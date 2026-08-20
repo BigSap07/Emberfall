@@ -1,0 +1,28 @@
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Unity creates these on first open; they are machine specific
+/Packages/packages-lock.json
+
+# IDE
+.vs/
+.idea/
+*.csproj
+*.sln
+*.user
+
+# Offline tooling output
+/Tools/DevHarness/bin/
+/Tools/**/*.rsp
+
+# OS
+Thumbs.db
+.DS_Store

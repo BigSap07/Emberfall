@@ -1,0 +1,85 @@
+{
+  "chapters": [
+    {
+      "id": "ch1",
+      "number": 1,
+      "name": "The Ashen Road",
+      "subtitle": "Follow the shardfall south, before the Hollow reach the valley towns.",
+      "stages": [
+        {
+          "id": "ch1_1", "index": 1, "name": "Shardfall Verge", "subtitle": "Something came down here last night.",
+          "environment": "ashen", "gold": 120, "shards": 6, "accountXp": 26,
+          "firstClearGold": 260, "firstClearShards": 35, "recommendedPower": 2600,
+          "enemies": [ { "id": "hollow_husk", "level": 1 }, { "id": "hollow_husk", "level": 1 }, { "id": "grave_moth", "level": 1 } ]
+        },
+        {
+          "id": "ch1_2", "index": 2, "name": "Cracked Milestones", "subtitle": "The road markers have been chewed.",
+          "environment": "ashen", "gold": 150, "shards": 8, "accountXp": 32,
+          "firstClearGold": 300, "firstClearShards": 40, "recommendedPower": 3000,
+          "enemies": [ { "id": "hollow_husk", "level": 3 }, { "id": "cinder_imp", "level": 3 }, { "id": "grave_moth", "level": 3 } ]
+        },
+        {
+          "id": "ch1_3", "index": 3, "name": "The Smoking Orchard", "subtitle": "Fruit trees, still burning politely.",
+          "environment": "ashen", "gold": 185, "shards": 10, "accountXp": 38,
+          "firstClearGold": 340, "firstClearShards": 45, "recommendedPower": 3300,
+          "enemies": [ { "id": "cinder_imp", "level": 5 }, { "id": "blight_hound", "level": 5 }, { "id": "hollow_husk", "level": 6 } ]
+        },
+        {
+          "id": "ch1_4", "index": 4, "name": "Wardenstone Ford", "subtitle": "Something old is standing in the river.",
+          "environment": "ashen", "gold": 225, "shards": 12, "accountXp": 45,
+          "firstClearGold": 400, "firstClearShards": 55, "recommendedPower": 3700,
+          "enemies": [ { "id": "blight_hound", "level": 7 }, { "id": "stone_warden", "level": 6 }, { "id": "cinder_imp", "level": 7 } ]
+        },
+        {
+          "id": "ch1_5", "index": 5, "name": "Emberwake Hollow", "subtitle": "The ash is warm enough to walk barefoot. Do not.",
+          "environment": "ember", "gold": 270, "shards": 14, "accountXp": 52,
+          "firstClearGold": 460, "firstClearShards": 65, "recommendedPower": 4000,
+          "enemies": [ { "id": "grave_moth", "level": 9 }, { "id": "ashen_revenant", "level": 8 }, { "id": "blight_hound", "level": 9 } ]
+        },
+        {
+          "id": "ch1_6", "index": 6, "name": "The Kiln Gate", "subtitle": "An elite guard, and it has been waiting.",
+          "environment": "ember", "gold": 320, "shards": 17, "accountXp": 60,
+          "firstClearGold": 540, "firstClearShards": 80, "recommendedPower": 4300,
+          "enemies": [ { "id": "stone_warden", "level": 12 }, { "id": "ashen_revenant", "level": 12 }, { "id": "cinder_imp", "level": 13 } ]
+        },
+        {
+          "id": "ch1_7", "index": 7, "name": "Drowned Causeway", "subtitle": "The tide came in and never went back out.",
+          "environment": "ember", "gold": 375, "shards": 19, "accountXp": 68,
+          "firstClearGold": 600, "firstClearShards": 90, "recommendedPower": 4600,
+          "enemies": [ { "id": "blight_hound", "level": 14 }, { "id": "blight_hound", "level": 14 }, { "id": "tidecaller_wretch", "level": 14 } ]
+        },
+        {
+          "id": "ch1_8", "index": 8, "name": "Revenant's Landing", "subtitle": "It remembers being a person. Barely.",
+          "environment": "ember", "gold": 435, "shards": 22, "accountXp": 76,
+          "firstClearGold": 680, "firstClearShards": 100, "recommendedPower": 4900,
+          "enemies": [ { "id": "ashen_revenant", "level": 15 }, { "id": "tidecaller_wretch", "level": 15 }, { "id": "stone_warden", "level": 15 } ]
+        },
+        {
+          "id": "ch1_9", "index": 9, "name": "Mothlight Steps", "subtitle": "Fast, thin things, and far too many of them.",
+          "environment": "hollow", "gold": 500, "shards": 25, "accountXp": 85,
+          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 5200,
+          "enemies": [ { "id": "grave_moth", "level": 18 }, { "id": "grave_moth", "level": 18 }, { "id": "ashen_revenant", "level": 18 } ]
+        },
+        {
+          "id": "ch1_10", "index": 10, "name": "The Grey Bulwark", "subtitle": "Two wardens. One narrow bridge.",
+          "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
+          "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 5500,
+          "enemies": [ { "id": "stone_warden", "level": 18 }, { "id": "ashen_revenant", "level": 18 }, { "id": "blight_hound", "level": 19 } ]
+        },
+        {
+          "id": "ch1_11", "index": 11, "name": "Pyre of Names", "subtitle": "Everyone who held this pass is stacked and burning.",
+          "environment": "hollow", "gold": 650, "shards": 32, "accountXp": 104,
+          "firstClearGold": 950, "firstClearShards": 150, "recommendedPower": 5900,
+          "enemies": [ { "id": "ashen_revenant", "level": 20 }, { "id": "ashen_revenant", "level": 20 }, { "id": "blight_hound", "level": 21 } ]
+        },
+        {
+          "id": "ch1_12", "index": 12, "name": "The Sundered Colossus", "subtitle": "The shard did not land. It stood up.",
+          "boss": true,
+          "environment": "hollow", "gold": 800, "shards": 40, "accountXp": 140,
+          "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 6400,
+          "enemies": [ { "id": "sundered_colossus", "level": 17 }, { "id": "tidecaller_wretch", "level": 18 }, { "id": "stone_warden", "level": 18 } ]
+        }
+      ]
+    }
+  ]
+}

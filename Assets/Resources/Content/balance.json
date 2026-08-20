@@ -1,0 +1,40 @@
+{
+  // Every tuning number the prototype reads. Edit here, no recompile needed.
+  "defenseConstant": 400,
+  "defensePerLevel": 24,
+
+  "energyMax": 100,
+  "energyPerBasicAttack": 28,
+  "energyOnDamaged": 9,
+  "maxRounds": 30,
+  "damageVariance": 0.06,
+  "maxTeamSize": 3,
+
+  // hero level up cost = A + B*level + C*level^2
+  "levelCostA": 55,
+  "levelCostB": 26,
+  "levelCostC": 3.2,
+  "heroLevelCapBase": 12,
+  "heroLevelCapPerPlayerLevel": 4,
+  "heroLevelHardCap": 80,
+
+  // account xp needed for the next rank = base * level^exponent
+  "playerXpBase": 120,
+  "playerXpExponent": 1.35,
+
+  "idleGoldPerHourBase": 140,
+  "idleGoldPerHourPerStage": 55,
+  "idleShardsPerHourBase": 7,
+  "idleShardsPerHourPerStage": 2.2,
+  "idleCapHours": 8,
+
+  "summonCost": 120,
+  "summonWeightCommon": 62,
+  "summonWeightRare": 29,
+  "summonWeightEpic": 9,
+  "duplicateGold": 450,
+  "duplicateShards": 30,
+
+  "startingGold": 1500,
+  "startingShards": 260
+}
