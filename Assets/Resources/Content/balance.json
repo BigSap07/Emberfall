@@ -27,7 +27,7 @@
   "idleGoldPerHourPerStage": 55,
   "idleShardsPerHourBase": 7,
   "idleShardsPerHourPerStage": 2.2,
-  "idleCapHours": 8,
+  "idleCapHours": 10,
 
   "summonCost": 120,
   "summonWeightCommon": 62,
