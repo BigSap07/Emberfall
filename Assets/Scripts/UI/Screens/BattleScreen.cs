@@ -411,18 +411,22 @@ namespace Emberfall.UI.Screens
                 case BattleEventType.BasicAttack:
                 {
                     UnitActor source = ActorOf(e.SourceId);
+                    List<int> targetIds = LookaheadTargets(index);
                     if (source != null)
                     {
-                        List<int> targetIds = LookaheadTargets(index);
+                        // intent + motion: lunge toward the real target now, land the strike vfx at arrival
                         UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
                         source.PlayAttackLunge(focus != null ? focus.transform.position : source.transform.position, _speed);
+                    }
+                    yield return Wait(0.16f);
+                    if (source != null)
+                    {
                         for (int t = 0; t < targetIds.Count; t++)
                         {
                             UnitActor hit = ActorOf(targetIds[t]);
                             if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
                         }
                     }
-                    yield return Wait(0.16f);
                     break;
                 }
 
@@ -461,15 +465,23 @@ namespace Emberfall.UI.Screens
                     UnitActor source = ActorOf(e.SourceId);
                     if (target != null)
                     {
-                        target.DisplayHp = Mathf.Max(0f, target.DisplayHp - e.Value);
+                        // impact: flash, shake, sound - immediate
                         target.PlayHit(e.Critical);
-                        UpdateHp(target, e.Critical);
-                        Color colour = e.Critical ? UITheme.Warning : Color.white;
-                        if (e.Status == StatusKind.Burn) colour = UITheme.Ember;
-                        SpawnFloatingText(target.HeadPosition, (e.Critical ? "" : "") + e.Value, colour, e.Critical ? 1.5f : 1f);
                         if (source != null && e.Status == StatusKind.None) _world.Vfx.Impact(target.CenterPosition, AspectTint(source), e.Critical ? 1.3f : 0.9f);
                         if (e.Critical) { App.Audio.Crit(); _world.Shake(0.14f, 0.2f); }
                         else App.Audio.Hit();
+
+                        yield return null; // number floats one frame after impact, never simultaneously
+
+                        // number: value, crit prefix, aspect tag
+                        Color colour = e.Critical ? UITheme.Warning : Color.white;
+                        if (e.Status == StatusKind.Burn) colour = UITheme.Ember;
+                        string text = (e.Critical ? "CRIT " : "") + e.Value + AspectTag(e.AspectFactor);
+                        SpawnFloatingText(target.HeadPosition, text, colour, e.Critical ? 1.5f : 1f);
+
+                        // effect, last: bar drains to the new value, ghost bar trails behind
+                        target.DisplayHp = Mathf.Max(0f, target.DisplayHp - e.Value);
+                        UpdateHp(target, e.Critical);
                     }
                     yield return Wait(e.Critical ? 0.14f : 0.10f);
                     break;
@@ -672,6 +684,14 @@ namespace Emberfall.UI.Screens
         private Color AspectTint(UnitActor actor)
         {
             return actor != null ? UITheme.AspectColor(actor.Snapshot.Aspect) : UITheme.TextPrimary;
+        }
+
+        /// <summary>WEAK when the target's aspect took bonus damage, RESIST when it took less - the ×1.20/×0.85 swing that decides fights, made readable.</summary>
+        private static string AspectTag(float aspectFactor)
+        {
+            if (aspectFactor > 1.01f) return "  WEAK";
+            if (aspectFactor < 0.99f) return "  RESIST";
+            return "";
         }
 
         /// <summary>

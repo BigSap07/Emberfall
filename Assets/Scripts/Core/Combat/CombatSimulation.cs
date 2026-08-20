@@ -175,7 +175,9 @@ namespace Emberfall.Core.Combat
                     {
                         int damage = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
                         if (damage < 1) damage = 1;
-                        DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn);
+                        // named for what it actually is - not whatever the source last cast, so the
+                        // Debrief and any on-screen attribution can't misname a burn tick as a fresh hit
+                        DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn, 1f, StatusInfo.DisplayName(StatusKind.Burn));
                         if (!unit.Alive) return;
                     }
                     else if (s.Kind == StatusKind.Regen)
@@ -294,7 +296,8 @@ namespace Emberfall.Core.Combat
             {
                 float raw = source.EffectiveAttack * effect.Power + effect.Flat;
 
-                raw *= AspectChart.Multiplier(source.Aspect, target.Aspect);
+                float aspectFactor = AspectChart.Multiplier(source.Aspect, target.Aspect);
+                raw *= aspectFactor;
 
                 if (source.Passive != null && source.Passive.BonusVsStatus != StatusKind.None
                     && target.Has(source.Passive.BonusVsStatus))
@@ -316,13 +319,15 @@ namespace Emberfall.Core.Combat
 
                 source.LastTargetId = target.Id;
                 string vfx = ability != null ? ability.Vfx : "impact";
-                DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None);
+                string abilityName = ability != null ? ability.Name : "";
+                DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
 
                 if (critical && source.Alive) TriggerPassive(source, PassiveTrigger.OnCriticalHit, depth);
             }
 
             /// <summary>Single funnel for every point of damage in the game.</summary>
-            private void DealRawDamage(int sourceId, CombatUnit target, int damage, bool critical, string vfx, StatusKind dotKind)
+            private void DealRawDamage(int sourceId, CombatUnit target, int damage, bool critical, string vfx, StatusKind dotKind,
+                                        float aspectFactor, string abilityName)
             {
                 if (!target.Alive || damage <= 0) return;
 
@@ -353,6 +358,8 @@ namespace Emberfall.Core.Combat
                 e.Critical = critical;
                 e.Vfx = vfx;
                 e.Status = dotKind;
+                e.AspectFactor = aspectFactor;
+                e.AbilityName = abilityName;
 
                 if (sourceId >= 0) target.LastAttackerId = sourceId;
 

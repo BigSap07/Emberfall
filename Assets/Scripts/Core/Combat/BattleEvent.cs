@@ -41,6 +41,9 @@ namespace Emberfall.Core.Combat
         public int Duration;
         public bool Victory;
 
+        /// <summary>Damage only: AspectChart.Multiplier(source.Aspect, target.Aspect) at the moment of the hit. 1 for non-aspect damage (e.g. burn ticks).</summary>
+        public float AspectFactor = 1f;
+
         public static BattleEvent Make(BattleEventType type, int round)
         {
             BattleEvent e = new BattleEvent();
