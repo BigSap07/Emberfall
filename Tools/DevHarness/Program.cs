@@ -560,6 +560,7 @@ namespace Emberfall.DevHarness
 
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             GameSession session = new GameSession(db, profile);
+            HeroDef noHealWren = BuildNoHealWren(db);
             long now = 0;
             int totalAttempts = 0;
             int seedCounter = 1;
@@ -605,13 +606,39 @@ namespace Emberfall.DevHarness
                     }
                 }
 
-                // measure the true win rate at the power the player actually had
+                // measure the true win rate at the power the player actually had, and while we're
+                // re-fighting this stage anyway, attribute damage per hero and probe whether the
+                // healer's healing (as opposed to just having a third body on the field) actually
+                // swung any of those same battles from a win to a loss.
                 int measureWins = 0;
                 const int MeasureRuns = 24;
+                Dictionary<string, long> damageByHero = new Dictionary<string, long>();
+                int healerFlips = 0;
+                int winsRetested = 0;
+                bool healerDeployed = false;
+
                 for (int m = 0; m < MeasureRuns; m++)
                 {
-                    BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(stage, 100000 + m * 37 + stageIdx));
+                    int seed = 100000 + m * 37 + stageIdx;
+                    BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
                     if (mr.Victory) measureWins++;
+                    AccumulateDamage(mr, damageByHero);
+
+                    if (mr.Victory && noHealWren != null)
+                    {
+                        List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealWren, out healerDeployed);
+                        if (healerDeployed)
+                        {
+                            BattleRequest altRequest = new BattleRequest();
+                            altRequest.Content = db;
+                            altRequest.Stage = stage;
+                            altRequest.Seed = seed;
+                            altRequest.Team = altTeam;
+                            BattleResult altResult = CombatSimulation.Run(altRequest);
+                            winsRetested++;
+                            if (!altResult.Victory) healerFlips++;
+                        }
+                    }
                 }
 
                 float winRate = measureWins / (float)MeasureRuns;
@@ -624,6 +651,8 @@ namespace Emberfall.DevHarness
                      + "  " + Fmt(avgRounds).PadLeft(9)
                      + "  " + attemptsForStage.ToString().PadLeft(8)
                      + (cleared ? "" : "   <-- STUCK"));
+                Line("           dmg share: " + FormatDamageShare(damageByHero)
+                     + "   healer changed outcome: " + (healerDeployed ? healerFlips + " of " + winsRetested + " wins would have been losses without her healing" : "n/a (not deployed)"));
 
                 if (!cleared) { stuckAt = stageIdx; break; }
             }
@@ -649,6 +678,123 @@ namespace Emberfall.DevHarness
             Check(stuckAt < 0, "a normal player can clear the whole campaign");
             Check(profile.Heroes.Count > 3, "summoning grew the roster past the 3 starters");
             Line("");
+        }
+
+        private static void AccumulateDamage(BattleResult r, Dictionary<string, long> damageByHero)
+        {
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.Value <= 0) continue;
+                UnitSnapshot source = r.FindUnit(e.SourceId);
+                if (source == null || !source.IsPlayer) continue;
+                long existing;
+                damageByHero.TryGetValue(source.Name, out existing);
+                damageByHero[source.Name] = existing + e.Value;
+            }
+        }
+
+        private static string FormatDamageShare(Dictionary<string, long> damageByHero)
+        {
+            long total = 0;
+            foreach (KeyValuePair<string, long> kv in damageByHero) total += kv.Value;
+            if (total <= 0) return "(no damage dealt)";
+
+            StringBuilder sb = new StringBuilder();
+            bool first = true;
+            foreach (KeyValuePair<string, long> kv in damageByHero)
+            {
+                if (!first) sb.Append(", ");
+                first = false;
+                float share = kv.Value / (float)total;
+                sb.Append(kv.Key).Append(' ').Append(Pct(share));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>A copy of Wren with her Active's Heal effect zeroed out - everything else (her
+        /// attack, passive ward, the Active's Cleanse) is untouched, isolating healing specifically.</summary>
+        private static HeroDef BuildNoHealWren(ContentDatabase db)
+        {
+            HeroDef src = db.GetHero("wren_ilyra");
+            if (src == null || src.Active == null) return null;
+
+            HeroDef clone = new HeroDef();
+            clone.Id = src.Id;
+            clone.Name = src.Name;
+            clone.Aspect = src.Aspect;
+            clone.BaseHp = src.BaseHp;
+            clone.BaseAttack = src.BaseAttack;
+            clone.BaseDefense = src.BaseDefense;
+            clone.BaseSpeed = src.BaseSpeed;
+            clone.CritChance = src.CritChance;
+            clone.CritDamage = src.CritDamage;
+            clone.Growth = src.Growth;
+            clone.StartEnergy = src.StartEnergy;
+            clone.Visual = src.Visual;
+            clone.BasicAttack = src.BasicAttack;
+            clone.Passive = src.Passive;
+            clone.Title = src.Title;
+            clone.Lore = src.Lore;
+            clone.Role = src.Role;
+            clone.Rarity = src.Rarity;
+            clone.StartingHero = src.StartingHero;
+
+            AbilityDef activeClone = new AbilityDef();
+            activeClone.Id = src.Active.Id;
+            activeClone.Name = src.Active.Name;
+            activeClone.Description = src.Active.Description;
+            activeClone.Kind = src.Active.Kind;
+            activeClone.EnergyCost = src.Active.EnergyCost;
+            activeClone.Vfx = src.Active.Vfx;
+            for (int i = 0; i < src.Active.Effects.Count; i++)
+            {
+                EffectDef e = src.Active.Effects[i];
+                if (e.Kind != EffectKind.Heal) { activeClone.Effects.Add(e); continue; }
+                EffectDef neutered = new EffectDef();
+                neutered.Kind = EffectKind.Heal;
+                neutered.Target = e.Target;
+                neutered.Power = 0f;
+                neutered.Flat = 0f;
+                neutered.SelfHpRatio = 0f;
+                neutered.Hits = e.Hits;
+                neutered.Status = e.Status;
+                neutered.Duration = e.Duration;
+                neutered.Magnitude = e.Magnitude;
+                neutered.Chance = e.Chance;
+                activeClone.Effects.Add(neutered);
+            }
+            clone.Active = activeClone;
+            return clone;
+        }
+
+        /// <summary>Same deployed team, but with Wren (if deployed) swapped for the no-heal clone at the same level.</summary>
+        private static List<HeroInstance> BuildTeamWithoutHealing(PlayerProfile profile, HeroDef noHealWren, out bool healerDeployed)
+        {
+            List<HeroInstance> real = profile.TeamHeroes();
+            List<HeroInstance> alt = new List<HeroInstance>();
+            healerDeployed = false;
+            for (int i = 0; i < real.Count; i++)
+            {
+                HeroInstance h = real[i];
+                if (h.DefId == "wren_ilyra")
+                {
+                    healerDeployed = true;
+                    HeroInstance sub = new HeroInstance();
+                    sub.Uid = h.Uid;
+                    sub.DefId = h.DefId;
+                    sub.Level = h.Level;
+                    sub.Copies = h.Copies;
+                    sub.AcquiredUnix = h.AcquiredUnix;
+                    sub.Def = noHealWren;
+                    alt.Add(sub);
+                }
+                else
+                {
+                    alt.Add(h);
+                }
+            }
+            return alt;
         }
 
         private static string Trim(string s, int max)
