@@ -351,16 +351,16 @@ namespace Emberfall.UI.Screens
 
             for (int i = 0; i < _result.Events.Count; i++)
             {
-                BattleEvent e = _result.Events[i];
-                yield return Handle(e);
+                yield return Handle(i);
             }
 
             yield return Wait(0.45f);
             ShowResult();
         }
 
-        private IEnumerator Handle(BattleEvent e)
+        private IEnumerator Handle(int index)
         {
+            BattleEvent e = _result.Events[index];
             switch (e.Type)
             {
                 case BattleEventType.RoundStart:
@@ -373,9 +373,14 @@ namespace Emberfall.UI.Screens
                     UnitActor source = ActorOf(e.SourceId);
                     if (source != null)
                     {
-                        UnitActor focus = NearestOpponent(source);
+                        List<int> targetIds = LookaheadTargets(index);
+                        UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
                         source.PlayAttackLunge(focus != null ? focus.transform.position : source.transform.position, _speed);
-                        if (focus != null) PlayAbilityVfx(e.Vfx, source, focus, AspectTint(source));
+                        for (int t = 0; t < targetIds.Count; t++)
+                        {
+                            UnitActor hit = ActorOf(targetIds[t]);
+                            if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
+                        }
                     }
                     yield return Wait(0.16f);
                     break;
@@ -384,6 +389,7 @@ namespace Emberfall.UI.Screens
                 case BattleEventType.AbilityCast:
                 {
                     UnitActor source = ActorOf(e.SourceId);
+                    List<int> targetIds = LookaheadTargets(index);
                     if (source != null)
                     {
                         source.PlayCast(_speed);
@@ -392,7 +398,7 @@ namespace Emberfall.UI.Screens
                         _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
                     }
                     yield return Wait(0.36f);
-                    if (source != null) PlayAreaVfx(e.Vfx, source, AspectTint(source));
+                    if (source != null) PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
                     yield return Wait(0.12f);
                     break;
                 }
@@ -559,18 +565,24 @@ namespace Emberfall.UI.Screens
             return actor != null ? UITheme.AspectColor(actor.Snapshot.Aspect) : UITheme.TextPrimary;
         }
 
-        private UnitActor NearestOpponent(UnitActor source)
+        /// <summary>
+        /// The true target set for the BasicAttack/AbilityCast at events[index]: every distinct
+        /// TargetId hit by a Damage, Heal or ShieldGain event before the next TurnStart. This is
+        /// the actual resolved target (taunt redirects included), not a geometry guess - a unit
+        /// using LowestHpEnemy, HighestAttackEnemy or RandomEnemy targeting shows the real pick,
+        /// and an AllEnemies effect naturally yields every unit it actually hit.
+        /// </summary>
+        private List<int> LookaheadTargets(int index)
         {
-            UnitActor best = null;
-            float bestDistance = float.MaxValue;
-            for (int i = 0; i < _world.Actors.Count; i++)
+            List<int> targets = new List<int>();
+            for (int j = index + 1; j < _result.Events.Count; j++)
             {
-                UnitActor other = _world.Actors[i];
-                if (!other.Alive || other.Snapshot.IsPlayer == source.Snapshot.IsPlayer) continue;
-                float distance = Vector3.Distance(other.transform.position, source.transform.position);
-                if (distance < bestDistance) { bestDistance = distance; best = other; }
+                BattleEvent e = _result.Events[j];
+                if (e.Type == BattleEventType.TurnStart) break;
+                if (e.Type != BattleEventType.Damage && e.Type != BattleEventType.Heal && e.Type != BattleEventType.ShieldGain) continue;
+                if (!targets.Contains(e.TargetId)) targets.Add(e.TargetId);
             }
-            return best;
+            return targets;
         }
 
         private void PlayAbilityVfx(string vfx, UnitActor source, UnitActor target, Color colour)
@@ -592,35 +604,49 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        private void PlayAreaVfx(string vfx, UnitActor source, Color colour)
+        /// <summary>
+        /// Plays the cast-impact vfx on the ability's real target set. Falls back to the old
+        /// same-side sweep only when lookahead found nothing to key off - a pure buff/status
+        /// ability (e.g. Maeve's Tidal Cadence: AttackUp + Focus + EnergyGain, no Damage/Heal/
+        /// Shield effect) has no Damage/Heal/ShieldGain event to reveal its target set from.
+        /// </summary>
+        private void PlayTargetedVfx(string vfx, UnitActor source, List<int> targetIds, Color colour)
         {
-            bool againstEnemies = true;
-            switch (vfx)
+            if (targetIds.Count > 0)
             {
-                case "heal":
-                case "buff":
-                    againstEnemies = false;
-                    break;
-            }
-
-            for (int i = 0; i < _world.Actors.Count; i++)
-            {
-                UnitActor actor = _world.Actors[i];
-                if (!actor.Alive) continue;
-                bool opposing = actor.Snapshot.IsPlayer != source.Snapshot.IsPlayer;
-                if (opposing != againstEnemies) continue;
-
-                switch (vfx)
+                for (int i = 0; i < targetIds.Count; i++)
                 {
-                    case "burst": _world.Vfx.Burst(actor.transform.position, colour, 0.9f); break;
-                    case "shadow": _world.Vfx.Implode(actor.CenterPosition, colour); break;
-                    case "heal": _world.Vfx.Motes(actor.transform.position, UITheme.Success, 6, 2.2f); break;
-                    case "buff": _world.Vfx.Aura(actor.transform.position, colour, 2.2f); break;
-                    default: _world.Vfx.Impact(actor.CenterPosition, colour, 1f); break;
+                    UnitActor actor = ActorOf(targetIds[i]);
+                    if (actor == null || !actor.Alive) continue;
+                    PlayAreaVfxOn(vfx, actor, colour);
+                }
+            }
+            else
+            {
+                bool againstEnemies = vfx != "heal" && vfx != "buff";
+                for (int i = 0; i < _world.Actors.Count; i++)
+                {
+                    UnitActor actor = _world.Actors[i];
+                    if (!actor.Alive) continue;
+                    bool opposing = actor.Snapshot.IsPlayer != source.Snapshot.IsPlayer;
+                    if (opposing != againstEnemies) continue;
+                    PlayAreaVfxOn(vfx, actor, colour);
                 }
             }
 
             if (vfx == "burst" || vfx == "shadow") _world.Shake(0.18f, 0.26f);
+        }
+
+        private void PlayAreaVfxOn(string vfx, UnitActor actor, Color colour)
+        {
+            switch (vfx)
+            {
+                case "burst": _world.Vfx.Burst(actor.transform.position, colour, 0.9f); break;
+                case "shadow": _world.Vfx.Implode(actor.CenterPosition, colour); break;
+                case "heal": _world.Vfx.Motes(actor.transform.position, UITheme.Success, 6, 2.2f); break;
+                case "buff": _world.Vfx.Aura(actor.transform.position, colour, 2.2f); break;
+                default: _world.Vfx.Impact(actor.CenterPosition, colour, 1f); break;
+            }
         }
 
         private void UpdateHp(UnitActor actor, bool critical)
