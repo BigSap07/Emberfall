@@ -152,7 +152,7 @@ namespace Emberfall.Game
         /// </summary>
         private static void EnsureEventSystem()
         {
-            if (FindObjectOfType<EventSystem>() != null) return;
+            if (FindFirstObjectByType<EventSystem>() != null) return;
 
             GameObject host = new GameObject("EventSystem");
             host.AddComponent<EventSystem>();

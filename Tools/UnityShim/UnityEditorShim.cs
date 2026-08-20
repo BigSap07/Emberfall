@@ -132,13 +132,15 @@ namespace UnityEditor
         public static bool useAnimatedAutorotation { get; set; }
         public static UnityEngine.Texture2D[] GetIconsForTargetGroup(BuildTargetGroup group) { return new UnityEngine.Texture2D[0]; }
         public static void SetIconsForTargetGroup(BuildTargetGroup group, UnityEngine.Texture2D[] icons) { }
-        public static void SetApplicationIdentifier(BuildTargetGroup group, string identifier) { }
-        public static string GetApplicationIdentifier(BuildTargetGroup group) { return ""; }
-        public static void SetScriptingBackend(BuildTargetGroup group, ScriptingImplementation backend) { }
-        public static ScriptingImplementation GetScriptingBackend(BuildTargetGroup group) { return ScriptingImplementation.Mono2x; }
         public static void SetApiCompatibilityLevel(BuildTargetGroup group, ApiCompatibilityLevel level) { }
-        public static void SetManagedStrippingLevel(BuildTargetGroup group, ManagedStrippingLevel level) { }
         public static ColorSpace colorSpace { get; set; }
+
+        // NamedBuildTarget-based overloads - the current (non-obsolete) way to set these as of Unity 6.
+        public static void SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget target, string identifier) { }
+        public static string GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget target) { return ""; }
+        public static void SetScriptingBackend(UnityEditor.Build.NamedBuildTarget target, ScriptingImplementation backend) { }
+        public static ScriptingImplementation GetScriptingBackend(UnityEditor.Build.NamedBuildTarget target) { return ScriptingImplementation.Mono2x; }
+        public static void SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget target, ManagedStrippingLevel level) { }
 
         public static class Android
         {
@@ -151,6 +153,21 @@ namespace UnityEditor
     }
 
     public enum ColorSpace { Uninitialized = -1, Gamma = 0, Linear = 1 }
+}
+
+namespace UnityEditor.Build
+{
+    /// <summary>Replaces BuildTargetGroup in the newer PlayerSettings overloads.</summary>
+    public struct NamedBuildTarget
+    {
+        private readonly string _name;
+        private NamedBuildTarget(string name) { _name = name; }
+        public string TargetName { get { return _name; } }
+
+        public static NamedBuildTarget Standalone { get { return new NamedBuildTarget("Standalone"); } }
+        public static NamedBuildTarget Android { get { return new NamedBuildTarget("Android"); } }
+        public static NamedBuildTarget iOS { get { return new NamedBuildTarget("iOS"); } }
+    }
 }
 
 namespace UnityEditor.Build.Reporting

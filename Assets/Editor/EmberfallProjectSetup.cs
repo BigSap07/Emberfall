@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -121,8 +122,8 @@ namespace Emberfall.EditorTools
             PlayerSettings.allowedAutorotateToLandscapeRight = false;
 
             PlayerSettings.colorSpace = ColorSpace.Gamma;
-            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, BundleId);
-            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel23;
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, BundleId);
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.bundleVersionCode = 1;
 
             ApplyFastIterationBackend();
@@ -131,21 +132,24 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Android/Fast Iteration Backend (Mono, ARMv7)", false, 40)]
         public static void ApplyFastIterationBackend()
         {
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.Mono2x);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7;
-            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Android, ManagedStrippingLevel.Disabled);
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Android, ManagedStrippingLevel.Disabled);
             Debug.Log("Emberfall: Android set to Mono / ARMv7. Fastest builds, no NDK required, " +
                       "runs on BlueStacks through its ARM translation layer.");
         }
 
-        [MenuItem("Emberfall/Android/Release Backend (IL2CPP, ARM64 + x86-64)", false, 41)]
+        [MenuItem("Emberfall/Android/Release Backend (IL2CPP, ARM64)", false, 41)]
         public static void ApplyReleaseBackend()
         {
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
-            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.X86_64;
-            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Android, ManagedStrippingLevel.Low);
-            Debug.Log("Emberfall: Android set to IL2CPP / ARM64 + x86-64. Requires the Android NDK " +
-                      "module; x86-64 runs natively on BlueStacks 5 64-bit instances.");
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Android, ManagedStrippingLevel.Low);
+            Debug.Log("Emberfall: Android set to IL2CPP / ARM64. Requires the Android NDK module. " +
+                      "x86-64 is no longer a supported Android target architecture, so this backend " +
+                      "no longer runs natively on 64-bit BlueStacks instances - ARM64 through " +
+                      "BlueStacks' translation layer, or a physical/emulated ARM64 device, are the " +
+                      "remaining options for this backend.");
         }
     }
 }

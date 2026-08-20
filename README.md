@@ -151,12 +151,14 @@ Android defaults applied by `EmberfallProjectSetup`:
 | Scripting backend | Mono | fastest builds, no NDK needed |
 | Architecture | ARMv7 | runs on BlueStacks through its ARM translation layer |
 | Orientation | Portrait | phone-shaped UI |
-| Min SDK | 23 | wide device coverage |
+| Min SDK | 26 | Unity's current Android minimum |
 | Bundle id | `com.emberfall.prototype` | |
 
-For a device-ready build use **Emberfall → Android → Release Backend (IL2CPP, ARM64 + x86-64)**
-first — x86-64 also runs natively on 64-bit BlueStacks instances. That path needs the Android
-NDK module installed and takes considerably longer to build.
+For a device-ready build use **Emberfall → Android → Release Backend (IL2CPP, ARM64)** first.
+That path needs the Android NDK module installed and takes considerably longer to build. x86-64
+is no longer a supported Android target architecture in this Unity version, so this backend no
+longer runs natively on 64-bit BlueStacks instances - it still runs there through BlueStacks' ARM
+translation layer, same as the fast-iteration (ARMv7) backend, just with an IL2CPP build.
 
 Headless/CI:
 

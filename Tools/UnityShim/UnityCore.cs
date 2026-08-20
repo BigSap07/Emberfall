@@ -10,6 +10,8 @@ using System.Collections.Generic;
 
 namespace UnityEngine
 {
+    public enum FindObjectsSortMode { None, InstanceID }
+
     public class Object
     {
         public string name = "";
@@ -22,6 +24,9 @@ namespace UnityEngine
         public static T Instantiate<T>(T original) where T : Object { return original; }
         public static T FindObjectOfType<T>() where T : Object { return null; }
         public static T[] FindObjectsOfType<T>() where T : Object { return new T[0]; }
+        public static T FindFirstObjectByType<T>() where T : Object { return null; }
+        public static T FindAnyObjectByType<T>() where T : Object { return null; }
+        public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object { return new T[0]; }
 
         public static implicit operator bool(Object exists) { return !ReferenceEquals(exists, null); }
         public static bool operator ==(Object a, Object b) { return ReferenceEquals(a, b); }
