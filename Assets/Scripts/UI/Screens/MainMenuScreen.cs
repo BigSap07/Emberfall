@@ -25,35 +25,60 @@ namespace Emberfall.UI.Screens
         private Image _chapterFill;
         private Text _chapterCount;
 
+        // Everything above the nav bar is laid out from a single top-down cursor so each block's
+        // position is derived from the one above it plus a spacing-scale gap, instead of being an
+        // independent hand-tuned literal - that independence is what let the banner card, continue
+        // button and idle cache card drift into collision in the first place.
+        private const float CardWidth = 940f;
+
         protected override void Build()
         {
-            BuildTitle();
-            BuildTeamShowcase();
-            BuildIdleCache();
-            BuildChapterProgress();
-            BuildContinue();
+            float cursor = UITheme.Space96;
+
+            cursor = BuildTitle(cursor);
+            cursor += UITheme.Space24;
+            cursor = BuildTeamShowcase(cursor);
+            cursor += UITheme.Space24;
+            cursor = BuildIdleCache(cursor);
+            cursor += UITheme.Space24;
+            cursor = BuildChapterProgress(cursor);
+            cursor += UITheme.Space24;
+            cursor = BuildContinue(cursor);
+
             BuildNav();
             BuildOptions();
         }
 
-        private void BuildTitle()
+        /// <returns>Distance from the top of the screen to the bottom of the block just built.</returns>
+        private float BuildTitle(float top)
         {
+            const float logoHeight = 100f;
             Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay + 22, UITheme.Gold, TextAnchor.UpperCenter);
-            UIBuilder.Box(logo.rectTransform, 0f, -180f, 900f, 100f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(logo.rectTransform, 0f, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(logo, new Color(0.35f, 0.12f, 0.02f, 0.9f), 3f);
             UIBuilder.Shadowed(logo, new Color(0f, 0f, 0f, 0.6f), 5f);
+            top += logoHeight;
 
+            top += UITheme.Space16;
+            const float ruleHeight = 3f;
             Image underline = UIBuilder.Img("Rule", Root, TextureLab.White, UITheme.WithAlpha(UITheme.Ember, 0.75f));
-            UIBuilder.Box(underline.rectTransform, 0f, -288f, 340f, 3f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(underline.rectTransform, 0f, -top, 340f, ruleHeight, new Vector2(0.5f, 1f));
+            top += ruleHeight;
 
+            top += UITheme.Space16;
+            const float subHeight = 32f;
             Text sub = UIBuilder.Label("Sub", Root, "THE ASHEN ROAD", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(sub.rectTransform, 0f, -312f, 700f, 32f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(sub.rectTransform, 0f, -top, 700f, subHeight, new Vector2(0.5f, 1f));
+            top += subHeight;
+
+            return top;
         }
 
-        private void BuildTeamShowcase()
+        private float BuildTeamShowcase(float top)
         {
+            const float cardHeight = 316f;
             RectTransform card = UIBuilder.Node("Squad", Root);
-            UIBuilder.Box(card, 0f, -392f, 940f, 300f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
@@ -61,18 +86,25 @@ namespace Emberfall.UI.Screens
             background.color = UITheme.WithAlpha(UITheme.Panel, 0.92f);
             UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 24, 2);
 
+            float inner = UITheme.Space24;
+            const float headingHeight = 26f;
             Text heading = UIBuilder.Label("Heading", card, "ACTIVE BANNER", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -16f, 400f, 26f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(heading.rectTransform, 0f, -inner, 400f, headingHeight, new Vector2(0.5f, 1f));
+            inner += headingHeight + UITheme.Space8;
 
+            const float rowHeight = 232f;
             _teamRow = UIBuilder.Node("Row", card);
-            UIBuilder.Box(_teamRow, 0f, -54f, 880f, 232f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_teamRow, 0f, -inner, 880f, rowHeight, new Vector2(0.5f, 1f));
             UIBuilder.HStack(_teamRow, 22f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+
+            return top + cardHeight;
         }
 
-        private void BuildIdleCache()
+        private float BuildIdleCache(float top)
         {
+            const float cardHeight = 358f;
             RectTransform card = UIBuilder.Node("IdleCache", Root);
-            UIBuilder.Box(card, 0f, -722f, 940f, 320f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
@@ -83,27 +115,43 @@ namespace Emberfall.UI.Screens
             Image glow = UIBuilder.Img("Glow", card, TextureLab.Glow(128, 2f), UITheme.WithAlpha(UITheme.Gold, 0.10f));
             UIBuilder.FillParent(glow.rectTransform, 0f);
 
+            // text stack, top-left, each row separated by the same tight inline gap
+            float inner = UITheme.Space24;
+            const float headingHeight = 42f;
             Text heading = UIBuilder.Label("Heading", card, "EMBER CACHE", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, 30f, -22f, 500f, 42f, new Vector2(0f, 1f));
+            UIBuilder.Box(heading.rectTransform, 30f, -inner, 500f, headingHeight, new Vector2(0f, 1f));
+            inner += headingHeight + UITheme.Space8;
 
+            const float rateHeight = 26f;
             _idleRate = UIBuilder.Label("Rate", card, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleRate.rectTransform, 30f, -66f, 620f, 26f, new Vector2(0f, 1f));
+            UIBuilder.Box(_idleRate.rectTransform, 30f, -inner, 620f, rateHeight, new Vector2(0f, 1f));
+            inner += rateHeight + UITheme.Space8;
 
+            const float amountsHeight = 46f;
             _idleAmounts = UIBuilder.Label("Amounts", card, "", UITheme.FontHeading, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleAmounts.rectTransform, 30f, -108f, 620f, 46f, new Vector2(0f, 1f));
+            UIBuilder.Box(_idleAmounts.rectTransform, 30f, -inner, 620f, amountsHeight, new Vector2(0f, 1f));
+            inner += amountsHeight + UITheme.Space8;
 
+            const float timerHeight = 32f;
             _idleTimer = UIBuilder.Label("Timer", card, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleTimer.rectTransform, 30f, -160f, 620f, 32f, new Vector2(0f, 1f));
+            UIBuilder.Box(_idleTimer.rectTransform, 30f, -inner, 620f, timerHeight, new Vector2(0f, 1f));
+            inner += timerHeight;
 
+            // COLLECT sits below the whole text stack (plus a section gap) instead of floating in
+            // the bottom-right corner, where it used to overlap the timer label by 20px.
+            inner += UITheme.Space24;
             _claimButton = UIBuilder.GoldButton("Claim", card, "COLLECT", UITheme.FontBody);
-            UIBuilder.Box(_claimButton.Root, -30f, 32f, 300f, 116f, new Vector2(1f, 0f));
+            UIBuilder.Box(_claimButton.Root, -30f, cardHeight - inner - 116f, 300f, 116f, new Vector2(1f, 0f));
             _claimButton.OnClick(ClaimIdle);
+
+            return top + cardHeight;
         }
 
-        private void BuildChapterProgress()
+        private float BuildChapterProgress(float top)
         {
+            const float cardHeight = 150f;
             RectTransform card = UIBuilder.Node("Progress", Root);
-            UIBuilder.Box(card, 0f, 470f, 940f, 150f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
@@ -124,16 +172,24 @@ namespace Emberfall.UI.Screens
             barRoot.pivot = new Vector2(0.5f, 0f);
             barRoot.offsetMin = new Vector2(26f, 34f);
             barRoot.offsetMax = new Vector2(-26f, 54f);
+
+            return top + cardHeight;
         }
 
-        private void BuildContinue()
+        private float BuildContinue(float top)
         {
+            const float buttonHeight = 168f;
             _continueButton = UIBuilder.PrimaryButton("Continue", Root, "CONTINUE CAMPAIGN", UITheme.FontHeading);
-            UIBuilder.Box(_continueButton.Root, 0f, 286f, 940f, 168f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_continueButton.Root, 0f, -top, CardWidth, buttonHeight, new Vector2(0.5f, 1f));
             _continueButton.OnClick(OpenCampaign);
+            top += buttonHeight + UITheme.Space16;
 
+            const float subHeight = 34f;
             _continueSub = UIBuilder.Label("ContinueSub", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(_continueSub.rectTransform, 0f, 244f, 900f, 34f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_continueSub.rectTransform, 0f, -top, 900f, subHeight, new Vector2(0.5f, 1f));
+            top += subHeight;
+
+            return top;
         }
 
         private void BuildNav()

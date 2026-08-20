@@ -54,6 +54,20 @@ namespace Emberfall.UI
         public const float CornerRadius = 22f;
         public const float CornerRadiusSmall = 14f;
 
+        // ---------- spacing scale ----------
+        // Shared gap/padding units - screens should compose layouts from these instead of
+        // inventing a new literal per call site. Card/button/portrait sizes stay bespoke;
+        // this scale is for the space *between* things.
+        public const float Space4 = 4f;
+        public const float Space8 = 8f;
+        public const float Space12 = 12f;
+        public const float Space16 = 16f;
+        public const float Space24 = 24f;
+        public const float Space32 = ScreenPadding;
+        public const float Space48 = 48f;
+        public const float Space64 = 64f;
+        public const float Space96 = 96f;
+
         private static Font _font;
 
         /// <summary>
