@@ -111,13 +111,15 @@ namespace Emberfall.Core.Combat
             {
                 List<CombatUnit> order = new List<CombatUnit>();
                 for (int i = 0; i < _units.Count; i++) if (_units[i].Alive) order.Add(_units[i]);
+                // re-rolled every call (once per round) so who acts first isn't fixed for the whole battle
+                for (int i = 0; i < order.Count; i++) order[i].RoundSpeedJitter = _rng.Spread(_cfg.SpeedVariance);
                 order.Sort(CompareTurnOrder);
                 return order;
             }
 
             private static int CompareTurnOrder(CombatUnit a, CombatUnit b)
             {
-                int bySpeed = b.EffectiveSpeed.CompareTo(a.EffectiveSpeed);
+                int bySpeed = b.TurnOrderSpeed.CompareTo(a.TurnOrderSpeed);
                 if (bySpeed != 0) return bySpeed;
                 if (a.IsPlayer != b.IsPlayer) return a.IsPlayer ? -1 : 1;
                 if (a.Slot != b.Slot) return a.Slot.CompareTo(b.Slot);

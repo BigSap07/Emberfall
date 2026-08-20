@@ -8,6 +8,7 @@
   "energyOnDamaged": 9,
   "maxRounds": 30,
   "damageVariance": 0.06,
+  "speedVariance": 0.08,
   "maxTeamSize": 3,
 
   // hero level up cost = A + B*level + C*level^2

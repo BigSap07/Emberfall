@@ -42,6 +42,9 @@ namespace Emberfall.Core.Combat
         public float Shield;
         public bool Alive = true;
 
+        /// <summary>Re-rolled once per round by the sim; keeps turn order from being the same every fight.</summary>
+        public float RoundSpeedJitter;
+
         public AbilityDef Basic;
         public AbilityDef Active;
         public PassiveDef Passive;
@@ -87,6 +90,12 @@ namespace Emberfall.Core.Combat
                 if (m < 0.3f) m = 0.3f;
                 return Speed * m;
             }
+        }
+
+        /// <summary>EffectiveSpeed plus this round's jitter - what turn order is actually sorted by.</summary>
+        public float TurnOrderSpeed
+        {
+            get { return EffectiveSpeed * (1f + RoundSpeedJitter); }
         }
 
         public float EffectiveCritChance

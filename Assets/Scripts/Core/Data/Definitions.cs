@@ -290,6 +290,7 @@ namespace Emberfall.Core.Data
         public int MaxRounds = 30;
         public float DamageVariance = 0.06f;
         public float MinDamage = 1f;
+        public float SpeedVariance = 0.08f;
 
         public int MaxTeamSize = 3;
 
@@ -335,6 +336,7 @@ namespace Emberfall.Core.Data
             b.EnergyOnDamaged = j.GetInt("energyOnDamaged", b.EnergyOnDamaged);
             b.MaxRounds = j.GetInt("maxRounds", b.MaxRounds);
             b.DamageVariance = j.GetFloat("damageVariance", b.DamageVariance);
+            b.SpeedVariance = j.GetFloat("speedVariance", b.SpeedVariance);
             b.MaxTeamSize = j.GetInt("maxTeamSize", b.MaxTeamSize);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
