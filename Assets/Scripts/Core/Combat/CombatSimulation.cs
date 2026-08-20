@@ -470,6 +470,15 @@ namespace Emberfall.Core.Combat
                         return result;
                     }
 
+                }
+
+                // every remaining mode targets a single enemy - Provoke overrides all of them,
+                // including LastAttacker/LastTarget, so a taunting tank can't be targeted around.
+                CombatUnit taunter = FindTaunter(!caster.IsPlayer);
+                if (taunter != null) { result.Add(taunter); return result; }
+
+                switch (mode)
+                {
                     case TargetMode.LastAttacker:
                     {
                         CombatUnit remembered = FindUnit(caster.LastAttackerId);
@@ -478,7 +487,8 @@ namespace Emberfall.Core.Combat
                             result.Add(remembered);
                             return result;
                         }
-                        return ResolveTargets(caster, TargetMode.FrontEnemy);
+                        mode = TargetMode.FrontEnemy;
+                        break;
                     }
 
                     case TargetMode.LastTarget:
@@ -489,13 +499,10 @@ namespace Emberfall.Core.Combat
                             result.Add(remembered);
                             return result;
                         }
-                        return ResolveTargets(caster, TargetMode.FrontEnemy);
+                        mode = TargetMode.FrontEnemy;
+                        break;
                     }
                 }
-
-                // remaining modes are single-target against the opposing side
-                CombatUnit taunter = FindTaunter(!caster.IsPlayer);
-                if (taunter != null) { result.Add(taunter); return result; }
 
                 CombatUnit picked = null;
                 switch (mode)

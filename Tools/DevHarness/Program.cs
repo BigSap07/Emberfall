@@ -34,6 +34,7 @@ namespace Emberfall.DevHarness
 
             CheckContent(content);
             CheckDeterminism(content);
+            CheckProvokeTargeting(content);
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
             RunCampaignBalancePass(content);
@@ -141,6 +142,86 @@ namespace Emberfall.DevHarness
             Check(r.Events.Count > 10, "battle produced an event stream (" + r.Events.Count + " events)");
             Check(r.Units.Count == 6, "3v3 battle built 6 units (got " + r.Units.Count + ")");
             Check(r.Rounds >= 1 && r.Rounds <= db.Balance.MaxRounds, "battle finished within the round limit (" + r.Rounds + ")");
+            Line("");
+        }
+
+        /// <summary>
+        /// Provoke (Taunt) is supposed to override normal enemy targeting entirely. Walks real
+        /// battles and checks that every single-target hit landed on the taunt holder while the
+        /// status was active, regardless of what target mode the attacking ability used.
+        /// </summary>
+        private static void CheckProvokeTargeting(ContentDatabase db)
+        {
+            Line("TARGETING");
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            StageDef stage = db.AllStages[0];
+
+            bool sawTauntApplied = false;
+            bool violation = false;
+            string violationDetail = "";
+
+            for (int seed = 1; seed <= 40 && !violation; seed++)
+            {
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+                List<int> activeTaunters = new List<int>();
+
+                int i = 0;
+                while (i < r.Events.Count)
+                {
+                    BattleEvent e = r.Events[i];
+
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt)
+                    {
+                        UnitSnapshot who = r.FindUnit(e.TargetId);
+                        if (who != null && who.IsPlayer)
+                        {
+                            sawTauntApplied = true;
+                            if (!activeTaunters.Contains(e.TargetId)) activeTaunters.Add(e.TargetId);
+                        }
+                        i++;
+                        continue;
+                    }
+                    if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Taunt)
+                    {
+                        UnitSnapshot who = r.FindUnit(e.TargetId);
+                        if (who != null && who.IsPlayer) activeTaunters.Remove(e.TargetId);
+                        i++;
+                        continue;
+                    }
+
+                    if (e.Type == BattleEventType.Damage && activeTaunters.Count > 0)
+                    {
+                        UnitSnapshot targetUnit = r.FindUnit(e.TargetId);
+                        UnitSnapshot sourceUnit = r.FindUnit(e.SourceId);
+                        if (targetUnit != null && targetUnit.IsPlayer && sourceUnit != null && !sourceUnit.IsPlayer)
+                        {
+                            // one enemy turn produces a contiguous run of Damage events (same source, same round).
+                            // a single distinct victim across that run means the ability was single-target.
+                            int j = i;
+                            List<int> hitTargets = new List<int>();
+                            while (j < r.Events.Count && r.Events[j].Type == BattleEventType.Damage
+                                   && r.Events[j].SourceId == e.SourceId && r.Events[j].Round == e.Round)
+                            {
+                                if (!hitTargets.Contains(r.Events[j].TargetId)) hitTargets.Add(r.Events[j].TargetId);
+                                j++;
+                            }
+                            if (hitTargets.Count == 1 && !activeTaunters.Contains(hitTargets[0]))
+                            {
+                                violation = true;
+                                violationDetail = "seed " + seed + " round " + e.Round + ": " + sourceUnit.Name
+                                    + " single-target hit " + targetUnit.Name + " while a Provoke was active";
+                            }
+                            i = j;
+                            continue;
+                        }
+                    }
+                    i++;
+                }
+            }
+
+            Check(sawTauntApplied, "Provoke was applied to a player unit across sample battles");
+            Check(!violation, "enemies always single-target the Provoke holder over normal targeting"
+                 + (violation ? " (" + violationDetail + ")" : ""));
             Line("");
         }
 
