@@ -192,6 +192,14 @@ namespace Emberfall.UI
             UIBuilder.Box(levelLabel.rectTransform, 4f, -4f, 40f, 22f, new Vector2(1f, 0f));
             UIBuilder.Outlined(levelLabel, new Color(0f, 0f, 0f, 0.85f), 1.5f);
 
+            // aspect is a reason to change the line, not just a number to compare - the ring
+            // colour alone asks the player to have memorised the palette, so name it too
+            string aspectCode = AspectChart.DisplayName(def.Aspect);
+            if (aspectCode.Length > 3) aspectCode = aspectCode.Substring(0, 3);
+            Text aspectLabel = UIBuilder.Label("Aspect", root, aspectCode, UITheme.FontTiny - 4, UITheme.AspectColor(def.Aspect), TextAnchor.UpperLeft);
+            UIBuilder.Box(aspectLabel.rectTransform, -2f, 2f, 46f, 18f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(aspectLabel, new Color(0f, 0f, 0f, 0.9f), 1.3f);
+
             return root;
         }
     }

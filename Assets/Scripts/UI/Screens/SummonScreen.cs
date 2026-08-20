@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -31,6 +32,7 @@ namespace Emberfall.UI.Screens
 
         private float _spin;
         private bool _busy;
+        private HeroInstance _lastSummoned;
 
         protected override void Build()
         {
@@ -219,6 +221,7 @@ namespace Emberfall.UI.Screens
         {
             HeroDef def = outcome.Hero;
             Color rarityColor = UITheme.RarityColor(def.Rarity);
+            _lastSummoned = outcome.Instance;
 
             for (int i = _revealPortraitHost.childCount - 1; i >= 0; i--)
                 Destroy(_revealPortraitHost.GetChild(i).gameObject);
@@ -262,6 +265,18 @@ namespace Emberfall.UI.Screens
             App.Audio.Tap();
             _reveal.gameObject.SetActive(false);
             _busy = false;
+
+            // the pull's meaning is the choice it forces - land on the hero, slot row live,
+            // instead of back on a shard counter
+            if (_lastSummoned != null)
+            {
+                HeroInstance target = _lastSummoned;
+                _lastSummoned = null;
+                Router.HeroDetail.SetHero(target);
+                Router.Show(ScreenId.HeroDetail);
+                return;
+            }
+
             Refresh();
         }
     }

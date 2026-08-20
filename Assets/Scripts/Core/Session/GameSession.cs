@@ -322,7 +322,11 @@ namespace Emberfall.Core.Session
             Profile.TotalSummons++;
 
             DeterministicRng rng = new DeterministicRng(seed);
-            HeroDef pulled = RollHero(rng);
+            // first-summon guarantee: pulls 1-3 draw only from heroes not already owned, so the
+            // opening pulls can't duplicate a starter. Falls back to normal weights if every hero
+            // is already owned (can't happen with the current roster, but content can grow).
+            HeroDef pulled = Profile.TotalSummons <= PityGuaranteedSummons ? RollUnownedHero(rng) : null;
+            if (pulled == null) pulled = RollHero(rng);
             if (pulled == null)
             {
                 Profile.Shards += Balance.SummonCost; // refund, content is broken
@@ -352,6 +356,17 @@ namespace Emberfall.Core.Session
                 outcome.Message = "Echo of an ally you already command.";
             }
             return outcome;
+        }
+
+        public const int PityGuaranteedSummons = 3;
+
+        private HeroDef RollUnownedHero(DeterministicRng rng)
+        {
+            List<HeroDef> pool = new List<HeroDef>();
+            for (int i = 0; i < Content.Heroes.Count; i++)
+                if (!Profile.Owns(Content.Heroes[i].Id)) pool.Add(Content.Heroes[i]);
+            if (pool.Count == 0) return null;
+            return pool[rng.Range(0, pool.Count)];
         }
 
         private HeroDef RollHero(DeterministicRng rng)

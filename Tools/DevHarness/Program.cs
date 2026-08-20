@@ -39,6 +39,7 @@ namespace Emberfall.DevHarness
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
             CheckSaveRoundTrip(content);
+            CheckSummonPity(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckUnderlevelledLoses(content);
@@ -413,6 +414,37 @@ namespace Emberfall.DevHarness
             string error2;
             PlayerProfile fromGarbage = SaveSerializer.Deserialize("{ not json", db, out error2);
             Check(fromGarbage == null && error2 != null, "corrupt save is rejected instead of throwing");
+            Line("");
+        }
+
+        /// <summary>Summons 1-3 must draw distinct unowned heroes; summon 4 must be able to
+        /// land on an already-owned hero, which pity summons structurally cannot produce.</summary>
+        private static void CheckSummonPity(ContentDatabase db)
+        {
+            Line("SUMMON PITY");
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            profile.Shards = 1000000; // bypass the economy - this checks the mechanic, not the grind to afford it
+            GameSession session = new GameSession(db, profile);
+
+            List<string> pulled = new List<string>();
+            bool firstThreeOk = true;
+            for (int i = 0; i < GameSession.PityGuaranteedSummons; i++)
+            {
+                SummonOutcome outcome = session.Summon(9000 + i, 0);
+                bool ok = outcome.Success && outcome.IsNew && outcome.Hero != null && !pulled.Contains(outcome.Hero.Id);
+                if (!ok) firstThreeOk = false;
+                else pulled.Add(outcome.Hero.Id);
+            }
+            Check(firstThreeOk && pulled.Count == GameSession.PityGuaranteedSummons,
+                  "a fresh profile's first three summons return three distinct unowned heroes");
+
+            bool sawDuplicate = false;
+            for (int seed = 0; seed < 300 && !sawDuplicate; seed++)
+            {
+                SummonOutcome outcome = session.Summon(20000 + seed, 0);
+                if (outcome.Success && !outcome.IsNew) sawDuplicate = true;
+            }
+            Check(sawDuplicate, "the fourth summon onward resumes normal weights (can land on an already-owned hero)");
             Line("");
         }
 

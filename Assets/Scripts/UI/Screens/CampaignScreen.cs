@@ -79,6 +79,7 @@ namespace Emberfall.UI.Screens
                     HeroInstance hero = team[slot];
                     RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, 84f, true);
                     UIBuilder.Sized(portrait, 84f, 84f);
+                    if (slot == 0) AddFrontSlotLabel(portrait);
                 }
                 else
                 {
@@ -87,10 +88,19 @@ namespace Emberfall.UI.Screens
                     Image image = empty.gameObject.AddComponent<Image>();
                     image.sprite = TextureLab.Ring(96, 5);
                     image.color = UITheme.BorderSoft;
+                    if (slot == 0) AddFrontSlotLabel(empty);
                 }
             }
 
             _teamPower.text = "POWER " + App.Session.Profile.TeamPower();
+        }
+
+        /// <summary>FrontEnemy targeting picks the lowest living slot, so slot 1 is the one that gets hit - name it.</summary>
+        private static void AddFrontSlotLabel(RectTransform portrait)
+        {
+            Text tag = UIBuilder.Label("FrontTag", portrait, "FRONT", UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.LowerCenter);
+            UIBuilder.Box(tag.rectTransform, 0f, -4f, 84f, 20f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(tag, new Color(0f, 0f, 0f, 0.92f), 1.4f);
         }
 
         private void RebuildStages()
