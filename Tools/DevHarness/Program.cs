@@ -33,10 +33,15 @@ namespace Emberfall.DevHarness
             if (content == null) return 1;
 
             CheckContent(content);
+            CheckAspectDirection(content);
+            CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckProvokeTargeting(content);
+            CheckStatusExpiry(content);
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
+            CheckStageWinnability(content);
+            CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
 
             Line("");
@@ -123,6 +128,86 @@ namespace Emberfall.DevHarness
             }
             Check(abilitiesOk, "every hero has a basic attack, an active and a passive");
             Line("");
+        }
+
+        /// <summary>Pure data check against AspectChart - no battle needed. Ember>Verdant>Tide>Gale>Ember, Lumen&lt;-&gt;Umbra.</summary>
+        private static void CheckAspectDirection(ContentDatabase db)
+        {
+            Line("ASPECT CHART");
+            bool ok = true;
+            ok &= AssertMultiplier(Aspect.Ember, Aspect.Verdant, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Verdant, Aspect.Ember, AspectChart.Disadvantage);
+            ok &= AssertMultiplier(Aspect.Verdant, Aspect.Tide, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Tide, Aspect.Verdant, AspectChart.Disadvantage);
+            ok &= AssertMultiplier(Aspect.Tide, Aspect.Gale, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Gale, Aspect.Tide, AspectChart.Disadvantage);
+            ok &= AssertMultiplier(Aspect.Gale, Aspect.Ember, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Ember, Aspect.Gale, AspectChart.Disadvantage);
+            // Lumen and Umbra mutually counter each other (both directions hit harder), unlike the
+            // one-way cycle above - matches Beats() returning true both ways for this pair.
+            ok &= AssertMultiplier(Aspect.Lumen, Aspect.Umbra, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Umbra, Aspect.Lumen, AspectChart.Advantage);
+            ok &= AssertMultiplier(Aspect.Ember, Aspect.Ember, 1f);
+            ok &= AssertMultiplier(Aspect.Ember, Aspect.Tide, 1f);
+            Check(ok, "aspect multipliers apply in the correct attacker -> defender direction");
+            Line("");
+        }
+
+        private static bool AssertMultiplier(Aspect attacker, Aspect defender, float expected)
+        {
+            float actual = AspectChart.Multiplier(attacker, defender);
+            if (Math.Abs(actual - expected) > 0.001f)
+            {
+                Line("  [FAIL] " + attacker + " attacking " + defender + ": expected x" + Fmt(expected) + ", got x" + Fmt(actual));
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>Catches authoring mistakes where an effect's numeric fields are all zero, so it silently does nothing.</summary>
+        private static void CheckAbilityPotency(ContentDatabase db)
+        {
+            Line("ABILITY POTENCY");
+            bool zeroFound = false;
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int u = 0; u < units.Count; u++)
+            {
+                UnitDef def = units[u];
+                if (CheckAbilityEffects(def.BasicAttack, def.Name, "basic")) zeroFound = true;
+                if (CheckAbilityEffects(def.Active, def.Name, "active")) zeroFound = true;
+                if (def.Passive != null)
+                {
+                    AbilityDef wrapper = new AbilityDef();
+                    wrapper.Name = def.Passive.Name;
+                    wrapper.Effects = def.Passive.Effects;
+                    if (CheckAbilityEffects(wrapper, def.Name, "passive")) zeroFound = true;
+                }
+            }
+            Check(!zeroFound, "no ability effect is configured to deal, heal or shield exactly zero");
+            Line("");
+        }
+
+        private static bool CheckAbilityEffects(AbilityDef ability, string ownerName, string slot)
+        {
+            if (ability == null) return false;
+            bool found = false;
+            for (int i = 0; i < ability.Effects.Count; i++)
+            {
+                EffectDef e = ability.Effects[i];
+                bool zero = false;
+                if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f;
+                else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield) zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f;
+                else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat <= 0f;
+                if (zero)
+                {
+                    found = true;
+                    Line("  [FAIL] " + ownerName + "'s " + slot + " ability \"" + ability.Name + "\" has a " + e.Kind + " effect worth zero");
+                }
+            }
+            return found;
         }
 
         private static void CheckDeterminism(ContentDatabase db)
@@ -239,6 +324,63 @@ namespace Emberfall.DevHarness
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Statuses decrement once per the holder's own turn-end and remove themselves at zero.
+        /// Self-cast, finite-duration statuses are the clean case to verify: the apply and every
+        /// decrement happen on the same unit's own turns, so round(expire) - round(apply) must be
+        /// exactly duration - 1 (the first decrement lands at the end of the very turn it was cast).
+        /// Shield is excluded - it can also expire early by being fully absorbed, which is correct
+        /// behaviour, not a schedule bug.
+        /// </summary>
+        private static void CheckStatusExpiry(ContentDatabase db)
+        {
+            Line("STATUS DURATION");
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            StageDef stage = db.AllStages[0];
+
+            int checkedCount = 0;
+            bool violation = false;
+            string detail = "";
+
+            for (int seed = 1; seed <= 60 && !violation; seed++)
+            {
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+                Dictionary<string, int[]> pending = new Dictionary<string, int[]>(); // key -> [applyRound, duration]
+
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.StatusApplied && e.SourceId == e.TargetId
+                        && e.Status != StatusKind.Shield && e.Duration > 0 && e.Duration < 90)
+                    {
+                        string key = e.TargetId + ":" + (int)e.Status;
+                        pending[key] = new int[] { e.Round, e.Duration };
+                    }
+                    else if (e.Type == BattleEventType.StatusExpired && e.Status != StatusKind.Shield)
+                    {
+                        string key = e.TargetId + ":" + (int)e.Status;
+                        int[] rec;
+                        if (pending.TryGetValue(key, out rec))
+                        {
+                            pending.Remove(key);
+                            int expected = rec[0] + rec[1] - 1;
+                            checkedCount++;
+                            if (e.Round != expected)
+                            {
+                                violation = true;
+                                detail = "seed " + seed + ": " + StatusInfo.DisplayName(e.Status) + " applied round " + rec[0]
+                                    + " (duration " + rec[1] + ") expired round " + e.Round + ", expected round " + expected;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Check(checkedCount > 0, "sampled a self-applied status through its full duration (" + checkedCount + " instance(s))");
+            Check(!violation, "statuses expire exactly on schedule, not early or late" + (violation ? " (" + detail + ")" : ""));
+            Line("");
+        }
+
         private static void CheckSaveRoundTrip(ContentDatabase db)
         {
             Line("SAVE");
@@ -335,6 +477,78 @@ namespace Emberfall.DevHarness
         {
             UnitSnapshot u = r.FindUnit(id);
             return u != null ? u.Name : "?";
+        }
+
+        /// <summary>
+        /// Levels a fresh team directly to each stage's own recommendedPower (bypassing the real
+        /// gold economy - this checks the content is winnable at the power it advertises, not how
+        /// long a real player would take to reach it) and confirms at least one sampled battle wins.
+        /// </summary>
+        private static void CheckStageWinnability(ContentDatabase db)
+        {
+            Line("STAGE WINNABILITY (team levelled to each stage's own recommended power)");
+            bool anyUnwinnable = false;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+                profile.PlayerLevel = 60;
+                profile.Gold = 500000000L;
+                GameSession session = new GameSession(db, profile);
+                List<HeroInstance> team = profile.TeamHeroes();
+
+                int guard = 0;
+                while (profile.TeamPower() < stage.RecommendedPower && guard < 5000)
+                {
+                    HeroInstance cheapest = null;
+                    int cheapestCost = int.MaxValue;
+                    for (int i = 0; i < team.Count; i++)
+                    {
+                        if (team[i].Level >= session.HeroLevelCap) continue;
+                        int cost = session.LevelUpCost(team[i]);
+                        if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
+                    }
+                    if (cheapest == null) break;
+                    session.LevelUpHero(cheapest, 1);
+                    guard++;
+                }
+
+                int wins = 0;
+                const int Samples = 20;
+                for (int i = 0; i < Samples; i++)
+                {
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + s * 97 + i));
+                    if (r.Victory) wins++;
+                }
+                if (wins == 0)
+                {
+                    anyUnwinnable = true;
+                    Line("  [FAIL] " + stage.DisplayCode + " " + stage.Name + " never won in " + Samples
+                         + " tries at team power " + profile.TeamPower() + " (recommended " + stage.RecommendedPower + ")");
+                }
+            }
+            Check(!anyUnwinnable, "every stage is winnable by a team at its own recommended power");
+            Line("");
+        }
+
+        /// <summary>Sanity check the other direction: raw stats have to matter, not just be flavour.</summary>
+        private static void CheckUnderlevelledLoses(ContentDatabase db)
+        {
+            Line("UNDERLEVELLED SANITY");
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            StageDef finalStage = db.AllStages[db.AllStages.Count - 1];
+
+            int wins = 0;
+            const int Samples = 20;
+            for (int i = 0; i < Samples; i++)
+            {
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(finalStage, 7000000 + i));
+                if (r.Victory) wins++;
+            }
+            float winRate = wins / (float)Samples;
+            Check(winRate <= 0.15f, "a level-1 starter team reliably loses the final stage (" + Pct(winRate) + " win rate)");
+            Line("");
         }
 
         // ---------------------------------------------------------------- balance pass

@@ -57,13 +57,13 @@
         {
           "id": "ch1_9", "index": 9, "name": "Mothlight Steps", "subtitle": "Fast, thin things, and far too many of them.",
           "environment": "hollow", "gold": 500, "shards": 25, "accountXp": 85,
-          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 5200,
+          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 5550,
           "enemies": [ { "id": "grave_moth", "level": 30 }, { "id": "grave_moth", "level": 30 }, { "id": "grave_moth", "level": 30 } ]
         },
         {
           "id": "ch1_10", "index": 10, "name": "The Grey Bulwark", "subtitle": "Two wardens. One narrow bridge.",
           "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
-          "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 5500,
+          "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 5850,
           "enemies": [ { "id": "stone_warden", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 28 } ]
         },
         {
