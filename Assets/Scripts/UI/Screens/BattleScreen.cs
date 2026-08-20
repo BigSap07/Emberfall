@@ -27,8 +27,12 @@ namespace Emberfall.UI.Screens
             public Image EnergyFill;
             public Image ShieldFill;
             public Text Status;
+            public Image TurnPip;
             public CanvasGroup Group;
             public readonly List<StatusKind> Statuses = new List<StatusKind>();
+
+            /// <summary>Added to the bar's tracked screen position by LateUpdate while the turn cue plays.</summary>
+            public float TurnLift;
         }
 
         private sealed class FloatText
@@ -37,6 +41,13 @@ namespace Emberfall.UI.Screens
             public Text Label;
             public CanvasGroup Group;
             public bool Busy;
+        }
+
+        private sealed class TurnStripIcon
+        {
+            public RectTransform Root;
+            public Image Fill;
+            public int UnitId;
         }
 
         private StageDef _stage;
@@ -70,6 +81,10 @@ namespace Emberfall.UI.Screens
         private readonly Dictionary<int, UnitBar> _bars = new Dictionary<int, UnitBar>();
         private readonly List<FloatText> _floatPool = new List<FloatText>();
 
+        private RectTransform _turnStrip;
+        private readonly List<TurnStripIcon> _turnStripIcons = new List<TurnStripIcon>();
+        private UnitBar _activeTurnBar;
+
         public void SetStage(StageDef stage)
         {
             _stage = stage;
@@ -86,8 +101,16 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_textLayer, 0f);
 
             BuildTopHud();
+            BuildTurnStrip();
             BuildBanner();
             BuildResultPanel();
+        }
+
+        private void BuildTurnStrip()
+        {
+            _turnStrip = UIBuilder.Node("TurnStrip", Root);
+            UIBuilder.Box(_turnStrip, 0f, -146f, 900f, 36f, new Vector2(0.5f, 1f));
+            UIBuilder.HStack(_turnStrip, 8f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
         }
 
         private void BuildTopHud()
@@ -225,6 +248,8 @@ namespace Emberfall.UI.Screens
 
             App.SetBackgroundVisible(true);
             ClearBars();
+            ClearTurnStrip();
+            _activeTurnBar = null;
             if (_world != null)
             {
                 _world.Teardown();
@@ -294,6 +319,10 @@ namespace Emberfall.UI.Screens
 
             Color tint = snapshot.IsPlayer ? UITheme.HealthAlly : UITheme.HealthEnemy;
 
+            // starts fully transparent; TurnCue lights it for the duration of this unit's turn
+            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, new Color(1f, 1f, 1f, 0f), 6);
+            UIBuilder.Box(bar.TurnPip.rectTransform, 0f, 108f, 22f, 22f, new Vector2(0.5f, 0f));
+
             // stacked upward from the unit's head: status, name, health, ward, energy
             bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 4, UITheme.Warning, TextAnchor.LowerCenter);
             UIBuilder.Box(bar.Status.rectTransform, 0f, 84f, 260f, 22f, new Vector2(0.5f, 0f));
@@ -339,7 +368,7 @@ namespace Emberfall.UI.Screens
                 bar.Group.alpha = visible ? 1f : Mathf.Max(0f, bar.Group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
 
-                bar.Root.anchoredPosition = new Vector2(screen.x / scale, screen.y / scale);
+                bar.Root.anchoredPosition = new Vector2(screen.x / scale, screen.y / scale + bar.TurnLift);
             }
         }
 
@@ -365,8 +394,19 @@ namespace Emberfall.UI.Screens
             {
                 case BattleEventType.RoundStart:
                     _roundLabel.text = "ROUND " + e.Value + " / " + App.Session.Balance.MaxRounds;
+                    RebuildTurnStrip(index);
                     yield return Wait(0.10f);
                     break;
+
+                case BattleEventType.TurnStart:
+                {
+                    UnitBar bar = BarOf(e.SourceId);
+                    if (_activeTurnBar != null && _activeTurnBar != bar) SettleTurnBar(_activeTurnBar);
+                    _activeTurnBar = bar;
+                    AdvanceTurnStrip(e.SourceId);
+                    if (bar != null) yield return TurnCue(bar);
+                    break;
+                }
 
                 case BattleEventType.BasicAttack:
                 {
@@ -558,6 +598,75 @@ namespace Emberfall.UI.Screens
         {
             UnitBar bar;
             return _bars.TryGetValue(id, out bar) ? bar : null;
+        }
+
+        // ------------------------------------------------------------------ turn cue / strip
+
+        /// <summary>Turn pip lights and the bar rises over 0.12s - the "cause" beat before intent/motion/impact.</summary>
+        private IEnumerator TurnCue(UnitBar bar)
+        {
+            float duration = Mathf.Max(0.05f, 0.12f / _speed);
+            Color lit = UITheme.Gold;
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                bar.TurnPip.color = new Color(lit.r, lit.g, lit.b, k);
+                bar.TurnLift = Mathf.Lerp(0f, 14f, k);
+                yield return null;
+            }
+            bar.TurnPip.color = lit;
+            bar.TurnLift = 14f;
+        }
+
+        /// <summary>Drops a bar out of "acting now" state - called on the previous actor once a new TurnStart fires.</summary>
+        private void SettleTurnBar(UnitBar bar)
+        {
+            bar.TurnLift = 0f;
+            Color c = bar.TurnPip.color;
+            bar.TurnPip.color = new Color(c.r, c.g, c.b, 0f);
+        }
+
+        /// <summary>Repopulates the turn strip from the TurnStart events between this RoundStart and the next.</summary>
+        private void RebuildTurnStrip(int roundStartIndex)
+        {
+            ClearTurnStrip();
+            for (int j = roundStartIndex + 1; j < _result.Events.Count; j++)
+            {
+                BattleEvent e = _result.Events[j];
+                if (e.Type == BattleEventType.RoundStart) break;
+                if (e.Type != BattleEventType.TurnStart) continue;
+
+                UnitSnapshot snap = _result.FindUnit(e.SourceId);
+                Color tint = snap != null && snap.IsPlayer ? UITheme.HealthAlly : UITheme.HealthEnemy;
+
+                TurnStripIcon icon = new TurnStripIcon();
+                icon.UnitId = e.SourceId;
+                icon.Fill = UIBuilder.Panel("Turn_" + e.SourceId, _turnStrip, UITheme.WithAlpha(tint, 0.4f), 8);
+                UIBuilder.Sized(icon.Fill.rectTransform, 30f, 30f);
+                icon.Root = icon.Fill.rectTransform;
+                _turnStripIcons.Add(icon);
+            }
+        }
+
+        /// <summary>Full-alpha on the acting unit's icon, dimmed on everyone else in the strip.</summary>
+        private void AdvanceTurnStrip(int unitId)
+        {
+            for (int i = 0; i < _turnStripIcons.Count; i++)
+            {
+                TurnStripIcon icon = _turnStripIcons[i];
+                bool active = icon.UnitId == unitId;
+                Color c = icon.Fill.color;
+                icon.Fill.color = new Color(c.r, c.g, c.b, active ? 1f : 0.4f);
+            }
+        }
+
+        private void ClearTurnStrip()
+        {
+            for (int i = 0; i < _turnStripIcons.Count; i++)
+                if (_turnStripIcons[i].Root != null) Destroy(_turnStripIcons[i].Root.gameObject);
+            _turnStripIcons.Clear();
         }
 
         private Color AspectTint(UnitActor actor)
