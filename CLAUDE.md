@@ -20,7 +20,9 @@ campaign progression, summoning, idle income, local saving. Portrait, touch-firs
   it. See `DESIGN-BATTLE-READABILITY.md`.
 - **Content is JSON** in `Assets/Resources/Content` (`heroes.json`, `enemies.json`,
   `campaign.json`, `balance.json`). Balance and content changes go there, not into code.
-- **Agents work on branches, never on `main`.** Branch first, commit there, leave `main` alone.
+- **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.
+- **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
+  them.
 - Verify with `Tools/build-check.ps1` before calling work done.
 
 ## Update posts (Discord)
