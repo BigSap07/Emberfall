@@ -38,6 +38,7 @@ namespace Emberfall.DevHarness
             CheckDeterminism(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
+            CheckDebrief();
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
@@ -379,6 +380,106 @@ namespace Emberfall.DevHarness
             Check(checkedCount > 0, "sampled a self-applied status through its full duration (" + checkedCount + " instance(s))");
             Check(!violation, "statuses expire exactly on schedule, not early or late" + (violation ? " (" + detail + ")" : ""));
             Line("");
+        }
+
+        /// <summary>
+        /// Hand-constructed BattleResults, not real simulated fights - each one is built to
+        /// isolate a single clause of Debrief.Summarize's priority order and confirm it wins.
+        /// </summary>
+        private static void CheckDebrief()
+        {
+            Line("DEBRIEF");
+            CheckDebriefTimeout();
+            CheckDebriefAspect();
+            CheckDebriefFallback();
+            Line("");
+        }
+
+        private static void CheckDebriefTimeout()
+        {
+            BattleResult r = new BattleResult();
+            r.TimedOut = true;
+            r.PlayerHpRatio = 0.4f;
+            r.EnemyHpRatio = 0.6f;
+            r.Units.Add(DebriefUnit(0, true, "Hero", "Active"));
+            r.Units.Add(DebriefUnit(1, false, "Foe", "Active"));
+            // a qualifying ability-dominance signal too, on purpose - Timeout is priority 1 and
+            // must win even though a later clause would also fire on this same event list.
+            DebriefDamage(r, 1, 0, 500, "Big Hit", 1.2f, 1);
+
+            DebriefResult result = Debrief.Summarize(r);
+            Check(result.Clause == DebriefClause.Timeout,
+                  "Debrief picks Timeout for a constructed timeout, ahead of a qualifying ability/aspect signal (got " + result.Clause + ")");
+        }
+
+        private static void CheckDebriefAspect()
+        {
+            BattleResult r = new BattleResult();
+            r.Units.Add(DebriefUnit(0, true, "Hero", "Active"));
+            r.Units.Add(DebriefUnit(1, false, "FoeA", "Active"));
+            r.Units.Add(DebriefUnit(2, false, "FoeB", "Active"));
+            r.Units.Add(DebriefUnit(3, false, "FoeC", "Active"));
+
+            // three different abilities so no single one clears the 35% ability-dominance bar,
+            // but two of them are Aspect-favoured (>=1.2) and together clear the 35% Aspect bar.
+            // No TurnStart events at all, so the Speed clause has nothing to measure and can't fire.
+            DebriefDamage(r, 1, 0, 233, "Ash Nova", 1.2f, 1);
+            DebriefDamage(r, 2, 0, 233, "Brine Lash", 1.2f, 1);
+            DebriefDamage(r, 3, 0, 234, "Wing Dust", 1.0f, 1);
+
+            DebriefResult result = Debrief.Summarize(r);
+            Check(result.Clause == DebriefClause.Aspect,
+                  "Debrief picks Aspect for a constructed aspect-mismatch loss, ahead of the (non-dominant) abilities that dealt it (got " + result.Clause + ")");
+        }
+
+        private static void CheckDebriefFallback()
+        {
+            BattleResult r = new BattleResult();
+            // no ActiveAbilityName at all - keeps this test clean of the Unspent Active clause
+            // regardless of AbilityCast events, which this construction doesn't need either way.
+            r.Units.Add(DebriefUnit(0, true, "Hero", ""));
+            r.Units.Add(DebriefUnit(1, false, "FoeA", ""));
+            r.Units.Add(DebriefUnit(2, false, "FoeB", ""));
+            r.Units.Add(DebriefUnit(3, false, "FoeC", ""));
+
+            // three neutral-Aspect hits from three different abilities - none clears 35% of the
+            // 302 total (100/302, 100/302, 102/302 all under 35%), so neither Ability nor Aspect
+            // fires; no TurnStart events, so Speed can't fire either.
+            DebriefDamage(r, 1, 0, 100, "Flail", 1f, 1);
+            DebriefDamage(r, 2, 0, 100, "Spit Ember", 1f, 1);
+            DebriefDamage(r, 3, 0, 102, "Dust Rake", 1f, 2);
+
+            BattleEvent death = BattleEvent.Make(BattleEventType.Death, 2);
+            death.SourceId = 3;
+            death.TargetId = 0;
+            r.Events.Add(death);
+
+            DebriefResult result = Debrief.Summarize(r);
+            bool namesBoth = result.Text.Contains("Hero") && result.Text.Contains("102");
+            Check(result.Clause == DebriefClause.Fallback,
+                  "Debrief falls back to death+biggest-hit when nothing else qualifies (got " + result.Clause + ")");
+            Check(namesBoth, "the fallback names both the death and the largest hit (" + result.Text + ")");
+        }
+
+        private static UnitSnapshot DebriefUnit(int id, bool isPlayer, string name, string activeAbilityName)
+        {
+            UnitSnapshot u = new UnitSnapshot();
+            u.Id = id;
+            u.IsPlayer = isPlayer;
+            u.Name = name;
+            u.ActiveAbilityName = activeAbilityName;
+            return u;
+        }
+
+        private static void DebriefDamage(BattleResult r, int sourceId, int targetId, int value, string abilityName, float aspectFactor, int round)
+        {
+            BattleEvent e = BattleEvent.Make(BattleEventType.Damage, round);
+            e.SourceId = sourceId;
+            e.TargetId = targetId;
+            e.Value = value;
+            e.AbilityName = abilityName;
+            e.AspectFactor = aspectFactor;
+            r.Events.Add(e);
         }
 
         private static void CheckSaveRoundTrip(ContentDatabase db)

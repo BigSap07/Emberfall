@@ -75,6 +75,7 @@ namespace Emberfall.UI.Screens
         private Text _resultTitle;
         private Text _resultSub;
         private RectTransform _rewardList;
+        private Text _debriefText;
         private UIButton _resultPrimary;
         private UIButton _resultSecondary;
 
@@ -195,13 +196,20 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_rewardList, 28f, 58f, 28f, 24f);
             UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
-            _resultSecondary = UIBuilder.SecondaryButton("Again", _resultPanel, "FIGHT AGAIN", UITheme.FontBody);
-            UIBuilder.Box(_resultSecondary.Root, 0f, 300f, 860f, 118f, new Vector2(0.5f, 0f));
-            _resultSecondary.OnClick(Replay);
+            // the Debrief line - one sentence, the single biggest reason the fight went this way.
+            // Sits in the gap between the rewards card and the buttons below, which has ~360px
+            // of unused space at this anchor (card bottom at distance-from-bottom 779, buttons
+            // starting at 418) - room for a wrapped sentence with no relayout of anything above it.
+            _debriefText = UIBuilder.WrappedLabel("Debrief", _resultPanel, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
+            UIBuilder.Box(_debriefText.rectTransform, 0f, 442f, 860f, 150f, new Vector2(0.5f, 0f));
 
-            _resultPrimary = UIBuilder.GoldButton("Continue", _resultPanel, "CONTINUE", UITheme.FontHeading);
+            _resultSecondary = UIBuilder.SecondaryButton("AdjustLine", _resultPanel, "ADJUST LINE", UITheme.FontBody);
+            UIBuilder.Box(_resultSecondary.Root, 0f, 300f, 860f, 118f, new Vector2(0.5f, 0f));
+            _resultSecondary.OnClick(AdjustLine);
+
+            _resultPrimary = UIBuilder.GoldButton("Rematch", _resultPanel, "REMATCH", UITheme.FontHeading);
             UIBuilder.Box(_resultPrimary.Root, 0f, 160f, 860f, 126f, new Vector2(0.5f, 0f));
-            _resultPrimary.OnClick(LeaveBattle);
+            _resultPrimary.OnClick(Replay);
 
             _resultPanel.gameObject.SetActive(false);
         }
@@ -920,6 +928,11 @@ namespace Emberfall.UI.Screens
                               + (_result.TimedOut ? "  -  TIME LIMIT REACHED" : "")
                               + "  -  BANNER AT " + Mathf.RoundToInt(_result.PlayerHpRatio * 100f) + "%";
 
+            // one plain sentence naming the single biggest reason this fight went the way it did -
+            // win or lose, per DESIGN-FIRST-TEN-MINUTES: "a one-line cause... win or lose"
+            DebriefResult debrief = Debrief.Summarize(_result);
+            _debriefText.text = debrief.Text;
+
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
 
             if (_result.Victory)
@@ -931,9 +944,6 @@ namespace Emberfall.UI.Screens
                 if (rewards.PlayerLevelsGained > 0)
                     AddRewardRow("RANK UP", "+" + rewards.PlayerLevelsGained + "  (hero cap " + App.Session.HeroLevelCap + ")", UITheme.Success);
                 if (rewards.UnlockedNextStage) AddRewardRow("NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
-
-                _resultPrimary.SetText("SPEND REWARDS");
-                _resultSecondary.SetText("FIGHT AGAIN");
                 App.Audio.Victory();
             }
             else
@@ -941,8 +951,6 @@ namespace Emberfall.UI.Screens
                 AddRewardRow("NOTHING RECOVERED", "-", UITheme.TextDim);
                 AddRewardRow("LEVEL YOUR HEROES", "HERO SCREEN", UITheme.TextMuted);
                 AddRewardRow("OR COLLECT THE CACHE", "MAIN SCREEN", UITheme.TextMuted);
-                _resultPrimary.SetText("IMPROVE HEROES");
-                _resultSecondary.SetText("TRY AGAIN");
                 App.Audio.Defeat();
             }
 
@@ -1007,11 +1015,12 @@ namespace Emberfall.UI.Screens
             OnShow();
         }
 
-        private void LeaveBattle()
+        /// <summary>Straight to Heroes to change the team - the stage stays remembered on this
+        /// screen (_stage isn't cleared), so Campaign still opens on the same fight afterward.</summary>
+        private void AdjustLine()
         {
             App.Audio.Tap();
-            if (_result != null && _result.Victory) Router.Show(ScreenId.Campaign, false);
-            else Router.Show(ScreenId.Heroes, false);
+            Router.Show(ScreenId.Heroes, false);
         }
     }
 }
