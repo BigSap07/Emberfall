@@ -170,6 +170,52 @@ namespace Emberfall.UI
             return card;
         }
 
+        /// <summary>
+        /// A hero the player hasn't summoned yet: same card shape as HeroCard so the grid reads
+        /// as one collection, but the portrait is a dimmed silhouette and there is no level/power/
+        /// deployed state to show - there's no HeroInstance, only the definition.
+        /// </summary>
+        public static UIButton LockedHeroCard(string name, Transform parent, HeroDef def, Action onClick)
+        {
+            UIButton card = new UIButton();
+            card.Root = UIBuilder.Node(name, parent);
+            UIBuilder.Sized(card.Root, 0f, 300f);
+
+            card.Background = card.Root.gameObject.AddComponent<Image>();
+            card.Background.sprite = TextureLab.RoundedRect(20);
+            card.Background.type = Image.Type.Sliced;
+            card.Background.color = UITheme.PanelSunken;
+
+            card.Button = card.Root.gameObject.AddComponent<Button>();
+            card.Button.targetGraphic = card.Background;
+            card.Root.gameObject.AddComponent<ButtonPress>();
+            card.OnClick(onClick);
+
+            card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.BorderSoft, 0.7f), 20, 2);
+
+            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Rarity, 128f, false);
+            UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
+            // dimmed silhouette: a dark scrim over the portrait hides the palette/sigil detail
+            // without hiding the shape, and the whole card fades to signal "not yours yet"
+            Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), new Color(0f, 0f, 0f, 0.72f));
+            UIBuilder.FillParent(scrim.rectTransform, 0f);
+            card.Background.color = UITheme.WithAlpha(card.Background.color, 0.7f);
+
+            Text nameLabel = UIBuilder.Label("Name", card.Root, def.Name, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
+            UIBuilder.Box(nameLabel.rectTransform, 0f, -156f, 260f, 30f, new Vector2(0.5f, 1f));
+
+            RectTransform aspectChip = UIBuilder.Chip("Aspect", card.Root, AspectChart.DisplayName(def.Aspect), UITheme.AspectColor(def.Aspect), UITheme.FontTiny);
+            UIBuilder.Box(aspectChip, 0f, -190f, 170f, 32f, new Vector2(0.5f, 1f));
+
+            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), UITheme.FontTiny);
+            UIBuilder.Box(roleChip, 0f, -226f, 170f, 32f, new Vector2(0.5f, 1f));
+
+            RectTransform lockedBadge = UIBuilder.Chip("Locked", card.Root, "LOCKED", UITheme.TextDim, UITheme.FontTiny);
+            UIBuilder.Box(lockedBadge, -10f, -10f, 150f, 30f, new Vector2(1f, 1f));
+
+            return card;
+        }
+
         /// <summary>Small aspect + level tag used under enemy previews in the campaign list.</summary>
         public static RectTransform EnemyPip(string name, Transform parent, UnitDef def, int level, float size)
         {

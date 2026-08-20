@@ -14,6 +14,7 @@ namespace Emberfall.UI.Screens
         public override ScreenId Id { get { return ScreenId.HeroDetail; } }
 
         private HeroInstance _hero;
+        private HeroDef _lockedDef;
 
         private Text _headerSubtitle;
         private RectTransform _identityCard;
@@ -23,6 +24,7 @@ namespace Emberfall.UI.Screens
         private Text _powerLabel;
         private Text _levelLabel;
         private RectTransform _chipRow;
+        private Text _slotHint;
         private RectTransform _slotRow;
         private readonly UIButton[] _slotButtons = new UIButton[3];
 
@@ -33,11 +35,26 @@ namespace Emberfall.UI.Screens
         private RectTransform _abilityHost;
         private UIButton _levelUpButton;
         private UIButton _levelUpTenButton;
+        private UIButton _obtainButton;
         private Text _capNote;
+
+        /// <summary>The definition backing the screen right now, whichever mode it's in.</summary>
+        private HeroDef CurrentDef
+        {
+            get { return _hero != null ? _hero.Def : _lockedDef; }
+        }
 
         public void SetHero(HeroInstance hero)
         {
             _hero = hero;
+            _lockedDef = null;
+        }
+
+        /// <summary>A hero the player hasn't summoned yet - shows identity and abilities, not stats or deploy/level actions.</summary>
+        public void SetLockedHero(HeroDef def)
+        {
+            _lockedDef = def;
+            _hero = null;
         }
 
         protected override void Build()
@@ -86,8 +103,8 @@ namespace Emberfall.UI.Screens
             _powerLabel = UIBuilder.Label("Power", _identityCard, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperRight);
             UIBuilder.Box(_powerLabel.rectTransform, -28f, -158f, 320f, 44f, new Vector2(1f, 1f));
 
-            Text slotHint = UIBuilder.Label("SlotHint", _identityCard, "BANNER SLOT", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(slotHint.rectTransform, 28f, -218f, 300f, 26f, new Vector2(0f, 1f));
+            _slotHint = UIBuilder.Label("SlotHint", _identityCard, "BANNER SLOT", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            UIBuilder.Box(_slotHint.rectTransform, 28f, -218f, 300f, 26f, new Vector2(0f, 1f));
 
             _slotRow = UIBuilder.Node("Slots", _identityCard);
             UIBuilder.Box(_slotRow, 28f, 24f, 0f, 74f, new Vector2(0f, 0f));
@@ -161,13 +178,17 @@ namespace Emberfall.UI.Screens
             _levelUpTenButton = UIBuilder.SecondaryButton("LevelUpTen", bar, "x10", UITheme.FontHeading);
             UIBuilder.Box(_levelUpTenButton.Root, -UITheme.ScreenPadding, 28f, 340f, 116f, new Vector2(1f, 0f));
             _levelUpTenButton.OnClick(delegate { LevelUp(10); });
+
+            _obtainButton = UIBuilder.GoldButton("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading);
+            UIBuilder.Box(_obtainButton.Root, 0f, 28f, 980f, 116f, new Vector2(0.5f, 0f));
+            _obtainButton.OnClick(GoToSummon);
         }
 
         // ------------------------------------------------------------------ refresh
 
         public override void OnShow()
         {
-            if (_hero == null && App.Session.Profile.Heroes.Count > 0) _hero = App.Session.Profile.Heroes[0];
+            if (_hero == null && _lockedDef == null && App.Session.Profile.Heroes.Count > 0) _hero = App.Session.Profile.Heroes[0];
             App.RefreshHud();
             RebuildStatic();
             Refresh();
@@ -176,12 +197,19 @@ namespace Emberfall.UI.Screens
         /// <summary>Rebuilds the parts that only change when the selected hero changes.</summary>
         private void RebuildStatic()
         {
-            if (_hero == null) return;
-            HeroDef def = _hero.Def;
+            HeroDef def = CurrentDef;
+            if (def == null) return;
+            bool locked = _hero == null;
 
             for (int i = _portraitHost.childCount - 1; i >= 0; i--) Destroy(_portraitHost.GetChild(i).gameObject);
-            RectTransform portrait = Widgets.Portrait("Portrait", _portraitHost, def, def.Rarity, 176f, true);
+            RectTransform portrait = Widgets.Portrait("Portrait", _portraitHost, def, def.Rarity, 176f, !locked);
             UIBuilder.FillParent(portrait, 0f);
+            if (locked)
+            {
+                // dimmed silhouette - same identity chips below, but the portrait itself stays a shape, not a reveal
+                Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), new Color(0f, 0f, 0f, 0.72f));
+                UIBuilder.FillParent(scrim.rectTransform, 0f);
+            }
 
             for (int i = _chipRow.childCount - 1; i >= 0; i--) Destroy(_chipRow.GetChild(i).gameObject);
             AddChip(UITheme.RarityName(def.Rarity), UITheme.RarityColor(def.Rarity), 180f);
@@ -204,6 +232,13 @@ namespace Emberfall.UI.Screens
             _nameLabel.text = def.Name;
             _titleLabel.text = def.Title.ToUpperInvariant();
             _headerSubtitle.text = def.Lore;
+
+            _statsCard.gameObject.SetActive(!locked);
+            _slotHint.gameObject.SetActive(!locked);
+            _slotRow.gameObject.SetActive(!locked);
+            _levelUpButton.Root.gameObject.SetActive(!locked);
+            _levelUpTenButton.Root.gameObject.SetActive(!locked);
+            _obtainButton.Root.gameObject.SetActive(locked);
         }
 
         private void AddChip(string text, Color tint, float width)
@@ -214,7 +249,11 @@ namespace Emberfall.UI.Screens
 
         private void Refresh()
         {
-            if (_hero == null) return;
+            if (_hero == null)
+            {
+                RefreshLocked();
+                return;
+            }
             GameSession session = App.Session;
             HeroDef def = _hero.Def;
 
@@ -261,6 +300,15 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>No HeroInstance exists for a locked hero, so there's no level/power/deploy state to show.</summary>
+        private void RefreshLocked()
+        {
+            if (_lockedDef == null) return;
+            _levelLabel.text = "";
+            _powerLabel.text = "LOCKED";
+            _capNote.text = "Not yet summoned. Open the Rift and try for " + _lockedDef.Name + ".";
+        }
+
         private static void SetDelta(Text label, float delta, bool atCap)
         {
             if (label == null) return;
@@ -304,6 +352,12 @@ namespace Emberfall.UI.Screens
             App.RequestSave();
             App.Notify(_hero.Def.Name + " deployed to slot " + (slot + 1) + ".");
             Refresh();
+        }
+
+        private void GoToSummon()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Summon);
         }
     }
 }
