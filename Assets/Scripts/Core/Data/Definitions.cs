@@ -25,6 +25,16 @@ namespace Emberfall.Core.Data
         /// </summary>
         public string Sprite = "";
 
+        /// <summary>
+        /// Sprite only. Fraction of the canvas, measured from the bottom (the feet), that is the
+        /// character's own body - head to feet, not counting anything raised above the head.
+        /// Defaults to 1: the whole canvas is body, today's behaviour, unchanged for every hero
+        /// that does not set this key. A raised weapon or prop needs the remaining top fraction
+        /// reserved for it; see UnitRig.BuildSprite for how that fraction turns into world space,
+        /// and DESIGN-ART-DELIVERY.md for how an artist measures it from their own file.
+        /// </summary>
+        public float SpriteBodyFraction = 1f;
+
         public static VisualDef FromJson(JsonValue j)
         {
             VisualDef v = new VisualDef();
@@ -37,6 +47,7 @@ namespace Emberfall.Core.Data
             v.Scale = j.GetFloat("scale", v.Scale);
             v.Sigil = j.GetInt("sigil", v.Sigil);
             v.Sprite = j.GetString("sprite", v.Sprite);
+            v.SpriteBodyFraction = j.GetFloat("spriteBodyFraction", v.SpriteBodyFraction);
             return v;
         }
     }

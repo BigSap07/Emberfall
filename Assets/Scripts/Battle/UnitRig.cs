@@ -72,7 +72,7 @@ namespace Emberfall.Battle
             // same code, same output, no behaviour change.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite);
+                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction);
             }
             else
             {
@@ -201,20 +201,40 @@ namespace Emberfall.Battle
 
         /// <summary>
         /// A single textured quad standing where the procedural silhouette would have stood.
-        /// Height matches BuildHumanoid's 1.85 exactly, so head/centre-position math elsewhere
-        /// (floating text, camera bar tracking, VFX impact points, all keyed on Rig.Height) does
-        /// not need to know or care which kind of rig it is looking at - "roughly the same visual
-        /// footprint as the procedural version" is met by construction, not by eyeballing it.
-        /// Width is derived from the loaded texture's own aspect ratio at that fixed height, not
-        /// hardcoded, so a differently-proportioned placeholder or the eventual real art both
-        /// render at their natural proportions without a code change.
+        /// Height (the field, 1.85) stays the body's own true height regardless of what this
+        /// method scales the quad to - head/centre-position math elsewhere (floating text,
+        /// camera bar tracking, VFX impact points, all keyed on Rig.Height) reads that field, not
+        /// the quad, so it keeps anchoring to the top of the body even when the quad extends
+        /// above it for a raised weapon. See bodyFraction below for what does extend it, and why.
         /// </summary>
-        private void BuildSprite(string spriteId)
+        private void BuildSprite(string spriteId, float bodyFraction)
         {
             Height = 1.85f;
             Texture2D tex = BattleAssets.UnitSprite(spriteId);
             float aspect = tex.height > 0 ? tex.width / (float)tex.height : 0.6f;
-            float width = Height * aspect;
+
+            // Canvas height was previously just Height, which assumes the whole image is body -
+            // true for Orrin's plain rectangle, false for anything drawn holding a raised weapon:
+            // Wren's staff reaches above her own head, so mapping the FULL canvas to 1.85 mapped
+            // her actual body to something shorter than 1.85, the same class of bug WeaponPivot
+            // was built to avoid for procedural rigs (a weapon there extends past the torso
+            // capsule without moving Height). bodyFraction is the sprite equivalent: the artist
+            // reports what fraction of their own canvas, from the bottom, is body - not an
+            // engine number tuned by trial and error, a measurement taken directly off their own
+            // file the same way they already report its pixel dimensions. Canvas height becomes
+            // Height / bodyFraction, taller than Height whenever bodyFraction < 1, so the BOTTOM
+            // bodyFraction slice of that taller canvas still lands at exactly Height - the same
+            // target every procedural body already hits - and the remaining top slice is where
+            // the weapon's overflow goes, extending the quad upward rather than shrinking the
+            // body to fit inside it.
+            //
+            // bodyFraction defaults to 1 when a hero's data does not set it, which reduces this
+            // to canvasHeight = Height / 1 = Height - algebraically identical to the previous
+            // formula, not just similar. Orrin's entry sets no such value, so this is a proven
+            // no-op for him, not an assumed one; the same holds for every other sprite until one
+            // is actually authored with a raised weapon and a real fraction.
+            float canvasHeight = Height / Mathf.Max(0.05f, bodyFraction);
+            float width = canvasHeight * aspect;
 
             Material material = BattleAssets.NewFx(tex, Color.white, false);
             // Primary/Secondary/Accent all point at the one sprite material, not three separate
@@ -229,8 +249,11 @@ namespace Emberfall.Battle
             StripCollider(quad);
             Transform t = quad.transform;
             t.SetParent(Body, false);
-            t.localPosition = new Vector3(0f, Height * 0.5f, 0f);
-            t.localScale = new Vector3(width, Height, 1f);
+            // Bottom edge of the quad still sits at y 0 either way - centring on half the
+            // (possibly taller) canvasHeight is what keeps feet on the ground while letting the
+            // extra height for a raised weapon extend upward, never downward.
+            t.localPosition = new Vector3(0f, canvasHeight * 0.5f, 0f);
+            t.localScale = new Vector3(width, canvasHeight, 1f);
 
             // No local rotation any more: the quad inherits Root's turn (180 -/+ ThreeQuarterTurn,
             // see Build) and so leans with the procedural rigs instead of staying square to the
