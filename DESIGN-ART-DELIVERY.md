@@ -98,7 +98,42 @@ bottom edge is treated as a fixed reference point.
 blob under every character automatically, sprite or not. A shadow baked into your art will
 either double up with the real one or sit at the wrong angle relative to it.
 
-## 5. What the game does to the art at runtime
+## 5. Facing: draw at three quarters, not square on
+
+**Draw the character turned 30 degrees off square-on, toward their own left.** Their own left is
+the viewer's right, so on your canvas the character's body and face angle toward the right-hand
+edge while still looking substantially at the viewer. This is the classic three-quarter portrait
+angle, at the shallow end of it: a clear turn, both eyes still visible, the far shoulder only
+slightly narrowed. Not a profile, and not a full 45 degrees.
+
+The exact number matters, so match it rather than approximating: **30 degrees**.
+
+The reason is that the game turns the image by that same 30 degrees in the 3D scene, mirrored by
+side. The player's team stands on the left of the screen turned toward the right; the enemy team
+stands on the right turned toward the left, so the two lines face each other across the middle.
+Because the two sides turn opposite ways, **the enemy side displays the identical file mirrored** -
+there is no separate enemy artwork, and no way to opt one side out of the flip.
+
+Two consequences worth designing around:
+
+- **Sprites are flat.** The game turns a flat image, which foreshortens it; it does not rotate a
+  3D character. Art drawn square-on and then turned reads as a flat card standing at an angle,
+  not as a character facing sideways. Drawing the turn into the art is what makes the two agree,
+  and it is the whole reason this section exists.
+- **Anything that must not mirror will mirror.** Text, insignia on one shoulder, a weapon held in
+  a specific hand, an asymmetric scar: all of these flip on the enemy side. Prefer designs that
+  survive being mirrored, or accept that the enemy version reads reversed.
+
+Orrin Kaal's shipped placeholder is drawn square-on and predates this rule, so until it is
+redrawn it will show this exact mismatch. That is expected and is not a bug in the loader.
+
+Not yet verified: like everything else in this document, the 30 degree turn has been derived
+from the code rather than seen rendering. In particular, which of the two sides ends up showing
+the un-mirrored art is worth confirming in the editor the first time real three-quarter art
+lands. If it turns out reversed, it is a one-line engine fix rather than a redraw, so do not
+pre-compensate for it in the art.
+
+## 6. What the game does to the art at runtime
 
 The character isn't static once it's in a battle. Three effects apply directly to your image's
 pixels, automatically, with no extra art required from you. It helps to know what they do so
@@ -126,7 +161,7 @@ character also tips backward as it fades, the same motion used for the built-in 
 image tipping over will read differently than a character with actual depth falling over; this
 hasn't been looked at yet and is worth an early look once someone can see it in motion.
 
-## 6. Not yet handled
+## 7. Not yet handled
 
 Stated plainly, so nothing here is assumed that doesn't exist yet:
 
@@ -148,7 +183,7 @@ Stated plainly, so nothing here is assumed that doesn't exist yet:
   too big, too small, or off-position at the fixed height, the fix today is re-cropping or
   re-scaling the file itself before it's delivered, not a setting anyone can adjust afterward.
 
-## 7. Reconciling with the art bible
+## 8. Reconciling with the art bible
 
 DESIGN-ART-BIBLE.md sets the visual rules; this document doesn't repeat them. Two of its own
 notes are directly relevant to anyone drawing a battle sprite, so read them there rather than
@@ -165,7 +200,7 @@ differently depending on where you look at it from. The built-in procedural look
 that: a baked-in rim light and a directional shading response, so its materials visibly react to
 angle. The sprite path has none of that. It displays your flat pixels exactly as painted, with
 no added lighting, no rim highlight, no directional shading of any kind, on top of what the
-three runtime effects in section 5 do. Whatever light-and-shadow read a material needs has to be
+three runtime effects in section 6 do. Whatever light-and-shadow read a material needs has to be
 painted directly into the artwork as a fixed, unchanging highlight. It cannot be added by the
 engine the way it can for a procedural character. This is a real gap between what the bible
 describes and what the current loader can do, not a rule to work around quietly, and it should
