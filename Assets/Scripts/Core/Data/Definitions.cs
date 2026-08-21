@@ -15,6 +15,16 @@ namespace Emberfall.Core.Data
         public float Scale = 1f;
         public int Sigil = 0;                  // index of the emblem drawn on the portrait
 
+        /// <summary>
+        /// Optional sprite id for the battle screen rig. Empty (the default) means the unit
+        /// stays fully procedural - no behaviour change from today. A non-empty value loads
+        /// Resources/Sprites/Units/{Sprite}.png and the battle screen renders that image on a
+        /// billboard quad instead of building the primitive body. Menu portraits (hero cards,
+        /// hero detail, the summon reveal) are a separate rendering path and are unaffected
+        /// either way - this only concerns the 3D battle rig.
+        /// </summary>
+        public string Sprite = "";
+
         public static VisualDef FromJson(JsonValue j)
         {
             VisualDef v = new VisualDef();
@@ -26,6 +36,7 @@ namespace Emberfall.Core.Data
             v.Weapon = j.GetString("weapon", v.Weapon);
             v.Scale = j.GetFloat("scale", v.Scale);
             v.Sigil = j.GetInt("sigil", v.Sigil);
+            v.Sprite = j.GetString("sprite", v.Sprite);
             return v;
         }
     }

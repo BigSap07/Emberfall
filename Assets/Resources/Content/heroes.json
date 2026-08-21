@@ -13,7 +13,7 @@
       "lore": "Held the Cinder Gate alone for nine nights. The ash never fully washed out of his skin.",
       "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
       "critChance": 0.08, "critDamage": 1.5, "growth": 0.115, "startEnergy": 10,
-      "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0 },
+      "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0, "sprite": "orrin_kaal" },
       "basic": {
         "id": "orrin_basic", "name": "Ashen Cleave", "vfx": "slash",
         "description": "A heavy downward swing at the nearest foe.",

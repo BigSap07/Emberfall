@@ -38,27 +38,39 @@ namespace Emberfall.Battle
             rig.Body = bodyObject.transform;
             rig.Body.SetParent(rig.Root, false);
 
-            Color primary = UITheme.Hex(visual.Primary);
-            Color secondary = UITheme.Hex(visual.Secondary);
-            Color accent = UITheme.Hex(visual.Accent);
-
-            rig.Primary = BattleAssets.NewLit(primary, primary * 0.85f, 0f);
-            rig.Secondary = BattleAssets.NewLit(secondary, primary * 0.5f, 0f);
-            rig.Accent = BattleAssets.NewLit(accent, accent, 0.55f);
-            rig.Materials.Add(rig.Primary);
-            rig.Materials.Add(rig.Secondary);
-            rig.Materials.Add(rig.Accent);
-
-            switch (visual.Silhouette)
+            // Sprite path: a unit with a non-empty VisualDef.Sprite renders a textured billboard
+            // instead of the primitive body below, and skips the weapon (baked into the art).
+            // Empty Sprite (every unit except Orrin today) takes the untouched procedural branch -
+            // same code, same output, no behaviour change.
+            if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                case "brute": rig.BuildBrute(); break;
-                case "beast": rig.BuildBeast(); break;
-                case "wisp": rig.BuildWisp(); break;
-                case "golem": rig.BuildGolem(); break;
-                default: rig.BuildHumanoid(); break;
+                rig.BuildSprite(visual.Sprite, facingForward);
+            }
+            else
+            {
+                Color primary = UITheme.Hex(visual.Primary);
+                Color secondary = UITheme.Hex(visual.Secondary);
+                Color accent = UITheme.Hex(visual.Accent);
+
+                rig.Primary = BattleAssets.NewLit(primary, primary * 0.85f, 0f);
+                rig.Secondary = BattleAssets.NewLit(secondary, primary * 0.5f, 0f);
+                rig.Accent = BattleAssets.NewLit(accent, accent, 0.55f);
+                rig.Materials.Add(rig.Primary);
+                rig.Materials.Add(rig.Secondary);
+                rig.Materials.Add(rig.Accent);
+
+                switch (visual.Silhouette)
+                {
+                    case "brute": rig.BuildBrute(); break;
+                    case "beast": rig.BuildBeast(); break;
+                    case "wisp": rig.BuildWisp(); break;
+                    case "golem": rig.BuildGolem(); break;
+                    default: rig.BuildHumanoid(); break;
+                }
+
+                rig.BuildWeapon(visual.Weapon);
             }
 
-            rig.BuildWeapon(visual.Weapon);
             rig.BuildShadow();
 
             float scale = Mathf.Max(0.3f, visual.Scale);
@@ -157,6 +169,53 @@ namespace Emberfall.Battle
 
             Solid(PrimitiveType.Cube, "Core", Body, new Vector3(0f, 1.22f, 0.34f), new Vector3(0.18f, 0.18f, 0.08f), new Vector3(0f, 0f, 45f), Accent);
             Solid(PrimitiveType.Cube, "Visor", Body, new Vector3(0f, 1.72f, 0.22f), new Vector3(0.30f, 0.07f, 0.04f), NoRotation, Accent);
+        }
+
+        /// <summary>
+        /// A single textured quad standing where the procedural silhouette would have stood.
+        /// Height matches BuildHumanoid's 1.85 exactly, so head/centre-position math elsewhere
+        /// (floating text, camera bar tracking, VFX impact points, all keyed on Rig.Height) does
+        /// not need to know or care which kind of rig it is looking at - "roughly the same visual
+        /// footprint as the procedural version" is met by construction, not by eyeballing it.
+        /// Width is derived from the loaded texture's own aspect ratio at that fixed height, not
+        /// hardcoded, so a differently-proportioned placeholder or the eventual real art both
+        /// render at their natural proportions without a code change.
+        /// </summary>
+        private void BuildSprite(string spriteId, bool facingForward)
+        {
+            Height = 1.85f;
+            Texture2D tex = BattleAssets.UnitSprite(spriteId);
+            float aspect = tex.height > 0 ? tex.width / (float)tex.height : 0.6f;
+            float width = Height * aspect;
+
+            Material material = BattleAssets.NewFx(tex, Color.white, false);
+            // Primary/Secondary/Accent all point at the one sprite material, not three separate
+            // ones - SetEmission (unlike SetFlash/SetFade) writes through these named fields
+            // rather than the generic Materials list, and this keeps that call safe and
+            // meaningful for a rig with only one material to glow.
+            Primary = Secondary = Accent = material;
+            Materials.Add(material);
+
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Sprite";
+            StripCollider(quad);
+            Transform t = quad.transform;
+            t.SetParent(Body, false);
+            t.localPosition = new Vector3(0f, Height * 0.5f, 0f);
+            t.localScale = new Vector3(width, Height, 1f);
+
+            // A default Unity Quad's front face points +Z. The battle camera always sits on the
+            // -Z side of the arena for both ally and enemy slots, so the sprite's own local
+            // rotation has to counter-rotate whatever Root already applied for ally/enemy facing
+            // (0 or 180 around Y, set above) so the two sum to 180 either way and the front face
+            // always ends up pointing at -Z, toward the camera, not mirrored on one side. This
+            // reasoning has not been checked against the real camera - verify in Play mode.
+            t.localRotation = Quaternion.Euler(0f, facingForward ? 180f : 0f, 0f);
+
+            MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
         }
 
         // ------------------------------------------------------------------ weapons
@@ -273,9 +332,11 @@ namespace Emberfall.Battle
 
         public void SetEmission(float primaryEmission)
         {
-            Primary.SetFloat("_Emission", primaryEmission);
-            Secondary.SetFloat("_Emission", primaryEmission * 0.5f);
-            Accent.SetFloat("_Emission", 0.55f + primaryEmission);
+            // Null-guarded: a sprite rig assigns all three to the same material (see BuildSprite),
+            // but this stays defensive against any future rig that leaves one unset.
+            if (Primary != null) Primary.SetFloat("_Emission", primaryEmission);
+            if (Secondary != null) Secondary.SetFloat("_Emission", primaryEmission * 0.5f);
+            if (Accent != null) Accent.SetFloat("_Emission", 0.55f + primaryEmission);
         }
 
         public void Destroy()

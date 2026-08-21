@@ -67,6 +67,48 @@ namespace Emberfall.Battle
             return material;
         }
 
+        // ------------------------------------------------------------------ unit sprites
+
+        /// <summary>
+        /// Loads Resources/Sprites/Units/{spriteId}.png for the sprite rig path. Cached like the
+        /// generated textures below, so repeat battles with the same unit don't re-hit Resources.
+        /// Never returns null: a missing or misspelled id logs a warning and falls back to a flat
+        /// magenta square, which is deliberately impossible to mistake for real art, rather than
+        /// silently reverting to the procedural rig (that fallback belongs to VisualDef.Sprite
+        /// being empty, a different and correct case - a non-empty id that fails to resolve is a
+        /// content bug and should look like one).
+        /// </summary>
+        public static Texture2D UnitSprite(string spriteId)
+        {
+            string key = "unitsprite_" + spriteId;
+            Texture2D cached;
+            if (TextureCache.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = Resources.Load<Texture2D>("Sprites/Units/" + spriteId);
+            if (tex == null)
+            {
+                Debug.LogWarning("Emberfall: no sprite at Resources/Sprites/Units/" + spriteId + ".png - showing a placeholder instead.");
+                tex = MissingSpriteTexture;
+            }
+            TextureCache[key] = tex;
+            return tex;
+        }
+
+        private static Texture2D MissingSpriteTexture
+        {
+            get
+            {
+                Texture2D cached;
+                if (TextureCache.TryGetValue("missingsprite", out cached)) return cached;
+                Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                Color32 magenta = new Color32(255, 0, 220, 255);
+                tex.SetPixels32(new[] { magenta, magenta, magenta, magenta });
+                tex.Apply();
+                TextureCache["missingsprite"] = tex;
+                return tex;
+            }
+        }
+
         // ------------------------------------------------------------------ shared textures
 
         public static Texture2D SoftDot { get { return TextureLab.Glow(128, 2.1f).texture; } }
