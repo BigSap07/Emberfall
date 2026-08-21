@@ -19,10 +19,12 @@ namespace Emberfall.UI.Screens
         {
             ScreenChrome.Header(Root, "YOUR ALLIES", Router, out _countLabel);
 
+            // three columns in landscape (3 x 470 + 2 x 20 = 1450 across 1856 usable); the grid
+            // centres the block. Was two columns in portrait.
             ScrollRect scroll;
             _grid = UIBuilder.ScrollGrid("Collection", Root, out scroll,
-                                         new Vector2(470f, 300f), new Vector2(20f, 20f), 2,
-                                         new RectOffset(0, 0, 8, 200));
+                                         new Vector2(470f, 300f), new Vector2(20f, 20f), 3,
+                                         new RectOffset(0, 0, 8, 48));
             RectTransform scrollRoot = scroll.GetComponent<RectTransform>();
             UIBuilder.FillParent(scrollRoot, UITheme.ScreenPadding, UITheme.TopBarHeight + 130f, UITheme.ScreenPadding, 0f);
 

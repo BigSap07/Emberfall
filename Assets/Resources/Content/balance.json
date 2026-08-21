@@ -9,7 +9,10 @@
   "maxRounds": 30,
   "damageVariance": 0.06,
   "speedVariance": 0.08,
-  "maxTeamSize": 3,
+  // gates both player deploys and enemy spawns; keep equal to PlayerProfile.TeamSize
+  "maxTeamSize": 5,
+  // cap on Gale kill re-entry turns per round; the mechanic (task 11) must read this
+  "galeExtraTurnsPerRound": 1,
 
   // hero level up cost = A + B*level + C*level^2
   "levelCostA": 55,

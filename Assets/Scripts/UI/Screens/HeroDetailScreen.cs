@@ -26,7 +26,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _chipRow;
         private Text _slotHint;
         private RectTransform _slotRow;
-        private readonly UIButton[] _slotButtons = new UIButton[3];
+        private readonly UIButton[] _slotButtons = new UIButton[PlayerProfile.TeamSize];
 
         private RectTransform _statsCard;
         private Text _hpValue, _atkValue, _defValue, _spdValue, _critValue;
@@ -61,10 +61,13 @@ namespace Emberfall.UI.Screens
         {
             ScreenChrome.Header(Root, "HERO", Router, out _headerSubtitle);
 
+            // the card stack keeps its portrait-era width as a centred column - stretched to the
+            // full 1920 the identity card's fixed-position internals would float in dead space
+            float columnInset = (UITheme.ReferenceResolution.x - 1100f) * 0.5f;
             ScrollRect scroll;
             RectTransform content = UIBuilder.ScrollList("Detail", Root, out scroll, 18f, new RectOffset(0, 0, 8, 40));
             UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 130f, UITheme.ScreenPadding, 236f);
+                                 columnInset, UITheme.TopBarHeight + 130f, columnInset, 236f);
 
             BuildIdentityCard(content);
             BuildStatsCard(content);
@@ -114,7 +117,7 @@ namespace Emberfall.UI.Screens
             _slotRow.offsetMax = new Vector2(-28f, 98f);
             UIBuilder.HStack(_slotRow, 12f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < PlayerProfile.TeamSize; i++)
             {
                 int slot = i;
                 UIButton button = UIBuilder.SecondaryButton("Slot" + i, _slotRow, "SLOT " + (i + 1), UITheme.FontSmall);

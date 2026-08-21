@@ -45,8 +45,10 @@ namespace Emberfall.UI.Screens
 
         private void BuildPortal()
         {
+            // landscape: the portal takes the left half of the screen, the odds and the button
+            // take the right, instead of everything stacking down the middle
             _portal = UIBuilder.Node("Portal", Root);
-            UIBuilder.Box(_portal, 0f, 120f, 760f, 760f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_portal, -480f, -20f, 680f, 680f, new Vector2(0.5f, 0.5f));
 
             Image halo = UIBuilder.Img("Halo", _portal, TextureLab.Glow(256, 1.6f), UITheme.WithAlpha(UITheme.RarityColor(Rarity.Epic), 0.20f));
             UIBuilder.FillParent(halo.rectTransform, -70f);
@@ -67,7 +69,7 @@ namespace Emberfall.UI.Screens
         private void BuildRates()
         {
             RectTransform card = UIBuilder.Node("Rates", Root);
-            UIBuilder.Box(card, 0f, 346f, 940f, 170f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(card, 470f, 150f, 880f, 170f, new Vector2(0.5f, 0.5f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
@@ -79,7 +81,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(heading.rectTransform, 0f, -14f, 400f, 26f, new Vector2(0.5f, 1f));
 
             RectTransform row = UIBuilder.Node("Row", card);
-            UIBuilder.Box(row, 0f, 18f, 880f, 78f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(row, 0f, 18f, 820f, 78f, new Vector2(0.5f, 0f));
             UIBuilder.HStack(row, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
             BalanceConfig balance = App.Session.Balance;
@@ -105,11 +107,11 @@ namespace Emberfall.UI.Screens
 
         private void BuildActions()
         {
-            _costLabel = UIBuilder.Label("Cost", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(_costLabel.rectTransform, 0f, 292f, 900f, 36f, new Vector2(0.5f, 0f));
+            _costLabel = UIBuilder.Label("Cost", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_costLabel.rectTransform, 470f, 20f, 860f, 36f, new Vector2(0.5f, 0.5f));
 
             _summonButton = UIBuilder.PrimaryButton("Summon", Root, "OPEN THE RIFT", UITheme.FontHeading);
-            UIBuilder.Box(_summonButton.Root, 0f, 120f, 860f, 160f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_summonButton.Root, 470f, -110f, 820f, 160f, new Vector2(0.5f, 0.5f));
             _summonButton.OnClick(DoSummon);
         }
 
