@@ -56,7 +56,7 @@ namespace Emberfall.Battle
             return material;
         }
 
-        /// <summary>Additive when glowing, alpha-blended for shadows and the sky.</summary>
+        /// <summary>Additive when glowing, alpha-blended for shadows and the backdrop.</summary>
         public static Material NewFx(Texture texture, Color color, bool additive)
         {
             Material material = new Material(FxShader);
@@ -189,77 +189,89 @@ namespace Emberfall.Battle
             return env;
         }
 
-        public static Texture2D SkyTexture(string environmentId)
+        // ------------------------------------------------------------------ backdrops
+
+        /// <summary>
+        /// The painted backdrop for one environment, from Resources/Backgrounds/{environmentId}.png.
+        /// Cached exactly like UnitSprite above, and keyed on the same environmentId campaign.json
+        /// already authors per stage, so adding a painting for a new environment is a file drop
+        /// rather than a code change. Today: "ashen", "ember", "hollow", four stages each.
+        ///
+        /// The fallback deliberately differs from UnitSprite's. There, a non-empty sprite id that
+        /// fails to resolve is a content bug and gets the unmissable magenta square. Here a
+        /// missing file is the normal case, not a bug - one painting exists and most environments
+        /// will have none for a long time - so this falls through to GeneratedBackdrop, which is
+        /// built from the same Environment palette and always renders. Nothing ever gets magenta
+        /// or black from this path.
+        /// </summary>
+        public static Texture2D BackdropTexture(string environmentId)
         {
-            string key = "sky_" + environmentId;
+            string key = "backdrop_" + environmentId;
             Texture2D cached;
             if (TextureCache.TryGetValue(key, out cached)) return cached;
 
+            Texture2D tex = Resources.Load<Texture2D>("Backgrounds/" + environmentId);
+            if (tex == null) tex = GeneratedBackdrop(environmentId);
+            TextureCache[key] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// Stand-in backdrop for any environment with no painting yet: sky gradient above a
+        /// horizon, ground below it, from that environment's own palette. This replaces the
+        /// separate sky-gradient and arena-floor textures that used to dress a 3D sky billboard
+        /// and ground plane; both are gone now that one backdrop quad carries the whole scene
+        /// (see BattleStage.BuildWorld), so their two palettes are combined into this single
+        /// image and every field of Environment is still used.
+        ///
+        /// Generated at 16:9 on purpose. BattleStage sizes the backdrop quad to cover the frame
+        /// while preserving its texture's aspect ratio, so a tall thin gradient strip would be
+        /// blown up enormously to cover the width. Matching the frame's own shape keeps the
+        /// painted and generated paths through that same sizing code identical.
+        /// </summary>
+        private static Texture2D GeneratedBackdrop(string environmentId)
+        {
             Environment env = GetEnvironment(environmentId);
-            const int w = 8, h = 256;
+            const int w = 320, h = 180;
+            const float horizon = 0.62f;   // measured from the bottom, so ground takes the lower 62%
+
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
             tex.filterMode = FilterMode.Bilinear;
             tex.wrapMode = TextureWrapMode.Clamp;
             Color32[] pixels = new Color32[w * h];
 
+            uint rng = 0x9E3779B9u;
             for (int y = 0; y < h; y++)
             {
                 float t = y / (float)(h - 1);
-                // horizon glow sits low in the frame
-                float glow = Mathf.Pow(1f - t, 3.2f);
-                Color c = Color.Lerp(env.SkyBottom, env.SkyTop, Mathf.Pow(t, 0.7f));
-                c = Color.Lerp(c, env.Accent, glow * 0.35f);
-                for (int x = 0; x < w; x++) pixels[y * w + x] = c;
-            }
-
-            tex.SetPixels32(pixels);
-            tex.Apply();
-            TextureCache[key] = tex;
-            return tex;
-        }
-
-        /// <summary>Arena floor: a lit centre, concentric rings and speckled grit.</summary>
-        public static Texture2D GroundTexture(string environmentId)
-        {
-            string key = "ground_" + environmentId;
-            Texture2D cached;
-            if (TextureCache.TryGetValue(key, out cached)) return cached;
-
-            Environment env = GetEnvironment(environmentId);
-            const int size = 256;
-            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            tex.filterMode = FilterMode.Bilinear;
-            tex.wrapMode = TextureWrapMode.Clamp;
-            Color32[] pixels = new Color32[size * size];
-
-            uint rng = 0x9E3779B9u;
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
+                Color row;
+                if (t >= horizon)
                 {
-                    float nx = (x + 0.5f) / size * 2f - 1f;
-                    float ny = (y + 0.5f) / size * 2f - 1f;
-                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    // sky: darkens with height, with the accent pooling just above the horizon
+                    float k = (t - horizon) / (1f - horizon);
+                    row = Color.Lerp(env.SkyBottom, env.SkyTop, Mathf.Pow(k, 0.7f));
+                    row = Color.Lerp(row, env.Accent, Mathf.Pow(1f - k, 3.2f) * 0.35f);
+                }
+                else
+                {
+                    // ground: far and dim at the horizon, nearer and warmer at the bottom edge
+                    float k = t / horizon;
+                    row = Color.Lerp(env.GroundNear, env.GroundFar, Mathf.Pow(k, 0.8f));
+                    row = Color.Lerp(row, env.Accent, Mathf.Pow(k, 6f) * 0.18f);
+                }
 
-                    Color c = Color.Lerp(env.GroundNear, env.GroundFar, Mathf.Clamp01(r * 1.15f));
-
-                    // two faint arena rings
-                    float ring = Mathf.Abs(r - 0.42f);
-                    if (ring < 0.012f) c = Color.Lerp(c, env.Accent, 0.28f);
-                    ring = Mathf.Abs(r - 0.66f);
-                    if (ring < 0.008f) c = Color.Lerp(c, env.Accent, 0.16f);
-
+                for (int x = 0; x < w; x++)
+                {
                     rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
-                    float grit = ((rng & 0xFF) / 255f - 0.5f) * 0.09f;
-                    c = new Color(Mathf.Clamp01(c.r + grit), Mathf.Clamp01(c.g + grit), Mathf.Clamp01(c.b + grit), 1f);
-
-                    pixels[y * size + x] = c;
+                    float grit = ((rng & 0xFF) / 255f - 0.5f) * 0.05f;
+                    pixels[y * w + x] = new Color(Mathf.Clamp01(row.r + grit),
+                                                  Mathf.Clamp01(row.g + grit),
+                                                  Mathf.Clamp01(row.b + grit), 1f);
                 }
             }
 
             tex.SetPixels32(pixels);
             tex.Apply();
-            TextureCache[key] = tex;
             return tex;
         }
     }

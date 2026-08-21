@@ -6,8 +6,10 @@ using Emberfall.Core.Combat;
 namespace Emberfall.Battle
 {
     /// <summary>
-    /// The 3D battlefield: camera, sky, arena floor, scenery and the six unit actors.
-    /// Built fresh for each battle and torn down afterwards.
+    /// The battlefield: camera, painted backdrop and the unit actors. Built fresh for each battle
+    /// and torn down afterwards. The scene is no longer assembled from 3D pieces - one backdrop
+    /// image carries the sky, ground and horizon that a sky billboard, an arena plane and a ridge
+    /// of blocks used to build between them (see BuildWorld).
     /// </summary>
     public sealed class BattleStage : MonoBehaviour
     {
@@ -150,121 +152,94 @@ namespace Emberfall.Battle
 
         // ------------------------------------------------------------------ world
 
+        /// <summary>
+        /// One painted backdrop quad, and nothing else. Three pieces of built geometry used to
+        /// stand here and all three are gone, because the painting carries what each of them was
+        /// carrying and they would otherwise fight it:
+        ///
+        /// - The sky billboard. The painting has its own sky. The billboard sat further out than
+        ///   the backdrop does, so it would be completely hidden behind it anyway.
+        /// - The arena ground plane. The painting has its own ground and horizon. This one was
+        ///   also the likeliest source of the hard diagonal edge with black beyond it: the plane
+        ///   is finite (32 x 32 world units) and the ridge blocks standing on it were yaw-rotated
+        ///   boxes, so an edge cutting across the frame at an angle can only have come from a
+        ///   rotated box silhouette or the plane running out, and both are removed here.
+        /// - The ridge blocks. The painting has its own background terrain. Six rotated boxes at
+        ///   a fixed depth cannot agree with a painted horizon, so they go rather than get
+        ///   re-fit a third time.
+        ///
+        /// Camera.backgroundColor is kept and repurposed: it is now the clear colour behind the
+        /// backdrop rather than behind a sky quad, so it is what would show if the frame were ever
+        /// wider than the quad covers. It is an environment tone, never black.
+        /// </summary>
         public void BuildWorld(string environmentId)
         {
             ClearWorld();
             BattleAssets.Environment env = BattleAssets.GetEnvironment(environmentId);
             Camera.backgroundColor = env.SkyTop;
 
-            // sky backdrop. A flat quad fixed at a constant world Z, checked against a ray
-            // traced out to that Z, is the wrong model once the camera has real pitch: under
-            // orthographic every screen edge traces a ray in the camera's own forward direction,
-            // and those rays are parallel, not converging, so a plane that isn't perpendicular
-            // to them is intersected at a shifted, skewed position that has to be re-verified
-            // by hand every time the pitch changes - which is exactly what caught the old
-            // version out here. Rebuilt instead as a billboard that faces the camera directly.
-            // Its rotation matches the camera's own pitch (Euler(28, 180, 0): the existing 180
-            // Y-flip so its front face points back toward the camera, plus the same 28 degree
-            // X-tilt the camera itself uses, which is the rotation that turns the quad's normal
-            // into exactly the negative of the camera's forward vector). Once the quad's plane
-            // is perpendicular to the view direction, orthographic guarantees a distortion-free
-            // fit: the frame's extent is exactly orthographicSize vertically and
-            // orthographicSize * aspect horizontally at any distance, so the quad only needs to
-            // be at least 4.74 * 2 = 9.5 tall and 4.74 * 1.778 * 2 = 16.9 wide - sized to 11 / 19
-            // here for margin. The pitch in the rotation and the direction vector below both
-            // still read 28 - only the distance and the resulting position changed. Positioned
-            // 24 units out along the camera's own forward direction (0, -sin(28), cos(28)) from
-            // the camera at (0, 5.0, -7.0): (0, -6.27, 14.19). That puts it well behind the ridge
-            // below (which reaches roughly z 9.4 at its deepest), so the ridge silhouettes read
-            // against it rather than in front of it.
-            GameObject sky = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            sky.name = "Sky";
-            Strip(sky);
-            sky.transform.SetParent(_world, false);
-            sky.transform.localPosition = new Vector3(0f, -6.27f, 14.19f);
-            sky.transform.localScale = new Vector3(19f, 11f, 1f);
-            sky.transform.localRotation = Quaternion.Euler(28f, 180f, 0f);
-            MeshRenderer skyRenderer = sky.GetComponent<MeshRenderer>();
-            skyRenderer.material = BattleAssets.NewFx(BattleAssets.SkyTexture(environmentId), Color.white, false);
-            skyRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            Texture2D painting = BattleAssets.BackdropTexture(environmentId);
 
-            // arena floor. Unlike the sky, this one is genuinely meant to be a real world-space
-            // horizontal plane (units stand on it), so it stays axis-aligned and gets checked
-            // with an actual ray-to-ground intersection instead of being turned into a billboard.
-            // Re-checked against the new camera: the nearest ground visible is bounded by the
-            // bottom of the vertical frustum, not by the near clip plane - the frustum edge cuts
-            // in at z -7.69, while near clip alone would only cut in at z -9.32, so the frustum
-            // is what actually limits visibility and it does so well short of the clip plane. The
-            // top-of-frame ray reaches as far as z 12.50. Both ends sit inside this plane's own
-            // z -16 to 16 extent. No change needed.
-            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
-            Strip(ground);
-            ground.transform.SetParent(_world, false);
-            ground.transform.localPosition = Vector3.zero;
-            ground.transform.localScale = new Vector3(3.2f, 1f, 3.2f);
-            MeshRenderer groundRenderer = ground.GetComponent<MeshRenderer>();
-            Material groundMaterial = BattleAssets.NewLit(Color.white, env.Accent * 0.35f, 0f);
-            groundMaterial.SetTexture("_MainTex", BattleAssets.GroundTexture(environmentId));
-            groundMaterial.SetFloat("_RimPower", 6f);
-            groundRenderer.material = groundMaterial;
-            groundRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            BuildScenery(env);
-        }
-
-        /// <summary>Silhouetted rocks and pillars that frame the arena and give the shot depth.</summary>
-        private void BuildScenery(BattleAssets.Environment env)
-        {
-            Material far = BattleAssets.NewLit(env.GroundFar, env.Accent * 0.25f, 0f);
-
-            // distant ridge line, re-fit against the new frustum. Two things moved it: the
-            // formation is deeper in z than last pass (units now reach z +3.25, not +1.4), so
-            // "just past the formation" is further out, and the frame is both wider and taller
-            // (orthographicSize 4.4 to 4.74), so there is more height budget to spend.
+            // Sizing is read off the live camera rather than written out as constants. The camera
+            // has moved three times in this session and every hardcoded backdrop number went
+            // stale each time; taking orthographicSize, aspect and the rig's own rotation from
+            // the Camera means this cannot drift again.
             //
-            // Depth and height: f(y, z) = y * cos(28) + z * sin(28), pitch unchanged. Targeting
-            // the ridge tops at 85% of the way to the top of frame (K + 0.85 * 4.74 = 5.16), the
-            // height budget at each of this array's three z values:
-            //   z 5.0:  (5.16 - 5.0*0.4695)/0.8829 = 3.18
-            //   z 6.2:  (5.16 - 6.2*0.4695)/0.8829 = 2.54
-            //   z 7.4:  (5.16 - 7.4*0.4695)/0.8829 = 1.91
-            // Block() places each ridge so its top lands exactly on ridgeH[i], so the heights
-            // below can be read straight against those budgets. The nearest ridge row (z 5.0)
-            // clears the deepest unit (z 3.25) by 1.75.
+            // Under orthographic a quad held perpendicular to the view direction covers exactly
+            // the same frame at any distance: half-height is orthographicSize and half-width is
+            // orthographicSize * aspect, with no perspective divide. At the current values that
+            // is a frame of 2 * 4.74 = 9.48 tall by 2 * 4.74 * 1.778 = 16.85 wide.
             //
-            // Horizontal: visible half-width is now orthographicSize * aspect = 4.74 * 1.778 =
-            // 8.43, so the spread widens to -8/8 to keep covering the frame edge to edge.
-            float[] ridgeX = { -8f, -4.8f, -1.6f, 1.6f, 4.8f, 8f };
-            float[] ridgeH = { 2.6f, 1.9f, 1.3f, 2.4f, 1.75f, 1.2f };
-            for (int i = 0; i < ridgeX.Length; i++)
+            // Margin: BattleStage.Shake moves the camera up to 0.18 world units in x and y
+            // (BattleScreen asks for 0.14 on a crit and 0.18 on a burst), while the backdrop is
+            // parented to the world and placed once, so it does not shake with the camera. A
+            // world-x shake shifts the frame 0.18 across the quad; a world-y shake shifts it
+            // 0.18 * cos(28) = 0.16. 0.30 per side covers both with room to spare.
+            //   needed width  = 16.85 + 0.60 = 17.45
+            //   needed height =  9.48 + 0.60 = 10.08
+            //
+            // Cover, not stretch: the quad is grown to the texture's own aspect ratio until it
+            // covers both, so the painting is never squashed and the frame never sees past its
+            // edge. battle_ash_marches.png is 1672 x 941, aspect 1.7768 against the frame's
+            // 1.7778 - within 0.05% of 16:9, so the choice between cropping, letterboxing and
+            // stretching is very nearly moot here. Cover is still the right rule for whatever
+            // arrives next: height binds at this aspect, giving 10.08 x 17.91, and the frame
+            // shows the middle 94% of the painting in each direction. The 6% lost is the price
+            // of the shake margin, not of the aspect mismatch, which costs 0.05%.
+            float frameH = Camera.orthographicSize * 2f;
+            float frameW = frameH * Camera.aspect;
+            const float ShakeMargin = 0.30f;
+            float needW = frameW + ShakeMargin * 2f;
+            float needH = frameH + ShakeMargin * 2f;
+
+            float imageAspect = painting.height > 0 ? painting.width / (float)painting.height : Camera.aspect;
+            float quadH = needH;
+            float quadW = quadH * imageAspect;
+            if (quadW < needW)
             {
-                Block("Ridge" + i, new Vector3(ridgeX[i], ridgeH[i] * 0.5f - 0.15f, 5.0f + (i % 3) * 1.2f),
-                      new Vector3(6.5f + (i % 2) * 2f, ridgeH[i] + 0.3f, 4f),
-                      new Vector3(0f, (i * 23f) % 40f - 20f, (i % 2 == 0 ? 3f : -4f)), far);
+                quadW = needW;
+                quadH = quadW / imageAspect;
             }
 
-            // The arena boundary stone ring stays removed, by instruction - it was cut last pass
-            // because no radius cleared the formation without also sitting in the camera's
-            // foreground, and this pass's formation, while shallower in z, is wider in x, so
-            // nothing here reopened the case for bringing it back. The ridge above still gives
-            // the shot its depth and frame on its own.
-        }
+            // Placed along the camera's own forward axis, so it is centred in frame by
+            // construction, and rotated to face straight back down that axis (the rig's rotation
+            // turned 180 about its own up axis puts the quad's +Z front face against the view
+            // direction). 20 units out clears the deepest unit, whose feet sit 11.4 along that
+            // axis, and sits well inside the 120 far clip.
+            const float Distance = 20f;
+            Vector3 forward = _cameraRig.localRotation * Vector3.forward;
 
-        private Transform Block(string name, Vector3 position, Vector3 scale, Vector3 euler, Material material)
-        {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            Strip(go);
-            go.transform.SetParent(_world, false);
-            go.transform.localPosition = position;
-            go.transform.localScale = scale;
-            go.transform.localRotation = Quaternion.Euler(euler.x, euler.y, euler.z);
-            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = material;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            return go.transform;
+            GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backdrop.name = "Backdrop";
+            Strip(backdrop);
+            backdrop.transform.SetParent(_world, false);
+            backdrop.transform.localPosition = _cameraHome + forward * Distance;
+            backdrop.transform.localRotation = _cameraRig.localRotation * Quaternion.Euler(0f, 180f, 0f);
+            backdrop.transform.localScale = new Vector3(quadW, quadH, 1f);
+            MeshRenderer backdropRenderer = backdrop.GetComponent<MeshRenderer>();
+            backdropRenderer.material = BattleAssets.NewFx(painting, Color.white, false);
+            backdropRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            backdropRenderer.receiveShadows = false;
         }
 
         private static void Strip(GameObject go)
