@@ -171,6 +171,130 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
 5. **Kalyx's Kindling is unresolved between two docs.** See "One conflict to resolve" above. Do not
    let it get cut or kept as a side effect of building something else.
 
+## Audit: what build-order-8-team-size-5 actually contains
+
+Read in full against `main`, ten files, every change categorised against the document's own
+description of task 8: `maxTeamSize`, `PlayerProfile.Team`, `SaveSerializer` version,
+`HeroDetailScreen._slotButtons`, `BattleStage` slot arrays. Inventory only, nothing here proposes
+a fix or a re-sequence.
+
+### Matches the document exactly
+
+- `balance.json` / `Definitions.cs`: `maxTeamSize` 3 to 5, both the content value and the
+  `BalanceConfig` field it deserialises into.
+- `PlayerProfile.cs`: `Team` grows from `new string[3]` to `new string[TeamSize]`, `TeamSize` a
+  new `public const int` at 5.
+- `SaveSerializer.cs`: `CurrentVersion` 1 to 2, with a new downgrade guard, a save from a newer
+  build is refused rather than silently truncated, which is what the document already called for.
+- `HeroDetailScreen.cs`: `_slotButtons` sized to `PlayerProfile.TeamSize`, the deploy-button loop
+  bound the same way.
+- `BattleStage.cs`: two new ally and two new enemy slot positions, the original three left
+  numerically untouched. The branch's own comment flags the new x-extents (2.6) as unverified
+  against the real camera.
+- `Tools/DevHarness/Program.cs`: a new `CheckTeamSizeStructure`, and `CheckDeterminism`'s
+  hardcoded `6` replaced with a computed deploys-plus-spawns figure. Both directly verify task 8's
+  own claims (profile shape, both save paths, the version guard, the fresh-account winnability
+  floor) and belong to it.
+
+### Present, and not in the document's description of task 8
+
+**`galeExtraTurnsPerRound` (`balance.json`, `Definitions.cs`).** A new `BalanceConfig` field and
+constant, 1, capping Gale's kill re-entry turns per round. This is Known trap 3's constant, and
+Known trap 3 assigns it to task 12, not task 8. It ships two tasks early, for a mechanic (Gale
+re-entry-on-kill) that does not exist anywhere in `CombatSimulation` yet, so the constant is
+currently unread by anything. The code comment attached to it says "task 11," which matches
+neither task 8 (where it shipped) nor task 12 (where the document assigns it), task 11 is Effect
+Hit/Resist phase B and has nothing to do with Gale.
+
+**`CampaignScreen.cs` and `MainMenuScreen.cs`.** Both re-lay out their team display for five slots
+instead of three, real changes, not renames: `CampaignScreen`'s team strip shrinks each portrait
+from 84f to 80f and loops to `PlayerProfile.TeamSize`; `MainMenuScreen`'s team row shrinks each
+cell from 270f to 158f and narrows the name and power labels to match. Neither file appears
+anywhere in the document's description of task 8, which names only `HeroDetailScreen._slotButtons`
+for UI. Whether five cells fit either strip without clipping is exactly the kind of thing the
+document already flags as unverified Play mode work for task 8's `[U]` half, it is simply
+unverified in two more places than written down.
+
+**Part of task 10 is already here.** See `campaign.json` below in full. In short: this branch does
+not ship structural only, it ships a partial, admittedly unbalanced enemy-count refill on eight of
+twelve stages, which is specifically task 10's job and not task 8's.
+
+### campaign.json, stage by stage
+
+Twelve stages, four categories of change.
+
+**Untouched: 1-2, 1-3, 1-4.** Still three enemies each, same ids, same levels.
+
+**Reduced: 1-1, Shardfall Verge.** Three enemies to two: `hollow_husk` L1, `hollow_husk` L1,
+`grave_moth` L1 becomes `hollow_husk` L1, `grave_moth` L1. One `hollow_husk` removed outright,
+nothing else changed. The only stage in either direction that got easier.
+
+**Plus one, formulaically: 1-5, 1-6, 1-7, 1-8.** Each gains exactly one enemy, and the new enemy's
+level is the stage's existing lowest level minus one, every time: 1-5 adds `hollow_husk` L8
+(existing low was `ashen_revenant` L9), 1-6 adds `cinder_imp` L12 (existing low L13), 1-7 adds
+`hollow_husk` L13 (existing low L14), 1-8 adds `cinder_imp` L14 (existing low L15). The original
+three enemies on each of these four stages are untouched, same ids and levels. This is a
+mechanical, formula-shaped pass, not four separately composed encounters.
+
+**Plus two, uneven: 1-9, 1-10, 1-11, 1-12.** Each goes from three enemies to five, and this is
+where the two stages worth naming specifically sit.
+
+- **1-9, Mothlight Steps, subtitled "far too many of them."** Was three `grave_moth`, all level
+  30, a deliberately uniform swarm the subtitle is written about. The three L30 moths are
+  untouched. Two more `grave_moth` are added, both level 22, eight levels under the original trio.
+  The stage stays monotype, so the subtitle's premise reads more true if anything, but the swarm
+  is no longer level-uniform, it is a three-plus-two composition, not five equals, and the two
+  additions read as a numeric top-up rather than a redesign of the swarm.
+- **1-12, The Sundered Colossus, boss stage.** Was the boss (`sundered_colossus` L17) plus two
+  `grave_moth` L16 escorts, a clean one-boss-two-adds shape. The boss and both original escorts
+  are untouched. Two more enemies are added, both `hollow_husk` L14, the roster's lowest-tier
+  trash, below even the existing escorts. The stage is now the boss plus four escorts, not two.
+  That is a real change to what the encounter is, a boss fight framed by a small crowd instead of
+  a boss fight framed by a pair. Nothing in the diff or its comments acknowledges this as a
+  deliberate re-design; it reads as the same formulaic top-up as 1-5 through 1-8, applied twice
+  instead of once, on the one stage where the original two-escort count was specifically doing
+  work.
+
+**One incidental fix, inside 1-10.** The Grey Bulwark's subtitle is "Two wardens. One narrow
+bridge," but the original three-enemy roster spawned exactly one `stone_warden`. The new
+five-enemy roster adds a second `stone_warden` (L24) alongside a `hollow_husk` (L22), so the enemy
+list finally matches its own subtitle. Whether this was noticed and intended, or arrived as a side
+effect of the count going up, cannot be determined from the diff.
+
+**1-11, Pyre of Names.** Adds `hollow_husk` L23 and `cinder_imp` L23, both well under the existing
+L26 to L27 trio (`ashen_revenant`, two `grave_moth`, untouched). Two different low-tier types
+rather than one repeated, closer to the 1-5 through 1-8 pattern than to 1-9's monotype top-up, but
+still filler relative to the stage's existing roster.
+
+Total spawns: 36 before, 47 after, not the 60 a full ramp to five everywhere would need.
+`recommendedPower` was not touched on any of the twelve stages.
+
+### What this means for the 8/9/10 stack
+
+Task 8 as written is structural only, and it is not that. It ships part of task 10's job,
+unreviewed, alongside its own structural work, and it ships one constant
+(`galeExtraTurnsPerRound`) that belongs to task 12's mechanic and is currently dead code. The
+existing note that 8, 9 and 10 now land as one merge unit already covers the practical
+consequence: this branch cannot go to `main` alone regardless, because its own
+`CheckStageWinnability` failures are partly caused by the very enemy counts it already contains.
+What this audit adds is that "10" in that stack is not entirely still to be written: a first,
+explicitly unbalanced pass at it is already sitting in this branch, and whoever picks up task 10
+needs to know they are revising eight already-changed stages, not writing net-new content for all
+twelve.
+
+### What could not be determined from the diff alone
+
+Whether the new `BattleStage` slot x-extents, the resized `CampaignScreen` portraits, or the
+resized `MainMenuScreen` cells actually render without overlap or clipping. All three are already
+flagged `[U]` by the document, and nothing here confirms or refutes them without opening the
+editor. Whether the specific enemy and level choices in the campaign.json additions were
+deliberately composed or are closer to placeholder values chosen to hit a count, beyond what the
+level-delta pattern itself suggests. Whether the 1-10 second `stone_warden` fixing the subtitle
+mismatch was intentional. Whether `galeExtraTurnsPerRound`'s value of 1 reflects any actual
+playtesting of a mechanic that does not exist yet in code. And whether the comment citing "task
+11" for the Gale constant, instead of task 12, reflects a task renumbering that predates this
+revision of the document or is simply a mistake, nothing in the diff says.
+
 ## Numbers already decided
 
 `startingGold` 400 · `startingShards` 40 · `idleCapHours` 10 · `repeatFullClearsPerDay` 3 ·
@@ -215,7 +339,9 @@ summon weights.
    execution now, not only by construction.
    Blocked by: nothing, can run before team size. Blocks: 11.
 
-8. **Team size 3 to 5, structural only.** `maxTeamSize` stays a constant at 5. Every player has 5
+8. **Team size 3 to 5, structural only, as written below.** See the audit section after Known
+   traps for what the branch actually contains, which is more than this line describes.
+   `maxTeamSize` stays a constant at 5. Every player has 5
    banner slots from the start, new account or old; a player does not need 5 heroes to deploy, an
    empty slot is simply empty, nobody needs granting extra starters. `PlayerProfile.Team`,
    `SaveSerializer` version (bumped, to protect the downgrade path: a 5-entry team read by 3-slot
