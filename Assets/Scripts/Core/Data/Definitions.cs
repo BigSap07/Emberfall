@@ -308,7 +308,17 @@ namespace Emberfall.Core.Data
         public float MinDamage = 1f;
         public float SpeedVariance = 0.08f;
 
-        public int MaxTeamSize = 3;
+        /// <summary>Gates BOTH sides of a battle: player deploys and enemy spawns. Keep equal to PlayerProfile.TeamSize.</summary>
+        public int MaxTeamSize = 5;
+
+        /// <summary>
+        /// Cap on extra turns a Gale unit's kill re-entry can grant per round. The re-entry
+        /// mechanic itself is not built yet (DESIGN-BUILD-ORDER task 11); this constant ships
+        /// ahead of it, with team size 5, because uncapped re-entry at five killable enemies
+        /// lets one Gale unit resolve a round unilaterally. Task 11 must read this, never
+        /// hardcode its own bound.
+        /// </summary>
+        public int GaleExtraTurnsPerRound = 1;
 
         // hero levelling
         public float LevelCostA = 55f;
@@ -354,6 +364,7 @@ namespace Emberfall.Core.Data
             b.DamageVariance = j.GetFloat("damageVariance", b.DamageVariance);
             b.SpeedVariance = j.GetFloat("speedVariance", b.SpeedVariance);
             b.MaxTeamSize = j.GetInt("maxTeamSize", b.MaxTeamSize);
+            b.GaleExtraTurnsPerRound = j.GetInt("galeExtraTurnsPerRound", b.GaleExtraTurnsPerRound);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
             b.LevelCostC = j.GetFloat("levelCostC", b.LevelCostC);

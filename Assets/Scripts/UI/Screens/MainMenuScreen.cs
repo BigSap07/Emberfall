@@ -272,11 +272,14 @@ namespace Emberfall.UI.Screens
         {
             for (int i = _teamRow.childCount - 1; i >= 0; i--) Destroy(_teamRow.GetChild(i).gameObject);
 
+            // Five cells across the 880f row: 5 * 158 + 4 * 22 spacing = 878. The old three-across
+            // cells were 270f; the portrait still fits, the name labels got narrower with them.
+            const float cellWidth = 158f;
             List<HeroInstance> team = App.Session.Profile.TeamHeroes();
-            for (int slot = 0; slot < 3; slot++)
+            for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
             {
                 RectTransform cell = UIBuilder.Node("Slot" + slot, _teamRow);
-                UIBuilder.Sized(cell, 270f, 196f);
+                UIBuilder.Sized(cell, cellWidth, 196f);
 
                 if (slot >= team.Count)
                 {
@@ -294,11 +297,11 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(portrait, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
 
                 Text name = UIBuilder.Label("Name", cell, hero.Def.Name, UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -132f, 260f, 26f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(name.rectTransform, 0f, -132f, 154f, 26f, new Vector2(0.5f, 1f));
 
                 Text meta = UIBuilder.Label("Meta", cell, "Lv " + hero.Level + "  -  " + hero.Power,
                                             UITheme.FontTiny, UITheme.Gold, TextAnchor.UpperCenter);
-                UIBuilder.Box(meta.rectTransform, 0f, -160f, 260f, 26f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(meta.rectTransform, 0f, -160f, 154f, 26f, new Vector2(0.5f, 1f));
             }
         }
 

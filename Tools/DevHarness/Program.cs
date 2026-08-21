@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Json;
 using Emberfall.Core.Model;
 using Emberfall.Core.Save;
 using Emberfall.Core.Session;
@@ -37,6 +38,7 @@ namespace Emberfall.DevHarness
             CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
+            CheckTeamSizeStructure(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
             CheckDebrief();
@@ -227,7 +229,11 @@ namespace Emberfall.DevHarness
 
             BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 12345));
             Check(r.Events.Count > 10, "battle produced an event stream (" + r.Events.Count + " events)");
-            Check(r.Units.Count == 6, "3v3 battle built 6 units (got " + r.Units.Count + ")");
+            // Team size is no longer a fixed 3v3: unit count is deploys plus spawns, both capped
+            // by MaxTeamSize. A fresh profile deploys its 3 starters against whatever stage 1 spawns.
+            int expectedUnits = Math.Min(session.Profile.TeamHeroes().Count, db.Balance.MaxTeamSize)
+                              + Math.Min(stage.Enemies.Count, db.Balance.MaxTeamSize);
+            Check(r.Units.Count == expectedUnits, "battle built deploys + spawns = " + expectedUnits + " units (got " + r.Units.Count + ")");
             Check(r.Rounds >= 1 && r.Rounds <= db.Balance.MaxRounds, "battle finished within the round limit (" + r.Rounds + ")");
             Line("");
         }
@@ -295,6 +301,88 @@ namespace Emberfall.DevHarness
                 }
             }
             Check(fingerprintsStable, "every one of the twelve stages still produces a stable, reproducible fingerprint across sampled seeds");
+            Line("");
+        }
+
+        /// <summary>
+        /// Team size 3 to 5, structural checks (DESIGN-BUILD-ORDER task 8). Proves the mechanics
+        /// without a Unity editor: the profile shape, both save paths, the version guard, the
+        /// spawn caps, and the one hard content requirement - a brand new account's three
+        /// starters can win whatever stage 1 spawns. Deliberately does NOT assert anything about
+        /// win rates beyond stage 1: enemy counts are a structural first pass and the balance
+        /// checks further down are the instrument that reports how unbalanced they are.
+        /// </summary>
+        private static void CheckTeamSizeStructure(ContentDatabase db)
+        {
+            Line("TEAM SIZE (5 banner slots, enemy count is the scaling variable)");
+
+            Check(PlayerProfile.TeamSize == 5, "PlayerProfile.TeamSize is 5 (got " + PlayerProfile.TeamSize + ")");
+            Check(db.Balance.MaxTeamSize == PlayerProfile.TeamSize,
+                  "balance maxTeamSize matches PlayerProfile.TeamSize (" + db.Balance.MaxTeamSize + " vs " + PlayerProfile.TeamSize + ")");
+
+            PlayerProfile fresh = GameSession.CreateNewProfile(db, 0);
+            Check(fresh.Team.Length == PlayerProfile.TeamSize, "a new profile has " + PlayerProfile.TeamSize + " banner slots");
+            Check(fresh.TeamHeroes().Count == 3, "a new profile deploys its 3 starters (got " + fresh.TeamHeroes().Count + ")");
+            Check(fresh.Team[3] == null && fresh.Team[4] == null, "slots 4 and 5 start empty, and empty is a legal state");
+
+            // spawn caps: MaxTeamSize silently truncates over-authored stages, so make that loud,
+            // and pin the ramp contract - stage 1 spawns fewer than the cap, the finale fills it.
+            bool spawnsOk = true;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                int count = db.AllStages[i].Enemies.Count;
+                if (count < 1 || count > db.Balance.MaxTeamSize)
+                {
+                    spawnsOk = false;
+                    Line("  [FAIL] " + db.AllStages[i].DisplayCode + " authors " + count + " spawns (cap " + db.Balance.MaxTeamSize + ")");
+                }
+            }
+            Check(spawnsOk, "every stage authors between 1 and " + db.Balance.MaxTeamSize + " spawns - nothing silently truncated");
+            Check(db.AllStages[0].Enemies.Count < db.Balance.MaxTeamSize,
+                  "stage 1 spawns fewer enemies than the cap (" + db.AllStages[0].Enemies.Count + ")");
+            Check(db.AllStages[db.AllStages.Count - 1].Enemies.Count == db.Balance.MaxTeamSize,
+                  "the chapter finale fills out to " + db.Balance.MaxTeamSize + " enemies");
+
+            // save, forward: a v2 profile round-trips with the version stamped
+            string json = SaveSerializer.Serialize(fresh);
+            JsonValue parsed;
+            string parseError;
+            Check(JsonValue.TryParse(json, out parsed, out parseError) && parsed.GetInt("version", 0) == SaveSerializer.CurrentVersion,
+                  "a fresh save is stamped version " + SaveSerializer.CurrentVersion);
+
+            // save, upgrade: a version 1 save with a 3-entry team fills slots 1-3 and leaves 4-5 empty
+            string legacy = "{\"version\":1,\"gold\":100,\"shards\":10,\"nextHeroUid\":4,"
+                + "\"heroes\":[{\"uid\":\"h1\",\"defId\":\"orrin_kaal\",\"level\":4,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h2\",\"defId\":\"kalyx_emberwright\",\"level\":3,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h3\",\"defId\":\"wren_ilyra\",\"level\":2,\"copies\":1,\"acquired\":0}],"
+                + "\"team\":[\"h1\",\"h2\",\"h3\"]}";
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacy, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null, "a version 1 save (3-entry team) loads without error"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            if (upgraded != null)
+            {
+                Check(upgraded.Team.Length == PlayerProfile.TeamSize && upgraded.TeamHeroes().Count == 3,
+                      "the upgraded save keeps its 3 heroes in a " + PlayerProfile.TeamSize + "-slot banner");
+                Check(upgraded.Team[0] == "h1" && upgraded.Team[1] == "h2" && upgraded.Team[2] == "h3",
+                      "the upgraded save keeps its banner order");
+            }
+
+            // save, downgrade: a save from a newer build is refused, not silently truncated
+            string futureError;
+            PlayerProfile future = SaveSerializer.Deserialize("{\"version\":99}", db, out futureError);
+            Check(future == null && futureError != null, "a save from a newer build is refused with an error, not mangled");
+
+            // the hard content requirement: 3 level-1 starters must be able to win stage 1
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            int wins = 0;
+            const int Samples = 20;
+            for (int i = 0; i < Samples; i++)
+            {
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 8000000 + i));
+                if (r.Victory) wins++;
+            }
+            Check(wins > 0, "a brand new account's 3 starters can win stage 1 (" + Pct(wins / (float)Samples) + " of sampled battles)");
             Line("");
         }
 

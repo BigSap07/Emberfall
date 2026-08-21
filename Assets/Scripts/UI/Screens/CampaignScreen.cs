@@ -71,19 +71,21 @@ namespace Emberfall.UI.Screens
         {
             for (int i = _teamStrip.childCount - 1; i >= 0; i--) Destroy(_teamStrip.GetChild(i).gameObject);
 
+            // Five portraits in the 460f strip: 5 * 80 + 4 * 12 spacing = 448. They were 84f at three.
+            const float portraitSize = 80f;
             List<HeroInstance> team = App.Session.Profile.TeamHeroes();
-            for (int slot = 0; slot < 3; slot++)
+            for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
             {
                 if (slot < team.Count)
                 {
                     HeroInstance hero = team[slot];
-                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, 84f, true);
-                    UIBuilder.Sized(portrait, 84f, 84f);
+                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, portraitSize, true);
+                    UIBuilder.Sized(portrait, portraitSize, portraitSize);
                 }
                 else
                 {
                     RectTransform empty = UIBuilder.Node("Empty" + slot, _teamStrip);
-                    UIBuilder.Sized(empty, 84f, 84f);
+                    UIBuilder.Sized(empty, portraitSize, portraitSize);
                     Image image = empty.gameObject.AddComponent<Image>();
                     image.sprite = TextureLab.Ring(96, 5);
                     image.color = UITheme.BorderSoft;

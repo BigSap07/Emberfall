@@ -13,14 +13,20 @@ namespace Emberfall.Battle
     {
         // A shallow V per side reads well on a tall phone screen: front-liner nearest the enemy,
         // supports set back and out to the sides.
+        // Slots 0-2 are unchanged from the 3v3 layout on purpose: a battle that deploys three
+        // units renders exactly as it did before team size grew. Slots 3-4 widen the back line
+        // and only exist on screen when a fourth or fifth unit actually stands there. The new
+        // x extents (2.6) have not been seen through the real camera - verify in Play mode.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(0f, -1.6f), new Vector2(-1.55f, -2.75f), new Vector2(1.55f, -2.75f)
+            new Vector2(0f, -1.6f), new Vector2(-1.55f, -2.75f), new Vector2(1.55f, -2.75f),
+            new Vector2(-2.6f, -3.6f), new Vector2(2.6f, -3.6f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(0f, 2.0f), new Vector2(-1.55f, 3.15f), new Vector2(1.55f, 3.15f)
+            new Vector2(0f, 2.0f), new Vector2(-1.55f, 3.15f), new Vector2(1.55f, 3.15f),
+            new Vector2(-2.6f, 4.0f), new Vector2(2.6f, 4.0f)
         };
 
         public Camera Camera;

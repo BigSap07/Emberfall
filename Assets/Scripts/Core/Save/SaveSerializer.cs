@@ -12,7 +12,15 @@ namespace Emberfall.Core.Save
     /// </summary>
     public static class SaveSerializer
     {
-        public const int CurrentVersion = 1;
+        /// <summary>
+        /// 2: team array grew from 3 to 5 slots. The upgrade path (a 3-entry team read into 5
+        /// slots) needs no migration - the read loop is length-tolerant and NormaliseTeam fills
+        /// the rest. The bump exists for the downgrade path: a 5-entry team read by 3-slot code
+        /// truncates silently, dropping two heroes with no error. Older builds never checked the
+        /// version at all, so this build is where the guard starts existing; from here on, a save
+        /// from a newer build is refused instead of quietly mangled.
+        /// </summary>
+        public const int CurrentVersion = 2;
 
         public static string Serialize(PlayerProfile profile)
         {
@@ -60,6 +68,17 @@ namespace Emberfall.Core.Save
             error = null;
             JsonValue root;
             if (!JsonValue.TryParse(json, out root, out error)) return null;
+
+            // Saves never carried a version below 1, and version was written from the start,
+            // so a missing field just means "1". Anything above CurrentVersion comes from a
+            // newer build; reading it here would silently drop whatever the newer format added
+            // (a 5-slot team truncated to 3 was the first real casualty), so refuse instead.
+            int version = root.GetInt("version", 1);
+            if (version > CurrentVersion)
+            {
+                error = "save is from a newer build (version " + version + ", this build reads up to " + CurrentVersion + ")";
+                return null;
+            }
 
             PlayerProfile profile = new PlayerProfile();
             profile.PlayerName = root.GetString("playerName", "Wayfarer");
