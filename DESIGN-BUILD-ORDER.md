@@ -5,14 +5,24 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
-**Status, as of this revision.** Two branches are merged to `main` and confirmed green on CI:
-`build-order-7-effect-hit-resist` and `sprite-path-orrin`. Three remain unmerged:
-`build-order-8-team-size-5` (implemented, compiled, and run on CI, DevHarness fails two checks,
-see task 8 and Known trap 1), `build-order-9-landscape` (stacked on 8, deliberately left alone
-until 8's result was known), and `build-order-1-3` (still local only, still unpushed). CI now runs
-`build-check.ps1` on every push and pull request, so status claims below about compiling or
+**Status, as of this revision.** `build-order-7-effect-hit-resist` and `sprite-path-orrin` were
+already merged to `main` and green. `build-order-8-team-size-5` and `build-order-9-landscape` are
+now merged too: task 10's `campaign.json` refill was committed directly onto
+`build-order-9-landscape` rather than its own branch, so all three tasks (8, 9, 10) landed
+together in one merge, exactly as this document already called for below. Tasks 8, 9 and 10 are
+done. One branch remains unmerged: `build-order-1-3` (still local only, still unpushed). CI now
+runs `build-check.ps1` on every push and pull request, so status claims below about compiling or
 running are claims about an actual run, not a reading of a diff, wherever a branch has actually
 been pushed through it.
+
+Task 9 grew far beyond its original one-line description while unmerged, through several rounds
+of Play mode feedback the document did not originally anticipate: portrait to landscape pulled in
+a full projection change (perspective to orthographic), a full formation rebuild (a depth-staggered
+V, then a flattened two-plane line, then left/right clusters in a three-row taper), a facing
+correction (allies were rendering with their backs to the camera after the rearrangement, caught
+late), and a battle background loader that did not exist in the plan at all. See task 9 below for
+the full account. None of this changes what shipped structurally for task 8 or the content shipped
+for task 10; it is scoped to presentation.
 
 **Legend.** `[H]` build-check.ps1 / DevHarness only, no Unity needed. `[U]` needs Unity Play mode to
 verify, because it fails silently rather than with a compile error. `[D]` a decision, not code.
@@ -78,12 +88,36 @@ sequence was spec, then a way to look at what the spec produces, then the loader
 real. What happened is the loader shipped second and the check screen hasn't shipped at all.
 Recorded here so it isn't quietly read back later as the order that was always intended.
 
+**A second loader arrived alongside task 9, for battle backgrounds, not part of the original
+three-part plan above but following the same convention on purpose.** `BattleAssets.BackdropTexture`
+loads `Resources/Backgrounds/{environmentId}.png`, mirroring the sprite path's
+`Resources/Sprites/Units/{spriteId}.png`, cached the same way. It replaces what used to be a
+generated sky quad, an arena ground plane and a ridge of rotated blocks - one painted image now
+carries sky, ground and horizon together, sized and positioned off the live camera
+(`orthographicSize`, aspect, the rig's own rotation) rather than hardcoded, specifically so it
+cannot go stale the way the ridge and sky quad did across three camera changes in one session. The
+environment ids campaign.json actually authors are `ashen`, `ember` and `hollow`, four stages
+each. Only `ashen.png` exists and is committed; `ember` and `hollow` have no painting yet and fall
+back to a generated gradient built from that environment's existing colour palette, never to black
+or to the sprite path's magenta (a missing environment painting is the ordinary case here, not a
+content bug, so it does not get treated like one). Verified only against `build-check.ps1`, same
+as the unit sprite loader - the Play mode look, and in particular whether painted ground lines up
+with where units actually stand, is unconfirmed.
+
 One real dependency worth naming despite this not being a numbered task: the loader fixes its
-sprite's height to a constant chosen to read correctly against the current portrait camera.
-Task 9 moves that camera closer specifically because characters read smaller in a wide frame.
-Nothing breaks structurally when 9 lands - the loader doesn't reference anything task 9 or task 8
-touch - but a fixed real-world height renders larger against a closer camera, and Orrin's sprite
-scale wants a second look once orientation ships. That check does not exist yet either.
+sprite's height to a constant chosen to read correctly against the original portrait camera. Task
+9 turned out to change far more than that camera's distance (see task 9 below for the full
+account: it went to orthographic projection, then through three re-framings, ending at
+`orthographicSize` 4.74). The loader doesn't reference anything task 9 or task 8 touch, so nothing
+broke structurally, but two things now need a look once someone can see Orrin in Play mode: his
+sprite's fixed height against the final framing, and a second, newer mismatch task 9 introduced on
+its own - `UnitRig.Build` now turns every unit `UnitRig.ThreeQuarterTurn` (30 degrees) off
+camera-square so the two sides face each other, and a flat sprite turned that way foreshortens
+while the art underneath still depicts a square-on character. `DESIGN-ART-DELIVERY.md` already
+documents the fix (draw at 30 degrees toward the character's own left) for whenever Orrin's
+placeholder gets redrawn; until then it will read visibly flatter than the procedural rigs beside
+it, which now turn correctly because the rotation is geometric, not baked into art. Neither check
+exists yet.
 
 ## Undecided, needs a human
 
@@ -112,8 +146,9 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
 
 ## Known traps, carried forward
 
-1. **`MaxTeamSize` gates enemy spawns too**, not just the player side. `BuildUnits` reads it for
-   both. DESIGN-COMBAT-STATS predicted that raising it to 5 with `campaign.json` untouched makes
+1. **Resolved by task 10, kept for the record.** `MaxTeamSize` gates enemy spawns too, not just
+   the player side. `BuildUnits` reads it for both. DESIGN-COMBAT-STATS predicted that raising it
+   to 5 with `campaign.json` untouched makes
    every stage 5-versus-3: trivially winnable, near-total win rates in the balance pass, and
    `CheckUnderlevelledLoses` failing. That prediction assumed task 8 would ship with zero content
    changes and task 10 would do the refill afterward, alone. It did not ship that way, and CI now
@@ -154,8 +189,10 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
    `PowerScore`. What is actually incorrect is the implicit premise that task 8 and task 10 stay
    cleanly separated: task 8 already contains a first, uneven slice of task 10's job, unbalanced by
    its own admission, and that slice, not a `StatMath` effect, is what `CheckStageWinnability` is
-   catching. Task 10 was already the fix for this trap. This just confirms why, with a run instead
-   of a prediction. Task 10.
+   catching. Task 10 was already the fix for this trap, and has since landed: all twelve stages
+   pass `CheckStageWinnability`, including the five named above, and CI is green on `main`. The
+   self-applied status duration failure named alongside it in task 8's entry below turned out to
+   be a separate, unrelated bug (stage 1-1's enemy count, not team size), fixed in the same pass.
 2. **`Debrief.AspectFactorThreshold` (1.2f) must move in the same change as the wheel narrowing**
    (`AspectChart.Advantage` 1.20 to 1.10). Miss it and the Aspect debrief clause silently stops
    firing, no test fails, no error appears. Re-check `AspectDominantShare` (0.35) at the same time.
@@ -172,6 +209,14 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
    let it get cut or kept as a side effect of building something else.
 
 ## Audit: what build-order-8-team-size-5 actually contains
+
+**Historical.** Written while task 8 was still unmerged and task 10 was still unstarted; kept for
+the reasoning, not as current status. Everything named as missing, unverified or still-to-be-done
+below has since been done: task 10 landed the full refill (as commits directly on
+`build-order-9-landscape`, not a branch of its own), task 9's Play mode pass (across several
+rounds, well past a single eyeball check) is recorded in task 9's own entry further down, and both
+`build-order-8-team-size-5` and `build-order-9-landscape` are merged to `main` and green. Do not
+read anything below as an open question.
 
 Read in full against `main`, ten files, every change categorised against the document's own
 description of task 8: `maxTeamSize`, `PlayerProfile.Team`, `SaveSerializer` version,
@@ -348,71 +393,96 @@ summon weights.
    code truncates silently, dropping two heroes with no error), `HeroDetailScreen._slotButtons`,
    `BattleStage` ally/enemy slot arrays. `[H]` for Core and save, `[U]` for slot layout, which
    overlaps units silently rather than erroring.
-   **Implemented on `build-order-8-team-size-5`, unmerged on purpose.** Compiles clean on CI. Runs,
-   and DevHarness fails two checks: the self-applied status duration sampler finds zero instances
-   to sample through a full duration, and stage winnability fails outright on five of twelve
-   stages, a team levelled to each stage's own `recommendedPower` never winning in twenty tries, on
-   1-6 The Kiln Gate, 1-9 Mothlight Steps, 1-10 The Grey Bulwark, 1-11 Pyre of Names and 1-12 The
-   Sundered Colossus. This is the deliberately broken intermediate state Known trap 1 already
-   named, and it stays off `main` until 10 lands alongside it, see the note after task 10 for why
-   9 joins them as well. Known trap 1 has the full account of what is actually causing the five
-   failures, which is not what that trap originally predicted. The `[U]` half - do five deploys
-   actually fit without overlapping on screen, does an empty slot read as open rather than broken -
-   is still completely outstanding; nothing in CI touches rendering.
-   Blocked by: nothing, both open questions this task depended on are resolved.
-   Blocks: 9 (orientation re-lays out these same slot positions), 10, 11, 12, 14.
+   **Done. Merged to `main`, green on CI.** Shipped on `build-order-8-team-size-5`, which stayed
+   unmerged until 9 and 10 landed alongside it (see below for why), then merged as one unit. The
+   two DevHarness failures this branch carried while unmerged - the self-applied status duration
+   sampler, and stage winnability failing on five stages - are both resolved; see Known trap 1 and
+   task 10. The `[U]` half (five deploys fitting without overlap, an empty slot reading as open) is
+   covered by task 9's Play mode pass below, which went through several rounds specifically because
+   the first layout did not clear it.
+   Blocks: 9, 10, 11, 12, 14 - all now unblocked on task 8's side.
 
-**8, 9 and 10 now land together as one merge unit, not 8 and 9 alone.** Build order already paired
-8 and 9 for the slot layout, 9 re-lays out exactly the positions 8 builds, so shipping one without
-the other left a broken screen either way. CI is the reason 10 joins them. Task 8 merged alone
-leaves `main` red on every push and pull request from the moment it lands until 10 fixes the
-recommendedPower-versus-enemy-count mismatch Known trap 1 describes, and that gap is no longer a
-private note in this document, it is a red status every contributor sees on every push in the
-meantime. Landing 8 without 9 and 10 in the same pass means a red `main` for however long 9 takes
-to build.
+**8, 9 and 10 landed together as one merge unit, not 8 and 9 alone, as planned.** Build order
+already paired 8 and 9 for the slot layout, 9 re-lays out exactly the positions 8 builds, so
+shipping one without the other would have left a broken screen either way. CI is why 10 joined
+them: task 8 merged alone would have left `main` red on every push until 10 fixed the
+recommendedPower-versus-enemy-count mismatch Known trap 1 described. All three merged together,
+confirmed green on CI on `main` after the merge.
 
 9. **Orientation: portrait to landscape.** Five-a-side is ten characters across a battle line;
    1080 of portrait width does not carry that read. Touches every screen, not only the battle
    screen, since the UI is built in code rather than laid out visually - there is no separate
    layout pass to redo, every screen's code is the layout. `[U]` heavy: nearly everything here
    fails silently or just looks wrong, long before it fails to compile.
-   **Implemented, unmerged, on `build-order-9-landscape`, stacked directly on top of
-   `build-order-8-team-size-5`.** Unverified in every sense - not compiled, not opened, not seen.
-   The two branches merge together and in order (8 then 9): this diff assumes 8's slot arrays
-   already exist and doesn't make sense applied on its own.
-   Blocked by: 8, it re-lays out the `BattleStage` slot positions and banner UI task 8 just built;
-   land them together so the battle screen gets laid out once, not laid out for 5v5 portrait and
-   then redone for landscape. Blocks: 10 (its Unity eyeball pass on the new spawn compositions
-   should happen once, in the shipped orientation), 11, 12, 13, and in general every later task
-   with a `[U]` or `[H+U]` tag, since their Play mode checks all run in whatever orientation ships.
-   Also settle this before any background or hub art starts (outside this list) - orientation
-   changes what the artist draws, and that work should not start twice either.
+   **Done. Merged to `main`, green on CI.** Grew well past what this line describes, through
+   several rounds of Play mode feedback after the branch was actually seen rendering for the first
+   time. In order:
+   - **Portrait to landscape**, as planned: canvas reference resolution, camera reoriented, every
+     screen's code-built layout redone for the wider frame.
+   - **Perspective to orthographic projection.** Not in the original plan. Under perspective the
+     far (enemy) side necessarily rendered smaller than the near (ally) side regardless of camera
+     angle; orthographic removes that falloff so both sides read at identical size, matching the
+     mobile-idle-RPG reference this was aimed at.
+   - **The formation itself was rebuilt three times** as the camera and projection changed under
+     it: a depth-staggered V (the original portrait shape), then a single flattened plane per
+     side, then the shipped shape - left and right clusters, each a three-row taper (1 front, 2
+     middle, 2 back) with the empty middle band running vertically down the screen rather than
+     horizontally across it. Slot spacing was corrected once more after Play mode showed units
+     overlapping at partial team sizes (three and four deployed, not only five) - the fix pays a
+     real, derived screen-space clearance on both axes rather than assuming either axis alone was
+     enough.
+   - **The arena boundary stone ring was removed outright**, not retuned. Under orthographic
+     projection, at any radius wide enough to clear the formation, the ring ends up sitting between
+     the camera and the characters rather than framing them from behind - a structural mismatch
+     with this projection and this formation depth, not a tuning error, so no radius fixes it.
+   - **Unit facing was corrected**, catching a real bug: the left/right rearrangement above left
+     allies rendering with their backs to the camera, unnoticed until specifically checked. Both
+     sides now turn `UnitRig.ThreeQuarterTurn` (30 degrees, derived, mirrored by side) toward each
+     other rather than standing camera-square, so the two lines read as facing off rather than
+     standing to attention. `DESIGN-ART-DELIVERY.md` was updated on `main` with the resulting art
+     spec: sprites are drawn at 30 degrees toward the character's own left, and the enemy side
+     displays the same file mirrored, not separate art.
+   - **A battle background loader was added**, not part of the original plan either: painted
+     per-environment images replace the sky quad, ground plane and ridge geometry that used to
+     dress the 3D scene. See "Art pipeline, outside the numbered order" above for the loader
+     itself and the new `Resources/Backgrounds/{environmentId}.png` convention.
+   Blocks: 10, 11, 12, 13, 14 - all now unblocked on task 9's side. Two things are still genuinely
+   unverified and belong to whoever looks next, not to this document: whether the painted
+   backdrop's ground line matches where units actually stand, and Orrin's sprite against both the
+   final framing and the new three-quarter rotation (see "Art pipeline" above).
 
 10. **Refill `campaign.json` with enemy counts that ramp toward five.** Enemy count per stage is
     the scaling variable, not a flat five everywhere: early stages spawn fewer enemies, later
     stages fill out toward the `maxTeamSize` cap. Chapter 1 must stay winnable by the 3 starting
     heroes against whatever stage 1 spawns. Known trap 1. `[H+U]`
-    Blocked by: 8, 9 (the eyeball pass belongs in the shipped orientation, not the portrait one).
-    Blocks: 11, 12, 14.
+    **Done. Merged to `main`, green on CI.** Landed as commits directly on
+    `build-order-9-landscape` rather than its own branch, alongside 8 and 9, then merged with
+    them. All twelve stages pass `CheckStageWinnability`, including the five named in Known trap
+    1. Enemy count ramps 3/3/3/3 (chapter 1), 4/4/4/4 (chapter 1 continued), 5/5/5/5 (the last
+    third), not flat five everywhere. `recommendedPower` was raised on six of the twelve stages
+    where the composition demanded it; nothing here is final, task 14 is still the real retune.
+    Blocks: 11, 12, 14 - all now unblocked on task 10's side.
 
 11. **Effect Hit / Effect Resist, phase B.** Author values on six heroes and eight enemies, add
     `StatusResisted`, wire it into the battle screen and Debrief, add the direction check to the
     harness. `[H]` for the logic, `[U]` for the new event's presentation, which renders on the
     battle screen and so wants orientation settled first.
-    Blocked by: 7, 8, 9, 10. Blocks: 14.
+    **Unblocked.** 7, 8, 9 and 10 have all landed on `main`. Nothing is stopping this from
+    starting.
+    Blocked by: nothing remaining. Blocks: 14.
 
 12. **Resolve the relic/aspect hook conflict**, then build whichever of Relics and Aspects follows
     from that. `[D]` for the decision, `[H+U]` for the code after, which renders in hero detail and
     on the battle screen.
-    Blocked by: 8 and 10 (both reference `AllEnemies` resolution at team size 5), 9 for its UI half,
-    and the conflict resolution itself. Blocks: 14. If the resolution follows DESIGN-ASPECTS'
+    Blocked by: the conflict resolution itself, the one blocker left - 8, 9 and 10 have landed.
+    Blocks: 14. If the resolution follows DESIGN-ASPECTS'
     suggested direction, build Aspects before Relics: two of six relics need rewriting once Aspects
     lands and two more need re-arguing, so building Relics first means doing part of that work twice.
 
 13. **Opening Gambit**, one pre-battle choice, every battle. Touches `BattleRequest`. `[H]` for
     Core, `[U]` for the pre-battle choice screen, which is new UI and should be built once, in
     whichever orientation ships.
-    Blocked by: 9. Blocks: 14, it changes win rates.
+    Blocked by: nothing remaining, 9 has landed. Blocks: 14, it changes win rates.
 
 14. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
     handful of spot-check battles in `[U]` are still worth watching.
