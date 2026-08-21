@@ -361,6 +361,17 @@ namespace Emberfall.UI.Screens
             return bar;
         }
 
+        // How far above a unit's head its bar floats, in screen pixels rather than world units.
+        // A world offset (the old approach: HeadPosition + up * 0.28) is fragile - the same
+        // world gap projects to a different pixel gap whenever the camera's pitch or distance
+        // changes, so it needs retuning every time BattleStage's camera does. Projecting the
+        // head first and adding the offset after, in pixels, makes the bar's on-screen rise
+        // constant regardless of how the battle camera is framed. 46 sits in the same range
+        // (44-53px) the old 0.28 world-unit offset produced across every camera setup checked
+        // while diagnosing this (portrait, the first landscape pass, and the flattened-plane
+        // camera above), so this keeps the look, it just stops it being pitch-dependent.
+        private const float BarPixelRise = 46f;
+
         private void LateUpdate()
         {
             if (_world == null || _world.Camera == null || Root == null || !Root.gameObject.activeInHierarchy) return;
@@ -373,12 +384,12 @@ namespace Emberfall.UI.Screens
                 UnitBar bar;
                 if (!_bars.TryGetValue(actor.Snapshot.Id, out bar)) continue;
 
-                Vector3 screen = _world.Camera.WorldToScreenPoint(actor.HeadPosition + Vector3.up * 0.28f);
+                Vector3 screen = _world.Camera.WorldToScreenPoint(actor.HeadPosition);
                 bool visible = screen.z > 0f && actor.Alive;
                 bar.Group.alpha = visible ? 1f : Mathf.Max(0f, bar.Group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
 
-                bar.Root.anchoredPosition = new Vector2(screen.x / scale, screen.y / scale + bar.TurnLift);
+                bar.Root.anchoredPosition = new Vector2(screen.x / scale, screen.y / scale + BarPixelRise + bar.TurnLift);
             }
         }
 

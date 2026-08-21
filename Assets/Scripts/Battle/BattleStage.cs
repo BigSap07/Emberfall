@@ -19,6 +19,20 @@ namespace Emberfall.Battle
         // push straight into the top UI band. Each side now sits on a single z plane and only
         // spreads on x, same as Idle Heroes / AFK Arena. Slot order still matters for combat
         // logic (slot 0 is the FrontEnemy targeting read), it just no longer maps to depth.
+        //
+        // The planes are not symmetric about z 0. At the flattened 5-unit-apart spacing the
+        // two sides read as one crowd: the near (ally) row's own on-screen height already
+        // reaches up to almost where the far (enemy) row's feet sit. Widening the gap has to
+        // come mostly from pushing the enemy plane back rather than pulling the ally plane in,
+        // because the ally plane's outer slot at bar height was already the tightest point in
+        // the camera's frustum (see Initialise) - moving it closer eats that margin directly,
+        // while the enemy plane had roughly 60% more frustum budget to spare than it needed.
+        // The ceiling on how far back the enemy plane can go is the arena boundary ring in
+        // BuildScenery: those stones sit at radius 7.4 to 8.4 from the origin, and the outer
+        // enemy slot at x 4 is the corner closest to them, at distance sqrt(4^2 + z^2). Solving
+        // sqrt(16 + z^2) = 7.4 puts the absolute limit at z = 6.23; z = 5.7 leaves about half a
+        // stone's width of clearance under that (distance 6.96), which is as close as felt safe
+        // to sit without units reading as planted on the boundary.
         private static readonly Vector2[] AllySlots =
         {
             new Vector2(0f, -2.5f), new Vector2(-2.0f, -2.5f), new Vector2(2.0f, -2.5f),
@@ -27,8 +41,8 @@ namespace Emberfall.Battle
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(0f, 2.5f), new Vector2(-2.0f, 2.5f), new Vector2(2.0f, 2.5f),
-            new Vector2(-4.0f, 2.5f), new Vector2(4.0f, 2.5f)
+            new Vector2(0f, 5.7f), new Vector2(-2.0f, 5.7f), new Vector2(2.0f, 5.7f),
+            new Vector2(-4.0f, 5.7f), new Vector2(4.0f, 5.7f)
         };
 
         public Camera Camera;
@@ -50,33 +64,51 @@ namespace Emberfall.Battle
             Camera = cameraObject.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.SolidColor;
             Camera.backgroundColor = new Color(0.04f, 0.03f, 0.07f, 1f);
-            // Framing re-derived for the flattened formation (fov 40 at y 5.8, z -7.4 was set
-            // against the old staggered V and never checked against this spread - the outer
-            // slots at x +/-4 fell outside the frustum). Worked from the actual geometry:
-            // ally plane z -2.5, enemy plane z 2.5, x +/-4, plus ~0.5 for character half-width
-            // and another 0.5 of clear air, so the framed edge is x +/-5. Vertically a unit
-            // spans y 0 (feet) to y 1.85 (UnitRig.Height), and the tracked health bar sits at
-            // HeadPosition + 0.28 (BattleScreen.cs), so the top of the chrome is y 2.13; add
-            // 0.2 of headroom above that and 0.2 below the feet. With camera at (0, 4.6, -10.5)
-            // looking at (0, 1.0, 0), the tightest point turns out to be the ally plane (nearer
-            // to camera than the enemy plane) at its outer x, at bar height rather than at the
-            // feet - being closer to the camera's own height shortens its distance along the
-            // view axis more than being lower does. That point needs a vertical field of view
-            // of ~37.4 degrees to stay inside frame; 42 leaves about 12% of headroom to spare
-            // there, and far more on the enemy plane and everywhere else, since every other
-            // point sits further from the camera along the view axis than that one does. Depth
-            // staggering is gone, so the steep 31 degree pitch the old V needed to compress
-            // itself vertically is gone too - this sits at roughly 19 degrees, the flattest
-            // angle that still clears the arena boundary stones and keeps both planes read as
-            // two distinct facing lines rather than one flat card.
+            // Framing re-derived from scratch against the separated planes (ally z -2.5, enemy
+            // z 5.7, x +/-4 with the same +0.5/+0.5 character-width and clear-air margin as
+            // before, so the framed edge is still x +/-5). Health bars no longer add to the
+            // required vertical world extent - they are a fixed screen-space offset now (see
+            // BattleScreen.cs), so the only vertical extent that matters here is the body: y 0
+            // at the feet to y 1.85 at the head (UnitRig.Height), plus 0.2 of margin on each
+            // end.
+            //
+            // Field of view stays at 42 - it already had headroom, the problem here was where
+            // the camera looks, not how wide. Composition wants the ally row's feet and the
+            // enemy row's head near the bottom and top of frame respectively, with even margin
+            // on both sides rather than the old setup's near-quarter of the screen wasted as
+            // pure foreground below the ally row. That is exactly two angles: the depression
+            // angle from the camera down to the ally feet, and the (much shallower) depression
+            // angle down to the enemy head-plus-margin. Aiming the camera exactly at the
+            // midpoint of those two angles centres both extremes in frame by construction, and
+            // checking the actual projected pixels confirms it lands within half a percent of
+            // dead-centre on both sides: ally feet fall at roughly 18% up from the bottom edge,
+            // enemy head clears the top by roughly the same 18%, so the two rows occupy the
+            // middle third-plus of a 1080-tall frame instead of the top two-thirds.
+            //
+            // Camera distance still answers to the arena boundary stones (radius 7.4 to 8.4,
+            // same ring as the slot spacing above) - z -9.2 clears them with a margin similar
+            // to the slot spacing's, and the camera sits at x 0, which happens to fall in the
+            // angular gap between the two stones nearest that heading anyway. With that
+            // distance fixed, camera height is what has room left to move, and pushing it up to
+            // y 7.0 is what buys the angular separation the composition needs - lower than that
+            // and the ally-feet-to-enemy-head angle span undershoots what 42 degrees can use
+            // well, higher and it barely gains more (the far plane's angle grows too, capping
+            // the achievable spread). The tightest point for x-coverage is still the ally
+            // plane's outer slot, still at the top of its margin rather than at the feet, for
+            // the same reason as before - it needs about 37.4 degrees of the 42 available,
+            // leaving about 13%, close to the 12% the previous framing carried. Pitch comes out
+            // to about 32 degrees, close to the original pre-flatten V's 31 - not because
+            // within-row depth scatter is back, each plane is still perfectly flat, but because
+            // the gap between the two planes is now wider (8.2 total) than the old V's own
+            // front-to-back spread (7.0) was, and that gap is what the pitch now has to cover.
             Camera.fieldOfView = 42f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 4.6f, -10.5f);
+            _cameraHome = new Vector3(0f, 7.0f, -9.2f);
             _cameraRig.localPosition = _cameraHome;
-            _cameraRig.LookAt(new Vector3(0f, 1.0f, 0f));
+            _cameraRig.LookAt(new Vector3(0f, 0.17f, 1.6f));
 
             GameObject vfxHost = new GameObject("Vfx");
             vfxHost.transform.SetParent(transform, false);
