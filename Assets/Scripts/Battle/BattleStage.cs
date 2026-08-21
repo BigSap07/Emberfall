@@ -11,38 +11,47 @@ namespace Emberfall.Battle
     /// </summary>
     public sealed class BattleStage : MonoBehaviour
     {
-        // Landscape formation: wide and flat, not staggered in depth. The old V-shaped ranks
-        // (front-centre closer, corners further back) were a portrait-era holdover - in
-        // landscape, depth staggering costs the one thing there is least of: five units at
-        // different z render at different screen heights and different apparent sizes, so a
-        // side scatters vertically instead of reading as a row, and the taller back corners
-        // push straight into the top UI band. Each side now sits on a single z plane and only
-        // spreads on x, same as Idle Heroes / AFK Arena. Slot order still matters for combat
-        // logic (slot 0 is the FrontEnemy targeting read), it just no longer maps to depth.
+        // Chibi arena formation: two flat rows per side, not one line. The single-plane layout
+        // this replaces was tuned for a perspective camera, where every unit sitting at one z
+        // was the fix for depth-based size falloff. Under orthographic (see Initialise) that
+        // falloff doesn't exist any more, so a single flat line is no longer required for units
+        // to render at equal size - it was solving a problem this file no longer has. What it
+        // gave up in exchange was the read the reference target actually wants: a front rank
+        // and a back rank per side, same as Idle Heroes / AFK Arena, not five units shoulder to
+        // shoulder.
         //
-        // The planes are not symmetric about z 0. At the flattened 5-unit-apart spacing the
-        // two sides read as one crowd: the near (ally) row's own on-screen height already
-        // reaches up to almost where the far (enemy) row's feet sit. Widening the gap has to
-        // come mostly from pushing the enemy plane back rather than pulling the ally plane in,
-        // because the ally plane's outer slot at bar height was already the tightest point in
-        // the camera's frustum (see Initialise) - moving it closer eats that margin directly,
-        // while the enemy plane had roughly 60% more frustum budget to spare than it needed.
-        // The ceiling on how far back the enemy plane can go is the arena boundary ring in
-        // BuildScenery: those stones sit at radius 7.4 to 8.4 from the origin, and the outer
-        // enemy slot at x 4 is the corner closest to them, at distance sqrt(4^2 + z^2). Solving
-        // sqrt(16 + z^2) = 7.4 puts the absolute limit at z = 6.23; z = 5.7 leaves about half a
-        // stone's width of clearance under that (distance 6.96), which is as close as felt safe
-        // to sit without units reading as planted on the boundary.
+        // The split is 3 front, 2 back, not 2-and-3. Slot 0 stays the front-centre position -
+        // it already carries meaning for combat logic (the FrontEnemy targeting read) and for
+        // the player's eye, so it belongs at the front, not tucked in a back rank. That leaves
+        // four slots to split, and 3-front/2-back lets the two back units sit exactly in the
+        // gaps between the three front units (front at x -4/0/4, back at x -2/2) rather than
+        // needing their own independent spacing - "no unit sits directly behind another" falls
+        // out of the arithmetic instead of needing separate tuning. A 2-front/3-back split has
+        // no equivalent symmetry: three back units can't centre on two gaps.
+        //
+        // The row gap (front z to back z, 1.0 apart) is deliberately small. Under orthographic
+        // it buys zero size change - that's not what it's for. It exists purely to separate the
+        // rows on screen once the camera is pitched (see Initialise): a point's screen height
+        // under a pitched orthographic camera is a mix of its world Y and world Z, so a small,
+        // flat z offset between two rows at the same Y still reads as one row standing visibly
+        // behind the other. Depth variation within a row would do the same thing to units that
+        // are meant to be read as equals, so there is none - AllySlots and EnemySlots each carry
+        // exactly two distinct z values, one per row, never a third.
+        //
+        // The two sides mirror across z 0: ally front at z -3, back at z -4; enemy front at z
+        // 3, back at z 4. The six-unit gap between the two front rows (z -3 to z 3) is the wide
+        // empty middle the reference target calls for. See Initialise for how orthographicSize
+        // and the camera's pitch are derived from these same numbers.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(0f, -2.5f), new Vector2(-2.0f, -2.5f), new Vector2(2.0f, -2.5f),
-            new Vector2(-4.0f, -2.5f), new Vector2(4.0f, -2.5f)
+            new Vector2(0f, -3.0f), new Vector2(-4.0f, -3.0f), new Vector2(4.0f, -3.0f),
+            new Vector2(-2.0f, -4.0f), new Vector2(2.0f, -4.0f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(0f, 5.7f), new Vector2(-2.0f, 5.7f), new Vector2(2.0f, 5.7f),
-            new Vector2(-4.0f, 5.7f), new Vector2(4.0f, 5.7f)
+            new Vector2(0f, 3.0f), new Vector2(-4.0f, 3.0f), new Vector2(4.0f, 3.0f),
+            new Vector2(-2.0f, 4.0f), new Vector2(2.0f, 4.0f)
         };
 
         public Camera Camera;
@@ -64,51 +73,69 @@ namespace Emberfall.Battle
             Camera = cameraObject.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.SolidColor;
             Camera.backgroundColor = new Color(0.04f, 0.03f, 0.07f, 1f);
-            // Framing re-derived from scratch against the separated planes (ally z -2.5, enemy
-            // z 5.7, x +/-4 with the same +0.5/+0.5 character-width and clear-air margin as
-            // before, so the framed edge is still x +/-5). Health bars no longer add to the
-            // required vertical world extent - they are a fixed screen-space offset now (see
-            // BattleScreen.cs), so the only vertical extent that matters here is the body: y 0
-            // at the feet to y 1.85 at the head (UnitRig.Height), plus 0.2 of margin on each
-            // end.
+            // Orthographic, not perspective. This is the change that actually produces the
+            // chibi-arena look: under perspective, the far (enemy) row necessarily rendered
+            // smaller than the near (ally) row regardless of camera angle, which is the single
+            // biggest mismatch with Idle Heroes / AFK Arena, where both sides read at identical
+            // size. Orthographic removes that falloff entirely - apparent size depends only on
+            // orthographicSize below, never on distance from the camera.
             //
-            // Field of view stays at 42 - it already had headroom, the problem here was where
-            // the camera looks, not how wide. Composition wants the ally row's feet and the
-            // enemy row's head near the bottom and top of frame respectively, with even margin
-            // on both sides rather than the old setup's near-quarter of the screen wasted as
-            // pure foreground below the ally row. That is exactly two angles: the depression
-            // angle from the camera down to the ally feet, and the (much shallower) depression
-            // angle down to the enemy head-plus-margin. Aiming the camera exactly at the
-            // midpoint of those two angles centres both extremes in frame by construction, and
-            // checking the actual projected pixels confirms it lands within half a percent of
-            // dead-centre on both sides: ally feet fall at roughly 18% up from the bottom edge,
-            // enemy head clears the top by roughly the same 18%, so the two rows occupy the
-            // middle third-plus of a 1080-tall frame instead of the top two-thirds.
+            // Pitch is 12 degrees, down from the previous 32. A pitched orthographic camera
+            // maps a world point's screen height to (worldY * cos(pitch) + worldZ * sin(pitch)),
+            // a straight linear mix, not the angle-subtended-by-FOV math perspective needed. 12
+            // degrees is a large cut from 32 - "much closer to level" is the brief, and this is
+            // most of the way there while still leaving sin(12 deg) = 0.208 to work with, which
+            // is what turns the 1-unit row gap and the 6-unit side gap (see the slot comment
+            // above) into visible screen separation at all. Set directly as a rotation rather
+            // than by LookAt-ing a computed target, since the pitch itself is the derived value
+            // here, not a side effect of where a look-at point happens to sit.
             //
-            // Camera distance still answers to the arena boundary stones (radius 7.4 to 8.4,
-            // same ring as the slot spacing above) - z -9.2 clears them with a margin similar
-            // to the slot spacing's, and the camera sits at x 0, which happens to fall in the
-            // angular gap between the two stones nearest that heading anyway. With that
-            // distance fixed, camera height is what has room left to move, and pushing it up to
-            // y 7.0 is what buys the angular separation the composition needs - lower than that
-            // and the ally-feet-to-enemy-head angle span undershoots what 42 degrees can use
-            // well, higher and it barely gains more (the far plane's angle grows too, capping
-            // the achievable spread). The tightest point for x-coverage is still the ally
-            // plane's outer slot, still at the top of its margin rather than at the feet, for
-            // the same reason as before - it needs about 37.4 degrees of the 42 available,
-            // leaving about 13%, close to the 12% the previous framing carried. Pitch comes out
-            // to about 32 degrees, close to the original pre-flatten V's 31 - not because
-            // within-row depth scatter is back, each plane is still perfectly flat, but because
-            // the gap between the two planes is now wider (8.2 total) than the old V's own
-            // front-to-back spread (7.0) was, and that gap is what the pitch now has to cover.
-            Camera.fieldOfView = 42f;
+            // orthographicSize is derived from the arrangement's real bounds, checked against
+            // both axes, and the binding one turns out to be horizontal, not vertical.
+            //
+            // Vertical: the lowest point in frame is the ally back row's feet (y 0, z -4, the
+            // nearest-to-camera edge of the formation); the highest is the enemy back row's
+            // head plus bar clearance (y 1.85 + 0.28, z 4 - 0.28 stands in for the bar's rise
+            // above the head, the same figure the old world-space bar offset used before it
+            // became a screen-space constant, kept here only to size this margin). Project both
+            // through the pitch formula above:
+            //   f(y, z) = y * cos(12) + z * sin(12) = y * 0.9781 + z * 0.2079
+            //   f(feet)  = 0 * 0.9781 + (-4) * 0.2079    = -0.832
+            //   f(head)  = 2.13 * 0.9781 + 4 * 0.2079    =  2.916
+            //   span     = f(head) - f(feet)             =  3.748
+            //   half-span with 25% margin                =  3.748 / 2 * 1.25 = 2.342
+            //
+            // Horizontal: half-width needed is orthographicSize * aspect (16:9 = 1.778, the
+            // landscape target - see UITheme.ReferenceResolution). The widest point is the
+            // front row's outer slot at x 4 (see the slot arrays above); a character's own body
+            // extends roughly 0.46 past its slot centre (UnitRig's arm placement on the widest
+            // silhouette), so budget 0.6 clear of that for the character plus a small margin:
+            //   half-width needed = 4.0 + 0.6                = 4.6
+            //   orthographicSize  = 4.6 / 1.778               = 2.587
+            //
+            // 2.587 (horizontal) exceeds 2.342 (vertical), so horizontal is what actually sets
+            // the frame - at 16:9 the wide five-across row runs out of width before the shallow
+            // pitch runs out of height. orthographicSize = 2.6 covers both with a small margin
+            // to spare, and the extra vertical headroom that leaves is exactly where the sky
+            // sits above the two rows (see BuildScenery).
+            //
+            // Camera position: x 0 for left-right symmetry. z -7.0 sits behind the ally back
+            // row (z -4) with clearance for VFX and the near clip plane; under orthographic,
+            // distance from the camera does not affect framing the way it did under
+            // perspective, so this value only has to clear geometry, not satisfy an angle
+            // budget. y is solved from the vertical centring requirement: the frame's vertical
+            // centre in world terms is K = (f(head) + f(feet)) / 2 = 1.042, and
+            // K = camY * cos(12) + camZ * sin(12), so camY = (K - camZ * sin(12)) / cos(12) =
+            // (1.042 - (-7.0) * 0.2079) / 0.9781 = 2.55.
+            Camera.orthographic = true;
+            Camera.orthographicSize = 2.6f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 7.0f, -9.2f);
+            _cameraHome = new Vector3(0f, 2.55f, -7.0f);
             _cameraRig.localPosition = _cameraHome;
-            _cameraRig.LookAt(new Vector3(0f, 0.17f, 1.6f));
+            _cameraRig.localRotation = Quaternion.Euler(12f, 0f, 0f);
 
             GameObject vfxHost = new GameObject("Vfx");
             vfxHost.transform.SetParent(transform, false);
@@ -124,7 +151,13 @@ namespace Emberfall.Battle
             BattleAssets.Environment env = BattleAssets.GetEnvironment(environmentId);
             Camera.backgroundColor = env.SkyTop;
 
-            // sky backdrop
+            // sky backdrop. Checked against the new camera rather than left alone on the
+            // assumption it still holds: at z 30 this quad spans world y -13 to 31, and tracing
+            // both the top-of-frame and bottom-of-frame view rays out to z 30 under the new
+            // orthographic camera (Initialise) lands them at roughly y -2.7 and y -8.0
+            // respectively, both comfortably inside that span. The quad was already oversized
+            // relative to the old camera's frustum, and the new one is smaller in every
+            // dimension, so it stays covered without changing position or scale.
             GameObject sky = GameObject.CreatePrimitive(PrimitiveType.Quad);
             sky.name = "Sky";
             Strip(sky);
@@ -136,7 +169,11 @@ namespace Emberfall.Battle
             skyRenderer.material = BattleAssets.NewFx(BattleAssets.SkyTexture(environmentId), Color.white, false);
             skyRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-            // arena floor
+            // arena floor. Also checked, also unchanged: this plane spans z -16 to 16, and the
+            // new camera's top-of-frame ray only reaches the ground (y 0) at roughly z 17, right
+            // at the plane's own far edge - close enough that the retuned ridge above (now at z
+            // 9 to 11.4, see BuildScenery) sits well inside the plane and screens that edge from
+            // view before it would ever become visible.
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             Strip(ground);
@@ -159,23 +196,46 @@ namespace Emberfall.Battle
             Material far = BattleAssets.NewLit(env.GroundFar, env.Accent * 0.25f, 0f);
             Material near = BattleAssets.NewLit(Color.Lerp(env.GroundNear, env.GroundFar, 0.4f), env.Accent * 0.3f, 0f);
 
-            // distant ridge line
+            // distant ridge line, pulled in and cut down for the new camera. Both changes come
+            // from the same fact: a pitched orthographic camera's visible world-height at a
+            // given z is f(y, z) = y * cos(12) + z * sin(12) (see Initialise), and that shrinks
+            // fast as z grows, since sin(12) = 0.208 is small. At the old ridge distance (z 17
+            // to 21.8) even ground level (y 0) already projects to f = 17 * 0.208 = 3.5 or more
+            // - past orthographicSize (2.6) on its own, before the ridge's own height is added.
+            // The old heights (5.5 to 9.0) were sized for a camera with far more vertical
+            // headroom to spend; at this z they would render almost entirely above the top of
+            // frame. Moving the ridge to z 9 to 11.4 (just past the arena boundary stones
+            // below) and cutting height by roughly 80% (1.0 to 1.8, keeping the same six-value
+            // variation the original array had) brings the tops back to just under the top
+            // edge: f(1.8, 11.4) = 1.8 * 0.978 + 11.4 * 0.208 = 1.76 + 2.37 = 4.13, close to the
+            // frame's own vertical centre (K = 1.042, see Initialise) plus its half-height
+            // (2.6), i.e. just inside the top edge with a small margin. The horizontal spread
+            // and per-block width are unchanged - only depth and height needed to move.
             float[] ridgeX = { -14f, -8.5f, -3.5f, 3.0f, 8.0f, 13.5f };
-            float[] ridgeH = { 7.5f, 5.0f, 9.0f, 6.0f, 8.5f, 5.5f };
+            float[] ridgeH = { 1.5f, 1.0f, 1.8f, 1.2f, 1.7f, 1.1f };
             for (int i = 0; i < ridgeX.Length; i++)
             {
-                Block("Ridge" + i, new Vector3(ridgeX[i], ridgeH[i] * 0.5f - 1.2f, 17f + (i % 3) * 2.4f),
-                      new Vector3(6.5f + (i % 2) * 2f, ridgeH[i], 4f),
+                Block("Ridge" + i, new Vector3(ridgeX[i], ridgeH[i] * 0.5f - 0.15f, 9f + (i % 3) * 1.2f),
+                      new Vector3(6.5f + (i % 2) * 2f, ridgeH[i] + 0.3f, 4f),
                       new Vector3(0f, (i * 23f) % 40f - 20f, (i % 2 == 0 ? 3f : -4f)), far);
             }
 
-            // arena boundary stones
+            // arena boundary stones. Radius comes in from 7.4-8.4 to 6.2-7.0 and height from
+            // 1.1-2.75 to 0.6-1.5, for the same reason as the ridge above: a stone dead ahead at
+            // the old radius and old max height projected to f = 2.6 * 0.978 + 8.4 * 0.208 =
+            // 2.54 + 1.75 = 4.29, well past the frame's top edge. The new range keeps every
+            // stone's top inside orthographicSize with margin to spare - a mid-range stone now
+            // projects to roughly f = 1.65 * 0.978 + 6.7 * 0.208 = 1.61 + 1.39 = 3.0, inside the
+            // frame once recentred against K. The new inner radius (6.2) still clears the
+            // formation: the widest corner in the new layout is the enemy back row's outer slot
+            // at x 4, z 4 (see the slot arrays above), distance sqrt(4^2 + 4^2) = 5.66 from the
+            // origin, so 6.2 leaves a margin of 0.54 rather than sitting flush against it.
             float[] stoneAngles = { 205f, 232f, 258f, 285f, 312f, 55f, 82f, 108f, 135f, 160f };
             for (int i = 0; i < stoneAngles.Length; i++)
             {
-                float radius = 7.4f + (i % 3) * 0.5f;
+                float radius = 6.2f + (i % 3) * 0.4f;
                 float rad = stoneAngles[i] * Mathf.Deg2Rad;
-                float height = 1.1f + (i % 4) * 0.55f;
+                float height = 0.6f + (i % 4) * 0.3f;
                 Block("Stone" + i, new Vector3(Mathf.Cos(rad) * radius, height * 0.5f - 0.15f, Mathf.Sin(rad) * radius),
                       new Vector3(0.9f + (i % 3) * 0.35f, height, 0.9f),
                       new Vector3(0f, stoneAngles[i], (i % 2 == 0 ? 5f : -6f)), near);

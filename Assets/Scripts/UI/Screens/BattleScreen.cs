@@ -366,11 +366,21 @@ namespace Emberfall.UI.Screens
         // world gap projects to a different pixel gap whenever the camera's pitch or distance
         // changes, so it needs retuning every time BattleStage's camera does. Projecting the
         // head first and adding the offset after, in pixels, makes the bar's on-screen rise
-        // constant regardless of how the battle camera is framed. 46 sits in the same range
-        // (44-53px) the old 0.28 world-unit offset produced across every camera setup checked
-        // while diagnosing this (portrait, the first landscape pass, and the flattened-plane
-        // camera above), so this keeps the look, it just stops it being pitch-dependent.
-        private const float BarPixelRise = 46f;
+        // constant regardless of how the battle camera is framed. This mechanism itself did not
+        // need to change for the perspective-to-orthographic switch: WorldToScreenPoint resolves
+        // correctly under either projection mode, and a pixel offset added after projection has
+        // no notion of perspective to begin with.
+        //
+        // The number did need to change, though, and for a different reason than projection
+        // mode: BattleStage.Initialise's new orthographicSize (2.6) sets a fixed, uniform pixel
+        // scale of screenHeight / (2 * orthographicSize) = 1080 / 5.2 = 207.7 pixels per world
+        // unit, the same for every unit regardless of distance, which the old perspective camera
+        // never had - a far unit's world-to-pixel scale was smaller than a near unit's, and 46
+        // was a compromise across that whole range (44-53px). There is no range to compromise
+        // across any more, so this is derived directly against the one scale that now applies,
+        // using the same 0.28 world-unit figure the old world-space offset used as the target
+        // visual gap: 0.28 * 207.7 = 58.2, rounded to 58.
+        private const float BarPixelRise = 58f;
 
         private void LateUpdate()
         {
