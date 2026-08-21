@@ -83,7 +83,42 @@ procedural look). Orrin's is already set larger than the default, because he's m
 a heavy tank. That scaling happens automatically after your image is placed at the fixed
 height described above; you don't need to compensate for it by drawing him bigger.
 
-## 4. Framing: where the feet go
+## 4. A raised weapon needs its own headroom reported, or it shrinks the body
+
+Read this section even if your character holds nothing above their head - the short version,
+"leave it alone," is the answer for most heroes, but knowing why matters the one time it isn't.
+
+Section 3 said the game fixes the character's height to one constant, and that whatever canvas
+you draw maps to that height. That is true only when the whole canvas is body. It stopped being
+true the first time a piece of art held a weapon above its own head: the canvas needed to be
+taller than the body alone to fit the weapon, the game still mapped that whole taller canvas to
+the one fixed height, and the body itself - the part a player actually reads as "how big is this
+character" - ended up rendered shorter than every procedural hero standing next to it. That was
+a real bug, not a hypothetical one, and this section is the fix.
+
+**If your canvas is entirely body - feet to the top of the head, nothing held or worn reaching
+higher - you have nothing to do. Leave this alone.** This is the default, it is free, and it is
+still how every hero shipped so far is drawn.
+
+**If something reaches above the head - a raised staff, tall hair, a banner, wings, anything -
+you have to report how much of the canvas is body, or the engine has no way to tell your body
+apart from the headroom around it and will shrink both together to fit the fixed height.**
+Measure it yourself, directly off your own file: what fraction of the canvas's total height,
+counted from the bottom, is the character's own body? Feet to the top of the head only - not the
+weapon, not hair or a banner that reaches higher. That fraction, a number between 0 and 1, is
+what gets handed to the engineer wiring up your file, as a value called `spriteBodyFraction` in
+the hero's data. It is not a number you set yourself in code, but it has to come from you: no
+automated check can reliably tell your body apart from a raised prop by looking at the pixels
+alone - a full cloak, tall hair and a held weapon can all look identical to that kind of check,
+and guessing wrong either shrinks the body that should be full size or clips a weapon that should
+have room. You are the only one who knows where your own body stops and the prop begins.
+
+Width is not part of this. A weapon held out to the side still just widens the canvas, which
+already produces a proportionally wider quad without touching how large the body reads - that
+was never the axis this bug affected, only height was, because height is the one fixed number
+everything else is measured against.
+
+## 5. Framing: where the feet go
 
 The bottom edge of your canvas is treated as ground level. The game positions the image so its
 bottom edge sits exactly on the floor of the scene. If you leave empty transparent space below
@@ -91,14 +126,16 @@ the character's feet, they will visibly float above the ground by that fraction 
 height. Crop tight to the feet at the bottom.
 
 There's more freedom at the top: headroom above the character (for a raised weapon, a tall
-hood, hair, antenna, whatever the silhouette calls for) is fine and expected, since only the
-bottom edge is treated as a fixed reference point.
+hood, hair, antenna, whatever the silhouette calls for) is fine, since only the bottom edge is
+treated as a fixed reference point - but "fine" here means it won't be cropped or clipped, not
+that it's free. See section 4 first: any headroom you draw has to be reported as a fraction of
+the canvas, or it shrinks the body along with itself.
 
 **Do not draw a ground shadow into the image.** The game already places its own soft shadow
 blob under every character automatically, sprite or not. A shadow baked into your art will
 either double up with the real one or sit at the wrong angle relative to it.
 
-## 5. Facing: draw at three quarters, not square on
+## 6. Facing: draw at three quarters, not square on
 
 **Draw the character turned 30 degrees off square-on, toward their own left.** Their own left is
 the viewer's right, so on your canvas the character's body and face angle toward the right-hand
@@ -133,7 +170,7 @@ the un-mirrored art is worth confirming in the editor the first time real three-
 lands. If it turns out reversed, it is a one-line engine fix rather than a redraw, so do not
 pre-compensate for it in the art.
 
-## 6. What the game does to the art at runtime
+## 7. What the game does to the art at runtime
 
 The character isn't static once it's in a battle. Three effects apply directly to your image's
 pixels, automatically, with no extra art required from you. It helps to know what they do so
@@ -161,7 +198,7 @@ character also tips backward as it fades, the same motion used for the built-in 
 image tipping over will read differently than a character with actual depth falling over; this
 hasn't been looked at yet and is worth an early look once someone can see it in motion.
 
-## 7. Not yet handled
+## 8. Not yet handled
 
 Stated plainly, so nothing here is assumed that doesn't exist yet:
 
@@ -183,7 +220,7 @@ Stated plainly, so nothing here is assumed that doesn't exist yet:
   too big, too small, or off-position at the fixed height, the fix today is re-cropping or
   re-scaling the file itself before it's delivered, not a setting anyone can adjust afterward.
 
-## 8. Reconciling with the art bible
+## 9. Reconciling with the art bible
 
 DESIGN-ART-BIBLE.md sets the visual rules; this document doesn't repeat them. Two of its own
 notes are directly relevant to anyone drawing a battle sprite, so read them there rather than
@@ -200,7 +237,7 @@ differently depending on where you look at it from. The built-in procedural look
 that: a baked-in rim light and a directional shading response, so its materials visibly react to
 angle. The sprite path has none of that. It displays your flat pixels exactly as painted, with
 no added lighting, no rim highlight, no directional shading of any kind, on top of what the
-three runtime effects in section 6 do. Whatever light-and-shadow read a material needs has to be
+three runtime effects in section 7 do. Whatever light-and-shadow read a material needs has to be
 painted directly into the artwork as a fixed, unchanging highlight. It cannot be added by the
 engine the way it can for a procedural character. This is a real gap between what the bible
 describes and what the current loader can do, not a rule to work around quietly, and it should
