@@ -81,7 +81,7 @@
       "lore": "Grew a garden in a crater. Insists that was the easy part.",
       "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
       "critChance": 0.10, "critDamage": 1.5, "growth": 0.115, "startEnergy": 20,
-      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2 },
+      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra" },
       "basic": {
         "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
         "description": "A snapped seed-pod that stings on impact.",
