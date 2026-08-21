@@ -5,6 +5,11 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
+**Status, as of this revision.** Five branches exist against `main`: `build-order-1-3`,
+`build-order-7-effect-hit-resist`, `build-order-8-team-size-5`, `build-order-9-landscape`, and
+`sprite-path-orrin`. None are merged. None have been compiled or run. Every status claim below is
+a claim about what a diff contains, not about anything that has been seen working.
+
 **Legend.** `[H]` build-check.ps1 / DevHarness only, no Unity needed. `[U]` needs Unity Play mode to
 verify, because it fails silently rather than with a compile error. `[D]` a decision, not code.
 `[H+U]` the logic is harness-provable, the presentation or feel still wants a look in the editor.
@@ -29,8 +34,45 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
 **`build-order-1-3`**, local only, never pushed. Contains the starting purse change (1500/260 to
 400/40) and it already shifted chapter 1 win rates out of band. `[H]`
 
+Still local-only, still unpushed, unchanged since the last revision of this document. It's the
+one branch of the five named in the status line above that can't be inspected from here at all -
+it exists only on a machine outside this repository's remotes, so nothing about it can be
+confirmed beyond what was already known.
+
 Blocked by: a push. Blocks: task 3, and the final retune (14), which needs to absorb that shift
 anyway. Do not re-author the purse change from scratch once the branch is pushed; fold it in.
+
+## Art pipeline, outside the numbered order
+
+The battle-sprite work is not one of the fourteen tasks below and should not become one. It sits
+outside the win-rate/economy chain the numbered order sequences, so it doesn't get a number; it
+gets tracked here instead. Deliberately not numbered, so nothing here is ever mistaken for a
+task-order cross-reference. Three parts, meant to land in this order:
+
+- **The delivery spec.** `DESIGN-ART-DELIVERY.md`. Done, merged to `main`. The technical
+  contract for anyone handing over a sprite: file location and naming, format, how a fixed
+  height and a derived width replace a fixed box to draw into, where the ground line sits, and
+  what the hit-flash/cast-glow/death-fade effects do to the art at runtime.
+- **A standalone art check screen.** Not built. The intended second step: somewhere to load and
+  look at one sprite in isolation before it's ever wired into a real battle.
+- **The loader.** Implemented on `sprite-path-orrin`, unmerged. `[U]` only - nothing in the
+  harness touches rendering, so there is no `[H]` half to this at all. Gives `VisualDef` an
+  optional sprite field; when set, the battle screen renders that image on a billboard instead
+  of building the procedural body. Wired to exactly one hero, Orrin Kaal, as a pipeline test,
+  with a hand-built placeholder shipped alongside it. Every other hero and every enemy is
+  untouched and stays procedural.
+
+The loader landing before the check screen exists is a reordering, not the plan. The intended
+sequence was spec, then a way to look at what the spec produces, then the loader that makes it
+real. What happened is the loader shipped second and the check screen hasn't shipped at all.
+Recorded here so it isn't quietly read back later as the order that was always intended.
+
+One real dependency worth naming despite this not being a numbered task: the loader fixes its
+sprite's height to a constant chosen to read correctly against the current portrait camera.
+Task 9 moves that camera closer specifically because characters read smaller in a wide frame.
+Nothing breaks structurally when 9 lands - the loader doesn't reference anything task 9 or task 8
+touch - but a fixed real-world height renders larger against a closer camera, and Orrin's sprite
+scale wants a second look once orientation ships. That check does not exist yet either.
 
 ## Undecided, needs a human
 
@@ -111,6 +153,11 @@ summon weights.
 7. **Effect Hit / Effect Resist, phase A.** Add both stats at zero default, wire the existing
    `_rng.Chance` gate to read them, prove the change is a no-op against the existing
    `BattleFingerprint`. `[H]`
+   **Implemented, unmerged, on `build-order-7-effect-hit-resist`.** Both stats added at zero
+   default, the gate wired, and a new harness check proves the bypass is exact and that Nyx's
+   Shadowmark - the one status in shipped content that would otherwise gain a draw - still draws
+   nothing. Proven by construction and by the check's own logic, not by an actual harness run;
+   this environment has no C# compiler to run it with. Merging is the only step left.
    Blocked by: nothing, can run before team size. Blocks: 11.
 
 8. **Team size 3 to 5, structural only.** `maxTeamSize` stays a constant at 5. Every player has 5
@@ -120,6 +167,10 @@ summon weights.
    code truncates silently, dropping two heroes with no error), `HeroDetailScreen._slotButtons`,
    `BattleStage` ally/enemy slot arrays. `[H]` for Core and save, `[U]` for slot layout, which
    overlaps units silently rather than erroring.
+   **Implemented, unmerged, on `build-order-8-team-size-5`.** Never compiled, never opened in the
+   editor. The `[H]` half (Core, save) is provable by reading the diff; the `[U]` half - do five
+   deploys actually fit without overlapping on screen, does an empty slot read as open rather than
+   broken - is still completely outstanding. Nobody has looked at this.
    Blocked by: nothing, both open questions this task depended on are resolved.
    Blocks: 9 (orientation re-lays out these same slot positions), 10, 11, 12, 14.
 
@@ -128,6 +179,10 @@ summon weights.
    screen, since the UI is built in code rather than laid out visually - there is no separate
    layout pass to redo, every screen's code is the layout. `[U]` heavy: nearly everything here
    fails silently or just looks wrong, long before it fails to compile.
+   **Implemented, unmerged, on `build-order-9-landscape`, stacked directly on top of
+   `build-order-8-team-size-5`.** Unverified in every sense - not compiled, not opened, not seen.
+   The two branches merge together and in order (8 then 9): this diff assumes 8's slot arrays
+   already exist and doesn't make sense applied on its own.
    Blocked by: 8, it re-lays out the `BattleStage` slot positions and banner UI task 8 just built;
    land them together so the battle screen gets laid out once, not laid out for 5v5 portrait and
    then redone for landscape. Blocks: 10 (its Unity eyeball pass on the new spawn compositions
