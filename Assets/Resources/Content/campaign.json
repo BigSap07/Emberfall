@@ -17,7 +17,7 @@
           "id": "ch1_1", "index": 1, "name": "Shardfall Verge", "subtitle": "Something came down here last night.",
           "environment": "ashen", "gold": 120, "shards": 6, "accountXp": 26,
           "firstClearGold": 260, "firstClearShards": 35, "recommendedPower": 2600,
-          "enemies": [ { "id": "hollow_husk", "level": 1 }, { "id": "grave_moth", "level": 1 } ]
+          "enemies": [ { "id": "hollow_husk", "level": 1 }, { "id": "hollow_husk", "level": 1 }, { "id": "grave_moth", "level": 1 } ]
         },
         {
           "id": "ch1_2", "index": 2, "name": "Cracked Milestones", "subtitle": "The road markers have been chewed.",
@@ -46,13 +46,13 @@
         {
           "id": "ch1_6", "index": 6, "name": "The Kiln Gate", "subtitle": "An elite guard, and it has been waiting.",
           "environment": "ember", "gold": 320, "shards": 17, "accountXp": 60,
-          "firstClearGold": 540, "firstClearShards": 80, "recommendedPower": 4300,
-          "enemies": [ { "id": "stone_warden", "level": 13 }, { "id": "ashen_revenant", "level": 13 }, { "id": "grave_moth", "level": 14 }, { "id": "cinder_imp", "level": 12 } ]
+          "firstClearGold": 540, "firstClearShards": 80, "recommendedPower": 4700,
+          "enemies": [ { "id": "stone_warden", "level": 13 }, { "id": "ashen_revenant", "level": 13 }, { "id": "grave_moth", "level": 11 }, { "id": "cinder_imp", "level": 6 } ]
         },
         {
           "id": "ch1_7", "index": 7, "name": "Drowned Causeway", "subtitle": "The tide came in and never went back out.",
           "environment": "ember", "gold": 375, "shards": 19, "accountXp": 68,
-          "firstClearGold": 600, "firstClearShards": 90, "recommendedPower": 4600,
+          "firstClearGold": 600, "firstClearShards": 90, "recommendedPower": 4750,
           "enemies": [ { "id": "grave_moth", "level": 15 }, { "id": "grave_moth", "level": 15 }, { "id": "tidecaller_wretch", "level": 14 }, { "id": "hollow_husk", "level": 13 } ]
         },
         {
@@ -64,27 +64,27 @@
         {
           "id": "ch1_9", "index": 9, "name": "Mothlight Steps", "subtitle": "Fast, thin things, and far too many of them.",
           "environment": "hollow", "gold": 500, "shards": 25, "accountXp": 85,
-          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 5550,
-          "enemies": [ { "id": "grave_moth", "level": 30 }, { "id": "grave_moth", "level": 30 }, { "id": "grave_moth", "level": 30 }, { "id": "grave_moth", "level": 22 }, { "id": "grave_moth", "level": 22 } ]
+          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 6000,
+          "enemies": [ { "id": "grave_moth", "level": 20 }, { "id": "grave_moth", "level": 20 }, { "id": "grave_moth", "level": 20 }, { "id": "grave_moth", "level": 20 }, { "id": "grave_moth", "level": 20 } ]
         },
         {
           "id": "ch1_10", "index": 10, "name": "The Grey Bulwark", "subtitle": "Two wardens. One narrow bridge.",
           "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
-          "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 5850,
-          "enemies": [ { "id": "stone_warden", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 28 }, { "id": "stone_warden", "level": 24 }, { "id": "hollow_husk", "level": 22 } ]
+          "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 6100,
+          "enemies": [ { "id": "stone_warden", "level": 20 }, { "id": "grave_moth", "level": 19 }, { "id": "grave_moth", "level": 19 }, { "id": "stone_warden", "level": 18 }, { "id": "hollow_husk", "level": 15 } ]
         },
         {
           "id": "ch1_11", "index": 11, "name": "Pyre of Names", "subtitle": "Everyone who held this pass is stacked and burning.",
           "environment": "hollow", "gold": 650, "shards": 32, "accountXp": 104,
-          "firstClearGold": 950, "firstClearShards": 150, "recommendedPower": 5900,
-          "enemies": [ { "id": "ashen_revenant", "level": 27 }, { "id": "grave_moth", "level": 26 }, { "id": "grave_moth", "level": 27 }, { "id": "hollow_husk", "level": 23 }, { "id": "cinder_imp", "level": 23 } ]
+          "firstClearGold": 950, "firstClearShards": 150, "recommendedPower": 6400,
+          "enemies": [ { "id": "ashen_revenant", "level": 21 }, { "id": "grave_moth", "level": 19 }, { "id": "grave_moth", "level": 20 }, { "id": "hollow_husk", "level": 14 }, { "id": "cinder_imp", "level": 14 } ]
         },
         {
           "id": "ch1_12", "index": 12, "name": "The Sundered Colossus", "subtitle": "The shard did not land. It stood up.",
           "boss": true,
           "environment": "hollow", "gold": 800, "shards": 40, "accountXp": 140,
-          "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 6400,
-          "enemies": [ { "id": "sundered_colossus", "level": 17 }, { "id": "grave_moth", "level": 16 }, { "id": "grave_moth", "level": 16 }, { "id": "hollow_husk", "level": 14 }, { "id": "hollow_husk", "level": 14 } ]
+          "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 6700,
+          "enemies": [ { "id": "sundered_colossus", "level": 20 }, { "id": "grave_moth", "level": 14 }, { "id": "grave_moth", "level": 14 }, { "id": "hollow_husk", "level": 12 }, { "id": "hollow_husk", "level": 12 } ]
         }
       ]
     }
