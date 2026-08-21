@@ -5,10 +5,14 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
-**Status, as of this revision.** Five branches exist against `main`: `build-order-1-3`,
-`build-order-7-effect-hit-resist`, `build-order-8-team-size-5`, `build-order-9-landscape`, and
-`sprite-path-orrin`. None are merged. None have been compiled or run. Every status claim below is
-a claim about what a diff contains, not about anything that has been seen working.
+**Status, as of this revision.** Two branches are merged to `main` and confirmed green on CI:
+`build-order-7-effect-hit-resist` and `sprite-path-orrin`. Three remain unmerged:
+`build-order-8-team-size-5` (implemented, compiled, and run on CI, DevHarness fails two checks,
+see task 8 and Known trap 1), `build-order-9-landscape` (stacked on 8, deliberately left alone
+until 8's result was known), and `build-order-1-3` (still local only, still unpushed). CI now runs
+`build-check.ps1` on every push and pull request, so status claims below about compiling or
+running are claims about an actual run, not a reading of a diff, wherever a branch has actually
+been pushed through it.
 
 **Legend.** `[H]` build-check.ps1 / DevHarness only, no Unity needed. `[U]` needs Unity Play mode to
 verify, because it fails silently rather than with a compile error. `[D]` a decision, not code.
@@ -26,8 +30,14 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
 - Chapter 1's first aspect-identity tuning pass. Superseded, not final: it predates the wheel
   narrowing in DESIGN-ASPECTS 4 and everything below it, and gets folded into task 14, not treated
   as sacred.
-- DESIGN-RELICS, DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS, DESIGN-ART-BIBLE. All committed
-  to `main`. None of them implemented yet, all of them decided.
+- DESIGN-RELICS, DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS, DESIGN-ART-BIBLE,
+  DESIGN-HOOK-CONFLICT, DESIGN-RECOLLECTION. All committed to `main`. None of them implemented yet,
+  all of them decided.
+- CI. `.github/workflows/build-check.yml` runs `Tools/build-check.ps1` on every push and every
+  pull request, on `windows-latest`. It doesn't stop at compiling, it runs DevHarness, so a green
+  run covers content validation, determinism, stage winnability, ability potency and status expiry
+  timing, the same checks listed above, on every push rather than whenever someone remembers to
+  run it locally.
 
 ## Blocked on a push, not lost
 
@@ -55,8 +65,9 @@ task-order cross-reference. Three parts, meant to land in this order:
   what the hit-flash/cast-glow/death-fade effects do to the art at runtime.
 - **A standalone art check screen.** Not built. The intended second step: somewhere to load and
   look at one sprite in isolation before it's ever wired into a real battle.
-- **The loader.** Implemented on `sprite-path-orrin`, unmerged. `[U]` only - nothing in the
-  harness touches rendering, so there is no `[H]` half to this at all. Gives `VisualDef` an
+- **The loader.** Merged to `main`, green on CI. `[U]` only - nothing in the harness touches
+  rendering, so a green run confirms it compiles and breaks nothing DevHarness checks, not that it
+  looks right; the Play mode look is still completely unverified. Gives `VisualDef` an
   optional sprite field; when set, the battle screen renders that image on a billboard instead
   of building the procedural body. Wired to exactly one hero, Orrin Kaal, as a pipeline test,
   with a hand-built placeholder shipped alongside it. Every other hero and every enemy is
@@ -102,7 +113,49 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
 ## Known traps, carried forward
 
 1. **`MaxTeamSize` gates enemy spawns too**, not just the player side. `BuildUnits` reads it for
-   both. Raise it to 5 without refilling `campaign.json` and every stage becomes 5-versus-3. Task 10.
+   both. DESIGN-COMBAT-STATS predicted that raising it to 5 with `campaign.json` untouched makes
+   every stage 5-versus-3: trivially winnable, near-total win rates in the balance pass, and
+   `CheckUnderlevelledLoses` failing. That prediction assumed task 8 would ship with zero content
+   changes and task 10 would do the refill afterward, alone. It did not ship that way, and CI now
+   shows what actually happened instead of what was predicted.
+
+   **What the real branch and a real run show.** `build-order-8-team-size-5` bundles a partial
+   `campaign.json` refill into task 8 itself, commented in the diff as a first pass and explicitly
+   not balanced: stage 1-1 drops from three enemies to two, 1-2 through 1-4 are untouched, 1-5
+   through 1-8 gain one enemy each, and 1-9 through 1-12 gain two, reaching five.
+   `recommendedPower` was not touched anywhere. Two different checks then disagree, for two
+   different reasons.
+
+   `RunCampaignBalancePass` confirms the prediction exactly, on the metric it actually describes:
+   as the simulated player's roster grows toward five deployed heroes, every one of the twelve
+   stages shows 100% win rate at roughly double `recommendedPower`. Trivially winnable, near-total
+   win rates, as predicted.
+
+   `CheckStageWinnability` is the one that fails, on the five stages named under task 8, and it is
+   a stricter, different test: it only ever levels the profile's three starting heroes.
+   `CreateNewProfile` still adds exactly `content.StartingHeroes`, three, and `NormaliseTeam` does
+   not conjure heroes into the two empty slots on a fresh profile with nothing to summon, which the
+   check's own log confirms directly ("a new profile deploys its 3 starters," "slots 4 and 5 start
+   empty"). A hypothesis was raised that levelling a five-hero team to the same `recommendedPower`
+   budget produces five much lower-level heroes than three would, and that `EffectiveDefense`'s
+   `DefensePerLevel * source.Level` term compounds that. Checked against the actual code, this is
+   refuted, not confirmed: `StatMath.cs` and `CombatSimulation.cs` have zero diff between `main`
+   and this branch, and the team `CheckStageWinnability` levels is three heroes both before and
+   after, so no per-hero power dilution happens in the check that is actually failing. The real
+   mechanism is plainer: `BuildUnits` clamps enemy spawn count to `MaxTeamSize`, which this task
+   also raised to 5, so the newly authored fourth and fifth enemy entries on the affected stages
+   can now actually spawn where they were previously truncated at three. A three-hero team still
+   levelled to the old, 3v3-tuned `recommendedPower` meets four or five enemies at that same figure
+   on exactly the stages whose enemy count grew, 1-6 and 1-9 through 1-12, and loses.
+
+   Neither document is factually wrong about a mechanism. DESIGN-COMBAT-STATS is confirmed for the
+   balance pass and was never written to cover `CheckStageWinnability`'s fixed-three-hero test at
+   all, its only comment on that check is about a different hazard, Effect Hit/Resist entering
+   `PowerScore`. What is actually incorrect is the implicit premise that task 8 and task 10 stay
+   cleanly separated: task 8 already contains a first, uneven slice of task 10's job, unbalanced by
+   its own admission, and that slice, not a `StatMath` effect, is what `CheckStageWinnability` is
+   catching. Task 10 was already the fix for this trap. This just confirms why, with a run instead
+   of a prediction. Task 10.
 2. **`Debrief.AspectFactorThreshold` (1.2f) must move in the same change as the wheel narrowing**
    (`AspectChart.Advantage` 1.20 to 1.10). Miss it and the Aspect debrief clause silently stops
    firing, no test fails, no error appears. Re-check `AspectDominantShare` (0.35) at the same time.
@@ -153,11 +206,13 @@ summon weights.
 7. **Effect Hit / Effect Resist, phase A.** Add both stats at zero default, wire the existing
    `_rng.Chance` gate to read them, prove the change is a no-op against the existing
    `BattleFingerprint`. `[H]`
-   **Implemented, unmerged, on `build-order-7-effect-hit-resist`.** Both stats added at zero
-   default, the gate wired, and a new harness check proves the bypass is exact and that Nyx's
-   Shadowmark - the one status in shipped content that would otherwise gain a draw - still draws
-   nothing. Proven by construction and by the check's own logic, not by an actual harness run;
-   this environment has no C# compiler to run it with. Merging is the only step left.
+   **Merged to `main`, green.** Both stats added at zero default, the gate wired, and a harness
+   check proves the bypass is exact and that Nyx's Shadowmark - the one status in shipped content
+   that would otherwise gain a draw - still draws nothing. This was previously proven by
+   construction and by the check's own logic, not by execution, because this environment has no
+   C# compiler to run it with. CI does have one: it ran the check on `windows-latest` against
+   `BattleFingerprint` across all twelve stages, and it passed. The no-op claim is proven by
+   execution now, not only by construction.
    Blocked by: nothing, can run before team size. Blocks: 11.
 
 8. **Team size 3 to 5, structural only.** `maxTeamSize` stays a constant at 5. Every player has 5
@@ -167,12 +222,28 @@ summon weights.
    code truncates silently, dropping two heroes with no error), `HeroDetailScreen._slotButtons`,
    `BattleStage` ally/enemy slot arrays. `[H]` for Core and save, `[U]` for slot layout, which
    overlaps units silently rather than erroring.
-   **Implemented, unmerged, on `build-order-8-team-size-5`.** Never compiled, never opened in the
-   editor. The `[H]` half (Core, save) is provable by reading the diff; the `[U]` half - do five
-   deploys actually fit without overlapping on screen, does an empty slot read as open rather than
-   broken - is still completely outstanding. Nobody has looked at this.
+   **Implemented on `build-order-8-team-size-5`, unmerged on purpose.** Compiles clean on CI. Runs,
+   and DevHarness fails two checks: the self-applied status duration sampler finds zero instances
+   to sample through a full duration, and stage winnability fails outright on five of twelve
+   stages, a team levelled to each stage's own `recommendedPower` never winning in twenty tries, on
+   1-6 The Kiln Gate, 1-9 Mothlight Steps, 1-10 The Grey Bulwark, 1-11 Pyre of Names and 1-12 The
+   Sundered Colossus. This is the deliberately broken intermediate state Known trap 1 already
+   named, and it stays off `main` until 10 lands alongside it, see the note after task 10 for why
+   9 joins them as well. Known trap 1 has the full account of what is actually causing the five
+   failures, which is not what that trap originally predicted. The `[U]` half - do five deploys
+   actually fit without overlapping on screen, does an empty slot read as open rather than broken -
+   is still completely outstanding; nothing in CI touches rendering.
    Blocked by: nothing, both open questions this task depended on are resolved.
    Blocks: 9 (orientation re-lays out these same slot positions), 10, 11, 12, 14.
+
+**8, 9 and 10 now land together as one merge unit, not 8 and 9 alone.** Build order already paired
+8 and 9 for the slot layout, 9 re-lays out exactly the positions 8 builds, so shipping one without
+the other left a broken screen either way. CI is the reason 10 joins them. Task 8 merged alone
+leaves `main` red on every push and pull request from the moment it lands until 10 fixes the
+recommendedPower-versus-enemy-count mismatch Known trap 1 describes, and that gap is no longer a
+private note in this document, it is a red status every contributor sees on every push in the
+meantime. Landing 8 without 9 and 10 in the same pass means a red `main` for however long 9 takes
+to build.
 
 9. **Orientation: portrait to landscape.** Five-a-side is ten characters across a battle line;
    1080 of portrait width does not carry that read. Touches every screen, not only the battle
