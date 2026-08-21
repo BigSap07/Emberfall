@@ -131,6 +131,9 @@ namespace Emberfall.Core.Data
         public float BaseSpeed = 100;
         public float CritChance = 0.15f;
         public float CritDamage = 1.6f;
+        /// <summary>Flat landing-chance bonus/penalty for harmful ApplyStatus effects. Phase A: always 0, authored nowhere.</summary>
+        public float EffectHit;
+        public float EffectResist;
         public float Growth = 0.11f;   // per level, applied to hp / attack / defense
         public int StartEnergy;
         public VisualDef Visual = new VisualDef();
@@ -149,6 +152,8 @@ namespace Emberfall.Core.Data
             BaseSpeed = j.GetFloat("speed", BaseSpeed);
             CritChance = j.GetFloat("critChance", CritChance);
             CritDamage = j.GetFloat("critDamage", CritDamage);
+            EffectHit = j.GetFloat("effectHit", EffectHit);
+            EffectResist = j.GetFloat("effectResist", EffectResist);
             Growth = j.GetFloat("growth", Growth);
             StartEnergy = j.GetInt("startEnergy", 0);
             Visual = VisualDef.FromJson(j["visual"]);

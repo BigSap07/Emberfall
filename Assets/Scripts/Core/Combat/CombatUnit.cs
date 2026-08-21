@@ -36,6 +36,8 @@ namespace Emberfall.Core.Combat
         public float Speed;
         public float CritChance;
         public float CritDamage;
+        public float EffectHit;
+        public float EffectResist;
 
         public int Energy;
         public int EnergyMax = 100;
@@ -107,6 +109,18 @@ namespace Emberfall.Core.Combat
                 if (c > 0.95f) c = 0.95f;
                 return c;
             }
+        }
+
+        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
+        public float EffectiveEffectHit
+        {
+            get { return EffectHit; }
+        }
+
+        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
+        public float EffectiveEffectResist
+        {
+            get { return EffectResist; }
         }
 
         public bool HasTaunt
@@ -202,6 +216,8 @@ namespace Emberfall.Core.Combat
             u.Speed = stats.Speed;
             u.CritChance = stats.CritChance;
             u.CritDamage = stats.CritDamage;
+            u.EffectHit = stats.EffectHit;
+            u.EffectResist = stats.EffectResist;
             u.EnergyMax = energyMax;
             u.Energy = Math.Min(energyMax, def.StartEnergy);
             u.Basic = def.BasicAttack != null ? def.BasicAttack : UnitDef.DefaultBasicAttack();

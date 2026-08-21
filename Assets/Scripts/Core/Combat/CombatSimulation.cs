@@ -23,10 +23,38 @@ namespace Emberfall.Core.Combat
     {
         private const int MaxPassiveDepth = 2;
 
+        private const float MinEffectLanding = 0.05f;
+        private const float MaxEffectLanding = 1f;
+
         public static BattleResult Run(BattleRequest request)
         {
             Sim sim = new Sim(request);
             return sim.Execute();
+        }
+
+        /// <summary>
+        /// The landing chance for an ApplyStatus effect, before the RNG roll. Bypasses the Effect
+        /// Hit / Effect Resist arithmetic entirely when both are exactly zero, which every unit in
+        /// shipped content is today - this keeps every battle bit-identical to the pre-stat
+        /// pipeline, since DeterministicRng.Chance short-circuits without drawing when its argument
+        /// is untouched. Only harmful statuses (StatusInfo.IsHarmful) are ever contested; beneficial
+        /// ones - Taunt, Shield, buffs - always resolve on the authored chance as-is.
+        /// </summary>
+        public static float ResolveLandingChance(float baseChance, StatusKind status, float sourceEffectHit, float targetEffectResist)
+        {
+            if (!StatusInfo.IsHarmful(status)) return baseChance;
+            if (sourceEffectHit == 0f && targetEffectResist == 0f) return baseChance;
+
+            float landing = baseChance + sourceEffectHit - targetEffectResist;
+            if (landing < MinEffectLanding) landing = MinEffectLanding;
+            // The ceiling is exactly 1f, not the 0.95f used elsewhere (EffectiveCritChance), and
+            // that is load bearing. Nyx's Shadowmark is the one ApplyStatus in shipped content with
+            // no authored "chance" field, so it defaults to 1.0 and DeterministicRng.Chance never
+            // draws for it. A ceiling below 1f would clamp that 1.0 down, turn the zero-draw
+            // short-circuit into a real draw, and desync every battle she appears in from that
+            // point on. Do not lower this without re-deriving every seeded fingerprint that includes her.
+            if (landing > MaxEffectLanding) landing = MaxEffectLanding;
+            return landing;
         }
 
         private sealed class Sim
@@ -257,7 +285,9 @@ namespace Emberfall.Core.Combat
                     case EffectKind.ApplyStatus:
                     {
                         if (!target.Alive || effect.Status == StatusKind.None) break;
-                        if (!_rng.Chance(effect.Chance)) break;
+                        float landing = ResolveLandingChance(effect.Chance, effect.Status,
+                                                              source.EffectiveEffectHit, target.EffectiveEffectResist);
+                        if (!_rng.Chance(landing)) break;
                         float magnitude = effect.Magnitude;
                         if (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen)
                             magnitude = source.EffectiveAttack * effect.Magnitude;

@@ -36,6 +36,7 @@ namespace Emberfall.DevHarness
             CheckAspectDirection(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
+            CheckEffectHitResistNoOp(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
             CheckDebrief();
@@ -228,6 +229,72 @@ namespace Emberfall.DevHarness
             Check(r.Events.Count > 10, "battle produced an event stream (" + r.Events.Count + " events)");
             Check(r.Units.Count == 6, "3v3 battle built 6 units (got " + r.Units.Count + ")");
             Check(r.Rounds >= 1 && r.Rounds <= db.Balance.MaxRounds, "battle finished within the round limit (" + r.Rounds + ")");
+            Line("");
+        }
+
+        /// <summary>
+        /// Effect Hit / Effect Resist, phase A only (DESIGN-BUILD-ORDER task 7): the stats exist and
+        /// are wired into the ApplyStatus landing gate, but nothing in heroes.json or enemies.json
+        /// authors a non-zero value yet, so every battle in the game must be provably unchanged.
+        /// Two separate proofs, not one. The first is exhaustive rather than sampled: it calls
+        /// CombatSimulation.ResolveLandingChance directly for every StatusKind and a spread of
+        /// chance values with both stats at zero, and asserts the result is bit-for-bit the
+        /// authored chance - this is the actual no-op guarantee DESIGN-COMBAT-STATS asks for, and
+        /// it needs no battle to run at all. It also checks the exact boundary case that made the
+        /// guarantee possible: Nyx's Shadowmark is the one ApplyStatus in shipped content with no
+        /// authored "chance", defaulting to 1.0, which is why DeterministicRng.Chance draws nothing
+        /// for it today. The second proof fingerprints all twelve chapter 1 stages at several seeds
+        /// each and confirms same-seed reproducibility still holds everywhere, not just stage 1-1
+        /// (CheckDeterminism above only samples that one stage). This does not diff against a
+        /// pre-patch baseline - nothing in this run environment could compile one to diff against -
+        /// so it is a project-wide determinism regression guard, not independent proof of no
+        /// behavioural change. The formula-level check above is that proof.
+        /// </summary>
+        private static void CheckEffectHitResistNoOp(ContentDatabase db)
+        {
+            Line("EFFECT HIT / EFFECT RESIST (phase A - zero default, must be a no-op)");
+
+            bool bypassOk = true;
+            StatusKind[] statuses = (StatusKind[])Enum.GetValues(typeof(StatusKind));
+            float[] chances = { 0f, 0.05f, 0.35f, 0.6f, 0.7f, 0.85f, 0.9f, 1f };
+            for (int s = 0; s < statuses.Length; s++)
+            {
+                for (int c = 0; c < chances.Length; c++)
+                {
+                    float landing = CombatSimulation.ResolveLandingChance(chances[c], statuses[s], 0f, 0f);
+                    if (landing != chances[c])
+                    {
+                        bypassOk = false;
+                        Line("  [FAIL] " + statuses[s] + " at chance " + Fmt(chances[c]) + " resolved to " + Fmt(landing)
+                             + " instead of the authored value, with both stats at zero");
+                    }
+                }
+            }
+            Check(bypassOk, "the landing formula returns the authored chance unchanged, for every status, when both stats are zero");
+
+            float shadowmark = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, 0f, 0f);
+            Check(shadowmark == 1f, "Shadowmark's unauthored 1.0 chance still resolves to exactly 1.0 - DeterministicRng.Chance still draws nothing for it");
+
+            Check(db.AllStages.Count == 12, "chapter 1 has twelve stages to fingerprint (got " + db.AllStages.Count + ")");
+
+            bool fingerprintsStable = true;
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                for (int seed = 1; seed <= 3; seed++)
+                {
+                    int actualSeed = 3000000 + s * 13 + seed;
+                    string a = BattleFingerprint(session, stage, actualSeed);
+                    string b = BattleFingerprint(session, stage, actualSeed);
+                    if (a != b)
+                    {
+                        fingerprintsStable = false;
+                        Line("  [FAIL] " + stage.DisplayCode + " seed " + actualSeed + " did not reproduce its own fingerprint");
+                    }
+                }
+            }
+            Check(fingerprintsStable, "every one of the twelve stages still produces a stable, reproducible fingerprint across sampled seeds");
             Line("");
         }
 
