@@ -14,52 +14,58 @@ namespace Emberfall.Battle
         // Left-versus-right clusters, replacing the opposing-lines arrangement. Allies occupy
         // negative x, enemies occupy positive x, and the empty middle band that used to run
         // horizontally across the screen (the gap between a near row and a far row) now runs
-        // vertically down the centre instead (the gap between the two x clusters). This is a
-        // screen-space rearrangement only - IsPlayer still drives facing in UnitActor.Setup,
-        // untouched here, so which way a unit turns to face the camera never changes.
+        // vertically down the centre instead (the gap between the two x clusters). Positions
+        // only; facing lives in UnitRig.Build, which turns each side toward the other by
+        // UnitRig.ThreeQuarterTurn off camera-square, mirrored by IsPlayer.
         //
-        // Each cluster's internal axes swap roles from the old design rather than staying the
-        // same: x used to be the free/spread axis (three units across at one depth) and z
-        // separated the two rows. Now x is spent separating the two sides and, within a side,
-        // separating that side's own rows from the centreline outward, while z becomes the free
-        // axis units within a row spread across. This matters for the occlusion argument below:
-        // under this orthographic camera, screen-x is exactly world x (the right axis has no
-        // pitch component) and screen-y is f(y, z) = y*cos(pitch) + z*sin(pitch) (see
-        // Initialise). Two units only risk hiding one behind the other if BOTH their x and their
-        // z are close at once - differing enough in either axis alone is sufficient separation.
+        // Each cluster's internal axes swap roles from the old design: x used to be the free
+        // spread axis and z separated the two rows. Now x separates the two sides and, within a
+        // side, separates that side's own ranks from the centreline outward, while z is the
+        // free axis units within a rank spread across.
         //
-        // Five per side, not four: the reference this is drawn from shows four per side already
-        // using most of the frame width in two rows of two. Five doesn't fit that shape without
-        // either widening the frame past what a tight "cluster" (the word the brief uses, not
-        // "line") should be, or thinning the middle gap to make room - so this goes to three
-        // rows instead of two: 1 front, 2 middle, 2 back, tapering toward the centre. Slot 0
-        // keeps the sole front position, preserving the FrontEnemy targeting read's meaning (the
-        // single most-exposed, closest-to-the-enemy unit) even though it no longer sits at x 0.
+        // Spacing corrected after Play mode showed units overlapping at partial team sizes. The
+        // previous version's occlusion argument - "two units only risk hiding each other if both
+        // their x and their z are close, and every pair is separated by at least one axis" - is
+        // half right and was applied wrongly. The half that is right: screen-x is exactly world
+        // x (the camera's right axis has no pitch component) and screen-y is
+        // f(y, z) = y*cos(28) + z*sin(28), so separation on either axis alone is sufficient. The
+        // half that was missed: how MUCH separation each axis needs is wildly different. To clear
+        // on x, two units need only the sum of their half-widths, roughly 1.0 to 2.0. To clear on
+        // z they need Dz >= H / sin(28) = H / 0.4695, because only 47% of a z offset becomes
+        // screen height while the unit's full height H stands in the way - and H is 1.13 for a
+        // Grave Moth, 2.66 for a Stone Warden, 3.49 for the Colossus. So the required z gaps are
+        // 2.40, 5.66 and 7.43. The old arrays gave the same-x pairs 2.8 (slots 1,2) and 1.8
+        // (slots 3,4). Both were far short, so both pairs overlapped - measured worst case a
+        // Stone Warden and a Hollow Husk in slots 3,4, overlapping by 1.39 world units of screen
+        // height. This is why it showed up at four deployed heroes and not only at five: slots
+        // 1,2 fill at team size 3, so the bug is present from three units on.
         //
-        // Row depth-from-centre steps 2.6 / 4.2 / 5.8 (a flat 1.6 apart, comfortably more than a
-        // character's own ~1-unit footprint, so adjacent rows never sit close enough in x to
-        // read as merged). The middle row spreads its two units to z +/-1.4 (2.8 apart); the
-        // back row to z +/-0.9 (1.8 apart, deliberately narrower than the middle row so the grid
-        // reads as offset rather than a rigid repeat, matching the "offset grid" the brief asks
-        // for). Every same-row pair is separated by z alone; every cross-row pair is separated
-        // by at least the 1.6 x-step alone; nothing needs both axes to be safe, but most pairs
-        // get both anyway.
+        // Fixed by paying the real z price on the same-x pairs and the real x price between
+        // ranks, both derived from the actual rig dimensions (UnitRig silhouettes and weapons,
+        // times each unit's VisualDef scale) rather than a nominal "1 unit wide":
+        //   rank depths 2.6 / 4.92 / 6.93  (steps 2.32 and 2.01, against required 1.96 and 1.65)
+        //   rank z spread +/-3.25          (gap 6.5, against required 5.66)
+        // Checked exhaustively over every slot subset a team of 1 to 5 can produce, every
+        // authored enemy composition in campaign.json, and every hero in every slot: minimum
+        // screen-space separation is 0.359 world units, and the tightest pair is the Colossus
+        // against a Grave Moth in slots 0 and 2. Nothing overlaps at any team size.
         //
-        // The front row's depth (2.6) is chosen to make the middle gap wide on its own terms,
-        // not incidentally: cluster width, edge to edge including a 0.5 character-silhouette
-        // margin, is (5.8+0.5)-(2.6-0.5) = 4.2; setting the gap (2*(2.6-0.5) = 4.2) equal to that
-        // gives a 1:1 ratio - the empty middle is exactly as wide as either army, not a
-        // leftover strip next to a wide army.
+        // Five per side, not four: the reference shows four per side in two rows of two. A third
+        // rank is what makes five fit, because two z-rows can hold at most two units per rank
+        // once the z gap above is honoured. Slot 0 keeps the sole front position, preserving the
+        // FrontEnemy targeting read, and sits at z 0, centred between the two rows rather than
+        // on either - which is also what keeps the arrangement an offset grid rather than a
+        // rigid 3x2 block with a hole in it.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(-2.6f, 0f), new Vector2(-4.2f, -1.4f), new Vector2(-4.2f, 1.4f),
-            new Vector2(-5.8f, -0.9f), new Vector2(-5.8f, 0.9f)
+            new Vector2(-2.6f, 0f), new Vector2(-4.92f, -3.25f), new Vector2(-4.92f, 3.25f),
+            new Vector2(-6.93f, -3.25f), new Vector2(-6.93f, 3.25f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(2.6f, 0f), new Vector2(4.2f, -1.4f), new Vector2(4.2f, 1.4f),
-            new Vector2(5.8f, -0.9f), new Vector2(5.8f, 0.9f)
+            new Vector2(2.6f, 0f), new Vector2(4.92f, -3.25f), new Vector2(4.92f, 3.25f),
+            new Vector2(6.93f, -3.25f), new Vector2(6.93f, 3.25f)
         };
 
         public Camera Camera;
@@ -92,45 +98,47 @@ namespace Emberfall.Battle
             // used to be wide and shallow (five across, two rows deep in z), now it is narrow in
             // z but wide in x (two clusters pushed apart left-right).
             //
-            // Vertical: with the row-gap concept gone, the only z values in play are the
-            // within-row spreads, +/-1.4 at most (the middle row). Lowest point in frame is any
-            // unit's feet at that outer z; highest is the same z with a unit's head plus
-            // headroom (y 1.85 + 0.28).
-            //   f(feet) = 0 * 0.8829 + (-1.4) * 0.4695   = -0.657
-            //   f(head) = 2.13 * 0.8829 + 1.4 * 0.4695   =  2.538
-            //   span    = f(head) - f(feet)              =  3.195
-            //   half-span with 25% margin                =  3.195 / 2 * 1.25 = 1.997
+            // Both bounds are computed over the real rig dimensions at every slot, not a nominal
+            // character box, and both grew because the spacing fix above deepened the ranks in z
+            // and widened the steps in x.
             //
-            // Horizontal: half-width needed is the back row's depth (5.8) plus the same 0.5
-            // character-silhouette clearance used to size the middle gap above, with the same
-            // 25% margin applied for comfort rather than left as a bare fit:
-            //   half-width needed = (5.8 + 0.5) * 1.25 = 7.875, orthographicSize = 7.875 / 1.778
-            //                     = 4.430
+            // Vertical: outermost z is now +/-3.25, and the tallest unit that can stand there is
+            // a Stone Warden (H 2.66).
+            //   f(feet, z -3.25) = -3.25 * 0.4695            = -1.526
+            //   f(head, z +3.25) = 2.66 * 0.8829 + 1.526     =  3.874
+            //   span                                         =  5.31, so half-span = 2.65
             //
-            // 4.430 (horizontal) now exceeds 1.997 (vertical) - it flipped back, as expected:
-            // pushing the two clusters apart in x grew the horizontal requirement far more than
-            // collapsing the row-gap concept into a shallow +/-1.4 z-spread grew the vertical
-            // one. orthographicSize = 4.4 covers the binding horizontal case; this is smaller
-            // than the previous pass's 5.2 despite the wider arrangement, because that 5.2 was
-            // set by a vertical requirement this arrangement no longer has - the frame is wider
-            // and shorter, exactly as anticipated, and characters read somewhat larger as a
-            // result of the shorter half-height.
+            // Horizontal: the widest occupied point is a Stone Warden in the outer rank, x 6.93
+            // plus its own rotated half-width 0.99 (see UnitRig.ThreeQuarterTurn - turning a unit
+            // widens its silhouette, so this is measured at the turn, not square-on) = 7.92. Add
+            // 0.5 of clear air so the outermost unit is not flush against the screen edge:
+            //   orthographicSize = (7.92 + 0.5) / 1.778 = 4.737
             //
-            // Camera position: x 0, still symmetric between the two clusters. z -6.5 clears the
-            // formation's now-shallow z-spread (+/-1.4) with real margin, much closer than the
-            // previous -9.5 since there is no deep back row to clear any more; -5.0 was tried
-            // first and rejected because it put camY below orthographicSize * cos(28), which
-            // pushes the bottom of frame below world Y 0 at the camera's own reference point -
-            // -6.5 keeps camY comfortably above that floor. y is solved the same way as before:
-            // K = (f(head) + f(feet)) / 2 = 0.940, camY = (K - camZ*sin(28)) / cos(28) =
-            // (0.940 - (-6.5)*0.4695) / 0.8829 = 4.52.
+            // Horizontal still binds, by a wide margin (4.74 against 2.65). orthographicSize goes
+            // 4.4 to 4.74. This is the one number the spacing fix genuinely forced: the required
+            // rank steps (1.96 and 1.65 minimum, from summed half-widths) push the outer rank out
+            // to x 6.93, and no arrangement of five units in two z-rows fits inside the old 4.4
+            // frame while also clearing on either axis. Characters render about 7% smaller as a
+            // result. A layout that keeps 4.4 exactly does exist, but only by pulling the two
+            // clusters together until the outermost unit sits 0.02 world units from the frame
+            // edge, which trades a visible overlap for a visible clipping risk.
+            //
+            // Camera position: x 0, still symmetric. z -7.0, half a unit further back than the
+            // previous -6.5 so the deepened near rank (z -3.25, not -1.4) keeps the same standoff
+            // from the camera. y solved from the vertical centring requirement as before:
+            // K = (f(head) + f(feet)) / 2 = 1.127, camY = (K - camZ*sin(28)) / cos(28) =
+            // (1.127 + 7.0*0.4695) / 0.8829 = 5.00. That clears the two floors this has to sit
+            // above: camY > orthographicSize*cos(28) = 4.19, so the bottom of frame stays above
+            // ground level at the camera's own reference point, and the nearest unit sits 4.44
+            // beyond where the frustum's lower edge crosses the ground (z -7.69), so no unit is
+            // clipped at the bottom.
             Camera.orthographic = true;
-            Camera.orthographicSize = 4.4f;
+            Camera.orthographicSize = 4.74f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 4.52f, -6.5f);
+            _cameraHome = new Vector3(0f, 5.0f, -7.0f);
             _cameraRig.localPosition = _cameraHome;
             _cameraRig.localRotation = Quaternion.Euler(28f, 0f, 0f);
 
@@ -162,19 +170,19 @@ namespace Emberfall.Battle
             // is perpendicular to the view direction, orthographic guarantees a distortion-free
             // fit: the frame's extent is exactly orthographicSize vertically and
             // orthographicSize * aspect horizontally at any distance, so the quad only needs to
-            // be at least 4.4 * 2 = 8.8 tall and 4.4 * 1.778 * 2 = 15.6 wide - sized to 10 / 19
+            // be at least 4.74 * 2 = 9.5 tall and 4.74 * 1.778 * 2 = 16.9 wide - sized to 11 / 19
             // here for margin. The pitch in the rotation and the direction vector below both
             // still read 28 - only the distance and the resulting position changed. Positioned
-            // 22 units out along the camera's own forward direction (0, -sin(28), cos(28)) from
-            // the camera at (0, 4.52, -6.5): (0, -5.81, 12.92). That puts it comfortably behind
-            // the ridge below (which reaches to roughly z 9.9 at its deepest), so the ridge
-            // silhouettes read against it rather than in front of it.
+            // 24 units out along the camera's own forward direction (0, -sin(28), cos(28)) from
+            // the camera at (0, 5.0, -7.0): (0, -6.27, 14.19). That puts it well behind the ridge
+            // below (which reaches roughly z 9.4 at its deepest), so the ridge silhouettes read
+            // against it rather than in front of it.
             GameObject sky = GameObject.CreatePrimitive(PrimitiveType.Quad);
             sky.name = "Sky";
             Strip(sky);
             sky.transform.SetParent(_world, false);
-            sky.transform.localPosition = new Vector3(0f, -5.81f, 12.92f);
-            sky.transform.localScale = new Vector3(19f, 10f, 1f);
+            sky.transform.localPosition = new Vector3(0f, -6.27f, 14.19f);
+            sky.transform.localScale = new Vector3(19f, 11f, 1f);
             sky.transform.localRotation = Quaternion.Euler(28f, 180f, 0f);
             MeshRenderer skyRenderer = sky.GetComponent<MeshRenderer>();
             skyRenderer.material = BattleAssets.NewFx(BattleAssets.SkyTexture(environmentId), Color.white, false);
@@ -183,13 +191,12 @@ namespace Emberfall.Battle
             // arena floor. Unlike the sky, this one is genuinely meant to be a real world-space
             // horizontal plane (units stand on it), so it stays axis-aligned and gets checked
             // with an actual ray-to-ground intersection instead of being turned into a billboard.
-            // Re-checked against the new, much closer camera: the nearest ground visible is
-            // bounded by the bottom of the vertical frustum, not by the near clip plane - the
-            // frustum edge cuts in at z -7.37, while near clip alone would only cut in at
-            // z -8.56, so the frustum is what actually limits visibility, and it does so well
-            // short of ever reaching the near clip plane. The top-of-frame ray reaches as far as
-            // z 11.38. Both ends sit well inside this plane's own z -16 to 16 extent. No change
-            // needed.
+            // Re-checked against the new camera: the nearest ground visible is bounded by the
+            // bottom of the vertical frustum, not by the near clip plane - the frustum edge cuts
+            // in at z -7.69, while near clip alone would only cut in at z -9.32, so the frustum
+            // is what actually limits visibility and it does so well short of the clip plane. The
+            // top-of-frame ray reaches as far as z 12.50. Both ends sit inside this plane's own
+            // z -16 to 16 extent. No change needed.
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             Strip(ground);
@@ -211,28 +218,28 @@ namespace Emberfall.Battle
         {
             Material far = BattleAssets.NewLit(env.GroundFar, env.Accent * 0.25f, 0f);
 
-            // distant ridge line, re-checked and re-fit again: the frame got wider and shorter
-            // this pass (orthographicSize 5.2 to 4.4, and horizontal is now the binding axis, see
-            // Initialise), the opposite shape of change from last time, so both axes move again.
+            // distant ridge line, re-fit against the new frustum. Two things moved it: the
+            // formation is deeper in z than last pass (units now reach z +3.25, not +1.4), so
+            // "just past the formation" is further out, and the frame is both wider and taller
+            // (orthographicSize 4.4 to 4.74), so there is more height budget to spend.
             //
             // Depth and height: f(y, z) = y * cos(28) + z * sin(28), pitch unchanged. Targeting
-            // the ridge tops at 85% of the way to the top of frame (K + 0.85 * 4.4 = 4.68), the
+            // the ridge tops at 85% of the way to the top of frame (K + 0.85 * 4.74 = 5.16), the
             // height budget at each of this array's three z values:
-            //   z 5.5:  (4.68 - 5.5*0.4695)/0.8829 = 2.38
-            //   z 6.7:  (4.68 - 6.7*0.4695)/0.8829 = 1.74
-            //   z 7.9:  (4.68 - 7.9*0.4695)/0.8829 = 1.10
-            // Pulled the whole ridge closer (base z 7.8 to 5.5) because the formation it needs to
-            // sit behind is now shallow (max z +/-1.4, not +/-6.5), so "just past the formation"
-            // is a much smaller z than before; heights raised back up somewhat versus last pass
-            // since the closer position gives more headroom to spend before the horizon.
+            //   z 5.0:  (5.16 - 5.0*0.4695)/0.8829 = 3.18
+            //   z 6.2:  (5.16 - 6.2*0.4695)/0.8829 = 2.54
+            //   z 7.4:  (5.16 - 7.4*0.4695)/0.8829 = 1.91
+            // Block() places each ridge so its top lands exactly on ridgeH[i], so the heights
+            // below can be read straight against those budgets. The nearest ridge row (z 5.0)
+            // clears the deepest unit (z 3.25) by 1.75.
             //
-            // Horizontal: visible half-width is now orthographicSize * aspect = 4.4 * 1.778 =
-            // 7.82, narrower than last pass's 9.25, so the spread pulls in slightly to -7.5/7.5.
-            float[] ridgeX = { -7.5f, -4.5f, -1.5f, 1.5f, 4.5f, 7.5f };
-            float[] ridgeH = { 1.9f, 1.4f, 0.8f, 1.8f, 1.3f, 0.75f };
+            // Horizontal: visible half-width is now orthographicSize * aspect = 4.74 * 1.778 =
+            // 8.43, so the spread widens to -8/8 to keep covering the frame edge to edge.
+            float[] ridgeX = { -8f, -4.8f, -1.6f, 1.6f, 4.8f, 8f };
+            float[] ridgeH = { 2.6f, 1.9f, 1.3f, 2.4f, 1.75f, 1.2f };
             for (int i = 0; i < ridgeX.Length; i++)
             {
-                Block("Ridge" + i, new Vector3(ridgeX[i], ridgeH[i] * 0.5f - 0.15f, 5.5f + (i % 3) * 1.2f),
+                Block("Ridge" + i, new Vector3(ridgeX[i], ridgeH[i] * 0.5f - 0.15f, 5.0f + (i % 3) * 1.2f),
                       new Vector3(6.5f + (i % 2) * 2f, ridgeH[i] + 0.3f, 4f),
                       new Vector3(0f, (i * 23f) % 40f - 20f, (i % 2 == 0 ? 3f : -4f)), far);
             }

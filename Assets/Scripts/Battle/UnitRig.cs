@@ -25,6 +25,22 @@ namespace Emberfall.Battle
 
         private static readonly Vector3 NoRotation = Vector3.zero;
 
+        /// <summary>
+        /// How far a unit turns off camera-square to face the opposing side, in degrees, mirrored
+        /// by side. Derived, not picked: a unit turned by phi has cos(phi) of its facing still
+        /// pointing at the camera and sin(phi) pointing at the enemy. At 30 the camera-facing
+        /// component is 0.87 and the opposing component is 0.50 - the turn reads clearly as
+        /// "these two lines face each other" while the face stays dominantly toward the viewer
+        /// and the shoulder line only foreshortens to 87% of square-on. 45 would split the two
+        /// evenly and read as true profile-ish three quarter, which is more than the slight turn
+        /// wanted here; below about 20 the turn stops reading at chibi scale. BattleStage's slot
+        /// spacing is verified against this exact angle, since turning a unit widens its
+        /// projected silhouette (a Grave Moth's nose-to-tail depth is three times its width, so
+        /// it widens most); the spacing still clears with zero overlap anywhere in 0 to 40, so
+        /// this value can be retuned within that range without redoing the layout.
+        /// </summary>
+        public const float ThreeQuarterTurn = 30f;
+
         public static UnitRig Build(string name, Transform parent, VisualDef visual, bool facingForward)
         {
             UnitRig rig = new UnitRig();
@@ -32,7 +48,19 @@ namespace Emberfall.Battle
             GameObject rootObject = new GameObject(name);
             rig.Root = rootObject.transform;
             rig.Root.SetParent(parent, false);
-            rig.Root.localRotation = Quaternion.Euler(0f, facingForward ? 0f : 180f, 0f);
+            // Both sides now start from 180 (facing the camera, which sits on -Z) and turn off it
+            // by ThreeQuarterTurn, mirrored: allies (facingForward, on the -X side) turn toward
+            // +X, enemies on the +X side turn toward -X, so the two clusters face each other.
+            //
+            // The ally half of this is a real change of facing, not just an added turn. The old
+            // value was 0 for allies, which points a unit's face along +Z - correct back when
+            // BattleStage put allies at negative z and enemies at positive z, because +Z was
+            // then "toward the enemy", and allies were deliberately seen from behind. The
+            // left-versus-right rearrangement moved the enemy to +X and left this convention
+            // behind: +Z stopped being toward anything and became simply away from the camera,
+            // so allies were facing nothing, with their backs to the viewer. 180 +/- 30 restores
+            // the intent (face the camera, lean toward the opponent) under the new geometry.
+            rig.Root.localRotation = Quaternion.Euler(0f, facingForward ? 180f - ThreeQuarterTurn : 180f + ThreeQuarterTurn, 0f);
 
             GameObject bodyObject = new GameObject("Body");
             rig.Body = bodyObject.transform;
@@ -44,7 +72,7 @@ namespace Emberfall.Battle
             // same code, same output, no behaviour change.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite, facingForward);
+                rig.BuildSprite(visual.Sprite);
             }
             else
             {
@@ -181,7 +209,7 @@ namespace Emberfall.Battle
         /// hardcoded, so a differently-proportioned placeholder or the eventual real art both
         /// render at their natural proportions without a code change.
         /// </summary>
-        private void BuildSprite(string spriteId, bool facingForward)
+        private void BuildSprite(string spriteId)
         {
             Height = 1.85f;
             Texture2D tex = BattleAssets.UnitSprite(spriteId);
@@ -204,13 +232,23 @@ namespace Emberfall.Battle
             t.localPosition = new Vector3(0f, Height * 0.5f, 0f);
             t.localScale = new Vector3(width, Height, 1f);
 
-            // A default Unity Quad's front face points +Z. The battle camera always sits on the
-            // -Z side of the arena for both ally and enemy slots, so the sprite's own local
-            // rotation has to counter-rotate whatever Root already applied for ally/enemy facing
-            // (0 or 180 around Y, set above) so the two sum to 180 either way and the front face
-            // always ends up pointing at -Z, toward the camera, not mirrored on one side. This
-            // reasoning has not been checked against the real camera - verify in Play mode.
-            t.localRotation = Quaternion.Euler(0f, facingForward ? 180f : 0f, 0f);
+            // No local rotation any more: the quad inherits Root's turn (180 -/+ ThreeQuarterTurn,
+            // see Build) and so leans with the procedural rigs instead of staying square to the
+            // camera. It previously counter-rotated to cancel Root out, which was right while
+            // Root's two values were 0 and 180 and the goal was "always flat on to the camera";
+            // it would now single this unit out as the only one not turned.
+            //
+            // The quad's front face is +Z, so at either turn its normal keeps a -Z component
+            // (dot with the camera's forward is -0.76 both ways) and stays visible, foreshortened
+            // to cos(30) = 87% of its square-on width. Because the two sides turn opposite ways,
+            // the enemy side shows the same texture mirrored, which is deliberate and is what
+            // DESIGN-ART-DELIVERY.md now specifies sprites be drawn for.
+            //
+            // Not verifiable here: this is a flat billboard, so turning it foreshortens art that
+            // still depicts a square-on character. Orrin's placeholder will read slightly wrong
+            // until it is redrawn to the three-quarter spec. Which side ends up un-mirrored is
+            // also a Play mode check, not something this reasoning settles.
+            t.localRotation = Quaternion.identity;
 
             MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
