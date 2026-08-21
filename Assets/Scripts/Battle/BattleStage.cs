@@ -11,24 +11,24 @@ namespace Emberfall.Battle
     /// </summary>
     public sealed class BattleStage : MonoBehaviour
     {
-        // Landscape formation: wide and shallow instead of narrow and deep. Ten units are two
-        // arcs of five facing each other across the middle of a 16:9 frame - each side spreads
-        // to x = +/-4 (roughly nine world units of line against the ~15 the camera now sees at
-        // mid-depth) and keeps under a unit of z between front and back rank, so no one hides
-        // behind anyone and every head has clear air above it for its screen-space bar. The
-        // slot order still matters: slot 0 is the front-centre unit FrontEnemy targeting reads,
-        // 1-2 flank it, 3-4 hold the wide back corners and only exist when someone stands there.
-        // None of these numbers has been seen through the real camera yet - Play mode first.
+        // Landscape formation: wide and flat, not staggered in depth. The old V-shaped ranks
+        // (front-centre closer, corners further back) were a portrait-era holdover - in
+        // landscape, depth staggering costs the one thing there is least of: five units at
+        // different z render at different screen heights and different apparent sizes, so a
+        // side scatters vertically instead of reading as a row, and the taller back corners
+        // push straight into the top UI band. Each side now sits on a single z plane and only
+        // spreads on x, same as Idle Heroes / AFK Arena. Slot order still matters for combat
+        // logic (slot 0 is the FrontEnemy targeting read), it just no longer maps to depth.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(0f, -1.7f), new Vector2(-2.0f, -2.6f), new Vector2(2.0f, -2.6f),
-            new Vector2(-4.0f, -3.3f), new Vector2(4.0f, -3.3f)
+            new Vector2(0f, -2.5f), new Vector2(-2.0f, -2.5f), new Vector2(2.0f, -2.5f),
+            new Vector2(-4.0f, -2.5f), new Vector2(4.0f, -2.5f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(0f, 2.1f), new Vector2(-2.0f, 3.0f), new Vector2(2.0f, 3.0f),
-            new Vector2(-4.0f, 3.7f), new Vector2(4.0f, 3.7f)
+            new Vector2(0f, 2.5f), new Vector2(-2.0f, 2.5f), new Vector2(2.0f, 2.5f),
+            new Vector2(-4.0f, 2.5f), new Vector2(4.0f, 2.5f)
         };
 
         public Camera Camera;
@@ -50,20 +50,33 @@ namespace Emberfall.Battle
             Camera = cameraObject.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.SolidColor;
             Camera.backgroundColor = new Color(0.04f, 0.03f, 0.07f, 1f);
-            // Landscape framing. The old portrait camera (fov 44 at y 7.2, z -8.6) kept the same
-            // vertical angle it always had, but in landscape that angle is drawn across 1080px
-            // instead of 1920px, so every unit rendered almost half as tall. Coming down and in
-            // (y 5.8, z -7.4) buys the character size back, the slightly tighter fov trims the
-            // dead sky and foreground the flat 16:9 frame no longer needs, and the lower look-at
-            // flattens the angle so the two five-wide arcs read side-on as two facing lines.
-            Camera.fieldOfView = 40f;
+            // Framing re-derived for the flattened formation (fov 40 at y 5.8, z -7.4 was set
+            // against the old staggered V and never checked against this spread - the outer
+            // slots at x +/-4 fell outside the frustum). Worked from the actual geometry:
+            // ally plane z -2.5, enemy plane z 2.5, x +/-4, plus ~0.5 for character half-width
+            // and another 0.5 of clear air, so the framed edge is x +/-5. Vertically a unit
+            // spans y 0 (feet) to y 1.85 (UnitRig.Height), and the tracked health bar sits at
+            // HeadPosition + 0.28 (BattleScreen.cs), so the top of the chrome is y 2.13; add
+            // 0.2 of headroom above that and 0.2 below the feet. With camera at (0, 4.6, -10.5)
+            // looking at (0, 1.0, 0), the tightest point turns out to be the ally plane (nearer
+            // to camera than the enemy plane) at its outer x, at bar height rather than at the
+            // feet - being closer to the camera's own height shortens its distance along the
+            // view axis more than being lower does. That point needs a vertical field of view
+            // of ~37.4 degrees to stay inside frame; 42 leaves about 12% of headroom to spare
+            // there, and far more on the enemy plane and everywhere else, since every other
+            // point sits further from the camera along the view axis than that one does. Depth
+            // staggering is gone, so the steep 31 degree pitch the old V needed to compress
+            // itself vertically is gone too - this sits at roughly 19 degrees, the flattest
+            // angle that still clears the arena boundary stones and keeps both planes read as
+            // two distinct facing lines rather than one flat card.
+            Camera.fieldOfView = 42f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 5.8f, -7.4f);
+            _cameraHome = new Vector3(0f, 4.6f, -10.5f);
             _cameraRig.localPosition = _cameraHome;
-            _cameraRig.LookAt(new Vector3(0f, 1.0f, 0.5f));
+            _cameraRig.LookAt(new Vector3(0f, 1.0f, 0f));
 
             GameObject vfxHost = new GameObject("Vfx");
             vfxHost.transform.SetParent(transform, false);
