@@ -11,22 +11,24 @@ namespace Emberfall.Battle
     /// </summary>
     public sealed class BattleStage : MonoBehaviour
     {
-        // A shallow V per side reads well on a tall phone screen: front-liner nearest the enemy,
-        // supports set back and out to the sides.
-        // Slots 0-2 are unchanged from the 3v3 layout on purpose: a battle that deploys three
-        // units renders exactly as it did before team size grew. Slots 3-4 widen the back line
-        // and only exist on screen when a fourth or fifth unit actually stands there. The new
-        // x extents (2.6) have not been seen through the real camera - verify in Play mode.
+        // Landscape formation: wide and shallow instead of narrow and deep. Ten units are two
+        // arcs of five facing each other across the middle of a 16:9 frame - each side spreads
+        // to x = +/-4 (roughly nine world units of line against the ~15 the camera now sees at
+        // mid-depth) and keeps under a unit of z between front and back rank, so no one hides
+        // behind anyone and every head has clear air above it for its screen-space bar. The
+        // slot order still matters: slot 0 is the front-centre unit FrontEnemy targeting reads,
+        // 1-2 flank it, 3-4 hold the wide back corners and only exist when someone stands there.
+        // None of these numbers has been seen through the real camera yet - Play mode first.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(0f, -1.6f), new Vector2(-1.55f, -2.75f), new Vector2(1.55f, -2.75f),
-            new Vector2(-2.6f, -3.6f), new Vector2(2.6f, -3.6f)
+            new Vector2(0f, -1.7f), new Vector2(-2.0f, -2.6f), new Vector2(2.0f, -2.6f),
+            new Vector2(-4.0f, -3.3f), new Vector2(4.0f, -3.3f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(0f, 2.0f), new Vector2(-1.55f, 3.15f), new Vector2(1.55f, 3.15f),
-            new Vector2(-2.6f, 4.0f), new Vector2(2.6f, 4.0f)
+            new Vector2(0f, 2.1f), new Vector2(-2.0f, 3.0f), new Vector2(2.0f, 3.0f),
+            new Vector2(-4.0f, 3.7f), new Vector2(4.0f, 3.7f)
         };
 
         public Camera Camera;
@@ -48,14 +50,20 @@ namespace Emberfall.Battle
             Camera = cameraObject.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.SolidColor;
             Camera.backgroundColor = new Color(0.04f, 0.03f, 0.07f, 1f);
-            Camera.fieldOfView = 44f;
+            // Landscape framing. The old portrait camera (fov 44 at y 7.2, z -8.6) kept the same
+            // vertical angle it always had, but in landscape that angle is drawn across 1080px
+            // instead of 1920px, so every unit rendered almost half as tall. Coming down and in
+            // (y 5.8, z -7.4) buys the character size back, the slightly tighter fov trims the
+            // dead sky and foreground the flat 16:9 frame no longer needs, and the lower look-at
+            // flattens the angle so the two five-wide arcs read side-on as two facing lines.
+            Camera.fieldOfView = 40f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 7.2f, -8.6f);
+            _cameraHome = new Vector3(0f, 5.8f, -7.4f);
             _cameraRig.localPosition = _cameraHome;
-            _cameraRig.LookAt(new Vector3(0f, 1.0f, 0.4f));
+            _cameraRig.LookAt(new Vector3(0f, 1.0f, 0.5f));
 
             GameObject vfxHost = new GameObject("Vfx");
             vfxHost.transform.SetParent(transform, false);

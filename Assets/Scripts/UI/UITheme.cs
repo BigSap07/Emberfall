@@ -47,7 +47,12 @@ namespace Emberfall.UI
         public const int FontTiny = 20;
 
         // ---------- layout ----------
-        public static readonly Vector2 ReferenceResolution = new Vector2(1080f, 1920f);
+        // Landscape since the 5v5 team size change: ten characters across a battle line need
+        // width, and 1080 of portrait width did not carry that read. The Game view in the
+        // editor must be set to a 1920x1080 (or 16:9) preset to match - a portrait Game view
+        // against this canvas has already produced one apparent layout bug that was really a
+        // preview mismatch.
+        public static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
         public const float ScreenPadding = 32f;
         public const float TopBarHeight = 132f;
         public const float NavBarHeight = 168f;

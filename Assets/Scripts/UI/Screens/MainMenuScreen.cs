@@ -25,25 +25,29 @@ namespace Emberfall.UI.Screens
         private Image _chapterFill;
         private Text _chapterCount;
 
-        // Everything above the nav bar is laid out from a single top-down cursor so each block's
-        // position is derived from the one above it plus a spacing-scale gap, instead of being an
-        // independent hand-tuned literal - that independence is what let the banner card, continue
-        // button and idle cache card drift into collision in the first place.
-        private const float CardWidth = 940f;
+        // Landscape splits the old single portrait stack into two top-down cursors, one per
+        // column, keeping the same rule: each block's position derives from the one above it
+        // plus a spacing-scale gap, never an independent hand-tuned literal. Left column is
+        // identity and the way forward (title, banner, chapter, continue); right column is
+        // income and navigation (cache, nav). Both start below the shared top bar.
+        private const float CardWidth = 900f;
+        private const float LeftColumnX = -462f;   // half the 24f column gap plus half a card
+        private const float RightColumnX = 462f;
+        private const float ColumnTop = UITheme.TopBarHeight + UITheme.Space24;
 
         protected override void Build()
         {
-            float cursor = UITheme.Space96;
+            float left = ColumnTop;
+            left = BuildTitle(left);
+            left += UITheme.Space24;
+            left = BuildTeamShowcase(left);
+            left += UITheme.Space24;
+            left = BuildChapterProgress(left);
+            left += UITheme.Space24;
+            left = BuildContinue(left);
 
-            cursor = BuildTitle(cursor);
-            cursor += UITheme.Space24;
-            cursor = BuildTeamShowcase(cursor);
-            cursor += UITheme.Space24;
-            cursor = BuildIdleCache(cursor);
-            cursor += UITheme.Space24;
-            cursor = BuildChapterProgress(cursor);
-            cursor += UITheme.Space24;
-            cursor = BuildContinue(cursor);
+            float right = ColumnTop;
+            right = BuildIdleCache(right);
 
             BuildNav();
             BuildOptions();
@@ -52,9 +56,11 @@ namespace Emberfall.UI.Screens
         /// <returns>Distance from the top of the screen to the bottom of the block just built.</returns>
         private float BuildTitle(float top)
         {
-            const float logoHeight = 100f;
-            Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay + 22, UITheme.Gold, TextAnchor.UpperCenter);
-            UIBuilder.Box(logo.rectTransform, 0f, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
+            // one type-scale step smaller than the portrait logo - the landscape left column has
+            // 1080 of height for four blocks where portrait had 1920 for five
+            const float logoHeight = 80f;
+            Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay, UITheme.Gold, TextAnchor.UpperCenter);
+            UIBuilder.Box(logo.rectTransform, LeftColumnX, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(logo, new Color(0.35f, 0.12f, 0.02f, 0.9f), 3f);
             UIBuilder.Shadowed(logo, new Color(0f, 0f, 0f, 0.6f), 5f);
             top += logoHeight;
@@ -62,13 +68,13 @@ namespace Emberfall.UI.Screens
             top += UITheme.Space16;
             const float ruleHeight = 3f;
             Image underline = UIBuilder.Img("Rule", Root, TextureLab.White, UITheme.WithAlpha(UITheme.Ember, 0.75f));
-            UIBuilder.Box(underline.rectTransform, 0f, -top, 340f, ruleHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(underline.rectTransform, LeftColumnX, -top, 340f, ruleHeight, new Vector2(0.5f, 1f));
             top += ruleHeight;
 
             top += UITheme.Space16;
             const float subHeight = 32f;
             Text sub = UIBuilder.Label("Sub", Root, "THE ASHEN ROAD", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(sub.rectTransform, 0f, -top, 700f, subHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(sub.rectTransform, LeftColumnX, -top, 700f, subHeight, new Vector2(0.5f, 1f));
             top += subHeight;
 
             return top;
@@ -78,7 +84,7 @@ namespace Emberfall.UI.Screens
         {
             const float cardHeight = 316f;
             RectTransform card = UIBuilder.Node("Squad", Root);
-            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(card, LeftColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
@@ -104,7 +110,7 @@ namespace Emberfall.UI.Screens
         {
             const float cardHeight = 358f;
             RectTransform card = UIBuilder.Node("IdleCache", Root);
-            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(card, RightColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
@@ -151,7 +157,7 @@ namespace Emberfall.UI.Screens
         {
             const float cardHeight = 150f;
             RectTransform card = UIBuilder.Node("Progress", Root);
-            UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(card, LeftColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
@@ -180,13 +186,13 @@ namespace Emberfall.UI.Screens
         {
             const float buttonHeight = 168f;
             _continueButton = UIBuilder.PrimaryButton("Continue", Root, "CONTINUE CAMPAIGN", UITheme.FontHeading);
-            UIBuilder.Box(_continueButton.Root, 0f, -top, CardWidth, buttonHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_continueButton.Root, LeftColumnX, -top, CardWidth, buttonHeight, new Vector2(0.5f, 1f));
             _continueButton.OnClick(OpenCampaign);
             top += buttonHeight + UITheme.Space16;
 
             const float subHeight = 34f;
             _continueSub = UIBuilder.Label("ContinueSub", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(_continueSub.rectTransform, 0f, -top, 900f, subHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_continueSub.rectTransform, LeftColumnX, -top, 900f, subHeight, new Vector2(0.5f, 1f));
             top += subHeight;
 
             return top;
@@ -194,8 +200,10 @@ namespace Emberfall.UI.Screens
 
         private void BuildNav()
         {
+            // bottom of the right column, mirroring the portrait bottom-nav muscle memory on the
+            // half of the screen the thumb rests on in landscape
             RectTransform nav = UIBuilder.Node("Nav", Root);
-            UIBuilder.BottomStrip(nav, 200f, 30f, UITheme.ScreenPadding);
+            UIBuilder.Box(nav, RightColumnX, 30f, CardWidth, 200f, new Vector2(0.5f, 0f));
             UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
             AddNavButton(nav, "HEROES", 0, UITheme.Shard, OpenHeroes);
@@ -221,8 +229,9 @@ namespace Emberfall.UI.Screens
 
         private void BuildOptions()
         {
+            // right screen edge, in the gap between the cache card (ends 514) and the nav (starts 850)
             UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f, UITheme.WithAlpha(UITheme.PanelRaised, 0.9f), UITheme.TextMuted);
-            UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -150f, 62f, 62f, new Vector2(1f, 1f));
+            UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -538f, 62f, 62f, new Vector2(1f, 1f));
             options.OnClick(ShowOptions);
         }
 
@@ -283,12 +292,13 @@ namespace Emberfall.UI.Screens
 
                 if (slot >= team.Count)
                 {
-                    Image empty = cell.gameObject.AddComponent<Image>();
-                    empty.sprite = TextureLab.RoundedRect(18);
-                    empty.type = Image.Type.Sliced;
-                    empty.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.8f);
-                    Text hint = UIBuilder.Label("Hint", cell, "EMPTY", UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
-                    UIBuilder.FillParent(hint.rectTransform, 0f);
+                    // an open slot is room to grow, not a hole: a ring where the portrait will
+                    // stand (same convention as the campaign banner strip) and the slot's number,
+                    // so the cell promises a fourth and fifth ally rather than apologising
+                    Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5), UITheme.BorderSoft);
+                    UIBuilder.Box(ring.rectTransform, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
+                    Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+                    UIBuilder.Box(hint.rectTransform, 0f, -132f, 154f, 26f, new Vector2(0.5f, 1f));
                     continue;
                 }
 

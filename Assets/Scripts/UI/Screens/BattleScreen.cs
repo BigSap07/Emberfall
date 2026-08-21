@@ -174,15 +174,18 @@ namespace Emberfall.UI.Screens
             dim.sprite = TextureLab.White;
             dim.color = new Color(0f, 0f, 0f, 0.78f);
 
+            // Landscape splits the panel into two panes: outcome, cause and actions on the left,
+            // the spoils card on the right. The portrait layout stacked these down the middle and
+            // mixed centre-anchored and bottom-anchored elements, which collide at 1080 of height.
             _resultTitle = UIBuilder.Label("Title", _resultPanel, "", UITheme.FontDisplay + 16, UITheme.Gold, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_resultTitle.rectTransform, 0f, 420f, 980f, 110f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_resultTitle.rectTransform, -460f, 310f, 900f, 110f, new Vector2(0.5f, 0.5f));
             UIBuilder.Outlined(_resultTitle, new Color(0.2f, 0.05f, 0f, 0.95f), 4f);
 
             _resultSub = UIBuilder.Label("Sub", _resultPanel, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_resultSub.rectTransform, 0f, 340f, 940f, 40f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_resultSub.rectTransform, -460f, 232f, 860f, 40f, new Vector2(0.5f, 0.5f));
 
             RectTransform card = UIBuilder.Node("Rewards", _resultPanel);
-            UIBuilder.Box(card, 0f, 50f, 860f, 462f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(card, 460f, 0f, 820f, 560f, new Vector2(0.5f, 0.5f));
             Image cardImage = card.gameObject.AddComponent<Image>();
             cardImage.sprite = TextureLab.RoundedRect(24);
             cardImage.type = Image.Type.Sliced;
@@ -196,19 +199,18 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_rewardList, 28f, 58f, 28f, 24f);
             UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
-            // the Debrief line - one sentence, the single biggest reason the fight went this way.
-            // Sits in the gap between the rewards card and the buttons below, which has ~360px
-            // of unused space at this anchor (card bottom at distance-from-bottom 779, buttons
-            // starting at 418) - room for a wrapped sentence with no relayout of anything above it.
+            // the Debrief line - one sentence, the single biggest reason the fight went this way -
+            // sits directly under the outcome it explains, in the left pane's reading order:
+            // verdict, cause, then what to do about it (the two buttons below)
             _debriefText = UIBuilder.WrappedLabel("Debrief", _resultPanel, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(_debriefText.rectTransform, 0f, 442f, 860f, 150f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_debriefText.rectTransform, -460f, 40f, 820f, 220f, new Vector2(0.5f, 0.5f));
 
             _resultSecondary = UIBuilder.SecondaryButton("AdjustLine", _resultPanel, "ADJUST LINE", UITheme.FontBody);
-            UIBuilder.Box(_resultSecondary.Root, 0f, 300f, 860f, 118f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_resultSecondary.Root, -460f, -220f, 620f, 112f, new Vector2(0.5f, 0.5f));
             _resultSecondary.OnClick(AdjustLine);
 
             _resultPrimary = UIBuilder.GoldButton("Rematch", _resultPanel, "REMATCH", UITheme.FontHeading);
-            UIBuilder.Box(_resultPrimary.Root, 0f, 160f, 860f, 126f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_resultPrimary.Root, -460f, -370f, 620f, 126f, new Vector2(0.5f, 0.5f));
             _resultPrimary.OnClick(Replay);
 
             _resultPanel.gameObject.SetActive(false);

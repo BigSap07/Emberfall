@@ -22,15 +22,20 @@ namespace Emberfall.UI.Screens
             ScreenChrome.Header(Root, "CAMPAIGN", Router, out _headerSubtitle);
             BuildTeamStrip();
 
+            // landscape: banner card sits to the left of the stage list rather than above it,
+            // both starting on the same line below the header
             _stageList = UIBuilder.ScrollList("Stages", Root, out _scroll, 14f, new RectOffset(0, 0, 6, 48));
             UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 292f, UITheme.ScreenPadding, 24f);
+                                 UITheme.ScreenPadding + TeamCardWidth + UITheme.Space24,
+                                 UITheme.TopBarHeight + 132f, UITheme.ScreenPadding, 24f);
         }
+
+        private const float TeamCardWidth = 520f;
 
         private void BuildTeamStrip()
         {
             RectTransform card = UIBuilder.Node("Team", Root);
-            UIBuilder.TopStrip(card, 146f, UITheme.TopBarHeight + 132f, UITheme.ScreenPadding);
+            UIBuilder.Box(card, UITheme.ScreenPadding, -(UITheme.TopBarHeight + 132f), TeamCardWidth, 146f, new Vector2(0f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
@@ -173,9 +178,9 @@ namespace Emberfall.UI.Screens
             Text subtitle = UIBuilder.Label("Sub", row, stage.Subtitle, UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             UIBuilder.Box(subtitle.rectTransform, 138f, -58f, 640f, 26f, new Vector2(0f, 1f));
 
-            // enemy preview
+            // enemy preview - wide enough for five pips now stages spawn up to five enemies
             RectTransform pips = UIBuilder.Node("Enemies", row);
-            UIBuilder.Box(pips, 138f, 20f, 300f, 62f, new Vector2(0f, 0f));
+            UIBuilder.Box(pips, 138f, 20f, 380f, 62f, new Vector2(0f, 0f));
             UIBuilder.HStack(pips, 10f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleLeft);
             for (int i = 0; i < stage.Enemies.Count; i++)
             {
