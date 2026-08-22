@@ -56,6 +56,41 @@ namespace Emberfall.Battle
         /// </summary>
         public const float HumanoidTop = 1.71f;
 
+        /// <summary>
+        /// The other four silhouettes' measured rendered tops, from the table above. Named rather
+        /// than left as literals inside each Build* method for the same reason HumanoidTop is:
+        /// the sprite path has to resolve the SAME number the procedural path asserts, and two
+        /// copies of a number that must agree is exactly how BuildSprite came to hardcode
+        /// HumanoidTop for every silhouette in the first place.
+        /// </summary>
+        public const float BruteTop = 1.74f;
+        public const float BeastTop = 1.08f;
+        public const float WispTop = 1.75f;
+        public const float GolemTop = 1.90f;
+
+        /// <summary>
+        /// The rendered top for a silhouette id, before visual.Scale. One resolver, read by both
+        /// rig paths: the procedural Build* methods assign from these constants and BuildSprite
+        /// looks the same value up, so a sprite stands exactly as tall as the rig it replaces
+        /// rather than as tall as a humanoid.
+        ///
+        /// The default arm is humanoid on purpose, and it is not a guess: Build's own silhouette
+        /// switch falls through to BuildHumanoid for any unrecognised string, so an unknown
+        /// silhouette resolves to the same height on both paths by construction rather than by
+        /// two switches happening to be written the same way. Keep the two defaults in step.
+        /// </summary>
+        public static float SilhouetteTop(string silhouette)
+        {
+            switch (silhouette)
+            {
+                case "brute": return BruteTop;
+                case "beast": return BeastTop;
+                case "wisp": return WispTop;
+                case "golem": return GolemTop;
+                default: return HumanoidTop;
+            }
+        }
+
         public Material Primary;
         public Material Secondary;
         public Material Accent;
@@ -110,7 +145,7 @@ namespace Emberfall.Battle
             // same code, same output, no behaviour change.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction);
+                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.Silhouette);
             }
             else
             {
@@ -175,7 +210,7 @@ namespace Emberfall.Battle
         {
             // Head (Sphere, y 1.56, scale.y 0.36) tops at 1.740; Helm (Cube, y 1.64, scale.y 0.20)
             // reaches 1.740 too. The old 2.05 was above both by 0.31.
-            Height = 1.74f;
+            Height = BruteTop;
             Solid(PrimitiveType.Capsule, "Torso", Body, new Vector3(0f, 0.98f, 0f), new Vector3(0.72f, 0.44f, 0.58f), NoRotation, Secondary);
             Solid(PrimitiveType.Cube, "Plate", Body, new Vector3(0f, 1.14f, 0.14f), new Vector3(0.62f, 0.42f, 0.22f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Head", Body, new Vector3(0f, 1.56f, 0.02f), new Vector3(0.38f, 0.36f, 0.38f), NoRotation, Secondary);
@@ -198,7 +233,7 @@ namespace Emberfall.Battle
             // Spine is a Capsule turned 90 about X, so its 0.52 scale.y becomes depth and its 0.46
             // scale.x becomes the height that counts: top 0.62 + 0.46 = 1.080. A quadruped, and
             // the only silhouette whose top is its back rather than its head.
-            Height = 1.08f;
+            Height = BeastTop;
             Solid(PrimitiveType.Capsule, "Spine", Body, new Vector3(0f, 0.62f, 0f), new Vector3(0.46f, 0.52f, 0.46f), new Vector3(90f, 0f, 0f), Secondary);
             Solid(PrimitiveType.Sphere, "Hump", Body, new Vector3(0f, 0.80f, -0.16f), new Vector3(0.44f, 0.34f, 0.46f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Head", Body, new Vector3(0f, 0.72f, 0.58f), new Vector3(0.36f, 0.32f, 0.42f), NoRotation, Secondary);
@@ -218,7 +253,7 @@ namespace Emberfall.Battle
         {
             // ShardC (Cube, y 1.62, scale.y 0.26) tops at 1.750. The only silhouette whose old
             // value was too LOW - bars sat inside a wisp rather than above it.
-            Height = 1.75f;
+            Height = WispTop;
             Solid(PrimitiveType.Sphere, "Core", Body, new Vector3(0f, 1.05f, 0f), new Vector3(0.62f, 0.66f, 0.62f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Inner", Body, new Vector3(0f, 1.05f, 0.06f), new Vector3(0.36f, 0.38f, 0.36f), NoRotation, Accent);
             Solid(PrimitiveType.Cube, "ShardA", Body, new Vector3(-0.44f, 1.22f, 0f), new Vector3(0.10f, 0.30f, 0.10f), new Vector3(0f, 0f, 24f), Secondary);
@@ -232,7 +267,7 @@ namespace Emberfall.Battle
             // Head (Cube, y 1.72, scale.y 0.36) tops at 1.900. The old 2.25 was the worst overshoot
             // of the five, and the Sundered Colossus (scale 1.55) magnified it into 0.54 of empty
             // air that BattleStage's spacing and framing were both sized against.
-            Height = 1.90f;
+            Height = GolemTop;
             Solid(PrimitiveType.Cube, "Torso", Body, new Vector3(0f, 1.10f, 0f), new Vector3(0.86f, 0.86f, 0.62f), NoRotation, Secondary);
             Solid(PrimitiveType.Cube, "Chest", Body, new Vector3(0f, 1.28f, 0.16f), new Vector3(0.66f, 0.40f, 0.36f), NoRotation, Primary);
             Solid(PrimitiveType.Cube, "Head", Body, new Vector3(0f, 1.72f, 0.02f), new Vector3(0.44f, 0.36f, 0.42f), NoRotation, Primary);
@@ -257,14 +292,27 @@ namespace Emberfall.Battle
         /// top of the body even when the quad extends above it for a raised weapon. See
         /// bodyFraction below for what does extend it, and why.
         /// </summary>
-        private void BuildSprite(string spriteId, float bodyFraction)
+        private void BuildSprite(string spriteId, float bodyFraction, string silhouette)
         {
-            // HumanoidTop, not a number of its own. This is the line the whole sprite pipeline
-            // hangs off: the quad below is sized so the body's top lands exactly here, so this
-            // constant IS the rendered height of every sprite hero. Setting it to the humanoid
-            // silhouette's own measured head top is what makes a sprite hero and a procedural rig
-            // stand eye to eye. It read 1.85 before, which is not the top of anything.
-            Height = HumanoidTop;
+            // The silhouette's own top, not a number of its own, and not HumanoidTop. This is the
+            // line the whole sprite pipeline hangs off: the quad below is sized so the body's top
+            // lands exactly here, so this value IS the rendered height of every sprite unit.
+            // Resolving it from the silhouette the sprite replaces is what makes a sprite unit and
+            // the procedural rig it stands in for reach the same height.
+            //
+            // It read HumanoidTop unconditionally before, which was correct only by luck: every
+            // sprite in the project was a hero, and every hero is humanoid, so the one silhouette
+            // it assumed was the only one it ever met. The first non-humanoid sprite broke it in
+            // both directions at once and silently, because a wrong height throws no error and
+            // renders perfectly happily. A Grave Moth is a beast (1.080) and would have rendered
+            // at 1.710, 58% too tall, going from 60% of a Hollow Husk's height to 95% and ceasing
+            // to read as a low skittering thing at all. A Sundered Colossus is a golem (1.900) and
+            // would have rendered 10% short, on the boss whose scale of 1.55 magnifies it most.
+            //
+            // Same class of bug as the one the Height table above records, and it survived that
+            // fix for the same reason it was introduced: a per-silhouette number collapsed to a
+            // single constant that happened to be right for the only case anyone had.
+            Height = SilhouetteTop(silhouette);
             Texture2D tex = BattleAssets.UnitSprite(spriteId);
             float aspect = tex.height > 0 ? tex.width / (float)tex.height : 0.6f;
 

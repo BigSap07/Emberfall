@@ -6,7 +6,7 @@
       "hp": 900, "attack": 111, "defense": 45, "speed": 92,
       "critChance": 0.06, "critDamage": 1.4, "growth": 0.12,
       "effectHit": 0.00, "effectResist": 0.05,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "claws", "scale": 0.95, "sigil": 6 },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "claws", "scale": 0.95, "sigil": 6, "sprite": "hollow_husk" },
       "basic": {
         "id": "husk_basic", "name": "Flail", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -37,7 +37,7 @@
       "hp": 720, "attack": 105, "defense": 36, "speed": 128,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.00,
-      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "none", "scale": 0.9, "sigil": 8 },
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "none", "scale": 0.9, "sigil": 8, "sprite": "grave_moth" },
       "basic": {
         "id": "moth_basic", "name": "Dust Rake", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.90 } ]
@@ -129,7 +129,7 @@
       "hp": 2450, "attack": 232, "defense": 104, "speed": 84,
       "critChance": 0.15, "critDamage": 1.7, "growth": 0.12, "startEnergy": 15,
       "effectHit": 0.15, "effectResist": 0.20,
-      "visual": { "primary": "4B3F63", "secondary": "17131F", "accent": "C9A6FF", "silhouette": "golem", "weapon": "hammer", "scale": 1.55, "sigil": 13 },
+      "visual": { "primary": "4B3F63", "secondary": "17131F", "accent": "C9A6FF", "silhouette": "golem", "weapon": "hammer", "scale": 1.55, "sigil": 13, "sprite": "sundered_colossus" },
       "basic": {
         "id": "colossus_basic", "name": "Ruinous Sweep", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.72 } ]

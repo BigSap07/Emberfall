@@ -187,7 +187,7 @@
       "hp": 1420, "attack": 227, "defense": 58, "speed": 126,
       "critChance": 0.28, "critDamage": 1.85, "growth": 0.115, "startEnergy": 0,
       "effectHit": 0.35, "effectResist": 0.00,
-      "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5 },
+      "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5, "sprite": "nyx_serrow" },
       "basic": {
         "id": "nyx_basic", "name": "Hollow Cut", "vfx": "shadow",
         "description": "Steps through the dark and opens the most dangerous enemy.",
