@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
             CheckAspectDirection(content);
             CheckAspectEmberVerdant(content);
             CheckAspectTideUmbra(content);
+            CheckAspectGale(content);
             CheckDispel(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
@@ -492,6 +493,438 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+
+        /// <summary>
+        /// Gale (DESIGN-ASPECTS sections 1, 2 and 8), in four parts, none of them read off the diff.
+        ///
+        /// Part 1 runs the shipped campaign and confirms re-entry actually happens there, with a
+        /// control run that changes exactly one string - Ryn's aspect - and watches her share of it
+        /// go to zero while the Gale enemy's share survives. That isolates the aspect as the cause
+        /// on a field that still contains Gale on the other side.
+        ///
+        /// Parts 2 and 3 use a synthetic 5v5 arena because the guard and the Slow shift cannot be
+        /// forced out of shipped content. Part 2 builds the same arena twice at two different values
+        /// of galeExtraTurnsPerRound and shows section 8's failure happening at the loose value and
+        /// being stopped at the shipped one - the guard is measured by removing it, not by being
+        /// present in a config file. Part 3 does the same for the intra-round Slow, against an
+        /// aspect-only control, because no Gale unit in the shipped roster applies Slow at all.
+        ///
+        /// Part 4 is the expiry clock, which re-entry is the first thing in the project able to
+        /// break: a status has to still expire on its authored schedule for a unit that acted twice.
+        /// </summary>
+        private static void CheckAspectGale(ContentDatabase db)
+        {
+            Line("ASPECT RULES (Gale turn re-entry, intra-round Slow)");
+
+            CheckGaleReentryInShippedContent(db);
+            CheckGaleExtraTurnCap();
+            CheckGaleSlowShift();
+            CheckNoGaleContentAppliesSlowYet(db);
+            CheckGaleExtraTurnDoesNotAgeStatuses();
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Ryn Solvarr is the Gale hero and a LowestHpEnemy finisher, so she is the unit the rule
+        /// was written for; the Grave Moth is the Gale enemy, and it is why the control below has to
+        /// count per unit rather than per battle. Changing Ryn to Ember must zero her re-entries and
+        /// leave the moth's alone.
+        /// </summary>
+        private static void CheckGaleReentryInShippedContent(ContentDatabase db)
+        {
+            HeroDef ryn = db.GetHero("ryn_solvarr");
+            Check(ryn != null && ryn.Aspect == Aspect.Gale, "Ryn Solvarr is present and Gale, so re-entry has a hero to fire from");
+            if (ryn == null) return;
+
+            string[] others = { "orrin_kaal", "kalyx_emberwright", "wren_ilyra", "maeve_corrin" };
+            List<HeroInstance> galeTeam = BuildNamedTeam(db, ryn, others);
+            List<HeroInstance> controlTeam = BuildNamedTeam(db, CloneHeroWithAspect(ryn, Aspect.Ember), others);
+
+            // A second, deliberately underlevelled line. The levelled team above never loses a
+            // hero, so the Gale enemy - the Grave Moth - never lands a kill and never re-enters in
+            // it. Re-entry is not a player-side rule and that has to be shown rather than assumed,
+            // so the same five heroes are run again at level 1, where the enemy line wins.
+            List<HeroInstance> weakTeam = BuildNamedTeamAtLevel(db, ryn, others, 1);
+
+            int total = 0, rynExtra = 0, enemyExtra = 0, fromNonGale = 0;
+            int rynExtraControl = 0;
+            int missingSecondTurn = 0, overCap = 0;
+            int cap = db.Balance.GaleExtraTurnsPerRound;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, galeTeam);
+                    total += CountExtraTurns(r, ref rynExtra, ref enemyExtra, ref fromNonGale,
+                                             ref missingSecondTurn, ref overCap, cap, "ryn_solvarr");
+
+                    int a = 0, b = 0, c = 0, d = 0, e = 0;
+                    BattleResult ctl = RunWith(db, db.AllStages[s], seed, controlTeam);
+                    CountExtraTurns(ctl, ref a, ref b, ref c, ref d, ref e, cap, "ryn_solvarr");
+                    rynExtraControl += a;
+
+                    int f = 0;
+                    BattleResult weak = RunWith(db, db.AllStages[s], seed, weakTeam);
+                    total += CountExtraTurns(weak, ref f, ref enemyExtra, ref fromNonGale,
+                                             ref missingSecondTurn, ref overCap, cap, "ryn_solvarr");
+                    rynExtra += f;
+                }
+            }
+
+            Check(total > 0,
+                  "Gale re-entry actually fires in shipped content - " + total
+                  + " extra turn(s) observed across all twelve stages (0 would mean the rule never engaged)");
+            Check(fromNonGale == 0,
+                  "every extra turn was granted to a Gale unit (" + fromNonGale + " were not)");
+            Check(missingSecondTurn == 0,
+                  "every ExtraTurn was followed by a real second TurnStart for that unit in that same round ("
+                  + missingSecondTurn + " were not)");
+            Check(overCap == 0,
+                  "no unit exceeded galeExtraTurnsPerRound (" + cap + ") in any round of any shipped stage ("
+                  + overCap + " did)");
+            Check(rynExtra > 0 && rynExtraControl == 0,
+                  "Ryn took " + rynExtra + " extra turn(s) as Gale and " + rynExtraControl
+                  + " with her aspect changed to Ember and nothing else touched - so the aspect is the cause");
+            Check(enemyExtra > 0,
+                  "re-entry is not player-side: the Gale enemy took " + enemyExtra
+                  + " extra turn(s) of its own on the underlevelled line, where it actually lands kills");
+        }
+
+        /// <summary>
+        /// Counts ExtraTurn events and checks each one against the record around it. Returns the
+        /// total; the by-unit tallies and the two violation counters come back through the refs.
+        /// </summary>
+        private static int CountExtraTurns(BattleResult r, ref int namedHeroExtra, ref int enemyExtra,
+                                           ref int fromNonGale, ref int missingSecondTurn, ref int overCap,
+                                           int cap, string namedHeroDefId)
+        {
+            int total = 0;
+            Dictionary<string, int> perUnitPerRound = new Dictionary<string, int>();
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.ExtraTurn) continue;
+                total++;
+
+                UnitSnapshot u = r.FindUnit(e.SourceId);
+                if (u == null || u.Aspect != Aspect.Gale) fromNonGale++;
+                if (u != null && u.DefId == namedHeroDefId) namedHeroExtra++;
+                if (u != null && !u.IsPlayer) enemyExtra++;
+
+                string key = e.SourceId + ":" + e.Round;
+                int n;
+                perUnitPerRound.TryGetValue(key, out n);
+                perUnitPerRound[key] = n + 1;
+                if (n + 1 > cap) overCap++;
+
+                // The grant is only real if the turn it bought actually happens. Scan forward to the
+                // next RoundStart: a TurnStart for this unit before then is the extra turn.
+                bool found = false;
+                for (int j = i + 1; j < r.Events.Count; j++)
+                {
+                    if (r.Events[j].Type == BattleEventType.RoundStart) break;
+                    if (r.Events[j].Type != BattleEventType.TurnStart) continue;
+                    if (r.Events[j].SourceId != e.SourceId) continue;
+                    found = true;
+                    break;
+                }
+                // A re-entry granted by a killing blow that ends the fight has no turn left to take.
+                // TryGaleReentry returns before emitting in that case, so an unmatched ExtraTurn
+                // that is not at the very end of the fight is a real violation.
+                if (!found && !EndsTheBattle(r, i)) missingSecondTurn++;
+            }
+            return total;
+        }
+
+        private static bool EndsTheBattle(BattleResult r, int index)
+        {
+            for (int j = index + 1; j < r.Events.Count; j++)
+                if (r.Events[j].Type == BattleEventType.BattleEnd) return true;
+            return index >= r.Events.Count - 1;
+        }
+
+        /// <summary>
+        /// DESIGN-ASPECTS section 8's exact failure, reproduced and then stopped.
+        ///
+        /// One Gale reaper that one-shots whatever it hits, four inert allies, five one-hit enemies -
+        /// a 5v5 line built so that "chain four kills and resolve the round unilaterally" is the
+        /// natural outcome if nothing prevents it. The same arena is run twice, identical in every
+        /// respect except galeExtraTurnsPerRound.
+        ///
+        /// At the loose value the reaper is the only unit that acts in round 1 and the fight is over
+        /// before anyone else moves, which is the failure in the document's own words. At the
+        /// shipped value of 1 it takes exactly one extra turn and the round carries on with everyone
+        /// else in it. That is the guard measured by its absence, not read off a constant.
+        /// </summary>
+        private static void CheckGaleExtraTurnCap()
+        {
+            ContentDatabase loose = BuildGaleTestContent(9);
+            ContentDatabase capped = BuildGaleTestContent(1);
+            if (loose == null || capped == null) return;
+
+            int looseExtra, looseActors, looseRounds;
+            int cappedExtra, cappedActors, cappedRounds;
+            RunReaperArena(loose, out looseExtra, out looseActors, out looseRounds);
+            RunReaperArena(capped, out cappedExtra, out cappedActors, out cappedRounds);
+
+            Check(looseExtra >= 4,
+                  "forced boundary: with galeExtraTurnsPerRound raised to 9 the reaper chained "
+                  + looseExtra + " extra turn(s) in round 1 (section 8 predicts four at 5v5)");
+            Check(looseActors == 1,
+                  "forced boundary: uncapped, the Gale unit resolved round 1 unilaterally - " + looseActors
+                  + " unit(s) took a turn in that round, out of ten on the field");
+            Check(cappedExtra == 1,
+                  "the shipped cap of 1 stops it in the same arena: " + cappedExtra
+                  + " extra turn in round 1 instead of " + looseExtra);
+            Check(cappedActors > 1,
+                  "and the round stayed a round - " + cappedActors
+                  + " unit(s) took a turn in it, so the Gale unit no longer resolves it on its own");
+            Check(cappedRounds > looseRounds,
+                  "the capped fight needed " + cappedRounds + " round(s) against the uncapped " + looseRounds
+                  + " - the same kills, spread across a bounded number of turns per round");
+        }
+
+        /// <summary>Extra turns taken in round 1, distinct units that acted in round 1, and rounds fought.</summary>
+        private static void RunReaperArena(ContentDatabase db, out int extraInRound1, out int actorsInRound1, out int rounds)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_gale_reaper"), 1));
+            for (int i = 1; i <= 4; i++) team.Add(MakeInstance(db.GetHero("test_inert_" + i), 1));
+
+            BattleResult r = RunWith(db, db.GetStage("test_gale_arena"), 1, team);
+
+            extraInRound1 = 0;
+            List<int> actors = new List<int>();
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Round != 1) continue;
+                if (e.Type == BattleEventType.ExtraTurn) extraInRound1++;
+                else if (e.Type == BattleEventType.TurnStart && !actors.Contains(e.SourceId)) actors.Add(e.SourceId);
+            }
+            actorsInRound1 = actors.Count;
+            rounds = r.Rounds;
+        }
+
+        /// <summary>
+        /// The second half of the Gale rule: a Slow from a Gale source moves its target's turn later
+        /// inside the round it lands in.
+        ///
+        /// The arena is built so the answer is a single, hand-computable swap. The slower acts first
+        /// at speed 300; the victim is speed 100 and the bystander speed 60, so the un-slowed round
+        /// runs slower, victim, bystander. A Slow of magnitude 0.5 takes the victim to an
+        /// EffectiveSpeed of 50 - below the bystander, and above the 0.3 floor that would have
+        /// clamped it - so the round must run slower, bystander, victim instead. The control changes
+        /// the slower's aspect to Ember and nothing else, and must produce the original order with
+        /// no shift event at all.
+        /// </summary>
+        private static void CheckGaleSlowShift()
+        {
+            ContentDatabase db = BuildGaleTestContent(1);
+            if (db == null) return;
+
+            List<int> galeOrder, emberOrder;
+            int galeShifts, emberShifts;
+            RunSlowArena(db, "test_gale_slower", out galeOrder, out galeShifts);
+            RunSlowArena(db, "test_ember_slower", out emberOrder, out emberShifts);
+
+            Check(galeShifts == 1,
+                  "a Gale Slow emitted " + galeShifts + " TurnOrderShift in the round it landed in");
+            Check(emberShifts == 0,
+                  "the same Slow from an Ember source emitted " + emberShifts
+                  + " - so it is the applier's aspect that moves the order, not the status");
+            Check(DescribeOrder(emberOrder) == "slower,victim,bystander",
+                  "control: un-shifted, the round runs slower, victim, bystander (got " + DescribeOrder(emberOrder) + ")");
+            Check(DescribeOrder(galeOrder) == "slower,bystander,victim",
+                  "Gale: the victim is pushed behind the bystander inside the same round (got " + DescribeOrder(galeOrder) + ")");
+        }
+
+        /// <summary>Round 1's TurnStart sequence as unit ids, plus the TurnOrderShift count in that round.</summary>
+        private static void RunSlowArena(ContentDatabase db, string slowerId, out List<int> order, out int shifts)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero(slowerId), 1));
+
+            BattleResult r = RunWith(db, db.GetStage("test_slow_arena"), 1, team);
+            order = new List<int>();
+            shifts = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Round != 1) continue;
+                if (e.Type == BattleEventType.TurnStart) order.Add(e.SourceId);
+                else if (e.Type == BattleEventType.TurnOrderShift) shifts++;
+            }
+        }
+
+        /// <summary>
+        /// Unit ids are assigned in build order - the one hero first, then the stage's spawns in
+        /// order - so 0/1/2 is slower/victim/bystander by construction. Named rather than numbered
+        /// so a failure reads as an order, not as three integers.
+        /// </summary>
+        private static string DescribeOrder(List<int> ids)
+        {
+            string[] names = { "slower", "victim", "bystander" };
+            List<string> parts = new List<string>();
+            for (int i = 0; i < ids.Count; i++)
+                parts.Add(ids[i] >= 0 && ids[i] < names.Length ? names[ids[i]] : "unit" + ids[i]);
+            return string.Join(",", parts.ToArray());
+        }
+
+        /// <summary>
+        /// RoundsLeft is a round counter that happened to be decremented at the end of the carrier's
+        /// turn, and re-entry is the first thing in this project that makes those two different. The
+        /// reaper carries a oncePerBattle TurnStart self-buff of duration 2 and takes an extra turn
+        /// in the round it gains it, so an ungated ExpireStatuses would decrement it twice and expire
+        /// it a full round early. Measured, not assumed: with the once-per-round gate removed, this
+        /// check reports the buff expiring in round 1 instead of round 2.
+        /// </summary>
+        private static void CheckGaleExtraTurnDoesNotAgeStatuses()
+        {
+            ContentDatabase db = BuildGaleTestContent(1);
+            if (db == null) return;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_gale_reaper"), 1));
+            for (int i = 1; i <= 4; i++) team.Add(MakeInstance(db.GetHero("test_inert_" + i), 1));
+
+            BattleResult r = RunWith(db, db.GetStage("test_gale_arena"), 1, team);
+
+            int appliedRound = -1, expiredRound = -1, extraTurnsRound1 = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.ExtraTurn && e.Round == 1) extraTurnsRound1++;
+                if (e.Status != StatusKind.AttackUp || e.SourceId != e.TargetId) continue;
+                if (e.Type == BattleEventType.StatusApplied && appliedRound < 0) appliedRound = e.Round;
+                else if (e.Type == BattleEventType.StatusExpired && expiredRound < 0) expiredRound = e.Round;
+            }
+
+            Check(extraTurnsRound1 == 1 && appliedRound == 1,
+                  "setup: the reaper gained its duration-2 self-buff in round 1 and took an extra turn in that same round");
+            Check(expiredRound == appliedRound + 1,
+                  "an extra turn does not age the acting unit's own statuses - the duration-2 buff applied in round "
+                  + appliedRound + " expired in round " + expiredRound + ", where an ungated ExpireStatuses"
+                  + " would have decremented it twice and expired it in round " + appliedRound
+                  + " (Gale acts out of order, it does not age faster)");
+        }
+
+        /// <summary>
+        /// The shipped-content gap the Slow half of the rule sits in, asserted rather than left
+        /// implicit: no Gale unit in heroes.json or enemies.json applies Slow today. The only Slow
+        /// in the game is the Sundered Colossus's, and it is Umbra. That is why CheckGaleSlowShift
+        /// above has to build its own slower, and it is what would need revisiting the day a Gale
+        /// unit is authored with one - at which point this note turns into a prompt.
+        /// </summary>
+        private static void CheckNoGaleContentAppliesSlowYet(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            List<string> galeSlowers = new List<string>();
+            List<string> anySlowers = new List<string>();
+            for (int i = 0; i < units.Count; i++)
+            {
+                if (!UnitAppliesStatus(units[i], StatusKind.Slow)) continue;
+                anySlowers.Add(units[i].Id + " (" + units[i].Aspect + ")");
+                if (units[i].Aspect == Aspect.Gale) galeSlowers.Add(units[i].Id);
+            }
+
+            Check(anySlowers.Count > 0, "Slow is authored somewhere in shipped content: " + string.Join(", ", anySlowers.ToArray()));
+            Line("  [note] " + galeSlowers.Count + " Gale unit(s) apply Slow, so the intra-round shift is unreachable"
+                 + " in shipped content and is proved above against a constructed Gale slower instead."
+                 + " DESIGN-ASPECTS section 7's content list does not add one; this is a gap, not a defect.");
+        }
+
+        /// <summary>
+        /// The Gale arena, parameterised on the one constant the guard test has to vary. Zero damage
+        /// and speed variance, so every turn order below is exact arithmetic rather than a seeded
+        /// draw and the two runs of CheckGaleExtraTurnCap differ in nothing else.
+        ///
+        /// test_gale_arena: one reaper fast enough to act first and hard enough to one-shot, four
+        /// inert allies slow enough to act after it and weak enough not to steal its kills, against
+        /// five enemies that die to one hit. Five kills available, four re-entries reachable.
+        ///
+        /// test_slow_arena: one slower against a victim and a bystander whose speeds bracket the
+        /// victim's slowed speed. Two slowers exist, identical but for aspect, so the control run
+        /// changes one enum value and nothing else.
+        /// </summary>
+        private static ContentDatabase BuildGaleTestContent(int galeExtraTurnsPerRound)
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_gale_reaper"", ""name"": ""Test Gale Reaper"", ""aspect"": ""Gale"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 5000, ""defense"": 50, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""reaper_basic"", ""name"": ""Reap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1 } ] },
+      ""passive"": { ""id"": ""reaper_passive"", ""name"": ""Reaper Mark"", ""trigger"": ""TurnStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 } ] } },
+    { ""id"": ""test_inert_1"", ""name"": ""Test Inert 1"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_inert_2"", ""name"": ""Test Inert 2"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_inert_3"", ""name"": ""Test Inert 3"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_inert_4"", ""name"": ""Test Inert 4"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 2, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_gale_slower"", ""name"": ""Test Gale Slower"", ""aspect"": ""Gale"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""slower_active"", ""name"": ""Unmoor"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Slow"", ""magnitude"": 0.5, ""duration"": 2, ""chance"": 1 } ] } },
+    { ""id"": ""test_ember_slower"", ""name"": ""Test Ember Slower"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""slower_active_ember"", ""name"": ""Unmoor"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Slow"", ""magnitude"": 0.5, ""duration"": 2, ""chance"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_paper"", ""name"": ""Test Paper"", ""aspect"": ""Ember"",
+      ""hp"": 100, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_slow_victim"", ""name"": ""Test Slow Victim"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_slow_bystander"", ""name"": ""Test Slow Bystander"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 60, ""critChance"": 0, ""critDamage"": 1.5 }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_gale_ch"", ""name"": ""Test Gale"", ""stages"": [
+        { ""id"": ""test_gale_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""test_paper"", ""level"": 1 }, { ""id"": ""test_paper"", ""level"": 1 },
+            { ""id"": ""test_paper"", ""level"": 1 }, { ""id"": ""test_paper"", ""level"": 1 },
+            { ""id"": ""test_paper"", ""level"": 1 } ] },
+        { ""id"": ""test_slow_arena"", ""index"": 2, ""enemies"": [
+            { ""id"": ""test_slow_victim"", ""level"": 1 }, { ""id"": ""test_slow_bystander"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0,
+  ""maxTeamSize"": 5, ""galeExtraTurnsPerRound"": " + galeExtraTurnsPerRound.ToString(CultureInfo.InvariantCulture) + @"
+}";
+
+            ContentDatabase db = ContentDatabase.Load(heroesJson, enemiesJson, campaignJson, balanceJson);
+            bool ok = db.Warnings.Count == 0;
+            for (int i = 0; i < db.Warnings.Count; i++) Line("  [FAIL] synthetic Gale content warning: " + db.Warnings[i]);
+            if (!ok) { Check(false, "synthetic Gale test content parses with no warnings"); return null; }
+
+            // Proves the constant is read from content rather than defaulted - which is also what
+            // makes the two-value guard experiment above a real experiment.
+            if (db.Balance.GaleExtraTurnsPerRound != galeExtraTurnsPerRound)
+            {
+                Check(false, "balance.json's galeExtraTurnsPerRound reaches BalanceConfig (asked for "
+                      + galeExtraTurnsPerRound + ", got " + db.Balance.GaleExtraTurnsPerRound + ")");
+                return null;
+            }
+            return db;
+        }
+
         /// <summary>
         /// Builds a DispelHero (Wren clone whose active strips one beneficial status from every
         /// ally) and fights alongside Maeve. Maeve's Tidal Cadence grants AttackUp + Focus to all
@@ -658,12 +1091,17 @@ namespace Emberfall.DevHarness
 
         private static List<HeroInstance> BuildNamedTeam(ContentDatabase db, HeroDef lead, string[] otherIds)
         {
+            return BuildNamedTeamAtLevel(db, lead, otherIds, 20);
+        }
+
+        private static List<HeroInstance> BuildNamedTeamAtLevel(ContentDatabase db, HeroDef lead, string[] otherIds, int level)
+        {
             List<HeroInstance> team = new List<HeroInstance>();
-            team.Add(MakeInstance(lead, 20));
+            team.Add(MakeInstance(lead, level));
             for (int i = 0; i < otherIds.Length; i++)
             {
                 HeroDef def = db.GetHero(otherIds[i]);
-                if (def != null) team.Add(MakeInstance(def, 20));
+                if (def != null) team.Add(MakeInstance(def, level));
             }
             return team;
         }
