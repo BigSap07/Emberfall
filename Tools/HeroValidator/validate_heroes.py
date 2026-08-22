@@ -26,6 +26,7 @@ VALID_STAT_KEYS = {
     "hp", "attack", "defense", "speed",
     "critChance", "critDamage",
     "effectHit", "effectResist",
+    "skillDamage", "block", "armorBreak", "controlImmunity", "damageReduction", "holyDamage",
     "growth", "startEnergy",
 }
 
