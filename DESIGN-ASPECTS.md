@@ -71,7 +71,7 @@ constants. `Sim.TakeTurn` sets `unit.Energy = 0` on cast, which is the sink the 
 **Verdant** — `Sim.ApplyHealValue` returns early when `missing <= 0`; that early return is the hook.
 The banked value becomes a `StatusKind.Regen` entry via `CombatUnit.AddOrRefresh`, which
 `Sim.TickDamageOverTime` already ticks in its `else if (s.Kind == StatusKind.Regen)` branch.
-`EffectKind.Shield` in `Sim.ApplyEffect` is the second entry point.
+~~`EffectKind.Shield` in `Sim.ApplyEffect` is the second entry point.~~ **Audited false** during `claude/aspects-ember-verdant`: the Shield handler is `target.Shield += value`, unconditional — nothing is ever clamped or discarded there, so there is no overflow to intercept. `ApplyHealValue` is Verdant's only real hook.
 
 **Gale** — `Sim.TurnOrder()` builds and sorts the round's list; `Sim.Execute` then iterates a
 snapshot of it in a plain `for` loop, which is what has to change for a re-entry.
