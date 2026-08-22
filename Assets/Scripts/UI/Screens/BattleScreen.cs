@@ -842,7 +842,10 @@ namespace Emberfall.UI.Screens
             return actor != null ? UITheme.AspectColor(actor.Snapshot.Aspect) : UITheme.TextPrimary;
         }
 
-        /// <summary>WEAK when the target's aspect took bonus damage, RESIST when it took less - the ×1.20/×0.85 swing that decides fights, made readable.</summary>
+        /// <summary>WEAK when the target's aspect took bonus damage, RESIST when it took less - the
+        /// AspectChart.Advantage/Disadvantage swing, made readable. The bounds test either side of
+        /// neutral rather than the chart's exact values, so retuning the wheel does not silence the
+        /// tags; Debrief.AspectFactorThreshold matches this deliberately.</summary>
         private static string AspectTag(float aspectFactor)
         {
             if (aspectFactor > 1.01f) return "  WEAK";
