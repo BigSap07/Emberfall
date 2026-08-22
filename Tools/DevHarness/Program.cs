@@ -38,6 +38,7 @@ namespace Emberfall.DevHarness
             CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
+            CheckEffectHitResistDirection(content);
             CheckTeamSizeStructure(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
@@ -301,6 +302,137 @@ namespace Emberfall.DevHarness
                 }
             }
             Check(fingerprintsStable, "every one of the twelve stages still produces a stable, reproducible fingerprint across sampled seeds");
+            Line("");
+        }
+
+        /// <summary>
+        /// Effect Hit / Effect Resist, phase B: the landing formula moves in the direction it
+        /// claims to, and the authored content is shaped the way the design says. Pure arithmetic
+        /// against ResolveLandingChance and the content database, mirroring CheckAspectDirection.
+        /// No battle is simulated, so nothing here can be confounded by RNG or by team size.
+        ///
+        /// This is a direction check, deliberately not a balance check. It asserts that more
+        /// Effect Hit lands more often and more Effect Resist lands less often; it asserts nothing
+        /// about whether the authored numbers are correctly tuned, because they are not tuned at
+        /// all yet. Task 14 is the retune.
+        /// </summary>
+        private static void CheckEffectHitResistDirection(ContentDatabase db)
+        {
+            Line("EFFECT HIT / EFFECT RESIST (phase B - direction and authored shape)");
+
+            const StatusKind Harmful = StatusKind.Burn;
+            const StatusKind Benign = StatusKind.AttackUp;
+
+            // more Effect Hit lands more often, against an identical target
+            bool hitMonotonic = true;
+            float[] bases = { 0.35f, 0.6f, 0.7f, 0.85f };
+            float[] hits = { 0f, 0.05f, 0.1f, 0.15f, 0.2f, 0.3f };
+            for (int b = 0; b < bases.Length; b++)
+            {
+                for (int h = 1; h < hits.Length; h++)
+                {
+                    float lo = CombatSimulation.ResolveLandingChance(bases[b], Harmful, hits[h - 1], 0.1f);
+                    float hi = CombatSimulation.ResolveLandingChance(bases[b], Harmful, hits[h], 0.1f);
+                    if (hi <= lo)
+                    {
+                        hitMonotonic = false;
+                        Line("  [FAIL] base " + Fmt(bases[b]) + ": Effect Hit " + Fmt(hits[h]) + " landed " + Fmt(hi)
+                             + ", no better than " + Fmt(hits[h - 1]) + " at " + Fmt(lo));
+                    }
+                }
+            }
+            Check(hitMonotonic, "a higher Effect Hit source lands more often than a lower one against the same target");
+
+            // more Effect Resist lands less often, from an identical source
+            bool resistMonotonic = true;
+            float[] resists = { 0f, 0.05f, 0.08f, 0.12f, 0.15f, 0.25f, 0.3f };
+            for (int b = 0; b < bases.Length; b++)
+            {
+                for (int rr = 1; rr < resists.Length; rr++)
+                {
+                    float lo = CombatSimulation.ResolveLandingChance(bases[b], Harmful, 0.1f, resists[rr - 1]);
+                    float hi = CombatSimulation.ResolveLandingChance(bases[b], Harmful, 0.1f, resists[rr]);
+                    if (hi >= lo)
+                    {
+                        resistMonotonic = false;
+                        Line("  [FAIL] base " + Fmt(bases[b]) + ": Effect Resist " + Fmt(resists[rr]) + " allowed " + Fmt(hi)
+                             + ", no less than " + Fmt(resists[rr - 1]) + " at " + Fmt(lo));
+                    }
+                }
+            }
+            Check(resistMonotonic, "Effect Resist reduces how often the same source lands the same affliction");
+
+            // additive on the authored base, not multiplicative, wherever the clamp is not involved
+            float additive = CombatSimulation.ResolveLandingChance(0.6f, Harmful, 0.2f, 0.05f);
+            Check(Math.Abs(additive - 0.75f) < 0.0001f,
+                  "the formula is additive on the authored chance (0.6 + 0.2 - 0.05 resolved to " + Fmt(additive) + ")");
+
+            // clamp, both ends
+            float floored = CombatSimulation.ResolveLandingChance(0.35f, Harmful, 0f, 0.95f);
+            Check(floored == 0.05f, "an overwhelming Effect Resist floors at 0.05 rather than going to zero (got " + Fmt(floored) + ")");
+            float ceiled = CombatSimulation.ResolveLandingChance(0.9f, Harmful, 0.9f, 0f);
+            Check(ceiled == 1f, "an overwhelming Effect Hit ceilings at exactly 1.0 (got " + Fmt(ceiled) + ")");
+
+            // beneficial statuses are never contested, from either side
+            bool benignUntouched = true;
+            for (int b = 0; b < bases.Length; b++)
+            {
+                float v = CombatSimulation.ResolveLandingChance(bases[b], Benign, 0.3f, 0.3f);
+                if (v != bases[b])
+                {
+                    benignUntouched = false;
+                    Line("  [FAIL] beneficial status at base " + Fmt(bases[b]) + " resolved to " + Fmt(v));
+                }
+            }
+            Check(benignUntouched, "beneficial statuses ignore both stats entirely and apply at their authored chance");
+
+            // authored content: every unit has a value in a sane band, and Nyx is the specialist
+            float bestHit = -1f, bestResist = -1f;
+            string bestHitId = "", bestResistId = "";
+            bool banded = true;
+            List<UnitDef> all = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) all.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) all.Add(db.Enemies[i]);
+            for (int i = 0; i < all.Count; i++)
+            {
+                UnitDef u = all[i];
+                if (u.EffectHit < 0f || u.EffectHit > 0.5f || u.EffectResist < 0f || u.EffectResist > 0.5f)
+                {
+                    banded = false;
+                    Line("  [FAIL] " + u.Id + " has out-of-band effectHit " + Fmt(u.EffectHit) + " / effectResist " + Fmt(u.EffectResist));
+                }
+                if (u.EffectHit > bestHit) { bestHit = u.EffectHit; bestHitId = u.Id; }
+                if (u.EffectResist > bestResist) { bestResist = u.EffectResist; bestResistId = u.Id; }
+            }
+            Check(banded, "every authored Effect Hit and Effect Resist sits inside a sane 0 to 0.5 band");
+            Check(bestHitId == "nyx_serrow",
+                  "Nyx Serrow has the roster's highest Effect Hit, so her mark landing is a stat rather than a missing field (highest is "
+                  + bestHitId + " at " + Fmt(bestHit) + ")");
+
+            // Known trap 4 still holds after authoring: Shadowmark must still never draw
+            HeroDef nyx = db.Heroes.Find(delegate (HeroDef u) { return u.Id == "nyx_serrow"; });
+            bool shadowmarkStillCertain = true;
+            for (int i = 0; i < db.Enemies.Count; i++)
+            {
+                EnemyDef foe = db.Enemies[i];
+                float landing = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, nyx.EffectHit, foe.EffectResist);
+                if (landing != 1f)
+                {
+                    shadowmarkStillCertain = false;
+                    Line("  [note] Shadowmark now rolls against " + foe.Id + " at " + Fmt(landing)
+                         + " - deliberate only if Nyx was meant to be beatable by that unit's Effect Resist");
+                }
+            }
+            Check(shadowmarkStillCertain,
+                  "Nyx's Shadowmark still resolves to exactly 1.0 against every authored enemy - her Effect Hit ("
+                  + Fmt(nyx.EffectHit) + ") STRICTLY EXCEEDS the highest Effect Resist in the game (" + bestResistId
+                  + " at " + Fmt(bestResist) + ")");
+            Check(nyx.EffectHit > bestResist,
+                  "and it exceeds it strictly rather than tying it - a tie is not enough, because 1f + 0.3f - 0.3f "
+                  + "evaluates to 0.99999994 in float, which fails DeterministicRng.Chance's >= 1f short-circuit and "
+                  + "silently turns Shadowmark into a real draw (Known trap 4)");
+
+            Line("  Authored values are UNTUNED. Every win rate below moves because of them; task 14 is the retune.");
             Line("");
         }
 

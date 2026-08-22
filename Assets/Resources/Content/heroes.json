@@ -13,6 +13,7 @@
       "lore": "Held the Cinder Gate alone for nine nights. The ash never fully washed out of his skin.",
       "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
       "critChance": 0.08, "critDamage": 1.5, "growth": 0.115, "startEnergy": 10,
+      "effectHit": 0.05, "effectResist": 0.20,
       "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0, "sprite": "orrin_kaal" },
       "basic": {
         "id": "orrin_basic", "name": "Ashen Cleave", "vfx": "slash",
@@ -48,6 +49,7 @@
       "lore": "Forge-taught, temple-exiled. Believes fire is simply an argument that wins.",
       "hp": 1450, "attack": 186, "defense": 62, "speed": 96,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.10, "effectResist": 0.05,
       "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1, "sprite": "kalyx_emberwright" },
       "basic": {
         "id": "kalyx_basic", "name": "Emberlash", "vfx": "bolt",
@@ -81,6 +83,7 @@
       "lore": "Grew a garden in a crater. Insists that was the easy part.",
       "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
       "critChance": 0.10, "critDamage": 1.5, "growth": 0.115, "startEnergy": 20,
+      "effectHit": 0.00, "effectResist": 0.10,
       "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra", "spriteBodyFraction": 0.94 },
       "basic": {
         "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
@@ -114,6 +117,7 @@
       "lore": "Rides ahead of her own thunder and complains when it is late.",
       "hp": 1500, "attack": 205, "defense": 66, "speed": 118,
       "critChance": 0.20, "critDamage": 1.7, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.05, "effectResist": 0.05,
       "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3, "sprite": "ryn_solvarr" },
       "basic": {
         "id": "ryn_basic", "name": "Lance Jab", "vfx": "slash",
@@ -147,6 +151,7 @@
       "lore": "Conducts a battle the way other people conduct a choir.",
       "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.115, "startEnergy": 30,
+      "effectHit": 0.00, "effectResist": 0.12,
       "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4, "sprite": "maeve_corrin" },
       "basic": {
         "id": "maeve_basic", "name": "Tideprod", "vfx": "bolt",
@@ -181,6 +186,7 @@
       "lore": "Contracted to end a war. Ended the people who were profiting from it instead.",
       "hp": 1420, "attack": 227, "defense": 58, "speed": 126,
       "critChance": 0.28, "critDamage": 1.85, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.35, "effectResist": 0.00,
       "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5 },
       "basic": {
         "id": "nyx_basic", "name": "Hollow Cut", "vfx": "shadow",
