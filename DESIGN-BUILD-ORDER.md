@@ -48,6 +48,71 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   run covers content validation, determinism, stage winnability, ability potency and status expiry
   timing, the same checks listed above, on every push rather than whenever someone remembers to
   run it locally.
+- All six aspect identities, wired into `CombatSimulation`:
+  - **Ember**: each Burn from an Ember source stacks as its own entry via `AddStack` rather than
+    overwriting (`AddOrRefresh`), so multiple Ember attackers pile independent Burn entries at
+    their own magnitudes. Capped at `EmberBurnStackCap` (3); a fourth application refreshes the
+    weakest existing entry instead of adding a new one.
+  - **Tide**: energy overflow from a Tide-sourced grant redirects to the living ally furthest from
+    full (`AddEnergy` keyed on `sourceId`); one hop, bounded by `_inRedirect`. The cascade guard
+    is wired but latent — no current grant is large enough to overflow a recipient and trigger it.
+  - **Verdant**: healing overflow from a Verdant source banks onto the recipient as Regen, split
+    across `VerdantBankRounds` (2) so the bank pays out at most what overflowed. The Regen tick
+    itself cannot bank, preventing a self-feeding loop.
+  - **Gale**: a Gale unit's kill re-inserts it into the current round's live initiative list at
+    the speed-sorted position among remaining turns, capped at `GaleExtraTurnsPerRound` (1) per
+    unit per round. A Slow from a Gale source also shifts the target's pending turn later in the
+    current round, not only the next. The Slow half is latent in shipped content (no Gale unit
+    authors Slow today); proven in DevHarness against a constructed case.
+  - **Umbra**: harmful statuses whose `sourceId` traces to an Umbra unit are skipped by
+    `EffectKind.Cleanse` without consuming a Hits count. The persistence half — not ticking down
+    while the applier lives — is explicitly not built (that belief belongs to Verdant in
+    DESIGN-ASPECTS, not Umbra).
+  - **Lumen**: a living Lumen unit unconditionally answers every single-target question aimed at
+    its side (`FindTargetAnchor`). Taunt is a secondary tier inside the same method, not the
+    primary rule. Emits `TargetAnchored` when Lumen (not Taunt) produced the redirect, so the
+    record is distinguishable. Outranks Taunt from any non-Lumen ally to preserve determinism.
+- **Orrin Kaal relabeled Ember → Lumen.** `heroes.json` `aspect` field changed; the harness
+  proves the aspect-targeting rule holds under the new identity. The cost of the relabel — which
+  harness checks had to be updated and which passed without changes — is recorded in `f6021a4`.
+- **14 combat stats and their wired behaviors.** All read from JSON into `UnitDef`, propagated
+  through `CombatUnit.EffectiveX` accessors, and exercised in `CombatSimulation`.
+  Phase A (shipped with the combat pipeline):
+  `hp` (health pool) · `attack` (scales damage and non-`selfHpRatio` healing) ·
+  `defense` (mitigation: `DefenseConstant / (DefenseConstant + defense + DefensePerLevel·level)`) ·
+  `speed` (turn-order sort key, jittered within `SpeedVariance`) ·
+  `critChance` (RNG draw; on success multiplies by `critDamage`) · `critDamage` (crit multiplier) ·
+  `effectHit` (flat addition to harmful `ApplyStatus` landing chance) ·
+  `effectResist` (flat subtraction from harmful `ApplyStatus` landing chance).
+  Phase B (added on `feat/stat-fields-phase-b`, all zero-defaulted so existing fingerprints are
+  unaffected):
+  `skillDamage` (source-side multiplier on Active/Passive damage only, never Basic Attack) ·
+  `block` (target-side RNG draw before all other steps; negates the hit entirely and fires
+  `OnBlock`) · `armorBreak` (source-side multiplicative reduction of the target's mitigation
+  ratio) · `controlImmunity` (target-side flat reduction of Silence/Stun landing chance only,
+  no other status) · `damageReduction` (target-side flat % reduction applied after Defense
+  mitigation) · `holyDamage` (source-side flat bonus added after Defense/ArmorBreak, never
+  reduced by Defense).
+- **Silence, Stun, Dispel, Block, Control Immunity** wired into live combat behavior.
+  Silence blocks the holder's Active on the turn it would resolve; Basic Attack fires instead.
+  Stun skips the holder's entire turn — no Basic Attack, no Active, no energy.
+  Both clear via `RoundsLeft` decay; Gale re-entry is gated so a Gale carrier does not shed
+  statuses at double rate on its extra turn.
+  Dispel (`EffectKind.Dispel`) removes beneficial statuses from the target, respecting the
+  `Hits` count and skipping Umbra-sourced harmful entries correctly.
+  Block and Control Immunity are stats (phase B above), not `StatusKind` entries.
+- **HeroValidator** (`Tools/HeroValidator/validate_heroes.py`). Standalone Python tool for
+  vetting ChatGPT-generated hero JSON before it enters the codebase. Validates stat keys against
+  `VALID_STAT_KEYS` (updated each phase-B pass), ability shapes, aspect/role enum membership,
+  required fields, and fixture format. Two fixture families: `chatgpt-batch-1.json` and
+  `chatgpt-batch-2.json` (raw AI output under review) and `regression-batch-1.json` (known-good
+  heroes from the shipped roster).
+- **UI theme consolidation.** `UITheme` gained three semantic groups — `Ink*` (text edge
+  treatments: `InkPanel`, `InkArt`, `InkStrong`), `Scrim*` (backdrop overlays), and
+  `Interactive*` (tappable-element tints) — replacing 11 drifted raw `new Color(0,0,0,a)`
+  literals at 11 different alphas across the screens. Two intentionally per-screen edges (main
+  menu logo warm rim, battle result title) were left in place and documented as deliberate
+  exclusions.
 
 ## Blocked on a push, not lost
 
