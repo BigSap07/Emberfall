@@ -16,7 +16,45 @@ namespace Emberfall.Battle
         public Transform Body;      // everything animated hangs off this
         public Transform WeaponPivot;
         public Transform Shadow;
-        public float Height = 1.8f;
+
+        /// <summary>
+        /// World Y of the TOP OF THE RENDERED SILHOUETTE above the unit's origin (its feet on the
+        /// ground), before visual.Scale is applied. Head, not weapon: a raised staff or spear
+        /// overshoots this deliberately, the same way it overshoots a procedural rig's head.
+        ///
+        /// This used to be a nominal per-silhouette guess that matched nothing. Measured against
+        /// what each Build* method actually assembles - Unity's Capsule and Cylinder are 2 units
+        /// tall natively, so localScale.y is their HALF height, while Cube, Sphere and Quad are 1
+        /// unit and localScale.y is their FULL height - the old values were wrong by a different
+        /// amount for every silhouette, and not even in a consistent direction:
+        ///
+        ///   humanoid  declared 1.85   real top 1.710 (Hood)     -0.140
+        ///   brute     declared 2.05   real top 1.740 (Head)     -0.310
+        ///   beast     declared 1.25   real top 1.080 (Spine)    -0.170
+        ///   wisp      declared 1.55   real top 1.750 (ShardC)   +0.200
+        ///   golem     declared 2.25   real top 1.900 (Head)     -0.350
+        ///
+        /// That mattered far more than a mislabelled field usually would, because the two rig
+        /// paths use this number in opposite directions. A procedural rig ASSERTS it: the body is
+        /// built from fixed offsets and Height is a label bolted on afterwards, so a wrong value
+        /// changed nothing visible and only misplaced the health bars that track it. The sprite
+        /// path DERIVES from it: BuildSprite sizes its quad so the body's top lands exactly here,
+        /// so 1.85 was not a wrong label there, it was a wrong instruction, and it built every
+        /// sprite hero 8% taller at the head than the 1.710 a procedural humanoid actually reaches.
+        /// Orrin, at scale 1.12, stood 27% taller than a Hollow Husk he is supposed to match.
+        ///
+        /// One definition, both paths, and side-by-side heights follow by construction rather than
+        /// by two numbers happening to agree.
+        /// </summary>
+        public float Height = HumanoidTop;
+
+        /// <summary>
+        /// The humanoid silhouette's rendered head top, and so the height a sprite hero is built
+        /// to. Named rather than repeated because the whole point is that the two are the same
+        /// number: a sprite stands in for a humanoid body, so it has to reach exactly as high as
+        /// one. Nyx Serrow is the last procedural hero, and she is the direct comparison.
+        /// </summary>
+        public const float HumanoidTop = 1.71f;
 
         public Material Primary;
         public Material Secondary;
@@ -72,7 +110,7 @@ namespace Emberfall.Battle
             // same code, same output, no behaviour change.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite);
+                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction);
             }
             else
             {
@@ -111,7 +149,9 @@ namespace Emberfall.Battle
 
         private void BuildHumanoid()
         {
-            Height = 1.85f;
+            // Hood, a Capsule at y 1.55 with localScale.y 0.16, so half-height 0.16: top 1.710.
+            // Head (Sphere, y 1.48, scale.y 0.44) reaches 1.700, just under it.
+            Height = HumanoidTop;
             Solid(PrimitiveType.Capsule, "Torso", Body, new Vector3(0f, 0.92f, 0f), new Vector3(0.52f, 0.40f, 0.44f), NoRotation, Secondary);
             Solid(PrimitiveType.Capsule, "Chest", Body, new Vector3(0f, 1.08f, 0.02f), new Vector3(0.56f, 0.26f, 0.46f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Head", Body, new Vector3(0f, 1.48f, 0.02f), new Vector3(0.42f, 0.44f, 0.42f), NoRotation, Secondary);
@@ -133,7 +173,9 @@ namespace Emberfall.Battle
 
         private void BuildBrute()
         {
-            Height = 2.05f;
+            // Head (Sphere, y 1.56, scale.y 0.36) tops at 1.740; Helm (Cube, y 1.64, scale.y 0.20)
+            // reaches 1.740 too. The old 2.05 was above both by 0.31.
+            Height = 1.74f;
             Solid(PrimitiveType.Capsule, "Torso", Body, new Vector3(0f, 0.98f, 0f), new Vector3(0.72f, 0.44f, 0.58f), NoRotation, Secondary);
             Solid(PrimitiveType.Cube, "Plate", Body, new Vector3(0f, 1.14f, 0.14f), new Vector3(0.62f, 0.42f, 0.22f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Head", Body, new Vector3(0f, 1.56f, 0.02f), new Vector3(0.38f, 0.36f, 0.38f), NoRotation, Secondary);
@@ -153,7 +195,10 @@ namespace Emberfall.Battle
 
         private void BuildBeast()
         {
-            Height = 1.25f;
+            // Spine is a Capsule turned 90 about X, so its 0.52 scale.y becomes depth and its 0.46
+            // scale.x becomes the height that counts: top 0.62 + 0.46 = 1.080. A quadruped, and
+            // the only silhouette whose top is its back rather than its head.
+            Height = 1.08f;
             Solid(PrimitiveType.Capsule, "Spine", Body, new Vector3(0f, 0.62f, 0f), new Vector3(0.46f, 0.52f, 0.46f), new Vector3(90f, 0f, 0f), Secondary);
             Solid(PrimitiveType.Sphere, "Hump", Body, new Vector3(0f, 0.80f, -0.16f), new Vector3(0.44f, 0.34f, 0.46f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Head", Body, new Vector3(0f, 0.72f, 0.58f), new Vector3(0.36f, 0.32f, 0.42f), NoRotation, Secondary);
@@ -171,7 +216,9 @@ namespace Emberfall.Battle
 
         private void BuildWisp()
         {
-            Height = 1.55f;
+            // ShardC (Cube, y 1.62, scale.y 0.26) tops at 1.750. The only silhouette whose old
+            // value was too LOW - bars sat inside a wisp rather than above it.
+            Height = 1.75f;
             Solid(PrimitiveType.Sphere, "Core", Body, new Vector3(0f, 1.05f, 0f), new Vector3(0.62f, 0.66f, 0.62f), NoRotation, Primary);
             Solid(PrimitiveType.Sphere, "Inner", Body, new Vector3(0f, 1.05f, 0.06f), new Vector3(0.36f, 0.38f, 0.36f), NoRotation, Accent);
             Solid(PrimitiveType.Cube, "ShardA", Body, new Vector3(-0.44f, 1.22f, 0f), new Vector3(0.10f, 0.30f, 0.10f), new Vector3(0f, 0f, 24f), Secondary);
@@ -182,7 +229,10 @@ namespace Emberfall.Battle
 
         private void BuildGolem()
         {
-            Height = 2.25f;
+            // Head (Cube, y 1.72, scale.y 0.36) tops at 1.900. The old 2.25 was the worst overshoot
+            // of the five, and the Sundered Colossus (scale 1.55) magnified it into 0.54 of empty
+            // air that BattleStage's spacing and framing were both sized against.
+            Height = 1.90f;
             Solid(PrimitiveType.Cube, "Torso", Body, new Vector3(0f, 1.10f, 0f), new Vector3(0.86f, 0.86f, 0.62f), NoRotation, Secondary);
             Solid(PrimitiveType.Cube, "Chest", Body, new Vector3(0f, 1.28f, 0.16f), new Vector3(0.66f, 0.40f, 0.36f), NoRotation, Primary);
             Solid(PrimitiveType.Cube, "Head", Body, new Vector3(0f, 1.72f, 0.02f), new Vector3(0.44f, 0.36f, 0.42f), NoRotation, Primary);
@@ -201,20 +251,45 @@ namespace Emberfall.Battle
 
         /// <summary>
         /// A single textured quad standing where the procedural silhouette would have stood.
-        /// Height matches BuildHumanoid's 1.85 exactly, so head/centre-position math elsewhere
-        /// (floating text, camera bar tracking, VFX impact points, all keyed on Rig.Height) does
-        /// not need to know or care which kind of rig it is looking at - "roughly the same visual
-        /// footprint as the procedural version" is met by construction, not by eyeballing it.
-        /// Width is derived from the loaded texture's own aspect ratio at that fixed height, not
-        /// hardcoded, so a differently-proportioned placeholder or the eventual real art both
-        /// render at their natural proportions without a code change.
+        /// Height stays the body's own top regardless of what this method scales the quad to -
+        /// head/centre-position math elsewhere (floating text, bar tracking, VFX impact points,
+        /// all keyed on Rig.Height) reads that field, not the quad, so it keeps anchoring to the
+        /// top of the body even when the quad extends above it for a raised weapon. See
+        /// bodyFraction below for what does extend it, and why.
         /// </summary>
-        private void BuildSprite(string spriteId)
+        private void BuildSprite(string spriteId, float bodyFraction)
         {
-            Height = 1.85f;
+            // HumanoidTop, not a number of its own. This is the line the whole sprite pipeline
+            // hangs off: the quad below is sized so the body's top lands exactly here, so this
+            // constant IS the rendered height of every sprite hero. Setting it to the humanoid
+            // silhouette's own measured head top is what makes a sprite hero and a procedural rig
+            // stand eye to eye. It read 1.85 before, which is not the top of anything.
+            Height = HumanoidTop;
             Texture2D tex = BattleAssets.UnitSprite(spriteId);
             float aspect = tex.height > 0 ? tex.width / (float)tex.height : 0.6f;
-            float width = Height * aspect;
+
+            // Canvas height was previously just Height, which assumes the whole image is body -
+            // true for a plain full-bleed figure, false for anything drawn holding a raised weapon:
+            // Wren's staff reaches above her own head, so mapping the FULL canvas to Height mapped
+            // her actual body to something shorter than Height, the same class of bug WeaponPivot
+            // was built to avoid for procedural rigs (a weapon there extends past the torso
+            // capsule without moving Height). bodyFraction is the sprite equivalent: the artist
+            // reports what fraction of their own canvas, from the bottom, is body - not an
+            // engine number tuned by trial and error, a measurement taken directly off their own
+            // file the same way they already report its pixel dimensions. Canvas height becomes
+            // Height / bodyFraction, taller than Height whenever bodyFraction < 1, so the BOTTOM
+            // bodyFraction slice of that taller canvas still lands at exactly Height - the same
+            // target every procedural body already hits - and the remaining top slice is where
+            // the weapon's overflow goes, extending the quad upward rather than shrinking the
+            // body to fit inside it.
+            //
+            // bodyFraction defaults to 1 when a hero's data does not set it, which reduces this
+            // to canvasHeight = Height / 1 = Height - algebraically identical to the previous
+            // formula, not just similar. Orrin's entry sets no such value, so this is a proven
+            // no-op for him, not an assumed one; the same holds for every other sprite until one
+            // is actually authored with a raised weapon and a real fraction.
+            float canvasHeight = Height / Mathf.Max(0.05f, bodyFraction);
+            float width = canvasHeight * aspect;
 
             Material material = BattleAssets.NewFx(tex, Color.white, false);
             // Primary/Secondary/Accent all point at the one sprite material, not three separate
@@ -229,8 +304,11 @@ namespace Emberfall.Battle
             StripCollider(quad);
             Transform t = quad.transform;
             t.SetParent(Body, false);
-            t.localPosition = new Vector3(0f, Height * 0.5f, 0f);
-            t.localScale = new Vector3(width, Height, 1f);
+            // Bottom edge of the quad still sits at y 0 either way - centring on half the
+            // (possibly taller) canvasHeight is what keeps feet on the ground while letting the
+            // extra height for a raised weapon extend upward, never downward.
+            t.localPosition = new Vector3(0f, canvasHeight * 0.5f, 0f);
+            t.localScale = new Vector3(width, canvasHeight, 1f);
 
             // No local rotation any more: the quad inherits Root's turn (180 -/+ ThreeQuarterTurn,
             // see Build) and so leans with the procedural rigs instead of staying square to the
@@ -311,6 +389,21 @@ namespace Emberfall.Battle
             }
         }
 
+        /// <summary>
+        /// Footprint of the blob shadow, in local units before visual.Scale. Was 1.35 x 1.05,
+        /// which is wider than any body it sits under: a sprite hero's quad is 0.98 across and a
+        /// humanoid rig 1.12, so the shadow stuck out past the feet on every side.
+        ///
+        /// It is a named constant because it is not only cosmetic. The shadow lies flat, so the
+        /// three-quarter turn swings its footprint out in z past the unit's own slot, and that
+        /// overhang is the LOWEST thing in frame for the back rank's near-z units. At 1.35 x 1.05
+        /// it was 5.5% of the entire vertical framing budget, spent on the edge of a soft blob.
+        /// UnitActor.PlayDeath shrinks the same numbers, so both read from here rather than
+        /// repeating literals that have already drifted apart once.
+        /// </summary>
+        public const float ShadowWidth = 1.10f;
+        public const float ShadowDepth = 0.85f;
+
         private void BuildShadow()
         {
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -320,7 +413,7 @@ namespace Emberfall.Battle
             Shadow.SetParent(Root, false);
             Shadow.localPosition = new Vector3(0f, 0.015f, 0f);
             Shadow.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Shadow.localScale = new Vector3(1.35f, 1.05f, 1f);
+            Shadow.localScale = new Vector3(ShadowWidth, ShadowDepth, 1f);
 
             MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
             renderer.material = BattleAssets.NewFx(BattleAssets.BlobShadow, new Color(0f, 0f, 0f, 0.55f), false);

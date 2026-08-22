@@ -25,14 +25,17 @@ namespace Emberfall.Battle
         private float _bobHeight = 0.035f;
         private Coroutine _motion;
 
+        // Both fall back to the humanoid silhouette's own head top rather than a loose 1.8, so a
+        // rigless actor anchors where a default-built one would. See UnitRig.Height for what that
+        // number now means: the top of the rendered silhouette, measured, not a nominal label.
         public Vector3 HeadPosition
         {
-            get { return transform.position + Vector3.up * (Rig != null ? Rig.Height : 1.8f); }
+            get { return transform.position + Vector3.up * (Rig != null ? Rig.Height : UnitRig.HumanoidTop); }
         }
 
         public Vector3 CenterPosition
         {
-            get { return transform.position + Vector3.up * (Rig != null ? Rig.Height * 0.55f : 1f); }
+            get { return transform.position + Vector3.up * (Rig != null ? Rig.Height : UnitRig.HumanoidTop) * 0.55f; }
         }
 
         public void Setup(UnitSnapshot snapshot, Vector3 position, bool facingForward)
@@ -159,7 +162,7 @@ namespace Emberfall.Battle
                 if (Rig.Shadow != null)
                 {
                     float shrink = 1f - k;
-                    Rig.Shadow.localScale = new Vector3(1.35f * shrink, 1.05f * shrink, 1f);
+                    Rig.Shadow.localScale = new Vector3(UnitRig.ShadowWidth * shrink, UnitRig.ShadowDepth * shrink, 1f);
                 }
                 yield return null;
             }
