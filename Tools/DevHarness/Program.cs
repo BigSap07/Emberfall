@@ -45,6 +45,7 @@ namespace Emberfall.DevHarness
             CheckTeamSizeStructure(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
+            CheckStatusAndStatBehavior(content);
             CheckDebrief();
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
@@ -1108,6 +1109,348 @@ namespace Emberfall.DevHarness
             Check(!violation, "enemies always single-target the Provoke holder over normal targeting"
                  + (violation ? " (" + violationDetail + ")" : ""));
             Line("");
+        }
+
+        /// <summary>
+        /// Silence, Stun, Armor Break, Damage Reduction and Skill Damage, all newly wired to real
+        /// combat behaviour in this pass. Unlike the Aspect/Dispel checks above, these do not
+        /// sample the shipped roster - nothing in heroes.json or enemies.json authors any of the
+        /// five yet, so there is nothing to observe there. Instead this builds a small, fully
+        /// synthetic ContentDatabase (own heroes, enemies, one-stage-per-scenario campaign,
+        /// zero-variance balance) that isolates exactly one mechanic per battle, deterministically -
+        /// DamageVariance and SpeedVariance are both zeroed, so every number below is exact
+        /// arithmetic, not a sampled distribution.
+        /// </summary>
+        private static void CheckStatusAndStatBehavior(ContentDatabase liveDb)
+        {
+            Line("STATUS + STAT BEHAVIOR (Silence, Stun, Armor Break, Damage Reduction, Skill Damage)");
+
+            CheckNoContentAuthorsNewMechanicsYet(liveDb);
+
+            ContentDatabase db = BuildStatBehaviorTestContent();
+            if (db == null) { Line(""); return; }
+
+            StageDef arena = db.GetStage("test_arena");
+            CheckSilenceBehavior(db, arena);
+            CheckStunBehavior(db, arena);
+            CheckSkillDamageActiveOnly(db, arena);
+            CheckArmorBreakVsDefense(db);
+            CheckDamageReductionVsDefense(db);
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The premise every check below relies on: these five mechanics are new behaviour on top
+        /// of stats/statuses that already existed as inert fields, and nothing in the shipped
+        /// roster authors a non-zero value or applies Silence/Stun today. That is what makes
+        /// CheckDeterminism's and CheckEffectHitResistNoOp's fingerprints a valid no-op proof for
+        /// this pass without re-deriving them: every new branch added to TakeTurn and
+        /// ApplyDamageEffect is gated on a value that is provably zero (or a status that is
+        /// provably never applied) for every unit currently in heroes.json / enemies.json, so it is
+        /// structurally unreachable there, not merely unexercised by the samples those checks take.
+        /// </summary>
+        private static void CheckNoContentAuthorsNewMechanicsYet(ContentDatabase liveDb)
+        {
+            bool clean = true;
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < liveDb.Heroes.Count; i++) units.Add(liveDb.Heroes[i]);
+            for (int i = 0; i < liveDb.Enemies.Count; i++) units.Add(liveDb.Enemies[i]);
+
+            for (int u = 0; u < units.Count; u++)
+            {
+                UnitDef def = units[u];
+                if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f)
+                {
+                    clean = false;
+                    Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage - "
+                        + "the shipped-fingerprint no-op assumption no longer holds for this unit");
+                }
+                if (UnitAppliesStatus(def, StatusKind.Silence) || UnitAppliesStatus(def, StatusKind.Stun))
+                {
+                    clean = false;
+                    Line("  [FAIL] " + def.Id + " authors Silence or Stun - "
+                        + "the shipped-fingerprint no-op assumption no longer holds for this unit");
+                }
+            }
+            Check(clean, "no shipped hero or enemy authors Armor Break, Damage Reduction, Skill Damage, Silence or Stun yet - "
+                + "so this pass cannot move any existing BattleFingerprint (CheckDeterminism / CheckEffectHitResistNoOp above "
+                + "already prove those stay stable)");
+        }
+
+        private static bool UnitAppliesStatus(UnitDef def, StatusKind kind)
+        {
+            if (AbilityAppliesStatus(def.BasicAttack, kind)) return true;
+            if (AbilityAppliesStatus(def.Active, kind)) return true;
+            if (def.Passive != null && EffectsApplyStatus(def.Passive.Effects, kind)) return true;
+            return false;
+        }
+
+        private static bool AbilityAppliesStatus(AbilityDef a, StatusKind kind)
+        {
+            return a != null && EffectsApplyStatus(a.Effects, kind);
+        }
+
+        private static bool EffectsApplyStatus(List<EffectDef> effects, StatusKind kind)
+        {
+            if (effects == null) return false;
+            for (int i = 0; i < effects.Count; i++)
+                if (effects[i].Kind == EffectKind.ApplyStatus && effects[i].Status == kind) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// One hero applies Silence (chance 1, duration 1) to the sole enemy, which starts with
+        /// enough energy to cast its own Active immediately if nothing stops it - the test would be
+        /// meaningless against an enemy that would have basic-attacked anyway. The caster outpaces
+        /// the enemy on Speed, so the Silence lands before the enemy's own turn in the same round.
+        /// </summary>
+        private static void CheckSilenceBehavior(ContentDatabase db, StageDef arena)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_silencer"), 20));
+            BattleResult r = RunWith(db, arena, 1, team);
+            int enemyId = FirstEnemyId(r);
+
+            bool silenced = false;
+            bool sawApplied = false, sawBasicWhileSilenced = false, sawExpired = false, violation = false;
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Silence && e.TargetId == enemyId)
+                {
+                    silenced = true;
+                    sawApplied = true;
+                }
+                else if (e.Type == BattleEventType.AbilityCast && e.SourceId == enemyId && silenced)
+                {
+                    violation = true;
+                }
+                else if (e.Type == BattleEventType.BasicAttack && e.SourceId == enemyId && silenced)
+                {
+                    sawBasicWhileSilenced = true;
+                }
+                else if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Silence && e.TargetId == enemyId)
+                {
+                    silenced = false;
+                    sawExpired = true;
+                }
+            }
+
+            Check(sawApplied, "Silence lands on the enemy (StatusApplied observed)");
+            Check(sawBasicWhileSilenced, "the Silenced enemy resolves a Basic Attack on its turn instead of its Active");
+            Check(!violation, "the Silenced enemy never casts its Active while Silence is active");
+            Check(sawExpired, "Silence clears via the normal RoundsLeft/ExpireStatuses decrement (StatusExpired observed the same round)");
+        }
+
+        /// <summary>
+        /// Same shape as Silence above, but Stun must suppress the entire turn: no Basic Attack, no
+        /// Active, no Damage dealt by the stunned unit at all while the status is live.
+        /// </summary>
+        private static void CheckStunBehavior(ContentDatabase db, StageDef arena)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_stunner"), 20));
+            BattleResult r = RunWith(db, arena, 1, team);
+            int enemyId = FirstEnemyId(r);
+
+            bool stunned = false;
+            bool sawApplied = false, sawExpired = false, violation = false;
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Stun && e.TargetId == enemyId)
+                {
+                    stunned = true;
+                    sawApplied = true;
+                }
+                else if (stunned && e.SourceId == enemyId &&
+                         (e.Type == BattleEventType.BasicAttack || e.Type == BattleEventType.AbilityCast || e.Type == BattleEventType.Damage))
+                {
+                    violation = true;
+                }
+                else if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Stun && e.TargetId == enemyId)
+                {
+                    stunned = false;
+                    sawExpired = true;
+                }
+            }
+
+            Check(sawApplied, "Stun lands on the enemy (StatusApplied observed)");
+            Check(!violation, "the Stunned enemy takes no action at all on its turn - no Basic Attack, no Active, no Damage dealt");
+            Check(sawExpired, "Stun clears via the normal RoundsLeft/ExpireStatuses decrement (StatusExpired observed the same round)");
+        }
+
+        /// <summary>
+        /// Same hero, same enemy (zero Defense so the comparison is not muddied by mitigation),
+        /// SkillDamage 0 vs 0.5. The hero starts with exactly enough energy to cast its Active
+        /// round 1, then falls back to its Basic Attack round 2 - one clean sample of each ability
+        /// kind per run, identified by AbilityName rather than event position.
+        /// </summary>
+        private static void CheckSkillDamageActiveOnly(ContentDatabase db, StageDef arena)
+        {
+            int basicOff, activeOff, basicOn, activeOn;
+            CollectSkillDamageHits(db, arena, "test_skill_off", out basicOff, out activeOff);
+            CollectSkillDamageHits(db, arena, "test_skill_on", out basicOn, out activeOn);
+
+            Check(basicOff > 0 && activeOff > 0 && basicOn > 0 && activeOn > 0,
+                  "sampled both a Basic Attack hit and an Active hit from the hero in both runs (off: basic "
+                  + basicOff + " active " + activeOff + "; on: basic " + basicOn + " active " + activeOn + ")");
+            Check(basicOn == basicOff,
+                  "Skill Damage does not change Basic Attack damage on the same hero (" + basicOff + " -> " + basicOn + ")");
+            Check(activeOn > activeOff,
+                  "Skill Damage boosts Active damage on the same hero (" + activeOff + " -> " + activeOn + ")");
+        }
+
+        private static void CollectSkillDamageHits(ContentDatabase db, StageDef arena, string heroId, out int basicDamage, out int activeDamage)
+        {
+            basicDamage = -1;
+            activeDamage = -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero(heroId), 20));
+            BattleResult r = RunWith(db, arena, 1, team);
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.SourceId != 0) continue;
+                if (basicDamage < 0 && e.AbilityName == "Strike") basicDamage = e.Value;
+                else if (activeDamage < 0 && e.AbilityName == "Skill Active") activeDamage = e.Value;
+            }
+        }
+
+        /// <summary>
+        /// Same target Defense (200) both runs; only the attacker's Armor Break changes (0 vs 0.5).
+        /// Armor Break scales the mitigation RATIO, never `defense` itself, so this is not the same
+        /// lever as DefenseDown even though both end up changing a damage number against a fixed
+        /// Defense stat.
+        /// </summary>
+        private static void CheckArmorBreakVsDefense(ContentDatabase db)
+        {
+            StageDef arena = db.GetStage("test_armor_arena");
+            int baseline = FirstDamageFromHero(db, arena, "test_armorbreak_off");
+            int withArmorBreak = FirstDamageFromHero(db, arena, "test_armorbreak_on");
+
+            Check(baseline > 0 && withArmorBreak > 0,
+                  "both Armor Break battles produced a measurable hit (baseline " + baseline + ", armor break " + withArmorBreak + ")");
+            Check(withArmorBreak != baseline,
+                  "Armor Break changes the final damage number against the same Defense value (baseline "
+                  + baseline + " vs armor break " + withArmorBreak + ")");
+            Check(withArmorBreak > baseline,
+                  "Armor Break increases damage by reducing the mitigation ratio, not the Defense stat itself ("
+                  + baseline + " -> " + withArmorBreak + ")");
+        }
+
+        /// <summary>
+        /// Same target Defense (200) both runs; only the target's Damage Reduction changes (0 vs
+        /// 0.3). Applied strictly after Defense mitigation, so it stacks with rather than replaces it.
+        /// </summary>
+        private static void CheckDamageReductionVsDefense(ContentDatabase db)
+        {
+            StageDef off = db.GetStage("test_dr_arena_off");
+            StageDef on = db.GetStage("test_dr_arena_on");
+            int baseline = FirstDamageFromHero(db, off, "test_plain_attacker");
+            int reduced = FirstDamageFromHero(db, on, "test_plain_attacker");
+
+            Check(baseline > 0 && reduced > 0,
+                  "both Damage Reduction battles produced a measurable hit (baseline " + baseline + ", reduced " + reduced + ")");
+            Check(reduced != baseline,
+                  "Damage Reduction changes the final damage number against the same Defense value (baseline "
+                  + baseline + " vs reduced " + reduced + ")");
+            Check(reduced < baseline,
+                  "Damage Reduction lowers the damage that already survived Defense mitigation (" + baseline + " -> " + reduced + ")");
+        }
+
+        private static int FirstDamageFromHero(ContentDatabase db, StageDef stage, string heroId)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero(heroId), 20));
+            BattleResult r = RunWith(db, stage, 1, team);
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.SourceId == 0) return e.Value;
+            }
+            return -1;
+        }
+
+        private static int FirstEnemyId(BattleResult r)
+        {
+            for (int i = 0; i < r.Units.Count; i++) if (!r.Units[i].IsPlayer) return r.Units[i].Id;
+            return -1;
+        }
+
+        /// <summary>
+        /// A small, self-contained ContentDatabase built from hand-written JSON rather than the
+        /// shipped files - the point of every check above is to isolate one mechanic at a time under
+        /// exact, hand-computable numbers, which the real roster's mixed stats and abilities cannot
+        /// give. DamageVariance and SpeedVariance are zeroed in balance so nothing here depends on
+        /// the RNG stream; EffectHit/EffectResist are left at their default zero so Silence/Stun's
+        /// chance:1 lands with no draw, same as every harmful status in the shipped game today.
+        /// </summary>
+        private static ContentDatabase BuildStatBehaviorTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_silencer"", ""name"": ""Test Silencer"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 500, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""silence_active"", ""name"": ""Silence Bolt"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Silence"", ""duration"": 1, ""chance"": 1 } ] } },
+    { ""id"": ""test_stunner"", ""name"": ""Test Stunner"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 500, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""stun_active"", ""name"": ""Stun Bolt"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Stun"", ""duration"": 1, ""chance"": 1 } ] } },
+    { ""id"": ""test_skill_off"", ""name"": ""Test Skill Off"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100, ""skillDamage"": 0,
+      ""active"": { ""id"": ""skill_active_off"", ""name"": ""Skill Active"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"" } ] } },
+    { ""id"": ""test_skill_on"", ""name"": ""Test Skill On"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100, ""skillDamage"": 0.5,
+      ""active"": { ""id"": ""skill_active_on"", ""name"": ""Skill Active"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"" } ] } },
+    { ""id"": ""test_armorbreak_off"", ""name"": ""Test ArmorBreak Off"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""armorBreak"": 0 },
+    { ""id"": ""test_armorbreak_on"", ""name"": ""Test ArmorBreak On"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""armorBreak"": 0.5 },
+    { ""id"": ""test_plain_attacker"", ""name"": ""Test Plain Attacker"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5 }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_target"", ""name"": ""Test Target"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""target_active"", ""name"": ""Target Active"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"" } ] } },
+    { ""id"": ""test_fixed_defense"", ""name"": ""Test Fixed Defense"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 200, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_dr_off"", ""name"": ""Test DR Off"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 200, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""damageReduction"": 0 },
+    { ""id"": ""test_dr_on"", ""name"": ""Test DR On"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 200, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""damageReduction"": 0.3 }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_ch"", ""name"": ""Test"", ""stages"": [
+        { ""id"": ""test_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_target"", ""level"": 1 } ] },
+        { ""id"": ""test_armor_arena"", ""index"": 2, ""enemies"": [ { ""id"": ""test_fixed_defense"", ""level"": 1 } ] },
+        { ""id"": ""test_dr_arena_off"", ""index"": 3, ""enemies"": [ { ""id"": ""test_dr_off"", ""level"": 1 } ] },
+        { ""id"": ""test_dr_arena_on"", ""index"": 4, ""enemies"": [ { ""id"": ""test_dr_on"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 6, ""energyMax"": 100, ""energyPerBasicAttack"": 28, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+
+            ContentDatabase db = ContentDatabase.Load(heroesJson, enemiesJson, campaignJson, balanceJson);
+            bool ok = db.Warnings.Count == 0;
+            for (int i = 0; i < db.Warnings.Count; i++) Line("  [FAIL] synthetic test content warning: " + db.Warnings[i]);
+            Check(ok, "synthetic test content for status/stat harness checks parses with no warnings");
+            return ok ? db : null;
         }
 
         private static string BattleFingerprint(GameSession session, StageDef stage, int seed)

@@ -187,7 +187,30 @@ namespace Emberfall.Core.Combat
                 TriggerPassive(unit, PassiveTrigger.TurnStart, 0);
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
-                bool usedActive = unit.Active != null && unit.Energy >= unit.Active.EnergyCost;
+                // Stun: the whole turn is skipped - no Basic Attack, no Active, no energy gain.
+                // Cleared by the ExpireStatuses() decrement below, the same RoundsLeft clock every
+                // other status uses; there is no separate timer to keep in sync.
+                //
+                // Re-entry, considered: TakeTurn is only ever called from the single `for` loop in
+                // Execute() over `order`, a List<CombatUnit> built once per round by TurnOrder() and
+                // never mutated afterward - each living unit is added to it exactly once. Returning
+                // early here does not requeue the unit, does not call TakeTurn again, and nothing
+                // downstream of a skipped turn (ExpireStatuses, the passive trigger already fired
+                // above) can hand control back into this method. So a stunned unit cannot be made to
+                // act again later in the same round as a side effect of the skip - unlike passive
+                // recursion (MaxPassiveDepth), there is no call path back into TakeTurn to bound.
+                if (unit.Has(StatusKind.Stun))
+                {
+                    ExpireStatuses(unit);
+                    return;
+                }
+
+                // Silence: the Active is blocked for this turn only; a Basic Attack resolves in its
+                // place exactly as if that had been the unit's normal choice (same energy gain, same
+                // AfterBasicAttack passive). Cleared the same way as Stun above - RoundsLeft reaching
+                // zero in ExpireStatuses, not a manual removal here.
+                bool silenced = unit.Has(StatusKind.Silence);
+                bool usedActive = !silenced && unit.Active != null && unit.Energy >= unit.Active.EnergyCost;
                 if (usedActive)
                 {
                     unit.Energy = 0;
@@ -416,20 +439,73 @@ namespace Emberfall.Core.Combat
                 }
             }
 
+            /// <summary>
+            /// The 8-step order, in the sequence below: (1) base, (2) aspect factor, (3) crit,
+            /// (4) Skill Damage, (5) Defense mitigation ratio, (6) Armor Break, (7) Damage
+            /// Reduction, (8) variance + round + clamp. Shield-then-HP happens afterward, inside
+            /// DealRawDamage, same as before - it was never part of this method's own steps.
+            ///
+            /// Steps 5 and 6 are computed as two separate terms - `mitigation` from Defense, then
+            /// Armor Break scaling that ratio - but applied to `raw` in one multiply. That is
+            /// deliberate, not a merge of the two ideas: computing `1f - mitigation` and then a
+            /// second `raw *= 1f - armorBreakAdjustment` would not be bit-identical to the single
+            /// multiply below when Armor Break is zero, and DESIGN-COMBAT-STATS' Known trap on this
+            /// exact pipeline is "relying on float identity across a formula you will later edit is
+            /// a trap - bypass explicitly" instead. Bypassed explicitly here: when armorBreak is 0,
+            /// `mitigation` is untouched and `raw *= 1f - mitigation` is the exact expression that
+            /// shipped before this change, so every fingerprint with ArmorBreak unauthored (all of
+            /// them today) stays byte-identical.
+            /// </summary>
             private void ApplyDamageEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
             {
+                // 1. Base
                 float raw = source.EffectiveAttack * effect.Power + effect.Flat;
 
+                // 2. Aspect factor
                 float aspectFactor = AspectChart.Multiplier(source.Aspect, target.Aspect);
                 raw *= aspectFactor;
 
+                // 3. Crit
                 bool critical = _rng.Chance(source.EffectiveCritChance);
                 if (critical) raw *= source.CritDamage;
 
+                // 4. Skill Damage - Active and passive-sourced Damage effects only. Gated on
+                // ability.Kind rather than on the stat being non-zero, so a Basic Attack is provably
+                // untouched by this term regardless of what SkillDamage is authored - not merely
+                // unaffected when nobody has authored one yet.
+                if (ability.Kind != AbilityKind.BasicAttack && source.EffectiveSkillDamage != 0f)
+                    raw *= 1f + source.EffectiveSkillDamage;
+
+                // 5. Defense mitigation ratio (EffectiveDefense already folds in DefenseUp/DefenseDown)
                 float defense = target.EffectiveDefense;
                 float mitigation = defense / (defense + _cfg.DefenseConstant + _cfg.DefensePerLevel * source.Level);
+
+                // 6. Armor Break - its own multiplicative reduction of the mitigation RATIO, not of
+                // `defense`/EffectiveDefense. Mathematically distinguishable from DefenseDown:
+                // DefenseDown changes the INPUT to the ratio (via SumMagnitude on EffectiveDefense),
+                // Armor Break scales the ratio's OUTPUT. Same Defense value, different ArmorBreak ->
+                // different final damage, and the reverse - two independent terms, not one value
+                // written from two places.
+                float armorBreak = source.EffectiveArmorBreak;
+                if (armorBreak > 0f)
+                {
+                    if (armorBreak > 1f) armorBreak = 1f;
+                    mitigation *= 1f - armorBreak;
+                }
+
                 raw *= 1f - mitigation;
 
+                // 7. Damage Reduction - flat percentage off the damage that already survived
+                // Defense + Armor Break above. Its own step, strictly after step 5/6, never folded
+                // into `mitigation` itself.
+                float damageReduction = target.EffectiveDamageReduction;
+                if (damageReduction > 0f)
+                {
+                    if (damageReduction > 1f) damageReduction = 1f;
+                    raw *= 1f - damageReduction;
+                }
+
+                // 8. Variance, round, clamp
                 raw *= 1f + _rng.Spread(_cfg.DamageVariance);
 
                 int damage = (int)Math.Round(raw, MidpointRounding.AwayFromZero);

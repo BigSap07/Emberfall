@@ -78,8 +78,8 @@ namespace Emberfall.Core.Data
         Taunt,
         Focus,   // increased critical chance
         Slow,    // reduced speed
-        Silence, // inert placeholder — no cast-blocking logic yet
-        Stun,    // inert placeholder — no turn-blocking logic yet
+        Silence, // blocks the Active on the holder's next turn; a Basic Attack resolves instead
+        Stun,    // skips the holder's entire next turn - no Basic Attack, no Active
         Stealth  // inert placeholder — no targeting-visibility logic yet
     }
 
