@@ -486,8 +486,92 @@ confirmed green on CI on `main` after the merge.
 
 14. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
     handful of spot-check battles in `[U]` are still worth watching.
+    ⚠️ **`RunCampaignBalancePass` alone is no longer "exactly the tool".** See "Task 14's
+    instrument was broken" below: it reported 100% on all twelve stages for reasons that had
+    nothing to do with the content, and two prerequisites had to land before it could be tuned
+    against at all. Both have now landed; the line above is kept because the retune is still one
+    pass, still last.
     Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12 (whatever of it shipped this pass), 13, everything
     above that changes a win rate or an economy number. Blocks: nothing, this is the last task.
 
 Task 14 is the only step that produces a valid win-rate table. Nothing tuned before it should be
 read as final.
+
+## Task 14's instrument was broken, and what was done about it
+
+Found while checking why the wheel narrowing did not move any win rate: `RunCampaignBalancePass`
+reported **100% on all twelve stages**, and had been doing so since well before that change. An
+instrument reporting a flat line measures nothing, and tuning against it would have been tuning
+blind. Neither of the two fixes below is tuning, and neither was in this document's dependency
+list, because nobody knew.
+
+**It is not collapsed reporting.** The figure is `measureWins / 24`, resolution 4.2%, and the same
+code printed 20.8%, 58.3%, 54.2% and 95.8% on the last four stages at commit `3afd83b`. It
+genuinely wins 24 of 24.
+
+**Task 8 caused it, and task 10 did not compensate.** Running the harness at historical commits:
+at `3afd83b`, stage 1-9 read teamPwr 5558 against recPwr 5550, a ratio of 1.00, and a win rate of
+20.8%. At `c1d5aed`, the team size 3 to 5 commit, the same stage read teamPwr **9232** against the
+same 5550. `5558 x 5/3 = 9263`: team power scaled almost exactly with slot count. Task 10 then
+raised `recommendedPower` 5550 to 6000, 8%, against a 66% move.
+
+The mechanism is not only the two extra bodies. `PlayerProfile.NormaliseTeam` fills empty slots
+with the highest-power benched hero, so the new slots went to Nyx (the roster's only 5-star) and
+Maeve (4-star), who had been sitting at Lv1 on the bench in the 3-slot world. Nyx alone now does
+46% to 58% of team damage. The pre-change ratio of team power to recommendedPower **decayed** from
+1.42 to 1.00 across the campaign, and the win rate broke exactly where it reached 1.00. After
+task 8 it never fell below 1.53.
+
+### Blocker A: re-base `recommendedPower` for 5 slots. **Done.**
+
+A five-body line cannot go below **5684** power (best five heroes at level 1, measured), so eight
+of twelve stages named a target no five-slot team can be under and pinning a team to it was a
+no-op. Every value was multiplied by `floor5 / floor3 = 5684 / 3739 = 1.52019`, the measured ratio
+of the minimum deployable line before and after the slot change, rounded to the nearest 50. That
+is mechanical: it preserves every stage's ratio to the floor, so no stage's difficulty claim moves
+relative to any other's, only the scale it is expressed on. Scaling by the slot ratio 5/3 would
+have been wrong, because the two added slots take the weakest two heroes, not average ones.
+
+Nine of twelve stages now sit above the floor, up from four. **1-1 to 1-4 remain under it, and
+that predates task 8**: their old values were already below the three-body floor of 3739. No
+scaling fixes that; enemy levels do, and that is task 14's.
+
+One consequence to own: `CheckStageWinnability` is the only check `recommendedPower` gates, and it
+levels a team **to** that number, so raising the target makes it **strictly easier to pass**. It
+stops being the accidental canary it had become. No check changed pass/fail state in the same
+commit, but do not read that as the content improving.
+
+### Blocker B: a controlled win-rate curve. **Done.**
+
+`CheckPinnedFiveBodyCurve` fields five bodies levelled to each stage's own `recommendedPower`,
+which is the case neither existing instrument covered. Both existing instruments are unchanged,
+and `PrintInstrumentComparison` now prints all three side by side, because kept apart the
+disagreement is invisible. It reports rather than asserting a target, with one exception: it fails
+if the curve is flat, since a curve reading identically on every stage has stopped measuring.
+
+### The two instruments were miscalibrated in opposite directions
+
+This is the finding worth carrying forward. The three checks disagree because each fields a
+different team, not because the content is ambiguous.
+
+| Instrument | Team | Bias |
+|---|---|---|
+| `CheckStageWinnability` | 3 bodies levelled to `recommendedPower` | Harsher than any real player: three bodies against a five-enemy line |
+| `RunCampaignBalancePass` | 5 bodies at whatever the simulated economy produced | More generous than one: ran 1.5x to 2.0x over `recommendedPower` |
+| `CheckPinnedFiveBodyCurve` | 5 bodies levelled to `recommendedPower` | The closest of the three to what a 5-slot player actually fields |
+
+**`PowerScore` is badly non-linear across body counts, and this is why the first two can invert.**
+At stage 1-12, three bodies at 10217 power (Lv33/33/32) win 24 of 24, while five bodies at 10238
+power (Lv11/11/11/10/10) win 4 of 24. Same scalar, opposite outcome. A single `recommendedPower`
+number cannot describe difficulty for a variable-size team, and any retune that treats it as if it
+can will be wrong for one team shape or the other.
+
+### Enemy level is the variable that has not moved
+
+Task 10 refilled `campaign.json` to a 3/4/5 enemy-count ramp, but per this document's own audit of
+`build-order-8-team-size-5` the additions were authored at the stage's existing lowest level minus
+one: filler below the existing roster. Counts went up, levels did not. Measured against the enemy
+line each stage actually spawns, `recommendedPower` before the re-base ranged from 1.27x the enemy
+line's power on 1-1 down to 0.70x on 1-10, with the break falling exactly where spawn counts go
+from three to four. **Five weak enemies lose to five strong heroes**, so enemy count alone will not
+restore the curve. Enemy levels are task 14's first lever, not its last.
