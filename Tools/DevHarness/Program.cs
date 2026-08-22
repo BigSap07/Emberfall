@@ -35,6 +35,7 @@ namespace Emberfall.DevHarness
 
             CheckContent(content);
             CheckAspectDirection(content);
+            CheckAspectEmberVerdant(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
@@ -123,17 +124,31 @@ namespace Emberfall.DevHarness
             }
             Check(everyRoleCovered, "every combat role has a hero");
 
+            // A basic and an active are structural - a hero without them cannot take a turn. A
+            // passive is not, and stopped being mandatory when DESIGN-ASPECTS section 3 cut Kalyx's
+            // Kindling as a percentage stat stick without replacing it: his Ember identity is now
+            // the Burn-stacking aspect rule, which lives in the simulation rather than on his sheet.
+            // Passive-less heroes are listed rather than failed, so the roster stays visible and a
+            // second one cannot appear unnoticed.
             bool abilitiesOk = true;
+            int passiveless = 0;
             for (int i = 0; i < db.Heroes.Count; i++)
             {
                 HeroDef h = db.Heroes[i];
-                if (h.BasicAttack == null || h.Active == null || h.Passive == null)
+                if (h.BasicAttack == null || h.Active == null)
                 {
                     abilitiesOk = false;
-                    Line("  hero " + h.Id + " is missing an ability");
+                    Line("  hero " + h.Id + " is missing a basic attack or an active");
+                }
+                if (h.Passive == null)
+                {
+                    passiveless++;
+                    Line("  hero " + h.Id + " has no passive (identity comes from its Aspect rule)");
                 }
             }
-            Check(abilitiesOk, "every hero has a basic attack, an active and a passive");
+            Check(abilitiesOk, "every hero has a basic attack and an active");
+            Check(passiveless <= 1,
+                  "at most one hero relies on its Aspect rule instead of a passive (got " + passiveless + ")");
             Line("");
         }
 
@@ -215,6 +230,147 @@ namespace Emberfall.DevHarness
                 }
             }
             return found;
+        }
+
+        /// <summary>
+        /// DESIGN-ASPECTS sections 1 and 2, the two identities built so far. Both halves are proved
+        /// against observed behaviour rather than against the shape of the code, because both are the
+        /// kind of rule that can be present, compile, and silently never fire.
+        ///
+        /// The battle-observed half leans on two facts about shipped content that make the proofs
+        /// airtight rather than suggestive. First, nothing in heroes.json or enemies.json authors a
+        /// Regen status anywhere, so every StatusApplied(Regen) in a real fight is necessarily
+        /// produced by Verdant's banking - there is no other source it could have come from. Second,
+        /// a fresh profile's three starters are Orrin and Kalyx (both Ember, both applying Burn to
+        /// AllEnemies) plus Wren (Verdant, healing AllAllies), so the default team exercises both
+        /// rules without any synthetic setup.
+        /// </summary>
+        private static void CheckAspectEmberVerdant(ContentDatabase db)
+        {
+            Line("ASPECT RULES (Ember stacking, Verdant banking)");
+            int cap = db.Balance.EmberBurnStackCap;
+
+            // ---- Ember, the primitive itself ----
+            CombatUnit stacked = new CombatUnit();
+            stacked.AddStack(StatusKind.Burn, 2, 10f, 1, cap);
+            stacked.AddStack(StatusKind.Burn, 2, 4f, 2, cap);
+            Check(stacked.CountOf(StatusKind.Burn) == 2,
+                  "a weaker second Ember Burn is kept as its own entry instead of being discarded (got "
+                  + stacked.CountOf(StatusKind.Burn) + ")");
+            Check(Math.Abs(stacked.SumMagnitude(StatusKind.Burn) - 14f) < 0.001f,
+                  "SumMagnitude already totals across stacked entries, so nothing downstream needed changing");
+
+            CombatUnit refreshed = new CombatUnit();
+            refreshed.AddOrRefresh(StatusKind.Burn, 2, 10f, 1);
+            refreshed.AddOrRefresh(StatusKind.Burn, 2, 4f, 2);
+            Check(refreshed.CountOf(StatusKind.Burn) == 1,
+                  "a Burn from a non-Ember source still folds into one entry, keeping the stronger magnitude");
+
+            CombatUnit capped = new CombatUnit();
+            for (int i = 0; i < cap + 4; i++) capped.AddStack(StatusKind.Burn, 2, 5f + i, i, cap);
+            Check(capped.CountOf(StatusKind.Burn) == cap,
+                  "emberBurnStackCap bounds the entry count at " + cap + " (got " + capped.CountOf(StatusKind.Burn) + ")");
+
+            // ---- both rules, observed in real battles ----
+            // Only a Verdant unit that actually heals can bank, so this - not the Verdant head count -
+            // is the real ceiling on banks per target per round. Derived from content rather than
+            // hardcoded, so adding a second Verdant healer relaxes the bound automatically instead of
+            // turning this into a false failure.
+            int verdantHealers = 0;
+            for (int i = 0; i < db.Heroes.Count; i++)
+                if (db.Heroes[i].Aspect == Aspect.Verdant && HasHealEffect(db.Heroes[i])) verdantHealers++;
+            for (int i = 0; i < db.Enemies.Count; i++)
+                if (db.Enemies[i].Aspect == Aspect.Verdant && HasHealEffect(db.Enemies[i])) verdantHealers++;
+
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            int maxBurnTicksInARound = 0;
+            int maxRegenAppliedInARound = 0;
+            int regenApplications = 0;
+            int regenFromNonVerdant = 0;
+            bool sawStackedBurnDeath = false;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[s], seed));
+
+                    Dictionary<string, int> burnTicks = new Dictionary<string, int>();
+                    Dictionary<string, int> regenHits = new Dictionary<string, int>();
+
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        string key = e.TargetId + ":" + e.Round;
+
+                        if (e.Type == BattleEventType.Damage && e.Status == StatusKind.Burn)
+                        {
+                            int n;
+                            burnTicks.TryGetValue(key, out n);
+                            burnTicks[key] = n + 1;
+                            if (n + 1 > maxBurnTicksInARound) maxBurnTicksInARound = n + 1;
+
+                            // the death-mid-loop hazard: a burn tick killing a unit that was carrying
+                            // more than one burn is the case DESIGN-ASPECTS section 2 flags as going
+                            // from rare to common. Confirm the sample actually reached it.
+                            if (n + 1 >= 2 && i + 1 < r.Events.Count
+                                && r.Events[i + 1].Type == BattleEventType.Death
+                                && r.Events[i + 1].TargetId == e.TargetId)
+                                sawStackedBurnDeath = true;
+                        }
+                        else if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Regen)
+                        {
+                            regenApplications++;
+                            UnitSnapshot src = r.FindUnit(e.SourceId);
+                            if (src == null || src.Aspect != Aspect.Verdant) regenFromNonVerdant++;
+                            int n;
+                            regenHits.TryGetValue(key, out n);
+                            regenHits[key] = n + 1;
+                            if (n + 1 > maxRegenAppliedInARound) maxRegenAppliedInARound = n + 1;
+                        }
+                    }
+                }
+            }
+
+            Check(maxBurnTicksInARound >= 2,
+                  "Ember stacking actually fires in shipped content - a unit took " + maxBurnTicksInARound
+                  + " separate Burn ticks in one round (1 would mean the rule never engaged)");
+            Check(maxBurnTicksInARound <= cap,
+                  "no unit ever carried more than emberBurnStackCap Burns (peak " + maxBurnTicksInARound + ", cap " + cap + ")");
+            Check(sawStackedBurnDeath,
+                  "the sample reached the hazard case: a unit carrying stacked Burns died to a Burn tick mid-walk");
+
+            Check(regenApplications > 0,
+                  "Verdant banking actually fires - " + regenApplications
+                  + " Regen application(s) observed, and nothing in content authors Regen, so banking is the only possible source");
+            Check(regenFromNonVerdant == 0,
+                  "every banked Regen came from a Verdant source (" + regenFromNonVerdant + " did not)");
+            // A Regen tick that re-banked its own overflow would re-apply Regen on the carrier's own
+            // turn, on top of any Verdant cast that round, and would do it every round forever. One
+            // Verdant unit can bank at most once per target per round, so exceeding the Verdant head
+            // count in a single round is the signature of that loop.
+            Check(maxRegenAppliedInARound <= verdantHealers,
+                  "no self-feeding Regen loop: peak " + maxRegenAppliedInARound
+                  + " Regen application(s) on one target in one round, against " + verdantHealers + " Verdant healer(s)");
+            Line("");
+        }
+
+        private static bool HasHealEffect(UnitDef def)
+        {
+            return AbilityHeals(def.BasicAttack) || AbilityHeals(def.Active)
+                || (def.Passive != null && EffectsHeal(def.Passive.Effects));
+        }
+
+        private static bool AbilityHeals(AbilityDef a)
+        {
+            return a != null && EffectsHeal(a.Effects);
+        }
+
+        private static bool EffectsHeal(List<EffectDef> effects)
+        {
+            if (effects == null) return false;
+            for (int i = 0; i < effects.Count; i++) if (effects[i].Kind == EffectKind.Heal) return true;
+            return false;
         }
 
         private static void CheckDeterminism(ContentDatabase db)

@@ -13,6 +13,9 @@
   "maxTeamSize": 5,
   // cap on Gale kill re-entry turns per round; the mechanic (task 11) must read this
   "galeExtraTurnsPerRound": 1,
+  // most simultaneous Burn entries one unit can carry from Ember stacking; at the cap a further
+  // application refreshes an existing entry instead of adding a new one
+  "emberBurnStackCap": 3,
 
   // hero level up cost = A + B*level + C*level^2
   "levelCostA": 55,

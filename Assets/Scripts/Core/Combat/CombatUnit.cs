@@ -161,6 +161,42 @@ namespace Emberfall.Core.Combat
             Statuses.Add(added);
         }
 
+        public int CountOf(StatusKind kind)
+        {
+            int n = 0;
+            for (int i = 0; i < Statuses.Count; i++) if (Statuses[i].Kind == kind) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Ember's rule (DESIGN-ASPECTS section 1): add a second entry of the same kind instead of
+        /// folding it into the first, so two sources deepen the same fire rather than one silently
+        /// discarding the other. Bounded by cap; at the cap this degrades to AddOrRefresh, which
+        /// keeps the stronger magnitude and longer duration on an existing entry. Returns true if a
+        /// genuinely new entry was added.
+        ///
+        /// Deliberately a separate method rather than a flag on AddOrRefresh: every other status in
+        /// the game wants refresh semantics, and this keeps those call sites provably unchanged.
+        /// SumMagnitude already totals across duplicate entries, so nothing downstream needs to know
+        /// which of the two paths produced the list.
+        /// </summary>
+        public bool AddStack(StatusKind kind, int rounds, float magnitude, int sourceId, int cap)
+        {
+            if (cap < 1) cap = 1;
+            if (CountOf(kind) >= cap)
+            {
+                AddOrRefresh(kind, rounds, magnitude, sourceId);
+                return false;
+            }
+            StatusInstance added = new StatusInstance();
+            added.Kind = kind;
+            added.RoundsLeft = rounds;
+            added.Magnitude = magnitude;
+            added.SourceId = sourceId;
+            Statuses.Add(added);
+            return true;
+        }
+
         public void Remove(StatusKind kind)
         {
             for (int i = Statuses.Count - 1; i >= 0; i--) if (Statuses[i].Kind == kind) Statuses.RemoveAt(i);
