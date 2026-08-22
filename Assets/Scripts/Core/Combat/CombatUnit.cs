@@ -76,6 +76,20 @@ namespace Emberfall.Core.Combat
         public PassiveDef Passive;
         public bool PassiveFired;
 
+        /// <summary>
+        /// The equipped relic, resolved from HeroInstance.RelicId during setup, or null. Only ever
+        /// non-null on a player unit: enemies come from EnemyDef, which has no relic slot, and
+        /// DESIGN-RELICS scopes the slot to an owned hero on the hero detail screen.
+        /// </summary>
+        public RelicDef Relic;
+
+        /// <summary>
+        /// Whether this unit's relic has already announced itself this battle. DESIGN-RELICS:
+        /// "Emit one the first time a relic alters an effect in a fight, not on every tick" -
+        /// Splitting Prism would otherwise banner on every cast and Verdict Sigil on every turn.
+        /// </summary>
+        public bool RelicAnnounced;
+
         public int LastAttackerId = -1;
         public int LastTargetId = -1;
 
