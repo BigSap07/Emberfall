@@ -190,14 +190,13 @@
       },
       "active": {
         "id": "nyx_active", "name": "Umbral Step", "energyCost": 100, "vfx": "shadow",
-        "description": "Two strikes from impossible angles, then she sharpens for the next.",
+        "description": "Two strikes from impossible angles, on whichever enemy is most dangerous.",
         "effects": [
-          { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.35, "hits": 2 },
-          { "kind": "ApplyStatus", "target": "Self", "status": "Focus", "magnitude": 0.25, "duration": 2 }
+          { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.35, "hits": 2 }
         ]
       },
       "passive": {
-        "id": "nyx_passive", "name": "Shadowmark", "trigger": "AfterBasicAttack",
+        "id": "nyx_passive", "name": "Hollowing", "trigger": "AfterBasicAttack",
         "oncePerBattle": false, "vfx": "shadow",
         "description": "Whatever she cuts stays cut: -22% Guard on her last target.",
         "effects": [ { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.22, "duration": 2 } ]

@@ -36,6 +36,7 @@ namespace Emberfall.DevHarness
             CheckContent(content);
             CheckAspectDirection(content);
             CheckAspectEmberVerdant(content);
+            CheckAspectTideUmbra(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
@@ -355,6 +356,257 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+        /// <summary>
+        /// Tide's redirect and Umbra's uncleansable rule, both observed in real battles rather than
+        /// inferred from the diff.
+        ///
+        /// Tide needs a constructed line because Maeve is the only unit in shipped content that
+        /// grants energy at all - EnergyGain appears on no other hero and no enemy, and the
+        /// Tidecaller Wretch is Tide but only heals and buffs. That fact is what makes the control
+        /// run meaningful: the same five heroes at the same seeds with Maeve's aspect changed to
+        /// Ember and nothing else touched must produce zero hand-offs, which isolates the aspect as
+        /// the cause and simultaneously proves self-regen never redirects (both regen paths still
+        /// fire in the control, on a field that still contains a Tide enemy).
+        ///
+        /// Umbra runs on the shipped campaign, because the one Umbra-sourced harmful status in the
+        /// game is the Sundered Colossus's Slow and the one Cleanse is Wren's, and stage 1-12 puts
+        /// them on opposite sides of the same fight.
+        /// </summary>
+        private static void CheckAspectTideUmbra(ContentDatabase db)
+        {
+            Line("ASPECT RULES (Tide energy redirect, Umbra uncleansable)");
+
+            // ---------------------------------------------------------------- Tide
+            HeroDef maeve = db.GetHero("maeve_corrin");
+            Check(maeve != null && maeve.Aspect == Aspect.Tide,
+                  "Maeve is present and Tide, so the redirect has a granter to fire from");
+            if (maeve == null) { Line(""); return; }
+
+            string[] others = { "orrin_kaal", "kalyx_emberwright", "wren_ilyra", "nyx_serrow" };
+            List<HeroInstance> tideTeam = BuildNamedTeam(db, maeve, others);
+            List<HeroInstance> controlTeam = BuildNamedTeam(db, CloneHeroWithAspect(maeve, Aspect.Ember), others);
+
+            int handoffs = 0, maxPerGrant = 0, handoffsControl = 0, handoffToCap = 0;
+            int energyMax = db.Balance.EnergyMax;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 8; seed++)
+                {
+                    handoffs += CountHandoffs(RunWith(db, db.AllStages[s], seed, tideTeam),
+                                              energyMax, ref maxPerGrant, ref handoffToCap);
+                    int ignoredMax = 0, ignoredCap = 0;
+                    handoffsControl += CountHandoffs(RunWith(db, db.AllStages[s], seed, controlTeam),
+                                                     energyMax, ref ignoredMax, ref ignoredCap);
+                }
+            }
+
+            Check(handoffs > 0,
+                  "Tide's redirect actually fires in real battles - " + handoffs
+                  + " energy hand-off(s) observed (an EnergyChanged whose SourceId is not its TargetId)");
+            Check(handoffsControl == 0,
+                  "the same five heroes at the same seeds produce " + handoffsControl
+                  + " hand-off(s) with Maeve's aspect changed to Ember and nothing else touched"
+                  + " - so the aspect is the cause, and neither regen path redirects (both still fire here,"
+                  + " on a field that still contains a Tide enemy)");
+            Check(maxPerGrant <= tideTeam.Count,
+                  "one hop, no cascade: at most " + maxPerGrant + " hand-off(s) landed inside a single grant,"
+                  + " against " + tideTeam.Count + " units - one hop caps this at the unit count, a cascade does not");
+            Line("  [note] " + handoffToCap + " of " + handoffs
+                 + " hand-off(s) filled the recipient to the cap, so the recipient had a remainder"
+                 + " a cascading build would have passed on. Chain depth is not directly observable in the"
+                 + " event list (a capped recipient emits nothing for its own next grant, making a real chain"
+                 + " byte-identical to two consecutive one-hop redirects); the sim bounds it with _inRedirect.");
+
+            // ---------------------------------------------------------------- Umbra
+            // Live status map, keyed target:kind, valued "was the applier Umbra". Rebuilt per battle.
+            // A cleanse removal emits StatusExpired with SourceId = the cleanser, so SourceId !=
+            // TargetId separates it from natural expiry, which emits the carrier as both.
+            int umbraCleansed = 0, nonUmbraCleansed = 0, umbraExpiredNaturally = 0, umbraSurvivedACleanse = 0;
+
+            // The same levelled line as the Tide pass, and it has to be levelled: the one
+            // Umbra-sourced harmful status in the game is the Sundered Colossus's Slow, and a fresh
+            // starting profile dies in stage 1-12 before the Colossus banks the 100 energy Gravewake
+            // costs. It also carries Wren, whose Verdant Tide is the only Cleanse in the game.
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, tideTeam);
+                    Dictionary<string, bool> live = new Dictionary<string, bool>();
+
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        string key = e.TargetId + ":" + e.Status;
+
+                        if (e.Type == BattleEventType.StatusApplied)
+                        {
+                            UnitSnapshot src = r.FindUnit(e.SourceId);
+                            live[key] = src != null && src.Aspect == Aspect.Umbra;
+                        }
+                        else if (e.Type == BattleEventType.StatusExpired)
+                        {
+                            bool fromUmbra;
+                            if (!live.TryGetValue(key, out fromUmbra)) fromUmbra = false;
+
+                            if (e.SourceId != e.TargetId)
+                            {
+                                if (fromUmbra) umbraCleansed++;
+                                else
+                                {
+                                    nonUmbraCleansed++;
+                                    // Was an Umbra status sitting on this same unit, passed over by
+                                    // the cleanse that just took something else? That is the filter
+                                    // demonstrably firing, not merely never being reached.
+                                    if (CarriesUmbraStatus(live, e.TargetId)) umbraSurvivedACleanse++;
+                                }
+                            }
+                            else if (fromUmbra) umbraExpiredNaturally++;
+
+                            live.Remove(key);
+                        }
+                        else if (e.Type == BattleEventType.Death)
+                        {
+                            ClearUnitStatuses(live, e.TargetId);
+                        }
+                    }
+                }
+            }
+
+            Check(umbraCleansed == 0,
+                  "no harmful status from an Umbra source was ever removed by a Cleanse (" + umbraCleansed + " were)");
+            Check(nonUmbraCleansed > 0,
+                  "Cleanse still works on everything else - " + nonUmbraCleansed
+                  + " non-Umbra harmful status(es) removed, so the filter is not a blanket disable");
+            Check(umbraSurvivedACleanse > 0,
+                  "the filter was actually exercised - " + umbraSurvivedACleanse
+                  + " time(s) a Cleanse took a different status off a unit that was carrying an Umbra one");
+            Check(umbraExpiredNaturally > 0,
+                  "non-expiry was NOT implemented: " + umbraExpiredNaturally
+                  + " Umbra-sourced status(es) ran out on schedule, which DESIGN-WORLD section 1 requires"
+                  + " (persistence is Verdant's verb, not Umbra's)");
+            Line("");
+        }
+
+        private static BattleResult RunWith(ContentDatabase db, StageDef stage, int seed, List<HeroInstance> team)
+        {
+            BattleRequest request = new BattleRequest();
+            request.Content = db;
+            request.Stage = stage;
+            request.Seed = seed;
+            request.Team = team;
+            return CombatSimulation.Run(request);
+        }
+
+        /// <summary>
+        /// Counts Tide hand-offs, and tracks the most that ever landed inside one grant.
+        ///
+        /// A grant is a maximal consecutive run of EnergyChanged events: one EnergyGain effect
+        /// resolving across its targets emits nothing else in between. Under one hop each target
+        /// yields at most one hand-off, so a run can hold at most as many hand-offs as there are
+        /// units. A cascade breaks that ceiling, because each hand-off would spawn another inside
+        /// the same run.
+        ///
+        /// This is the bound to check rather than "was any hand-off handed on again", which reads
+        /// as the obvious test and is unsound: a recipient filled to the cap emits nothing for its
+        /// own next grant, so two consecutive one-hop redirects are byte-identical to a real chain.
+        /// That version reported 14 chains against code that provably cannot chain.
+        /// </summary>
+        private static int CountHandoffs(BattleResult r, int energyMax, ref int maxPerGrant, ref int toCap)
+        {
+            int n = 0;
+            int runHandoffs = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.EnergyChanged)
+                {
+                    if (runHandoffs > maxPerGrant) maxPerGrant = runHandoffs;
+                    runHandoffs = 0;
+                    continue;
+                }
+                if (e.SourceId == e.TargetId) continue;
+                n++;
+                runHandoffs++;
+                if (e.Value >= energyMax) toCap++;
+            }
+            if (runHandoffs > maxPerGrant) maxPerGrant = runHandoffs;
+            return n;
+        }
+
+        private static bool CarriesUmbraStatus(Dictionary<string, bool> live, int unitId)
+        {
+            string prefix = unitId + ":";
+            foreach (KeyValuePair<string, bool> kv in live)
+                if (kv.Value && kv.Key.StartsWith(prefix)) return true;
+            return false;
+        }
+
+        private static void ClearUnitStatuses(Dictionary<string, bool> live, int unitId)
+        {
+            string prefix = unitId + ":";
+            List<string> drop = new List<string>();
+            foreach (KeyValuePair<string, bool> kv in live)
+                if (kv.Key.StartsWith(prefix)) drop.Add(kv.Key);
+            for (int i = 0; i < drop.Count; i++) live.Remove(drop[i]);
+        }
+
+        private static List<HeroInstance> BuildNamedTeam(ContentDatabase db, HeroDef lead, string[] otherIds)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(lead, 20));
+            for (int i = 0; i < otherIds.Length; i++)
+            {
+                HeroDef def = db.GetHero(otherIds[i]);
+                if (def != null) team.Add(MakeInstance(def, 20));
+            }
+            return team;
+        }
+
+        private static HeroInstance MakeInstance(HeroDef def, int level)
+        {
+            HeroInstance h = new HeroInstance();
+            h.Uid = def.Id;
+            h.DefId = def.Id;
+            h.Level = level;
+            h.Copies = 1;
+            h.Def = def;
+            return h;
+        }
+
+        /// <summary>
+        /// The same hero with one field changed. Abilities are shared by reference deliberately -
+        /// the point of the control run is that the aspect is the only difference.
+        /// </summary>
+        private static HeroDef CloneHeroWithAspect(HeroDef src, Aspect aspect)
+        {
+            HeroDef clone = new HeroDef();
+            clone.Id = src.Id;
+            clone.Name = src.Name;
+            clone.Aspect = aspect;
+            clone.BaseHp = src.BaseHp;
+            clone.BaseAttack = src.BaseAttack;
+            clone.BaseDefense = src.BaseDefense;
+            clone.BaseSpeed = src.BaseSpeed;
+            clone.CritChance = src.CritChance;
+            clone.CritDamage = src.CritDamage;
+            clone.EffectHit = src.EffectHit;
+            clone.EffectResist = src.EffectResist;
+            clone.Growth = src.Growth;
+            clone.StartEnergy = src.StartEnergy;
+            clone.Visual = src.Visual;
+            clone.BasicAttack = src.BasicAttack;
+            clone.Active = src.Active;
+            clone.Passive = src.Passive;
+            clone.Title = src.Title;
+            clone.Lore = src.Lore;
+            clone.Role = src.Role;
+            clone.Rarity = src.Rarity;
+            clone.StartingHero = src.StartingHero;
+            return clone;
+        }
+
         private static bool HasHealEffect(UnitDef def)
         {
             return AbilityHeals(def.BasicAttack) || AbilityHeals(def.Active)
@@ -406,7 +658,7 @@ namespace Emberfall.DevHarness
         /// chance values with both stats at zero, and asserts the result is bit-for-bit the
         /// authored chance - this is the actual no-op guarantee DESIGN-COMBAT-STATS asks for, and
         /// it needs no battle to run at all. It also checks the exact boundary case that made the
-        /// guarantee possible: Nyx's Shadowmark is the one ApplyStatus in shipped content with no
+        /// guarantee possible: Nyx's Hollowing is the one ApplyStatus in shipped content with no
         /// authored "chance", defaulting to 1.0, which is why DeterministicRng.Chance draws nothing
         /// for it today. The second proof fingerprints all twelve chapter 1 stages at several seeds
         /// each and confirms same-seed reproducibility still holds everywhere, not just stage 1-1
@@ -437,8 +689,8 @@ namespace Emberfall.DevHarness
             }
             Check(bypassOk, "the landing formula returns the authored chance unchanged, for every status, when both stats are zero");
 
-            float shadowmark = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, 0f, 0f);
-            Check(shadowmark == 1f, "Shadowmark's unauthored 1.0 chance still resolves to exactly 1.0 - DeterministicRng.Chance still draws nothing for it");
+            float hollowing = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, 0f, 0f);
+            Check(hollowing == 1f, "Hollowing's unauthored 1.0 chance still resolves to exactly 1.0 - DeterministicRng.Chance still draws nothing for it");
 
             Check(db.AllStages.Count == 12, "chapter 1 has twelve stages to fingerprint (got " + db.AllStages.Count + ")");
 
@@ -567,28 +819,28 @@ namespace Emberfall.DevHarness
                   "Nyx Serrow has the roster's highest Effect Hit, so her mark landing is a stat rather than a missing field (highest is "
                   + bestHitId + " at " + Fmt(bestHit) + ")");
 
-            // Known trap 4 still holds after authoring: Shadowmark must still never draw
+            // Known trap 4 still holds after authoring: Hollowing must still never draw
             HeroDef nyx = db.Heroes.Find(delegate (HeroDef u) { return u.Id == "nyx_serrow"; });
-            bool shadowmarkStillCertain = true;
+            bool hollowingStillCertain = true;
             for (int i = 0; i < db.Enemies.Count; i++)
             {
                 EnemyDef foe = db.Enemies[i];
                 float landing = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, nyx.EffectHit, foe.EffectResist);
                 if (landing != 1f)
                 {
-                    shadowmarkStillCertain = false;
-                    Line("  [note] Shadowmark now rolls against " + foe.Id + " at " + Fmt(landing)
+                    hollowingStillCertain = false;
+                    Line("  [note] Hollowing now rolls against " + foe.Id + " at " + Fmt(landing)
                          + " - deliberate only if Nyx was meant to be beatable by that unit's Effect Resist");
                 }
             }
-            Check(shadowmarkStillCertain,
-                  "Nyx's Shadowmark still resolves to exactly 1.0 against every authored enemy - her Effect Hit ("
+            Check(hollowingStillCertain,
+                  "Nyx's Hollowing still resolves to exactly 1.0 against every authored enemy - her Effect Hit ("
                   + Fmt(nyx.EffectHit) + ") STRICTLY EXCEEDS the highest Effect Resist in the game (" + bestResistId
                   + " at " + Fmt(bestResist) + ")");
             Check(nyx.EffectHit > bestResist,
                   "and it exceeds it strictly rather than tying it - a tie is not enough, because 1f + 0.3f - 0.3f "
                   + "evaluates to 0.99999994 in float, which fails DeterministicRng.Chance's >= 1f short-circuit and "
-                  + "silently turns Shadowmark into a real draw (Known trap 4)");
+                  + "silently turns Hollowing into a real draw (Known trap 4)");
 
             Line("  Authored values are UNTUNED. Every win rate below moves because of them; task 14 is the retune.");
             Line("");
