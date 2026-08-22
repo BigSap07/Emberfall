@@ -99,6 +99,14 @@ every single-enemy `TargetMode`, including `LastAttacker` and `LastTarget`. Lume
 makes targeting deterministic. Absorption is not the identity, it is what happens when the answer is
 always you.
 
+**Built to this reading, not to DESIGN-ASPECTS', in `claude/aspects-lumen`.** The correction was the
+whole specification: a living Lumen unit answers every single-enemy targeting question aimed at its
+side, carrying `Taunt` or not, and outranks a non-Lumen ally's `Taunt` even when that ally holds the lower slot. Both
+halves of "always" are load-bearing and both are forced in the harness. `DealRawDamage`'s
+shield-absorb block needed no code at all — absorption is observed as the consequence this section
+says it is (Orrin takes 60% of incoming single-target damage as Lumen against 22% as Ember, and his
+ward eats 131587 against 73738), not implemented as a second rule.
+
 This is a promotion, not a criticism. DESIGN-ASPECTS 5 admitted Lumen was the one identity derived
 by elimination rather than read off an existing kit, called it the least trustworthy of the six, and
 recommended building it last. The belief gives it the evidence it was missing. Lumen should still be
@@ -247,6 +255,18 @@ preying on the Glass Dominion's is the campaign in miniature. Practically it is 
 in the first minute of the game and the last stage of the chapter, and it lands on the tutorial. It
 is another reason to narrow the wheel in the same pass, per DESIGN-ASPECTS 4, and stage 12 should be
 re-checked afterwards regardless.
+
+**Re-checked, in `claude/aspects-lumen`, and the spike did not arrive.** Stage 1-12 goes from 73% to
+85% at a contested level — 12 points *easier*, not harder — and a second, independently-built
+instrument moves the same way on the same stage (20.8% to 58.3%). The reason is a consequence this
+section does not weigh: the relabel does not only hand Umbra a multiplier, it also routes every
+single-target enemy hit onto the highest-HP, highest-Defense, ward-carrying unit on the line. On this
+content the routing beats the multiplier. Two honest caveats. The multiplier is ×1.10, not ×1.20 —
+the narrowing landed first. And **the tutorial half of this warning could not be measured at all**:
+three starters clear stage 1-1 forty seeds out of forty at Lv1, the floor, so the stage has no
+headroom for a spike to show in either direction. Untested, not refuted. The risk also returns
+unchanged for any line that does not field Orrin, where the penalty arrives with no routing benefit
+to offset it.
 
 ## 4. What this fiction does not decide
 

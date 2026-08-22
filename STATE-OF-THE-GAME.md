@@ -20,7 +20,7 @@ Nothing is stubbed. Every screen above is real and connected to the next.
 
 Each plays differently because of what their abilities *do*, not because of bigger numbers.
 
-- **Orrin Kaal** soaks damage, forces enemies to swing at him, hardens when badly hurt.
+- **Orrin Kaal** is where every enemy blow lands. Bring him and the enemy line stops choosing targets at all — it swings at him whether or not he has raised his guard — and he soaks it, hardening when badly hurt.
 - **Kalyx Emberwright** sets the enemy line on fire and hits harder against anything already
   burning.
 - **Wren Ilyra** heals everyone at once, clears afflictions, and shields the team before the

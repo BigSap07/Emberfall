@@ -42,7 +42,14 @@ permanently subtracts it from the fight.
 
 **Lumen — Lumen decides who takes the hit.** Lumen intercepts. Damage aimed at the line resolves
 onto Lumen or onto a ward before it reaches its intended target, so the fragile heroes never resolve
-as targets in the first place.
+as targets in the first place. **Built in `claude/aspects-lumen`, to DESIGN-WORLD
+section 1's re-weighting rather than to the text above.** The paragraph leads with absorption;
+DESIGN-WORLD overrides that ordering and makes targeting determinism the identity. As shipped, a
+living Lumen unit answers every single-enemy targeting question aimed at its side, carrying `Taunt`
+or not, and outranks a non-Lumen ally's `Taunt` even from a higher slot. The unconditional is the
+mechanic: a rule that only held while a duration-2 `Taunt` was up would be a function whose answer
+changes every other round, which is the opposite of the belief it carries. Absorption got no code at
+all — see §2.
 
 ### Rejected, per the no-percentage constraint
 
@@ -127,6 +134,24 @@ override, which already outranks every single-enemy `TargetMode` including `Last
 `LastTarget`. `StatusKind.Taunt`, `StatusKind.Shield` and `EffectKind.Shield` are the existing
 vocabulary. Lumen needs the least new code of the six and has the least evidence behind it (§5).
 
+**Verified during `claude/aspects-lumen`.** The `FindTaunter` override is exactly as described and
+still outranks `LastAttacker` and `LastTarget` — both forced against a line where those modes
+provably wanted somebody else, and both anchored 5 hits out of 5. `FindTaunter` is now
+`FindTargetAnchor`, since `Taunt` is no longer the only way to qualify.
+
+⚠️ **Half of this hook list belongs to the weighting DESIGN-WORLD replaced.** The shield-absorb
+block in `DealRawDamage` needed **no new code**: it already absorbs unconditionally, and under the
+corrected weighting absorption is what happens to a unit that is always the answer, not a second
+co-equal rule to implement. Nor did `EffectKind.Shield`. That makes this the **third** time this
+document has named a Shield-path hook that turns out to need nothing — Verdant's second entry point
+was audited false in `claude/aspects-ember-verdant`, DESIGN-HOOK-RESOLUTION §3 cut Green Hour Vessel
+for the same reason, and this is the third. The pattern is worth naming: the Shield path in this
+codebase has no discard, no clamp and no branch to intercept, so a hook proposed there is almost
+always a hook that is already doing the job.
+
+One stale comment fixed in passing: the call site said "Provoke overrides all of them". `Provoke` was
+the old name for `StatusKind.Taunt` and the comment had outlived it.
+
 **Hazards, honestly:** Ember's stacking makes `Sim.TickDamageOverTime`'s index walk more likely to
 hit the death path mid-loop, where `Sim.DealRawDamage` calls `target.Statuses.Clear()`. The existing
 `if (!unit.Alive) return;` guard covers it, but it goes from a rare case to a common one. Tide's
@@ -166,7 +191,11 @@ existing (§6).
 `Shield` (22% of his own max HP), `Taunt` on self, and `DefenseUp` 45% from `Emberskin`.
 Interception and absorption — the Lumen rule, verbatim, three times over. His only Ember content is
 a 0.55-power `AllEnemies` hit and a 70%-chance `Burn` bolted onto the end of the same ability. Under
-this design he is not a second Ember; he is the Lumen hero the roster already has.
+this design he is not a second Ember; he is the Lumen hero the roster already has. **Relabelled in
+`claude/aspects-lumen`**, one string, kit untouched and asserted untouched. One second-order effect
+the section does not predict: `Cinderguard`'s `Taunt` line is now **redundant on him**, since he
+answers with or without it. That is orphaned content in the same sense this section uses for Kalyx's
+`Kindling`, and it is left alone because the brief was relabel, not re-kit.
 
 **Wren Ilyra (Verdant) — half mismatched.** `Verdant Tide`'s `Heal` to `AllAllies` is Verdant. The
 `Cleanse` on the same ability is anti-Umbra, and `Rootbound` — a `Shield` on `AllAllies` at
@@ -241,6 +270,14 @@ what the pipeline still had spare after the other five took theirs. That makes i
 trustworthy entry in §1 and the one most likely to be wrong in play. It should be specified last and
 built last, and if one of the six has to be cut to ship, cut this one.
 
+**Held, and the thin coverage is real.** Built last, as advised. Orrin is the only Lumen unit in the
+game and no enemy is Lumen, so the rule has exactly one carrier and is one-sided: enemy single-target
+abilities anchor onto him, and player single-target abilities resolve exactly as they did before.
+That is thinner shipped-content evidence than any of the other five aspects had, and it is why the
+`claude/aspects-lumen` harness leans on forced synthetic arenas — four contrary `TargetMode`s and a
+lower-slot `Taunt` — rather than on the campaign run alone. Stated as a `[note]` in the harness
+output so it cannot quietly become an assumption.
+
 **Two. Ember does not actually have two heroes.** Per §3, Orrin's kit is Shield, Taunt and DefenseUp
 — the Lumen rule. Re-labelling him Lumen costs one string in `heroes.json` (`"aspect": "Ember"` →
 `"Lumen"`), fixes Lumen's zero, fixes Ember's duplicate, and — this is the point — is the *less*
@@ -257,6 +294,33 @@ With no Lumen unit in the game, **Umbra's advantage has never once fired**, on e
 activates for the first time — and the first thing it does is give every Umbra enemy (Hollow Husk,
 and the `sundered_colossus` boss) a live ×1.20 against the player's tank. Under the narrowed numbers
 in §4 that is a ×1.10 rather than a ×1.20, which is another reason to narrow them in the same pass.
+
+**Measured during `claude/aspects-lumen`.** The pair is live: 194 hits from an Umbra enemy onto
+Orrin and 154 the other way across twelve stages, against zero non-neutral hits in the Ember control,
+which confirms the chart really had never fired. Three corrections to this paragraph, in ascending
+order of how much they matter.
+
+The **live number is ×1.10**, not ×1.20. The narrowing landed in an earlier pass, so the
+parenthetical at the end of this paragraph is now the operative figure and the ×1.20 in the sentence
+before it is historical.
+
+**The pair is mutual, not one-way, and this paragraph only names the half that hurts.** `Beats()`
+returns true in *both* directions for Lumen and Umbra, so `Multiplier` returns `Advantage` both ways
+and never `Disadvantage`. Orrin gains the same ×1.10 attacking a Hollow Husk that it gains attacking
+him. He is a tank with 105 Attack, so the offensive half is small — but it is not zero and it is not
+mentioned.
+
+⚠️ **The predicted difficulty spike did not appear, and went the other way.** Stage 1-12, which is
+3 of 5 Umbra, goes from **73% to 85%** at a contested level — *easier* by 12 points. A second,
+independently-built instrument (`CheckPinnedFiveBodyCurve`) moves the same direction on the same
+stage, 20.8% to 58.3%. The reason is the half of the relabel this paragraph does not weigh: it does
+not only apply a multiplier, it also routes every single-target enemy hit onto the highest-HP,
+highest-Defense, ward-carrying unit on the line. On this content the routing beats the multiplier
+outright. Stage 1-1 could not be measured at all — three starters clear it 40 seeds out of 40 at
+Lv1, the floor, so there is no headroom for a spike to show in either direction; the tutorial half of
+DESIGN-WORLD §3's warning is **untested, not refuted**. None of this says the spike was never a risk:
+it returns on any stage whose Umbra enemies out-damage what one tank can absorb, and on any line that
+does not field Orrin at all, where the penalty arrives with no routing benefit to offset it.
 
 ---
 
