@@ -38,6 +38,12 @@ namespace Emberfall.Core.Combat
         public float CritDamage;
         public float EffectHit;
         public float EffectResist;
+        public float SkillDamage;
+        public float Block;
+        public float ArmorBreak;
+        public float ControlImmunity;
+        public float DamageReduction;
+        public float HolyDamage;
 
         public int Energy;
         public int EnergyMax = 100;
@@ -122,6 +128,13 @@ namespace Emberfall.Core.Combat
         {
             get { return EffectResist; }
         }
+
+        public float EffectiveSkillDamage { get { return SkillDamage; } }
+        public float EffectiveBlock { get { return Block; } }
+        public float EffectiveArmorBreak { get { return ArmorBreak; } }
+        public float EffectiveControlImmunity { get { return ControlImmunity; } }
+        public float EffectiveDamageReduction { get { return DamageReduction; } }
+        public float EffectiveHolyDamage { get { return HolyDamage; } }
 
         public bool HasTaunt
         {
@@ -254,6 +267,12 @@ namespace Emberfall.Core.Combat
             u.CritDamage = stats.CritDamage;
             u.EffectHit = stats.EffectHit;
             u.EffectResist = stats.EffectResist;
+            u.SkillDamage = stats.SkillDamage;
+            u.Block = stats.Block;
+            u.ArmorBreak = stats.ArmorBreak;
+            u.ControlImmunity = stats.ControlImmunity;
+            u.DamageReduction = stats.DamageReduction;
+            u.HolyDamage = stats.HolyDamage;
             u.EnergyMax = energyMax;
             u.Energy = Math.Min(energyMax, def.StartEnergy);
             u.Basic = def.BasicAttack != null ? def.BasicAttack : UnitDef.DefaultBasicAttack();
