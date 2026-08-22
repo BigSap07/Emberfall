@@ -201,6 +201,14 @@ namespace Emberfall.UI.Screens
             // state marker / action
             if (!unlocked)
             {
+                // THEME: deliberately NOT migrated to a UITheme.Scrim tier, because it is not
+                // clear this value is right and the migration's rule was to move numbers, not
+                // change them. Every other locked or disabled state in the project scrims at 0.72
+                // (see UITheme.ScrimModal, used by both locked hero portraits); this is 0.22, a
+                // third of that. Either the hatch texture is carrying the "locked" read on its own
+                // and the low alpha is correct, or this is drift and locked stages sit too close
+                // to available ones. That is a call about how locked should feel, so it wants a
+                // human rather than a find-and-replace. See DESIGN-UI-THEME.md.
                 Image hatch = UIBuilder.Img("Locked", row, TextureLab.Hatch(32, 10), new Color(0f, 0f, 0f, 0.22f));
                 UIBuilder.FillParent(hatch.rectTransform, 2f);
                 Text lockLabel = UIBuilder.Label("LockText", row, "LOCKED", UITheme.FontSmall, UITheme.TextDim, TextAnchor.UpperRight);

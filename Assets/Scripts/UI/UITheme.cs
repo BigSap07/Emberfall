@@ -55,7 +55,18 @@ namespace Emberfall.UI
         /// <summary>Text sitting on a solid UI panel. Quiet, just enough to stop it dissolving.</summary>
         public static readonly Color InkPanel = new Color(0f, 0f, 0f, 0.55f);
 
-        /// <summary>Text over artwork, a portrait or the battlefield, where the backing is busy and moving.</summary>
+        /// <summary>
+        /// Text over artwork, a portrait or the battlefield, where the backing is busy and moving.
+        ///
+        /// THEME: seven of this tier's eight users are in BattleScreen, and they were the highest
+        /// alphas in the project before consolidation (0.9 to 0.95) because that text sits over a
+        /// painted backdrop and moving characters rather than a flat panel. It is arguable that
+        /// the battle screen wants its own tier here, or a different technique entirely (a soft
+        /// backing plate behind the text rather than a rim on it, which is what the banner already
+        /// does with ScrimBacking). Grouping it with the rest of the UI is the conservative choice
+        /// for a migration, not a claim that it is right. Flagged for a human; see
+        /// DESIGN-UI-THEME.md.
+        /// </summary>
         public static readonly Color InkArt = new Color(0f, 0f, 0f, 0.9f);
 
         /// <summary>Display text over a dimmed screen, wanting a soft drop shadow rather than a hard rim.</summary>
