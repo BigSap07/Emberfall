@@ -25,8 +25,8 @@ Each plays differently because of what their abilities *do*, not because of bigg
   burning.
 - **Wren Ilyra** heals everyone at once, clears afflictions, and shields the team before the
   first blow.
-- **Ryn Solvarr** is fast and goes for whoever is closest to dying; each critical feeds her next
-  strike.
+- **Ryn Solvarr** is fast and goes for whoever is closest to dying; a kill puts her straight back
+  into the same round's turn order and feeds her next strike.
 - **Maeve Corrin** speeds the team up — buffs, and a drip of energy so everyone's big ability
   arrives sooner.
 - **Nyx Serrow** is the fastest and most dangerous, always hunting the deadliest enemy and

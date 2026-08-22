@@ -128,9 +128,9 @@
         ]
       },
       "passive": {
-        "id": "ryn_passive", "name": "Follow-Through", "trigger": "OnCriticalHit",
+        "id": "ryn_passive", "name": "Follow-Through", "trigger": "OnKill",
         "oncePerBattle": false, "vfx": "buff",
-        "description": "Every critical hit feeds 22 energy straight back into her lance.",
+        "description": "Every kill feeds 22 energy straight back into her lance.",
         "effects": [ { "kind": "EnergyGain", "target": "Self", "flat": 22 } ]
       }
     },

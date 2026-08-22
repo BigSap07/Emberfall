@@ -520,6 +520,7 @@ namespace Emberfall.DevHarness
             CheckGaleExtraTurnCap();
             CheckGaleSlowShift();
             CheckNoGaleContentAppliesSlowYet(db);
+            CheckOnKillPassive(db);
             CheckGaleExtraTurnDoesNotAgeStatuses();
 
             Line("");
@@ -590,6 +591,102 @@ namespace Emberfall.DevHarness
             Check(enemyExtra > 0,
                   "re-entry is not player-side: the Gale enemy took " + enemyExtra
                   + " extra turn(s) of its own on the underlevelled line, where it actually lands kills");
+        }
+
+
+        /// <summary>
+        /// Ryn's Follow-Through, moved from OnCriticalHit to OnKill per DESIGN-ASPECTS section 3
+        /// ("that is a Tide passive on a Gale hero... under this design it becomes OnKill") and
+        /// section 7's content list. Two things are checked, and the second is the one that matters.
+        ///
+        /// One: the trigger actually fires where it now says it does. Every Follow-Through in a real
+        /// battle must sit directly behind a Death that Ryn caused, which is the only place
+        /// DealRawDamage fires OnKill from - and none of them may sit behind a critical hit that
+        /// killed nothing, which is what the passive used to do.
+        ///
+        /// Two, and this is a hazard the design documents do not mention. DealRawDamage fires
+        /// OnKill with a hardcoded depth of 0, not the caller's depth - unlike OnCriticalHit two
+        /// dozen lines above it, which passes depth through. MaxPassiveDepth therefore does not
+        /// bound an OnKill passive at all: one that could itself land a kill would re-enter its own
+        /// trigger without limit. DealRawDamage has no depth parameter to thread, so fixing that
+        /// properly means touching every damage path in the file and is not this pass's job. What
+        /// this pass owes is that the path stays unreachable, and that is the same standard
+        /// CheckNoContentAuthorsNewMechanicsYet applies one section up: no OnKill passive in shipped
+        /// content may carry an effect that can kill. Ryn's is EnergyGain, which cannot. The day one
+        /// is authored that can, this check fails and the depth question has to be answered first.
+        /// </summary>
+        private static void CheckOnKillPassive(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            List<string> onKill = new List<string>();
+            List<string> lethal = new List<string>();
+            for (int i = 0; i < units.Count; i++)
+            {
+                PassiveDef p = units[i].Passive;
+                if (p == null || p.Trigger != PassiveTrigger.OnKill) continue;
+                onKill.Add(units[i].Id + "/" + p.Name);
+                if (PassiveCanKill(p)) lethal.Add(units[i].Id + "/" + p.Name);
+            }
+
+            Check(onKill.Count > 0,
+                  "OnKill is authored in shipped content for the first time: " + string.Join(", ", onKill.ToArray())
+                  + " - DESIGN-ASPECTS section 2's \"used by nobody\" was true against main and is now deliberately false");
+            Check(lethal.Count == 0,
+                  "no OnKill passive can itself land a kill (" + string.Join(", ", lethal.ToArray())
+                  + ") - DealRawDamage fires OnKill at a hardcoded depth 0, so MaxPassiveDepth does not bound it"
+                  + " and the recursion is kept unreachable by content rather than by that guard");
+
+            HeroDef ryn = db.GetHero("ryn_solvarr");
+            if (ryn == null || ryn.Passive == null) return;
+            Check(ryn.Passive.Trigger == PassiveTrigger.OnKill,
+                  "Ryn's Follow-Through triggers on OnKill, not OnCriticalHit (section 3's one clear cross-wiring)");
+
+            string[] others = { "orrin_kaal", "kalyx_emberwright", "wren_ilyra", "maeve_corrin" };
+            List<HeroInstance> team = BuildNamedTeam(db, ryn, others);
+
+            int fired = 0, notBehindAKill = 0;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, team);
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        if (e.Type != BattleEventType.PassiveTrigger) continue;
+                        if (e.AbilityId != ryn.Passive.Id) continue;
+                        fired++;
+                        // TriggerPassive is called immediately after Emit(Death) in the death
+                        // branch, so the event directly before this one is that Death.
+                        BattleEvent prev = i > 0 ? r.Events[i - 1] : null;
+                        if (prev == null || prev.Type != BattleEventType.Death || prev.SourceId != e.SourceId)
+                            notBehindAKill++;
+                    }
+                }
+            }
+
+            Check(fired > 0, "Follow-Through fires in real battles on its new trigger (" + fired + " time(s))");
+            Check(notBehindAKill == 0,
+                  "every Follow-Through sat directly behind a Death that Ryn caused (" + notBehindAKill
+                  + " did not) - it is a kill trigger now, not a crit trigger");
+        }
+
+        /// <summary>Whether a passive's own effects could reduce a unit to zero HP.</summary>
+        private static bool PassiveCanKill(PassiveDef p)
+        {
+            if (p.Effects == null) return false;
+            for (int i = 0; i < p.Effects.Count; i++)
+            {
+                EffectKind k = p.Effects[i].Kind;
+                if (k == EffectKind.Damage) return true;
+                // A Burn applied by a passive kills on a later tick, and that tick's DealRawDamage
+                // fires OnKill just the same.
+                if (k == EffectKind.ApplyStatus && p.Effects[i].Status == StatusKind.Burn) return true;
+            }
+            return false;
         }
 
         /// <summary>

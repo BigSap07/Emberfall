@@ -30,7 +30,11 @@ healthy line; it is stored on it.
 
 **Gale — Gale acts out of order.** Gale manipulates the initiative list itself: a Gale unit that
 lands a kill re-enters the current round's turn order, and Gale's `Slow` pushes a target's turn
-later within the round it is applied, not merely the next one.
+later within the round it is applied, not merely the next one. **Both halves built in
+`claude/aspects-gale`.** The Slow half has no shipped-content source: the game's only `Slow` is the
+Sundered Colossus's, which is Umbra, and neither Gale unit applies one. §7's content list does not
+add one either, so that half is correct and currently unreachable, proved against a constructed Gale
+slower and asserted as a gap in the harness.
 
 **Umbra — what Umbra marks stays marked.** Harmful statuses applied by an Umbra source cannot be
 cleansed and do not tick down while the applier lives. Umbra picks the enemy that matters and
@@ -85,6 +89,32 @@ snapshot of it in a plain `for` loop, which is what has to change for a re-entry
 `Sim.DealRawDamage` calls `TriggerPassive(killer, PassiveTrigger.OnKill, 0)` in its death branch —
 and **no hero and no enemy in the content files uses `OnKill`**. It is a live, wired, completely
 unused trigger. Gale is what it was built for.
+
+**Verified and built during `claude/aspects-gale`.** Every claim above was re-checked against `main`
+before it was relied on and all of them held: the `for` loop over the snapshot, the four sort inputs,
+the `TriggerPassive(killer, PassiveTrigger.OnKill, 0)` call in the death branch, and `OnKill` being
+authored by nobody. That last one is now deliberately false — Ryn's `Follow-Through` uses it, per §3.
+
+Two clarifications the section did not have. **First, re-entry is not a passive and cannot be one.**
+There is no `EffectKind` that grants a turn, so "Gale is what `OnKill` was built for" is true of the
+*call site* and not of the trigger: the rule is keyed on `killer.Aspect == Aspect.Gale` at that same
+point in the death branch, exactly as Ember keys on the Burn's source and Tide on the energy's
+granter. It fires for every Gale unit whether or not that unit authors a passive at all. **Second,
+the section misses one consequence of the re-entry it asks for.** `ExpireStatuses` runs at the end
+of the acting unit's turn, and `RoundsLeft` is a round counter — the same thing right up until a
+unit can take two turns in one round. Left alone, a Gale unit that kills would shed its own `Slow`,
+`Silence`, `Stun` and buffs at double rate, a second undesigned reward riding on the first. Expiry
+is now once per round per carrier.
+
+⚠️ **One hazard found in the hook itself, not fixed here.** `DealRawDamage` fires `OnKill` with a
+hardcoded depth of `0`, unlike the `OnCriticalHit` call twenty lines above it which passes `depth`
+through. `MaxPassiveDepth` therefore does not bound an `OnKill` passive at all, and an `OnKill`
+passive that could itself land a kill would re-enter its own trigger without limit. This was
+harmless while nothing authored `OnKill`; §3's change makes it live. `DealRawDamage` has no `depth`
+parameter to thread, so fixing it means touching every damage path in the file. It is left alone and
+the path is kept unreachable by content instead — the harness asserts no `OnKill` passive in shipped
+content carries an effect that can kill (Ryn's is `EnergyGain`, which cannot), and fails the day one
+does.
 
 **Umbra** — three places. `Sim.ExpireStatuses` decrements `RoundsLeft` at the end of the carrier's
 turn; the non-expiry rule lives there and needs `StatusInstance.SourceId` (already recorded) to
@@ -149,7 +179,12 @@ on both `Lance Jab` and `Piercing Gale` is a finisher, and "acts again on a kill
 finisher wants. But `Follow-Through` is `OnCriticalHit → EnergyGain flat: 22` — **that is a Tide
 passive on a Gale hero.** It is the single clearest cross-wiring in the roster. Under this design it
 becomes `OnKill`, and `PassiveTrigger.OnCriticalHit` joins `OnKill` and `OnDamaged` in being
-defined, fired by the sim, and used by nobody.
+defined, fired by the sim, and used by nobody. **Done in `claude/aspects-gale`**, together with
+her description line. Worth stating plainly, because it is easy to assume otherwise: this did *not*
+enable the re-entry mechanic, which is aspect-keyed and fires for Ryn and for the Grave Moth with or
+without it (see §2). It is a separate content fix that happens to belong to the same pass. Note also
+that the trigger swap does not fully un-cross-wire her — the *effect* is still `EnergyGain`, Tide's
+verb; what changed is which of her own moments pays it out.
 
 **Tally:** 1 clean (Maeve), 2 near (Nyx, Kalyx), 3 that need re-labelling or re-kitting (Orrin,
 Wren, Ryn). Three of six heroes change colour or change a passive. That is the real cost of this
@@ -378,6 +413,20 @@ killable enemies. At 3v3 a Gale finisher can chain at most two extra turns and t
 5v5 it can chain four, and a single Gale unit can resolve a round unilaterally — the exact failure
 the `MaxPassiveDepth = 2` constant exists to prevent one level down, with no equivalent guard on
 turn re-entry. **Needs `galeExtraTurnsPerRound` (1) before team size moves, not after.**
+
+**Measured during `claude/aspects-gale`, and the prediction was exact.** Team size was already 5 by
+the time this was built, so the guard shipped in the same change as the mechanic rather than before
+it. Forced in a synthetic 5v5 arena — one Gale unit that one-shots, four inert allies, five one-hit
+enemies — the same arena run twice at two values of the constant: at `galeExtraTurnsPerRound` 9 the
+Gale unit chained **four** extra turns and was the **only** unit to take a turn in round 1, out of
+ten on the field, which is this paragraph's sentence happening. At the shipped value of 1 it took
+one extra turn, eight units acted in that round, and the same kills took three rounds instead of
+one. The guard is per unit per round, since the failure this section names is per unit.
+
+One correction to the reasoning, not the conclusion: the cap is a **balance** bound, not a hang
+guard. Every re-entry costs a kill and there are only ever as many kills as units, so the loop
+terminates even with the constant misconfigured upward. That is why it could be raised to 9 to
+measure it.
 
 **Umbra — flagged in the opposite direction. Weakens at 5.** Its rule is inherently single-target:
 permanently subtract the enemy that matters. At 3 that is a third of the enemy's offence removed and
