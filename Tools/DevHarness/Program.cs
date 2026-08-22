@@ -38,6 +38,8 @@ namespace Emberfall.DevHarness
             CheckAspectEmberVerdant(content);
             CheckAspectTideUmbra(content);
             CheckAspectGale(content);
+            CheckAspectLumen(content);
+            CheckLumenDifficultyDelta(content);
             CheckDispel(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
@@ -483,9 +485,19 @@ namespace Emberfall.DevHarness
             Check(nonUmbraCleansed > 0,
                   "Cleanse still works on everything else - " + nonUmbraCleansed
                   + " non-Umbra harmful status(es) removed, so the filter is not a blanket disable");
-            Check(umbraSurvivedACleanse > 0,
-                  "the filter was actually exercised - " + umbraSurvivedACleanse
-                  + " time(s) a Cleanse took a different status off a unit that was carrying an Umbra one");
+            // Was a Check, and it should not have been. The overlap it counts - a Cleanse taking a
+            // non-Umbra status off a unit that is also carrying an Umbra one - needs the Colossus's
+            // Gravewake, a Grave Moth's Wing Dust and Wren's Verdant Tide to coincide inside one
+            // fight, and at 12 seeds that lands well under once per run on average. Any change that
+            // shifts the RNG stream can take it to zero without anything being wrong, and the Lumen
+            // relabel in claude/aspects-lumen did exactly that: 0 here, 8 at 120 seeds, with the
+            // filter itself provably intact (0 Umbra statuses cleansed, 44 non-Umbra removed). A
+            // coverage claim that rests on a coincidence in unrelated content is not a test, so the
+            // count is reported and the claim is proved deterministically below instead.
+            Line("  [note] the filter was passed over " + umbraSurvivedACleanse
+                 + " time(s) in shipped content this run - a rare coincidence, not a guarantee."
+                 + " CheckUmbraCleanseFilterForced below is what actually proves it.");
+            CheckUmbraCleanseFilterForced();
             Check(umbraExpiredNaturally > 0,
                   "non-expiry was NOT implemented: " + umbraExpiredNaturally
                   + " Umbra-sourced status(es) ran out on schedule, which DESIGN-WORLD section 1 requires"
@@ -1020,6 +1032,842 @@ namespace Emberfall.DevHarness
                 return null;
             }
             return db;
+        }
+
+
+        /// <summary>
+        /// What the shipped-content sample above used to assert by coincidence, forced instead.
+        ///
+        /// One ally carrying two harmful statuses at once, one applied by an Umbra source and one
+        /// not, with a Cleanse landing while both are up. The Cleanse must take the non-Umbra one
+        /// and leave the Umbra one, which is the IsUmbraSourced filter doing its job rather than
+        /// simply never being reached. Zero variance and chance 1 throughout, and speeds ordered so
+        /// both debuffs are on the target before the cleanser acts, so this is arithmetic rather
+        /// than a draw.
+        /// </summary>
+        private static void CheckUmbraCleanseFilterForced()
+        {
+            ContentDatabase db = BuildUmbraFilterTestContent();
+            if (db == null) return;
+
+            // Two heroes, and the cleanse has to land on the OTHER one. A Cleanse targeting Self
+            // emits its StatusExpired with SourceId == TargetId, which is indistinguishable from
+            // natural expiry in the record - the first version of this check read zero removals for
+            // exactly that reason, not because nothing was removed.
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_cleanser"), 1));
+            team.Add(MakeInstance(db.GetHero("test_cleanse_target"), 1));
+            BattleResult r = RunWith(db, db.GetStage("test_filter_arena"), 1, team);
+
+            bool sawUmbraApplied = false, sawPlainApplied = false;
+            bool bothUpTogether = false;
+            int umbraRemovedByCleanse = 0, plainRemovedByCleanse = 0;
+            bool umbraUp = false, plainUp = false;
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied)
+                {
+                    if (e.Status == StatusKind.Slow) { umbraUp = true; sawUmbraApplied = true; }
+                    if (e.Status == StatusKind.AttackDown) { plainUp = true; sawPlainApplied = true; }
+                    if (umbraUp && plainUp) bothUpTogether = true;
+                }
+                else if (e.Type == BattleEventType.StatusExpired && e.SourceId != e.TargetId)
+                {
+                    // SourceId != TargetId is a removal by somebody else, i.e. the Cleanse.
+                    if (e.Status == StatusKind.Slow) { umbraRemovedByCleanse++; umbraUp = false; }
+                    if (e.Status == StatusKind.AttackDown) { plainRemovedByCleanse++; plainUp = false; }
+                }
+            }
+
+            Check(sawUmbraApplied && sawPlainApplied && bothUpTogether,
+                  "forced setup: the cleanser carried an Umbra-sourced Slow and a non-Umbra AttackDown at the same time");
+            Check(plainRemovedByCleanse > 0,
+                  "the Cleanse took the non-Umbra status off it (" + plainRemovedByCleanse + " time(s))");
+            Check(umbraRemovedByCleanse == 0,
+                  "and passed over the Umbra-sourced one sitting next to it (" + umbraRemovedByCleanse
+                  + " removed) - the filter is exercised here by construction, not by coincidence."
+                  + " hits is 2 against exactly 2 harmful statuses, so the cleanse actively reached the"
+                  + " Umbra one and refused it rather than merely stopping before it");
+        }
+
+        /// <summary>
+        /// Two debuffers on one side of a one-hero fight: an Umbra one applying Slow and an Ember one
+        /// applying AttackDown, both AllEnemies at chance 1, both faster than the hero so the hero's
+        /// own Cleanse resolves with both already on it. Everything is unkillable so the fight runs
+        /// to the round limit and the sequence is fixed.
+        /// </summary>
+        private static ContentDatabase BuildUmbraFilterTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_cleanser"", ""name"": ""Test Cleanser"", ""aspect"": ""Verdant"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""cleanse_active"", ""name"": ""Wash"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Cleanse"", ""target"": ""AllAllies"", ""hits"": 2 } ] } },
+    { ""id"": ""test_cleanse_target"", ""name"": ""Test Cleanse Target"", ""aspect"": ""Verdant"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5 }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_umbra_debuffer"", ""name"": ""Test Umbra Debuffer"", ""aspect"": ""Umbra"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""umbra_debuff"", ""name"": ""Unmake"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Slow"", ""magnitude"": 0.1, ""duration"": 9, ""chance"": 1 } ] } },
+    { ""id"": ""test_plain_debuffer"", ""name"": ""Test Plain Debuffer"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""plain_debuff"", ""name"": ""Sap"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""AttackDown"", ""magnitude"": 0.1, ""duration"": 9, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_filter_ch"", ""name"": ""Test Filter"", ""stages"": [
+        { ""id"": ""test_filter_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""test_umbra_debuffer"", ""level"": 1 }, { ""id"": ""test_plain_debuffer"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 4, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Umbra cleanse filter");
+        }
+
+        /// <summary>
+        /// Lumen (DESIGN-ASPECTS sections 1, 2, 3 and 5, as re-weighted by DESIGN-WORLD section 1),
+        /// in five parts. The re-weighting decides what is even being tested: targeting determinism
+        /// is the identity and gets the forced tests, absorption is the consequence and is measured
+        /// rather than asserted into existence.
+        ///
+        /// Part 1 is the shipped-content run with an aspect-only control, the same shape every
+        /// aspect in this series got. Part 2 forces the override against four TargetModes that each
+        /// provably want somebody else, including the two DESIGN-WORLD names specifically
+        /// (LastAttacker, LastTarget). Part 3 forces the Lumen-outranks-Taunt precedence, with the
+        /// taunter deliberately in the lower slot so the old tie-break would have picked it. Part 4
+        /// measures absorption as a consequence: the same fights with and without the relabel, and
+        /// what changes about where damage lands and what Orrin's ward eats. Part 5 is the
+        /// Lumen/Umbra wheel pair, live for the first time in this project's history.
+        ///
+        /// Coverage, stated rather than implied: Orrin is the only Lumen unit in the game and no
+        /// enemy is Lumen, so this rule has exactly one carrier and is one-sided. That is thinner
+        /// evidence than any of the other five aspects had, which DESIGN-ASPECTS section 5 predicted
+        /// in as many words. The forced parts exist because the shipped part cannot carry it alone.
+        /// </summary>
+        private static void CheckAspectLumen(ContentDatabase db)
+        {
+            Line("ASPECT RULES (Lumen targeting determinism)");
+
+            CheckLumenRosterCoverage(db);
+            CheckLumenAnchorInShippedContent(db);
+            CheckLumenOverridesContraryTargetModes();
+            CheckLumenOutranksTaunt();
+            CheckLumenAbsorptionIsTheConsequence(db);
+            CheckLumenUmbraPairIsLive(db);
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The honest coverage statement, as a check rather than a comment so it cannot drift.
+        /// DESIGN-ASPECTS section 5 said the string "Lumen" appeared in this project exactly twice
+        /// and that nothing had ever been Lumen; the relabel is what changes the second half.
+        /// </summary>
+        private static void CheckLumenRosterCoverage(ContentDatabase db)
+        {
+            List<string> lumenHeroes = new List<string>();
+            List<string> lumenEnemies = new List<string>();
+            for (int i = 0; i < db.Heroes.Count; i++)
+                if (db.Heroes[i].Aspect == Aspect.Lumen) lumenHeroes.Add(db.Heroes[i].Id);
+            for (int i = 0; i < db.Enemies.Count; i++)
+                if (db.Enemies[i].Aspect == Aspect.Lumen) lumenEnemies.Add(db.Enemies[i].Id);
+
+            Check(lumenHeroes.Count > 0,
+                  "Lumen has a hero at last: " + string.Join(", ", lumenHeroes.ToArray())
+                  + " - DESIGN-ASPECTS section 5 counted zero");
+            Check(lumenHeroes.Contains("orrin_kaal"),
+                  "the Lumen hero is Orrin Kaal, by relabel and not by rewrite");
+
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (orrin != null)
+            {
+                bool kitIntact = orrin.Title == "Bulwark of Ash"
+                              && orrin.Visual != null && orrin.Visual.Primary == "C2502F"
+                              && orrin.Active != null && orrin.Active.Name == "Cinderguard"
+                              && orrin.Passive != null && orrin.Passive.Name == "Emberskin"
+                              && orrin.BasicAttack != null && orrin.BasicAttack.Name == "Ashen Cleave";
+                Check(kitIntact,
+                      "and only the aspect string moved - title, visual.primary C2502F, Cinderguard, Emberskin and"
+                      + " Ashen Cleave are all untouched (DESIGN-WORLD section 3: the ash is where he was, not what he believed)");
+            }
+
+            Line("  [note] " + lumenEnemies.Count + " Lumen enemies, so the rule is one-sided today: enemy"
+                 + " single-target abilities are anchored onto Orrin, and player single-target abilities resolve"
+                 + " exactly as they did before. It also means Lumen has one carrier in the whole game, which is"
+                 + " thinner shipped-content evidence than any of the other five aspects had - expected, and"
+                 + " predicted by DESIGN-ASPECTS section 5. The forced checks below are what carry it.");
+        }
+
+        /// <summary>
+        /// The shipped campaign, with the same aspect-only control every other aspect in this series
+        /// was held to: the identical five heroes at the identical seeds with Orrin cloned back to
+        /// Ember and nothing else changed must produce zero anchoring.
+        /// </summary>
+        private static void CheckLumenAnchorInShippedContent(ContentDatabase db)
+        {
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (orrin == null) { Check(false, "Orrin Kaal is present"); return; }
+            Check(orrin.Aspect == Aspect.Lumen, "Orrin is Lumen, so the anchor has a unit to fire from");
+
+            string[] others = { "kalyx_emberwright", "wren_ilyra", "nyx_serrow", "maeve_corrin" };
+            List<HeroInstance> lumenTeam = BuildNamedTeam(db, orrin, others);
+            List<HeroInstance> controlTeam = BuildNamedTeam(db, CloneHeroWithAspect(orrin, Aspect.Ember), others);
+
+            int anchored = 0, anchoredOntoNonLumen = 0, unresolved = 0, anchoredControl = 0;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, lumenTeam);
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        if (e.Type != BattleEventType.TargetAnchored) continue;
+                        anchored++;
+
+                        UnitSnapshot onto = r.FindUnit(e.TargetId);
+                        if (onto == null || onto.Aspect != Aspect.Lumen) anchoredOntoNonLumen++;
+
+                    }
+
+                    // The invariant, which is stronger than matching each event to the hit that
+                    // followed it: an ability resolves targets once per effect, so one cast can emit
+                    // several TargetAnchored in a row before anything lands and adjacency proves
+                    // nothing. What must hold instead is that while a living Lumen unit is on the
+                    // player side, no enemy single-target ability ever resolves onto anyone else.
+                    unresolved += CountSingleTargetHitsThatMissedTheAnchor(db, r);
+
+                    BattleResult ctl = RunWith(db, db.AllStages[s], seed, controlTeam);
+                    for (int i = 0; i < ctl.Events.Count; i++)
+                        if (ctl.Events[i].Type == BattleEventType.TargetAnchored) anchoredControl++;
+                }
+            }
+
+            Check(anchored > 0,
+                  "the Lumen anchor actually fires in shipped content - " + anchored
+                  + " single-enemy ability(s) resolved onto Orrin because he answers for his side"
+                  + " (0 would mean the rule never engaged)");
+            Check(anchoredOntoNonLumen == 0,
+                  "every anchored ability resolved onto a Lumen unit (" + anchoredOntoNonLumen + " did not)");
+            Check(unresolved == 0,
+                  "while Orrin was alive, no enemy single-target ability ever resolved onto anyone else ("
+                  + unresolved + " did) - the invariant, not event adjacency");
+            Check(anchoredControl == 0,
+                  "the same five heroes at the same seeds anchor " + anchoredControl
+                  + " time(s) with Orrin's aspect changed back to Ember and nothing else touched"
+                  + " - so the aspect is the cause");
+            Line("  [note] none of these were emitted while Orrin also carried Taunt, by construction - the event"
+                 + " is suppressed when the status tag on his own bar already explains the hit."
+                 + " Cinderguard's Taunt line is therefore now redundant on him:"
+                 + " he answers with or without it. That is orphaned content in the sense DESIGN-ASPECTS section 3"
+                 + " uses for Kalyx's Kindling, and it is left alone here because the brief was relabel, not re-kit.");
+        }
+
+
+        /// <summary>
+        /// Enemy single-target hits that landed on a player unit other than the living Lumen anchor.
+        /// Zero is the invariant the anchor rule has to hold; anything else is the override leaking.
+        ///
+        /// "Single-target" is read out of the content, not guessed from how many units a cast
+        /// happened to hit. The first version of this inferred it the way CheckProvokeTargeting does
+        /// - one contiguous run of Damage from one source with exactly one victim - and reported 168
+        /// false violations, because late in a fight an AllEnemies sweep against a line with one
+        /// survivor left produces exactly one Damage event and is indistinguishable from a single
+        /// pick. A ward that fully absorbs one target's share does the same thing. So the cast's own
+        /// ability id is looked up instead, and only abilities whose every Damage effect names a
+        /// single-enemy TargetMode are held to the rule.
+        /// </summary>
+        private static int CountSingleTargetHitsThatMissedTheAnchor(ContentDatabase db, BattleResult r)
+        {
+            List<int> lumenIds = new List<int>();
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].IsPlayer && r.Units[i].Aspect == Aspect.Lumen) lumenIds.Add(r.Units[i].Id);
+            if (lumenIds.Count == 0) return 0;
+
+            List<int> dead = new List<int>();
+            int violations = 0;
+            string singleTargetCast = null;
+            int castingUnit = -1;
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+
+                if (e.Type == BattleEventType.Death) { if (!dead.Contains(e.TargetId)) dead.Add(e.TargetId); continue; }
+
+                if (e.Type == BattleEventType.TurnStart) { singleTargetCast = null; castingUnit = -1; continue; }
+
+                if (e.Type == BattleEventType.BasicAttack || e.Type == BattleEventType.AbilityCast
+                    || e.Type == BattleEventType.PassiveTrigger)
+                {
+                    UnitSnapshot caster = r.FindUnit(e.SourceId);
+                    bool enemyCast = caster != null && !caster.IsPlayer;
+                    singleTargetCast = enemyCast && IsSingleTargetDamageAbility(db, caster.DefId, e.AbilityId) ? e.AbilityId : null;
+                    castingUnit = enemyCast ? e.SourceId : -1;
+                    continue;
+                }
+
+                if (e.Type != BattleEventType.Damage || e.Status == StatusKind.Burn) continue;
+                if (singleTargetCast == null || e.SourceId != castingUnit) continue;
+                if (lumenIds.Contains(e.TargetId)) continue;
+
+                UnitSnapshot victim = r.FindUnit(e.TargetId);
+                if (victim == null || !victim.IsPlayer) continue;
+
+                bool anchorAlive = false;
+                for (int k = 0; k < lumenIds.Count; k++) if (!dead.Contains(lumenIds[k])) anchorAlive = true;
+                if (anchorAlive) violations++;
+            }
+            return violations;
+        }
+
+        /// <summary>
+        /// Whether an ability belonging to a unit def deals damage and every one of its Damage
+        /// effects names a single-enemy TargetMode. AllEnemies anywhere in the effect list
+        /// disqualifies it, since such a cast legitimately reaches units other than the anchor.
+        /// </summary>
+        private static bool IsSingleTargetDamageAbility(ContentDatabase db, string defId, string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return false;
+            UnitDef def = db.GetEnemy(defId);
+            if (def == null) return false;
+
+            AbilityDef ability = null;
+            if (def.BasicAttack != null && def.BasicAttack.Id == abilityId) ability = def.BasicAttack;
+            else if (def.Active != null && def.Active.Id == abilityId) ability = def.Active;
+            else if (def.Passive != null && def.Passive.Id == abilityId)
+                return EffectsAreSingleTargetDamage(def.Passive.Effects);
+
+            return ability != null && EffectsAreSingleTargetDamage(ability.Effects);
+        }
+
+        private static bool EffectsAreSingleTargetDamage(List<EffectDef> effects)
+        {
+            if (effects == null) return false;
+            bool sawDamage = false;
+            for (int i = 0; i < effects.Count; i++)
+            {
+                if (effects[i].Kind != EffectKind.Damage) continue;
+                sawDamage = true;
+                if (!IsSingleEnemyMode(effects[i].Target)) return false;
+            }
+            return sawDamage;
+        }
+
+        private static bool IsSingleEnemyMode(TargetMode mode)
+        {
+            return mode == TargetMode.LowestHpEnemy || mode == TargetMode.HighestHpEnemy
+                || mode == TargetMode.HighestAttackEnemy || mode == TargetMode.FrontEnemy
+                || mode == TargetMode.RandomEnemy || mode == TargetMode.LastAttacker
+                || mode == TargetMode.LastTarget;
+        }
+
+        /// <summary>
+        /// The override forced against four TargetModes that each provably want somebody else. This
+        /// is the part that cannot be done in shipped content, because there the anchor is also the
+        /// front-most unit and most picks would have landed on him anyway.
+        ///
+        /// The line is a full-health Lumen tank in slot 0 and a badly wounded squishy in slot 1 with
+        /// a much higher Attack, so LowestHpEnemy and HighestAttackEnemy both want the squishy on
+        /// pure merit. The squishy also strikes first each round, which makes it the enemy's
+        /// LastAttacker, and the enemy's own previous target, which makes it LastTarget - the two
+        /// modes DESIGN-WORLD section 1 names specifically as the ones FindTaunter already outranks.
+        /// Four enemies, one per mode, and the control is the same arena with the tank's aspect
+        /// changed to Ember and nothing else.
+        /// </summary>
+        private static void CheckLumenOverridesContraryTargetModes()
+        {
+            ContentDatabase db = BuildLumenTestContent();
+            if (db == null) return;
+
+            string[] modes = { "lowesthp", "highestattack", "lastattacker", "lasttarget" };
+            for (int m = 0; m < modes.Length; m++)
+            {
+                // LastTarget needs the squishy in front. With nothing targeted yet the mode falls
+                // back to FrontEnemy, so a tank in slot 0 would become the enemy's LastTarget on
+                // round 1 and stay it - the control would "want" the tank and prove nothing. Putting
+                // the squishy in slot 0 makes the mode genuinely want it, and makes the Lumen run
+                // also show the anchor beating slot order rather than agreeing with it.
+                bool squishyFirst = modes[m] == "lasttarget";
+                int lumenOntoTank, lumenOntoSquishy, emberOntoTank, emberOntoSquishy;
+                RunAnchorArena(db, "test_lumen_tank", "test_arena_" + modes[m], squishyFirst, out lumenOntoTank, out lumenOntoSquishy);
+                RunAnchorArena(db, "test_ember_tank", "test_arena_" + modes[m], squishyFirst, out emberOntoTank, out emberOntoSquishy);
+
+                Check(emberOntoSquishy > 0 && emberOntoTank == 0,
+                      "control (" + modes[m] + "): with an Ember tank the enemy hits the squishy every time ("
+                      + emberOntoSquishy + " on the squishy, " + emberOntoTank + " on the tank)"
+                      + " - so this mode genuinely wants somebody other than the tank");
+                Check(lumenOntoTank > 0 && lumenOntoSquishy == 0,
+                      "Lumen (" + modes[m] + "): every one of those hits is anchored onto the tank instead ("
+                      + lumenOntoTank + " on the tank, " + lumenOntoSquishy + " on the squishy)");
+            }
+        }
+
+        /// <summary>
+        /// Enemy single-target hits landing on the tank vs on the squishy, over one arena. Victims
+        /// are resolved by DefId rather than by unit id, so the two team orderings the caller uses
+        /// cannot silently swap the two tallies.
+        /// </summary>
+        private static void RunAnchorArena(ContentDatabase db, string tankId, string stageId, bool squishyFirst,
+                                           out int ontoTank, out int ontoSquishy)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            if (squishyFirst) team.Add(MakeInstance(db.GetHero("test_squishy"), 1));
+            team.Add(MakeInstance(db.GetHero(tankId), 1));
+            if (!squishyFirst) team.Add(MakeInstance(db.GetHero("test_squishy"), 1));
+
+            BattleResult r = RunWith(db, db.GetStage(stageId), 1, team);
+            ontoTank = 0;
+            ontoSquishy = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                UnitSnapshot src = r.FindUnit(e.SourceId);
+                if (src == null || src.IsPlayer) continue;
+                UnitSnapshot tgt = r.FindUnit(e.TargetId);
+                if (tgt == null) continue;
+                if (tgt.DefId == tankId) ontoTank++;
+                else if (tgt.DefId == "test_squishy") ontoSquishy++;
+            }
+        }
+
+        /// <summary>
+        /// Precedence, forced: a non-Lumen ally carrying Taunt sits in slot 0 and the Lumen unit sits
+        /// in slot 1, so the Slot tie-break that FindTaunter always used would have picked the
+        /// taunter. Lumen has to win anyway. If it did not, the answer for the side would change
+        /// every time somebody else taunted, which is the non-determinism the aspect exists to
+        /// remove - DESIGN-WORLD section 1's "a function that returns the same answer no matter what
+        /// was asked of it".
+        /// </summary>
+        private static void CheckLumenOutranksTaunt()
+        {
+            ContentDatabase db = BuildLumenTestContent();
+            if (db == null) return;
+
+            // Slot 0 taunts, slot 1 is Lumen, slot 2 is the squishy the mode actually wants.
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_taunter"), 1));
+            team.Add(MakeInstance(db.GetHero("test_lumen_tank"), 1));
+            team.Add(MakeInstance(db.GetHero("test_squishy"), 1));
+
+            BattleResult r = RunWith(db, db.GetStage("test_arena_lowesthp"), 1, team);
+
+            int ontoTaunter = 0, ontoLumen = 0, ontoSquishy = 0;
+            bool tauntWasUp = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt && e.TargetId == 0)
+                    tauntWasUp = true;
+                if (e.Type != BattleEventType.Damage) continue;
+                UnitSnapshot src = r.FindUnit(e.SourceId);
+                if (src == null || src.IsPlayer) continue;
+                if (e.TargetId == 0) ontoTaunter++;
+                else if (e.TargetId == 1) ontoLumen++;
+                else if (e.TargetId == 2) ontoSquishy++;
+            }
+
+            Check(tauntWasUp, "forced setup: the non-Lumen ally in slot 0 actually raised a Taunt");
+            Check(ontoLumen > 0 && ontoTaunter == 0 && ontoSquishy == 0,
+                  "Lumen outranks a non-Lumen ally's Taunt even from a higher slot - " + ontoLumen
+                  + " hit(s) on the Lumen unit in slot 1, " + ontoTaunter + " on the taunter in slot 0, "
+                  + ontoSquishy + " on the squishy the mode wanted");
+        }
+
+        /// <summary>
+        /// Absorption, measured as the consequence it is rather than asserted as a rule.
+        ///
+        /// No code was added to DealRawDamage's shield-absorb block in this pass, so the claim under
+        /// test is not "absorption works" - it already did - but "being the answer is what makes the
+        /// ward matter". The measurement is the same twelve stages run twice, differing only in
+        /// Orrin's aspect: how much of the enemy line's single-target damage lands on him, and how
+        /// much of it his Cinderguard ward eats before it reaches anybody's HP.
+        /// </summary>
+        private static void CheckLumenAbsorptionIsTheConsequence(ContentDatabase db)
+        {
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (orrin == null) return;
+
+            string[] others = { "kalyx_emberwright", "wren_ilyra", "nyx_serrow", "maeve_corrin" };
+            List<HeroInstance> lumenTeam = BuildNamedTeam(db, orrin, others);
+            List<HeroInstance> controlTeam = BuildNamedTeam(db, CloneHeroWithAspect(orrin, Aspect.Ember), others);
+
+            int lumenOnOrrin, lumenOnOthers, lumenAbsorbedByOrrin;
+            int emberOnOrrin, emberOnOthers, emberAbsorbedByOrrin;
+            MeasureIncoming(db, lumenTeam, out lumenOnOrrin, out lumenOnOthers, out lumenAbsorbedByOrrin);
+            MeasureIncoming(db, controlTeam, out emberOnOrrin, out emberOnOthers, out emberAbsorbedByOrrin);
+
+            int lumenTotal = lumenOnOrrin + lumenOnOthers;
+            int emberTotal = emberOnOrrin + emberOnOthers;
+            int lumenShare = lumenTotal > 0 ? (int)(100L * lumenOnOrrin / lumenTotal) : 0;
+            int emberShare = emberTotal > 0 ? (int)(100L * emberOnOrrin / emberTotal) : 0;
+
+            Check(lumenShare > emberShare,
+                  "being the answer moves the damage: Orrin takes " + lumenShare + "% of all incoming single-target"
+                  + " damage as Lumen against " + emberShare + "% as Ember, over the same twelve stages and seeds");
+            Check(lumenAbsorbedByOrrin > emberAbsorbedByOrrin,
+                  "and it is what makes his ward matter - Cinderguard absorbed " + lumenAbsorbedByOrrin
+                  + " damage as Lumen against " + emberAbsorbedByOrrin + " as Ember, with no change at all to"
+                  + " DealRawDamage's absorb block (absorption is the consequence, not the identity)");
+            Line("  [note] the absorb block is unchanged by this pass. That is the third Shield-path hook"
+                 + " DESIGN-ASPECTS has named that turned out to need no code: Verdant's was audited false in"
+                 + " claude/aspects-ember-verdant, DESIGN-HOOK-RESOLUTION cut Green Hour Vessel for the same"
+                 + " reason, and section 2's Lumen entry is the third.");
+        }
+
+        /// <summary>Enemy single-target damage onto Orrin, onto everyone else, and what his shield ate.</summary>
+        private static void MeasureIncoming(ContentDatabase db, List<HeroInstance> team,
+                                            out int ontoOrrin, out int ontoOthers, out int absorbedByOrrin)
+        {
+            ontoOrrin = 0;
+            ontoOthers = 0;
+            absorbedByOrrin = 0;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, team);
+                    int orrinId = -1;
+                    for (int i = 0; i < r.Units.Count; i++)
+                        if (r.Units[i].DefId == "orrin_kaal") orrinId = r.Units[i].Id;
+                    if (orrinId < 0) continue;
+
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        UnitSnapshot src = r.FindUnit(e.SourceId);
+                        if (src == null || src.IsPlayer) continue;
+                        UnitSnapshot tgt = r.FindUnit(e.TargetId);
+                        if (tgt == null || !tgt.IsPlayer) continue;
+
+                        if (e.Type == BattleEventType.ShieldAbsorb)
+                        {
+                            if (e.TargetId == orrinId) absorbedByOrrin += e.Value;
+                            continue;
+                        }
+                        if (e.Type != BattleEventType.Damage || e.Status == StatusKind.Burn) continue;
+                        if (e.TargetId == orrinId) ontoOrrin += e.Value;
+                        else ontoOthers += e.Value;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The Lumen/Umbra wheel pair, live for the first time in this project's history.
+        ///
+        /// DESIGN-ASPECTS section 5 says Umbra's advantage "has never once fired, on either side",
+        /// because Beats() pairs Lumen with Umbra and nothing had ever been Lumen. The relabel
+        /// activates it. Two things the section does not say, and both are checked here rather than
+        /// assumed. First, the live number is AspectChart.Advantage, which an earlier pass narrowed
+        /// from 1.20 to 1.10 - section 5's "×1.20" is the pre-narrowing figure. Second, Beats()
+        /// returns true in BOTH directions for this pair, so it is a mutual advantage, not a
+        /// one-way counter: Orrin gains the same 1.10 attacking Umbra that they gain attacking him.
+        /// Section 5 only names the direction that hurts.
+        /// </summary>
+        private static void CheckLumenUmbraPairIsLive(ContentDatabase db)
+        {
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (orrin == null) return;
+
+            string[] others = { "kalyx_emberwright", "wren_ilyra", "nyx_serrow", "maeve_corrin" };
+            List<HeroInstance> lumenTeam = BuildNamedTeam(db, orrin, others);
+            List<HeroInstance> controlTeam = BuildNamedTeam(db, CloneHeroWithAspect(orrin, Aspect.Ember), others);
+
+            int umbraOntoOrrin = 0, orrinOntoUmbra = 0, wrongFactor = 0, controlNonNeutral = 0;
+            float expected = AspectChart.Advantage;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    BattleResult r = RunWith(db, db.AllStages[s], seed, lumenTeam);
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        if (e.Type != BattleEventType.Damage || e.Status == StatusKind.Burn) continue;
+                        UnitSnapshot src = r.FindUnit(e.SourceId);
+                        UnitSnapshot tgt = r.FindUnit(e.TargetId);
+                        if (src == null || tgt == null) continue;
+
+                        if (src.Aspect == Aspect.Umbra && tgt.Aspect == Aspect.Lumen)
+                        {
+                            umbraOntoOrrin++;
+                            if (Math.Abs(e.AspectFactor - expected) > 0.001f) wrongFactor++;
+                        }
+                        else if (src.Aspect == Aspect.Lumen && tgt.Aspect == Aspect.Umbra)
+                        {
+                            orrinOntoUmbra++;
+                            if (Math.Abs(e.AspectFactor - expected) > 0.001f) wrongFactor++;
+                        }
+                    }
+
+                    BattleResult ctl = RunWith(db, db.AllStages[s], seed, controlTeam);
+                    for (int i = 0; i < ctl.Events.Count; i++)
+                    {
+                        BattleEvent e = ctl.Events[i];
+                        if (e.Type != BattleEventType.Damage) continue;
+                        UnitSnapshot src = ctl.FindUnit(e.SourceId);
+                        UnitSnapshot tgt = ctl.FindUnit(e.TargetId);
+                        if (src == null || tgt == null) continue;
+                        if (src.Aspect == Aspect.Umbra && tgt.DefId == "orrin_kaal"
+                            && Math.Abs(e.AspectFactor - 1f) > 0.001f) controlNonNeutral++;
+                    }
+                }
+            }
+
+            Check(umbraOntoOrrin > 0,
+                  "the Lumen/Umbra pair is live for the first time - " + umbraOntoOrrin
+                  + " hit(s) from an Umbra enemy onto the Lumen tank, where the chart had never once fired before");
+            Check(orrinOntoUmbra > 0,
+                  "and it is mutual, not one-way - " + orrinOntoUmbra
+                  + " hit(s) the other direction, which DESIGN-ASPECTS section 5 does not mention");
+            Check(wrongFactor == 0,
+                  "every one of those carried AspectFactor " + Fmt(expected) + " exactly (" + wrongFactor
+                  + " did not) - the live number is AspectChart.Advantage after the narrowing, not section 5's 1.20");
+            Check(controlNonNeutral == 0,
+                  "the control run, with Orrin back to Ember, produced " + controlNonNeutral
+                  + " Umbra-versus-Orrin hits at a non-neutral factor across the same sample - Beats() pairs Umbra"
+                  + " only with Lumen, so before this relabel the chart was silent on every hit in the game");
+        }
+
+        /// <summary>
+        /// The Lumen arena. Zero variance so every pick below is exact rather than a draw.
+        ///
+        /// The tank sits in slot 0 at full health with low Attack; the squishy sits in slot 1 with a
+        /// sliver of health and a much higher Attack, so LowestHpEnemy and HighestAttackEnemy both
+        /// prefer it on merit. The squishy is also fast enough to strike first every round, which
+        /// makes it the enemy's LastAttacker and, after the first exchange, the enemy's own
+        /// LastTarget. Two tanks exist, identical but for aspect, so the control changes one enum
+        /// value and nothing else. A separate non-Lumen taunter is used by the precedence check.
+        ///
+        /// Enemy Attack is tuned so nothing dies inside maxRounds and every round contributes a
+        /// clean single-target hit to the tally.
+        /// </summary>
+        private static ContentDatabase BuildLumenTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_lumen_tank"", ""name"": ""Test Lumen Tank"", ""aspect"": ""Lumen"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_ember_tank"", ""name"": ""Test Ember Tank"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_taunter"", ""name"": ""Test Taunter"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 50, ""speed"": 250, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""taunt_active"", ""name"": ""Draw"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"", ""duration"": 9, ""chance"": 1 } ] } },
+    { ""id"": ""test_squishy"", ""name"": ""Test Squishy"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 40, ""attack"": 900, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""squishy_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_seeker_lowesthp"", ""name"": ""Seeker LowestHp"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 20, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""seek_lowesthp"", ""name"": ""Seek"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 0.1 } ] } },
+    { ""id"": ""test_seeker_highestattack"", ""name"": ""Seeker HighestAttack"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 20, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""seek_highestattack"", ""name"": ""Seek"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""HighestAttackEnemy"", ""power"": 0.1 } ] } },
+    { ""id"": ""test_seeker_lastattacker"", ""name"": ""Seeker LastAttacker"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 20, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""seek_lastattacker"", ""name"": ""Seek"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastAttacker"", ""power"": 0.1 } ] } },
+    { ""id"": ""test_seeker_lasttarget"", ""name"": ""Seeker LastTarget"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 20, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""seek_lasttarget"", ""name"": ""Seek"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastTarget"", ""power"": 0.1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_lumen_ch"", ""name"": ""Test Lumen"", ""stages"": [
+        { ""id"": ""test_arena_lowesthp"", ""index"": 1, ""enemies"": [ { ""id"": ""test_seeker_lowesthp"", ""level"": 1 } ] },
+        { ""id"": ""test_arena_highestattack"", ""index"": 2, ""enemies"": [ { ""id"": ""test_seeker_highestattack"", ""level"": 1 } ] },
+        { ""id"": ""test_arena_lastattacker"", ""index"": 3, ""enemies"": [ { ""id"": ""test_seeker_lastattacker"", ""level"": 1 } ] },
+        { ""id"": ""test_arena_lasttarget"", ""index"": 4, ""enemies"": [ { ""id"": ""test_seeker_lasttarget"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Lumen");
+        }
+
+        /// <summary>Shared loader for the synthetic databases: parses, reports warnings as failures.</summary>
+        private static ContentDatabase LoadSyntheticContent(string heroes, string enemies, string campaign,
+                                                            string balance, string label)
+        {
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] synthetic " + label + " content warning: " + db.Warnings[i]);
+            Check(false, "synthetic " + label + " test content parses with no warnings");
+            return null;
+        }
+
+
+        /// <summary>
+        /// The difficulty consequence DESIGN-ASPECTS section 5 and DESIGN-WORLD section 3 both name,
+        /// measured on the two stages they name rather than flagged as a concern.
+        ///
+        /// Their claim: relabelling Orrin activates the Lumen/Umbra pair for the first time and
+        /// "the first thing it does is give every Umbra enemy a live advantage against the player's
+        /// tank", landing on "the tutorial and the last stage of chapter 1 simultaneously". The two
+        /// stages are stage 1-1, which is 2 of 3 Umbra, and stage 1-12, which is 3 of 5.
+        ///
+        /// Both are run against an aspect-only control - the identical heroes at the identical
+        /// seeds with Orrin cloned back to Ember - at the line each stage actually meets: three
+        /// level-1 starters for the tutorial, and a levelled five-hero banner for the boss.
+        ///
+        /// What this asserts is only that neither stage becomes unwinnable, because the direction of
+        /// the change is a finding to report, not a target to hit. The numbers are printed either
+        /// way, since running them was the point.
+        /// </summary>
+        private static void CheckLumenDifficultyDelta(ContentDatabase db)
+        {
+            Line("LUMEN DIFFICULTY DELTA (the two stages the docs flag)");
+
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (orrin == null) { Line(""); return; }
+            HeroDef orrinAsEmber = CloneHeroWithAspect(orrin, Aspect.Ember);
+
+            // Both lines are PINNED to the stage's own recommendedPower, the same idea
+            // CheckPinnedFiveBodyCurve uses and for the same reason: at a free-levelled Lv20 banner
+            // both stages sit at 100% with Orrin either colour, and a saturated instrument measures
+            // nothing. The first version of this check read 100% -> 100% on both rows and was
+            // reporting the ceiling, not the change. Aspect does not enter PowerScore, so the pinned
+            // level is identical for the two runs and only the colour differs.
+            string[] starters = { "kalyx_emberwright", "wren_ilyra" };
+            string[] full = { "kalyx_emberwright", "wren_ilyra", "nyx_serrow", "maeve_corrin" };
+
+            int tutLumen, tutEmber, tutLevel;
+            int bossLumen, bossEmber, bossLevel;
+            MeasureStageDelta(db, "ch1_1", orrin, orrinAsEmber, starters, out tutEmber, out tutLumen, out tutLevel);
+            MeasureStageDelta(db, "ch1_12", orrin, orrinAsEmber, full, out bossEmber, out bossLumen, out bossLevel);
+
+            Line("  stage 1-1  (tutorial, 2 of 3 enemies Umbra, 3 heroes at Lv" + tutLevel + ", 40 seeds): "
+                 + tutEmber + "% as Ember -> " + tutLumen + "% as Lumen  (" + Delta(tutEmber, tutLumen) + ")");
+            Line("  stage 1-12 (boss, 3 of 5 enemies Umbra, 5 heroes at Lv" + bossLevel + ", 40 seeds): "
+                 + bossEmber + "% as Ember -> " + bossLumen + "% as Lumen  (" + Delta(bossEmber, bossLumen) + ")");
+
+            Check(tutLumen > 0, "stage 1-1 is still winnable after the relabel (" + tutLumen + "%)");
+            Check(bossLumen > 0, "stage 1-12 is still winnable after the relabel (" + bossLumen + "%)");
+
+            Line("  [note] the wheel penalty is real and lands exactly where both documents said it would - every"
+                 + " Umbra hit onto Orrin now carries AspectFactor " + Fmt(AspectChart.Advantage)
+                 + ", asserted above. What neither document weighs against it is that the same relabel also routes"
+                 + " those hits onto the highest-HP, highest-Defense, ward-carrying unit on the line instead of"
+                 + " onto whoever the enemy's TargetMode preferred. On stage 1-12 the routing beats the multiplier"
+                 + " outright and the stage gets EASIER, not harder - the opposite of the predicted spike."
+                 + " CheckPinnedFiveBodyCurve, a different instrument on a differently-built line, moves the same"
+                 + " way on the same stage (20.8% to 58.3%), so this is not an artefact of how this line is built.");
+            Line("  [note] stage 1-1 could not be measured at all, and that is the honest result rather than a pass."
+                 + " Three starters clear it 40 seeds out of 40 at Lv1, which is the floor - there is no level left"
+                 + " to walk down to, so the stage has no headroom for a spike to show in either direction. The"
+                 + " tutorial half of DESIGN-WORLD section 3's warning is untested here, not refuted.");
+            Line("  [note] neither result says the spike was never a risk. It would reappear on a stage whose Umbra"
+                 + " enemies out-damage what one tank can absorb, and on any line that does not field Orrin at all,"
+                 + " where the relabel is pure penalty and no routing benefit arrives to offset it. Task 13's retune"
+                 + " is where that gets settled.");
+            Line("");
+        }
+
+
+
+        /// <summary>
+        /// One stage measured with Orrin Lumen against Orrin Ember, at a hero level chosen so the
+        /// instrument can actually move.
+        ///
+        /// Pinning to recommendedPower is not enough on its own and the first two versions of this
+        /// check proved it: at a free-levelled banner both flagged stages sit at 100% either colour,
+        /// and a uniform level that reaches recommendedPower overshoots it (the project's own
+        /// five-body pin gets a tight fit by levelling the cheapest hero one step at a time, which a
+        /// single uniform level cannot reproduce). A saturated instrument reports "no change" for
+        /// every possible outcome, which is not a measurement.
+        ///
+        /// So the level is walked down from the recommendedPower pin until the ANCHOR-FREE control
+        /// - Orrin as Ember - lands strictly between a total loss and a total win. That is the level
+        /// where the stage is genuinely contested, and therefore the only level where the relabel's
+        /// effect on difficulty is visible at all. Calibrating on the control rather than on the
+        /// Lumen run keeps the choice of level independent of the thing being measured.
+        /// </summary>
+        private static void MeasureStageDelta(ContentDatabase db, string stageId, HeroDef lumen, HeroDef ember,
+                                              string[] others, out int emberRate, out int lumenRate, out int level)
+        {
+            int pin = PinLevel(db, stageId, lumen, others);
+            level = pin;
+            emberRate = WinRate(db, stageId, BuildNamedTeamAtLevel(db, ember, others, pin), 40);
+
+            for (int candidate = pin; candidate >= 1 && (emberRate >= 100 || emberRate <= 0); candidate--)
+            {
+                level = candidate;
+                emberRate = WinRate(db, stageId, BuildNamedTeamAtLevel(db, ember, others, candidate), 40);
+            }
+            lumenRate = WinRate(db, stageId, BuildNamedTeamAtLevel(db, lumen, others, level), 40);
+        }
+
+        /// <summary>
+        /// The lowest uniform hero level at which this line's summed PowerScore reaches the stage's
+        /// recommendedPower, so the fight is measured at the difficulty the content was authored
+        /// for rather than at whatever a free-levelled banner happens to be. Falls back to level 1
+        /// if the line already clears the target unlevelled, and stops at 60.
+        /// </summary>
+        private static int PinLevel(ContentDatabase db, string stageId, HeroDef lead, string[] otherIds)
+        {
+            StageDef stage = db.GetStage(stageId);
+            if (stage == null) return 20;
+
+            for (int level = 1; level <= 60; level++)
+            {
+                int power = Emberfall.Core.Progression.StatMath.ForHero(lead, level).Power;
+                for (int i = 0; i < otherIds.Length; i++)
+                {
+                    HeroDef def = db.GetHero(otherIds[i]);
+                    if (def != null) power += Emberfall.Core.Progression.StatMath.ForHero(def, level).Power;
+                }
+                if (power >= stage.RecommendedPower) return level;
+            }
+            return 60;
+        }
+
+        private static string Delta(int before, int after)
+        {
+            int d = after - before;
+            if (d == 0) return "no change";
+            return (d > 0 ? "+" : "") + d + " points";
+        }
+
+        /// <summary>Win rate over `seeds` seeds of one stage with one fixed team, as a whole percent.</summary>
+        private static int WinRate(ContentDatabase db, string stageId, List<HeroInstance> team, int seeds)
+        {
+            StageDef stage = db.GetStage(stageId);
+            if (stage == null || seeds <= 0) return 0;
+            int wins = 0;
+            for (int seed = 1; seed <= seeds; seed++)
+                if (RunWith(db, stage, seed, team).Victory) wins++;
+            return (int)Math.Round(100.0 * wins / seeds, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>
