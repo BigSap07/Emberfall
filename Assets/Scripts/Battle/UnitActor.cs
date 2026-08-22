@@ -22,7 +22,7 @@ namespace Emberfall.Battle
         private float _idlePhase;
         private float _flash;
         private float _bobSpeed = 1.6f;
-        private float _bobHeight = 0.035f;
+        private float _bobHeight = 0.09f;
         private Coroutine _motion;
 
         // Both fall back to the humanoid silhouette's own head top rather than a loose 1.8, so a
@@ -51,7 +51,7 @@ namespace Emberfall.Battle
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
             _bobSpeed = snapshot.IsBoss ? 1.1f : 1.5f + (snapshot.Id % 3) * 0.16f;
-            _bobHeight = snapshot.IsBoss ? 0.05f : 0.035f;
+            _bobHeight = snapshot.IsBoss ? 0.12f : 0.09f;
         }
 
         private void Update()
@@ -62,9 +62,9 @@ namespace Emberfall.Battle
             {
                 _idlePhase += Time.deltaTime * _bobSpeed;
                 float bob = Mathf.Sin(_idlePhase) * _bobHeight;
-                float sway = Mathf.Sin(_idlePhase * 0.6f) * 1.6f;
+                float sway = Mathf.Sin(_idlePhase * 0.6f) * 4.0f;
                 Rig.Body.localPosition = new Vector3(0f, bob, 0f);
-                Rig.Body.localRotation = Quaternion.Euler(0f, sway, Mathf.Sin(_idlePhase * 0.8f) * 1.2f);
+                Rig.Body.localRotation = Quaternion.Euler(0f, sway, Mathf.Sin(_idlePhase * 0.8f) * 3.0f);
             }
 
             if (_flash > 0f)
