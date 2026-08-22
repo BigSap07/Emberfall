@@ -53,6 +53,24 @@ namespace Emberfall.Core.Combat
         /// <summary>Re-rolled once per round by the sim; keeps turn order from being the same every fight.</summary>
         public float RoundSpeedJitter;
 
+        /// <summary>
+        /// Gale (DESIGN-ASPECTS section 1 and 8): extra turns this unit has been granted by its own
+        /// kills in the current round. Reset by the sim at the top of every round, and bounded there
+        /// by BalanceConfig.GaleExtraTurnsPerRound.
+        ///
+        /// Per unit, not per side and not per battle, because section 8's stated failure is per
+        /// unit: "a single Gale unit can resolve a round unilaterally". Two Gale units each taking
+        /// one extra turn is the mechanic working; one unit taking four is the failure.
+        /// </summary>
+        public int ExtraTurnsThisRound;
+
+        /// <summary>
+        /// Whether this unit's statuses have already had their once-per-round RoundsLeft decrement.
+        /// Set by Sim.ExpireStatuses, cleared at the top of every round. Only Gale's extra turn can
+        /// make a unit reach ExpireStatuses twice in one round; see the comment there.
+        /// </summary>
+        public bool StatusesExpiredThisRound;
+
         public AbilityDef Basic;
         public AbilityDef Active;
         public PassiveDef Passive;

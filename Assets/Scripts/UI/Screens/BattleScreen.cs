@@ -84,6 +84,9 @@ namespace Emberfall.UI.Screens
 
         private RectTransform _turnStrip;
         private readonly List<TurnStripIcon> _turnStripIcons = new List<TurnStripIcon>();
+
+        /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
+        private int _turnStripCursor;
         private UnitBar _activeTurnBar;
 
         public void SetStage(StageDef stage)
@@ -818,13 +821,29 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        /// <summary>Full-alpha on the acting unit's icon, dimmed on everyone else in the strip.</summary>
+        /// <summary>
+        /// Full-alpha on the acting unit's icon, dimmed on everyone else in the strip.
+        ///
+        /// Walks a cursor rather than matching every icon with this unit id, because Gale's kill
+        /// re-entry (DESIGN-ASPECTS section 1) puts a unit into one round's order more than once, so
+        /// the strip legitimately holds two icons for the same unit. Matching on id alone lit both
+        /// of them from the first turn and made the extra turn look like a duplicated frame instead
+        /// of the second entry it is. The cursor advances to the next icon at or after its current
+        /// position, which is exactly the sequence the strip was built from.
+        /// </summary>
         private void AdvanceTurnStrip(int unitId)
         {
+            for (int i = _turnStripCursor; i < _turnStripIcons.Count; i++)
+            {
+                if (_turnStripIcons[i].UnitId != unitId) continue;
+                _turnStripCursor = i;
+                break;
+            }
+
             for (int i = 0; i < _turnStripIcons.Count; i++)
             {
                 TurnStripIcon icon = _turnStripIcons[i];
-                bool active = icon.UnitId == unitId;
+                bool active = i == _turnStripCursor && icon.UnitId == unitId;
                 Color c = icon.Fill.color;
                 icon.Fill.color = UITheme.WithAlpha(c, active ? 1f : 0.4f);
             }
@@ -835,6 +854,7 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < _turnStripIcons.Count; i++)
                 if (_turnStripIcons[i].Root != null) Destroy(_turnStripIcons[i].Root.gameObject);
             _turnStripIcons.Clear();
+            _turnStripCursor = 0;
         }
 
         private Color AspectTint(UnitActor actor)

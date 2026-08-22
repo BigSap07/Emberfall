@@ -33,6 +33,32 @@ namespace Emberfall.Core.Combat
         StatusExpired,
         EnergyChanged,
         Death,
+
+        /// <summary>
+        /// Gale (DESIGN-ASPECTS section 1): the unit named by SourceId killed something and has been
+        /// put back into the current round's turn order. Emitted at the moment of re-entry, which is
+        /// inside the victim's death, not at the extra turn itself - the extra turn emits its own
+        /// TurnStart later, exactly like a scheduled one.
+        ///
+        /// This exists because the re-entry is otherwise unreadable, not merely unread. A second
+        /// TurnStart for the same unit in the same round is the only trace it leaves, and that is
+        /// indistinguishable from a screen bug without a record saying it was deliberate.
+        /// Value carries how many extra turns that unit has taken this round, so the screen can say
+        /// which one of a bounded sequence this is.
+        /// </summary>
+        ExtraTurn,
+
+        /// <summary>
+        /// Gale (DESIGN-ASPECTS section 1): a Slow from a Gale source moved TargetId's turn later
+        /// inside the round it was applied in, rather than only affecting the next round's sort.
+        /// Value is how many places later it moved among the units that have not acted yet.
+        ///
+        /// Also genuinely absent rather than unread: the resulting turn sequence is a valid sequence
+        /// on its own, so nothing in the event list distinguishes "Gale pushed this unit back" from
+        /// "this unit was simply slower this round" unless the shift is recorded when it happens.
+        /// </summary>
+        TurnOrderShift,
+
         BattleEnd
     }
 

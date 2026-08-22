@@ -89,6 +89,15 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private bool _inRedirect;
 
+            /// <summary>
+            /// The round's live initiative list, and the index of the turn being taken out of it.
+            /// Null outside the round loop - Execute() fires the BattleStart passives before any
+            /// round exists, and a kill there has no round order to re-enter. Both Gale hooks check
+            /// for that rather than assuming a round is in progress.
+            /// </summary>
+            private List<CombatUnit> _order;
+            private int _orderIndex;
+
             public Sim(BattleRequest request)
             {
                 _request = request;
@@ -115,14 +124,31 @@ namespace Emberfall.Core.Combat
                     BattleEvent roundEvent = Emit(BattleEventType.RoundStart, -1, -1);
                     roundEvent.Value = _round;
 
-                    List<CombatUnit> order = TurnOrder();
-                    for (int i = 0; i < order.Count; i++)
+                    for (int i = 0; i < _units.Count; i++)
                     {
-                        CombatUnit unit = order[i];
+                        _units[i].ExtraTurnsThisRound = 0;
+                        _units[i].StatusesExpiredThisRound = false;
+                    }
+
+                    // Gale (DESIGN-ASPECTS section 2): this was a plain `for` over a snapshot, which
+                    // is exactly what had to change. The list is now live and the cursor is a field,
+                    // so TryGaleReentry can splice the round's own initiative list while it is being
+                    // walked and TryGaleSlowShift can re-sort the part of it that has not happened
+                    // yet. Count is re-read every iteration on purpose - `order.Count` grows.
+                    //
+                    // Termination does not rest on the cap. Every insertion requires a kill and
+                    // there are only ever _units.Count units to kill, so the list is finite even if
+                    // GaleExtraTurnsPerRound is misconfigured upward. The cap is a balance bound
+                    // (section 8), not a hang guard, and the harness proves it by removing it.
+                    _order = TurnOrder();
+                    for (_orderIndex = 0; _orderIndex < _order.Count; _orderIndex++)
+                    {
+                        CombatUnit unit = _order[_orderIndex];
                         if (!unit.Alive) continue;
                         TakeTurn(unit);
                         if (IsBattleOver()) break;
                     }
+                    _order = null;
                     if (IsBattleOver()) break;
                 }
 
@@ -177,6 +203,105 @@ namespace Emberfall.Core.Combat
                 return a.Id.CompareTo(b.Id);
             }
 
+            // ------------------------------------------------------------------ Gale
+
+            /// <summary>
+            /// Gale, half one (DESIGN-ASPECTS section 1): a Gale unit that lands a kill re-enters
+            /// the current round's turn order.
+            ///
+            /// Keyed on the killer's own aspect, the same way Ember keys on the Burn's source, Tide
+            /// on the energy's granter, Verdant on the healer and Umbra on the applier. No content
+            /// authors this and no content can: there is no EffectKind that grants a turn, so the
+            /// rule is a property of being Gale rather than a passive anyone could write. That is
+            /// also why section 2's "the kill hook already exists and is already fired" is about the
+            /// call site, not about PassiveTrigger.OnKill - the trigger above fires whatever passive
+            /// the killer authored, and this fires regardless of whether it authored one.
+            ///
+            /// Re-entry position uses CompareTurnOrder, which is why section 2 names it and
+            /// TurnOrderSpeed, RoundSpeedJitter and EffectiveSpeed as the sort inputs: the unit
+            /// slots back in where its speed says it belongs among the turns that have not happened
+            /// yet, so a fast Gale finisher acts again almost immediately and a slow one waits. The
+            /// round's jitter is deliberately not re-rolled - it is a per-round value, and drawing
+            /// again here would consume from _rng and desync every seeded replay.
+            ///
+            /// **The bound (DESIGN-ASPECTS section 8, DESIGN-BUILD-ORDER known trap 3).** At 5v5 an
+            /// unbounded re-entry lets one Gale unit chain four kills and resolve the round on its
+            /// own, which is the failure MaxPassiveDepth prevents one level down in passive
+            /// recursion. GaleExtraTurnsPerRound is the equivalent guard and it is enforced here,
+            /// per unit per round. It ships in the same change as the mechanic, never after.
+            /// </summary>
+            private void TryGaleReentry(CombatUnit killer)
+            {
+                if (_order == null) return;
+                if (killer == null || !killer.Alive) return;
+                if (killer.Aspect != Aspect.Gale) return;
+                if (killer.ExtraTurnsThisRound >= _cfg.GaleExtraTurnsPerRound) return;
+                if (IsBattleOver()) return;
+
+                killer.ExtraTurnsThisRound++;
+
+                int at = _order.Count;
+                for (int i = _orderIndex + 1; i < _order.Count; i++)
+                {
+                    if (CompareTurnOrder(killer, _order[i]) >= 0) continue;
+                    at = i;
+                    break;
+                }
+                _order.Insert(at, killer);
+
+                BattleEvent e = Emit(BattleEventType.ExtraTurn, killer.Id, killer.Id);
+                e.Value = killer.ExtraTurnsThisRound;
+            }
+
+            /// <summary>
+            /// Gale, half two (DESIGN-ASPECTS section 1): a Slow applied by a Gale source pushes the
+            /// target's turn later inside the round it is applied in, not merely the next one.
+            ///
+            /// Without this the Slow is inert for the current round no matter how early it lands,
+            /// because the order was sorted before it existed. The shift is done by re-sorting only
+            /// the turns that have not been taken yet, with the same comparator that built the list:
+            /// EffectiveSpeed already folds in the new Slow, so the target falls to wherever its
+            /// reduced speed puts it and nothing else moves. Re-sorting an already-sorted tail with
+            /// a total-ordering comparator cannot reorder anything whose sort key did not change,
+            /// which is what keeps this from being a general shuffle. CompareTurnOrder breaks every
+            /// tie on Id, so the result does not depend on List.Sort being stable, and nothing here
+            /// draws from _rng.
+            ///
+            /// A target that has already acted this round is not in the tail and so is not moved -
+            /// there is no turn left to push. That is a natural bound, not an omission: "later in
+            /// this round" has no meaning once the turn is spent.
+            ///
+            /// **Unreachable in shipped content today, and deliberately not fixed here.** The only
+            /// unit in the game that applies Slow is the Sundered Colossus, which is Umbra, and
+            /// neither Gale unit (Ryn Solvarr, Grave Moth) applies it. Section 7's content list does
+            /// not add one. The harness proves this half against a constructed Gale slower and
+            /// asserts the shipped-content gap separately, so the day a Gale unit is authored with a
+            /// Slow, the rule is already correct rather than newly written.
+            /// </summary>
+            private void TryGaleSlowShift(CombatUnit source, CombatUnit target)
+            {
+                if (_order == null) return;
+                if (source == null || source.Aspect != Aspect.Gale) return;
+                if (target == null || !target.Alive) return;
+
+                int first = _orderIndex + 1;
+                if (first >= _order.Count) return;
+
+                int before = _order.IndexOf(target, first);
+                if (before < 0) return;
+
+                List<CombatUnit> tail = _order.GetRange(first, _order.Count - first);
+                tail.Sort(CompareTurnOrder);
+                for (int i = 0; i < tail.Count; i++) _order[first + i] = tail[i];
+
+                int after = _order.IndexOf(target, first);
+                if (after <= before) return;
+
+                BattleEvent e = Emit(BattleEventType.TurnOrderShift, source.Id, target.Id);
+                e.Status = StatusKind.Slow;
+                e.Value = after - before;
+            }
+
             private void TakeTurn(CombatUnit unit)
             {
                 Emit(BattleEventType.TurnStart, unit.Id, unit.Id);
@@ -191,14 +316,18 @@ namespace Emberfall.Core.Combat
                 // Cleared by the ExpireStatuses() decrement below, the same RoundsLeft clock every
                 // other status uses; there is no separate timer to keep in sync.
                 //
-                // Re-entry, considered: TakeTurn is only ever called from the single `for` loop in
-                // Execute() over `order`, a List<CombatUnit> built once per round by TurnOrder() and
-                // never mutated afterward - each living unit is added to it exactly once. Returning
-                // early here does not requeue the unit, does not call TakeTurn again, and nothing
-                // downstream of a skipped turn (ExpireStatuses, the passive trigger already fired
-                // above) can hand control back into this method. So a stunned unit cannot be made to
-                // act again later in the same round as a side effect of the skip - unlike passive
-                // recursion (MaxPassiveDepth), there is no call path back into TakeTurn to bound.
+                // Re-entry, re-stated for Gale. The previous version of this comment argued that a
+                // skipped turn could not become a second turn because `order` was built once per
+                // round and never mutated, so there was no call path back into TakeTurn to bound.
+                // Gale makes the premise false: `_order` is now spliced mid-walk by TryGaleReentry,
+                // and TakeTurn can be entered twice in one round for the same unit.
+                //
+                // The conclusion survives, on a different argument. Re-entry is granted only in
+                // DealRawDamage's death branch, to the unit credited with the kill, and a stunned
+                // unit returns from here having dealt no damage at all - it cannot have killed
+                // anything on this turn, so nothing requeues it. What does need bounding is the
+                // path that exists now, and that bound is GaleExtraTurnsPerRound in TryGaleReentry,
+                // the turn-order equivalent of MaxPassiveDepth one level down.
                 if (unit.Has(StatusKind.Stun))
                 {
                     ExpireStatuses(unit);
@@ -285,8 +414,27 @@ namespace Emberfall.Core.Combat
                 }
             }
 
+            /// <summary>
+            /// Once per round per carrier, not once per turn taken.
+            ///
+            /// Gale's re-entry is the reason this needs saying. RoundsLeft is a round counter that
+            /// happens to be decremented at the end of the carrier's turn, which was the same thing
+            /// right up until a unit could take two turns in one round. Left ungated, a Gale unit
+            /// that kills would shed its own Slow, Silence, Stun, DefenseDown and buffs at double
+            /// rate as a side effect of the extra turn - a second, undesigned reward riding on the
+            /// first, and one that would quietly break CheckStatusExpiry's "expires exactly on
+            /// schedule" rule for any Gale carrier. Gale's rule is that it acts out of order, not
+            /// that it ages faster.
+            ///
+            /// The flag is reset at the top of each round alongside ExtraTurnsThisRound. No unit
+            /// could take two turns in a round before this pass, so this gate is a no-op for every
+            /// battle that contains no Gale re-entry.
+            /// </summary>
             private void ExpireStatuses(CombatUnit unit)
             {
+                if (unit.StatusesExpiredThisRound) return;
+                unit.StatusesExpiredThisRound = true;
+
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
                     StatusInstance s = unit.Statuses[i];
@@ -407,6 +555,12 @@ namespace Emberfall.Core.Combat
                         BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                         e.Status = effect.Status;
                         e.Duration = duration;
+
+                        // Gale (DESIGN-ASPECTS section 1): a Slow from a Gale source takes effect in
+                        // the round it lands in, not only in the next one's sort. Emitted after
+                        // StatusApplied so the record reads in causal order: the Slow landed, then
+                        // the order moved because of it.
+                        if (effect.Status == StatusKind.Slow) TryGaleSlowShift(source, target);
                         break;
                     }
                     case EffectKind.Cleanse:
@@ -619,6 +773,7 @@ namespace Emberfall.Core.Combat
 
                     CombatUnit killer = FindUnit(sourceId);
                     if (killer != null && killer.Alive) TriggerPassive(killer, PassiveTrigger.OnKill, 0);
+                    TryGaleReentry(killer);
                     return;
                 }
 
