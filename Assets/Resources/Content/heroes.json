@@ -64,12 +64,7 @@
           { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.28, "duration": 3, "chance": 0.85 }
         ]
       },
-      "passive": {
-        "id": "kalyx_passive", "name": "Kindling", "trigger": "None",
-        "bonusVsStatus": "Burn", "bonusMultiplier": 0.30,
-        "description": "Kalyx deals 30% more damage to anything already burning.",
-        "effects": []
-      }
+      "passive": null
     },
 
     {

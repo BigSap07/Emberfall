@@ -117,8 +117,6 @@ namespace Emberfall.Core.Data
         public PassiveTrigger Trigger = PassiveTrigger.None;
         public float Threshold = 0.5f;        // for OnHpBelowThreshold
         public bool OncePerBattle = true;     // for threshold style passives
-        public StatusKind BonusVsStatus = StatusKind.None;
-        public float BonusMultiplier;         // extra damage vs targets carrying BonusVsStatus
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -132,8 +130,6 @@ namespace Emberfall.Core.Data
             p.Trigger = EnumUtil.Parse(j.GetString("trigger", "None"), PassiveTrigger.None);
             p.Threshold = j.GetFloat("threshold", 0.5f);
             p.OncePerBattle = j.GetBool("oncePerBattle", p.Trigger == PassiveTrigger.OnHpBelowThreshold || p.Trigger == PassiveTrigger.BattleStart);
-            p.BonusVsStatus = EnumUtil.Parse(j.GetString("bonusVsStatus", "None"), StatusKind.None);
-            p.BonusMultiplier = j.GetFloat("bonusMultiplier", 0f);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));
@@ -331,6 +327,19 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int GaleExtraTurnsPerRound = 1;
 
+        /// <summary>
+        /// Most simultaneous Burn entries one unit can carry from Ember stacking (DESIGN-ASPECTS
+        /// section 8). Ember's rule lets each Ember source add its own Burn instead of overwriting,
+        /// so the entry count scales with how many Embers are on the line: at team size 5, three
+        /// Embers casting an AllEnemies Burn against five enemies is 15 live StatusInstances all
+        /// ticking in TickDamageOverTime. The doc calls that a legibility and stability problem
+        /// rather than a balance one, which is why the bound is a flat entry cap and not a damage
+        /// scale. At the cap a further application degrades to the pre-Ember refresh: it keeps the
+        /// stronger magnitude and the longer duration on an existing entry instead of adding a new
+        /// one, so a strong Ember still deepens the fire and nothing is silently dropped.
+        /// </summary>
+        public int EmberBurnStackCap = 3;
+
         // hero levelling
         public float LevelCostA = 55f;
         public float LevelCostB = 26f;
@@ -376,6 +385,7 @@ namespace Emberfall.Core.Data
             b.SpeedVariance = j.GetFloat("speedVariance", b.SpeedVariance);
             b.MaxTeamSize = j.GetInt("maxTeamSize", b.MaxTeamSize);
             b.GaleExtraTurnsPerRound = j.GetInt("galeExtraTurnsPerRound", b.GaleExtraTurnsPerRound);
+            b.EmberBurnStackCap = j.GetInt("emberBurnStackCap", b.EmberBurnStackCap);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
             b.LevelCostC = j.GetFloat("levelCostC", b.LevelCostC);

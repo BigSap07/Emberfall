@@ -23,6 +23,14 @@ namespace Emberfall.Core.Combat
     {
         private const int MaxPassiveDepth = 2;
 
+        /// <summary>
+        /// Rounds a Verdant overflow bank is spread across. Two, not one: a status decrements at the
+        /// end of its carrier's own turn, so a bank applied during the carrier's own turn - a Verdant
+        /// unit overhealing itself - would expire at the end of that same turn having never reached a
+        /// TickDamageOverTime. Two rounds guarantees at least one tick from either side of the turn.
+        /// </summary>
+        private const int VerdantBankRounds = 2;
+
         private const float MinEffectLanding = 0.05f;
         private const float MaxEffectLanding = 1f;
 
@@ -194,11 +202,32 @@ namespace Emberfall.Core.Combat
                 ExpireStatuses(unit);
             }
 
+            /// <summary>
+            /// Walks a snapshot, not the live list, because two things mutate unit.Statuses from
+            /// inside this loop: DealRawDamage removes the Shield entry when a tick breaks the ward,
+            /// and clears the list entirely on death. Indexing the live list meant a shield break
+            /// shifted every later entry down one and the walk stepped straight over it, so a Burn or
+            /// Regen sitting behind a Shield could silently never tick.
+            ///
+            /// Latent, not observed: reverting this method to the indexed walk produces byte-identical
+            /// harness output across all twelve stages, so the ordering needed to trigger it does not
+            /// occur in shipped content today. It is guarded rather than left alone because Ember's
+            /// stacking raises the number of DoT entries a single unit can sit behind one ward, which
+            /// moves the case from unreachable toward merely rare. Any behavioural change here would
+            /// therefore be a regression, not a fix - the identical output is the point.
+            ///
+            /// The Contains guard stops an entry that was removed mid-walk from ticking after the
+            /// fact. StatusInstance is a reference type with no Equals override, so that is identity
+            /// comparison, which is what is wanted here.
+            /// </summary>
             private void TickDamageOverTime(CombatUnit unit)
             {
-                for (int i = 0; i < unit.Statuses.Count; i++)
+                List<StatusInstance> ticking = new List<StatusInstance>(unit.Statuses);
+                for (int i = 0; i < ticking.Count; i++)
                 {
-                    StatusInstance s = unit.Statuses[i];
+                    StatusInstance s = ticking[i];
+                    if (!unit.Statuses.Contains(s)) continue;
+
                     if (s.Kind == StatusKind.Burn)
                     {
                         int damage = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
@@ -212,7 +241,7 @@ namespace Emberfall.Core.Combat
                     {
                         int heal = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
                         if (heal < 1) heal = 1;
-                        ApplyHealValue(s.SourceId, unit, heal, "heal");
+                        ApplyHealValue(s.SourceId, unit, heal, "heal", false);
                     }
                 }
             }
@@ -266,7 +295,7 @@ namespace Emberfall.Core.Combat
                     {
                         if (!target.Alive) break;
                         float amount = source.EffectiveAttack * effect.Power + effect.Flat + source.MaxHp * effect.SelfHpRatio;
-                        ApplyHealValue(source.Id, target, (int)Math.Round(amount, MidpointRounding.AwayFromZero), "heal");
+                        ApplyHealValue(source.Id, target, (int)Math.Round(amount, MidpointRounding.AwayFromZero), "heal", true);
                         break;
                     }
                     case EffectKind.Shield:
@@ -303,10 +332,21 @@ namespace Emberfall.Core.Combat
                         float magnitude = effect.Magnitude;
                         if (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen)
                             magnitude = source.EffectiveAttack * effect.Magnitude;
-                        target.AddOrRefresh(effect.Status, Math.Max(1, effect.Duration), magnitude, source.Id);
+                        int duration = Math.Max(1, effect.Duration);
+
+                        // Ember (DESIGN-ASPECTS section 1): a Burn from an Ember source stacks as
+                        // its own entry instead of folding into the one already there, so a second
+                        // Ember deepens the same fire rather than replacing it. The magnitude was
+                        // snapshotted off this source's own EffectiveAttack just above, so a strong
+                        // Ember's stack and a weak Ember's are already correctly different sizes.
+                        if (effect.Status == StatusKind.Burn && source.Aspect == Aspect.Ember)
+                            target.AddStack(effect.Status, duration, magnitude, source.Id, _cfg.EmberBurnStackCap);
+                        else
+                            target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
+
                         BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                         e.Status = effect.Status;
-                        e.Duration = Math.Max(1, effect.Duration);
+                        e.Duration = duration;
                         break;
                     }
                     case EffectKind.Cleanse:
@@ -340,12 +380,6 @@ namespace Emberfall.Core.Combat
 
                 float aspectFactor = AspectChart.Multiplier(source.Aspect, target.Aspect);
                 raw *= aspectFactor;
-
-                if (source.Passive != null && source.Passive.BonusVsStatus != StatusKind.None
-                    && target.Has(source.Passive.BonusVsStatus))
-                {
-                    raw *= 1f + source.Passive.BonusMultiplier;
-                }
 
                 bool critical = _rng.Chance(source.EffectiveCritChance);
                 if (critical) raw *= source.CritDamage;
@@ -423,17 +457,45 @@ namespace Emberfall.Core.Combat
                 TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
             }
 
-            private void ApplyHealValue(int sourceId, CombatUnit target, int amount, string vfx)
+            /// <summary>
+            /// allowBank is Verdant's gate and is never defaulted, because the one call site that
+            /// must pass false is the Regen tick itself. Banking a Regen tick's own overflow would
+            /// re-apply Regen to a full-health carrier every turn, refreshing the status off its own
+            /// output and leaving it on the unit permanently - a self-feeding loop. Verdant's rule is
+            /// about healing *output* finding somewhere to go, not about a bank recycling itself.
+            /// </summary>
+            private void ApplyHealValue(int sourceId, CombatUnit target, int amount, string vfx, bool allowBank)
             {
                 if (!target.Alive || amount <= 0) return;
+
                 float missing = target.MaxHp - target.Hp;
-                if (missing <= 0f) return;
-                int healed = (int)Math.Min(missing, amount);
-                if (healed <= 0) return;
-                target.Hp += healed;
-                BattleEvent e = Emit(BattleEventType.Heal, sourceId, target.Id);
-                e.Value = healed;
-                e.Vfx = vfx;
+                int healed = missing > 0f ? (int)Math.Min(missing, amount) : 0;
+                if (healed > 0)
+                {
+                    target.Hp += healed;
+                    BattleEvent e = Emit(BattleEventType.Heal, sourceId, target.Id);
+                    e.Value = healed;
+                    e.Vfx = vfx;
+                }
+
+                // Verdant (DESIGN-ASPECTS section 1): healing with nowhere to go is banked onto the
+                // recipient as Regen instead of being clamped away. Split across VerdantBankRounds
+                // so the bank pays out at most what overflowed and never more - Magnitude on a Regen
+                // entry is a flat per-tick heal, so handing it the whole overflow with a duration
+                // above 1 would pay the overflow out once per round and create value.
+                int overflow = amount - healed;
+                if (!allowBank || overflow <= 0) return;
+
+                CombatUnit source = FindUnit(sourceId);
+                if (source == null || source.Aspect != Aspect.Verdant) return;
+
+                float perTick = overflow / (float)VerdantBankRounds;
+                if (perTick < 1f) return;
+
+                target.AddOrRefresh(StatusKind.Regen, VerdantBankRounds, perTick, sourceId);
+                BattleEvent banked = Emit(BattleEventType.StatusApplied, sourceId, target.Id);
+                banked.Status = StatusKind.Regen;
+                banked.Duration = VerdantBankRounds;
             }
 
             private void AddEnergy(CombatUnit unit, int amount)
