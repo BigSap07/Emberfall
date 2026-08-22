@@ -51,9 +51,49 @@ namespace Emberfall.Battle
         //      from slot order at all, so the targeting rule and the visual layout stay in sync
         //      by construction rather than by the layout happening to put low slots first.
         // Reported so the choice is made deliberately, not decided here.
-        // Tightened pass. Front x 2.40 -> 1.60, back x 4.90 -> 4.25, front z +/-4.10 -> +/-3.45,
-        // back z +/-6.42 -> +/-5.25. Every number re-derived rather than scaled down by eye, and
-        // one correction in the method itself made most of the room:
+        // Tightened again: front x 1.60 -> 1.40, back x 4.25 -> 3.95, front z +/-3.45 -> +/-3.25,
+        // back z +/-5.25 -> +/-4.95. Cumulatively from where this started, front x 2.40 -> 1.40
+        // and back z +/-6.42 -> +/-4.95.
+        //
+        // CAMERA PITCH WAS TESTED AS A LEVER FOR CHARACTER SIZE AND IT IS NOT ONE. The reasoning
+        // that it should be is sound as far as it goes: a z gap costs H / tan(pitch), which falls
+        // 24% between 28 and 35 degrees, on exactly the axis that binds. But the saving does not
+        // survive projection. The z spread needed is proportional to H / tan(p), and what it
+        // contributes to the VERTICAL FRAME is that spread times sin(p):
+        //     (H / tan(p)) * sin(p) = H * cos(p)
+        // and a character's own apparent height is also H * cos(p), since a vertical billboard
+        // foreshortens by the cosine. Every term in the vertical budget carries the same cos(p),
+        // so orthographicSize falls in exact proportion to how much shorter the character gets,
+        // and apparent size is invariant. Pitch buys nothing by construction, not by coincidence.
+        //
+        // Measured, holding minimum separation fixed at 0.373 and re-solving the layout at each
+        // pitch, character height in pixels at 1080p:
+        //     24 deg 215.5   28 deg 213.0   32 deg 210.1   35 deg 207.9   40 deg 203.6   45 deg 198.7
+        // Steeper is monotonically WORSE, and 35 degrees would have cost 2.4%. The residual slope
+        // is the blob shadow: it lies flat, so its projected depth grows with sin(p) while
+        // everything else shrinks with cos(p). Pitch stays at 28, which is also the shallow end of
+        // the range that still reads as a battle line rather than a map. For the record the point
+        // where it stops reading as a line is somewhere near 45, where a depth step and a height
+        // step project equally (tan = 1) and rank separation stops being distinguishable from
+        // height, but there is no reason to go looking for it: the direction is unprofitable from
+        // the first degree.
+        //
+        // What did buy size, since pitch could not:
+        //   the minimum separation target, 0.373 -> 0.232 world units (33 px at 1080p, still
+        //     clearly a gap), which let the whole z spread come in;
+        //   the blob shadow, 1.35 x 1.05 -> 1.10 x 0.85 (see UnitRig.ShadowWidth), which was
+        //     wider than any body it sat under and was 5.5% of the vertical budget on its own.
+        // Together those are orthographicSize 3.85 -> 3.65, characters 5% larger. That is the
+        // honest ceiling for this content: the vertical budget at the shipped layout is 65% back
+        // rank z spread, 22% the tallest hero, 5.5% shadow, 4.2% shake reserve, 2.8% cast reserve,
+        // and the z spread is already at its floor for the separation above. Anything much larger
+        // needs either overlap allowed, per-stage framing, or the two golem-scale enemies
+        // (Stone Warden 1.18, Sundered Colossus 1.55) toned down in enemies.json.
+        //
+        // x closed as far as it goes; that air was free, since vertical binds either way.
+        //
+        // Every number re-derived rather than scaled down by eye, and one correction in the
+        // method itself made most of the room the first time:
         //
         // The old rule was "clearing on z costs H / sin(28)". That is not the requirement. Two
         // units at the same x are separated on screen by dz*sin(28), and the near one's head
@@ -65,19 +105,17 @@ namespace Emberfall.Battle
         // slot at team sizes 1 to 5:
         //   front rank  Sundered Colossus slot 0 next to a Grave Moth slot 1 (ch1_12). The
         //               Colossus's hammer tips out at 3.162, so 2*Zf*sin(28) must clear
-        //               3.162*cos(28): Zf >= 2.974 bare. Chosen 3.45.
+        //               3.162*cos(28): Zf >= 3.208 at the current separation. Chosen 3.25.
         //   back rank   Stone Warden slot 3 next to a Hollow Husk slot 4 (ch1_10). Hammer top
-        //               2.407, so Zb >= 4.527 bare. Chosen 5.25, and this pair is what sets the
-        //               final minimum separation.
+        //               2.407, so Zb >= 4.925. Chosen 4.95, and this pair is what sets the final
+        //               minimum separation.
         //   sides       Nyx Serrow slot 0 against the Colossus slot 0 across the middle. Their
-        //               turned half-widths are 0.63 and 1.32, so Xf >= 1.15 bare. Chosen 1.60.
-        //   x-step      Colossus slot 0 against a Grave Moth slot 2, needing Xb - Xf >= 2.50.
-        //               Chosen 2.65.
+        //               turned half-widths are 0.63 and 1.32, so Xf >= 1.114. Chosen 1.40.
+        //   x-step      Colossus slot 0 against a Grave Moth slot 2, needing Xb - Xf >= 2.320.
+        //               Chosen 2.55.
         //
-        // Minimum screen separation over everything checked: 0.373 world units, at the Stone
-        // Warden / Hollow Husk pair above. Nothing overlaps at any team size. The old layout
-        // measured 0.401 by this same corrected model, so the formation is substantially tighter
-        // for 0.028 of give-up, not for free but close to it.
+        // Minimum screen separation over everything checked: 0.232 world units, 33 px at 1080p,
+        // at the Stone Warden / Hollow Husk pair above. Nothing overlaps at any team size.
         //
         // Half-widths come from the assembled rig, not from a nominal figure: the local AABB of
         // every primitive a Build* method emits including its weapon, turned by
@@ -88,14 +126,14 @@ namespace Emberfall.Battle
         // last pass lost them.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(-1.6f, -3.45f), new Vector2(-1.6f, 3.45f),
-            new Vector2(-4.25f, -5.25f), new Vector2(-4.25f, 0f), new Vector2(-4.25f, 5.25f)
+            new Vector2(-1.4f, -3.25f), new Vector2(-1.4f, 3.25f),
+            new Vector2(-3.95f, -4.95f), new Vector2(-3.95f, 0f), new Vector2(-3.95f, 4.95f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(1.6f, -3.45f), new Vector2(1.6f, 3.45f),
-            new Vector2(4.25f, -5.25f), new Vector2(4.25f, 0f), new Vector2(4.25f, 5.25f)
+            new Vector2(1.4f, -3.25f), new Vector2(1.4f, 3.25f),
+            new Vector2(3.95f, -4.95f), new Vector2(3.95f, 0f), new Vector2(3.95f, 4.95f)
         };
 
         public Camera Camera;
@@ -133,35 +171,34 @@ namespace Emberfall.Battle
             //   burst), which moves the frame 0.18*cos(28) = 0.159 vertically. The backdrop
             //   already budgeted for shake; the frame bound never did.
             //
-            //   highest  f  4.529   Orrin Kaal, slot 4, mid-cast, at shake extreme
-            //   lowest   f -3.025   Orrin Kaal, slot 2, shadow near edge, at shake extreme
-            //   span 7.554, half-span 3.777, centre 0.7518
+            //   highest  f  4.388   Orrin Kaal, slot 4, mid-cast, at shake extreme
+            //   lowest   f -2.806   Orrin Kaal, slot 2, shadow near edge, at shake extreme
+            //   span 7.194, half-span 3.597, centre 0.791
             //
-            // Horizontal: widest reach is a Stone Warden in the back rank's outer slot, 4.25 plus
-            // its own shadow half-width 1.00, plus shake, = 5.45.
-            //   orthographicSize by width = 5.45 / 1.778 = 3.07
+            // Horizontal: widest reach is a Stone Warden in the back rank's outer slot, 3.95 plus
+            // its own shadow half-width 0.81, plus shake, = 5.15.
+            //   orthographicSize by width = 5.15 / 1.778 = 2.90
             //
-            // Vertical binds, 3.78 against 3.07. Chosen 3.85, which leaves 0.07 world (10 px at
-            // 1080p) beyond the already-reserved shake and cast at each edge, and 1.39 world
-            // (195 px) of unused air at each SIDE. Horizontal is not close, and cannot become
-            // close at this aspect: it would only bind below an aspect ratio of 5.45 / 3.85 =
-            // 1.42, so anything at or above 3:2 is clear and 16:9 has room to spare.
+            // Vertical binds, 3.60 against 2.90. Chosen 3.65, which leaves about 0.05 world (8 px
+            // at 1080p) beyond the already-reserved shake and cast at each edge, and 1.34 world
+            // (198 px) of unused air at each SIDE. Horizontal is not close and cannot become
+            // close at this aspect: it would only bind below an aspect ratio of 5.15 / 3.65 =
+            // 1.41, so anything at or above 3:2 is clear and 16:9 has room to spare.
             //
-            // 4.25 -> 3.85 renders everything 10% larger, on top of the formation itself being
-            // roughly 20% tighter in both axes.
+            // 3.85 -> 3.65 renders everything 5% larger again. See the slot comment above for why
+            // that is the ceiling and what would have to change to beat it.
             //
-            // Camera: x 0, symmetric. z -9.5 unchanged. y solves to the same 5.90 as before,
-            // because tightening the formation shrank its reach almost symmetrically about the
-            // old centre: camY = (0.7518 + 9.5*0.4695) / 0.8829 = 5.903. Floors re-checked:
-            // camY (5.90) is still above orthographicSize*cos(28) (3.40), and the nearest
-            // occupied point is well past the 0.3 near clip.
+            // Camera: x 0, symmetric. z -9.5 unchanged. y re-solved for the new centre:
+            // camY = (0.791 + 9.5*0.4695) / 0.8829 = 5.95. Floors re-checked: camY (5.95) is
+            // still above orthographicSize*cos(28) (3.22), and the nearest occupied point is well
+            // past the 0.3 near clip.
             Camera.orthographic = true;
-            Camera.orthographicSize = 3.85f;
+            Camera.orthographicSize = 3.65f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(0f, 5.90f, -9.5f);
+            _cameraHome = new Vector3(0f, 5.95f, -9.5f);
             _cameraRig.localPosition = _cameraHome;
             _cameraRig.localRotation = Quaternion.Euler(28f, 0f, 0f);
 
@@ -209,23 +246,23 @@ namespace Emberfall.Battle
             // Under orthographic a quad held perpendicular to the view direction covers exactly
             // the same frame at any distance: half-height is orthographicSize and half-width is
             // orthographicSize * aspect, with no perspective divide. Re-checked against the new
-            // orthographicSize (3.85, down from 4.25) rather than assumed still correct: frame is
-            // now 2 * 3.85 = 7.70 tall by 7.70 * 1.778 = 13.69 wide, both smaller.
+            // orthographicSize (3.65, down from 3.85) rather than assumed still correct: frame is
+            // now 2 * 3.65 = 7.30 tall by 7.30 * 1.778 = 12.98 wide, both smaller.
             //
             // Margin: BattleStage.Shake moves the camera up to 0.18 world units in x and y
             // (BattleScreen asks for 0.14 on a crit and 0.18 on a burst), while the backdrop is
             // parented to the world and placed once, so it does not shake with the camera. A
             // world-x shake shifts the frame 0.18 across the quad; a world-y shake shifts it
             // 0.18 * cos(28) = 0.16. 0.30 per side covers both with room to spare.
-            //   needed width  = 13.69 + 0.60 = 14.29
-            //   needed height =  7.70 + 0.60 =  8.30
+            //   needed width  = 12.98 + 0.60 = 13.58
+            //   needed height =  7.30 + 0.60 =  7.90
             //
             // Cover, not stretch: the quad is grown to the texture's own aspect ratio until it
             // covers both, so the painting is never squashed and the frame never sees past its
             // edge. ashen.png is 1672 x 941, aspect 1.7768 against the frame's 1.7778 - within
             // 0.05% of 16:9, so cropping, letterboxing and stretching are still nearly the same
-            // choice here. Height is the exact fit this time (quadH = 8.30, no crop vertically);
-            // width comes out to 8.30 * 1.7768 = 14.75, past the 14.29 needed, so the frame shows
+            // choice here. Height is the exact fit this time (quadH = 7.90, no crop vertically);
+            // width comes out to 7.90 * 1.7768 = 14.04, past the 13.58 needed, so the frame shows
             // the middle 97% of the painting horizontally. The backdrop therefore covers the frame
             // with 0.46 world units to spare on width, which is worth stating because it rules the
             // backdrop out as a source of anything that looks like a cut-off edge. Which axis
@@ -252,9 +289,9 @@ namespace Emberfall.Battle
             // construction, and rotated to face straight back down that axis (the rig's rotation
             // turned 180 about its own up axis puts the quad's +Z front face against the view
             // direction). Distance re-checked against the new formation rather than left at its
-            // old value: the back rank's far-z occupant (x 4.25, z 5.25) is now the deepest point,
-            // forward depth 15.79 along the camera's view axis, down from 16.83 now that the back
-            // rank's z reach is +/-5.25 rather than +/-6.42. 22 clears that with margin
+            // old value: the back rank's far-z occupant (x 3.95, z 4.95) is now the deepest point,
+            // forward depth 15.55 along the camera's view axis, down again now that the back
+            // rank's z reach is +/-4.95 rather than +/-5.25. 22 clears that with margin
             // and sits well inside the 120 far clip.
             const float Distance = 22f;
             Vector3 forward = _cameraRig.localRotation * Vector3.forward;

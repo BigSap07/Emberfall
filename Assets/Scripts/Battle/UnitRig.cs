@@ -389,6 +389,21 @@ namespace Emberfall.Battle
             }
         }
 
+        /// <summary>
+        /// Footprint of the blob shadow, in local units before visual.Scale. Was 1.35 x 1.05,
+        /// which is wider than any body it sits under: a sprite hero's quad is 0.98 across and a
+        /// humanoid rig 1.12, so the shadow stuck out past the feet on every side.
+        ///
+        /// It is a named constant because it is not only cosmetic. The shadow lies flat, so the
+        /// three-quarter turn swings its footprint out in z past the unit's own slot, and that
+        /// overhang is the LOWEST thing in frame for the back rank's near-z units. At 1.35 x 1.05
+        /// it was 5.5% of the entire vertical framing budget, spent on the edge of a soft blob.
+        /// UnitActor.PlayDeath shrinks the same numbers, so both read from here rather than
+        /// repeating literals that have already drifted apart once.
+        /// </summary>
+        public const float ShadowWidth = 1.10f;
+        public const float ShadowDepth = 0.85f;
+
         private void BuildShadow()
         {
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -398,7 +413,7 @@ namespace Emberfall.Battle
             Shadow.SetParent(Root, false);
             Shadow.localPosition = new Vector3(0f, 0.015f, 0f);
             Shadow.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Shadow.localScale = new Vector3(1.35f, 1.05f, 1f);
+            Shadow.localScale = new Vector3(ShadowWidth, ShadowDepth, 1f);
 
             MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
             renderer.material = BattleAssets.NewFx(BattleAssets.BlobShadow, new Color(0f, 0f, 0f, 0.55f), false);

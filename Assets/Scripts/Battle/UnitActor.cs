@@ -162,7 +162,7 @@ namespace Emberfall.Battle
                 if (Rig.Shadow != null)
                 {
                     float shrink = 1f - k;
-                    Rig.Shadow.localScale = new Vector3(1.35f * shrink, 1.05f * shrink, 1f);
+                    Rig.Shadow.localScale = new Vector3(UnitRig.ShadowWidth * shrink, UnitRig.ShadowDepth * shrink, 1f);
                 }
                 yield return null;
             }
