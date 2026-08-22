@@ -74,8 +74,19 @@ namespace Emberfall.Core.Combat
             private readonly BattleResult _result = new BattleResult();
             private int _round;
 
-            /// <summary>True while a Tide hand-off is being delivered. Bounds the redirect to one
-            /// hop even if the hand-off is ever routed back through AddEnergy.</summary>
+            /// <summary>
+            /// True while a Tide hand-off is being delivered. Bounds the redirect to one hop even if
+            /// the hand-off is ever routed back through AddEnergy.
+            ///
+            /// Measured, not assumed: with the hand-off deliberately rewritten to recurse, removing
+            /// this guard changes nothing in shipped content - the recipient is chosen as the
+            /// largest gap on the line, and no grant today (8 and 25, from Rising Chorus and Tidal
+            /// Cadence) is big enough to overflow it. So the cascade is currently unreachable and
+            /// this guard is latent. It stops being latent the moment grants get bigger, which
+            /// DESIGN-ASPECTS section 8 says is coming ("her numbers get retuned regardless of this
+            /// document"): at 4x grants the same rewrite cascades to 6 hand-offs inside one grant,
+            /// and with this guard in place it stays at 4.
+            /// </summary>
             private bool _inRedirect;
 
             public Sim(BattleRequest request)
