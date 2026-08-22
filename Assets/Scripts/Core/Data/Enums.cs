@@ -61,7 +61,8 @@ namespace Emberfall.Core.Data
         Shield,
         ApplyStatus,
         Cleanse,
-        EnergyGain
+        EnergyGain,
+        Dispel
     }
 
     public enum StatusKind
@@ -76,7 +77,10 @@ namespace Emberfall.Core.Data
         Shield,
         Taunt,
         Focus,   // increased critical chance
-        Slow     // reduced speed
+        Slow,    // reduced speed
+        Silence, // inert placeholder — no cast-blocking logic yet
+        Stun,    // inert placeholder — no turn-blocking logic yet
+        Stealth  // inert placeholder — no targeting-visibility logic yet
     }
 
     public enum PassiveTrigger
@@ -137,7 +141,9 @@ namespace Emberfall.Core.Data
             return kind == StatusKind.AttackDown
                 || kind == StatusKind.DefenseDown
                 || kind == StatusKind.Burn
-                || kind == StatusKind.Slow;
+                || kind == StatusKind.Slow
+                || kind == StatusKind.Silence
+                || kind == StatusKind.Stun;
         }
 
         public static string DisplayName(StatusKind kind)
@@ -154,6 +160,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Taunt: return "Provoke";
                 case StatusKind.Focus: return "Focus";
                 case StatusKind.Slow: return "Mire";
+                case StatusKind.Silence: return "Silence";
+                case StatusKind.Stun: return "Stun";
+                case StatusKind.Stealth: return "Stealth";
             }
             return kind.ToString();
         }
@@ -173,6 +182,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Taunt: return "PRV";
                 case StatusKind.Focus: return "FOC";
                 case StatusKind.Slow: return "MIR";
+                case StatusKind.Silence: return "SIL";
+                case StatusKind.Stun: return "STN";
+                case StatusKind.Stealth: return "STH";
             }
             return "?";
         }

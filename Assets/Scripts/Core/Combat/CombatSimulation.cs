@@ -390,6 +390,20 @@ namespace Emberfall.Core.Combat
                         }
                         break;
                     }
+                    case EffectKind.Dispel:
+                    {
+                        if (!target.Alive) break;
+                        int removed = 0;
+                        for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
+                        {
+                            if (StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
+                            BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
+                            e.Status = target.Statuses[i].Kind;
+                            target.Statuses.RemoveAt(i);
+                            removed++;
+                        }
+                        break;
+                    }
                     case EffectKind.EnergyGain:
                     {
                         if (!target.Alive) break;
