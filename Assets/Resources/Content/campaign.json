@@ -84,7 +84,7 @@
           "boss": true,
           "environment": "hollow", "gold": 800, "shards": 40, "accountXp": 140,
           "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 10200,
-          "enemies": [ { "id": "sundered_colossus", "level": 20 }, { "id": "grave_moth", "level": 14 }, { "id": "grave_moth", "level": 14 }, { "id": "hollow_husk", "level": 12 }, { "id": "hollow_husk", "level": 12 } ]
+          "enemies": [ { "id": "sundered_colossus", "level": 20 }, { "id": "hollow_husk", "level": 12 }, { "id": "hollow_husk", "level": 12 }, { "id": "grave_moth", "level": 14 }, { "id": "grave_moth", "level": 14 } ]
         }
       ]
     }
