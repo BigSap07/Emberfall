@@ -152,6 +152,13 @@ namespace Emberfall.Core.Data
         /// <summary>Flat landing-chance bonus/penalty for harmful ApplyStatus effects. Phase A: always 0, authored nowhere.</summary>
         public float EffectHit;
         public float EffectResist;
+        /// <summary>Phase B flat stats: authored in JSON, passed through to CombatUnit, not consumed by any combat logic yet.</summary>
+        public float SkillDamage;
+        public float Block;
+        public float ArmorBreak;
+        public float ControlImmunity;
+        public float DamageReduction;
+        public float HolyDamage;
         public float Growth = 0.11f;   // per level, applied to hp / attack / defense
         public int StartEnergy;
         public VisualDef Visual = new VisualDef();
@@ -172,6 +179,12 @@ namespace Emberfall.Core.Data
             CritDamage = j.GetFloat("critDamage", CritDamage);
             EffectHit = j.GetFloat("effectHit", EffectHit);
             EffectResist = j.GetFloat("effectResist", EffectResist);
+            SkillDamage = j.GetFloat("skillDamage", SkillDamage);
+            Block = j.GetFloat("block", Block);
+            ArmorBreak = j.GetFloat("armorBreak", ArmorBreak);
+            ControlImmunity = j.GetFloat("controlImmunity", ControlImmunity);
+            DamageReduction = j.GetFloat("damageReduction", DamageReduction);
+            HolyDamage = j.GetFloat("holyDamage", HolyDamage);
             Growth = j.GetFloat("growth", Growth);
             StartEnergy = j.GetInt("startEnergy", 0);
             Visual = VisualDef.FromJson(j["visual"]);

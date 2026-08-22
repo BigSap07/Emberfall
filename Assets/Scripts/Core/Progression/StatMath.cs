@@ -14,6 +14,12 @@ namespace Emberfall.Core.Progression
         public float CritDamage;
         public float EffectHit;
         public float EffectResist;
+        public float SkillDamage;
+        public float Block;
+        public float ArmorBreak;
+        public float ControlImmunity;
+        public float DamageReduction;
+        public float HolyDamage;
 
         public int Power
         {
@@ -65,6 +71,12 @@ namespace Emberfall.Core.Progression
             // effect of its level, which nobody decided.
             s.EffectHit = def.EffectHit;
             s.EffectResist = def.EffectResist;
+            s.SkillDamage = def.SkillDamage;
+            s.Block = def.Block;
+            s.ArmorBreak = def.ArmorBreak;
+            s.ControlImmunity = def.ControlImmunity;
+            s.DamageReduction = def.DamageReduction;
+            s.HolyDamage = def.HolyDamage;
             return s;
         }
 
