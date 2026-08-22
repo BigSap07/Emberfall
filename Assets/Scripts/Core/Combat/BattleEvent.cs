@@ -16,6 +16,20 @@ namespace Emberfall.Core.Combat
         ShieldGain,
         ShieldAbsorb,
         StatusApplied,
+
+        /// <summary>
+        /// A harmful status was rolled for and did not land. Carries SourceId, TargetId and Status,
+        /// the same three fields StatusApplied carries, so the screen can say which affliction
+        /// failed and who shrugged it off.
+        ///
+        /// This exists because DESIGN-BATTLE-READABILITY requires the screen to read the record
+        /// rather than recompute it, and without this event a resist is invisible: the debuff
+        /// simply never appears and nothing says why. Emitted only for harmful statuses, which are
+        /// the only ones Effect Resist contests - a beneficial status failing its own authored
+        /// chance is a whiff, not a resist, and calling it one would be a lie in the record.
+        /// </summary>
+        StatusResisted,
+
         StatusExpired,
         EnergyChanged,
         Death,

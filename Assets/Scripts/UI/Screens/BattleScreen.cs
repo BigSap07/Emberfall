@@ -684,6 +684,25 @@ namespace Emberfall.UI.Screens
                     break;
                 }
 
+                case BattleEventType.StatusResisted:
+                {
+                    // The whole reason this event exists: without a visible beat here, a resisted
+                    // debuff is indistinguishable from an ability that did nothing, and the player
+                    // has no way to learn that a target is resistant. Named, so the record is
+                    // readable rather than merely non-empty - "RESIST" alone would not say what
+                    // failed. Shield blue rather than Danger red, because nothing bad happened to
+                    // the unit this text sits over; the affliction is what failed.
+                    UnitActor target = ActorOf(e.TargetId);
+                    if (target != null)
+                    {
+                        SpawnFloatingText(target.HeadPosition,
+                                          StatusInfo.DisplayName(e.Status) + " resisted",
+                                          UITheme.Shield, 0.8f);
+                    }
+                    yield return Wait(0.05f);
+                    break;
+                }
+
                 case BattleEventType.StatusExpired:
                 {
                     UnitBar bar = BarOf(e.TargetId);

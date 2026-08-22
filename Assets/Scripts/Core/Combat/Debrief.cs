@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Emberfall.Core.Data;
 
 namespace Emberfall.Core.Combat
 {
@@ -10,6 +11,7 @@ namespace Emberfall.Core.Combat
         Timeout,
         AbilityDominant,
         Aspect,
+        Resisted,
         Speed,
         UnspentActive,
         Fallback
@@ -34,6 +36,15 @@ namespace Emberfall.Core.Combat
         private const float AspectFactorThreshold = 1.2f;
         private const float SpeedMajorityShare = 0.5f;
 
+        /// <summary>
+        /// Fraction of the player's own harmful statuses that has to be shrugged off before the
+        /// resist clause fires, and the fewest attempts that share is allowed to be measured over.
+        /// Four is not arbitrary: below it a single unlucky roll clears a half-share threshold and
+        /// the line would blame Effect Resist for ordinary variance.
+        /// </summary>
+        private const float ResistedDominantShare = 0.5f;
+        private const int ResistedMinAttempts = 4;
+
         public static DebriefResult Summarize(BattleResult result)
         {
             DebriefResult clause;
@@ -48,6 +59,7 @@ namespace Emberfall.Core.Combat
             if (TryTimeout(result, out clause)) return clause;
             if (TryAbilityDominant(result, out clause)) return clause;
             if (TryAspect(result, out clause)) return clause;
+            if (TryResisted(result, out clause)) return clause;
             if (TrySpeed(result, out clause)) return clause;
             if (TryUnspentActive(result, out clause)) return clause;
             return Fallback(result);
@@ -142,7 +154,68 @@ namespace Emberfall.Core.Combat
             return true;
         }
 
-        // ------------------------------------------------------------------ 4. speed
+        // ------------------------------------------------------------------ 4. afflictions did not land
+
+        /// <summary>
+        /// Counts the player's own offensive afflictions and how many the enemy shrugged off,
+        /// reading StatusApplied against StatusResisted. Sits below the two damage clauses because
+        /// a fight is usually decided by damage, and above Speed because this one is actionable:
+        /// it names Effect Hit and Effect Resist, which the player can change by choosing who to
+        /// deploy, where turn order is not something they pick.
+        ///
+        /// Player-cast and enemy-targeted only. An enemy resisting its own self-buff is impossible
+        /// (beneficial statuses are never contested) and enemy debuffs failing on the player is
+        /// good news, not an explanation of a loss.
+        /// </summary>
+        private static bool TryResisted(BattleResult r, out DebriefResult clause)
+        {
+            clause = null;
+            int attempts = 0;
+            int resisted = 0;
+            Dictionary<int, int> resistedByTarget = new Dictionary<int, int>();
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                bool applied = e.Type == BattleEventType.StatusApplied;
+                bool blocked = e.Type == BattleEventType.StatusResisted;
+                if (!applied && !blocked) continue;
+                if (!StatusInfo.IsHarmful(e.Status)) continue;
+
+                UnitSnapshot source = r.FindUnit(e.SourceId);
+                UnitSnapshot target = r.FindUnit(e.TargetId);
+                if (source == null || target == null) continue;
+                if (!source.IsPlayer || target.IsPlayer) continue;
+
+                attempts++;
+                if (!blocked) continue;
+                resisted++;
+                int existing;
+                resistedByTarget.TryGetValue(e.TargetId, out existing);
+                resistedByTarget[e.TargetId] = existing + 1;
+            }
+
+            if (attempts < ResistedMinAttempts) return false;
+            float share = resisted / (float)attempts;
+            if (share <= ResistedDominantShare) return false;
+
+            int worstId = -1;
+            int worstCount = 0;
+            foreach (KeyValuePair<int, int> kv in resistedByTarget)
+                if (kv.Value > worstCount) { worstCount = kv.Value; worstId = kv.Key; }
+            UnitSnapshot worst = r.FindUnit(worstId);
+
+            clause = new DebriefResult();
+            clause.Clause = DebriefClause.Resisted;
+            clause.Text = worst != null
+                ? Pct(share) + "% of your afflictions were shrugged off (" + resisted + " of " + attempts
+                  + "), most of them by " + worst.Name + " - this line needs more Effect Hit against them."
+                : Pct(share) + "% of your afflictions were shrugged off (" + resisted + " of " + attempts
+                  + ") - this line needs more Effect Hit for this fight.";
+            return true;
+        }
+
+        // ------------------------------------------------------------------ 5. speed
 
         /// <summary>
         /// For every player TurnStart, what fraction of that round's enemy turns had already
@@ -198,7 +271,7 @@ namespace Emberfall.Core.Combat
             return true;
         }
 
-        // ------------------------------------------------------------------ 5. unspent active
+        // ------------------------------------------------------------------ 6. unspent active
 
         private static bool TryUnspentActive(BattleResult r, out DebriefResult clause)
         {
@@ -228,7 +301,7 @@ namespace Emberfall.Core.Combat
             return false;
         }
 
-        // ------------------------------------------------------------------ 6. fallback
+        // ------------------------------------------------------------------ 7. fallback
 
         /// <summary>Always produces a clause: the first player Death, if any, plus the largest single hit. Never fails.</summary>
         private static DebriefResult Fallback(BattleResult r)

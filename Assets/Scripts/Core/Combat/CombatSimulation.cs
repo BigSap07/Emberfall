@@ -287,7 +287,19 @@ namespace Emberfall.Core.Combat
                         if (!target.Alive || effect.Status == StatusKind.None) break;
                         float landing = ResolveLandingChance(effect.Chance, effect.Status,
                                                               source.EffectiveEffectHit, target.EffectiveEffectResist);
-                        if (!_rng.Chance(landing)) break;
+                        if (!_rng.Chance(landing))
+                        {
+                            // Only harmful statuses are contested, so only harmful statuses can be
+                            // resisted. A beneficial status losing its own authored roll is not a
+                            // resist and must not be reported as one. Emitting here costs no RNG
+                            // draw, so it cannot shift the stream or desync a seeded battle.
+                            if (StatusInfo.IsHarmful(effect.Status))
+                            {
+                                BattleEvent miss = Emit(BattleEventType.StatusResisted, source.Id, target.Id);
+                                miss.Status = effect.Status;
+                            }
+                            break;
+                        }
                         float magnitude = effect.Magnitude;
                         if (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen)
                             magnitude = source.EffectiveAttack * effect.Magnitude;

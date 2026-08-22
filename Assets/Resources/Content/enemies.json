@@ -5,6 +5,7 @@
       "id": "hollow_husk", "name": "Hollow Husk", "kind": "minion", "aspect": "Umbra",
       "hp": 900, "attack": 111, "defense": 45, "speed": 92,
       "critChance": 0.06, "critDamage": 1.4, "growth": 0.12,
+      "effectHit": 0.00, "effectResist": 0.05,
       "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "claws", "scale": 0.95, "sigil": 6 },
       "basic": {
         "id": "husk_basic", "name": "Flail", "vfx": "impact",
@@ -16,6 +17,7 @@
       "id": "cinder_imp", "name": "Cinder Imp", "kind": "minion", "aspect": "Ember",
       "hp": 780, "attack": 130, "defense": 38, "speed": 104,
       "critChance": 0.10, "critDamage": 1.5, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.10, "effectResist": 0.05,
       "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "wisp", "weapon": "none", "scale": 0.8, "sigil": 7 },
       "basic": {
         "id": "imp_basic", "name": "Spit Ember", "vfx": "bolt",
@@ -34,6 +36,7 @@
       "id": "grave_moth", "name": "Grave Moth", "kind": "minion", "aspect": "Gale",
       "hp": 720, "attack": 105, "defense": 36, "speed": 128,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.00,
       "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "none", "scale": 0.9, "sigil": 8 },
       "basic": {
         "id": "moth_basic", "name": "Dust Rake", "vfx": "slash",
@@ -52,6 +55,7 @@
       "id": "blight_hound", "name": "Blight Hound", "kind": "minion", "aspect": "Verdant",
       "hp": 950, "attack": 122, "defense": 48, "speed": 112,
       "critChance": 0.12, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.20, "effectResist": 0.08,
       "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 1.0, "sigil": 9 },
       "basic": {
         "id": "hound_basic", "name": "Rotbite", "vfx": "slash",
@@ -66,6 +70,7 @@
       "id": "stone_warden", "name": "Stone Warden", "kind": "elite", "aspect": "Verdant",
       "hp": 1600, "attack": 119, "defense": 106, "speed": 76,
       "critChance": 0.05, "critDamage": 1.4, "growth": 0.12,
+      "effectHit": 0.00, "effectResist": 0.25,
       "visual": { "primary": "6E7A63", "secondary": "2B3129", "accent": "AFC49B", "silhouette": "golem", "weapon": "hammer", "scale": 1.18, "sigil": 10 },
       "basic": {
         "id": "warden_basic", "name": "Grind", "vfx": "impact",
@@ -85,6 +90,7 @@
       "id": "ashen_revenant", "name": "Ashen Revenant", "kind": "elite", "aspect": "Ember",
       "hp": 1500, "attack": 184, "defense": 62, "speed": 98,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.15,
       "visual": { "primary": "B33A2E", "secondary": "2E1A18", "accent": "FF9A5C", "silhouette": "brute", "weapon": "greatsword", "scale": 1.1, "sigil": 11 },
       "basic": {
         "id": "revenant_basic", "name": "Sear", "vfx": "slash",
@@ -103,6 +109,7 @@
       "id": "tidecaller_wretch", "name": "Tidecaller Wretch", "kind": "elite", "aspect": "Tide",
       "hp": 1120, "attack": 124, "defense": 70, "speed": 100,
       "critChance": 0.08, "critDamage": 1.4, "growth": 0.12, "startEnergy": 25,
+      "effectHit": 0.00, "effectResist": 0.12,
       "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "wisp", "weapon": "staff", "scale": 1.02, "sigil": 12 },
       "basic": {
         "id": "wretch_basic", "name": "Brine Lash", "vfx": "bolt",
@@ -121,6 +128,7 @@
       "id": "sundered_colossus", "name": "Sundered Colossus", "kind": "boss", "aspect": "Umbra",
       "hp": 2450, "attack": 232, "defense": 104, "speed": 84,
       "critChance": 0.15, "critDamage": 1.7, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.15, "effectResist": 0.20,
       "visual": { "primary": "4B3F63", "secondary": "17131F", "accent": "C9A6FF", "silhouette": "golem", "weapon": "hammer", "scale": 1.55, "sigil": 13 },
       "basic": {
         "id": "colossus_basic", "name": "Ruinous Sweep", "vfx": "impact",
