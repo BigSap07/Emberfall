@@ -19,12 +19,18 @@ existing branch in that path:
 
 The two discard paths are the richest, because today they silently throw value away.
 
-## Six relics
+## Four relics
+
+Two of the six relics designed here were cut during the implementation pass. Their entries below
+carry a **Cut** note and the reason. The four that shipped are Splitting Prism, Warden's Debt,
+Stormlance Oath, and Verdict Sigil; see `relics.json` for their final hook parameters.
 
 **Splitting Prism** — Damage effects aimed at `AllEnemies` retarget to `FrontEnemy`, with `Hits`
 multiplied by the number of enemies they would have struck. *Kalyx.* Cinder Bloom stops being a
-board wipe and becomes a drill. The cost is real: the Burn no longer spreads, so Kindling (+30%
-versus burning) has almost nothing to feed on. The relic asks you to rebuild him.
+board wipe and becomes a drill. The cost is real: the Burn no longer spreads, and every enemy that
+would have been burning is left unscorched. (`Kindling`, originally named here as a second cost
+because the relic would starve its own passive, was cut during the Ember implementation — see
+DESIGN-ASPECTS §3 and §6. The downside is now purely about spread lost.)
 
 **Warden's Debt** — `Shield` effects targeting `Self` instead target the lowest-HP ally.
 *Orrin.* Cinderguard's ward leaves the tank and lands on Ryn or Kalyx. Orrin becomes a protector
@@ -35,6 +41,10 @@ wants him. Deliberately double-edged.
 discarded. *Wren.* Verdant Tide on a healthy line is currently worth nothing; with this it is a
 team-wide ward, and Wren stops being a reactive button.
 
+**Cut.** Verdant's identity claims the same early return in `ApplyHealValue`, banking overflow to
+`Regen` instead of a ward. One hook, one wearer (Wren), and the aspect owns it. See
+DESIGN-HOOK-RESOLUTION §3.
+
 **Stormlance Oath** — the wearer's `LowestHpEnemy` targeting becomes `HighestHpEnemy`. *Ryn.*
 Lance Jab and Piercing Gale stop cleaning up chaff and start opening the Sundered Colossus. She
 loses her finisher role entirely; against three minions she is now the worst pick on the banner.
@@ -42,6 +52,10 @@ loses her finisher role entirely; against three minions she is now the worst pic
 **Tidewrought Metronome** — `EnergyGain` the wearer grants is not clamped at 100; the excess
 banks toward the next cast. *Maeve.* Tidal Cadence plus Rising Chorus wastes energy constantly at
 cap. Banked, the line can cast on consecutive rounds. Pure tempo, zero stats.
+
+**Cut.** The Tide identity claims the same discard in `AddEnergy`, redirecting overflow to the living
+ally furthest from casting. One hook, one wearer (Maeve), and the aspect owns it. See
+DESIGN-HOOK-RESOLUTION §2.
 
 **Verdict Sigil** — `AfterBasicAttack` passives also fire after an Active. *Nyx.* Hollowing
 currently skips every turn she casts Umbral Step, so her best turn is her least debilitating.
@@ -84,9 +98,9 @@ a stat stick and should be cut.
 `fromTrigger`/`toTrigger`). No change to `heroes.json` or `enemies.json`.
 
 **Save** — `HeroInstance.RelicId`, written into the existing `heroes` array beside `uid`/`defId`.
-⚠️ **Save version bump.** Per DESIGN-BUILD-ORDER the repeat cap already takes the save to 2; if
-relics ship in the same pass they ride that bump, otherwise 2 → 3. Missing `relicId` reads as
-empty.
+⚠️ **Save version bump.** Relics shipped in a separate pass from the team-size change: the save
+went 1 → 2 for `PlayerProfile.Team` growing to 5 slots, then 2 → 3 when `HeroInstance.RelicId`
+landed. `SaveSerializer.CurrentVersion` is 3. Missing `relicId` reads as empty.
 
-**Balance** — `relicSlotsPerHero` (1) and `relicEnergyBankMax` (100), the ceiling on the
-Metronome's carry so it cannot spiral. Nothing else.
+**Balance** — `relicSlotsPerHero` (1). `relicEnergyBankMax` is absent from `balance.json` on
+purpose: it bounded the Tidewrought Metronome's carry, and that relic is cut.

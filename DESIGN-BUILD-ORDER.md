@@ -209,6 +209,13 @@ DESIGN-ASPECTS proposes a direction (aspects keep the hook, relics move off it: 
 that is a suggestion in the source doc, not a confirmed decision. **This needs resolving before
 either Relics or Aspects is implemented** (task 12), not discovered mid-build.
 
+**Resolved.** Aspects keep the hooks; the two conflicting relics are cut outright rather than
+redirected: Tidewrought Metronome cut (Tide owns `AddEnergy` overflow), Green Hour Vessel cut
+(Verdant owns `ApplyHealValue` overflow). `Kindling` is cut per §3, changing Splitting Prism's
+stated cost to Burn-spread-lost. Orrin is relabelled to Lumen; `Warden's Debt` redirects `Shield`
+effects, not targeting, so the relic is compatible with the Lumen identity. Task 12 is in progress
+on `claude/relics-rework`. See DESIGN-HOOK-RESOLUTION for the full account.
+
 ## Known traps, carried forward
 
 1. **Resolved by task 10, kept for the record.** `MaxTeamSize` gates enemy spawns too, not just
@@ -270,8 +277,9 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
    `ApplyStatus` in shipped content whose `chance` defaults to 1.0 today. Every other harmful status
    already rolls. A zero-default phase is therefore bit-identical to today's battles, provable
    against the existing `BattleFingerprint`. Prove it; don't assume it. Tasks 7 and 11.
-5. **Kalyx's Kindling is unresolved between two docs.** See "One conflict to resolve" above. Do not
-   let it get cut or kept as a side effect of building something else.
+5. **Kalyx's Kindling is resolved.** Cut in the Ember implementation pass; both docs updated.
+   Splitting Prism's stated downside is now about Burn spread lost, not a passive left hungry.
+   See "One conflict to resolve" above for the full account.
 
 ## Audit: what build-order-8-team-size-5 actually contains
 

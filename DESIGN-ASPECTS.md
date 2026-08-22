@@ -12,6 +12,12 @@ it.
 
 Nothing here is implemented. This is a specification and an argument about cost.
 
+**All six identities are now implemented**, wired into `CombatSimulation`, and recorded in
+DESIGN-BUILD-ORDER's "Already done" section. `AspectChart.Multiplier` is ×1.10 / ×0.92 (narrowed
+from ×1.20 / ×0.85 per §4); `Aspect` is read throughout `CombatSimulation`, `Debrief`, and
+`BattleScreen`, not only in `UITheme.AspectColor`. The opening paragraph above describes the
+pre-implementation state.
+
 ---
 
 ## 1. The six identities
@@ -361,6 +367,12 @@ two
 of six relics and a re-argument of two more — do not build relics and aspects in the same pass and
 expect either spec to survive.
 
+**Resolved.** 1 and 2: Tidewrought Metronome and Green Hour Vessel are cut, not moved; the aspect
+owns the hook and no relic path remained. 3: `Kindling` is cut (§3), so Splitting Prism's stated
+downside changed — it is now about Burn spread lost, not a passive left hungry. 4: Orrin relabelled
+to Lumen; `Warden's Debt` operates on `Shield` effects, not on targeting, so the relic leaves his
+interception identity intact. See `relics.json` comments and DESIGN-RELICS for the final four.
+
 **DESIGN-BUILD-ORDER — three problems.**
 
 5. **Task 7 (Opening Gambit) and task 8 (Debrief) are both upstream of this work and neither knows
@@ -424,9 +436,14 @@ no number, same standard DESIGN-RELICS sets for relic text), `SummonScreen`, `Wi
 **Save format: not affected by the aspect rules.** `SaveSerializer` writes `uid`, `defId`, `level`,
 `copies`, `acquired`. Aspect is content, resolved from `defId` through `ContentDatabase` at load.
 Every change in §1 is a rule in the simulation, and the simulation is reconstructed from the request
-each fight. `SaveSerializer.CurrentVersion` stays at 1. Re-labelling Orrin from Ember to Lumen
-changes a content file, not a save file — an existing save holding `"defId": "orrin_kaal"` picks the
-new Aspect up on next load with no migration.
+each fight. `SaveSerializer.CurrentVersion` stays at 1 per the aspect rules. Re-labelling Orrin from Ember to
+Lumen changes a content file, not a save file — an existing save holding `"defId": "orrin_kaal"`
+picks the new Aspect up on next load with no migration.
+
+⚠️ **Stale.** `CurrentVersion` is 3: bumped to 2 when `PlayerProfile.Team` grew to 5 slots (for
+downgrade protection — a 5-entry save read by 3-slot code truncates silently), and to 3 when
+`HeroInstance.RelicId` landed on `claude/relics-rework`. The aspect rules themselves caused no bump,
+as stated.
 
 **Save format: not affected by team size 3 → 5 either, and this is worth stating precisely** because
 it is not obvious. `PlayerProfile.Team` is `new string[3]`, and the array has to grow. But the
