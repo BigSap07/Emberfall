@@ -24,7 +24,6 @@ namespace Emberfall.UI.Screens
             public Text Name;
             public Image HpFill;
             public Image HpGhost;
-            public Image EnergyFill;
             public Image ShieldFill;
             public Text Status;
             public Image TurnPip;
@@ -324,39 +323,56 @@ namespace Emberfall.UI.Screens
             bar.Root.anchorMin = Vector2.zero;
             bar.Root.anchorMax = Vector2.zero;
             bar.Root.pivot = new Vector2(0.5f, 0f);
-            UIBuilder.Size(bar.Root, 210f, 110f);
+            UIBuilder.Size(bar.Root, BarWidth + 40f, BarStackHeight);
             bar.Group = bar.Root.gameObject.AddComponent<CanvasGroup>();
 
             Color tint = snapshot.IsPlayer ? UITheme.HealthAlly : UITheme.HealthEnemy;
 
-            // starts fully transparent; TurnCue lights it for the duration of this unit's turn
-            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, new Color(1f, 1f, 1f, 0f), 6);
-            UIBuilder.Box(bar.TurnPip.rectTransform, 0f, 108f, 22f, 22f, new Vector2(0.5f, 0f));
-
-            // stacked upward from the unit's head: status, name, health, ward, energy
-            bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 4, UITheme.Warning, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Status.rectTransform, 0f, 84f, 260f, 22f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Status, new Color(0f, 0f, 0f, 0.9f), 1.4f);
-
-            bar.Name = UIBuilder.Label("Name", bar.Root, snapshot.Name + "  " + snapshot.Level,
-                                       UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Name.rectTransform, 0f, 58f, 300f, 24f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Name, new Color(0f, 0f, 0f, 0.95f), 1.6f);
-
-            // ghost bar drains a moment after the real one, so a big hit is legible
+            // Rebuilt as a small tag rather than a slab, and rebuilt bottom-up rather than
+            // re-tuned. The root's pivot is its BOTTOM edge and LateUpdate places that bottom edge
+            // BarWorldRise above the unit's head, so whatever sits at local y 0 is what the player
+            // reads as "the gap". Previously that was empty space: the stack ran energy at y 16,
+            // ward at 27, health at 36, name at 58, status at 84, turn pip at 108, so the health
+            // bar was 36 canvas units above an anchor that was itself 0.28 world units up, and the
+            // gap that actually rendered was 0.28 + 36/pixelsPerWorldUnit, more than double the
+            // number anyone was reading. The health bar now sits AT y 0, so the rise means what it
+            // says and no constant had to be fudged to get there.
+            //
+            // 200 x 18 -> 120 x 7, and the label fonts drop with it.
             bar.HpGhost = UIBuilder.Bar("HpGhost", bar.Root, new Color(0f, 0f, 0f, 0.8f), new Color(1f, 1f, 1f, 0.5f));
-            UIBuilder.Box(bar.HpGhost.rectTransform.parent as RectTransform, 0f, 36f, 200f, 18f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(bar.HpGhost.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
 
             bar.HpFill = UIBuilder.Bar("Hp", bar.Root, new Color(0f, 0f, 0f, 0f), tint);
-            UIBuilder.Box(bar.HpFill.rectTransform.parent as RectTransform, 0f, 36f, 200f, 18f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(bar.HpFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
 
-            bar.ShieldFill = UIBuilder.Bar("Shield", bar.Root, new Color(0f, 0f, 0f, 0.6f), UITheme.WithAlpha(UITheme.Shield, 0.95f));
-            UIBuilder.Box(bar.ShieldFill.rectTransform.parent as RectTransform, 0f, 27f, 200f, 7f, new Vector2(0.5f, 0f));
+            // Ward is no longer its own strip. It occupies the SAME rectangle as health and draws
+            // over it, so the unit still reads as one bar while a warded unit is still obviously
+            // warded. Kept rather than cut because a ward changes whether an incoming number
+            // matters at all, which is the one thing on this tag the player cannot infer from the
+            // health fill alone.
+            bar.ShieldFill = UIBuilder.Bar("Shield", bar.Root, new Color(0f, 0f, 0f, 0f), UITheme.WithAlpha(UITheme.Shield, 0.95f));
+            UIBuilder.Box(bar.ShieldFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
             UIBuilder.SetBar(bar.ShieldFill, 0f);
 
-            bar.EnergyFill = UIBuilder.Bar("Energy", bar.Root, new Color(0f, 0f, 0f, 0.7f), UITheme.Energy);
-            UIBuilder.Box(bar.EnergyFill.rectTransform.parent as RectTransform, 0f, 16f, 200f, 9f, new Vector2(0.5f, 0f));
-            UIBuilder.SetBar(bar.EnergyFill, snapshot.EnergyMax > 0 ? snapshot.StartEnergy / (float)snapshot.EnergyMax : 0f);
+            // Name only. The level number that used to trail it is gone: it never changes during a
+            // battle, so it was permanent clutter on a tag that has to be readable in a glance.
+            bar.Name = UIBuilder.Label("Name", bar.Root, snapshot.Name,
+                                       UITheme.FontTiny - 5, UITheme.TextPrimary, TextAnchor.LowerCenter);
+            UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + 2f, 240f, 18f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(bar.Name, new Color(0f, 0f, 0f, 0.95f), 1.4f);
+
+            // Status sits above the name and is empty unless the unit actually carries one, so it
+            // costs nothing visually at rest. Kept against a literal reading of "nothing else"
+            // because DESIGN-BATTLE-READABILITY.md names it as load-bearing: without it there is
+            // no way to see that a unit is burning, taunting or warded down.
+            bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 7, UITheme.Warning, TextAnchor.LowerCenter);
+            UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + 20f, 240f, 15f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(bar.Status, new Color(0f, 0f, 0f, 0.9f), 1.2f);
+
+            // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
+            // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
+            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, new Color(1f, 1f, 1f, 0f), 5);
+            UIBuilder.Box(bar.TurnPip.rectTransform, -(BarWidth * 0.5f + 9f), -1f, 10f, 10f, new Vector2(0.5f, 0f));
 
             return bar;
         }
@@ -380,11 +396,26 @@ namespace Emberfall.UI.Screens
         // intended. Reading orthographicSize off the live camera cannot go stale that way.
         private const float BarWorldRise = 0.28f;
 
-        // Height of the bar stack above its own anchor, in canvas units. CreateBar sizes the root
-        // 210 x 110 with a bottom pivot and stacks health, ward, energy, name and status inside
-        // it, so 110 is the authored extent rather than a measured guess. Used only to keep the
-        // stack on screen, see the clamp in LateUpdate.
-        private const float BarStackHeight = 110f;
+        private const float BarWidth = 120f;
+        private const float BarHeight = 7f;
+
+        /// <summary>How far a damage or heal number climbs over its life, in canvas units.</summary>
+        private const float FloatRise = 120f;
+
+        // Full height of the tag above its own anchor, in canvas units: bar 7, name to 27, status
+        // to 44. Was 110. Used to size the root and to keep the tag on screen, see the clamp in
+        // LateUpdate.
+        //
+        // What is NOT in it any more: the energy bar. It was the second bar per unit, filling
+        // toward each unit's 100-energy ultimate. Removed rather than kept, because nothing the
+        // player can do depends on it: CombatSimulation resolves the entire fight before the first
+        // frame plays, and the battle screen offers only speed and skip, so there is no decision
+        // an energy readout could inform. It was a progress meter for an outcome already decided.
+        //
+        // Flagged rather than done quietly: DESIGN-BATTLE-READABILITY.md step 7 lists "energy
+        // fills" as part of the beat sequence, so removing it contradicts that doc. Energy events
+        // are still in the event list and the bar is one Box call to restore if the doc wins.
+        private const float BarStackHeight = 44f;
 
         private void LateUpdate()
         {
@@ -603,14 +634,11 @@ namespace Emberfall.UI.Screens
 
                 case BattleEventType.EnergyChanged:
                 {
+                    // Still tracked on the actor, no longer drawn: the unit tag lost its energy
+                    // bar (see BarStackHeight). Anything that wants to show energy again reads
+                    // actor.Energy, which stays correct whether or not a bar is bound to it.
                     UnitActor actor = ActorOf(e.SourceId);
-                    UnitBar bar = BarOf(e.SourceId);
-                    if (actor != null && bar != null)
-                    {
-                        actor.Energy = e.Value;
-                        float max = actor.Snapshot.EnergyMax > 0 ? actor.Snapshot.EnergyMax : 100f;
-                        UIBuilder.SetBar(bar.EnergyFill, e.Value / max);
-                    }
+                    if (actor != null) actor.Energy = e.Value;
                     break;
                 }
 
@@ -931,7 +959,21 @@ namespace Emberfall.UI.Screens
 
             Vector3 screen = _world.Camera.WorldToScreenPoint(worldPosition);
             Vector2 start = new Vector2(screen.x / canvasScale, screen.y / canvasScale);
+
+            // Callers pass HeadPosition, which is exactly where that unit's tag is anchored, so
+            // a number spawned here started underneath the name and rose straight through it.
+            // That is the "58 on top of the Sundered Colossus's name" case, and it was not bad
+            // luck: for a head-targeted number it was certain. Clearing the tag's own height puts
+            // the number above it and it rises away rather than across.
+            float rise = BarWorldRise * (Screen.height / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize)));
+            start.y += (rise / canvasScale) + BarStackHeight + 6f;
             start.x += Random.Range(-34f, 34f);
+
+            // Clearing the tag pushes the back rank's far-z units past the top of the screen, so
+            // the whole 120-unit climb is clamped to fit rather than just the spawn point. A
+            // number that lands slightly below its own unit is still readable; one that rises off
+            // the screen is not there at all.
+            start.y = Mathf.Min(start.y, Screen.height / canvasScale - FloatRise - 30f);
 
             float duration = 0.75f / _speed;
             float t = 0f;
@@ -939,7 +981,7 @@ namespace Emberfall.UI.Screens
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                item.Root.anchoredPosition = start + new Vector2(0f, 120f * Mathf.Sqrt(k));
+                item.Root.anchoredPosition = start + new Vector2(0f, FloatRise * Mathf.Sqrt(k));
                 item.Group.alpha = 1f - k * k;
                 yield return null;
             }

@@ -25,42 +25,7 @@ namespace Emberfall.Battle
         // side, separates that side's own ranks from the centreline outward, while z is the
         // free axis units within a rank spread across.
         //
-        // Two ranks, not three: front 2 (slots 0, 1), back 3 (slots 2, 3, 4), replacing the
-        // 1-2-2 taper. Method is unchanged from that pass - clear on x costs the sum of two
-        // half-widths; clear on z costs H / sin(28) = H / 0.4695, since only 47% of a z offset
-        // becomes screen height - but every dimension is recomputed, because two things moved
-        // under it: rig dimensions now come from UnitRig.ThreeQuarterTurn's actual footprint
-        // (turning a procedural silhouette widens it, turning a flat sprite quad narrows it,
-        // since a quad has zero depth to rotate into the width axis - see UnitRig.BuildSprite),
-        // and Wren Ilyra is a sprite now too, not the procedural humanoid+orb entry the last pass
-        // measured her as.
-        //
-        // The tightest single requirement drove the shape: campaign.json puts the Sundered
-        // Colossus (the tallest thing in the game) at slot 0 in every stage it appears, alongside
-        // a Grave Moth at slot 1 - both front rank, both the same x, so that pair alone sets the
-        // front rank's z spread (+/-4.10, gap 8.2), independent of anything about the back rank.
-        //
-        // These spacings were derived when UnitRig.Height was a nominal label rather than a
-        // measured one, so every H below was inflated and every requirement with it. They are left
-        // as they stand because the correction only ever adds clearance: the Colossus's real
-        // rendered top is 2.945, not the 3.49 this was sized against, so the pair needs
-        // Dz >= 2.945 / 0.4695 = 6.27 against the 8.20 it has, and the back rank's Stone Warden
-        // needs 2.242 / 0.4695 = 4.78 against the 6.42 it has. Re-tightening the formation to the
-        // true numbers would be a real change to the layout rather than a fix, so it is not made
-        // here; what matters is that nothing is now under-spaced. Front-to-back x-step only has to clear the sum of two half-widths (about 2.29
-        // worst case), a small number next to the z requirements above, so it added almost
-        // nothing to orthographicSize - the ranks sit at x 2.4 and 4.9, a 2.5 step, well past what
-        // clearing the x-axis alone needed, chosen instead to keep a genuine 2.2 world units of
-        // clear ground between the two front ranks' own widest occupants (a deliberate margin,
-        // not a byproduct - it cost nothing, since the vertical bound was already the binding one
-        // before this margin was added, so widening it further didn't change orthographicSize).
-        //
-        // Checked exhaustively, as before: every slot subset a team of 1 to 5 can produce, every
-        // authored enemy composition in campaign.json, every hero in every slot, at both 30 and 0
-        // degrees of turn. Minimum screen-space separation is 0.359 world units (Stone Warden
-        // against Hollow Husk, slots 3 and 4, at a full five-unit team); the tightest case at
-        // smaller team sizes is the Colossus against a Grave Moth in slots 0 and 1, at 0.362.
-        // Nothing overlaps at any team size.
+        // Two ranks: front 2 (slots 0, 1), back 3 (slots 2, 3, 4).
         //
         // FrontEnemy (CombatSimulation.cs) targets whichever alive unit has the lowest Slot
         // index, nothing more - it is not aware of rank or position. With a single front slot
@@ -86,16 +51,51 @@ namespace Emberfall.Battle
         //      from slot order at all, so the targeting rule and the visual layout stay in sync
         //      by construction rather than by the layout happening to put low slots first.
         // Reported so the choice is made deliberately, not decided here.
+        // Tightened pass. Front x 2.40 -> 1.60, back x 4.90 -> 4.25, front z +/-4.10 -> +/-3.45,
+        // back z +/-6.42 -> +/-5.25. Every number re-derived rather than scaled down by eye, and
+        // one correction in the method itself made most of the room:
+        //
+        // The old rule was "clearing on z costs H / sin(28)". That is not the requirement. Two
+        // units at the same x are separated on screen by dz*sin(28), and the near one's head
+        // reaches H*cos(28) above its own feet, so what non-overlap actually costs is
+        //   dz >= H * cos(28) / sin(28) = H / tan(28) = H * 1.881
+        // not H / sin(28) = H * 2.130. The old formula over-charged every z gap by 13%.
+        //
+        // Binding pairs, over every authored composition in campaign.json and every hero in every
+        // slot at team sizes 1 to 5:
+        //   front rank  Sundered Colossus slot 0 next to a Grave Moth slot 1 (ch1_12). The
+        //               Colossus's hammer tips out at 3.162, so 2*Zf*sin(28) must clear
+        //               3.162*cos(28): Zf >= 2.974 bare. Chosen 3.45.
+        //   back rank   Stone Warden slot 3 next to a Hollow Husk slot 4 (ch1_10). Hammer top
+        //               2.407, so Zb >= 4.527 bare. Chosen 5.25, and this pair is what sets the
+        //               final minimum separation.
+        //   sides       Nyx Serrow slot 0 against the Colossus slot 0 across the middle. Their
+        //               turned half-widths are 0.63 and 1.32, so Xf >= 1.15 bare. Chosen 1.60.
+        //   x-step      Colossus slot 0 against a Grave Moth slot 2, needing Xb - Xf >= 2.50.
+        //               Chosen 2.65.
+        //
+        // Minimum screen separation over everything checked: 0.373 world units, at the Stone
+        // Warden / Hollow Husk pair above. Nothing overlaps at any team size. The old layout
+        // measured 0.401 by this same corrected model, so the formation is substantially tighter
+        // for 0.028 of give-up, not for free but close to it.
+        //
+        // Half-widths come from the assembled rig, not from a nominal figure: the local AABB of
+        // every primitive a Build* method emits including its weapon, turned by
+        // UnitRig.ThreeQuarterTurn, which widens a procedural rig (real depth rotates into the
+        // width axis) and narrows a flat sprite quad (no depth to rotate). Shadows are excluded
+        // from the overlap test on purpose - they are soft blobs on the ground and reading as
+        // pooled is correct - but they ARE included in the frame bound below, which is where the
+        // last pass lost them.
         private static readonly Vector2[] AllySlots =
         {
-            new Vector2(-2.4f, -4.1f), new Vector2(-2.4f, 4.1f),
-            new Vector2(-4.9f, -6.42f), new Vector2(-4.9f, 0f), new Vector2(-4.9f, 6.42f)
+            new Vector2(-1.6f, -3.45f), new Vector2(-1.6f, 3.45f),
+            new Vector2(-4.25f, -5.25f), new Vector2(-4.25f, 0f), new Vector2(-4.25f, 5.25f)
         };
 
         private static readonly Vector2[] EnemySlots =
         {
-            new Vector2(2.4f, -4.1f), new Vector2(2.4f, 4.1f),
-            new Vector2(4.9f, -6.42f), new Vector2(4.9f, 0f), new Vector2(4.9f, 6.42f)
+            new Vector2(1.6f, -3.45f), new Vector2(1.6f, 3.45f),
+            new Vector2(4.25f, -5.25f), new Vector2(4.25f, 0f), new Vector2(4.25f, 5.25f)
         };
 
         public Camera Camera;
@@ -123,57 +123,40 @@ namespace Emberfall.Battle
             // formula mapping a world point to screen height (see the slot comment above for
             // what it implies about occlusion in this new arrangement).
             //
-            // orthographicSize and camera height re-derived AGAIN, because the previous pass had
-            // two faults that both showed up in Play mode as units clipped by the frame edges.
+            // orthographicSize re-derived against the tightened slots above. Bounds taken over
+            // every hero in every slot and every enemy in the slots campaign.json actually places
+            // it in, and over the animation range rather than the rest pose alone. Two extras are
+            // reserved that earlier passes left out, because both were caught clipping:
+            //   the blob shadow's rotated footprint, 0.79 * scale of z-reach past the slot, and
+            //   0.85 * scale of x-reach, which is what made the bottom of frame slice shadows;
+            //   the camera shake, +/-0.18 world (BattleScreen asks 0.14 on a crit, 0.18 on a
+            //   burst), which moves the frame 0.18*cos(28) = 0.159 vertically. The backdrop
+            //   already budgeted for shake; the frame bound never did.
             //
-            // Fault 1, the big one: the bound was taken from UnitRig.Height, which at the time was
-            // a nominal per-silhouette label that matched no rendered geometry (a Stone Warden's
-            // declared 2.66 against a real 2.41 including its hammer, a golem's 2.25 against a
-            // real 1.90). Height now means the measured top of the rendered silhouette, so the
-            // bound can finally be taken from it honestly.
+            //   highest  f  4.529   Orrin Kaal, slot 4, mid-cast, at shake extreme
+            //   lowest   f -3.025   Orrin Kaal, slot 2, shadow near edge, at shake extreme
+            //   span 7.554, half-span 3.777, centre 0.7518
             //
-            // Fault 2, the one that actually clipped: the lowest point in frame was taken as
-            // "the back rank's outer feet, y 0", which ignored the blob shadow. BuildShadow lays a
-            // 1.35 x 1.05 quad flat under every unit, and Root's three-quarter turn swings that
-            // footprint out to 0.79 * scale of reach in z BEYOND the unit's own slot. At z -6.42
-            // that put the shadow's near edge at f -3.42 against a frame bottom of -3.02: a
-            // 0.40 world unit overhang, 53 pixels at 1080p, sliced off every frame. The feet
-            // themselves sat at f -3.014 against that same -3.018 edge, a margin of 0.004, so the
-            // idle bob (Body -0.035) pushed the unit itself over the line as well.
+            // Horizontal: widest reach is a Stone Warden in the back rank's outer slot, 4.25 plus
+            // its own shadow half-width 1.00, plus shake, = 5.45.
+            //   orthographicSize by width = 5.45 / 1.778 = 3.07
             //
-            // Bounds now, over every hero in every slot and every enemy in the slots campaign.json
-            // actually places it in, including the animation range rather than the rest pose only:
-            //   highest  f  4.9194  Orrin Kaal, slot 4, mid-cast (PlayCast lifts Root +0.28 y)
-            //   lowest   f -3.4157  Orrin Kaal, slot 2, shadow near edge
-            //   span 8.3351, bare half-span 4.1675, centre 0.7518
+            // Vertical binds, 3.78 against 3.07. Chosen 3.85, which leaves 0.07 world (10 px at
+            // 1080p) beyond the already-reserved shake and cast at each edge, and 1.39 world
+            // (195 px) of unused air at each SIDE. Horizontal is not close, and cannot become
+            // close at this aspect: it would only bind below an aspect ratio of 5.45 / 3.85 =
+            // 1.42, so anything at or above 3:2 is clear and 16:9 has room to spare.
             //
-            // Horizontal: widest reach is a Stone Warden in the back rank's outer slot, 4.9 plus
-            // its own shadow half-width 1.06 = 5.96. Add 0.5 of clear air:
-            //   orthographicSize by width = (5.96 + 0.5) / 1.778 = 3.635
+            // 4.25 -> 3.85 renders everything 10% larger, on top of the formation itself being
+            // roughly 20% tighter in both axes.
             //
-            // Vertical binds, and by a wide margin (4.17 against 3.63), same as the last pass.
-            //
-            // Chosen: orthographicSize 4.25, leaving about 10 px of air at each edge at 1080p.
-            // That is 4.05 -> 4.25, so procedural rigs render about 5% smaller than they did.
-            // Deliberate and small next to the other half of this fix: sprite heroes were being
-            // built to 1.85 against a humanoid rig's real 1.71, and now shrink about 8% on top of
-            // this, which is the ratio that was making them read as the wrong size next to
-            // everything else.
-            //
-            // Formation slots are NOT touched. The re-derivation only moved the camera, and the
-            // slot spacing has more clearance than before rather than less: the z-gap rule is
-            // Dz >= H / sin(28), and with H now the true rendered top instead of an inflated
-            // label, every requirement shrank (the Colossus/Grave Moth pair that forced the front
-            // rank's +/-4.10 now needs 6.27 rather than 7.43, against the 8.20 it has).
-            //
-            // Camera position: x 0, still symmetric. z -9.5 unchanged. y re-solved for the new
-            // centre: camY = (0.7518 + 9.5*0.4695) / 0.8829 = 5.90, which lowers the aim by 0.32
-            // and is what moves the slack from the top of the frame, where it was going unused, to
-            // the bottom, where it was needed. Floors re-checked: camY (5.90) is still above
-            // orthographicSize*cos(28) (3.75), and the nearest occupied point is 6.60 along the
-            // view axis, well past the 0.3 near clip.
+            // Camera: x 0, symmetric. z -9.5 unchanged. y solves to the same 5.90 as before,
+            // because tightening the formation shrank its reach almost symmetrically about the
+            // old centre: camY = (0.7518 + 9.5*0.4695) / 0.8829 = 5.903. Floors re-checked:
+            // camY (5.90) is still above orthographicSize*cos(28) (3.40), and the nearest
+            // occupied point is well past the 0.3 near clip.
             Camera.orthographic = true;
-            Camera.orthographicSize = 4.25f;
+            Camera.orthographicSize = 3.85f;
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
@@ -226,24 +209,27 @@ namespace Emberfall.Battle
             // Under orthographic a quad held perpendicular to the view direction covers exactly
             // the same frame at any distance: half-height is orthographicSize and half-width is
             // orthographicSize * aspect, with no perspective divide. Re-checked against the new
-            // orthographicSize (4.25, up from 4.05) rather than assumed still correct: frame is
-            // now 2 * 4.25 = 8.50 tall by 8.50 * 1.778 = 15.11 wide, both slightly larger.
+            // orthographicSize (3.85, down from 4.25) rather than assumed still correct: frame is
+            // now 2 * 3.85 = 7.70 tall by 7.70 * 1.778 = 13.69 wide, both smaller.
             //
             // Margin: BattleStage.Shake moves the camera up to 0.18 world units in x and y
             // (BattleScreen asks for 0.14 on a crit and 0.18 on a burst), while the backdrop is
             // parented to the world and placed once, so it does not shake with the camera. A
             // world-x shake shifts the frame 0.18 across the quad; a world-y shake shifts it
             // 0.18 * cos(28) = 0.16. 0.30 per side covers both with room to spare.
-            //   needed width  = 15.11 + 0.60 = 15.71
-            //   needed height =  8.50 + 0.60 =  9.10
+            //   needed width  = 13.69 + 0.60 = 14.29
+            //   needed height =  7.70 + 0.60 =  8.30
             //
             // Cover, not stretch: the quad is grown to the texture's own aspect ratio until it
             // covers both, so the painting is never squashed and the frame never sees past its
             // edge. ashen.png is 1672 x 941, aspect 1.7768 against the frame's 1.7778 - within
             // 0.05% of 16:9, so cropping, letterboxing and stretching are still nearly the same
-            // choice here. Height is the exact fit this time (quadH = 9.10, no crop vertically);
-            // width comes out to 9.10 * 1.7768 = 16.17, past the 15.71 needed, so the frame shows
-            // the middle 97% of the painting horizontally. Which axis exactly-fits versus crops
+            // choice here. Height is the exact fit this time (quadH = 8.30, no crop vertically);
+            // width comes out to 8.30 * 1.7768 = 14.75, past the 14.29 needed, so the frame shows
+            // the middle 97% of the painting horizontally. The backdrop therefore covers the frame
+            // with 0.46 world units to spare on width, which is worth stating because it rules the
+            // backdrop out as a source of anything that looks like a cut-off edge. Which axis
+            // exactly-fits versus crops
             // changed from the three-rank pass (width fit exactly there) purely because the frame
             // shape changed, not because this logic did - it is still whichever axis the image's
             // own aspect ratio makes tightest against the frame's.
@@ -266,9 +252,9 @@ namespace Emberfall.Battle
             // construction, and rotated to face straight back down that axis (the rig's rotation
             // turned 180 about its own up axis puts the quad's +Z front face against the view
             // direction). Distance re-checked against the new formation rather than left at its
-            // old value: the back rank's far-z occupant (x 4.9, z 6.42) is now the deepest point,
-            // forward depth 16.83 along the camera's view axis - deeper than the old 11.4, since
-            // the back rank's z reach grew from +/-3.25 to +/-6.42. 22 clears that with margin
+            // old value: the back rank's far-z occupant (x 4.25, z 5.25) is now the deepest point,
+            // forward depth 15.79 along the camera's view axis, down from 16.83 now that the back
+            // rank's z reach is +/-5.25 rather than +/-6.42. 22 clears that with margin
             // and sits well inside the 120 far clip.
             const float Distance = 22f;
             Vector3 forward = _cameraRig.localRotation * Vector3.forward;
