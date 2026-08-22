@@ -51,6 +51,7 @@ namespace Emberfall.DevHarness
             CheckStatusAndStatBehavior(content);
             CheckHolyBlockControlImmunity(content);
             CheckDebrief();
+            CheckRelics(content);
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
@@ -100,7 +101,9 @@ namespace Emberfall.DevHarness
                 string enemies = File.ReadAllText(Path.Combine(dir, "enemies.json"));
                 string campaign = File.ReadAllText(Path.Combine(dir, "campaign.json"));
                 string balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
-                return ContentDatabase.Load(heroes, enemies, campaign, balance);
+                string relicsPath = Path.Combine(dir, "relics.json");
+                string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
+                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics);
             }
             catch (Exception ex)
             {
@@ -3125,6 +3128,495 @@ namespace Emberfall.DevHarness
         /// Hand-constructed BattleResults, not real simulated fights - each one is built to
         /// isolate a single clause of Debrief.Summarize's priority order and confirm it wins.
         /// </summary>
+        // ---------------------------------------------------------------- relics
+
+        /// <summary>
+        /// Four relics, four mechanics, each forced rather than inspected. Every check below runs
+        /// the SAME synthetic content twice - once with the relic equipped and once without - and
+        /// asserts on the difference, so a relic that silently did nothing fails on the control
+        /// matching the treatment rather than passing because the assertion was written loosely.
+        ///
+        /// Two of DESIGN-RELICS' six are absent on purpose (DESIGN-HOOK-RESOLUTION sections 2, 3);
+        /// CheckRelicContent asserts their absence rather than leaving it to be noticed.
+        /// </summary>
+        private static void CheckRelics(ContentDatabase db)
+        {
+            Line("");
+            Line("RELICS");
+            CheckRelicContent(db);
+            CheckRelicSplittingPrism();
+            CheckRelicWardensDebt();
+            CheckRelicStormlanceOath();
+            CheckRelicVerdictSigil();
+            CheckRelicDoesNotLeakAcrossBattles();
+            CheckRelicsBiteOnShippedContent(db);
+        }
+
+        /// <summary>
+        /// The shipped relics.json, against what DESIGN-RELICS and DESIGN-HOOK-RESOLUTION between
+        /// them actually leave standing. The digit test is the design's own stated test, mechanised:
+        /// "if a relic cannot be written as one sentence without a number, it is a stat stick and
+        /// should be cut". A rule string containing a digit is that failure, detectable.
+        /// </summary>
+        private static void CheckRelicContent(ContentDatabase db)
+        {
+            Check(db.Relics.Count == 4, "relics.json loads the 4 surviving relics (got " + db.Relics.Count + ")");
+
+            string[] expected = { "splitting_prism", "wardens_debt", "stormlance_oath", "verdict_sigil" };
+            for (int i = 0; i < expected.Length; i++)
+                Check(db.GetRelic(expected[i]) != null, "relic " + expected[i] + " exists");
+
+            // The two DESIGN-HOOK-RESOLUTION cut outright. Asserted, not assumed: re-adding either
+            // one is the mistake this pass exists to prevent, and it would otherwise be silent.
+            Check(db.GetRelic("tidewrought_metronome") == null,
+                  "Tidewrought Metronome is absent - Tide owns the energy clamp, so it had no code left to run");
+            Check(db.GetRelic("green_hour_vessel") == null,
+                  "Green Hour Vessel is absent - Verdant owns the heal clamp and the Shield path never discards");
+
+            int withDigits = 0;
+            List<string> offenders = new List<string>();
+            for (int i = 0; i < db.Relics.Count; i++)
+            {
+                RelicDef r = db.Relics[i];
+                bool digit = false;
+                for (int c = 0; c < r.Rule.Length; c++) if (char.IsDigit(r.Rule[c])) digit = true;
+                if (digit) { withDigits++; offenders.Add(r.Id); }
+            }
+            Check(withDigits == 0,
+                  "no relic states its rule with a number in it - DESIGN-RELICS' own stat-stick test"
+                  + (withDigits == 0 ? "" : " (offenders: " + string.Join(", ", offenders.ToArray()) + ")"));
+
+            Check(db.Balance.RelicSlotsPerHero == 1,
+                  "balance.json sets relicSlotsPerHero to 1 (got " + db.Balance.RelicSlotsPerHero + ")");
+        }
+
+        /// <summary>
+        /// Splitting Prism, both halves at once: the upside (a wide cast concentrates onto the
+        /// front enemy with its output preserved) and the cost this pass had to invent for it (the
+        /// status rider gets ONE landing attempt for the whole cast instead of one per enemy).
+        ///
+        /// The cost is the half that matters. Its original cost - starving Kalyx's Kindling - was
+        /// deleted with Kindling itself, and without a replacement the relic is the pure-upside
+        /// stat stick DESIGN-RELICS forbids. So the rider assertion below is not a detail of the
+        /// implementation, it is the entire argument for the relic still existing.
+        ///
+        /// Enemies are unkillable and the caster's damage is negligible, so no enemy dies mid-cast.
+        /// That matters: ApplyEffect's Damage loop breaks on a dead target, and a kill would end
+        /// the hit sequence early and make the preserved-output comparison meaningless.
+        /// </summary>
+        private static void CheckRelicSplittingPrism()
+        {
+            ContentDatabase db = BuildRelicTestContent();
+            if (db == null) return;
+
+            int plainDamage, plainTargets, plainBurns;
+            int relicDamage, relicTargets, relicBurns;
+            RunPrismArena(db, "", out plainDamage, out plainTargets, out plainBurns);
+            RunPrismArena(db, "splitting_prism", out relicDamage, out relicTargets, out relicBurns);
+
+            Check(plainTargets == 3 && plainBurns == 3 && plainDamage == 3,
+                  "control: the wide cast hits all 3 enemies and burns all 3 (" + plainDamage
+                  + " damage instance(s) over " + plainTargets + " enemies, " + plainBurns + " burn(s))"
+                  + " - so the spread this relic collapses is genuinely there to collapse");
+
+            Check(relicTargets == 1,
+                  "Splitting Prism: every damage instance lands on one enemy instead of three (got "
+                  + relicTargets + " distinct target(s))");
+            Check(relicDamage == plainDamage,
+                  "Splitting Prism: output is concentrated, not lost - the same " + plainDamage
+                  + " damage instance(s) resolve, now all on the front enemy (got " + relicDamage + ")");
+            Check(relicBurns == 1,
+                  "Splitting Prism' cost: the burn rider resolves ONCE for the whole cast instead of "
+                  + plainBurns + " times (got " + relicBurns + ") - the drill only afflicts what it drills");
+        }
+
+        private static void RunPrismArena(ContentDatabase db, string relicId,
+                                          out int damageInstances, out int distinctTargets, out int burns)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_prism_caster"), 1, relicId));
+            BattleResult r = RunWith(db, db.GetStage("test_relic_wide"), 1, team);
+
+            // Scoped to the CAST, not to the caster. Counting every Damage event the caster
+            // sources also counts its later basic attacks and - much less obviously - every Burn
+            // tick, since TickDamageOverTime credits the tick to whoever applied the Burn. Both
+            // runs are contaminated, but not equally: the relic run lands one Burn where the
+            // control lands three, so the tick totals differ for a reason that has nothing to do
+            // with the concentration being measured, and the comparison silently stops meaning
+            // what it says. The window runs from the AbilityCast to the next TurnStart, which is
+            // exactly the span one ability resolves in.
+            damageInstances = 0;
+            burns = 0;
+            Dictionary<int, bool> hit = new Dictionary<int, bool>();
+            bool inCast = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.AbilityCast) { inCast = e.SourceId == 0; continue; }
+                if (e.Type == BattleEventType.TurnStart) { inCast = false; continue; }
+                if (!inCast || e.SourceId != 0) continue;
+                if (e.Type == BattleEventType.Damage) { damageInstances++; hit[e.TargetId] = true; }
+                else if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Burn) burns++;
+            }
+            distinctTargets = hit.Count;
+        }
+
+        /// <summary>
+        /// Warden's Debt: the ward leaves the wearer and lands on the most wounded ally, and the
+        /// Taunt aimed at the same Self target does NOT move with it.
+        ///
+        /// The second assertion is the one DESIGN-HOOK-RESOLUTION section 5 turns on. Its argument
+        /// for the relic surviving Orrin's relabel to Lumen is that it costs him the ward while
+        /// leaving the targeting guarantee intact - "Orrin keeps every part of what DESIGN-WORLD
+        /// says his color actually is". Cinderguard aims a Shield AND a Taunt at Self, so a relic
+        /// implemented without an EffectKind filter would hand the Taunt away too and falsify that
+        /// argument silently. The filter is load bearing, and this is what bears on it.
+        ///
+        /// The ally is genuinely the most wounded rather than merely first in slot order: the enemy
+        /// is faster than the wearer and strikes the front slot before the wearer's turn comes up,
+        /// so LowestHpAlly is answering a real question, not a tie broken by iteration order.
+        /// </summary>
+        private static void CheckRelicWardensDebt()
+        {
+            ContentDatabase db = BuildRelicTestContent();
+            if (db == null) return;
+
+            int plainShieldTo, plainTauntTo, plainAllyHurtFirst;
+            int relicShieldTo, relicTauntTo, relicAllyHurtFirst;
+            RunWardenArena(db, "", out plainShieldTo, out plainTauntTo, out plainAllyHurtFirst);
+            RunWardenArena(db, "wardens_debt", out relicShieldTo, out relicTauntTo, out relicAllyHurtFirst);
+
+            Check(plainAllyHurtFirst > 0 && relicAllyHurtFirst > 0,
+                  "forced setup: the ally in slot 0 is wounded before the wearer casts, so LowestHpAlly"
+                  + " has a real answer rather than a tie (" + plainAllyHurtFirst + " hit(s) taken)");
+            Check(plainShieldTo == 1,
+                  "control: without the relic the ward stays on the wearer (unit " + plainShieldTo + ")");
+            Check(relicShieldTo == 0,
+                  "Warden's Debt: the ward leaves the wearer and lands on the wounded ally (unit "
+                  + relicShieldTo + ", wearer is unit 1)");
+            Check(plainTauntTo == 1 && relicTauntTo == 1,
+                  "Warden's Debt takes the ward and NOT the Taunt aimed at the same Self target - the"
+                  + " targeting guarantee DESIGN-WORLD calls the actual Lumen identity is untouched"
+                  + " (taunt on unit " + relicTauntTo + " with the relic, unit " + plainTauntTo + " without)");
+
+            CheckWardensDebtWhenWearerIsMostWounded(db);
+        }
+
+        /// <summary>
+        /// The case that broke this relic the first time, kept as a check so it cannot come back.
+        ///
+        /// LowestHpAlly includes the caster, and Orrin is the Lumen anchor - every single-enemy
+        /// ability aimed at his side resolves onto him - so on shipped content he is reliably the
+        /// most wounded ally and the ward he is supposed to give away came straight back to him.
+        /// The relic was a no-op on its own named wearer, which is precisely what got Tidewrought
+        /// Metronome and Green Hour Vessel cut. RelicDef.ExcludeSelf is the fix.
+        ///
+        /// Forced here rather than relied on from the shipped run: the wearer is the ONLY unit
+        /// taking damage and the ally is untouched, so LowestHpAlly unambiguously wants the wearer
+        /// and the exclusion is the only thing that can send the ward anywhere else.
+        /// </summary>
+        private static void CheckWardensDebtWhenWearerIsMostWounded(ContentDatabase db)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_warden"), 1, "wardens_debt")); // unit 0, slot 0, takes the hits
+            team.Add(MakeInstance(db.GetHero("test_warden_ally"), 1));                     // unit 1, untouched
+            BattleResult r = RunWith(db, db.GetStage("test_relic_striker"), 1, team);
+
+            int wearerHits = 0, shieldTo = -1;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == 0) wearerHits++;
+                if (e.Type == BattleEventType.ShieldGain && e.SourceId == 0 && shieldTo < 0) shieldTo = e.TargetId;
+            }
+
+            Check(wearerHits > 0,
+                  "forced setup: the wearer is in the front slot and is the only one taking damage, so"
+                  + " LowestHpAlly genuinely wants the wearer itself (" + wearerHits + " hit(s) taken)");
+            Check(shieldTo == 1,
+                  "Warden's Debt still gives the ward away when the WEARER is the most wounded ally"
+                  + " (ward on unit " + shieldTo + ", wearer is unit 0) - without this the relic is a"
+                  + " no-op on exactly the tank it was written for");
+        }
+
+        private static void RunWardenArena(ContentDatabase db, string relicId,
+                                           out int shieldTarget, out int tauntTarget, out int allyHitsTaken)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_warden_ally"), 1));          // unit 0, slot 0
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_warden"), 1, relicId)); // unit 1, slot 1
+            BattleResult r = RunWith(db, db.GetStage("test_relic_striker"), 1, team);
+
+            shieldTarget = -1;
+            tauntTarget = -1;
+            allyHitsTaken = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == 0) allyHitsTaken++;
+                if (e.SourceId != 1) continue;
+                if (e.Type == BattleEventType.ShieldGain && shieldTarget < 0) shieldTarget = e.TargetId;
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt && tauntTarget < 0)
+                    tauntTarget = e.TargetId;
+            }
+        }
+
+        /// <summary>
+        /// Stormlance Oath: the wearer stops finishing and starts opening.
+        ///
+        /// Both enemies are Ember and neither taunts, which is not decoration. ResolveTargets
+        /// short-circuits EVERY single-enemy mode to FindTargetAnchor when the far side holds a
+        /// Lumen unit or a taunter, so an anchored enemy line would make both runs identical and
+        /// the relic would look broken when it was merely outranked. The control assertion - that
+        /// without the relic the hits genuinely go to the WEAKEST enemy - is what proves no anchor
+        /// is quietly answering for that side.
+        /// </summary>
+        private static void CheckRelicStormlanceOath()
+        {
+            ContentDatabase db = BuildRelicTestContent();
+            if (db == null) return;
+
+            int plainOntoWeak, plainOntoStrong, relicOntoWeak, relicOntoStrong;
+            RunOathArena(db, "", out plainOntoWeak, out plainOntoStrong);
+            RunOathArena(db, "stormlance_oath", out relicOntoWeak, out relicOntoStrong);
+
+            Check(plainOntoWeak > 0 && plainOntoStrong == 0,
+                  "control: LowestHpEnemy genuinely wants the weakest enemy, and no anchor is"
+                  + " answering for that side (" + plainOntoWeak + " on the weak, " + plainOntoStrong + " on the strong)");
+            Check(relicOntoStrong > 0 && relicOntoWeak == 0,
+                  "Stormlance Oath: every one of those strikes goes to the strongest enemy instead ("
+                  + relicOntoStrong + " on the strong, " + relicOntoWeak + " on the weak)");
+        }
+
+        private static void RunOathArena(ContentDatabase db, string relicId, out int ontoWeak, out int ontoStrong)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_oath_striker"), 1, relicId));
+            BattleResult r = RunWith(db, db.GetStage("test_relic_pair"), 1, team);
+
+            ontoWeak = 0;
+            ontoStrong = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.SourceId != 0) continue;
+                UnitSnapshot tgt = r.FindUnit(e.TargetId);
+                if (tgt == null) continue;
+                if (tgt.DefId == "test_weakling") ontoWeak++;
+                else if (tgt.DefId == "test_bulwark") ontoStrong++;
+            }
+        }
+
+        /// <summary>
+        /// Verdict Sigil: an AfterBasicAttack passive also fires on the turn the wearer casts.
+        ///
+        /// The wearer opens at full energy and gains none back (energyPerBasicAttack is 0 in the
+        /// synthetic balance), so round 1 is deterministically an Active and round 2 onward is
+        /// deterministically a Basic. That gives both cases inside one run, which is what makes the
+        /// second assertion possible: the relic must WIDEN the trigger, not move it, so the basic
+        /// attack turns have to keep marking exactly as they did before.
+        /// </summary>
+        private static void CheckRelicVerdictSigil()
+        {
+            ContentDatabase db = BuildRelicTestContent();
+            if (db == null) return;
+
+            int plainOnCast, plainOnBasic, relicOnCast, relicOnBasic;
+            RunSigilArena(db, "", out plainOnCast, out plainOnBasic);
+            RunSigilArena(db, "verdict_sigil", out relicOnCast, out relicOnBasic);
+
+            Check(plainOnBasic > 0 && plainOnCast == 0,
+                  "control: the passive marks after a basic attack (" + plainOnBasic + "x) and never"
+                  + " after a cast (" + plainOnCast + "x) - which is the turn DESIGN-RELICS calls her"
+                  + " best and her least debilitating");
+            Check(relicOnCast > 0,
+                  "Verdict Sigil: casting now marks too (" + relicOnCast + " passive trigger(s) on cast turns)");
+            Check(relicOnBasic == plainOnBasic,
+                  "Verdict Sigil widens the trigger rather than moving it - basic attack turns still"
+                  + " mark exactly as often as without it (" + relicOnBasic + " vs " + plainOnBasic + ")");
+        }
+
+        /// <summary>
+        /// Passive triggers split by what the wearer did on that turn. Walked in order with a
+        /// running "last thing this unit did" flag rather than by counting totals, because the
+        /// whole question is WHICH turn the passive fired on.
+        /// </summary>
+        private static void RunSigilArena(ContentDatabase db, string relicId, out int onCastTurns, out int onBasicTurns)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_sigil_wearer"), 1, relicId));
+            BattleResult r = RunWith(db, db.GetStage("test_relic_striker"), 1, team);
+
+            onCastTurns = 0;
+            onBasicTurns = 0;
+            bool lastWasCast = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.SourceId != 0) continue;
+                if (e.Type == BattleEventType.AbilityCast) lastWasCast = true;
+                else if (e.Type == BattleEventType.BasicAttack) lastWasCast = false;
+                else if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "test_mark")
+                {
+                    if (lastWasCast) onCastTurns++; else onBasicTurns++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The failure mode that would not show up in any of the four checks above: a relic
+        /// mutating the EffectDef it was handed. Those defs live on the AbilityDef inside the
+        /// ContentDatabase and are shared by every unit in every battle for the life of the
+        /// process, so an in-place rewrite would leak the relic onto later casts by anybody -
+        /// including the enemy side, and including battles fought after the relic was unequipped.
+        ///
+        /// Every check above happens to run its control FIRST, which is exactly the ordering that
+        /// would hide this. So this one deliberately runs the relic battle first and then asserts
+        /// the control battle is still a control. It also announces once and only once, which is
+        /// DESIGN-RELICS' "emit one the first time a relic alters an effect in a fight, not on
+        /// every tick" - Splitting Prism alters something on every cast.
+        /// </summary>
+        private static void CheckRelicDoesNotLeakAcrossBattles()
+        {
+            ContentDatabase db = BuildRelicTestContent();
+            if (db == null) return;
+
+            int relicDamage, relicTargets, relicBurns;
+            RunPrismArena(db, "splitting_prism", out relicDamage, out relicTargets, out relicBurns);
+
+            int afterDamage, afterTargets, afterBurns;
+            RunPrismArena(db, "", out afterDamage, out afterTargets, out afterBurns);
+
+            Check(afterTargets == 3 && afterBurns == 3,
+                  "a relic battle does not leak into the next one - an unrelic'd caster still hits all 3"
+                  + " and burns all 3 after Splitting Prism ran on the same shared content (got "
+                  + afterTargets + " target(s), " + afterBurns + " burn(s))");
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstanceWithRelic(db.GetHero("test_prism_caster"), 1, "splitting_prism"));
+            BattleResult r = RunWith(db, db.GetStage("test_relic_wide"), 4, team);
+            int announcements = 0;
+            int casts = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityId == "splitting_prism") announcements++;
+                if (r.Events[i].Type == BattleEventType.AbilityCast && r.Events[i].SourceId == 0) casts++;
+            }
+            Check(casts >= 1 && announcements == 1,
+                  "a relic announces itself once per battle, not once per use (" + announcements
+                  + " announcement(s) over " + casts + " cast(s))");
+        }
+
+        private static HeroInstance MakeInstanceWithRelic(HeroDef def, int level, string relicId)
+        {
+            HeroInstance h = MakeInstance(def, level);
+            h.RelicId = relicId;
+            return h;
+        }
+
+        /// <summary>
+        /// One synthetic database covering all four relics. Damage and speed variance are zero and
+        /// every landing chance is 1, so nothing here consumes RNG in a way that could make a
+        /// control and its treatment differ for a reason other than the relic.
+        /// </summary>
+        private static ContentDatabase BuildRelicTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_prism_caster"", ""name"": ""Prism Caster"", ""aspect"": ""Tide"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""basic"": { ""id"": ""prism_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""prism_active"", ""name"": ""Bloom"", ""energyCost"": 100,
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 0.001 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Burn"", ""magnitude"": 0.001, ""duration"": 2, ""chance"": 1 }
+        ] } },
+
+    { ""id"": ""test_warden"", ""name"": ""Warden"", ""aspect"": ""Tide"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""basic"": { ""id"": ""warden_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""warden_active"", ""name"": ""Guard"", ""energyCost"": 100,
+        ""effects"": [
+          { ""kind"": ""Shield"", ""target"": ""Self"", ""selfHpRatio"": 0.05, ""duration"": 3 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"", ""duration"": 2, ""chance"": 1 }
+        ] } },
+    { ""id"": ""test_warden_ally"", ""name"": ""Warden Ally"", ""aspect"": ""Tide"", ""startingHero"": true,
+      ""hp"": 5000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ally_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+
+    { ""id"": ""test_oath_striker"", ""name"": ""Oath Striker"", ""aspect"": ""Tide"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""oath_basic"", ""name"": ""Thrust"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 0.001 } ] } },
+
+    { ""id"": ""test_sigil_wearer"", ""name"": ""Sigil Wearer"", ""aspect"": ""Tide"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""basic"": { ""id"": ""sigil_basic"", ""name"": ""Cut"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""sigil_active"", ""name"": ""Step"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""test_mark"", ""name"": ""Mark"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""LastTarget"", ""status"": ""DefenseDown"", ""magnitude"": 0.01, ""duration"": 2, ""chance"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_dummy"", ""name"": ""Dummy"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dummy_basic"", ""name"": ""Flail"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""test_striker"", ""name"": ""Striker"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 200, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""striker_basic"", ""name"": ""Stab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""test_weakling"", ""name"": ""Weakling"", ""aspect"": ""Ember"",
+      ""hp"": 900, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""weak_basic"", ""name"": ""Flail"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""test_bulwark"", ""name"": ""Bulwark"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""bulwark_basic"", ""name"": ""Flail"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_relic_ch"", ""name"": ""Test Relics"", ""stages"": [
+        { ""id"": ""test_relic_wide"", ""index"": 1, ""enemies"": [
+            { ""id"": ""test_dummy"", ""level"": 1 }, { ""id"": ""test_dummy"", ""level"": 1 }, { ""id"": ""test_dummy"", ""level"": 1 } ] },
+        { ""id"": ""test_relic_striker"", ""index"": 2, ""enemies"": [ { ""id"": ""test_striker"", ""level"": 1 } ] },
+        { ""id"": ""test_relic_pair"", ""index"": 3, ""enemies"": [
+            { ""id"": ""test_bulwark"", ""level"": 1 }, { ""id"": ""test_weakling"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0,
+  ""maxTeamSize"": 5, ""relicSlotsPerHero"": 1
+}";
+            string relicsJson = @"{
+  ""relics"": [
+    { ""id"": ""splitting_prism"", ""name"": ""Splitting Prism"", ""rule"": ""Wide becomes narrow."", ""hook"": ""SplitWideDamage"" },
+    { ""id"": ""wardens_debt"", ""name"": ""Warden's Debt"", ""rule"": ""The ward leaves the wearer."",
+      ""hook"": ""Retarget"", ""effectKind"": ""Shield"", ""fromTarget"": ""Self"", ""toTarget"": ""LowestHpAlly"", ""excludeSelf"": true },
+    { ""id"": ""stormlance_oath"", ""name"": ""Stormlance Oath"", ""rule"": ""Open, never finish."",
+      ""hook"": ""Retarget"", ""fromTarget"": ""LowestHpEnemy"", ""toTarget"": ""HighestHpEnemy"" },
+    { ""id"": ""verdict_sigil"", ""name"": ""Verdict Sigil"", ""rule"": ""Casting marks too."",
+      ""hook"": ""WidenPassiveTrigger"", ""fromTrigger"": ""AfterBasicAttack"" }
+  ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] synthetic relic content warning: " + db.Warnings[i]);
+            Check(false, "synthetic relic test content parses with no warnings");
+            return null;
+        }
+
         private static void CheckDebrief()
         {
             Line("DEBRIEF");
@@ -3294,6 +3786,8 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < profile.Team.Length; i++) if (profile.Team[i] != loaded.Team[i]) teamOk = false;
             Check(teamOk, "team assignment survives the round trip");
 
+            CheckSaveCarriesRelics(db, profile);
+
             string error2;
             PlayerProfile fromGarbage = SaveSerializer.Deserialize("{ not json", db, out error2);
             Check(fromGarbage == null && error2 != null, "corrupt save is rejected instead of throwing");
@@ -3439,6 +3933,181 @@ namespace Emberfall.DevHarness
         /// not worth blocking a build over, because until task 14 nothing here is tuned and a near
         /// miss is exactly the kind of noise re-tuning is expected to absorb.
         /// </summary>
+        /// <summary>
+        /// The relic half of the save format (DESIGN-RELICS "New fields", save version 2 -> 3).
+        ///
+        /// Both directions are asserted, because only one of them is the reason the version was
+        /// bumped. Forward - a v3 save carrying a relic reads its relic back - is the obvious half.
+        /// Backward - a save written WITHOUT relics is unchanged apart from the version stamp, so
+        /// the bump costs nothing to anyone who never equips one - is the half that would rot
+        /// silently if the writer ever started emitting an empty relicId key for every hero.
+        /// </summary>
+        private static void CheckSaveCarriesRelics(ContentDatabase db, PlayerProfile profile)
+        {
+            string beforeJson = SaveSerializer.Serialize(profile);
+            Check(beforeJson.IndexOf("relicId", StringComparison.Ordinal) < 0,
+                  "a profile with no relics equipped writes no relicId key at all");
+
+            profile.Heroes[0].RelicId = "splitting_prism";
+            string withRelic = SaveSerializer.Serialize(profile);
+            string relicErr;
+            PlayerProfile reloaded = SaveSerializer.Deserialize(withRelic, db, out relicErr);
+            Check(reloaded != null && relicErr == null, "a save carrying a relic deserialises without error");
+            if (reloaded != null)
+            {
+                HeroInstance back = reloaded.FindHeroByUid(profile.Heroes[0].Uid);
+                Check(back != null && back.RelicId == "splitting_prism",
+                      "an equipped relic survives the round trip (got "
+                      + (back == null ? "no hero" : "\"" + back.RelicId + "\"") + ")");
+            }
+
+            // An id no longer present in content is deliberately KEPT rather than scrubbed: the
+            // simulation resolves ids to defs and treats an unresolvable one as no relic, so
+            // holding the string means re-adding the relic to content restores the equip instead
+            // of having silently wiped every player's slot the one build it was missing.
+            profile.Heroes[0].RelicId = "relic_that_no_longer_exists";
+            string orphanErr;
+            PlayerProfile orphan = SaveSerializer.Deserialize(SaveSerializer.Serialize(profile), db, out orphanErr);
+            HeroInstance orphanHero = orphan != null ? orphan.FindHeroByUid(profile.Heroes[0].Uid) : null;
+            Check(orphanHero != null && orphanHero.RelicId == "relic_that_no_longer_exists",
+                  "a relic id that content no longer defines is kept, not scrubbed, so re-adding the relic restores it");
+            profile.Heroes[0].RelicId = "";
+        }
+
+        /// <summary>
+        /// The four synthetic checks above prove the mechanics. This one proves they connect to the
+        /// heroes DESIGN-RELICS actually pairs them with, on shipped content, at a level and stage
+        /// a real line would meet - the gap those checks cannot close, because a mechanic that
+        /// works perfectly on a hand-built caster and never engages on Kalyx is still a dead relic.
+        ///
+        /// The stage is discovered rather than hardcoded: it walks the campaign for the first one
+        /// where the control run actually shows the wearer's wide cast striking three or more
+        /// enemies. Pinning a stage id here would rot the moment campaign.json is retuned, and it
+        /// would rot as a false PASS - a cast that stopped happening reads the same as a cast that
+        /// hit one target - which is the failure this whole harness is shaped to avoid.
+        /// </summary>
+        private static void CheckRelicsBiteOnShippedContent(ContentDatabase db)
+        {
+            HeroDef kalyx = db.GetHero("kalyx_emberwright");
+            HeroDef orrin = db.GetHero("orrin_kaal");
+            if (kalyx == null || orrin == null) { Check(false, "shipped relic check: Kalyx and Orrin both exist"); return; }
+
+            string[] others = { "orrin_kaal", "wren_ilyra", "ryn_solvarr", "maeve_corrin" };
+
+            StageDef found = null;
+            int controlSpread = 0;
+            for (int i = 0; i < db.AllStages.Count && found == null; i++)
+            {
+                StageDef stage = db.AllStages[i];
+                if (stage.Enemies.Count < 3) continue;
+                int spread = WidestKalyxCast(RunWith(db, stage, 11, BuildNamedTeamAtLevel(db, kalyx, others, 20)));
+                if (spread >= 3) { found = stage; controlSpread = spread; }
+            }
+
+            Check(found != null,
+                  "shipped content has a stage where Kalyx's Cinder Bloom actually strikes 3+ enemies"
+                  + (found == null ? " - none found, so Splitting Prism could not be measured on real content"
+                                   : " (" + found.Id + ", " + controlSpread + " enemies struck)"));
+            if (found == null) return;
+
+            List<HeroInstance> prismTeam = BuildNamedTeamAtLevel(db, kalyx, others, 20);
+            prismTeam[0].RelicId = "splitting_prism";
+            int prismSpread = WidestKalyxCast(RunWith(db, found, 11, prismTeam));
+            Check(prismSpread == 1,
+                  "Splitting Prism on the real Kalyx: Cinder Bloom collapses from " + controlSpread
+                  + " enemies onto 1 (got " + prismSpread + ")");
+
+            // Warden's Debt on the real Orrin. Cinderguard is the only Self Shield in shipped
+            // content, and it aims a Taunt at Self in the same ability, so this also re-proves the
+            // EffectKind filter against authored content rather than against a test fixture.
+            List<HeroInstance> plainOrrin = BuildNamedTeamAtLevel(db, orrin, new string[] { "kalyx_emberwright", "wren_ilyra", "ryn_solvarr", "maeve_corrin" }, 20);
+            List<HeroInstance> debtOrrin = BuildNamedTeamAtLevel(db, orrin, new string[] { "kalyx_emberwright", "wren_ilyra", "ryn_solvarr", "maeve_corrin" }, 20);
+            debtOrrin[0].RelicId = "wardens_debt";
+
+            int plainSelf, plainAway, plainTauntSelf, plainTauntAway;
+            int debtSelf, debtAway, debtTauntSelf, debtTauntAway;
+            CountOrrinWard(RunWith(db, found, 11, plainOrrin), out plainSelf, out plainAway, out plainTauntSelf, out plainTauntAway);
+            CountOrrinWard(RunWith(db, found, 11, debtOrrin), out debtSelf, out debtAway, out debtTauntSelf, out debtTauntAway);
+
+            Check(plainSelf > 0 && plainAway == 0,
+                  "control: the real Orrin's Cinderguard wards himself (" + plainSelf + " on self, " + plainAway + " on allies)");
+            Check(debtAway > 0 && debtSelf == 0,
+                  "Warden's Debt on the real Orrin: every Cinderguard ward goes to an ally instead ("
+                  + debtAway + " on allies, " + debtSelf + " on self)");
+
+            // Asserted on WHERE the Taunt lands, deliberately not on how many times. A relic
+            // changes how a battle plays out - DESIGN-RELICS says so outright, "the same seed with
+            // a different relic is a different battle" - so Orrin surviving to cast a different
+            // number of times is the relic working, not a regression. Requiring the counts to match
+            // failed for exactly that reason and was testing the wrong thing: the claim under test
+            // is that the Taunt never travels, not that the fight is unchanged.
+            Check(debtTauntSelf > 0 && debtTauntAway == 0 && plainTauntAway == 0,
+                  "and every Taunt he raises still lands on himself - the relic costs him the ward, not"
+                  + " the anchor (" + debtTauntSelf + " on self, " + debtTauntAway + " elsewhere, against "
+                  + plainTauntSelf + "/" + plainTauntAway + " without it)");
+        }
+
+        /// <summary>Most distinct enemies struck inside any single Cinder Bloom cast.</summary>
+        private static int WidestKalyxCast(BattleResult r)
+        {
+            int kalyxId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == "kalyx_emberwright") kalyxId = r.Units[i].Id;
+            if (kalyxId < 0) return 0;
+
+            int widest = 0;
+            bool inCast = false;
+            Dictionary<int, bool> struck = new Dictionary<int, bool>();
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.AbilityCast)
+                {
+                    if (struck.Count > widest) widest = struck.Count;
+                    struck.Clear();
+                    inCast = e.SourceId == kalyxId && e.AbilityId == "kalyx_active";
+                    continue;
+                }
+                if (e.Type == BattleEventType.TurnStart)
+                {
+                    if (struck.Count > widest) widest = struck.Count;
+                    struck.Clear();
+                    inCast = false;
+                    continue;
+                }
+                if (inCast && e.Type == BattleEventType.Damage && e.SourceId == kalyxId) struck[e.TargetId] = true;
+            }
+            if (struck.Count > widest) widest = struck.Count;
+            return widest;
+        }
+
+        private static void CountOrrinWard(BattleResult r, out int ontoSelf, out int ontoAlly,
+                                           out int tauntOntoSelf, out int tauntOntoOther)
+        {
+            int orrinId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == "orrin_kaal") orrinId = r.Units[i].Id;
+
+            ontoSelf = 0;
+            ontoAlly = 0;
+            tauntOntoSelf = 0;
+            tauntOntoOther = 0;
+            if (orrinId < 0) return;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.SourceId != orrinId) continue;
+                if (e.Type == BattleEventType.ShieldGain)
+                {
+                    if (e.TargetId == orrinId) ontoSelf++; else ontoAlly++;
+                }
+                else if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt)
+                {
+                    if (e.TargetId == orrinId) tauntOntoSelf++; else tauntOntoOther++;
+                }
+            }
+        }
+
         private static void CheckStageWinnability(ContentDatabase db)
         {
             Line("STAGE WINNABILITY (team levelled to each stage's own recommended power)");
