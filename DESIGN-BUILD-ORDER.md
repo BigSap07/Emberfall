@@ -201,7 +201,7 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
    after. Team size will already be 5 by the time this is built; uncapped, a single Gale unit can
    resolve a round unilaterally, the same failure `MaxPassiveDepth` prevents one level down with no
    equivalent guard on turn re-entry. Task 12.
-4. **Only Nyx's Shadowmark gains an RNG draw when Effect Hit/Resist land.** Audited: it is the one
+4. **Only Nyx's Hollowing gains an RNG draw when Effect Hit/Resist land.** Audited: it is the one
    `ApplyStatus` in shipped content whose `chance` defaults to 1.0 today. Every other harmful status
    already rolls. A zero-default phase is therefore bit-identical to today's battles, provable
    against the existing `BattleFingerprint`. Prove it; don't assume it. Tasks 7 and 11.
@@ -376,7 +376,7 @@ summon weights.
    `_rng.Chance` gate to read them, prove the change is a no-op against the existing
    `BattleFingerprint`. `[H]`
    **Merged to `main`, green.** Both stats added at zero default, the gate wired, and a harness
-   check proves the bypass is exact and that Nyx's Shadowmark - the one status in shipped content
+   check proves the bypass is exact and that Nyx's Hollowing - the one status in shipped content
    that would otherwise gain a draw - still draws nothing. This was previously proven by
    construction and by the check's own logic, not by execution, because this environment has no
    C# compiler to run it with. CI does have one: it ran the check on `windows-latest` against

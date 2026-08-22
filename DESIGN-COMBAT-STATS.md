@@ -244,7 +244,7 @@ A `chance` of 1.0 consumes **zero** draws. That is what makes a clean migration 
 A turn is one ability. Counting `ApplyStatus` resolutions per turn:
 
 - An ability with no harmful status: **0 new draws.**
-- A single-target harmful status (Ryn's Piercing Gale, Nyx's Shadowmark): **0 or 1**, depending on
+- A single-target harmful status (Ryn's Piercing Gale, Nyx's Hollowing): **0 or 1**, depending on
   whether it already rolled.
 - An `AllEnemies` harmful status (Orrin's Cinderguard, Kalyx's Cinder Bloom, three enemy actives):
   resolves once per living target, so **0 to 3 today, 0 to 5 after the team size change**.
@@ -258,7 +258,7 @@ The honest number is smaller than that ceiling, because most already roll. Audit
 | Harmful, `chance` already < 1 | 8 | 1 each | 1 each |
 | Harmful, `chance` = 1.0 | 1 | **0** | **1** |
 
-The single entry in that last row is **Nyx's Shadowmark**: `DefenseDown` 0.22 on `LastTarget`, no
+The single entry in that last row is **Nyx's Hollowing**: `DefenseDown` 0.22 on `LastTarget`, no
 `chance` authored, so it defaults to 1.0 and short-circuits. It fires `AfterBasicAttack`, meaning
 every basic attack she throws. It is the only place in shipped content where the draw count changes
 at all. (DESIGN-WORLD flags that this passive is due a rename, since marking is Lumen's verb under
@@ -278,7 +278,7 @@ if (source.EffectiveEffectHit != 0f || target.EffectiveEffectResist != 0f)
 ```
 
 then `landing` is bit-identical to `effect.Chance`, the short-circuit behaves identically,
-Shadowmark still consumes no draw, and **every seeded battle produces the same event list it does
+Hollowing still consumes no draw, and **every seeded battle produces the same event list it does
 today**. `CheckDeterminism`'s `BattleFingerprint` proves that rather than assuming it.
 
 Two things break the guarantee if you are careless:

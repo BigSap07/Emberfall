@@ -43,7 +43,7 @@ loses her finisher role entirely; against three minions she is now the worst pic
 banks toward the next cast. *Maeve.* Tidal Cadence plus Rising Chorus wastes energy constantly at
 cap. Banked, the line can cast on consecutive rounds. Pure tempo, zero stats.
 
-**Verdict Sigil** — `AfterBasicAttack` passives also fire after an Active. *Nyx.* Shadowmark
+**Verdict Sigil** — `AfterBasicAttack` passives also fire after an Active. *Nyx.* Hollowing
 currently skips every turn she casts Umbral Step, so her best turn is her least debilitating.
 With the Sigil, casting also marks.
 

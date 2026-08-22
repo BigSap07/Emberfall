@@ -104,9 +104,10 @@ by elimination rather than read off an existing kit, called it the least trustwo
 recommended building it last. The belief gives it the evidence it was missing. Lumen should still be
 built last, but it is no longer the weakest entry.
 
-**One naming collision, small but worth fixing.** Nyx's passive is called `Shadowmark`, and marking
+**One naming collision, small but worth fixing.** ~~Nyx's passive is called `Shadowmark`, and marking
 is Lumen's verb under this fiction, not Umbra's. Her mechanic is fine. Her passive is named after
-the wrong aspect.
+the wrong aspect.~~ **Fixed in `claude/aspects-tide-umbra`:** renamed to `Hollowing`, which is
+already the project's established Umbra word (`hollow_husk`, `Hollow Cut`).
 
 **What the fiction does not excuse.** DESIGN-ASPECTS 3 found three of six heroes cross-wired, and
 the Cinder does not give them cover. A recalled hero is a pattern, and a pattern is how that person

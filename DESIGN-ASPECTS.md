@@ -67,6 +67,11 @@ stack are correctly different sizes already. Ember is one `if` in one method.
 redirect goes there, with `Sim.EmitEnergy` firing for both units so the battle screen sees it.
 `EffectKind.EnergyGain` in `Sim.ApplyEffect` and `BalanceConfig.EnergyMax` are the surrounding
 constants. `Sim.TakeTurn` sets `unit.Energy = 0` on cast, which is the sink the redirect feeds.
+**Clarified during `claude/aspects-tide-umbra`:** the rule keys on the *granter*, not the receiver.
+`AddEnergy` takes an explicit `sourceId`; the redirect fires only when that source is a living Tide
+unit. A unit's own basic-attack refill and on-damaged refill both pass `sourceId = -1` and are
+excluded — otherwise a Tide enemy hitting the player's line would redirect the player's own
+self-regen.
 
 **Verdant** — `Sim.ApplyHealValue` returns early when `missing <= 0`; that early return is the hook.
 The banked value becomes a `StatusKind.Regen` entry via `CombatUnit.AddOrRefresh`, which
@@ -113,7 +118,7 @@ the mechanic today: with `Rising Chorus` ticking every turn, a line sitting near
 away most of what she produces, which is exactly the discard the Tide rule reclaims.
 
 **Nyx Serrow (Umbra) — fits, with one stray.** `Hollow Cut` and `Umbral Step` both target
-`HighestAttackEnemy`; `Shadowmark` fires `AfterBasicAttack` and applies `DefenseDown` 22% to
+`HighestAttackEnemy`; `Hollowing` fires `AfterBasicAttack` and applies `DefenseDown` 22% to
 `LastTarget`. That is "pick the enemy that matters and subtract it" already written down. The stray
 is the `Focus` self-buff on `Umbral Step` — crit chance is Gale's axis, not Umbra's, and it is the
 one line of her kit that would move.
