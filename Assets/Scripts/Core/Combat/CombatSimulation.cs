@@ -1021,10 +1021,31 @@ namespace Emberfall.Core.Combat
 
                 }
 
-                // every remaining mode targets a single enemy - Provoke overrides all of them,
-                // including LastAttacker/LastTarget, so a taunting tank can't be targeted around.
-                CombatUnit taunter = FindTaunter(!caster.IsPlayer);
-                if (taunter != null) { result.Add(taunter); return result; }
+                // Every remaining mode targets a single enemy, and the anchor overrides all of them
+                // including LastAttacker/LastTarget, so the unit that answers for a side cannot be
+                // targeted around. ("Provoke" in the previous version of this comment was the old
+                // name for StatusKind.Taunt and had outlived it.)
+                //
+                // Note for anyone reading the RNG stream: returning here short-circuits the switch
+                // below, so RandomEnemy does not draw when a side has an anchor. That was already
+                // true for Taunt; Lumen simply makes it true far more often.
+                CombatUnit anchor = FindTargetAnchor(!caster.IsPlayer);
+                if (anchor != null)
+                {
+                    // Recorded only where the Lumen rule is what produced the answer and Taunt does
+                    // not already explain it on the target's own status bar. The redirect is
+                    // otherwise unreadable rather than merely unread: the Damage event shows the hit
+                    // landing on the Lumen unit, and nothing in the record distinguishes "it
+                    // answered for its side" from "it was genuinely the lowest-HP or front-most
+                    // pick". Emitting costs no RNG draw, so it cannot desync a seeded battle.
+                    if (anchor.Aspect == Aspect.Lumen && !anchor.HasTaunt)
+                    {
+                        BattleEvent anchored = Emit(BattleEventType.TargetAnchored, caster.Id, anchor.Id);
+                        anchored.Value = (int)mode;
+                    }
+                    result.Add(anchor);
+                    return result;
+                }
 
                 switch (mode)
                 {
@@ -1091,16 +1112,46 @@ namespace Emberfall.Core.Combat
                 }
             }
 
-            private CombatUnit FindTaunter(bool playerSide)
+            /// <summary>
+            /// The unit that answers every single-enemy targeting question aimed at `playerSide`, or
+            /// null when the question resolves by its own TargetMode. Was `FindTaunter`; renamed
+            /// because Taunt is no longer the only way to qualify.
+            ///
+            /// **Lumen (DESIGN-ASPECTS section 1, re-weighted by DESIGN-WORLD section 1).** A living
+            /// Lumen unit answers unconditionally, carrying Taunt or not. That unconditional is the
+            /// whole rule. DESIGN-ASPECTS wrote Lumen as "Lumen intercepts", absorption first;
+            /// DESIGN-WORLD overrides that ordering and says the identity is that targeting becomes
+            /// deterministic - "a description of a function that returns the same answer no matter
+            /// what was asked of it", and "absorption is not the identity, it is what happens when
+            /// the answer is always you". A rule that only held while a duration-2 Taunt was up
+            /// would be a function whose answer changes every other round, which is the opposite of
+            /// the belief it is supposed to be. So this method is the identity, and DealRawDamage's
+            /// shield-absorb block - which section 2 also names - gets no new code at all: it
+            /// already absorbs unconditionally, and absorption is the consequence of being the
+            /// answer, not a second co-equal rule.
+            ///
+            /// **Lumen outranks Taunt, and the order matters.** If a non-Lumen ally's Taunt could
+            /// displace a Lumen unit, the answer would change whenever anyone else taunted - again
+            /// the non-determinism the aspect exists to remove. Both tiers break ties on Slot, and
+            /// nothing here draws from _rng, so the answer is stable within a fight and across
+            /// replays of it.
+            ///
+            /// **No aliveness question beyond the loop's own.** A dead Lumen unit stops answering
+            /// and targeting immediately reverts to normal, which is the cost the rule carries: the
+            /// line has exactly one knowable place until it doesn't.
+            /// </summary>
+            private CombatUnit FindTargetAnchor(bool playerSide)
             {
-                CombatUnit found = null;
+                CombatUnit lumen = null;
+                CombatUnit taunter = null;
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (!u.Alive || u.IsPlayer != playerSide || !u.HasTaunt) continue;
-                    if (found == null || u.Slot < found.Slot) found = u;
+                    if (!u.Alive || u.IsPlayer != playerSide) continue;
+                    if (u.Aspect == Aspect.Lumen && (lumen == null || u.Slot < lumen.Slot)) lumen = u;
+                    if (u.HasTaunt && (taunter == null || u.Slot < taunter.Slot)) taunter = u;
                 }
-                return found;
+                return lumen != null ? lumen : taunter;
             }
 
             /// <summary>

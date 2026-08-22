@@ -59,6 +59,23 @@ namespace Emberfall.Core.Combat
         /// </summary>
         TurnOrderShift,
 
+        /// <summary>
+        /// Lumen (DESIGN-ASPECTS section 1, as re-weighted by DESIGN-WORLD section 1): SourceId's
+        /// single-enemy ability was resolved onto TargetId because TargetId is Lumen and answers for
+        /// its whole side, not because the ability's own TargetMode picked it. Value carries that
+        /// TargetMode, so the screen can say what the ability was aiming at before the answer
+        /// overrode it.
+        ///
+        /// Emitted only where the Lumen rule alone caused the redirect. When the anchor is also
+        /// carrying Taunt, the status tag on its bar already explains the hit and this would be a
+        /// second, redundant telling of it.
+        ///
+        /// Genuinely absent from the record rather than unread: the Damage event that follows shows
+        /// the hit landing on the Lumen unit, and nothing else distinguishes "it answered for its
+        /// side" from "it really was the lowest-HP or front-most pick".
+        /// </summary>
+        TargetAnchored,
+
         BattleEnd
     }
 
