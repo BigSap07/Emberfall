@@ -129,7 +129,7 @@
       "hp": 2450, "attack": 232, "defense": 104, "speed": 84,
       "critChance": 0.15, "critDamage": 1.7, "growth": 0.12, "startEnergy": 15,
       "effectHit": 0.15, "effectResist": 0.20,
-      "visual": { "primary": "4B3F63", "secondary": "17131F", "accent": "C9A6FF", "silhouette": "golem", "weapon": "hammer", "scale": 1.55, "sigil": 13, "sprite": "sundered_colossus" },
+      "visual": { "primary": "4B3F63", "secondary": "17131F", "accent": "C9A6FF", "silhouette": "golem", "weapon": "hammer", "scale": 1.15, "sigil": 13, "sprite": "sundered_colossus" },
       "basic": {
         "id": "colossus_basic", "name": "Ruinous Sweep", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.72 } ]
