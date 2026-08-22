@@ -16,6 +16,10 @@
   // most simultaneous Burn entries one unit can carry from Ember stacking; at the cap a further
   // application refreshes an existing entry instead of adding a new one
   "emberBurnStackCap": 3,
+  // relic slots on one hero; more than one stacks rule changes into a build, and a team-wide slot
+  // would be an aura, which is a global multiplier. DESIGN-RELICS' relicEnergyBankMax is absent on
+  // purpose: it bounded the Tidewrought Metronome's carry, and that relic is cut.
+  "relicSlotsPerHero": 1,
 
   // hero level up cost = A + B*level + C*level^2
   "levelCostA": 55,
