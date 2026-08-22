@@ -56,7 +56,7 @@ namespace Emberfall.Core.Combat
             float landing = baseChance + sourceEffectHit - targetEffectResist;
             if (landing < MinEffectLanding) landing = MinEffectLanding;
             // The ceiling is exactly 1f, not the 0.95f used elsewhere (EffectiveCritChance), and
-            // that is load bearing. Nyx's Shadowmark is the one ApplyStatus in shipped content with
+            // that is load bearing. Nyx's Hollowing is the one ApplyStatus in shipped content with
             // no authored "chance" field, so it defaults to 1.0 and DeterministicRng.Chance never
             // draws for it. A ceiling below 1f would clamp that 1.0 down, turn the zero-draw
             // short-circuit into a real draw, and desync every battle she appears in from that
@@ -73,6 +73,21 @@ namespace Emberfall.Core.Combat
             private readonly List<CombatUnit> _units = new List<CombatUnit>();
             private readonly BattleResult _result = new BattleResult();
             private int _round;
+
+            /// <summary>
+            /// True while a Tide hand-off is being delivered. Bounds the redirect to one hop even if
+            /// the hand-off is ever routed back through AddEnergy.
+            ///
+            /// Measured, not assumed: with the hand-off deliberately rewritten to recurse, removing
+            /// this guard changes nothing in shipped content - the recipient is chosen as the
+            /// largest gap on the line, and no grant today (8 and 25, from Rising Chorus and Tidal
+            /// Cadence) is big enough to overflow it. So the cascade is currently unreachable and
+            /// this guard is latent. It stops being latent the moment grants get bigger, which
+            /// DESIGN-ASPECTS section 8 says is coming ("her numbers get retuned regardless of this
+            /// document"): at 4x grants the same rewrite cascades to 6 hand-offs inside one grant,
+            /// and with this guard in place it stays at 4.
+            /// </summary>
+            private bool _inRedirect;
 
             public Sim(BattleRequest request)
             {
@@ -194,7 +209,8 @@ namespace Emberfall.Core.Combat
 
                     if (unit.Alive)
                     {
-                        AddEnergy(unit, _cfg.EnergyPerBasicAttack);
+                        // -1: a unit's own basic-attack refill has no granter, so it never redirects.
+                        AddEnergy(unit, _cfg.EnergyPerBasicAttack, -1);
                         TriggerPassive(unit, PassiveTrigger.AfterBasicAttack, 0);
                     }
                 }
@@ -356,6 +372,17 @@ namespace Emberfall.Core.Combat
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (!StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
+                            // Umbra (DESIGN-ASPECTS section 1, as corrected by DESIGN-WORLD section
+                            // 1): a harmful status from an Umbra source cannot be cleansed. Only the
+                            // uncleansable half of the original rule is built. The other half - "does
+                            // not tick down while the applier lives" - is persistence, which is
+                            // Verdant's belief, not Umbra's, so ExpireStatuses is deliberately left
+                            // alone and these entries still expire on schedule.
+                            //
+                            // Skipping rather than counting: an uncleansable status does not consume
+                            // one of the cleanse's Hits, so a Cleanse still clears what it legitimately
+                            // can instead of being absorbed by the entry it was never allowed to take.
+                            if (IsUmbraSourced(target.Statuses[i])) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
                             target.Statuses.RemoveAt(i);
@@ -368,7 +395,8 @@ namespace Emberfall.Core.Combat
                         if (!target.Alive) break;
                         int amount = (int)Math.Round(effect.Flat + effect.Power * 100f, MidpointRounding.AwayFromZero);
                         if (amount == 0) break;
-                        AddEnergy(target, amount);
+                        // The one granting site: source handed this out, so Tide's redirect applies.
+                        AddEnergy(target, amount, source.Id);
                         break;
                     }
                 }
@@ -452,7 +480,9 @@ namespace Emberfall.Core.Combat
                     return;
                 }
 
-                AddEnergy(target, _cfg.EnergyOnDamaged);
+                // -1: energy from being hit is the victim's own regen, not something the attacker
+                // granted. A Tide attacker must not redirect its victim's line's energy.
+                AddEnergy(target, _cfg.EnergyOnDamaged, -1);
                 TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
                 TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
             }
@@ -498,19 +528,130 @@ namespace Emberfall.Core.Combat
                 banked.Duration = VerdantBankRounds;
             }
 
-            private void AddEnergy(CombatUnit unit, int amount)
+            /// <summary>
+            /// Tide (DESIGN-ASPECTS section 1): energy granted by a Tide source is never discarded.
+            /// Overflow past EnergyMax is handed to the living ally furthest from casting.
+            ///
+            /// sourceId is the unit that *granted* this energy, or -1 where there is no granter.
+            /// That distinction is the one DESIGN-HOOK-CONFLICT section 1 flags as missing from the
+            /// rule's wording: two of the three call sites are a unit's own regen (its own basic
+            /// attack, and being hit), which nobody hands out, and "Tide never discards energy" read
+            /// literally would redirect those too. Keying on the granter matches how Ember and
+            /// Verdant already key on source.Aspect, and matches the rule's own justification in
+            /// DESIGN-ASPECTS section 3 - "a line sitting near 100 energy throws away most of what
+            /// she produces" is about Maeve's output, not about other units' self-regen.
+            ///
+            /// One hop, no chaining, per section 2's explicit hazard. Two things enforce it, and the
+            /// second exists because the first is easy to undo by accident. Structurally, the
+            /// hand-off goes through AddEnergyClamped, which has no redirect branch, so there is no
+            /// code path from the hand-off back into this method. _inRedirect then holds the bound
+            /// even if someone later routes the hand-off through AddEnergy instead - the obvious,
+            /// tempting refactor, and silently a cascade. The cost of the bound is that a recipient
+            /// which also caps out discards its own remainder; that is what "one hop" means.
+            ///
+            /// Chain depth is deliberately guarded here rather than checked in the event list,
+            /// because it is not observable there: a recipient filled to the cap emits nothing for
+            /// its own next grant, so a genuine chain and two consecutive one-hop redirects produce
+            /// byte-identical events. The harness bounds hand-offs per grant instead.
+            /// </summary>
+            private void AddEnergy(CombatUnit unit, int amount, int sourceId)
             {
-                if (!unit.Alive || amount == 0) return;
+                int overflow = AddEnergyClamped(unit, amount);
+                if (overflow <= 0) return;
+                if (_inRedirect) return;
+
+                CombatUnit source = FindUnit(sourceId);
+                if (source == null || source.Aspect != Aspect.Tide) return;
+
+                CombatUnit recipient = FurthestFromCasting(unit);
+                if (recipient == null) return;
+
+                _inRedirect = true;
+                AddEnergyClamped(recipient, overflow, unit.Id);
+                _inRedirect = false;
+            }
+
+            /// <summary>
+            /// The original clamping AddEnergy, returning what it would otherwise have thrown away.
+            /// EmitEnergy fires here, so both sides of a Tide hand-off are recorded in the event
+            /// list. Deliberately has no redirect branch: this is the method that makes chaining
+            /// impossible rather than merely bounded.
+            /// </summary>
+            private int AddEnergyClamped(CombatUnit unit, int amount, int handedFromId)
+            {
+                if (!unit.Alive || amount == 0) return 0;
                 int before = unit.Energy;
                 unit.Energy += amount;
-                if (unit.Energy > unit.EnergyMax) unit.Energy = unit.EnergyMax;
+                int overflow = 0;
+                if (unit.Energy > unit.EnergyMax)
+                {
+                    overflow = unit.Energy - unit.EnergyMax;
+                    unit.Energy = unit.EnergyMax;
+                }
                 if (unit.Energy < 0) unit.Energy = 0;
-                if (unit.Energy != before) EmitEnergy(unit);
+                if (unit.Energy != before) EmitEnergy(unit, handedFromId);
+                return overflow;
+            }
+
+            private int AddEnergyClamped(CombatUnit unit, int amount)
+            {
+                return AddEnergyClamped(unit, amount, -1);
+            }
+
+            /// <summary>
+            /// Tide's recipient: the living ally with the most energy still to find before its own
+            /// active can fire. Excludes the unit that just overflowed, which is at cap by
+            /// definition, and excludes units with no active, since energy handed to a unit that can
+            /// never spend it is the same discard Tide exists to prevent. Side is taken from the
+            /// unit that overflowed rather than from the granter, so overflow stays on the line it
+            /// landed on even if some future ability grants energy across the field.
+            ///
+            /// Ties break on Id, and nothing here draws from _rng: this runs inside a seeded
+            /// simulation, and consuming a draw would shift the stream and desync replays.
+            /// </summary>
+            private CombatUnit FurthestFromCasting(CombatUnit overflowed)
+            {
+                CombatUnit best = null;
+                int bestGap = 0;
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u == overflowed) continue;
+                    if (u.IsPlayer != overflowed.IsPlayer) continue;
+                    if (u.Active == null) continue;
+
+                    int gap = u.Active.EnergyCost - u.Energy;
+                    if (gap <= 0) continue;
+                    if (best == null || gap > bestGap || (gap == bestGap && u.Id < best.Id))
+                    {
+                        best = u;
+                        bestGap = gap;
+                    }
+                }
+                return best;
             }
 
             private void EmitEnergy(CombatUnit unit)
             {
-                BattleEvent e = Emit(BattleEventType.EnergyChanged, unit.Id, unit.Id);
+                EmitEnergy(unit, -1);
+            }
+
+            /// <summary>
+            /// handedFromId is the unit a Tide redirect took this energy from, or -1 for ordinary
+            /// energy change. It is written into the event's SourceId, so on an EnergyChanged event
+            /// SourceId != TargetId means "this energy was handed over" and SourceId == TargetId
+            /// means "this unit's own energy changed" - which is what every pre-Tide path emits, so
+            /// their events are unchanged byte for byte.
+            ///
+            /// Without this the hand-off would be invisible: EmitEnergy fires for both units, but a
+            /// consumer reading the list could not tell the recipient's gain apart from any other
+            /// energy gain, and DESIGN-BATTLE-READABILITY's rule is that the screen reads the record
+            /// rather than recomputing the fight. The causality has to be in the record to be read.
+            /// </summary>
+            private void EmitEnergy(CombatUnit unit, int handedFromId)
+            {
+                int from = handedFromId >= 0 ? handedFromId : unit.Id;
+                BattleEvent e = Emit(BattleEventType.EnergyChanged, from, unit.Id);
                 e.Value = unit.Energy;
             }
 
@@ -663,6 +804,19 @@ namespace Emberfall.Core.Combat
                     if (found == null || u.Slot < found.Slot) found = u;
                 }
                 return found;
+            }
+
+            /// <summary>
+            /// Whether a status entry was applied by an Umbra source. No aliveness test on the
+            /// applier: DESIGN-ASPECTS section 2 attached "while the applier lives" specifically to
+            /// the non-expiry rule, and DESIGN-WORLD section 1 cuts that rule. What is left is
+            /// bounded by the status's own duration either way, so a dead Umbra's debuff runs out on
+            /// schedule rather than lasting forever.
+            /// </summary>
+            private bool IsUmbraSourced(StatusInstance status)
+            {
+                CombatUnit applier = FindUnit(status.SourceId);
+                return applier != null && applier.Aspect == Aspect.Umbra;
             }
 
             private CombatUnit FindUnit(int id)
