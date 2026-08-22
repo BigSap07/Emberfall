@@ -46,8 +46,10 @@ namespace Emberfall.DevHarness
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
+            CheckPinnedFiveBodyCurve(content);
             CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
+            PrintInstrumentComparison();
 
             Line("");
             if (_failures == 0) Line("RESULT: all checks passed");
@@ -926,6 +928,54 @@ namespace Emberfall.DevHarness
         /// </summary>
         private const float NearMissEnemyHpCeiling = 0.35f;
 
+        // ---------------------------------------------------------------- instrument comparison
+        //
+        // Three checks in this harness measure "can the player beat this stage" and they disagree,
+        // because each fields a different team. Kept apart they read as three unrelated results and
+        // the disagreement is invisible; PrintInstrumentComparison prints them in one table so it
+        // is not. Each check writes its own column here as it runs and is otherwise unchanged.
+        //
+        //   winnability3  CheckStageWinnability     3 bodies levelled TO recommendedPower
+        //   pinned5       CheckPinnedFiveBodyCurve  5 bodies levelled TO recommendedPower
+        //   balance5      RunCampaignBalancePass    5 bodies at whatever the simulated economy gave
+        //
+        // The first is harsher than any real player (three bodies against a five-enemy line), the
+        // last is more generous (it runs 1.5x to 2x over recommendedPower), and until pinned5 was
+        // added the case in between - the team a real 5-slot player actually fields - was measured
+        // by nothing. See DESIGN-BUILD-ORDER, task 14's blockers.
+        private sealed class InstrumentRow
+        {
+            public string Code = "";
+            public string Name = "";
+            public int RecPower;
+
+            public int Winnability3Wins = -1;
+            public int Winnability3Samples;
+            public int Winnability3Power;
+
+            public float Pinned5Rate = -1f;
+            public int Pinned5Power;
+            public int Pinned5Bodies;
+            public bool Pinned5AtFloor;
+
+            public float Balance5Rate = -1f;
+            public int Balance5Power;
+        }
+
+        private static readonly List<InstrumentRow> _instrumentRows = new List<InstrumentRow>();
+
+        private static InstrumentRow Row(StageDef stage)
+        {
+            for (int i = 0; i < _instrumentRows.Count; i++)
+                if (_instrumentRows[i].Code == stage.DisplayCode) return _instrumentRows[i];
+            InstrumentRow row = new InstrumentRow();
+            row.Code = stage.DisplayCode;
+            row.Name = stage.Name;
+            row.RecPower = stage.RecommendedPower;
+            _instrumentRows.Add(row);
+            return row;
+        }
+
         /// <summary>
         /// Levels a fresh team directly to each stage's own recommendedPower (bypassing the real
         /// gold economy - this checks the content is winnable at the power it advertises, not how
@@ -979,6 +1029,12 @@ namespace Emberfall.DevHarness
                     if (r.Victory) wins++;
                     if (r.EnemyHpRatio < bestEnemyHpRatio) bestEnemyHpRatio = r.EnemyHpRatio;
                 }
+
+                InstrumentRow instrument = Row(stage);
+                instrument.Winnability3Wins = wins;
+                instrument.Winnability3Samples = Samples;
+                instrument.Winnability3Power = profile.TeamPower();
+
                 if (wins == 0 && bestEnemyHpRatio > NearMissEnemyHpCeiling)
                 {
                     anyUnwinnable = true;
@@ -997,6 +1053,169 @@ namespace Emberfall.DevHarness
             Check(!anyUnwinnable, "no stage is genuinely out of reach at its own recommended power (near misses do not count, see WARN lines above)");
             if (nearMisses > 0)
                 Line("  " + nearMisses + " stage(s) reported WARN. Untuned by design until task 14 - not a build blocker, worth another look after the retune.");
+            Line("");
+        }
+
+        /// <summary>
+        /// The controlled win-rate curve, and the instrument task 14 actually needs.
+        ///
+        /// Five bodies (the full banner a 5-slot player fields, best-power five as NormaliseTeam
+        /// picks them) levelled to exactly the stage's own recommendedPower. That is the case
+        /// neither existing check covers: CheckStageWinnability fields three bodies at that power,
+        /// which is harsher than any real player, and RunCampaignBalancePass fields five bodies at
+        /// whatever the simulated economy produced, which currently runs 1.5x to 2x over
+        /// recommendedPower and therefore reports 100% on all twelve stages - a flat line measures
+        /// nothing, and tuning against it would be tuning blind.
+        ///
+        /// This reports and does not assert a target. The curve is expected to look bad: nothing is
+        /// tuned until task 14 and these numbers are the input to that pass, not a goal it has
+        /// already missed. The one thing it does assert is that the instrument still discriminates
+        /// at all, because a curve that reads identically on every stage has stopped being a
+        /// measurement - which is exactly the regression this check was added to catch.
+        ///
+        /// Where recommendedPower sits below the floor of a five-body line (the sum of the best
+        /// five heroes at level 1, which no team can go under once five heroes are owned) the pin
+        /// cannot level anything down and the row is marked FLOOR. Those rows measure the floor,
+        /// not the target, and the fix is the stage's enemy levels, not this check.
+        /// </summary>
+        private static void CheckPinnedFiveBodyCurve(ContentDatabase db)
+        {
+            Line("PINNED FIVE-BODY CURVE (full banner levelled to each stage's own recommended power)");
+            Line("  stage  name                       bodies  teamPwr  recPwr  winRate");
+
+            const int Samples = 24;
+            int floorRows = 0;
+            float firstRate = -1f;
+            bool anyDifferent = false;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+
+                PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+                profile.PlayerLevel = 60;
+                profile.Gold = 500000000L;
+                GameSession session = new GameSession(db, profile);
+
+                // Deterministic roster fill, not summoning: every hero the content defines, granted
+                // directly, so the five bodies are the same five on every run and no summon RNG
+                // leaks into the measurement.
+                for (int h = 0; h < db.Heroes.Count; h++)
+                    if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
+
+                // Then deploy the best five by power, explicitly. NormaliseTeam is not enough and
+                // using it here was a real bug while this check was being written: it only fills
+                // EMPTY slots and never displaces a deployed hero, so the three starters kept slots
+                // 0 to 2 and grant order decided the rest - which left Nyx, the roster's only
+                // 5-star and its highest-power unit, on the bench and the floor reading 5112
+                // instead of 5684. A player choosing their own line would field her.
+                for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
+                List<HeroInstance> byPower = new List<HeroInstance>(profile.Heroes);
+                byPower.Sort(delegate (HeroInstance a, HeroInstance b) { return b.Power.CompareTo(a.Power); });
+                for (int i = 0; i < profile.Team.Length && i < byPower.Count; i++)
+                    profile.AssignToTeam(i, byPower[i].Uid);
+
+                List<HeroInstance> team = profile.TeamHeroes();
+                int floorPower = profile.TeamPower();
+
+                int guard = 0;
+                while (profile.TeamPower() < stage.RecommendedPower && guard < 20000)
+                {
+                    HeroInstance cheapest = null;
+                    int cheapestCost = int.MaxValue;
+                    for (int i = 0; i < team.Count; i++)
+                    {
+                        if (team[i].Level >= session.HeroLevelCap) continue;
+                        int cost = session.LevelUpCost(team[i]);
+                        if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
+                    }
+                    if (cheapest == null) break;
+                    session.LevelUpHero(cheapest, 1);
+                    guard++;
+                }
+
+                bool atFloor = stage.RecommendedPower <= floorPower;
+                if (atFloor) floorRows++;
+
+                int wins = 0;
+                for (int i = 0; i < Samples; i++)
+                {
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + s * 97 + i));
+                    if (r.Victory) wins++;
+                }
+                float rate = wins / (float)Samples;
+
+                if (firstRate < 0f) firstRate = rate;
+                else if (Math.Abs(rate - firstRate) > 0.001f) anyDifferent = true;
+
+                InstrumentRow row = Row(stage);
+                row.Pinned5Rate = rate;
+                row.Pinned5Power = profile.TeamPower();
+                row.Pinned5Bodies = team.Count;
+                row.Pinned5AtFloor = atFloor;
+
+                Line("  " + stage.DisplayCode.PadRight(5)
+                     + "  " + Trim(stage.Name, 25).PadRight(25)
+                     + "  " + team.Count.ToString().PadLeft(6)
+                     + "  " + profile.TeamPower().ToString().PadLeft(7)
+                     + "  " + stage.RecommendedPower.ToString().PadLeft(6)
+                     + "  " + Pct(rate).PadLeft(6)
+                     + (atFloor ? "   FLOOR (recommendedPower is under a five-body line's minimum, " + floorPower + ")" : ""));
+            }
+
+            if (floorRows > 0)
+                Line("  " + floorRows + " stage(s) marked FLOOR: the pin could not level down to the target, so those rows"
+                     + " measure the five-body floor rather than recommendedPower. Enemy levels, not this check.");
+
+            Check(anyDifferent,
+                  "the pinned five-body curve still discriminates between stages (a flat curve measures nothing - "
+                  + "this is the instrument task 14 tunes against, not a target it has to hit)");
+            Line("");
+        }
+
+        /// <summary>
+        /// Prints the three win-rate instruments side by side. No assertions and no new simulation:
+        /// every number here was already computed and reported by the check that owns it. The point
+        /// is that the three disagree, in which direction, and by how much - kept in three separate
+        /// sections that is invisible, and it is the thing task 14 most needs to see before it
+        /// trusts any single one of them.
+        /// </summary>
+        private static void PrintInstrumentComparison()
+        {
+            Line("INSTRUMENT COMPARISON (same stages, three different teams)");
+            Line("  3-body  = CheckStageWinnability     3 bodies levelled to recommendedPower");
+            Line("  5-body  = CheckPinnedFiveBodyCurve  5 bodies levelled to recommendedPower");
+            Line("  economy = RunCampaignBalancePass    5 bodies at whatever the simulated economy produced");
+            Line("");
+            Line("  stage  name                       recPwr   3-body   5-body  economy   economy power vs recPwr");
+
+            for (int i = 0; i < _instrumentRows.Count; i++)
+            {
+                InstrumentRow r = _instrumentRows[i];
+                string w3 = r.Winnability3Wins < 0
+                    ? "n/a".PadLeft(6)
+                    : Pct(r.Winnability3Wins / (float)Math.Max(1, r.Winnability3Samples)).PadLeft(6);
+                string p5 = r.Pinned5Rate < 0f ? "n/a".PadLeft(6) : Pct(r.Pinned5Rate).PadLeft(6);
+                string b5 = r.Balance5Rate < 0f ? "n/a".PadLeft(6) : Pct(r.Balance5Rate).PadLeft(6);
+                string ratio = (r.Balance5Rate < 0f || r.RecPower <= 0)
+                    ? "n/a"
+                    : "x" + Fmt(r.Balance5Power / (float)r.RecPower);
+
+                Line("  " + r.Code.PadRight(5)
+                     + "  " + Trim(r.Name, 25).PadRight(25)
+                     + "  " + r.RecPower.ToString().PadLeft(6)
+                     + "   " + w3
+                     + "   " + p5 + (r.Pinned5AtFloor ? "*" : " ")
+                     + "  " + b5
+                     + "   " + ratio.PadLeft(6));
+            }
+
+            Line("");
+            Line("  * the five-body pin sat at its floor on this stage, so that column measures the floor, not recommendedPower.");
+            Line("  Reading it: the three columns are the same content measured against three different lines. Where they");
+            Line("  disagree the content is not ambiguous, the team is - 3-body is harsher than any real player and economy");
+            Line("  is more generous than one. 5-body is the closest of the three to what a 5-slot player actually fields.");
+            Line("  Nothing here is tuned. Task 14 is the retune; this table is its input.");
             Line("");
         }
 
@@ -1111,6 +1330,10 @@ namespace Emberfall.DevHarness
 
                 float winRate = measureWins / (float)MeasureRuns;
                 float avgRounds = samples > 0 ? rounds / (float)samples : 0f;
+
+                InstrumentRow instrument = Row(stage);
+                instrument.Balance5Rate = winRate;
+                instrument.Balance5Power = profile.TeamPower();
                 Line("  " + stage.DisplayCode.PadRight(6)
                      + " " + Trim(stage.Name, 25).PadRight(25)
                      + " " + profile.TeamPower().ToString().PadLeft(7)
