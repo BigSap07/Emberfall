@@ -48,7 +48,7 @@
       "lore": "Forge-taught, temple-exiled. Believes fire is simply an argument that wins.",
       "hp": 1450, "attack": 186, "defense": 62, "speed": 96,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.115, "startEnergy": 0,
-      "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1 },
+      "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1, "sprite": "kalyx_emberwright" },
       "basic": {
         "id": "kalyx_basic", "name": "Emberlash", "vfx": "bolt",
         "description": "Whips a cord of live flame at the nearest foe.",
@@ -81,7 +81,7 @@
       "lore": "Grew a garden in a crater. Insists that was the easy part.",
       "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
       "critChance": 0.10, "critDamage": 1.5, "growth": 0.115, "startEnergy": 20,
-      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra" },
+      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra", "spriteBodyFraction": 0.94 },
       "basic": {
         "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
         "description": "A snapped seed-pod that stings on impact.",
@@ -114,7 +114,7 @@
       "lore": "Rides ahead of her own thunder and complains when it is late.",
       "hp": 1500, "attack": 205, "defense": 66, "speed": 118,
       "critChance": 0.20, "critDamage": 1.7, "growth": 0.115, "startEnergy": 0,
-      "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3 },
+      "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3, "sprite": "ryn_solvarr" },
       "basic": {
         "id": "ryn_basic", "name": "Lance Jab", "vfx": "slash",
         "description": "A fast thrust at whichever enemy is closest to falling.",
@@ -147,7 +147,7 @@
       "lore": "Conducts a battle the way other people conduct a choir.",
       "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.115, "startEnergy": 30,
-      "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4 },
+      "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4, "sprite": "maeve_corrin" },
       "basic": {
         "id": "maeve_basic", "name": "Tideprod", "vfx": "bolt",
         "description": "A curt shove of pressurised water.",
