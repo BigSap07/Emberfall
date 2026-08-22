@@ -11,10 +11,11 @@ import sys
 # ---------------------------------------------------------------------------
 # Ground truth from Assets/Scripts/Core/Data/Enums.cs
 # ---------------------------------------------------------------------------
-EFFECT_KINDS = {"Damage", "Heal", "Shield", "ApplyStatus", "Cleanse", "EnergyGain"}
+EFFECT_KINDS = {"Damage", "Heal", "Shield", "ApplyStatus", "Cleanse", "EnergyGain", "Dispel"}
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
     "Burn", "Regen", "Shield", "Taunt", "Focus", "Slow",
+    "Silence", "Stun", "Stealth",
 }
 
 # ---------------------------------------------------------------------------

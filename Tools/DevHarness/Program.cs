@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
             CheckAspectDirection(content);
             CheckAspectEmberVerdant(content);
             CheckAspectTideUmbra(content);
+            CheckDispel(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
@@ -487,6 +488,107 @@ namespace Emberfall.DevHarness
                   + " Umbra-sourced status(es) ran out on schedule, which DESIGN-WORLD section 1 requires"
                   + " (persistence is Verdant's verb, not Umbra's)");
             Line("");
+        }
+
+        /// <summary>
+        /// Builds a DispelHero (Wren clone whose active strips one beneficial status from every
+        /// ally) and fights alongside Maeve. Maeve's Tidal Cadence grants AttackUp + Focus to all
+        /// allies; DispelHero's Dispel then removes one of those per target. Confirms the
+        /// StatusExpired path fires for beneficial statuses and that the control (original Wren
+        /// with Cleanse) never removes a beneficial status.
+        /// </summary>
+        private static void CheckDispel(ContentDatabase db)
+        {
+            Line("DISPEL");
+            HeroDef maeveDef = db.GetHero("maeve_corrin");
+            HeroDef wrenDef  = db.GetHero("wren_ilyra");
+            if (maeveDef == null || wrenDef == null)
+            {
+                Check(false, "maeve_corrin and wren_ilyra both exist in content");
+                Line("");
+                return;
+            }
+
+            EffectDef dispelEffect = new EffectDef();
+            dispelEffect.Kind   = EffectKind.Dispel;
+            dispelEffect.Target = TargetMode.AllAllies;
+            dispelEffect.Hits   = 1;
+
+            AbilityDef dispelActive = new AbilityDef();
+            dispelActive.Id         = "test_dispel_active";
+            dispelActive.Name       = "Unravel";
+            dispelActive.Kind       = AbilityKind.Active;
+            dispelActive.EnergyCost = 100;
+            dispelActive.Vfx        = "buff";
+            dispelActive.Effects.Add(dispelEffect);
+
+            HeroDef dispelHero = CloneHeroWithActive(wrenDef, dispelActive);
+            StageDef stage = db.AllStages[0];
+
+            // Live: run several seeds so timing variance can't hide the mechanic.
+            int dispelled = 0;
+            List<HeroInstance> dispelTeam = new List<HeroInstance>();
+            dispelTeam.Add(MakeInstance(maeveDef, 20));
+            dispelTeam.Add(MakeInstance(dispelHero, 20));
+            for (int seed = 1; seed <= 5; seed++)
+            {
+                BattleResult r = RunWith(db, stage, seed, dispelTeam);
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type != BattleEventType.StatusExpired) continue;
+                    if (e.SourceId == e.TargetId) continue; // natural expiry
+                    if (!StatusInfo.IsHarmful(e.Status)) dispelled++;
+                }
+            }
+            Check(dispelled > 0, "Dispel removes at least one beneficial status across seeds 1-5 (" + dispelled + " total)");
+
+            // Control: original Wren (Cleanse, not Dispel) must produce zero beneficial-status removals.
+            int controlDispelled = 0;
+            List<HeroInstance> controlTeam = new List<HeroInstance>();
+            controlTeam.Add(MakeInstance(maeveDef, 20));
+            controlTeam.Add(MakeInstance(wrenDef, 20));
+            for (int seed = 1; seed <= 5; seed++)
+            {
+                BattleResult r = RunWith(db, stage, seed, controlTeam);
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type != BattleEventType.StatusExpired) continue;
+                    if (e.SourceId == e.TargetId) continue;
+                    if (!StatusInfo.IsHarmful(e.Status)) controlDispelled++;
+                }
+            }
+            Check(controlDispelled == 0, "control (Cleanse, not Dispel) produces 0 beneficial-status removals");
+
+            Line("");
+        }
+
+        /// <summary>Clone a hero, replacing only the active ability. Passive is cleared so
+        /// the test hero's behaviour is determined entirely by what we give them.</summary>
+        private static HeroDef CloneHeroWithActive(HeroDef src, AbilityDef active)
+        {
+            HeroDef clone = new HeroDef();
+            clone.Id            = src.Id + "_clone";
+            clone.Name          = src.Name;
+            clone.Aspect        = src.Aspect;
+            clone.BaseHp        = src.BaseHp;
+            clone.BaseAttack    = src.BaseAttack;
+            clone.BaseDefense   = src.BaseDefense;
+            clone.BaseSpeed     = src.BaseSpeed;
+            clone.CritChance    = src.CritChance;
+            clone.CritDamage    = src.CritDamage;
+            clone.EffectHit     = src.EffectHit;
+            clone.EffectResist  = src.EffectResist;
+            clone.Growth        = src.Growth;
+            clone.StartEnergy   = src.StartEnergy;
+            clone.Visual        = src.Visual;
+            clone.BasicAttack   = src.BasicAttack;
+            clone.Active        = active;
+            clone.Passive       = null;
+            clone.Role          = src.Role;
+            clone.Rarity        = src.Rarity;
+            return clone;
         }
 
         private static BattleResult RunWith(ContentDatabase db, StageDef stage, int seed, List<HeroInstance> team)
