@@ -32,8 +32,37 @@ namespace Emberfall.Core.Combat
     public static class Debrief
     {
         private const float AbilityDominantShare = 0.35f;
+
+        /// <summary>
+        /// Share of the damage the player took that has to carry an advantaged Aspect tag before
+        /// the clause fires. Held at 0.35 through the 1.20 -> 1.10 wheel narrowing, deliberately.
+        ///
+        /// The instinct is that a smaller multiplier means a smaller share and the bar should drop
+        /// with it. That is true of *attributable* damage (the extra a matchup bought: 0.20A before,
+        /// 0.10A now, a halving) and this is not that metric. It measures tagged *volume* - the
+        /// damage that arrived on an advantaged hit, all of it, not the slice the multiplier added.
+        /// Volume barely moves: with equal base damage in the advantaged, neutral and disadvantaged
+        /// buckets the share goes 1.20/3.05 = 0.393 to 1.10/3.02 = 0.364, still clear of the bar,
+        /// and the base ratio needed to fire tightens only from 0.449 to 0.490.
+        ///
+        /// So halving the bar to chase a halved attribution would over-fire on a cause that just
+        /// got weaker, which is the opposite of what narrowing the wheel was for. Raising it is
+        /// arguable on the same logic and is not done here either: there is no measurement of how
+        /// often this clause actually fires, and inventing one without data is how the constants
+        /// this pass exists to fix got stale. Task 14 owns it, with a real win-rate table.
+        /// </summary>
         private const float AspectDominantShare = 0.35f;
-        private const float AspectFactorThreshold = 1.2f;
+
+        /// <summary>
+        /// What counts as an advantaged hit. Deliberately NOT AspectChart.Advantage: this used to
+        /// be 1.2f, an inlined copy of that constant, so narrowing the wheel to 1.10 would have
+        /// made the comparison never true again and killed this clause in silence with no test
+        /// failing (DESIGN-BUILD-ORDER known trap 2). Anything above neutral is the actual intent,
+        /// so the bar sits just above 1.0 and never needs moving when the wheel is retuned again.
+        /// Matches BattleScreen.AspectTag's own > 1.01f test, which the two had drifted apart on.
+        /// </summary>
+        private const float AspectFactorThreshold = 1.01f;
+
         private const float SpeedMajorityShare = 0.5f;
 
         /// <summary>

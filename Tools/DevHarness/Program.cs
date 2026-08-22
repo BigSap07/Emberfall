@@ -677,6 +677,7 @@ namespace Emberfall.DevHarness
         {
             Line("DEBRIEF");
             CheckDebriefTimeout();
+            CheckDebriefAspectCanFire();
             CheckDebriefAspect();
             CheckDebriefFallback();
             Line("");
@@ -692,11 +693,49 @@ namespace Emberfall.DevHarness
             r.Units.Add(DebriefUnit(1, false, "Foe", "Active"));
             // a qualifying ability-dominance signal too, on purpose - Timeout is priority 1 and
             // must win even though a later clause would also fire on this same event list.
-            DebriefDamage(r, 1, 0, 500, "Big Hit", 1.2f, 1);
+            DebriefDamage(r, 1, 0, 500, "Big Hit", AspectChart.Advantage, 1);
 
             DebriefResult result = Debrief.Summarize(r);
             Check(result.Clause == DebriefClause.Timeout,
                   "Debrief picks Timeout for a constructed timeout, ahead of a qualifying ability/aspect signal (got " + result.Clause + ")");
+        }
+
+        /// <summary>
+        /// The tripwire for DESIGN-BUILD-ORDER known trap 2, and the only check here that exists to
+        /// catch a silent death rather than a wrong answer.
+        ///
+        /// Debrief.TryAspect counts damage at or above its own AspectFactorThreshold. That threshold
+        /// used to be an inlined copy of AspectChart.Advantage, so lowering the wheel would have made
+        /// the comparison unsatisfiable: the clause stops firing, the results screen quietly loses a
+        /// fifth of its vocabulary, and nothing fails. Every event below carries exactly the live
+        /// AspectChart.Advantage, so if the threshold ever rises above what the chart can actually
+        /// emit, weak stays 0, the share stays 0, the clause cannot win, and this FAILS.
+        ///
+        /// Deliberately end-to-end rather than an assert on the two constants: it reads no private
+        /// field, so it keeps working if the threshold is re-expressed, and it proves the behaviour
+        /// (the clause fires) instead of a relationship that only implies it. Task 14 retunes the
+        /// wheel again; this is what stops that pass from re-killing the clause.
+        /// </summary>
+        private static void CheckDebriefAspectCanFire()
+        {
+            BattleResult r = new BattleResult();
+            r.Units.Add(DebriefUnit(0, true, "Hero", "Active"));
+            r.Units.Add(DebriefUnit(1, false, "FoeA", "Active"));
+            r.Units.Add(DebriefUnit(2, false, "FoeB", "Active"));
+            r.Units.Add(DebriefUnit(3, false, "FoeC", "Active"));
+
+            // Every hit aspect-favoured, so the Aspect share is 100% and only the threshold itself
+            // can stop the clause. Split across three abilities at 233/233/234 of 700 so no single
+            // one reaches the 35% ability-dominance bar and steals priority 2 ahead of it.
+            DebriefDamage(r, 1, 0, 233, "Ash Nova", AspectChart.Advantage, 1);
+            DebriefDamage(r, 2, 0, 233, "Brine Lash", AspectChart.Advantage, 1);
+            DebriefDamage(r, 3, 0, 234, "Wing Dust", AspectChart.Advantage, 1);
+
+            DebriefResult result = Debrief.Summarize(r);
+            Check(result.Clause == DebriefClause.Aspect,
+                  "the Aspect debrief clause can still fire at the live AspectChart.Advantage of x"
+                  + Fmt(AspectChart.Advantage) + " (got " + result.Clause
+                  + ") - if this FAILS, Debrief.AspectFactorThreshold is above what the wheel emits");
         }
 
         private static void CheckDebriefAspect()
@@ -707,11 +746,16 @@ namespace Emberfall.DevHarness
             r.Units.Add(DebriefUnit(2, false, "FoeB", "Active"));
             r.Units.Add(DebriefUnit(3, false, "FoeC", "Active"));
 
-            // three different abilities so no single one clears the 35% ability-dominance bar,
-            // but two of them are Aspect-favoured (>=1.2) and together clear the 35% Aspect bar.
-            // No TurnStart events at all, so the Speed clause has nothing to measure and can't fire.
-            DebriefDamage(r, 1, 0, 233, "Ash Nova", 1.2f, 1);
-            DebriefDamage(r, 2, 0, 233, "Brine Lash", 1.2f, 1);
+            // three different abilities so no single one clears the 35% ability-dominance bar, but
+            // two of them are Aspect-favoured and together clear the 35% Aspect bar. No TurnStart
+            // events at all, so the Speed clause has nothing to measure and can't fire.
+            //
+            // The factor is read from AspectChart, never inlined. These were literal 1.2f until the
+            // wheel narrowed to 1.10, which is the failure mode worth naming: the literal would have
+            // gone on passing green while feeding Debrief a number the simulation can no longer
+            // produce, so the check would have been testing nothing and reporting [ok] for it.
+            DebriefDamage(r, 1, 0, 233, "Ash Nova", AspectChart.Advantage, 1);
+            DebriefDamage(r, 2, 0, 233, "Brine Lash", AspectChart.Advantage, 1);
             DebriefDamage(r, 3, 0, 234, "Wing Dust", 1.0f, 1);
 
             DebriefResult result = Debrief.Summarize(r);

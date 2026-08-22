@@ -93,8 +93,14 @@ namespace Emberfall.Core.Data
 
     public static class AspectChart
     {
-        public const float Advantage = 1.20f;
-        public const float Disadvantage = 0.85f;
+        // Narrowed from 1.20/0.85 per DESIGN-ASPECTS section 4: a 41% swing between an advantaged
+        // and a disadvantaged attacker out-argues every aspect identity, which forces one correct
+        // counter-colour per stage and turns team building into a compliance check. At 1.10/0.92
+        // the wheel is a tiebreak between two lines you'd already be happy with, which is what a
+        // secondary layer is. Nothing reads these as literals - see Debrief.AspectFactorThreshold
+        // and DevHarness CheckDebriefAspect* for the two places that used to.
+        public const float Advantage = 1.10f;
+        public const float Disadvantage = 0.92f;
 
         /// <summary>Ember &gt; Verdant &gt; Tide &gt; Gale &gt; Ember. Lumen and Umbra counter each other.</summary>
         public static float Multiplier(Aspect attacker, Aspect defender)
