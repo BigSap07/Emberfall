@@ -66,7 +66,7 @@ namespace Emberfall.UI
         {
             RectTransform rt = Node(name, parent);
             Image image = rt.gameObject.AddComponent<Image>();
-            image.sprite = radius > 0 ? TextureLab.RoundedRect(radius) : TextureLab.White;
+            image.sprite = radius > 0 ? UISkin.Panel(radius) : TextureLab.White;
             image.type = radius > 0 ? Image.Type.Sliced : Image.Type.Simple;
             image.color = color;
             return image;
@@ -76,7 +76,7 @@ namespace Emberfall.UI
         {
             RectTransform rt = Node(name, parent);
             Image image = rt.gameObject.AddComponent<Image>();
-            image.sprite = TextureLab.RoundedOutline(radius, thickness);
+            image.sprite = UISkin.PanelFrame(radius, thickness);
             image.type = Image.Type.Sliced;
             image.color = color;
             image.raycastTarget = false;
@@ -329,7 +329,7 @@ namespace Emberfall.UI
             handle.Group = handle.Root.gameObject.AddComponent<CanvasGroup>();
 
             handle.Background = handle.Root.gameObject.AddComponent<Image>();
-            handle.Background.sprite = TextureLab.RoundedRect((int)UITheme.CornerRadius);
+            handle.Background.sprite = UISkin.Button((int)UITheme.CornerRadius);
             handle.Background.type = Image.Type.Sliced;
             handle.Background.color = fill;
 
@@ -375,7 +375,7 @@ namespace Emberfall.UI
             handle.Group = handle.Root.gameObject.AddComponent<CanvasGroup>();
 
             handle.Background = handle.Root.gameObject.AddComponent<Image>();
-            handle.Background.sprite = TextureLab.Circle(96);
+            handle.Background.sprite = UISkin.Disc(96);
             handle.Background.color = fill;
 
             handle.Button = handle.Root.gameObject.AddComponent<Button>();
