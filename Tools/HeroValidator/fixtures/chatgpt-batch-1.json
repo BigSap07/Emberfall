@@ -1,0 +1,1246 @@
+[
+{
+"id": "sera_venn",
+"name": "Sera Venn",
+"title": "The Third Revision",
+"role": "Mage",
+"aspect": "Ember",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Sera rebuilt failed siege formulae instead of discarding them, convinced that every failed attempt should make the next one more severe. She believed destruction only mattered when it left no path back to the first version.",
+"stats": {
+"attack": 38,
+"unfixedAttack": 38,
+"fixedAttack": 0,
+"hp": 370,
+"unfixedHp": 370,
+"fixedHp": 0,
+"armor": 20,
+"speed": 208,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0.05,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "27272A",
+"secondary": "B8AEA0",
+"accent": "E84532",
+"silhouette": "Irreversible asymmetry; a rebuilt left mantle has overtaken the original right side. The Cinder Seam runs from the left temple to the right hip, and one waist buckle visibly fastens nothing.",
+"weapon": "A hinged slate codex whose repaired outer corner is much larger than the original, with the six-sided broken-ring notch punched through its spine.",
+"scale": 1.0,
+"sigil": 0,
+"sprite": "sera_venn"
+},
+"skills": {
+"basicAttack": {
+"id": "sera_venn_basic_first_revision",
+"name": "First Revision",
+"description": "Deals 90% of Attack damage to 1 enemy and applies 1 Burn stack for 3 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.9
+},
+{
+"kind": "Burn",
+"target": "Enemy",
+"power": 0.3,
+"duration": 3,
+"stacks": 1
+}
+]
+},
+"activeSkill": {
+"id": "sera_venn_active_third_revision",
+"name": "Third Revision",
+"energyCost": 100,
+"description": "Deals 145% of Attack damage to all enemies and applies 2 Burn stacks to each for 3 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.45
+},
+{
+"kind": "Burn",
+"target": "AllEnemies",
+"power": 0.3,
+"duration": 3,
+"stacks": 2
+}
+]
+},
+"passive1": {
+"id": "sera_venn_passive_compounding_error",
+"name": "Compounding Error",
+"description": "When Sera applies Burn to an enemy that already has Burn, she applies 1 additional Burn stack to that enemy. This can trigger once per enemy per round.",
+"effects": [
+{
+"kind": "Burn",
+"target": "Enemy",
+"power": 0.3,
+"duration": 3,
+"stacks": 1
+}
+]
+},
+"passive2": {
+"id": "sera_venn_passive_shared_escalation",
+"name": "Shared Escalation",
+"description": "The first time each round another ally applies Burn to an enemy, Sera applies 1 Burn stack to the same enemy.",
+"effects": [
+{
+"kind": "Burn",
+"target": "Enemy",
+"power": 0.3,
+"duration": 3,
+"stacks": 1
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "sera_venn_talent_open_revision",
+"name": "Open Revision",
+"description": "First Revision applies its Burn for 1 additional round.",
+"effects": [
+{
+"kind": "Burn",
+"target": "Enemy",
+"duration": 1
+}
+]
+},
+"talentII": {
+"id": "sera_venn_talent_parallel_errors",
+"name": "Parallel Errors",
+"description": "Shared Escalation can trigger once for each enemy during the round instead of only once during the round.",
+"effects": []
+},
+"talentIII": {
+"id": "sera_venn_talent_no_clean_copy",
+"name": "No Clean Copy",
+"description": "Third Revision applies 1 additional Burn stack to enemies that already had Burn before the skill resolved.",
+"effects": [
+{
+"kind": "Burn",
+"target": "Enemy",
+"power": 0.3,
+"duration": 3,
+"stacks": 1
+}
+]
+}
+}
+},
+{
+"id": "ilyan_mere",
+"name": "Ilyan Mere",
+"title": "Keeper of Unspent Hours",
+"role": "Priest",
+"aspect": "Tide",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Ilyan managed evacuation clocks for a city that changed its escape routes every hour. He came to believe that anything left unused in one place should immediately become useful somewhere else.",
+"stats": {
+"attack": 32,
+"unfixedAttack": 32,
+"fixedAttack": 0,
+"hp": 438,
+"unfixedHp": 438,
+"fixedHp": 0,
+"armor": 22,
+"speed": 194,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "5B6670",
+"secondary": "D2D6D5",
+"accent": "28C7D9",
+"silhouette": "Directional contradiction; the coat pulls sharply left while the staff architecture projects right. The Cinder Seam crosses the throat and left forearm, while one shoulder clasp is mounted backwards.",
+"weapon": "An off-axis articulated staff with mirrored plates pointing in opposing directions and the broken-ring notch cut into its lower joint.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "ilyan_mere"
+},
+"skills": {
+"basicAttack": {
+"id": "ilyan_mere_basic_pass_it_on",
+"name": "Pass It On",
+"description": "Deals 80% of Attack damage to 1 enemy and grants 15 Energy to the ally furthest from casting an Active.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.8
+},
+{
+"kind": "Energy",
+"target": "AllyFurthestFromCasting",
+"energy": 15
+}
+]
+},
+"activeSkill": {
+"id": "ilyan_mere_active_unspent_current",
+"name": "Unspent Current",
+"energyCost": 100,
+"description": "Deals 105% of Attack damage to all enemies, heals all allies for 95% of Attack, and grants all allies 35 Energy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.05
+},
+{
+"kind": "Heal",
+"target": "AllAllies",
+"power": 0.95
+},
+{
+"kind": "Energy",
+"target": "AllAllies",
+"energy": 35
+}
+]
+},
+"passive1": {
+"id": "ilyan_mere_passive_reversible_route",
+"name": "Reversible Route",
+"description": "Whenever Ilyan heals an ally, that ally gains 8 Energy.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Ally",
+"energy": 8
+}
+]
+},
+"passive2": {
+"id": "ilyan_mere_passive_nothing_wasted",
+"name": "Nothing Wasted",
+"description": "Energy generated by Ilyan that would exceed an ally's maximum Energy is not discarded. The excess is redirected to the ally furthest from casting an Active. Redirected excess can redirect again if it would also overflow.",
+"effects": [
+{
+"kind": "Energy",
+"target": "AllyFurthestFromCasting"
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "ilyan_mere_talent_second_destination",
+"name": "Second Destination",
+"description": "If the ally furthest from casting would also overflow from Nothing Wasted, redirect the remaining excess to the next ally furthest from casting.",
+"effects": [
+{
+"kind": "Energy",
+"target": "AllyFurthestFromCasting"
+}
+]
+},
+"talentII": {
+"id": "ilyan_mere_talent_changed_route",
+"name": "Changed Route",
+"description": "Pass It On grants its Energy to the two allies furthest from casting, split evenly between them.",
+"effects": [
+{
+"kind": "Energy",
+"target": "AlliesFurthestFromCasting",
+"energy": 15
+}
+]
+},
+"talentIII": {
+"id": "ilyan_mere_talent_return_flow",
+"name": "Return Flow",
+"description": "When at least 20 Energy is redirected by Nothing Wasted during a round, Ilyan gains 10 Energy at the end of that round.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 10
+}
+]
+}
+}
+},
+{
+"id": "brann_ossa",
+"name": "Brann Ossa",
+"title": "The Last Graft",
+"role": "Warrior",
+"aspect": "Verdant",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Brann refused to retire wounded soldiers from his caravan guard, rebuilding equipment and duties around whatever each person could still do. To him, survival created an obligation to continue.",
+"stats": {
+"attack": 31,
+"unfixedAttack": 31,
+"fixedAttack": 0,
+"hp": 490,
+"unfixedHp": 490,
+"fixedHp": 0,
+"armor": 25,
+"speed": 158,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "66594A",
+"secondary": "9A8065",
+"accent": "62A77A",
+"silhouette": "Accumulation; layered armor becomes densest around the left shoulder and ribs where several older repairs remain visible beneath newer ones. The Cinder Seam crosses the right cheek and chest, and one boot transitions halfway into a completely different construction.",
+"weapon": "A broad hooked maul reinforced by mismatched horn, copper and timber braces, with the broken-ring notch carved through an old repair plate.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "brann_ossa"
+},
+"skills": {
+"basicAttack": {
+"id": "brann_ossa_basic_keep_what_stands",
+"name": "Keep What Stands",
+"description": "Deals 85% of Attack damage to 1 enemy and heals the highest-HP ally for 55% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.85
+},
+{
+"kind": "Heal",
+"target": "HighestHpAlly",
+"power": 0.55
+}
+]
+},
+"activeSkill": {
+"id": "brann_ossa_active_preserve_the_whole",
+"name": "Preserve the Whole",
+"energyCost": 100,
+"description": "Deals 165% of Attack damage to 1 enemy, heals the highest-HP ally for 180% of Attack, and grants Brann Defense Up for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.65
+},
+{
+"kind": "Heal",
+"target": "HighestHpAlly",
+"power": 1.8
+},
+{
+"kind": "DefenseUp",
+"target": "Self",
+"magnitude": 0.2,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "brann_ossa_passive_choose_the_intact",
+"name": "Choose the Intact",
+"description": "The first time Brann deals damage each round, he heals the highest-HP ally for 45% of Attack.",
+"effects": [
+{
+"kind": "Heal",
+"target": "HighestHpAlly",
+"power": 0.45
+}
+]
+},
+"passive2": {
+"id": "brann_ossa_passive_health_has_memory",
+"name": "Health Has Memory",
+"description": "Healing Brann gives to an ally already at full Health is banked instead of discarded and applied to that ally as Regen for 2 rounds.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Ally",
+"duration": 2,
+"status": "Regen"
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "brann_ossa_talent_old_layers",
+"name": "Old Layers",
+"description": "Regen created by Health Has Memory lasts 1 additional round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Ally",
+"duration": 1,
+"status": "Regen"
+}
+]
+},
+"talentII": {
+"id": "brann_ossa_talent_preserve_another",
+"name": "Preserve Another",
+"description": "If Preserve the Whole heals a full-Health ally, half of that heal is also applied to the lowest-HP ally.",
+"effects": [
+{
+"kind": "Heal",
+"target": "LowestHpAlly",
+"power": 0.9
+}
+]
+},
+"talentIII": {
+"id": "brann_ossa_talent_refuse_the_loss",
+"name": "Refuse the Loss",
+"description": "The first time each battle an ally carrying Regen would take lethal damage, remove that Regen and leave the ally at 1 Health.",
+"effects": [
+{
+"kind": "RemoveStatus",
+"target": "Ally"
+}
+]
+}
+}
+},
+{
+"id": "keth_arvo",
+"name": "Keth Arvo",
+"title": "The Missed Beat",
+"role": "Assassin",
+"aspect": "Gale",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Keth survived by striking during the fractions of a second when formal duels expected both fighters to wait. He came to despise any rule that told an action when it was allowed to happen.",
+"stats": {
+"attack": 39,
+"unfixedAttack": 39,
+"fixedAttack": 0,
+"hp": 318,
+"unfixedHp": 318,
+"fixedHp": 0,
+"armor": 18,
+"speed": 248,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0.08,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "727778",
+"secondary": "D4D1C6",
+"accent": "C6E34A",
+"silhouette": "Broken continuity; one shoulder plate and one sleeve cuff hover apart from the body with clean background gaps. The Cinder Seam runs from the lower lip through the left hand, and the right glove is shaped for six fingers.",
+"weapon": "A narrow dagger with a detached central blade segment suspended between hilt and tip, with the broken-ring notch punched through the guard.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "keth_arvo"
+},
+"skills": {
+"basicAttack": {
+"id": "keth_arvo_basic_between_beats",
+"name": "Between Beats",
+"description": "Deals 105% of Attack damage to 1 enemy. If that enemy is Silenced, Keth gains 10 Energy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.05
+},
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 10
+}
+]
+},
+"activeSkill": {
+"id": "keth_arvo_active_cut_the_cue",
+"name": "Cut the Cue",
+"energyCost": 100,
+"description": "Deals 245% of Attack damage to 1 enemy and Silences them. Silence prevents that target's next Active from being cast. It does not prevent Basic Attacks.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 2.45
+},
+{
+"kind": "Silence",
+"target": "Enemy",
+"chance": 1.0
+}
+]
+},
+"passive1": {
+"id": "keth_arvo_passive_first_out_of_line",
+"name": "First Out of Line",
+"description": "At the start of battle, Keth gains Speed Up for 2 rounds.",
+"effects": [
+{
+"kind": "SpeedUp",
+"target": "Self",
+"magnitude": 0.15,
+"duration": 2
+}
+]
+},
+"passive2": {
+"id": "keth_arvo_passive_stolen_moment",
+"name": "Stolen Moment",
+"description": "When Silence prevents an enemy Active, Keth immediately gains 25 Energy.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 25
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "keth_arvo_talent_wrong_timing",
+"name": "Wrong Timing",
+"description": "When Silence prevents an Active, the Silenced enemy also loses 15 Energy.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Enemy",
+"energy": -15
+}
+]
+},
+"talentII": {
+"id": "keth_arvo_talent_second_gap",
+"name": "Second Gap",
+"description": "If Cut the Cue defeats its target, Keth Silences the enemy with the highest Energy.",
+"effects": [
+{
+"kind": "Silence",
+"target": "HighestEnergyEnemy",
+"chance": 1.0
+}
+]
+},
+"talentIII": {
+"id": "keth_arvo_talent_no_appointed_hour",
+"name": "No Appointed Hour",
+"description": "The first time each battle Stolen Moment triggers, Keth immediately makes Between Beats against that enemy.",
+"effects": []
+}
+}
+},
+{
+"id": "nyra_pell",
+"name": "Nyra Pell",
+"title": "The Redacted Hand",
+"role": "Assassin",
+"aspect": "Umbra",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Nyra erased witnesses from official records without harming them, believing that knowledge itself could be the weapon that made a person vulnerable. She preferred making someone impossible to account for over making them disappear.",
+"stats": {
+"attack": 40,
+"unfixedAttack": 40,
+"fixedAttack": 0,
+"hp": 312,
+"unfixedHp": 312,
+"fixedHp": 0,
+"armor": 18,
+"speed": 238,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0.07,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "171719",
+"secondary": "4B4B4D",
+"accent": "E7E0D0",
+"silhouette": "Missing silhouette; the right coat hem ends in a ruler-straight absence with the background visible where fabric should continue. The Cinder Seam crosses the nose and left thigh, and a collar strap disappears directly into the skin.",
+"weapon": "A matte short blade whose midsection is absent between hilt and upper blade, with bone-white edge marks around the missing space and the broken-ring notch cut into the pommel.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "nyra_pell"
+},
+"skills": {
+"basicAttack": {
+"id": "nyra_pell_basic_remove_the_name",
+"name": "Remove the Name",
+"description": "Deals 110% of Attack damage to 1 enemy. If the target is Unlisted, Nyra gains 12 Energy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.1
+},
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 12
+}
+]
+},
+"activeSkill": {
+"id": "nyra_pell_active_unlisted",
+"name": "Unlisted",
+"energyCost": 100,
+"description": "Deals 235% of Attack damage to 1 enemy and applies Unlisted for 2 rounds. An Unlisted enemy cannot be selected by its allies' single-target healing, buff, or Cleanse effects. Effects that target multiple allies can still affect it.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 2.35
+},
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"duration": 2,
+"status": "Unlisted"
+}
+]
+},
+"passive1": {
+"id": "nyra_pell_passive_absent_from_account",
+"name": "Absent from Account",
+"description": "When an Unlisted enemy would be chosen by an allied single-target beneficial effect, that effect selects another eligible ally instead.",
+"effects": []
+},
+"passive2": {
+"id": "nyra_pell_passive_missing_entry",
+"name": "Missing Entry",
+"description": "The first time each round an Unlisted enemy fails to receive a single-target beneficial effect because of Unlisted, Nyra gains 20 Energy.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 20
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "nyra_pell_talent_no_recipient",
+"name": "No Recipient",
+"description": "Unlisted also prevents the target from being selected by allied single-target Energy effects.",
+"effects": []
+},
+"talentII": {
+"id": "nyra_pell_talent_redacted_correction",
+"name": "Redacted Correction",
+"description": "When Nyra reapplies Unlisted to an enemy already carrying it, she Dispels 1 buff from that enemy.",
+"effects": [
+{
+"kind": "Dispel",
+"target": "Enemy"
+}
+]
+},
+"talentIII": {
+"id": "nyra_pell_talent_missing_from_the_count",
+"name": "Missing from the Count",
+"description": "The first time each battle an Unlisted enemy would receive a single-target Heal, extend Unlisted by 1 round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"duration": 1,
+"status": "Unlisted"
+}
+]
+}
+}
+},
+{
+"id": "damar_quell",
+"name": "Damar Quell",
+"title": "The Fixed Point",
+"role": "Warrior",
+"aspect": "Lumen",
+"rarity": "Common",
+"startingHero": false,
+"stars": 5,
+"lore": "Damar commanded retreats by assigning every person a position and refusing to let panic change the answer. He believed safety began when everyone knew exactly where danger was required to go.",
+"stats": {
+"attack": 31,
+"unfixedAttack": 31,
+"fixedAttack": 0,
+"hp": 498,
+"unfixedHp": 498,
+"fixedHp": 0,
+"armor": 25,
+"speed": 154,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "E2DDD1",
+"secondary": "4E5965",
+"accent": "3568E8",
+"silhouette": "Imposed boundary; a square mantle, circular collar and perfectly straight lower hem force the body into conspicuous geometric containment. The Cinder Seam crosses the left brow and right shoulder, while one engraved label changes alphabet halfway through.",
+"weapon": "A heavy rectangular-framed polearm of enamel, ruled stone and brass, with the broken-ring notch stamped through the frame.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "damar_quell"
+},
+"skills": {
+"basicAttack": {
+"id": "damar_quell_basic_designated_threat",
+"name": "Designated Threat",
+"description": "Deals 90% of Attack damage to 1 enemy and Taunts that enemy for 1 round.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.9
+},
+{
+"kind": "Taunt",
+"target": "Enemy",
+"duration": 1
+}
+]
+},
+"activeSkill": {
+"id": "damar_quell_active_all_lines_end_here",
+"name": "All Lines End Here",
+"energyCost": 100,
+"description": "Deals 115% of Attack damage to all enemies, Taunts them for 2 rounds, and grants Damar Defense Up for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.15
+},
+{
+"kind": "Taunt",
+"target": "AllEnemies",
+"duration": 2
+},
+{
+"kind": "DefenseUp",
+"target": "Self",
+"magnitude": 0.25,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "damar_quell_passive_assigned_position",
+"name": "Assigned Position",
+"description": "Whenever Damar is hit by an enemy, he gains Defense Up for 1 round.",
+"effects": [
+{
+"kind": "DefenseUp",
+"target": "Self",
+"magnitude": 0.08,
+"duration": 1
+}
+]
+},
+"passive2": {
+"id": "damar_quell_passive_rule_of_one",
+"name": "Rule of One",
+"description": "A single-target attack made by an enemy Taunted by Damar selects Damar regardless of that attack's normal enemy target rule.",
+"effects": [
+{
+"kind": "Taunt",
+"target": "Enemy"
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "damar_quell_talent_fixed_answer",
+"name": "Fixed Answer",
+"description": "Designated Threat Taunts for 2 rounds instead of 1.",
+"effects": [
+{
+"kind": "Taunt",
+"target": "Enemy",
+"duration": 2
+}
+]
+},
+"talentII": {
+"id": "damar_quell_talent_closed_boundary",
+"name": "Closed Boundary",
+"description": "When a Taunted enemy attacks Damar, extend Damar's current Defense Up by 1 round.",
+"effects": [
+{
+"kind": "DefenseUp",
+"target": "Self",
+"duration": 1
+}
+]
+},
+"talentIII": {
+"id": "damar_quell_talent_everything_in_place",
+"name": "Everything in Place",
+"description": "The first enemy each round whose Taunt expires is immediately Taunted again for 1 round.",
+"effects": [
+{
+"kind": "Taunt",
+"target": "Enemy",
+"duration": 1
+}
+]
+}
+}
+},
+{
+"id": "tovin_rusk",
+"name": "Tovin Rusk",
+"title": "Breaker of Locks",
+"role": "Warrior",
+"aspect": "Ember",
+"rarity": "Common",
+"startingHero": false,
+"stars": 1,
+"lore": "Tovin believed a barrier that refused to open had already chosen to be broken.",
+"stats": {
+"attack": 18,
+"unfixedAttack": 18,
+"fixedAttack": 0,
+"hp": 228,
+"unfixedHp": 228,
+"fixedHp": 0,
+"armor": 12,
+"speed": 142,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "49433E",
+"secondary": "A99B87",
+"accent": "E84532",
+"silhouette": "Simple irreversible asymmetry; one repaired shoulder guard has become visibly larger than its untouched counterpart. The Cinder Seam crosses the neck and left arm, and one belt loop holds no belt.",
+"weapon": "A blunt iron pry-bar rebuilt thicker on one end, with the broken-ring notch punched near the grip.",
+"scale": 1.0,
+"sigil": 0,
+"sprite": "tovin_rusk"
+},
+"skills": {
+"basicAttack": {
+"id": "tovin_rusk_basic_force_open",
+"name": "Force Open",
+"description": "Deals 95% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.95
+}
+]
+},
+"activeSkill": null,
+"passive1": null,
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "mera_coil",
+"name": "Mera Coil",
+"title": "Patchkeeper",
+"role": "Ranger",
+"aspect": "Verdant",
+"rarity": "Common",
+"startingHero": false,
+"stars": 2,
+"lore": "Mera kept damaged tools in service long after others would have discarded them, because usefulness that survived damage was worth preserving.",
+"stats": {
+"attack": 24,
+"unfixedAttack": 24,
+"fixedAttack": 0,
+"hp": 246,
+"unfixedHp": 246,
+"fixedHp": 0,
+"armor": 14,
+"speed": 180,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0.03,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "6A6258",
+"secondary": "A28C70",
+"accent": "62A77A",
+"silhouette": "Simple accumulation; three generations of patched arm protection overlap around the draw arm. The Cinder Seam crosses the left cheek and right knee, and the two shoes merge into incompatible constructions halfway down.",
+"weapon": "A compact crossbow repaired with layered wood and copper brackets, with the broken-ring notch carved into the stock.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "mera_coil"
+},
+"skills": {
+"basicAttack": {
+"id": "mera_coil_basic_still_useful",
+"name": "Still Useful",
+"description": "Deals 95% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.95
+}
+]
+},
+"activeSkill": null,
+"passive1": {
+"id": "mera_coil_passive_keep_going",
+"name": "Keep Going",
+"description": "The first time each battle Mera falls below 50% Health, she heals herself for 80% of Attack.",
+"effects": [
+{
+"kind": "Heal",
+"target": "Self",
+"power": 0.8,
+"threshold": 0.5,
+"oncePerBattle": true
+}
+]
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "hal_veyr",
+"name": "Hal Veyr",
+"title": "The Unrecorded Wall",
+"role": "Warrior",
+"aspect": "Umbra",
+"rarity": "Common",
+"startingHero": false,
+"stars": 4,
+"lore": "Hal guarded people whose names had been removed from public registers. He learned that the safest wall was sometimes one an attacker could neither categorize nor confidently plan around.",
+"stats": {
+"attack": 28,
+"unfixedAttack": 28,
+"fixedAttack": 0,
+"hp": 424,
+"unfixedHp": 424,
+"fixedHp": 0,
+"armor": 24,
+"speed": 160,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0.12,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "1B1B1D",
+"secondary": "555557",
+"accent": "E7E0D0",
+"silhouette": "Missing silhouette; a clean rectangular section is absent from the outer edge of the left shoulder mass without dividing the body. The Cinder Seam crosses the forehead and right hip, and one chest strap vanishes beneath exposed skin.",
+"weapon": "A broad matte shield with one clean missing corner and a short undecorated mace, with the broken-ring notch cut through the shield rim.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "hal_veyr"
+},
+"skills": {
+"basicAttack": {
+"id": "hal_veyr_basic_dead_angle",
+"name": "Dead Angle",
+"description": "Deals 85% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.85
+}
+]
+},
+"activeSkill": {
+"id": "hal_veyr_active_no_clear_opening",
+"name": "No Clear Opening",
+"description": "Deals 145% of Attack damage to 1 enemy and grants Hal Defense Up for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.45
+},
+{
+"kind": "DefenseUp",
+"target": "Self",
+"magnitude": 0.25,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "hal_veyr_passive_unreadable_guard",
+"name": "Unreadable Guard",
+"description": "The first time Hal is damaged each round, he gains Defense Up until the end of his next turn.",
+"effects": [
+{
+"kind": "DefenseUp",
+"target": "Self",
+"magnitude": 0.12,
+"duration": 1
+}
+]
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "vek_tarrow",
+"name": "Vek Tarrow",
+"title": "Mercy's End",
+"role": "Ranger",
+"aspect": "Ember",
+"rarity": "Common",
+"startingHero": false,
+"stars": 3,
+"lore": "Vek hunted wounded siege beasts before they could recover and return to the line. He believed a conflict allowed to survive unfinished would only demand greater destruction later.",
+"stats": {
+"attack": 31,
+"unfixedAttack": 31,
+"fixedAttack": 0,
+"hp": 286,
+"unfixedHp": 286,
+"fixedHp": 0,
+"armor": 16,
+"speed": 204,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0.04,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "4A433C",
+"secondary": "A79580",
+"accent": "E84532",
+"silhouette": "Irreversible asymmetry; repeated repairs have made the upper limb of the bow-side silhouette much larger than the lower. The Cinder Seam crosses the right eye and left forearm, and one glove changes from five fingers to four at the second knuckle.",
+"weapon": "A longbow whose repeatedly repaired upper limb has become visibly heavier than the original lower limb, with the broken-ring notch cut into the grip plate.",
+"scale": 1.0,
+"sigil": 0,
+"sprite": "vek_tarrow"
+},
+"skills": {
+"basicAttack": {
+"id": "vek_tarrow_basic_follow_the_wound",
+"name": "Follow the Wound",
+"description": "Deals 100% of Attack damage to the lowest-HP enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.0
+}
+]
+},
+"activeSkill": {
+"id": "vek_tarrow_active_finish_the_work",
+"name": "Finish the Work",
+"description": "Deals 170% of Attack damage to the lowest-HP enemy. If that enemy is below 35% Health, deals an additional 80% of Attack damage.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.7
+},
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 0.8,
+"threshold": 0.35
+}
+]
+},
+"passive1": {
+"id": "vek_tarrow_passive_no_second_recovery",
+"name": "No Second Recovery",
+"description": "When Vek defeats an enemy, he gains 20 Energy.",
+"effects": [
+{
+"kind": "Energy",
+"target": "Self",
+"energy": 20
+}
+]
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "alda_senn",
+"name": "Alda Senn",
+"title": "Field Stitcher",
+"role": "Priest",
+"aspect": "Verdant",
+"rarity": "Common",
+"startingHero": false,
+"stars": 4,
+"lore": "Alda treated survival as a tactical resource rather than a retreat from violence. She kept fighters standing so they could finish the danger that had wounded them.",
+"stats": {
+"attack": 30,
+"unfixedAttack": 30,
+"fixedAttack": 0,
+"hp": 392,
+"unfixedHp": 392,
+"fixedHp": 0,
+"armor": 20,
+"speed": 182,
+"skillDamage": 0,
+"precision": 0,
+"block": 0,
+"crit": 0,
+"critDamage": 0,
+"armorBreak": 0,
+"controlImmunity": 0,
+"damageReduction": 0,
+"holyDamage": 0
+},
+"visual": {
+"primary": "73695A",
+"secondary": "B09B7A",
+"accent": "62A77A",
+"silhouette": "Accumulation; layered protective wraps and old plates become denser around the left arm used for treatment. The Cinder Seam crosses the chin and abdomen, while one fastening strap loops behind itself and secures nothing.",
+"weapon": "A short staff reinforced by successive wood, horn and copper braces, with the broken-ring notch carved through the oldest support.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "alda_senn"
+},
+"skills": {
+"basicAttack": {
+"id": "alda_senn_basic_stitch_and_strike",
+"name": "Stitch and Strike",
+"description": "Deals 80% of Attack damage to the lowest-HP enemy and heals the lowest-HP ally for 35% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 0.8
+},
+{
+"kind": "Heal",
+"target": "LowestHpAlly",
+"power": 0.35
+}
+]
+},
+"activeSkill": {
+"id": "alda_senn_active_keep_them_fighting",
+"name": "Keep Them Fighting",
+"description": "Deals 155% of Attack damage to the lowest-HP enemy and heals the two lowest-HP allies for 125% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.55
+},
+{
+"kind": "Heal",
+"target": "TwoLowestHpAllies",
+"power": 1.25
+}
+]
+},
+"passive1": {
+"id": "alda_senn_passive_back_to_the_line",
+"name": "Back to the Line",
+"description": "After Alda heals an ally below 50% Health, her next Basic Attack targets the lowest-HP enemy.",
+"effects": []
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+}
+]

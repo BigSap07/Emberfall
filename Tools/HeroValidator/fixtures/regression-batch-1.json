@@ -1,0 +1,247 @@
+{
+  "_comment": "Regression fixture for validate_heroes.py. Derived from heroes.json but translated to the ChatGPT-generator schema (stars, stats block, basicAttack/activeSkill/passive1/passive2/talents). Covers all seven validation checks.",
+  "heroes": [
+    {
+      "_expect": "PASS — valid stars-3 hero (adapted from orrin_kaal)",
+      "id": "orrin_kaal",
+      "name": "Orrin Kaal",
+      "title": "Bulwark of Ash",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 3,
+      "stats": {
+        "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
+        "critChance": 0.08, "critDamage": 1.5, "growth": 0.115,
+        "startEnergy": 10, "effectHit": 0.05, "effectResist": 0.20
+      },
+      "visual": {
+        "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347",
+        "silhouette": "brute", "weapon": "greatsword", "scale": 1.12,
+        "sigil": null
+      },
+      "basicAttack": {
+        "id": "orrin_basic", "name": "Ashen Cleave", "vfx": "slash",
+        "description": "A heavy downward swing at the nearest foe.",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.95 } ]
+      },
+      "activeSkill": {
+        "id": "orrin_active", "name": "Cinderguard", "energyCost": 100, "vfx": "burst",
+        "description": "Raises a burning ward, forces enemies to strike Orrin.",
+        "effects": [
+          { "kind": "Shield", "target": "Self", "selfHpRatio": 0.22, "duration": 3 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.55 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn",
+            "magnitude": 0.20, "duration": 2, "chance": 0.7 }
+        ]
+      },
+      "passive1": {
+        "id": "orrin_passive", "name": "Emberskin",
+        "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true,
+        "vfx": "buff",
+        "description": "Below half health, +45% Guard for the rest of the battle.",
+        "effects": [
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp",
+            "magnitude": 0.45, "duration": 99 }
+        ]
+      },
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "PASS — valid stars-1 hero (only basicAttack, everything else null)",
+      "id": "wren_stars1",
+      "name": "Wren Ilyra",
+      "title": "Keeper of the Green Hour",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 1,
+      "stats": {
+        "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
+        "critChance": 0.10, "critDamage": 1.5, "growth": 0.115,
+        "startEnergy": 0, "effectHit": 0.00, "effectResist": 0.10
+      },
+      "visual": {
+        "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E",
+        "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": null
+      },
+      "basicAttack": {
+        "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
+        "description": "A snapped seed-pod that stings on impact.",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — stats block contains unknown keys: mana, magicResist (check 1)",
+      "id": "hero_bad_stat_keys",
+      "name": "Bad Stat Hero",
+      "role": "Striker",
+      "aspect": "Gale",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "mana": 50,
+        "magicResist": 0.15
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — 'Burn' used as an effect kind instead of ApplyStatus+status (check 2)",
+      "id": "hero_status_as_kind",
+      "name": "Status As Kind Hero",
+      "role": "Breaker",
+      "aspect": "Ember",
+      "stars": 1,
+      "stats": {
+        "hp": 1400, "attack": 180, "defense": 55, "speed": 95
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 },
+          { "kind": "Burn", "target": "FrontEnemy", "magnitude": 0.15, "duration": 2 }
+        ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — ApplyStatus with an invalid status value 'Poison' (check 3)",
+      "id": "hero_bad_status",
+      "name": "Bad Status Hero",
+      "role": "Warden",
+      "aspect": "Tide",
+      "stars": 1,
+      "stats": {
+        "hp": 1700, "attack": 148, "defense": 82, "speed": 108
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Poison",
+            "magnitude": 0.20, "duration": 2 }
+        ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "WARN — stars 2 but activeSkill is set (check 4 star-shape)",
+      "id": "hero_wrong_star_shape",
+      "name": "Wrong Shape Hero",
+      "role": "Striker",
+      "aspect": "Gale",
+      "stars": 2,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 65, "speed": 115
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.05 } ]
+      },
+      "activeSkill": {
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.4 } ]
+      },
+      "passive1": {
+        "trigger": "OnCriticalHit",
+        "effects": [ { "kind": "EnergyGain", "target": "Self", "flat": 22 } ]
+      },
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — rarity field present (check 5)",
+      "id": "hero_has_rarity",
+      "name": "Rarity Hero",
+      "role": "Stalker",
+      "aspect": "Umbra",
+      "stars": 3,
+      "rarity": "Epic",
+      "stats": {
+        "hp": 1420, "attack": 227, "defense": 58, "speed": 126
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": {
+        "effects": [ { "kind": "Damage", "target": "HighestAttackEnemy", "power": 2.0 } ]
+      },
+      "passive1": {
+        "trigger": "AfterBasicAttack",
+        "effects": [
+          { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown",
+            "magnitude": 0.22, "duration": 2 }
+        ]
+      },
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — visual.sigil is non-null (check 6)",
+      "id": "hero_sigil_set",
+      "name": "Sigil Hero",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 1,
+      "stats": {
+        "hp": 2000, "attack": 110, "defense": 120, "speed": 85
+      },
+      "visual": {
+        "primary": "8A6BFF", "sigil": 2
+      },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "INFO — stacks property on an effect (check 7)",
+      "id": "hero_stacks_property",
+      "name": "Stacks Hero",
+      "role": "Breaker",
+      "aspect": "Verdant",
+      "stars": 1,
+      "stats": {
+        "hp": 1600, "attack": 170, "defense": 65, "speed": 100
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "DefenseDown",
+            "magnitude": 0.10, "duration": 2, "stacks": 3 }
+        ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    }
+  ]
+}
