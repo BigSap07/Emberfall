@@ -92,7 +92,8 @@ namespace Emberfall.Core.Data
         OnCriticalHit,
         OnKill,
         OnHpBelowThreshold,
-        OnDamaged
+        OnDamaged,
+        OnBlock
     }
 
     public static class AspectChart

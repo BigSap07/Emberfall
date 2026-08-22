@@ -154,15 +154,15 @@ namespace Emberfall.Core.Data
         public float EffectResist;
         /// <summary>Phase B flat stat: multiplies activeSkill/passive-sourced Damage, never Basic Attack. See ApplyDamageEffect step 4.</summary>
         public float SkillDamage;
-        /// <summary>Phase B flat stat: authored in JSON, passed through to CombatUnit, not consumed by any combat logic yet.</summary>
+        /// <summary>Phase B flat stat: target-side chance to fully negate an incoming hit. See ApplyDamageEffect step 0 (before Base).</summary>
         public float Block;
         /// <summary>Phase B flat stat: source-side multiplicative reduction of the target's mitigation ratio. See ApplyDamageEffect step 6.</summary>
         public float ArmorBreak;
-        /// <summary>Phase B flat stat: authored in JSON, passed through to CombatUnit, not consumed by any combat logic yet.</summary>
+        /// <summary>Phase B flat stat: target-side chance reduction against Silence/Stun landing only. See ApplyEffect's ApplyStatus branch.</summary>
         public float ControlImmunity;
         /// <summary>Phase B flat stat: flat percentage reduction of incoming damage, applied after Defense mitigation. See ApplyDamageEffect step 7.</summary>
         public float DamageReduction;
-        /// <summary>Phase B flat stat: authored in JSON, passed through to CombatUnit, not consumed by any combat logic yet.</summary>
+        /// <summary>Phase B flat stat: source-side flat bonus damage added after Defense/Armor Break mitigation, so Defense never reduces it. See ApplyDamageEffect step 6.5.</summary>
         public float HolyDamage;
         public float Growth = 0.11f;   // per level, applied to hp / attack / defense
         public int StartEnergy;

@@ -46,6 +46,7 @@ namespace Emberfall.DevHarness
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
             CheckStatusAndStatBehavior(content);
+            CheckHolyBlockControlImmunity(content);
             CheckDebrief();
             CheckSaveRoundTrip(content);
             PrintSampleBattle(content);
@@ -1160,10 +1161,11 @@ namespace Emberfall.DevHarness
             for (int u = 0; u < units.Count; u++)
             {
                 UnitDef def = units[u];
-                if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f)
+                if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f
+                    || def.Block != 0f || def.ControlImmunity != 0f || def.HolyDamage != 0f)
                 {
                     clean = false;
-                    Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage - "
+                    Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage/Block/ControlImmunity/HolyDamage - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
                 if (UnitAppliesStatus(def, StatusKind.Silence) || UnitAppliesStatus(def, StatusKind.Stun))
@@ -1173,9 +1175,9 @@ namespace Emberfall.DevHarness
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
             }
-            Check(clean, "no shipped hero or enemy authors Armor Break, Damage Reduction, Skill Damage, Silence or Stun yet - "
-                + "so this pass cannot move any existing BattleFingerprint (CheckDeterminism / CheckEffectHitResistNoOp above "
-                + "already prove those stay stable)");
+            Check(clean, "no shipped hero or enemy authors Armor Break, Damage Reduction, Skill Damage, Silence, Stun, "
+                + "Block, Control Immunity or Holy Damage yet - so this pass cannot move any existing BattleFingerprint "
+                + "(CheckDeterminism / CheckEffectHitResistNoOp above already prove those stay stable)");
         }
 
         private static bool UnitAppliesStatus(UnitDef def, StatusKind kind)
@@ -1450,6 +1452,218 @@ namespace Emberfall.DevHarness
             bool ok = db.Warnings.Count == 0;
             for (int i = 0; i < db.Warnings.Count; i++) Line("  [FAIL] synthetic test content warning: " + db.Warnings[i]);
             Check(ok, "synthetic test content for status/stat harness checks parses with no warnings");
+            return ok ? db : null;
+        }
+
+        // The flat Holy Damage value authored on test_holy_on below - kept as a named constant so
+        // the check's expected delta and the JSON's authored value can't drift apart silently.
+        private const int HolyBonusExpected = 300;
+
+        /// <summary>
+        /// Holy Damage, Block and Control Immunity - a second, independent synthetic ContentDatabase
+        /// from the Silence/Stun/Armor Break/Damage Reduction/Skill Damage pass above, deliberately
+        /// not folded into that one's heroesJson/enemiesJson: this is its own branch tonight and
+        /// stays independently revertable from the other one, same reasoning as the branch split
+        /// itself. Same zero-variance balance convention, so every number below is exact arithmetic.
+        /// </summary>
+        private static void CheckHolyBlockControlImmunity(ContentDatabase liveDb)
+        {
+            Line("STATUS + STAT BEHAVIOR II (Holy Damage, Block, Control Immunity)");
+
+            ContentDatabase db = BuildHolyBlockImmunityTestContent();
+            if (db == null) { Line(""); return; }
+
+            CheckHolyDamageBypassesDefense(db);
+            CheckBlockNegatesHit(db);
+            CheckControlImmunityResistsMore(db);
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Same target Defense (200) both runs; only the attacker's Holy Damage changes (0 vs
+        /// HolyBonusExpected). If Holy Damage were folded into `raw` before the Defense multiply
+        /// like every other additive term, the 200-Defense/300-constant mitigation ratio here (0.4)
+        /// would only let 60% of it through and the delta would read 180, not 300 - the exact-delta
+        /// assertion is what proves it lands after mitigation, not merely that it lands at all.
+        /// </summary>
+        private static void CheckHolyDamageBypassesDefense(ContentDatabase db)
+        {
+            StageDef arena = db.GetStage("test_holy_arena");
+            int baseline = FirstDamageFromHero(db, arena, "test_holy_off");
+            int withHoly = FirstDamageFromHero(db, arena, "test_holy_on");
+
+            Check(baseline > 0 && withHoly > 0,
+                  "both Holy Damage battles produced a measurable hit (baseline " + baseline + ", holy " + withHoly + ")");
+            Check(withHoly - baseline == HolyBonusExpected,
+                  "Holy Damage adds exactly its flat value on top of the Defense-mitigated baseline, unreduced by "
+                  + "Defense (" + baseline + " -> " + withHoly + ", delta " + (withHoly - baseline)
+                  + ", expected +" + HolyBonusExpected + ")");
+        }
+
+        /// <summary>
+        /// The same attacker against two otherwise-identical enemies, Block 0 vs Block 1. The
+        /// control (Block 0) proves the attacker really does connect under these stats; the 100%
+        /// Block twin must then take zero damage across every hit, not merely less. Also confirms
+        /// PassiveTrigger.OnBlock actually fires on a successful Block, via a passive on the
+        /// Blocking enemy whose only job is to be observable (an EnergyGain to itself).
+        /// </summary>
+        private static void CheckBlockNegatesHit(ContentDatabase db)
+        {
+            StageDef offArena = db.GetStage("test_block_arena_off");
+            StageDef onArena = db.GetStage("test_block_arena_on");
+
+            BattleResult offResult = RunSingleHero(db, offArena, "test_plain_attacker");
+            BattleResult onResult = RunSingleHero(db, onArena, "test_plain_attacker");
+
+            int damageToBlockerOff = SumDamageToEnemy(offResult);
+            int damageToBlockerOn = SumDamageToEnemy(onResult);
+            bool passiveFired = SawPassiveTrigger(onResult, "Test Block React");
+
+            Check(damageToBlockerOff > 0,
+                  "control: the same attacker deals real damage to a non-Blocking twin (" + damageToBlockerOff + " total)");
+            Check(damageToBlockerOn == 0,
+                  "a 100%-chance Block target takes zero damage across every hit (" + damageToBlockerOn + " total)");
+            Check(passiveFired, "a successful Block fires PassiveTrigger.OnBlock");
+        }
+
+        /// <summary>
+        /// One caster with a cheap-to-recast Silence (energyCost 0, so it never falls back to a
+        /// Basic Attack) fires at both enemies every round via AllEnemies; sampled across many seeds
+        /// so the authored 0.9 chance and the 0.5 Control Immunity subtraction (landing 0.4 for the
+        /// immune twin) separate well past sampling noise. Chance-based, not duration-based - see
+        /// the comment at the Control Immunity call site in CombatSimulation.cs for why.
+        /// </summary>
+        private static void CheckControlImmunityResistsMore(ContentDatabase db)
+        {
+            StageDef arena = db.GetStage("test_cc_arena");
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("test_cc_caster"), 20));
+
+            int immuneApplied = 0, immuneResisted = 0, vulnerableApplied = 0, vulnerableResisted = 0;
+            const int Seeds = 40;
+            for (int seed = 1; seed <= Seeds; seed++)
+            {
+                BattleResult r = RunWith(db, arena, seed, team);
+                int immuneId = -1, vulnerableId = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                {
+                    if (r.Units[i].DefId == "test_cc_immune") immuneId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "test_cc_vulnerable") vulnerableId = r.Units[i].Id;
+                }
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Status != StatusKind.Silence) continue;
+                    if (e.Type == BattleEventType.StatusApplied)
+                    {
+                        if (e.TargetId == immuneId) immuneApplied++;
+                        else if (e.TargetId == vulnerableId) vulnerableApplied++;
+                    }
+                    else if (e.Type == BattleEventType.StatusResisted)
+                    {
+                        if (e.TargetId == immuneId) immuneResisted++;
+                        else if (e.TargetId == vulnerableId) vulnerableResisted++;
+                    }
+                }
+            }
+
+            int immuneAttempts = immuneApplied + immuneResisted;
+            int vulnerableAttempts = vulnerableApplied + vulnerableResisted;
+            float immuneLandRate = immuneAttempts > 0 ? immuneApplied / (float)immuneAttempts : -1f;
+            float vulnerableLandRate = vulnerableAttempts > 0 ? vulnerableApplied / (float)vulnerableAttempts : -1f;
+
+            Check(immuneAttempts > 20 && vulnerableAttempts > 20,
+                  "sampled enough Silence attempts on both targets (immune " + immuneAttempts + ", vulnerable " + vulnerableAttempts + ")");
+            Check(immuneResisted > 0, "Control Immunity actually causes resists to occur (" + immuneResisted + " observed)");
+            Check(immuneLandRate < vulnerableLandRate,
+                  "the Control-Immune unit lands Silence less often than its otherwise-identical twin ("
+                  + Pct(immuneLandRate) + " vs " + Pct(vulnerableLandRate) + ")");
+        }
+
+        private static BattleResult RunSingleHero(ContentDatabase db, StageDef stage, string heroId)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero(heroId), 20));
+            return RunWith(db, stage, 1, team);
+        }
+
+        private static int SumDamageToEnemy(BattleResult r)
+        {
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                UnitSnapshot target = r.FindUnit(e.TargetId);
+                if (target != null && !target.IsPlayer) total += e.Value;
+            }
+            return total;
+        }
+
+        private static bool SawPassiveTrigger(BattleResult r, string abilityName)
+        {
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityName == abilityName) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Holy Damage reuses the same 1000-Attack/200-Defense/300-constant shape as the Armor
+        /// Break/Damage Reduction pass above so its expected numbers are hand-derivable the same
+        /// way. Block and Control Immunity each get their own minimal pair of enemies.
+        /// </summary>
+        private static ContentDatabase BuildHolyBlockImmunityTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_holy_off"", ""name"": ""Test Holy Off"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""holyDamage"": 0 },
+    { ""id"": ""test_holy_on"", ""name"": ""Test Holy On"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""holyDamage"": 300 },
+    { ""id"": ""test_plain_attacker"", ""name"": ""Test Plain Attacker"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 1000, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_cc_caster"", ""name"": ""Test CC Caster"", ""aspect"": ""Ember"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 10, ""defense"": 50, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""cc_active"", ""name"": ""Repeat Hex"", ""energyCost"": 0,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Silence"", ""duration"": 1, ""chance"": 0.9 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_fixed_defense"", ""name"": ""Test Fixed Defense"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 200, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_blocker_off"", ""name"": ""Test Blocker Off"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 50, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""block"": 0 },
+    { ""id"": ""test_blocker_on"", ""name"": ""Test Blocker On"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 50, ""defense"": 50, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""block"": 1,
+      ""passive"": { ""id"": ""block_react"", ""name"": ""Test Block React"", ""trigger"": ""OnBlock"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""test_cc_immune"", ""name"": ""Test CC Immune"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 10, ""defense"": 50, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""controlImmunity"": 0.5 },
+    { ""id"": ""test_cc_vulnerable"", ""name"": ""Test CC Vulnerable"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 10, ""defense"": 50, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""controlImmunity"": 0 }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_ch2"", ""name"": ""Test2"", ""stages"": [
+        { ""id"": ""test_holy_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_fixed_defense"", ""level"": 1 } ] },
+        { ""id"": ""test_block_arena_off"", ""index"": 2, ""enemies"": [ { ""id"": ""test_blocker_off"", ""level"": 1 } ] },
+        { ""id"": ""test_block_arena_on"", ""index"": 3, ""enemies"": [ { ""id"": ""test_blocker_on"", ""level"": 1 } ] },
+        { ""id"": ""test_cc_arena"", ""index"": 4, ""enemies"": [ { ""id"": ""test_cc_immune"", ""level"": 1 }, { ""id"": ""test_cc_vulnerable"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 6, ""energyMax"": 100, ""energyPerBasicAttack"": 28, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+
+            ContentDatabase db = ContentDatabase.Load(heroesJson, enemiesJson, campaignJson, balanceJson);
+            bool ok = db.Warnings.Count == 0;
+            for (int i = 0; i < db.Warnings.Count; i++) Line("  [FAIL] synthetic test content warning: " + db.Warnings[i]);
+            Check(ok, "synthetic test content for Holy Damage/Block/Control Immunity harness checks parses with no warnings");
             return ok ? db : null;
         }
 

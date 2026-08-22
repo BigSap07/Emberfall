@@ -355,6 +355,27 @@ namespace Emberfall.Core.Combat
                         if (!target.Alive || effect.Status == StatusKind.None) break;
                         float landing = ResolveLandingChance(effect.Chance, effect.Status,
                                                               source.EffectiveEffectHit, target.EffectiveEffectResist);
+
+                        // Control Immunity: a second, narrower resist than Effect Resist - it only
+                        // ever reduces Silence/Stun landing chance, never any other harmful status
+                        // (Burn, Slow, AttackDown, DefenseDown stay governed by Effect Resist alone).
+                        // Chosen over a duration reduction because chance is where Effect Resist
+                        // already lives, so a defender's full anti-control kit (Effect Resist plus
+                        // Control Immunity) resolves as one landing roll instead of a roll plus a
+                        // separate post-hoc duration edit. Applied as a second subtraction with the
+                        // same additive-then-clamp shape ResolveLandingChance uses, rather than as a
+                        // 5th parameter on that method: ResolveLandingChance is called directly, with
+                        // its existing 4-argument signature, from CheckEffectHitResistNoOp and
+                        // CheckEffectHitResistDirection in the harness, and every one of those calls
+                        // would need updating for a parameter that only Silence/Stun ever use.
+                        if ((effect.Status == StatusKind.Silence || effect.Status == StatusKind.Stun)
+                            && target.EffectiveControlImmunity != 0f)
+                        {
+                            landing -= target.EffectiveControlImmunity;
+                            if (landing < MinEffectLanding) landing = MinEffectLanding;
+                            if (landing > MaxEffectLanding) landing = MaxEffectLanding;
+                        }
+
                         if (!_rng.Chance(landing))
                         {
                             // Only harmful statuses are contested, so only harmful statuses can be
@@ -440,10 +461,11 @@ namespace Emberfall.Core.Combat
             }
 
             /// <summary>
-            /// The 8-step order, in the sequence below: (1) base, (2) aspect factor, (3) crit,
-            /// (4) Skill Damage, (5) Defense mitigation ratio, (6) Armor Break, (7) Damage
-            /// Reduction, (8) variance + round + clamp. Shield-then-HP happens afterward, inside
-            /// DealRawDamage, same as before - it was never part of this method's own steps.
+            /// The order, in the sequence below: (0) Block roll, (1) base, (2) aspect factor,
+            /// (3) crit, (4) Skill Damage, (5) Defense mitigation ratio, (6) Armor Break,
+            /// (6.5) Holy Damage, (7) Damage Reduction, (8) variance + round + clamp.
+            /// Shield-then-HP happens afterward, inside DealRawDamage, same as before - it was
+            /// never part of this method's own steps.
             ///
             /// Steps 5 and 6 are computed as two separate terms - `mitigation` from Defense, then
             /// Armor Break scaling that ratio - but applied to `raw` in one multiply. That is
@@ -455,11 +477,35 @@ namespace Emberfall.Core.Combat
             /// `mitigation` is untouched and `raw *= 1f - mitigation` is the exact expression that
             /// shipped before this change, so every fingerprint with ArmorBreak unauthored (all of
             /// them today) stays byte-identical.
+            ///
+            /// Holy Damage (step 6.5) is a flat bonus that must be unaffected by Defense - the two
+            /// cannot both be true of one insertion point, since anything folded into `raw` before
+            /// the step-5/6 multiply gets scaled down by mitigation same as everything else. So its
+            /// value is read here, held aside in `holyBonus`, and added back to `raw` immediately
+            /// after that multiply (see below) rather than before it: "before Defense" describes
+            /// when its value is decided (a flat number off the source's own stat, independent of
+            /// the target entirely), "unaffected by Defense" describes where it lands in the actual
+            /// arithmetic. It still passes through Damage Reduction and variance afterward - neither
+            /// of those was asked to exempt it, only Defense/Armor Break was.
             /// </summary>
             private void ApplyDamageEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
             {
+                // 0. Block - a distinct RNG draw from the crit roll below, resolved on the
+                // defender before anything else runs. Success negates the whole hit: no damage, no
+                // crit (never rolled), no OnCriticalHit, nothing rides along - "zero effects from
+                // that hit", not a partial reduction. Block defaults to 0 on every unit today, and
+                // DeterministicRng.Chance(0) returns false without drawing (the same short-circuit
+                // Effect Hit/Resist rely on for their own no-op guarantee), so this new draw changes
+                // nothing about any existing seeded battle's RNG stream.
+                if (_rng.Chance(target.EffectiveBlock))
+                {
+                    TriggerPassive(target, PassiveTrigger.OnBlock, depth);
+                    return;
+                }
+
                 // 1. Base
                 float raw = source.EffectiveAttack * effect.Power + effect.Flat;
+                float holyBonus = source.EffectiveHolyDamage;
 
                 // 2. Aspect factor
                 float aspectFactor = AspectChart.Multiplier(source.Aspect, target.Aspect);
@@ -495,9 +541,15 @@ namespace Emberfall.Core.Combat
 
                 raw *= 1f - mitigation;
 
+                // 6.5. Holy Damage - added back in only now, after the Defense/Armor Break
+                // multiply above, so it is not part of what that multiply scaled down. A flat
+                // add is an exact no-op when holyBonus is 0 (IEEE 754 x + 0 == x always), so this
+                // needs no zero-guard the way the multiplicative steps above do to stay bit-identical.
+                raw += holyBonus;
+
                 // 7. Damage Reduction - flat percentage off the damage that already survived
-                // Defense + Armor Break above. Its own step, strictly after step 5/6, never folded
-                // into `mitigation` itself.
+                // Defense + Armor Break above (Holy Damage included - only Defense was asked to
+                // skip it). Its own step, strictly after step 5/6, never folded into `mitigation` itself.
                 float damageReduction = target.EffectiveDamageReduction;
                 if (damageReduction > 0f)
                 {
