@@ -197,7 +197,7 @@ namespace Emberfall.UI
             UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
             // dimmed silhouette: a dark scrim over the portrait hides the palette/sigil detail
             // without hiding the shape, and the whole card fades to signal "not yours yet"
-            Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), new Color(0f, 0f, 0f, 0.72f));
+            Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), UITheme.ScrimModal);
             UIBuilder.FillParent(scrim.rectTransform, 0f);
             card.Background.color = UITheme.WithAlpha(card.Background.color, 0.7f);
 
@@ -236,7 +236,7 @@ namespace Emberfall.UI
 
             Text levelLabel = UIBuilder.Label("Level", root, level.ToString(), UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.LowerRight);
             UIBuilder.Box(levelLabel.rectTransform, 4f, -4f, 40f, 22f, new Vector2(1f, 0f));
-            UIBuilder.Outlined(levelLabel, new Color(0f, 0f, 0f, 0.85f), 1.5f);
+            UIBuilder.Outlined(levelLabel, UITheme.InkArt, 1.5f);
 
             return root;
         }

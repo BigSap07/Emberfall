@@ -136,11 +136,11 @@ namespace Emberfall.UI.Screens
 
             _stageLabel = UIBuilder.Label("Stage", bar, "", UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperLeft);
             UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 520f, 26f, new Vector2(0f, 1f));
-            UIBuilder.Outlined(_stageLabel, new Color(0f, 0f, 0f, 0.95f), 1.8f);
+            UIBuilder.Outlined(_stageLabel, UITheme.InkArt, 1.8f);
 
             _roundLabel = UIBuilder.Label("Round", bar, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.LowerLeft);
             UIBuilder.Box(_roundLabel.rectTransform, 4f, 4f, 520f, 22f, new Vector2(0f, 0f));
-            UIBuilder.Outlined(_roundLabel, new Color(0f, 0f, 0f, 0.9f), 1.5f);
+            UIBuilder.Outlined(_roundLabel, UITheme.InkArt, 1.5f);
 
             _speedButton = UIBuilder.SecondaryButton("Speed", bar, "1x", UITheme.FontTiny);
             UIBuilder.Box(_speedButton.Root, -4f, 0f, 84f, 44f, new Vector2(1f, 0.5f));
@@ -170,16 +170,16 @@ namespace Emberfall.UI.Screens
             Image backing = _banner.gameObject.AddComponent<Image>();
             backing.sprite = TextureLab.RoundedRect(14);
             backing.type = Image.Type.Sliced;
-            backing.color = new Color(0f, 0f, 0f, 0.34f);
+            backing.color = UITheme.ScrimBacking;
             backing.raycastTarget = false;
 
             _bannerTitle = UIBuilder.Label("Title", _banner, "", UITheme.FontBody, UITheme.Gold, TextAnchor.UpperCenter);
             UIBuilder.Box(_bannerTitle.rectTransform, 0f, -8f, 500f, 34f, new Vector2(0.5f, 1f));
-            UIBuilder.Outlined(_bannerTitle, new Color(0f, 0f, 0f, 0.9f), 1.8f);
+            UIBuilder.Outlined(_bannerTitle, UITheme.InkArt, 1.8f);
 
             _bannerSub = UIBuilder.Label("Sub", _banner, "", UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.LowerCenter);
             UIBuilder.Box(_bannerSub.rectTransform, 0f, 8f, 500f, 24f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_bannerSub, new Color(0f, 0f, 0f, 0.9f), 1.5f);
+            UIBuilder.Outlined(_bannerSub, UITheme.InkArt, 1.5f);
 
             _banner.gameObject.SetActive(false);
         }
@@ -192,7 +192,7 @@ namespace Emberfall.UI.Screens
 
             Image dim = _resultPanel.gameObject.AddComponent<Image>();
             dim.sprite = TextureLab.White;
-            dim.color = new Color(0f, 0f, 0f, 0.78f);
+            dim.color = UITheme.ScrimResult;
 
             // Landscape splits the panel into two panes: outcome, cause and actions on the left,
             // the spoils card on the right. The portrait layout stacked these down the middle and
@@ -389,7 +389,7 @@ namespace Emberfall.UI.Screens
             bar.Name = UIBuilder.Label("Name", bar.Root, snapshot.Name,
                                        UITheme.FontTiny - 5, UITheme.TextPrimary, TextAnchor.LowerCenter);
             UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + EnergyHeight + 3f, 240f, 18f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Name, new Color(0f, 0f, 0f, 0.95f), 1.4f);
+            UIBuilder.Outlined(bar.Name, UITheme.InkArt, 1.4f);
 
             // Status sits above the name and is empty unless the unit actually carries one, so it
             // costs nothing visually at rest. Kept against a literal reading of "nothing else"
@@ -397,7 +397,7 @@ namespace Emberfall.UI.Screens
             // no way to see that a unit is burning, taunting or warded down.
             bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 7, UITheme.Warning, TextAnchor.LowerCenter);
             UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + EnergyHeight + 21f, 240f, 15f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Status, new Color(0f, 0f, 0f, 0.9f), 1.2f);
+            UIBuilder.Outlined(bar.Status, UITheme.InkArt, 1.2f);
 
             // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
             // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
@@ -780,7 +780,7 @@ namespace Emberfall.UI.Screens
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                bar.TurnPip.color = new Color(lit.r, lit.g, lit.b, k);
+                bar.TurnPip.color = UITheme.WithAlpha(lit, k);
                 bar.TurnLift = Mathf.Lerp(0f, 14f, k);
                 yield return null;
             }
@@ -793,7 +793,7 @@ namespace Emberfall.UI.Screens
         {
             bar.TurnLift = 0f;
             Color c = bar.TurnPip.color;
-            bar.TurnPip.color = new Color(c.r, c.g, c.b, 0f);
+            bar.TurnPip.color = UITheme.WithAlpha(c, 0f);
         }
 
         /// <summary>Repopulates the turn strip from the TurnStart events between this RoundStart and the next.</summary>
@@ -826,7 +826,7 @@ namespace Emberfall.UI.Screens
                 TurnStripIcon icon = _turnStripIcons[i];
                 bool active = icon.UnitId == unitId;
                 Color c = icon.Fill.color;
-                icon.Fill.color = new Color(c.r, c.g, c.b, active ? 1f : 0.4f);
+                icon.Fill.color = UITheme.WithAlpha(c, active ? 1f : 0.4f);
             }
         }
 
@@ -1019,7 +1019,7 @@ namespace Emberfall.UI.Screens
             item.Group = item.Root.gameObject.AddComponent<CanvasGroup>();
             item.Label = UIBuilder.Label("Text", item.Root, "", UITheme.FontHeading, Color.white, TextAnchor.MiddleCenter);
             UIBuilder.FillParent(item.Label.rectTransform, 0f);
-            UIBuilder.Outlined(item.Label, new Color(0f, 0f, 0f, 0.95f), 2.4f);
+            UIBuilder.Outlined(item.Label, UITheme.InkArt, 2.4f);
             _floatPool.Add(item);
             return item;
         }

@@ -25,7 +25,7 @@ namespace Emberfall.UI
 
             Text titleLabel = UIBuilder.Label("Title", header, title, UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.UpperCenter);
             UIBuilder.Box(titleLabel.rectTransform, 0f, 0f, 760f, 52f, new Vector2(0.5f, 1f));
-            UIBuilder.Shadowed(titleLabel, new Color(0f, 0f, 0f, 0.55f), 3f);
+            UIBuilder.Shadowed(titleLabel, UITheme.InkPanel, 3f);
 
             subtitle = UIBuilder.Label("Subtitle", header, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
             UIBuilder.Box(subtitle.rectTransform, 0f, -54f, 860f, 30f, new Vector2(0.5f, 1f));

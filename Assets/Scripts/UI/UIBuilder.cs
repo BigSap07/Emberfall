@@ -338,10 +338,10 @@ namespace Emberfall.UI
             handle.Button.transition = Selectable.Transition.ColorTint;
             ColorBlock colors = ColorBlock.defaultColorBlock;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.08f, 1.08f, 1.08f, 1f);
-            colors.pressedColor = new Color(0.82f, 0.82f, 0.82f, 1f);
-            colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
-            colors.fadeDuration = 0.06f;
+            colors.highlightedColor = UITheme.ButtonHighlight;
+            colors.pressedColor = UITheme.ButtonPressed;
+            colors.disabledColor = UITheme.ButtonDisabled;
+            colors.fadeDuration = UITheme.ButtonFadeDuration;
             colors.colorMultiplier = 1f;
             handle.Button.colors = colors;
 
@@ -355,12 +355,12 @@ namespace Emberfall.UI
             Image sheenImage = sheen.gameObject.AddComponent<Image>();
             sheenImage.sprite = TextureLab.RoundedRect((int)UITheme.CornerRadius);
             sheenImage.type = Image.Type.Sliced;
-            sheenImage.color = new Color(1f, 1f, 1f, 0.07f);
+            sheenImage.color = UITheme.ButtonSheen;
             sheenImage.raycastTarget = false;
 
             handle.Label = Label("Text", handle.Root, text, fontSize, textColor, TextAnchor.MiddleCenter);
             FillParent(handle.Label.rectTransform, 12f);
-            Shadowed(handle.Label, new Color(0f, 0f, 0f, 0.5f), 2f);
+            Shadowed(handle.Label, UITheme.InkPanel, 2f);
 
             handle.Root.gameObject.AddComponent<ButtonPress>();
             return handle;

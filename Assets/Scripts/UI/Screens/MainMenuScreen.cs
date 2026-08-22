@@ -62,7 +62,7 @@ namespace Emberfall.UI.Screens
             Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay, UITheme.Gold, TextAnchor.UpperCenter);
             UIBuilder.Box(logo.rectTransform, LeftColumnX, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(logo, new Color(0.35f, 0.12f, 0.02f, 0.9f), 3f);
-            UIBuilder.Shadowed(logo, new Color(0f, 0f, 0f, 0.6f), 5f);
+            UIBuilder.Shadowed(logo, UITheme.InkPanel, 5f);
             top += logoHeight;
 
             top += UITheme.Space16;

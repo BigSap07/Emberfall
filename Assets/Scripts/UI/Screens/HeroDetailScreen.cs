@@ -210,7 +210,7 @@ namespace Emberfall.UI.Screens
             if (locked)
             {
                 // dimmed silhouette - same identity chips below, but the portrait itself stays a shape, not a reveal
-                Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), new Color(0f, 0f, 0f, 0.72f));
+                Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), UITheme.ScrimModal);
                 UIBuilder.FillParent(scrim.rectTransform, 0f);
             }
 

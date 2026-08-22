@@ -81,7 +81,7 @@ namespace Emberfall.UI
 
             Image dim = _root.gameObject.AddComponent<Image>();
             dim.sprite = TextureLab.White;
-            dim.color = new Color(0f, 0f, 0f, 0.72f);
+            dim.color = UITheme.ScrimModal;
 
             _panel = UIBuilder.Node("Panel", _root);
             UIBuilder.Box(_panel, 0f, 0f, 840f, 520f, new Vector2(0.5f, 0.5f));

@@ -123,7 +123,7 @@ namespace Emberfall.UI.Screens
 
             Image dim = _reveal.gameObject.AddComponent<Image>();
             dim.sprite = TextureLab.White;
-            dim.color = new Color(0f, 0f, 0f, 0.85f);
+            dim.color = UITheme.ScrimReveal;
 
             _revealGlow = UIBuilder.Img("Glow", _reveal, TextureLab.Glow(256, 1.3f), UITheme.WithAlpha(UITheme.Gold, 0.3f));
             UIBuilder.Box(_revealGlow.rectTransform, 0f, 180f, 900f, 900f, new Vector2(0.5f, 0.5f));
@@ -136,7 +136,7 @@ namespace Emberfall.UI.Screens
 
             _revealName = UIBuilder.Label("Name", _reveal, "", UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealName.rectTransform, 0f, -30f, 900f, 60f, new Vector2(0.5f, 0.5f));
-            UIBuilder.Shadowed(_revealName, new Color(0f, 0f, 0f, 0.7f), 4f);
+            UIBuilder.Shadowed(_revealName, UITheme.InkDisplay, 4f);
 
             _revealTitle = UIBuilder.Label("Title", _reveal, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealTitle.rectTransform, 0f, -84f, 900f, 36f, new Vector2(0.5f, 0.5f));
