@@ -371,22 +371,37 @@ namespace Emberfall.UI.Screens
         // correctly under either projection mode, and a pixel offset added after projection has
         // no notion of perspective to begin with.
         //
-        // The number did need to change, though, and for a different reason than projection
-        // mode: BattleStage.Initialise's new orthographicSize (2.6) sets a fixed, uniform pixel
-        // scale of screenHeight / (2 * orthographicSize) = 1080 / 5.2 = 207.7 pixels per world
-        // unit, the same for every unit regardless of distance, which the old perspective camera
-        // never had - a far unit's world-to-pixel scale was smaller than a near unit's, and 46
-        // was a compromise across that whole range (44-53px). There is no range to compromise
-        // across any more, so this is derived directly against the one scale that now applies,
-        // using the same 0.28 world-unit figure the old world-space offset used as the target
-        // visual gap: 0.28 * 207.7 = 58.2, rounded to 58.
-        private const float BarPixelRise = 58f;
+        // What the gap should be, in world units. The pixel figure is computed per frame below
+        // instead of being baked in, because baking it in is exactly how it went wrong: the
+        // constant here used to be 58 px, derived - correctly, at the time - against an
+        // orthographicSize of 2.6, giving 1080 / 5.2 = 207.7 px per world unit. BattleStage has
+        // since reframed three times and is now at 4.25, which is 1080 / 8.5 = 127.1 px per world
+        // unit, so those 58 px had quietly become 0.46 world units, two thirds again the gap
+        // intended. Reading orthographicSize off the live camera cannot go stale that way.
+        private const float BarWorldRise = 0.28f;
+
+        // Height of the bar stack above its own anchor, in canvas units. CreateBar sizes the root
+        // 210 x 110 with a bottom pivot and stacks health, ward, energy, name and status inside
+        // it, so 110 is the authored extent rather than a measured guess. Used only to keep the
+        // stack on screen, see the clamp in LateUpdate.
+        private const float BarStackHeight = 110f;
 
         private void LateUpdate()
         {
             if (_world == null || _world.Camera == null || Root == null || !Root.gameObject.activeInHierarchy) return;
             float scale = App.RootCanvas != null ? App.RootCanvas.scaleFactor : 1f;
             if (scale <= 0f) scale = 1f;
+
+            // Orthographic gives one pixel scale for the whole field, independent of depth, so
+            // this is exact rather than an average across near and far units.
+            float pixelsPerWorldUnit = Screen.height / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize));
+            float rise = BarWorldRise * pixelsPerWorldUnit / scale;
+
+            // The back rank's far-z slot projects a head to about 97% of screen height, so there
+            // is genuinely no room above it for a 110-unit stack; without this the whole bar left
+            // the screen and read as a stray bar stuck to the top edge belonging to nobody.
+            // Clamped it overlaps its own unit instead, which is legible and still attached.
+            float ceiling = Screen.height / scale - BarStackHeight - 6f;
 
             for (int i = 0; i < _world.Actors.Count; i++)
             {
@@ -399,7 +414,8 @@ namespace Emberfall.UI.Screens
                 bar.Group.alpha = visible ? 1f : Mathf.Max(0f, bar.Group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
 
-                bar.Root.anchoredPosition = new Vector2(screen.x / scale, screen.y / scale + BarPixelRise + bar.TurnLift);
+                float y = screen.y / scale + rise + bar.TurnLift;
+                bar.Root.anchoredPosition = new Vector2(screen.x / scale, Mathf.Min(y, ceiling));
             }
         }
 
