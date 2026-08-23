@@ -34,8 +34,33 @@ namespace Emberfall.Core.Save
         /// generous default. The bump is once more for the downgrade direction: version 3 code
         /// drops both keys, so a capped-out player who rolled back would silently get their whole
         /// day of paid repeats handed back, and the guard below refuses instead.
+        ///
+        /// 5: the relic inventory (DESIGN-RELIC-PROGRESSION section 3) plus the relicDust purse.
+        /// The profile grows an ownedRelics array of { relicId, tier }, and the per-hero relicId
+        /// key becomes equippedRelicId - a REFERENCE into that array rather than the relic's only
+        /// existence. The doc calls this bump 3 -> 4; 3 was the version when it was written, and
+        /// the repeat cap has since taken 4, so it is 4 -> 5.
+        ///
+        /// Upgrade DOES need a migration this time, and it is the reason this is not a free bump:
+        /// a version 4 save has no ownedRelics array at all, so a relic that exists only as a
+        /// hero's relicId would simply cease to exist under the new model. The read below
+        /// synthesises an ownedRelics entry at tier 1 for every hero-level relic it finds, from
+        /// either key, so a player who had one equipped keeps it equipped and now also owns it.
+        /// A player with none gets an empty collection, which is the correct default.
+        ///
+        /// Downgrade is guarded the same way 2, 3 and 4 are, by the version check below: version 4
+        /// code reads no equippedRelicId and no ownedRelics, so it would silently unequip every
+        /// relic AND drop the player's whole relic collection and dust purse. Refusing is the only
+        /// safe answer, and refusing is what the existing guard already does once this constant moves.
         /// </summary>
-        public const int CurrentVersion = 4;
+        public const int CurrentVersion = 5;
+
+        /// <summary>
+        /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
+        /// migration in Deserialize. Named here rather than inlined so the one place that still
+        /// understands the old format is obvious.
+        /// </summary>
+        private const string LegacyHeroRelicKey = "relicId";
 
         public static string Serialize(PlayerProfile profile)
         {
@@ -46,6 +71,7 @@ namespace Emberfall.Core.Save
             root.Set("playerXp", profile.PlayerXp);
             root.Set("gold", profile.Gold);
             root.Set("shards", profile.Shards);
+            root.Set("relicDust", profile.RelicDust);
             root.Set("stagesCleared", profile.StagesCleared);
             root.Set("lastIdleClaimUnix", profile.LastIdleClaimUnix);
             root.Set("lastSaveUnix", profile.LastSaveUnix);
@@ -69,11 +95,28 @@ namespace Emberfall.Core.Save
                 hj.Set("copies", h.Copies);
                 hj.Set("acquired", h.AcquiredUnix);
                 // Written only when set, so a profile with no relics equipped serialises byte for
-                // byte the way it did before relics existed apart from the version number.
-                if (!string.IsNullOrEmpty(h.RelicId)) hj.Set("relicId", h.RelicId);
+                // byte the way it did before relics existed apart from the version number. The
+                // legacy "relicId" key is never written again - only read, on upgrade.
+                if (!string.IsNullOrEmpty(h.EquippedRelicId)) hj.Set("equippedRelicId", h.EquippedRelicId);
                 heroes.Add(hj);
             }
             root.Set("heroes", heroes);
+
+            // The relic collection is written even when empty, unlike the per-hero key above: an
+            // empty array and an absent array mean different things here now. Absent is a save
+            // from before version 5, which the read below migrates; empty is a version 5 player
+            // who genuinely owns no relics and needs nothing synthesised.
+            JsonValue ownedRelics = JsonValue.NewArray();
+            for (int i = 0; i < profile.OwnedRelics.Count; i++)
+            {
+                OwnedRelic owned = profile.OwnedRelics[i];
+                if (string.IsNullOrEmpty(owned.RelicId)) continue;
+                JsonValue oj = JsonValue.NewObject();
+                oj.Set("relicId", owned.RelicId);
+                oj.Set("tier", owned.Tier);
+                ownedRelics.Add(oj);
+            }
+            root.Set("ownedRelics", ownedRelics);
 
             // Zero counts are dropped rather than written: absent already means zero on the way
             // back in, so a player who has farmed nothing today serialises no map at all.
@@ -114,6 +157,7 @@ namespace Emberfall.Core.Save
             profile.PlayerXp = Math.Max(0, root.GetInt("playerXp", 0));
             profile.Gold = Math.Max(0, root.GetLong("gold", 0));
             profile.Shards = Math.Max(0, root.GetLong("shards", 0));
+            profile.RelicDust = Math.Max(0, root.GetLong("relicDust", 0));
             profile.StagesCleared = Math.Max(0, root.GetInt("stagesCleared", 0));
             profile.LastIdleClaimUnix = root.GetLong("lastIdleClaimUnix", 0);
             profile.LastSaveUnix = root.GetLong("lastSaveUnix", 0);
@@ -148,8 +192,39 @@ namespace Emberfall.Core.Save
                 // is deliberately NOT dropped here: the simulation resolves ids to defs and treats
                 // an unresolvable one as no relic, so keeping the string means re-adding the relic
                 // to content restores the equip rather than silently having wiped it.
-                h.RelicId = hj.GetString("relicId", "");
+                // Version 5 writes equippedRelicId; anything older wrote relicId. Reading both
+                // here is what makes the migration below a no-op for an already-current save.
+                h.EquippedRelicId = hj.GetString("equippedRelicId", hj.GetString(LegacyHeroRelicKey, ""));
                 profile.Heroes.Add(h);
+            }
+
+            List<JsonValue> ownedRelics = root.GetList("ownedRelics");
+            for (int i = 0; i < ownedRelics.Count; i++)
+            {
+                string relicId = ownedRelics[i].GetString("relicId", "");
+                if (string.IsNullOrEmpty(relicId) || profile.OwnsRelic(relicId)) continue;
+                OwnedRelic owned = new OwnedRelic();
+                owned.RelicId = relicId;
+                owned.Tier = Math.Max(1, ownedRelics[i].GetInt("tier", 1));
+                profile.OwnedRelics.Add(owned);
+            }
+
+            // THE VERSION 4 -> 5 MIGRATION. Before version 5 a relic existed only as a hero's
+            // relicId, so every one of those has to become an owned relic or it vanishes with the
+            // format. Synthesised at tier 1, which is the only tier that has ever existed.
+            //
+            // Deliberately not conditioned on the version number: it is written as "every equipped
+            // relic must be owned", which is true of a version 5 save as well and simply finds
+            // nothing to do there. A version check would make the invariant hold only on the one
+            // read path that happened to be tested.
+            for (int i = 0; i < profile.Heroes.Count; i++)
+            {
+                string relicId = profile.Heroes[i].EquippedRelicId;
+                if (string.IsNullOrEmpty(relicId) || profile.OwnsRelic(relicId)) continue;
+                OwnedRelic synthesised = new OwnedRelic();
+                synthesised.RelicId = relicId;
+                synthesised.Tier = 1;
+                profile.OwnedRelics.Add(synthesised);
             }
 
             // Stage ids are not validated against content here for the same reason relic ids are
@@ -169,6 +244,7 @@ namespace Emberfall.Core.Save
             }
 
             profile.NormaliseTeam();
+            profile.NormaliseRelics();
             return profile;
         }
     }
