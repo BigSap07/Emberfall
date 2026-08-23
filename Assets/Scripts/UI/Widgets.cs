@@ -41,9 +41,10 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// Row of five star glyphs: hero's earned stars filled (★), remaining empty (☆).
-        /// Uses Unicode characters so it never depends on a separate star sprite asset.
-        /// Flag for art: replace with sprite-based stars once assets are available.
+        /// Row of five star icons: filled (solid) for earned stars, empty (muted) for the rest.
+        /// Uses a runtime-generated sprite from TextureLab.Star — no external asset needed.
+        /// To swap in real art, replace the sprite source inside TextureLab.Star; all call sites
+        /// here continue to work without changes.
         /// </summary>
         public static RectTransform StarRow(string name, Transform parent, int stars, float starSize)
         {
@@ -54,16 +55,11 @@ namespace Emberfall.UI
             UIBuilder.HStack(root, gap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
             Color filled = UITheme.StarColor(stars);
             Color empty  = UITheme.WithAlpha(UITheme.TextDim, 0.55f);
-            int fontSize = (int)starSize;
+            Sprite starSprite = TextureLab.Star(64);
             for (int i = 0; i < Total; i++)
             {
-                bool isFilled = i < stars;
-                Text star = UIBuilder.Label("Star" + i, root,
-                    isFilled ? "★" : "☆",
-                    fontSize,
-                    isFilled ? filled : empty,
-                    TextAnchor.MiddleCenter);
-                UIBuilder.Sized(star.rectTransform, starSize, starSize);
+                Image img = UIBuilder.Img("Star" + i, root, starSprite, i < stars ? filled : empty);
+                UIBuilder.Sized(img.rectTransform, starSize, starSize);
             }
             return root;
         }

@@ -23,6 +23,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _reveal;
         private CanvasGroup _revealGroup;
         private RectTransform _revealPortraitHost;
+        private RectTransform _revealStarHost;
         private Image _revealGlow;
         private Text _revealName;
         private Text _revealTitle;
@@ -135,6 +136,9 @@ namespace Emberfall.UI.Screens
             _revealPortraitHost = UIBuilder.Node("PortraitHost", _reveal);
             UIBuilder.Box(_revealPortraitHost, 0f, 250f, 340f, 340f, new Vector2(0.5f, 0.5f));
 
+            _revealStarHost = UIBuilder.Node("StarHost", _reveal);
+            UIBuilder.Box(_revealStarHost, 0f, 75f, 130f, 24f, new Vector2(0.5f, 0.5f));
+
             _revealTag = UIBuilder.Label("Tag", _reveal, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealTag.rectTransform, 0f, 30f, 700f, 40f, new Vector2(0.5f, 0.5f));
 
@@ -232,10 +236,12 @@ namespace Emberfall.UI.Screens
             RectTransform portrait = Widgets.Portrait("Portrait", _revealPortraitHost, def, def.Stars, 340f, true);
             UIBuilder.FillParent(portrait, 0f);
 
+            for (int i = _revealStarHost.childCount - 1; i >= 0; i--)
+                Destroy(_revealStarHost.GetChild(i).gameObject);
+            Widgets.StarRow("Stars", _revealStarHost, def.Stars, 24f);
+
             _revealGlow.color = UITheme.WithAlpha(starColor, 0.34f);
-            string starGlyphs = new string('★', def.Stars) + new string('☆', 5 - def.Stars);
-            _revealTag.text = starGlyphs + "  -  " + UITheme.RoleName(def.Role)
-                              + "  -  " + AspectChart.DisplayName(def.Aspect);
+            _revealTag.text = UITheme.RoleName(def.Role) + "  -  " + AspectChart.DisplayName(def.Aspect);
             _revealTag.color = starColor;
             _revealName.text = def.Name;
             _revealTitle.text = def.Title.ToUpperInvariant();
