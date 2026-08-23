@@ -49,6 +49,21 @@
   // Hour of the UTC day the per-stage counters roll over.
   "dailyResetHourUtc": 4,
 
+  // Relic Dust - see DESIGN-RELIC-PROGRESSION section 1. Paid off the repeat-clear loop above,
+  // never off a first clear (first-clear rewards are already tuned and adding to them would mean
+  // rebalancing them), and scaled by stage difficulty as base + perStageIndex * stage.globalIndex.
+  // PLACEHOLDER SOURCE: the intended long-term home for Relic Dust is harder, dedicated content -
+  // the endless mode proposed as The Deep Recital in DESIGN-DEEP-RECITAL.md, which is not built.
+  // Repeat-clears are a bootstrap so the currency and the shop have somewhere to come from in the
+  // meantime, not the final design. Both numbers are a balance pass, per the doc deferring the
+  // curve exactly the way DESIGN-BUILD-ORDER task 14 defers recommendedPower.
+  "relicDustPerRepeatClear": 6,
+  "relicDustPerStageIndex": 2,
+  // Highest tier a relic can be owned at. 1 until the balance pass authors tier 2 - the tier field
+  // and its save path exist now so that pass is a content and tuning change, not a save migration.
+  // Nothing in the simulation reads tier, so a tier-2 relic would behave exactly like a tier-1 one.
+  "relicMaxTier": 1,
+
   "summonCost": 120,
   "summonWeightCommon": 62,
   "summonWeightRare": 29,

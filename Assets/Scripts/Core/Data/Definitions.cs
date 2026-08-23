@@ -509,6 +509,24 @@ namespace Emberfall.Core.Data
         /// <summary>Hour of the UTC day the per-stage repeat counters roll over.</summary>
         public int DailyResetHourUtc = 4;
 
+        // relic progression - see DESIGN-RELIC-PROGRESSION.md
+        /// <summary>
+        /// Relic Dust paid by a repeat clear of the campaign's first stage. Later stages add
+        /// RelicDustPerStageIndex per step of StageDef.GlobalIndex, which is the difficulty
+        /// scaling the design doc asks for and leaves to tuning.
+        /// </summary>
+        public int RelicDustPerRepeatClear = 6;
+
+        /// <summary>Extra Relic Dust per step of StageDef.GlobalIndex.</summary>
+        public int RelicDustPerStageIndex = 2;
+
+        /// <summary>
+        /// Highest tier a relic can be owned at. Pinned to 1 until the balance pass authors
+        /// tier 2; nothing in the simulation branches on tier, so raising this alone changes
+        /// no relic's behaviour.
+        /// </summary>
+        public int RelicMaxTier = 1;
+
         // summoning
         public int SummonCost = 120;
         public float SummonWeightCommon = 62f;
@@ -553,6 +571,9 @@ namespace Emberfall.Core.Data
             b.RepeatFullClearsPerDay = j.GetInt("repeatFullClearsPerDay", b.RepeatFullClearsPerDay);
             b.RepeatRewardFloor = j.GetFloat("repeatRewardFloor", b.RepeatRewardFloor);
             b.DailyResetHourUtc = j.GetInt("dailyResetHourUtc", b.DailyResetHourUtc);
+            b.RelicDustPerRepeatClear = j.GetInt("relicDustPerRepeatClear", b.RelicDustPerRepeatClear);
+            b.RelicDustPerStageIndex = j.GetInt("relicDustPerStageIndex", b.RelicDustPerStageIndex);
+            b.RelicMaxTier = j.GetInt("relicMaxTier", b.RelicMaxTier);
             b.SummonCost = j.GetInt("summonCost", b.SummonCost);
             b.SummonWeightCommon = j.GetFloat("summonWeightCommon", b.SummonWeightCommon);
             b.SummonWeightRare = j.GetFloat("summonWeightRare", b.SummonWeightRare);
