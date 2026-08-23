@@ -62,6 +62,14 @@ namespace Emberfall.Core.Session
         public int PlayerLevelsGained;
         public bool UnlockedNextStage;
         public string StageId = "";
+
+        /// <summary>True when this win landed past the stage's daily paid-repeat allowance, so
+        /// the purse below was scaled by BalanceConfig.RepeatRewardFloor - zero by default.</summary>
+        public bool RepeatCapped;
+
+        /// <summary>Paid repeat clears left on this stage for the rest of the reward day,
+        /// counted after this win was banked.</summary>
+        public int RepeatClearsRemaining;
     }
 
     /// <summary>
@@ -219,9 +227,42 @@ namespace Emberfall.Core.Session
 
             bool firstClear = !Profile.HasClearedStage(stage.Id);
             rewards.FirstClear = firstClear;
-            rewards.Gold = stage.RewardGold + (firstClear ? stage.FirstClearGold : 0);
-            rewards.Shards = stage.RewardShards + (firstClear ? stage.FirstClearShards : 0);
-            rewards.AccountXp = stage.RewardAccountXp;
+
+            int gold = stage.RewardGold + (firstClear ? stage.FirstClearGold : 0);
+            int shards = stage.RewardShards + (firstClear ? stage.FirstClearShards : 0);
+            int accountXp = stage.RewardAccountXp;
+
+            // The repeat cap, per DESIGN-REPLAY-ECONOMY. A first clear is progress rather than
+            // farming and is never counted or capped; every clear after it spends one of the
+            // stage's paid repeats for the day. Past the allowance the fight still ran, still
+            // counts as a win and still unlocks nothing new - it simply pays the floor, which is
+            // zero, so the loss-adjust-reclear loop stays free while the twentieth farm run of
+            // the day stops paying.
+            RollDailyReset(nowUnix);
+            if (!firstClear)
+            {
+                int used = Profile.ClearsTodayFor(stage.Id);
+                if (used >= RepeatFullClearsPerDay)
+                {
+                    float floor = Balance.RepeatRewardFloor;
+                    if (floor < 0f) floor = 0f;
+                    if (floor > 1f) floor = 1f;
+                    // Only ever scale below par, so the uncapped purse stays exactly the integer
+                    // the stage authored instead of a float round trip of it.
+                    gold = (int)Math.Floor(gold * (double)floor);
+                    shards = (int)Math.Floor(shards * (double)floor);
+                    accountXp = (int)Math.Floor(accountXp * (double)floor);
+                    rewards.RepeatCapped = true;
+                }
+                else
+                {
+                    Profile.StageClearsToday[stage.Id] = used + 1;
+                }
+            }
+
+            rewards.Gold = gold;
+            rewards.Shards = shards;
+            rewards.AccountXp = accountXp;
 
             Profile.Gold += rewards.Gold;
             Profile.Shards += rewards.Shards;
@@ -238,8 +279,69 @@ namespace Emberfall.Core.Session
             }
 
             rewards.PlayerLevelsGained = GrantAccountXp(rewards.AccountXp);
+            rewards.RepeatClearsRemaining = RepeatClearsRemaining(stage, nowUnix);
             Profile.LastSaveUnix = nowUnix;
             return rewards;
+        }
+
+        // ------------------------------------------------------------------ repeat cap
+
+        /// <summary>Paid repeat clears each already-cleared stage gets per reward day.</summary>
+        public int RepeatFullClearsPerDay
+        {
+            get { return Math.Max(0, Balance.RepeatFullClearsPerDay); }
+        }
+
+        /// <summary>
+        /// Start of the reward day nowUnix falls in: the most recent Balance.DailyResetHourUtc
+        /// boundary at or before it, in UTC. Floors rather than truncates, so it stays correct
+        /// for timestamps before the epoch instead of jumping a day forward.
+        /// </summary>
+        public long DayStartUnix(long nowUnix)
+        {
+            const long Day = 86400L;
+            long offset = (long)Balance.DailyResetHourUtc * 3600L;
+            long shifted = nowUnix - offset;
+            long days = shifted >= 0 ? shifted / Day : -(((-shifted) + Day - 1L) / Day);
+            return days * Day + offset;
+        }
+
+        /// <summary>
+        /// Empties the per-stage repeat counters if nowUnix has crossed into a later reward day,
+        /// and returns true when it did. The stamp only ever moves FORWARD: with no server the
+        /// device clock is the only source of truth, so a clock wound backwards must not buy a
+        /// fresh set of paid clears (DESIGN-REPLAY-ECONOMY). There is nothing to sell and no
+        /// leaderboard, so a player who forces the clock forward only cheats themselves.
+        /// </summary>
+        public bool RollDailyReset(long nowUnix)
+        {
+            long start = DayStartUnix(nowUnix);
+            if (start <= Profile.DailyResetUnix) return false;
+            Profile.DailyResetUnix = start;
+            Profile.StageClearsToday.Clear();
+            return true;
+        }
+
+        /// <summary>
+        /// Paid repeat clears left on a stage for the rest of the reward day. A stage the player
+        /// has not cleared yet reports the full allowance: the first clear of a stage is never
+        /// capped, so there is nothing spent against it.
+        /// </summary>
+        public int RepeatClearsRemaining(StageDef stage, long nowUnix)
+        {
+            if (stage == null) return 0;
+            RollDailyReset(nowUnix);
+            if (!Profile.HasClearedStage(stage.Id)) return RepeatFullClearsPerDay;
+            int left = RepeatFullClearsPerDay - Profile.ClearsTodayFor(stage.Id);
+            return left > 0 ? left : 0;
+        }
+
+        /// <summary>True when a further clear of this stage would pay the floor instead of the
+        /// purse. Never true for a stage the player has not cleared yet.</summary>
+        public bool RepeatCapReached(StageDef stage, long nowUnix)
+        {
+            if (stage == null || !Profile.HasClearedStage(stage.Id)) return false;
+            return RepeatClearsRemaining(stage, nowUnix) <= 0;
         }
 
         public int GrantAccountXp(int amount)
