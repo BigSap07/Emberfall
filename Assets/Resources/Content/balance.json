@@ -33,10 +33,9 @@
   "playerXpBase": 120,
   "playerXpExponent": 1.35,
 
-  "idleGoldPerHourBase": 140,
-  "idleGoldPerHourPerStage": 55,
-  "idleShardsPerHourBase": 7,
-  "idleShardsPerHourPerStage": 2.2,
+  // floor rate for a fresh account with zero stages cleared; per-stage rates live in campaign.json
+  "idleGoldPerHourFloor": 140,
+  "idleShardsPerHourFloor": 7,
   "idleCapHours": 10,
 
   // Replay economy - see DESIGN-REPLAY-ECONOMY.md. Repeat clears of an already-cleared stage that

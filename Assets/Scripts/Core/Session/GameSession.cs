@@ -497,9 +497,10 @@ namespace Emberfall.Core.Session
             if (elapsed > report.CapSeconds) { elapsed = (long)report.CapSeconds; report.Capped = true; }
             report.Seconds = elapsed;
 
-            int stages = Math.Max(0, Profile.StagesCleared);
-            report.Gold = (int)Math.Floor(StatMath.IdleGoldPerSecond(Balance, stages) * elapsed);
-            report.Shards = (int)Math.Floor(StatMath.IdleShardsPerSecond(Balance, stages) * elapsed);
+            StageDef idleStage = Profile.StagesCleared > 0
+                ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+            report.Gold = (int)Math.Floor(StatMath.IdleGoldPerSecond(Balance, idleStage) * elapsed);
+            report.Shards = (int)Math.Floor(StatMath.IdleShardsPerSecond(Balance, idleStage) * elapsed);
             return report;
         }
 
@@ -514,12 +515,22 @@ namespace Emberfall.Core.Session
 
         public float IdleGoldPerHour
         {
-            get { return StatMath.IdleGoldPerSecond(Balance, Profile.StagesCleared) * 3600f; }
+            get
+            {
+                StageDef s = Profile.StagesCleared > 0
+                    ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+                return StatMath.IdleGoldPerSecond(Balance, s) * 3600f;
+            }
         }
 
         public float IdleShardsPerHour
         {
-            get { return StatMath.IdleShardsPerSecond(Balance, Profile.StagesCleared) * 3600f; }
+            get
+            {
+                StageDef s = Profile.StagesCleared > 0
+                    ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+                return StatMath.IdleShardsPerSecond(Balance, s) * 3600f;
+            }
         }
 
         // ------------------------------------------------------------------ summoning

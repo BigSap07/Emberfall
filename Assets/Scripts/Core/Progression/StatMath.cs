@@ -126,14 +126,20 @@ namespace Emberfall.Core.Progression
 
         // ---------- idle income ----------
 
-        public static float IdleGoldPerSecond(BalanceConfig cfg, int stagesCleared)
+        /// <summary>
+        /// Rate resolved from the player's best cleared stage. Pass null when StagesCleared is
+        /// zero (no stage cleared yet) to get the floor rate from BalanceConfig.
+        /// </summary>
+        public static float IdleGoldPerSecond(BalanceConfig cfg, StageDef stage)
         {
-            return (cfg.IdleGoldPerHourBase + cfg.IdleGoldPerHourPerStage * stagesCleared) / 3600f;
+            float perHour = stage != null ? stage.IdleGoldPerHour : cfg.IdleGoldPerHourFloor;
+            return perHour / 3600f;
         }
 
-        public static float IdleShardsPerSecond(BalanceConfig cfg, int stagesCleared)
+        public static float IdleShardsPerSecond(BalanceConfig cfg, StageDef stage)
         {
-            return (cfg.IdleShardsPerHourBase + cfg.IdleShardsPerHourPerStage * stagesCleared) / 3600f;
+            float perHour = stage != null ? stage.IdleShardsPerHour : cfg.IdleShardsPerHourFloor;
+            return perHour / 3600f;
         }
     }
 }

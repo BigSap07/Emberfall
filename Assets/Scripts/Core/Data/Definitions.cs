@@ -305,6 +305,8 @@ namespace Emberfall.Core.Data
         public int FirstClearGold = 200;
         public int FirstClearShards = 25;
         public int RecommendedPower = 100;
+        public int IdleGoldPerHour;
+        public int IdleShardsPerHour;
 
         public string DisplayCode
         {
@@ -328,6 +330,8 @@ namespace Emberfall.Core.Data
             s.FirstClearGold = j.GetInt("firstClearGold", s.RewardGold * 2);
             s.FirstClearShards = j.GetInt("firstClearShards", s.RewardShards * 5);
             s.RecommendedPower = j.GetInt("recommendedPower", 100);
+            s.IdleGoldPerHour = j.GetInt("idleGoldPerHour", 0);
+            s.IdleShardsPerHour = j.GetInt("idleShardsPerHour", 0);
             List<JsonValue> enemies = j.GetList("enemies");
             for (int i = 0; i < enemies.Count; i++) s.Enemies.Add(EnemySpawn.FromJson(enemies[i]));
             return s;
@@ -493,10 +497,8 @@ namespace Emberfall.Core.Data
         public float PlayerXpExponent = 1.35f;
 
         // idle income
-        public float IdleGoldPerHourBase = 140f;
-        public float IdleGoldPerHourPerStage = 55f;
-        public float IdleShardsPerHourBase = 7f;
-        public float IdleShardsPerHourPerStage = 2.2f;
+        public float IdleGoldPerHourFloor = 140f;
+        public float IdleShardsPerHourFloor = 7f;
         public float IdleCapHours = 8f;
 
         // replay economy - see DESIGN-REPLAY-ECONOMY.md
@@ -566,10 +568,8 @@ namespace Emberfall.Core.Data
             b.HeroLevelHardCap = j.GetInt("heroLevelHardCap", b.HeroLevelHardCap);
             b.PlayerXpBase = j.GetFloat("playerXpBase", b.PlayerXpBase);
             b.PlayerXpExponent = j.GetFloat("playerXpExponent", b.PlayerXpExponent);
-            b.IdleGoldPerHourBase = j.GetFloat("idleGoldPerHourBase", b.IdleGoldPerHourBase);
-            b.IdleGoldPerHourPerStage = j.GetFloat("idleGoldPerHourPerStage", b.IdleGoldPerHourPerStage);
-            b.IdleShardsPerHourBase = j.GetFloat("idleShardsPerHourBase", b.IdleShardsPerHourBase);
-            b.IdleShardsPerHourPerStage = j.GetFloat("idleShardsPerHourPerStage", b.IdleShardsPerHourPerStage);
+            b.IdleGoldPerHourFloor = j.GetFloat("idleGoldPerHourFloor", b.IdleGoldPerHourFloor);
+            b.IdleShardsPerHourFloor = j.GetFloat("idleShardsPerHourFloor", b.IdleShardsPerHourFloor);
             b.IdleCapHours = j.GetFloat("idleCapHours", b.IdleCapHours);
             b.RepeatFullClearsPerDay = j.GetInt("repeatFullClearsPerDay", b.RepeatFullClearsPerDay);
             b.RepeatRewardFloor = j.GetFloat("repeatRewardFloor", b.RepeatRewardFloor);
