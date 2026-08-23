@@ -63,6 +63,8 @@
   // and its save path exist now so that pass is a content and tuning change, not a save migration.
   // Nothing in the simulation reads tier, so a tier-2 relic would behave exactly like a tier-1 one.
   "relicMaxTier": 1,
+  // Relic Dust cost to purchase one relic from the shop. Balance pass placeholder.
+  "relicShopPrice": 80,
 
   "summonCost": 120,
   "summonWeightCommon": 62,

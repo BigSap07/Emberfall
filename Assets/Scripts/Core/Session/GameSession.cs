@@ -439,6 +439,22 @@ namespace Emberfall.Core.Session
             return true;
         }
 
+        /// <summary>
+        /// Purchases a relic from the shop: deducts RelicShopPrice Relic Dust and adds it to the
+        /// collection unassigned. Returns false when the relic is unknown, already owned, or the
+        /// player cannot afford it — the caller should surface whichever message fits.
+        /// </summary>
+        public bool BuyRelic(string relicId)
+        {
+            if (string.IsNullOrEmpty(relicId)) return false;
+            if (Profile.OwnsRelic(relicId)) return false;
+            int price = Balance.RelicShopPrice;
+            if (Profile.RelicDust < price) return false;
+            if (!GrantRelic(relicId)) return false;
+            Profile.RelicDust -= price;
+            return true;
+        }
+
         /// <summary>Takes a hero's relic off them. The relic stays owned, just unassigned.</summary>
         public bool UnassignRelic(HeroInstance hero)
         {

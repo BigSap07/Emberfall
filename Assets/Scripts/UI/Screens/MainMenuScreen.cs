@@ -50,6 +50,7 @@ namespace Emberfall.UI.Screens
             right = BuildIdleCache(right);
 
             BuildNav();
+            BuildSecondNav();
             BuildOptions();
         }
 
@@ -227,6 +228,17 @@ namespace Emberfall.UI.Screens
             button.Label.fontSize = UITheme.FontTiny;
         }
 
+        private void BuildSecondNav()
+        {
+            // second row of destination buttons, stacked above the primary nav
+            RectTransform nav = UIBuilder.Node("Nav2", Root);
+            UIBuilder.Box(nav, RightColumnX, 246f, CardWidth, 170f, new Vector2(0.5f, 0f));
+            UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+
+            AddNavButton(nav, "RELICS", 6, UITheme.Ember, OpenRelicShop);
+            AddNavButton(nav, "INVENTORY", 7, UITheme.TextMuted, OpenInventory);
+        }
+
         private void BuildOptions()
         {
             // right screen edge, in the gap between the cache card (ends 514) and the nav (starts 850)
@@ -386,6 +398,18 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Summon);
+        }
+
+        private void OpenRelicShop()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.RelicShop);
+        }
+
+        private void OpenInventory()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Inventory);
         }
 
         private void ShowOptions()

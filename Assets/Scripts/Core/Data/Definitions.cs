@@ -527,6 +527,9 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int RelicMaxTier = 1;
 
+        /// <summary>Relic Dust cost to purchase one relic from the shop.</summary>
+        public int RelicShopPrice = 80;
+
         // summoning
         public int SummonCost = 120;
         public float SummonWeightCommon = 62f;
@@ -574,6 +577,7 @@ namespace Emberfall.Core.Data
             b.RelicDustPerRepeatClear = j.GetInt("relicDustPerRepeatClear", b.RelicDustPerRepeatClear);
             b.RelicDustPerStageIndex = j.GetInt("relicDustPerStageIndex", b.RelicDustPerStageIndex);
             b.RelicMaxTier = j.GetInt("relicMaxTier", b.RelicMaxTier);
+            b.RelicShopPrice = j.GetInt("relicShopPrice", b.RelicShopPrice);
             b.SummonCost = j.GetInt("summonCost", b.SummonCost);
             b.SummonWeightCommon = j.GetFloat("summonWeightCommon", b.SummonWeightCommon);
             b.SummonWeightRare = j.GetFloat("summonWeightRare", b.SummonWeightRare);
