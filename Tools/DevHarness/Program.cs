@@ -55,6 +55,8 @@ namespace Emberfall.DevHarness
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
+            CheckRelicDust(content);
+            CheckRelicInventoryModel(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckPinnedFiveBodyCurve(content);
@@ -3512,7 +3514,7 @@ namespace Emberfall.DevHarness
         private static HeroInstance MakeInstanceWithRelic(HeroDef def, int level, string relicId)
         {
             HeroInstance h = MakeInstance(def, level);
-            h.RelicId = relicId;
+            h.EquippedRelicId = relicId;
             return h;
         }
 
@@ -3813,7 +3815,6 @@ namespace Emberfall.DevHarness
             Check(db.Balance.RepeatRewardFloor == 0f,
                   "balance.repeatRewardFloor is 0 - a positive floor still out-earns idle (" + Fmt(db.Balance.RepeatRewardFloor) + ")");
             Check(db.Balance.DailyResetHourUtc == 4, "balance.dailyResetHourUtc is 4 (" + db.Balance.DailyResetHourUtc + ")");
-            Check(SaveSerializer.CurrentVersion == 4, "save version bumped to 4 (" + SaveSerializer.CurrentVersion + ")");
 
             if (db.AllStages.Count < 2) { Check(false, "need two stages to check per-stage counting"); Line(""); return; }
             StageDef stageA = db.AllStages[0];
@@ -3925,6 +3926,8 @@ namespace Emberfall.DevHarness
             foreach (string key in parsed.Keys)
             {
                 if (key == "dailyResetUnix" || key == "stageClearsToday") continue;
+                // 3 is the version immediately before the repeat cap shipped - the case this
+                // migration check exists for. Pinned deliberately, unlike the guard check above.
                 legacy.Set(key, key == "version" ? new JsonValue((double)3) : parsed[key]);
             }
             string error2;
@@ -3939,11 +3942,15 @@ namespace Emberfall.DevHarness
                       "so an upgrading player starts with a full allowance rather than capped");
             }
 
-            // ---- a save from a newer build is still refused rather than silently uncapped
-            string future = json.Replace("\"version\": 4", "\"version\": 5");
+            // ---- a save from a newer build is still refused rather than silently uncapped.
+            // Built off CurrentVersion rather than a literal: this asserts the guard, not the
+            // number, and a pinned number turns every future save bump into a false failure here.
+            int newer = SaveSerializer.CurrentVersion + 1;
+            string future = json.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": " + newer);
             string error3;
             PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out error3);
-            Check(fromFuture == null && error3 != null, "a version 5 save is refused rather than silently uncapped");
+            Check(fromFuture == null && error3 != null,
+                  "a version " + newer + " save is refused rather than silently uncapped");
 
             Line("");
         }
@@ -4119,21 +4126,326 @@ namespace Emberfall.DevHarness
         /// miss is exactly the kind of noise re-tuning is expected to absorb.
         /// </summary>
         /// <summary>
-        /// The relic half of the save format (DESIGN-RELICS "New fields", save version 2 -> 3).
+        /// Relic Dust (DESIGN-RELIC-PROGRESSION section 1), forced at each boundary the doc draws:
+        /// a first clear pays none, a repeat pays some, the amount climbs with stage difficulty,
+        /// and a clear past the repeat cap pays none - a currency exempt from the cap would hand
+        /// the uncapped farming loop straight back in a different denomination.
+        /// </summary>
+        private static void CheckRelicDust(ContentDatabase db)
+        {
+            Line("RELIC DUST");
+
+            Check(db.Balance.RelicDustPerRepeatClear > 0,
+                  "balance.relicDustPerRepeatClear is positive (" + db.Balance.RelicDustPerRepeatClear + ")");
+            Check(db.Balance.RelicDustPerStageIndex > 0,
+                  "balance.relicDustPerStageIndex is positive, so later stages pay more ("
+                  + db.Balance.RelicDustPerStageIndex + ")");
+
+            if (db.AllStages.Count < 2) { Check(false, "need two stages to check difficulty scaling"); Line(""); return; }
+            StageDef first = db.AllStages[0];
+            StageDef last = db.AllStages[db.AllStages.Count - 1];
+
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+
+            Check(profile.RelicDust == 0, "a new profile starts with no Relic Dust (" + profile.RelicDust + ")");
+
+            // ---- first clear pays nothing
+            BattleRewards firstClear = session.GrantBattleResult(first, true, Noon);
+            Check(firstClear.RelicDust == 0,
+                  "a first clear pays no Relic Dust - first-clear rewards are already tuned (" + firstClear.RelicDust + ")");
+            Check(profile.RelicDust == 0, "and none reached the purse");
+            Check(firstClear.Gold > 0, "while the first clear's ordinary purse is untouched by any of this");
+
+            // ---- a repeat pays, and the purse actually moves
+            int expected = session.RelicDustForRepeatClear(first);
+            Check(expected > 0, "stage 1 is worth " + expected + " Relic Dust on repeat");
+            BattleRewards repeat = session.GrantBattleResult(first, true, Noon + 1);
+            Check(repeat.RelicDust == expected,
+                  "a repeat clear pays exactly that (" + repeat.RelicDust + ")");
+            Check(profile.RelicDust == expected, "and it reached the purse (" + profile.RelicDust + ")");
+            Check(!repeat.FirstClear, "the paying clear really was a repeat, not a second first clear");
+
+            // ---- difficulty scaling is real, not just a constant with a multiplier of zero
+            int lateDust = session.RelicDustForRepeatClear(last);
+            Check(lateDust > expected,
+                  "the last stage pays more than the first (" + lateDust + " vs " + expected + ")");
+            Check(lateDust - expected == db.Balance.RelicDustPerStageIndex * last.GlobalIndex,
+                  "and the gap is exactly perStageIndex * globalIndex");
+
+            // ---- the repeat cap governs dust the same way it governs gold
+            long dustBefore = 0;
+            for (int i = 2; i <= session.RepeatFullClearsPerDay; i++)
+            {
+                BattleRewards paid = session.GrantBattleResult(first, true, Noon + i);
+                if (paid.RelicDust != expected) Check(false, "paid repeat " + i + " should still pay full dust");
+            }
+            dustBefore = profile.RelicDust;
+            Check(session.RepeatCapReached(first, Noon + 50), "the stage is capped out");
+            BattleRewards capped = session.GrantBattleResult(first, true, Noon + 50);
+            Check(capped.RepeatCapped, "the next clear is a capped one");
+            Check(capped.RelicDust == 0,
+                  "a capped clear pays no Relic Dust either (" + capped.RelicDust + ")");
+            Check(profile.RelicDust == dustBefore, "and the dust purse did not move");
+            Check(profile.RelicDust == expected * session.RepeatFullClearsPerDay,
+                  "a full day on one stage is exactly repeatFullClearsPerDay payouts ("
+                  + profile.RelicDust + ")");
+
+            // ---- and the purse survives a save
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && loaded.RelicDust == profile.RelicDust,
+                  "the Relic Dust purse survives the round trip ("
+                  + (loaded == null ? "no profile" : loaded.RelicDust.ToString()) + ")");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The owned-relics model and the version 4 -> 5 migration
+        /// (DESIGN-RELIC-PROGRESSION section 3).
+        ///
+        /// The migration check builds a real version 4 save by hand - the old per-hero relicId key,
+        /// no ownedRelics array, version stamped 4 - rather than trusting the current writer to
+        /// produce one, because the current writer cannot produce one any more. That is the whole
+        /// point: the only artefact that proves the upgrade path works is a document the running
+        /// code can no longer write.
+        /// </summary>
+        private static void CheckRelicInventoryModel(ContentDatabase db)
+        {
+            Line("RELIC INVENTORY");
+
+            Check(SaveSerializer.CurrentVersion == 5,
+                  "save version bumped to 5 (" + SaveSerializer.CurrentVersion + ")");
+
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            Check(profile.OwnedRelics.Count == 0, "a new profile owns no relics");
+
+            // ---- the owned-but-unassigned state, which is the reason the model changed at all
+            Check(session.GrantRelic("splitting_prism"), "a granted relic is accepted");
+            Check(profile.OwnsRelic("splitting_prism"), "and is owned");
+            Check(profile.HeroHoldingRelic("splitting_prism") == null,
+                  "and is NOT auto-equipped to its paired hero - pairing is flavour, not a constraint");
+            Check(profile.UnassignedRelics().Count == 1, "so it reads as unassigned (" + profile.UnassignedRelics().Count + ")");
+            Check(profile.RelicTier("splitting_prism") == 1, "granted at tier 1");
+            Check(!session.GrantRelic("splitting_prism"), "granting the same relic twice is refused - one entry per relic id");
+            Check(!session.GrantRelic("relic_that_does_not_exist"), "granting a relic content does not define is refused");
+
+            // ---- assignment, reassignment, and the one-holder rule
+            HeroInstance heroA = profile.Heroes[0];
+            HeroInstance heroB = profile.Heroes[1];
+            Check(session.AssignRelic(heroA, "splitting_prism"), "it assigns to a hero");
+            Check(heroA.EquippedRelicId == "splitting_prism", "the hero holds it");
+            Check(profile.UnassignedRelics().Count == 0, "and it is no longer unassigned");
+            Check(session.AssignRelic(heroB, "splitting_prism"), "it reassigns freely to another hero");
+            Check(heroB.EquippedRelicId == "splitting_prism" && heroA.EquippedRelicId == "",
+                  "and only one hero holds it - assigning to B took it off A");
+            Check(session.UnassignRelic(heroB), "it comes off again");
+            Check(profile.UnassignedRelics().Count == 1 && profile.OwnsRelic("splitting_prism"),
+                  "back to owned-but-unassigned, not destroyed");
+            Check(!session.AssignRelic(heroA, "wardens_debt"), "an unowned relic cannot be assigned");
+
+            // ---- relicSlotsPerHero is 1: a second relic displaces the first, it does not stack
+            session.GrantRelic("wardens_debt");
+            session.AssignRelic(heroA, "splitting_prism");
+            session.AssignRelic(heroA, "wardens_debt");
+            Check(heroA.EquippedRelicId == "wardens_debt", "a hero wears the relic assigned last");
+            Check(profile.OwnsRelic("splitting_prism") && profile.HeroHoldingRelic("splitting_prism") == null,
+                  "and the displaced one returns to the collection unassigned rather than being lost");
+
+            // ---- tier exists structurally and is pinned to 1 this session
+            Check(db.Balance.RelicMaxTier == 1,
+                  "balance.relicMaxTier is 1 - tier 2's numbers are a balance pass (" + db.Balance.RelicMaxTier + ")");
+            Check(session.RelicMaxTier == 1, "and the session agrees");
+            bool everyOwnedAtTier1 = true;
+            for (int i = 0; i < profile.OwnedRelics.Count; i++) if (profile.OwnedRelics[i].Tier != 1) everyOwnedAtTier1 = false;
+            Check(everyOwnedAtTier1, "every owned relic is at tier 1 - nothing in this session authors tier 2");
+
+            // A tier-2 entry must round trip (the field is structural), and must change no
+            // behaviour, because nothing in the simulation reads tier. Proven by fingerprint:
+            // the same battle at tier 1 and tier 2 resolves identically, event for event.
+            OwnedRelic tiered = profile.FindOwnedRelic("wardens_debt");
+            tiered.Tier = 2;
+            string tierJson = SaveSerializer.Serialize(profile);
+            string tierErr;
+            PlayerProfile tierLoaded = SaveSerializer.Deserialize(tierJson, db, out tierErr);
+            Check(tierLoaded != null && tierLoaded.RelicTier("wardens_debt") == 2,
+                  "a tier 2 entry survives the round trip, so the balance pass is a content change not a migration");
+            Check(RelicFingerprintAtTier(db, 1) == RelicFingerprintAtTier(db, 2),
+                  "and a relic at tier 2 resolves the battle identically to tier 1 - nothing reads tier yet");
+            tiered.Tier = 1;
+
+            // ---- normalisation: two heroes pointing at one relic, and a pointer at nothing
+            heroA.EquippedRelicId = "wardens_debt";
+            heroB.EquippedRelicId = "wardens_debt";
+            profile.Heroes[2].EquippedRelicId = "a_relic_nobody_owns";
+            profile.NormaliseRelics();
+            Check(!(heroA.EquippedRelicId == "wardens_debt" && heroB.EquippedRelicId == "wardens_debt"),
+                  "normalising breaks a double hold so only one hero keeps the relic");
+            Check(profile.Heroes[2].EquippedRelicId == "", "and empties a reference to a relic nobody owns");
+
+            CheckRelicSaveMigration(db);
+            Line("");
+        }
+
+        /// <summary>
+        /// The version 4 -> 5 upgrade path, against a hand-built version 4 document. Two heroes
+        /// carry relics under the old per-hero key and there is no ownedRelics array at all; both
+        /// must come out owned, at tier 1, still on the same heroes, with nothing lost.
+        /// </summary>
+        private static void CheckRelicSaveMigration(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile source = GameSession.CreateNewProfile(db, Noon);
+            if (source.Heroes.Count < 2) { Check(false, "need two starter heroes to check the migration"); return; }
+
+            string uidA = source.Heroes[0].Uid;
+            string uidB = source.Heroes[1].Uid;
+            string uidC = source.Heroes.Count > 2 ? source.Heroes[2].Uid : null;
+
+            // Build the version 4 document by editing the version 5 one the writer produces:
+            // strip ownedRelics, rewrite equippedRelicId back to relicId, restamp the version.
+            source.OwnedRelics.Add(NewOwnedRelic("splitting_prism", 1));
+            source.OwnedRelics.Add(NewOwnedRelic("stormlance_oath", 1));
+            source.Heroes[0].EquippedRelicId = "splitting_prism";
+            source.Heroes[1].EquippedRelicId = "stormlance_oath";
+
+            JsonValue current;
+            string parseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(source), out current, out parseError);
+            Check(current != null && parseError == null, "the version 5 document parses before being downgraded by hand");
+            if (current == null) return;
+
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in current.Keys)
+            {
+                if (key == "ownedRelics" || key == "relicDust") continue;
+                if (key == "version") { legacy.Set("version", 4); continue; }
+                if (key == "heroes")
+                {
+                    JsonValue heroes = JsonValue.NewArray();
+                    for (int i = 0; i < current["heroes"].Count; i++)
+                    {
+                        JsonValue hero = current["heroes"][i];
+                        JsonValue rebuilt = JsonValue.NewObject();
+                        foreach (string heroKey in hero.Keys)
+                        {
+                            if (heroKey == "equippedRelicId") rebuilt.Set("relicId", hero["equippedRelicId"].AsString(""));
+                            else rebuilt.Set(heroKey, hero[heroKey]);
+                        }
+                        heroes.Add(rebuilt);
+                    }
+                    legacy.Set("heroes", heroes);
+                    continue;
+                }
+                legacy.Set(key, current[key]);
+            }
+
+            string legacyJson = legacy.ToJson(true);
+            Check(legacyJson.IndexOf("ownedRelics", StringComparison.Ordinal) < 0,
+                  "the hand-built version 4 save really has no ownedRelics array");
+            Check(legacyJson.IndexOf("equippedRelicId", StringComparison.Ordinal) < 0
+                  && legacyJson.IndexOf("\"relicId\"", StringComparison.Ordinal) >= 0,
+                  "and really carries relics under the old per-hero relicId key");
+            Check(legacyJson.IndexOf("relicDust", StringComparison.Ordinal) < 0,
+                  "and has no relicDust purse");
+
+            string error;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacyJson, db, out error);
+            Check(upgraded != null && error == null,
+                  "a version 4 save loads under version 5 code" + (error != null ? " (" + error + ")" : ""));
+            if (upgraded == null) return;
+
+            Check(upgraded.OwnedRelics.Count == 2,
+                  "both hero-level relics were synthesised into the collection, none lost ("
+                  + upgraded.OwnedRelics.Count + ")");
+            Check(upgraded.OwnsRelic("splitting_prism") && upgraded.OwnsRelic("stormlance_oath"),
+                  "and they are the right two relics");
+            Check(upgraded.RelicTier("splitting_prism") == 1 && upgraded.RelicTier("stormlance_oath") == 1,
+                  "synthesised at tier 1, the only tier that has ever existed");
+
+            HeroInstance a = upgraded.FindHeroByUid(uidA);
+            HeroInstance b = upgraded.FindHeroByUid(uidB);
+            Check(a != null && a.EquippedRelicId == "splitting_prism",
+                  "the hero who had one still has it (" + (a == null ? "no hero" : a.EquippedRelicId) + ")");
+            Check(b != null && b.EquippedRelicId == "stormlance_oath",
+                  "and so does the other one (" + (b == null ? "no hero" : b.EquippedRelicId) + ")");
+            if (uidC != null)
+            {
+                HeroInstance c = upgraded.FindHeroByUid(uidC);
+                Check(c != null && c.EquippedRelicId == "", "a hero who had none contributes nothing and stays empty");
+            }
+            Check(upgraded.RelicDust == 0, "a pre-dust save reads as an empty dust purse");
+
+            // A version 4 save with NO relics at all must upgrade to an empty collection, not to
+            // one synthesised entry with an empty id.
+            PlayerProfile bare = GameSession.CreateNewProfile(db, Noon);
+            JsonValue bareCurrent;
+            string bareParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(bare), out bareCurrent, out bareParseError);
+            JsonValue bareLegacy = JsonValue.NewObject();
+            foreach (string key in bareCurrent.Keys)
+            {
+                if (key == "ownedRelics" || key == "relicDust") continue;
+                bareLegacy.Set(key, key == "version" ? new JsonValue((double)4) : bareCurrent[key]);
+            }
+            string bareError;
+            PlayerProfile bareUpgraded = SaveSerializer.Deserialize(bareLegacy.ToJson(true), db, out bareError);
+            Check(bareUpgraded != null && bareError == null, "a version 4 save with no relics loads too");
+            Check(bareUpgraded != null && bareUpgraded.OwnedRelics.Count == 0,
+                  "and upgrades to an empty collection rather than a phantom entry ("
+                  + (bareUpgraded == null ? "-" : bareUpgraded.OwnedRelics.Count.ToString()) + ")");
+
+            // ---- the downgrade guard, the same one versions 2, 3 and 4 rely on
+            string future = SaveSerializer.Serialize(source).Replace("\"version\": 5", "\"version\": 6");
+            string futureError;
+            PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
+            Check(fromFuture == null && futureError != null,
+                  "a version 6 save is refused rather than silently stripped of its relics");
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message the earlier bumps use (\"" + futureError + "\")");
+        }
+
+        /// <summary>
+        /// Resolves one fixed battle with a relic owned at the given tier and returns a fingerprint
+        /// of every event. Two tiers producing the same string is the proof that nothing in the
+        /// simulation branches on tier yet, which is this session's stated constraint.
+        /// </summary>
+        private static string RelicFingerprintAtTier(ContentDatabase db, int tier)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1699963200L);
+            GameSession session = new GameSession(db, profile);
+            session.GrantRelic("splitting_prism");
+            OwnedRelic owned = profile.FindOwnedRelic("splitting_prism");
+            if (owned != null) owned.Tier = tier;
+            session.AssignRelic(profile.Heroes[0], "splitting_prism");
+            return BattleFingerprint(session, db.AllStages[0], 20260823);
+        }
+
+        /// <summary>
+        /// The relic half of the save format, now the version 5 owned-relics model
+        /// (DESIGN-RELIC-PROGRESSION section 3).
         ///
         /// Both directions are asserted, because only one of them is the reason the version was
-        /// bumped. Forward - a v3 save carrying a relic reads its relic back - is the obvious half.
-        /// Backward - a save written WITHOUT relics is unchanged apart from the version stamp, so
-        /// the bump costs nothing to anyone who never equips one - is the half that would rot
-        /// silently if the writer ever started emitting an empty relicId key for every hero.
+        /// bumped. Forward - a save carrying a relic reads its relic back - is the obvious half.
+        /// Backward - a save written WITHOUT relics is unchanged apart from the version stamp and
+        /// an empty array, so the bump costs nothing to anyone who never equips one - is the half
+        /// that would rot silently if the writer ever started emitting a key for every hero.
         /// </summary>
         private static void CheckSaveCarriesRelics(ContentDatabase db, PlayerProfile profile)
         {
             string beforeJson = SaveSerializer.Serialize(profile);
-            Check(beforeJson.IndexOf("relicId", StringComparison.Ordinal) < 0,
-                  "a profile with no relics equipped writes no relicId key at all");
+            Check(beforeJson.IndexOf("equippedRelicId", StringComparison.Ordinal) < 0,
+                  "a profile with no relics equipped writes no equippedRelicId key at all");
+            Check(beforeJson.IndexOf("\"relicId\"", StringComparison.Ordinal) < 0,
+                  "and never writes the pre-version-5 relicId key again");
 
-            profile.Heroes[0].RelicId = "splitting_prism";
+            profile.OwnedRelics.Add(NewOwnedRelic("splitting_prism", 1));
+            profile.Heroes[0].EquippedRelicId = "splitting_prism";
             string withRelic = SaveSerializer.Serialize(profile);
             string relicErr;
             PlayerProfile reloaded = SaveSerializer.Deserialize(withRelic, db, out relicErr);
@@ -4141,22 +4453,36 @@ namespace Emberfall.DevHarness
             if (reloaded != null)
             {
                 HeroInstance back = reloaded.FindHeroByUid(profile.Heroes[0].Uid);
-                Check(back != null && back.RelicId == "splitting_prism",
+                Check(back != null && back.EquippedRelicId == "splitting_prism",
                       "an equipped relic survives the round trip (got "
-                      + (back == null ? "no hero" : "\"" + back.RelicId + "\"") + ")");
+                      + (back == null ? "no hero" : "\"" + back.EquippedRelicId + "\"") + ")");
+                Check(reloaded.OwnsRelic("splitting_prism"), "and the profile still owns it");
             }
 
             // An id no longer present in content is deliberately KEPT rather than scrubbed: the
             // simulation resolves ids to defs and treats an unresolvable one as no relic, so
             // holding the string means re-adding the relic to content restores the equip instead
             // of having silently wiped every player's slot the one build it was missing.
-            profile.Heroes[0].RelicId = "relic_that_no_longer_exists";
+            profile.OwnedRelics.Add(NewOwnedRelic("relic_that_no_longer_exists", 1));
+            profile.Heroes[0].EquippedRelicId = "relic_that_no_longer_exists";
             string orphanErr;
             PlayerProfile orphan = SaveSerializer.Deserialize(SaveSerializer.Serialize(profile), db, out orphanErr);
             HeroInstance orphanHero = orphan != null ? orphan.FindHeroByUid(profile.Heroes[0].Uid) : null;
-            Check(orphanHero != null && orphanHero.RelicId == "relic_that_no_longer_exists",
+            Check(orphanHero != null && orphanHero.EquippedRelicId == "relic_that_no_longer_exists",
                   "a relic id that content no longer defines is kept, not scrubbed, so re-adding the relic restores it");
-            profile.Heroes[0].RelicId = "";
+            Check(orphan != null && orphan.OwnsRelic("relic_that_no_longer_exists"),
+                  "and it is kept in the collection too, not just on the hero");
+
+            profile.Heroes[0].EquippedRelicId = "";
+            profile.OwnedRelics.Clear();
+        }
+
+        private static OwnedRelic NewOwnedRelic(string relicId, int tier)
+        {
+            OwnedRelic owned = new OwnedRelic();
+            owned.RelicId = relicId;
+            owned.Tier = tier;
+            return owned;
         }
 
         /// <summary>
@@ -4196,7 +4522,7 @@ namespace Emberfall.DevHarness
             if (found == null) return;
 
             List<HeroInstance> prismTeam = BuildNamedTeamAtLevel(db, kalyx, others, 20);
-            prismTeam[0].RelicId = "splitting_prism";
+            prismTeam[0].EquippedRelicId = "splitting_prism";
             int prismSpread = WidestKalyxCast(RunWith(db, found, 11, prismTeam));
             Check(prismSpread == 1,
                   "Splitting Prism on the real Kalyx: Cinder Bloom collapses from " + controlSpread
@@ -4207,7 +4533,7 @@ namespace Emberfall.DevHarness
             // EffectKind filter against authored content rather than against a test fixture.
             List<HeroInstance> plainOrrin = BuildNamedTeamAtLevel(db, orrin, new string[] { "kalyx_emberwright", "wren_ilyra", "ryn_solvarr", "maeve_corrin" }, 20);
             List<HeroInstance> debtOrrin = BuildNamedTeamAtLevel(db, orrin, new string[] { "kalyx_emberwright", "wren_ilyra", "ryn_solvarr", "maeve_corrin" }, 20);
-            debtOrrin[0].RelicId = "wardens_debt";
+            debtOrrin[0].EquippedRelicId = "wardens_debt";
 
             int plainSelf, plainAway, plainTauntSelf, plainTauntAway;
             int debtSelf, debtAway, debtTauntSelf, debtTauntAway;

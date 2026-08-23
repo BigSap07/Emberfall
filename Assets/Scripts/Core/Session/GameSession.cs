@@ -70,6 +70,10 @@ namespace Emberfall.Core.Session
         /// <summary>Paid repeat clears left on this stage for the rest of the reward day,
         /// counted after this win was banked.</summary>
         public int RepeatClearsRemaining;
+
+        /// <summary>Relic Dust this win paid. Zero on a first clear and zero past the repeat
+        /// cap, both by design - see GameSession.RelicDustForRepeatClear.</summary>
+        public int RelicDust;
     }
 
     /// <summary>
@@ -238,6 +242,12 @@ namespace Emberfall.Core.Session
             // counts as a win and still unlocks nothing new - it simply pays the floor, which is
             // zero, so the loss-adjust-reclear loop stays free while the twentieth farm run of
             // the day stops paying.
+            // Relic Dust rides the same branch, per DESIGN-RELIC-PROGRESSION section 1: paid by a
+            // repeat clear, never by a first clear, and scaled by stage difficulty. It is subject
+            // to the repeat cap for the same reason gold is - a currency exempt from the cap would
+            // hand the uncapped farming loop straight back, just denominated differently.
+            int relicDust = firstClear ? 0 : RelicDustForRepeatClear(stage);
+
             RollDailyReset(nowUnix);
             if (!firstClear)
             {
@@ -252,6 +262,7 @@ namespace Emberfall.Core.Session
                     gold = (int)Math.Floor(gold * (double)floor);
                     shards = (int)Math.Floor(shards * (double)floor);
                     accountXp = (int)Math.Floor(accountXp * (double)floor);
+                    relicDust = (int)Math.Floor(relicDust * (double)floor);
                     rewards.RepeatCapped = true;
                 }
                 else
@@ -263,9 +274,11 @@ namespace Emberfall.Core.Session
             rewards.Gold = gold;
             rewards.Shards = shards;
             rewards.AccountXp = accountXp;
+            rewards.RelicDust = relicDust;
 
             Profile.Gold += rewards.Gold;
             Profile.Shards += rewards.Shards;
+            Profile.RelicDust += rewards.RelicDust;
             Profile.TotalBattlesWon++;
 
             if (firstClear)
@@ -342,6 +355,96 @@ namespace Emberfall.Core.Session
         {
             if (stage == null || !Profile.HasClearedStage(stage.Id)) return false;
             return RepeatClearsRemaining(stage, nowUnix) <= 0;
+        }
+
+        // ------------------------------------------------------------------ relic progression
+
+        /// <summary>
+        /// Relic Dust one repeat clear of a stage pays, before the repeat cap is applied to it.
+        ///
+        /// PLACEHOLDER SOURCE, and the comment matters more than the arithmetic. DESIGN-RELIC-
+        /// PROGRESSION section 1 hangs Relic Dust off the repeat-clear loop because that loop was
+        /// the only grind the game had when it was written. The intended long-term home is harder,
+        /// dedicated content - the endless mode proposed as The Deep Recital in
+        /// DESIGN-DEEP-RECITAL.md, which is specified but not built. Repeat clears are a bootstrap
+        /// so the currency, the shop and the inventory have a source to exist against in the
+        /// meantime; they are NOT the final design, and whoever builds the Deep Recital should
+        /// expect to move this, not to add a second source beside it.
+        ///
+        /// First clears pay nothing, per the doc: first-clear rewards are already designed and
+        /// tuned, and adding a currency to them would mean rebalancing them.
+        ///
+        /// The curve is base + perStageIndex * globalIndex, matching the base + per-stage shape
+        /// balance.json already uses for idle income. Both numbers are a balance pass - the doc
+        /// defers the curve the same way DESIGN-BUILD-ORDER task 14 defers recommendedPower.
+        ///
+        /// No chapter gating: chapter 1 is the only chapter, so gating on a chapter-2 clear would
+        /// lock out every current player. Revisit when there is a second boundary to gate against.
+        /// </summary>
+        public int RelicDustForRepeatClear(StageDef stage)
+        {
+            if (stage == null) return 0;
+            int dust = Balance.RelicDustPerRepeatClear + Balance.RelicDustPerStageIndex * Math.Max(0, stage.GlobalIndex);
+            return dust > 0 ? dust : 0;
+        }
+
+        /// <summary>Highest tier a relic may be owned at. 1 until the balance pass authors tier 2.</summary>
+        public int RelicMaxTier
+        {
+            get { return Math.Max(1, Balance.RelicMaxTier); }
+        }
+
+        /// <summary>
+        /// Adds a relic to the player's collection UNASSIGNED, which is the state
+        /// DESIGN-RELIC-PROGRESSION section 3 exists to make representable. Pairing a relic with a
+        /// hero is flavour and a suggested starting point, not a constraint, so nothing is
+        /// auto-equipped. Returns false when the relic is unknown to content or already owned -
+        /// there is at most one entry per relic id, and the shop shows an owned relic as owned
+        /// rather than re-purchasable.
+        ///
+        /// This does NOT charge Relic Dust. Costs live with the shop, which is not built; this is
+        /// the model operation the shop will call once it is.
+        /// </summary>
+        public bool GrantRelic(string relicId)
+        {
+            if (string.IsNullOrEmpty(relicId)) return false;
+            if (Content.GetRelic(relicId) == null) return false;
+            if (Profile.OwnsRelic(relicId)) return false;
+            OwnedRelic owned = new OwnedRelic();
+            owned.RelicId = relicId;
+            owned.Tier = 1;
+            Profile.OwnedRelics.Add(owned);
+            return true;
+        }
+
+        /// <summary>
+        /// Equips an owned relic on a hero. Free and reversible, per section 3: reassignment is a
+        /// team-building decision, not a resource expenditure - no cost, no cooldown.
+        ///
+        /// Only one hero holds a given relic at a time, so this unassigns it from whoever held it
+        /// first. relicSlotsPerHero is 1, so it also displaces whatever the target hero was
+        /// already wearing, which returns to the collection unassigned rather than being lost.
+        /// Returns false for an unowned relic or a hero that is not in this profile.
+        /// </summary>
+        public bool AssignRelic(HeroInstance hero, string relicId)
+        {
+            if (hero == null || string.IsNullOrEmpty(relicId)) return false;
+            if (!Profile.OwnsRelic(relicId)) return false;
+            if (Profile.FindHeroByUid(hero.Uid) != hero) return false;
+
+            HeroInstance previous = Profile.HeroHoldingRelic(relicId);
+            if (previous == hero) return true;
+            if (previous != null) previous.EquippedRelicId = "";
+            hero.EquippedRelicId = relicId;
+            return true;
+        }
+
+        /// <summary>Takes a hero's relic off them. The relic stays owned, just unassigned.</summary>
+        public bool UnassignRelic(HeroInstance hero)
+        {
+            if (hero == null || string.IsNullOrEmpty(hero.EquippedRelicId)) return false;
+            hero.EquippedRelicId = "";
+            return true;
         }
 
         public int GrantAccountXp(int amount)
