@@ -7,13 +7,14 @@
       "name": "Orrin Kaal",
       "title": "Bulwark of Ash",
       "role": "Bulwark",
-      "aspect": "Ember",
+      "aspect": "Lumen",
       "rarity": "Common",
       "startingHero": true,
       "lore": "Held the Cinder Gate alone for nine nights. The ash never fully washed out of his skin.",
       "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
       "critChance": 0.08, "critDamage": 1.5, "growth": 0.115, "startEnergy": 10,
-      "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0 },
+      "effectHit": 0.05, "effectResist": 0.20,
+      "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0, "sprite": "orrin_kaal" },
       "basic": {
         "id": "orrin_basic", "name": "Ashen Cleave", "vfx": "slash",
         "description": "A heavy downward swing at the nearest foe.",
@@ -48,7 +49,8 @@
       "lore": "Forge-taught, temple-exiled. Believes fire is simply an argument that wins.",
       "hp": 1450, "attack": 186, "defense": 62, "speed": 96,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.115, "startEnergy": 0,
-      "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1 },
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1, "sprite": "kalyx_emberwright" },
       "basic": {
         "id": "kalyx_basic", "name": "Emberlash", "vfx": "bolt",
         "description": "Whips a cord of live flame at the nearest foe.",
@@ -62,12 +64,7 @@
           { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.28, "duration": 3, "chance": 0.85 }
         ]
       },
-      "passive": {
-        "id": "kalyx_passive", "name": "Kindling", "trigger": "None",
-        "bonusVsStatus": "Burn", "bonusMultiplier": 0.30,
-        "description": "Kalyx deals 30% more damage to anything already burning.",
-        "effects": []
-      }
+      "passive": null
     },
 
     {
@@ -81,7 +78,8 @@
       "lore": "Grew a garden in a crater. Insists that was the easy part.",
       "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
       "critChance": 0.10, "critDamage": 1.5, "growth": 0.115, "startEnergy": 20,
-      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2 },
+      "effectHit": 0.00, "effectResist": 0.10,
+      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra", "spriteBodyFraction": 1.0 },
       "basic": {
         "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
         "description": "A snapped seed-pod that stings on impact.",
@@ -114,7 +112,8 @@
       "lore": "Rides ahead of her own thunder and complains when it is late.",
       "hp": 1500, "attack": 205, "defense": 66, "speed": 118,
       "critChance": 0.20, "critDamage": 1.7, "growth": 0.115, "startEnergy": 0,
-      "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3 },
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3, "sprite": "ryn_solvarr" },
       "basic": {
         "id": "ryn_basic", "name": "Lance Jab", "vfx": "slash",
         "description": "A fast thrust at whichever enemy is closest to falling.",
@@ -129,9 +128,9 @@
         ]
       },
       "passive": {
-        "id": "ryn_passive", "name": "Follow-Through", "trigger": "OnCriticalHit",
+        "id": "ryn_passive", "name": "Follow-Through", "trigger": "OnKill",
         "oncePerBattle": false, "vfx": "buff",
-        "description": "Every critical hit feeds 22 energy straight back into her lance.",
+        "description": "Every kill feeds 22 energy straight back into her lance.",
         "effects": [ { "kind": "EnergyGain", "target": "Self", "flat": 22 } ]
       }
     },
@@ -147,7 +146,8 @@
       "lore": "Conducts a battle the way other people conduct a choir.",
       "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.115, "startEnergy": 30,
-      "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4 },
+      "effectHit": 0.00, "effectResist": 0.12,
+      "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4, "sprite": "maeve_corrin" },
       "basic": {
         "id": "maeve_basic", "name": "Tideprod", "vfx": "bolt",
         "description": "A curt shove of pressurised water.",
@@ -181,7 +181,8 @@
       "lore": "Contracted to end a war. Ended the people who were profiting from it instead.",
       "hp": 1420, "attack": 227, "defense": 58, "speed": 126,
       "critChance": 0.28, "critDamage": 1.85, "growth": 0.115, "startEnergy": 0,
-      "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5 },
+      "effectHit": 0.35, "effectResist": 0.00,
+      "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5, "sprite": "nyx_serrow" },
       "basic": {
         "id": "nyx_basic", "name": "Hollow Cut", "vfx": "shadow",
         "description": "Steps through the dark and opens the most dangerous enemy.",
@@ -189,14 +190,13 @@
       },
       "active": {
         "id": "nyx_active", "name": "Umbral Step", "energyCost": 100, "vfx": "shadow",
-        "description": "Two strikes from impossible angles, then she sharpens for the next.",
+        "description": "Two strikes from impossible angles, on whichever enemy is most dangerous.",
         "effects": [
-          { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.35, "hits": 2 },
-          { "kind": "ApplyStatus", "target": "Self", "status": "Focus", "magnitude": 0.25, "duration": 2 }
+          { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.35, "hits": 2 }
         ]
       },
       "passive": {
-        "id": "nyx_passive", "name": "Shadowmark", "trigger": "AfterBasicAttack",
+        "id": "nyx_passive", "name": "Hollowing", "trigger": "AfterBasicAttack",
         "oncePerBattle": false, "vfx": "shadow",
         "description": "Whatever she cuts stays cut: -22% Guard on her last target.",
         "effects": [ { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.22, "duration": 2 } ]

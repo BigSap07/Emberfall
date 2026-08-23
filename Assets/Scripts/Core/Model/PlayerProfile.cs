@@ -14,6 +14,13 @@ namespace Emberfall.Core.Model
         public int Copies = 1;         // duplicates pulled from summoning
         public long AcquiredUnix;
 
+        /// <summary>
+        /// Equipped relic id, or empty for an empty slot. Resolved against the ContentDatabase by
+        /// the simulation during setup, not stored as a RelicDef - a save holds ids, exactly like
+        /// DefId, so content can change under it without bricking it.
+        /// </summary>
+        public string RelicId = "";
+
         [NonSerialized] public HeroDef Def;
 
         public UnitStats Stats
@@ -44,9 +51,16 @@ namespace Emberfall.Core.Model
         /// <summary>Number of distinct campaign stages cleared; also the index of the next locked stage.</summary>
         public int StagesCleared;
 
+        /// <summary>
+        /// Banner slots every player has, from the first minute. Deploying fewer heroes than this
+        /// is fine - empty slots are simply empty. Must stay equal to BalanceConfig.MaxTeamSize,
+        /// which gates the same number on the simulation side; they are two names for one decision.
+        /// </summary>
+        public const int TeamSize = 5;
+
         public readonly List<string> ClearedStageIds = new List<string>();
         public readonly List<HeroInstance> Heroes = new List<HeroInstance>();
-        public readonly string[] Team = new string[3]; // hero uids, null = empty slot
+        public readonly string[] Team = new string[TeamSize]; // hero uids, null = empty slot
 
         public long LastIdleClaimUnix;
         public long LastSaveUnix;

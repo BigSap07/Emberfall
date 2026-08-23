@@ -36,6 +36,14 @@ namespace Emberfall.Core.Combat
         public float Speed;
         public float CritChance;
         public float CritDamage;
+        public float EffectHit;
+        public float EffectResist;
+        public float SkillDamage;
+        public float Block;
+        public float ArmorBreak;
+        public float ControlImmunity;
+        public float DamageReduction;
+        public float HolyDamage;
 
         public int Energy;
         public int EnergyMax = 100;
@@ -45,10 +53,42 @@ namespace Emberfall.Core.Combat
         /// <summary>Re-rolled once per round by the sim; keeps turn order from being the same every fight.</summary>
         public float RoundSpeedJitter;
 
+        /// <summary>
+        /// Gale (DESIGN-ASPECTS section 1 and 8): extra turns this unit has been granted by its own
+        /// kills in the current round. Reset by the sim at the top of every round, and bounded there
+        /// by BalanceConfig.GaleExtraTurnsPerRound.
+        ///
+        /// Per unit, not per side and not per battle, because section 8's stated failure is per
+        /// unit: "a single Gale unit can resolve a round unilaterally". Two Gale units each taking
+        /// one extra turn is the mechanic working; one unit taking four is the failure.
+        /// </summary>
+        public int ExtraTurnsThisRound;
+
+        /// <summary>
+        /// Whether this unit's statuses have already had their once-per-round RoundsLeft decrement.
+        /// Set by Sim.ExpireStatuses, cleared at the top of every round. Only Gale's extra turn can
+        /// make a unit reach ExpireStatuses twice in one round; see the comment there.
+        /// </summary>
+        public bool StatusesExpiredThisRound;
+
         public AbilityDef Basic;
         public AbilityDef Active;
         public PassiveDef Passive;
         public bool PassiveFired;
+
+        /// <summary>
+        /// The equipped relic, resolved from HeroInstance.RelicId during setup, or null. Only ever
+        /// non-null on a player unit: enemies come from EnemyDef, which has no relic slot, and
+        /// DESIGN-RELICS scopes the slot to an owned hero on the hero detail screen.
+        /// </summary>
+        public RelicDef Relic;
+
+        /// <summary>
+        /// Whether this unit's relic has already announced itself this battle. DESIGN-RELICS:
+        /// "Emit one the first time a relic alters an effect in a fight, not on every tick" -
+        /// Splitting Prism would otherwise banner on every cast and Verdict Sigil on every turn.
+        /// </summary>
+        public bool RelicAnnounced;
 
         public int LastAttackerId = -1;
         public int LastTargetId = -1;
@@ -109,6 +149,25 @@ namespace Emberfall.Core.Combat
             }
         }
 
+        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
+        public float EffectiveEffectHit
+        {
+            get { return EffectHit; }
+        }
+
+        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
+        public float EffectiveEffectResist
+        {
+            get { return EffectResist; }
+        }
+
+        public float EffectiveSkillDamage { get { return SkillDamage; } }
+        public float EffectiveBlock { get { return Block; } }
+        public float EffectiveArmorBreak { get { return ArmorBreak; } }
+        public float EffectiveControlImmunity { get { return ControlImmunity; } }
+        public float EffectiveDamageReduction { get { return DamageReduction; } }
+        public float EffectiveHolyDamage { get { return HolyDamage; } }
+
         public bool HasTaunt
         {
             get { return Alive && Has(StatusKind.Taunt); }
@@ -145,6 +204,42 @@ namespace Emberfall.Core.Combat
             added.Magnitude = magnitude;
             added.SourceId = sourceId;
             Statuses.Add(added);
+        }
+
+        public int CountOf(StatusKind kind)
+        {
+            int n = 0;
+            for (int i = 0; i < Statuses.Count; i++) if (Statuses[i].Kind == kind) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Ember's rule (DESIGN-ASPECTS section 1): add a second entry of the same kind instead of
+        /// folding it into the first, so two sources deepen the same fire rather than one silently
+        /// discarding the other. Bounded by cap; at the cap this degrades to AddOrRefresh, which
+        /// keeps the stronger magnitude and longer duration on an existing entry. Returns true if a
+        /// genuinely new entry was added.
+        ///
+        /// Deliberately a separate method rather than a flag on AddOrRefresh: every other status in
+        /// the game wants refresh semantics, and this keeps those call sites provably unchanged.
+        /// SumMagnitude already totals across duplicate entries, so nothing downstream needs to know
+        /// which of the two paths produced the list.
+        /// </summary>
+        public bool AddStack(StatusKind kind, int rounds, float magnitude, int sourceId, int cap)
+        {
+            if (cap < 1) cap = 1;
+            if (CountOf(kind) >= cap)
+            {
+                AddOrRefresh(kind, rounds, magnitude, sourceId);
+                return false;
+            }
+            StatusInstance added = new StatusInstance();
+            added.Kind = kind;
+            added.RoundsLeft = rounds;
+            added.Magnitude = magnitude;
+            added.SourceId = sourceId;
+            Statuses.Add(added);
+            return true;
         }
 
         public void Remove(StatusKind kind)
@@ -202,6 +297,14 @@ namespace Emberfall.Core.Combat
             u.Speed = stats.Speed;
             u.CritChance = stats.CritChance;
             u.CritDamage = stats.CritDamage;
+            u.EffectHit = stats.EffectHit;
+            u.EffectResist = stats.EffectResist;
+            u.SkillDamage = stats.SkillDamage;
+            u.Block = stats.Block;
+            u.ArmorBreak = stats.ArmorBreak;
+            u.ControlImmunity = stats.ControlImmunity;
+            u.DamageReduction = stats.DamageReduction;
+            u.HolyDamage = stats.HolyDamage;
             u.EnergyMax = energyMax;
             u.Energy = Math.Min(energyMax, def.StartEnergy);
             u.Basic = def.BasicAttack != null ? def.BasicAttack : UnitDef.DefaultBasicAttack();

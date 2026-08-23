@@ -1,0 +1,1163 @@
+[
+{
+"id": "aven_sorn",
+"name": "Aven Sorn",
+"title": "The Ninth Draft",
+"role": "Mage",
+"aspect": "Ember",
+"startingHero": false,
+"stars": 5,
+"lore": "Aven designed siege formulae that were never erased after failure; every failed version was written into the next. He believed destruction only mattered when it made returning to the previous state impossible.",
+"stats": {
+"hp": 372,
+"attack": 38,
+"defense": 20,
+"speed": 214,
+"critChance": 0.04,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0
+},
+"visual": {
+"primary": "2B2A2A",
+"secondary": "B7AA98",
+"accent": "E84532",
+"silhouette": "Irreversible asymmetry: the left mantle has been rebuilt until it overtakes the right side. A thin Cinder Seam crosses the jaw, collar, and right forearm; one chest clasp closes around empty air.",
+"weapon": "A folding calculation frame of blackened steel and cracked lacquer, repaired with progressively larger outer plates; the six-sided broken-ring Cinder Notch is punched through the spine.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "aven_sorn"
+},
+"skills": {
+"basicAttack": {
+"id": "aven_sorn_basic_revise_again",
+"name": "Revise Again",
+"description": "Deals 90% of Attack damage to 1 enemy and applies 1 Burn stack for 3 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.9
+},
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Burn",
+"power": 0.28,
+"duration": 3,
+"stacks": 1
+}
+]
+},
+"activeSkill": {
+"id": "aven_sorn_active_ninth_draft",
+"name": "Ninth Draft",
+"energyCost": 100,
+"description": "Deals 135% of Attack damage to all enemies and applies 2 Burn stacks to each for 3 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.35
+},
+{
+"kind": "ApplyStatus",
+"target": "AllEnemies",
+"status": "Burn",
+"power": 0.28,
+"duration": 3,
+"stacks": 2
+}
+]
+},
+"passive1": {
+"id": "aven_sorn_passive_revision_without_reset",
+"name": "Revision Without Reset",
+"description": "When Aven applies Burn to an enemy that already has Burn, he applies 1 additional Burn stack to that enemy. This can trigger once per enemy per round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Burn",
+"power": 0.28,
+"duration": 3,
+"stacks": 1
+}
+]
+},
+"passive2": {
+"id": "aven_sorn_passive_other_hands_same_consequence",
+"name": "Other Hands, Same Consequence",
+"description": "The first time each round another ally applies Burn to an enemy, Aven applies 1 Burn stack to that same enemy.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Burn",
+"power": 0.28,
+"duration": 3,
+"stacks": 1
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "aven_sorn_talent_longer_revision",
+"name": "Longer Revision",
+"description": "Burn applied by Revise Again lasts 1 additional round.",
+"effects": []
+},
+"talentII": {
+"id": "aven_sorn_talent_parallel_drafts",
+"name": "Parallel Drafts",
+"description": "Other Hands, Same Consequence can trigger once on each enemy per round.",
+"effects": []
+},
+"talentIII": {
+"id": "aven_sorn_talent_no_clean_copy",
+"name": "No Clean Copy",
+"description": "Ninth Draft applies 1 additional Burn stack to enemies that already had Burn before the skill resolved.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Burn",
+"power": 0.28,
+"duration": 3,
+"stacks": 1
+}
+]
+}
+}
+},
+{
+"id": "tessa_rell",
+"name": "Tessa Rell",
+"title": "Keeper of Spare Motion",
+"role": "Priest",
+"aspect": "Tide",
+"startingHero": false,
+"stars": 5,
+"lore": "Tessa coordinated evacuation lifts whose routes changed every hour. She refused to accept idle capacity anywhere in the system, believing that anything unused in one place should immediately be redirected somewhere else.",
+"stats": {
+"hp": 438,
+"attack": 32,
+"defense": 22,
+"speed": 196,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0
+},
+"visual": {
+"primary": "59656A",
+"secondary": "D6D4CC",
+"accent": "28C7D9",
+"silhouette": "Directional contradiction: her reversible coat pulls hard left while the staff and shoulder architecture point right. The Cinder Seam crosses the throat and left palm; one fastening plate is mounted backward but still closes.",
+"weapon": "An off-axis articulated staff of polished alloy and flexible glass with opposing directional shapes; the broken-ring Cinder Notch is cut into the lower joint.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "tessa_rell"
+},
+"skills": {
+"basicAttack": {
+"id": "tessa_rell_basic_spare_current",
+"name": "Spare Current",
+"description": "Deals 80% of Attack damage to 1 enemy and grants 15 Energy to the ally furthest from casting an Active.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.8
+},
+{
+"kind": "EnergyGain",
+"target": "AllyFurthestFromActive",
+"energy": 15
+}
+]
+},
+"activeSkill": {
+"id": "tessa_rell_active_everything_moves",
+"name": "Everything Moves",
+"energyCost": 100,
+"description": "Deals 100% of Attack damage to all enemies, heals all allies for 90% of Attack, and grants all allies 30 Energy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.0
+},
+{
+"kind": "Heal",
+"target": "AllAllies",
+"power": 0.9
+},
+{
+"kind": "EnergyGain",
+"target": "AllAllies",
+"energy": 30
+}
+]
+},
+"passive1": {
+"id": "tessa_rell_passive_motion_finds_a_use",
+"name": "Motion Finds a Use",
+"description": "Whenever Tessa heals an ally, that ally gains 8 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "HealedAlly",
+"energy": 8
+}
+]
+},
+"passive2": {
+"id": "tessa_rell_passive_overflow_has_a_destination",
+"name": "Overflow Has a Destination",
+"description": "Energy generated by Tessa that would exceed an ally's maximum Energy is redirected instead of discarded. The excess is granted to the ally furthest from casting an Active; if that ally also overflows, the remaining excess continues to the next eligible ally.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "AllyFurthestFromActive"
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "tessa_rell_talent_broader_route",
+"name": "Broader Route",
+"description": "Spare Current grants 10 Energy to the two allies furthest from casting instead of 15 Energy to one ally.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "TwoAlliesFurthestFromActive",
+"energy": 10
+}
+]
+},
+"talentII": {
+"id": "tessa_rell_talent_returning_motion",
+"name": "Returning Motion",
+"description": "The first time at least 20 overflow Energy is redirected in a round, Tessa gains 10 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 10
+}
+]
+},
+"talentIII": {
+"id": "tessa_rell_talent_no_dead_end",
+"name": "No Dead End",
+"description": "Everything Moves grants 10 additional Energy to the ally furthest from casting after its normal Energy gain resolves.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "AllyFurthestFromActive",
+"energy": 10
+}
+]
+}
+}
+},
+{
+"id": "garran_holt",
+"name": "Garran Holt",
+"title": "The Mended Line",
+"role": "Warrior",
+"aspect": "Verdant",
+"startingHero": false,
+"stars": 5,
+"lore": "Garran kept a border company functioning by rebuilding duties around whoever survived each campaign. To him, survival was not an ending but a claim on whatever could be preserved next.",
+"stats": {
+"hp": 492,
+"attack": 31,
+"defense": 25,
+"speed": 158,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0.05
+},
+"visual": {
+"primary": "655A4C",
+"secondary": "A28768",
+"accent": "62A77A",
+"silhouette": "Accumulation: layered hide, old wood, and tarnished copper become densest around the left shoulder where every repair remains visible. The Cinder Seam crosses the right cheek and ribs; one boot changes construction halfway down.",
+"weapon": "A broad maul reinforced by successive horn, timber, and copper braces, with the broken-ring Cinder Notch carved through the oldest repair.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "garran_holt"
+},
+"skills": {
+"basicAttack": {
+"id": "garran_holt_basic_keep_the_intact",
+"name": "Keep the Intact",
+"description": "Deals 85% of Attack damage to 1 enemy and heals the highest-HP ally for 50% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.85
+},
+{
+"kind": "Heal",
+"target": "HighestHpAlly",
+"power": 0.5
+}
+]
+},
+"activeSkill": {
+"id": "garran_holt_active_preserve_more_than_needed",
+"name": "Preserve More Than Needed",
+"energyCost": 100,
+"description": "Deals 160% of Attack damage to 1 enemy, heals the highest-HP ally for 175% of Attack, and applies DefenseUp to Garran for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.6
+},
+{
+"kind": "Heal",
+"target": "HighestHpAlly",
+"power": 1.75
+},
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.2,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "garran_holt_passive_old_layers_hold",
+"name": "Old Layers Hold",
+"description": "The first time Garran is damaged each round, apply DefenseUp to him for 1 round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.12,
+"duration": 1
+}
+]
+},
+"passive2": {
+"id": "garran_holt_passive_health_keeps_the_excess",
+"name": "Health Keeps the Excess",
+"description": "When Garran heals an ally already at full Health, the amount that would have been overheal is banked as Regen on that ally for 2 rounds instead of being wasted.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "HealedAlly",
+"status": "Regen",
+"duration": 2
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "garran_holt_talent_long_memory",
+"name": "Long Memory",
+"description": "Regen created by Health Keeps the Excess lasts 1 additional round.",
+"effects": []
+},
+"talentII": {
+"id": "garran_holt_talent_second_graft",
+"name": "Second Graft",
+"description": "If Preserve More Than Needed heals a full-Health ally, apply Regen to the lowest-HP ally for 2 rounds as well.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "LowestHpAlly",
+"status": "Regen",
+"duration": 2
+}
+]
+},
+"talentIII": {
+"id": "garran_holt_talent_refuse_the_gap",
+"name": "Refuse the Gap",
+"description": "The first time each battle an ally with Regen falls below 30% Health, heal that ally for 90% of Garran's Attack.",
+"effects": [
+{
+"kind": "Heal",
+"target": "AllyWithRegenBelow30PercentHp",
+"power": 0.9,
+"oncePerBattle": true
+}
+]
+}
+}
+},
+{
+"id": "veyl_orr",
+"name": "Veyl Orr",
+"title": "The Interrupted Step",
+"role": "Assassin",
+"aspect": "Gale",
+"startingHero": false,
+"stars": 5,
+"lore": "Veyl survived formal duels by acting during the fractions of a second when custom said both fighters should wait. He believed sequence was only another restraint pretending to be natural law.",
+"stats": {
+"hp": 318,
+"attack": 39,
+"defense": 18,
+"speed": 248,
+"critChance": 0.08,
+"critDamage": 0,
+"effectHit": 0.05,
+"effectResist": 0
+},
+"visual": {
+"primary": "74797A",
+"secondary": "D4D2C9",
+"accent": "C6E34A",
+"silhouette": "Broken continuity: one shoulder plate and one sleeve cuff hover away from the body with clear empty gaps. The Cinder Seam runs from the lower lip through the left hand; the right glove is reconstructed for six fingers.",
+"weapon": "A narrow dagger whose central blade segment is physically detached from hilt and tip, with the broken-ring Cinder Notch punched through the guard.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "veyl_orr"
+},
+"skills": {
+"basicAttack": {
+"id": "veyl_orr_basic_between_counts",
+"name": "Between Counts",
+"description": "Deals 105% of Attack damage to 1 enemy. If the target has Slow, Veyl gains 10 Energy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.05
+},
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 10,
+"condition": "TargetHasSlow"
+}
+]
+},
+"activeSkill": {
+"id": "veyl_orr_active_cut_the_turn",
+"name": "Cut the Turn",
+"energyCost": 100,
+"description": "Deals 235% of Attack damage to 1 enemy and applies Slow for 2 rounds. Silence that prevents the target's next Active is not currently representable.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 2.35
+},
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Slow",
+"magnitude": 0.2,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "veyl_orr_passive_unheld_momentum",
+"name": "Unheld Momentum",
+"description": "At the start of battle, Veyl gains 20 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 20
+}
+]
+},
+"passive2": {
+"id": "veyl_orr_passive_stolen_interval",
+"name": "Stolen Interval",
+"description": "The first time each round Veyl applies Slow, he gains 15 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 15
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "veyl_orr_talent_wider_gap",
+"name": "Wider Gap",
+"description": "Cut the Turn applies Slow for 1 additional round.",
+"effects": []
+},
+"talentII": {
+"id": "veyl_orr_talent_first_out",
+"name": "First Out",
+"description": "Unheld Momentum grants 10 additional Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 10
+}
+]
+},
+"talentIII": {
+"id": "veyl_orr_talent_missed_appointment",
+"name": "Missed Appointment",
+"description": "When Veyl damages an enemy with Slow, he gains 5 Energy. This can trigger once per round.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 5
+}
+]
+}
+}
+},
+{
+"id": "sile_marr",
+"name": "Sile Marr",
+"title": "The Missing Witness",
+"role": "Assassin",
+"aspect": "Umbra",
+"startingHero": false,
+"stars": 5,
+"lore": "Sile protected fugitives by removing the records that allowed institutions to coordinate around them. She believed danger often began not with an attack, but with everyone agreeing on who could be acted upon.",
+"stats": {
+"hp": 322,
+"attack": 40,
+"defense": 18,
+"speed": 238,
+"critChance": 0.07,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0.05
+},
+"visual": {
+"primary": "18181A",
+"secondary": "505052",
+"accent": "E7E0D0",
+"silhouette": "Missing silhouette: a ruler-straight section of the right coat hem is simply absent, leaving background where cloth should continue. The Cinder Seam crosses the bridge of the nose and left thigh; one collar strap disappears into exposed skin.",
+"weapon": "A matte black ceramic knife with an absent section between hilt and upper blade; bone-white lines trace only the edges of the missing information, and the broken-ring Cinder Notch is cut into the pommel.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "sile_marr"
+},
+"skills": {
+"basicAttack": {
+"id": "sile_marr_basic_erase_the_entry",
+"name": "Erase the Entry",
+"description": "Deals 110% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.1
+}
+]
+},
+"activeSkill": {
+"id": "sile_marr_active_no_common_reference",
+"name": "No Common Reference",
+"energyCost": 100,
+"description": "Deals 245% of Attack damage to 1 enemy. Making that specific enemy harder for its own team to target with beneficial single-target actions is not currently representable without inventing a status outside the fixed StatusKind list.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 2.45
+}
+]
+},
+"passive1": {
+"id": "sile_marr_passive_incomplete_record",
+"name": "Incomplete Record",
+"description": "When Sile damages the same enemy on consecutive turns, she gains 12 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 12
+}
+]
+},
+"passive2": {
+"id": "sile_marr_passive_absence_has_weight",
+"name": "Absence Has Weight",
+"description": "When Sile falls below 50% Health, apply DefenseUp to her for 2 rounds. This can trigger once per battle.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.2,
+"duration": 2,
+"oncePerBattle": true
+}
+]
+}
+},
+"talents": {
+"talentI": {
+"id": "sile_marr_talent_thinner_record",
+"name": "Thinner Record",
+"description": "Incomplete Record grants 5 additional Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 5
+}
+]
+},
+"talentII": {
+"id": "sile_marr_talent_missing_edge",
+"name": "Missing Edge",
+"description": "No Common Reference deals an additional 55% of Attack damage if the target is below 50% Health.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.55,
+"threshold": 0.5
+}
+]
+},
+"talentIII": {
+"id": "sile_marr_talent_leave_less_behind",
+"name": "Leave Less Behind",
+"description": "The first time each battle Sile defeats an enemy, she gains 30 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 30
+}
+]
+}
+}
+},
+{
+"id": "corren_dask",
+"name": "Corren Dask",
+"title": "The Assigned Wall",
+"role": "Warrior",
+"aspect": "Lumen",
+"startingHero": false,
+"stars": 5,
+"lore": "Corren commanded retreats by assigning every soldier a position and every threat a destination. He believed panic ended when the same question always produced the same answer.",
+"stats": {
+"hp": 498,
+"attack": 31,
+"defense": 25,
+"speed": 154,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0.06,
+"effectResist": 0.08
+},
+"visual": {
+"primary": "DED8CB",
+"secondary": "4C5662",
+"accent": "3568E8",
+"silhouette": "Imposed boundary: a square mantle, circular collar, and perfectly straight hem force the body into conspicuous geometric containment. The Cinder Seam crosses the left brow and right shoulder; one engraved label changes alphabet halfway through.",
+"weapon": "A heavy polearm enclosed inside a rectangular brass-and-porcelain frame marked with measured divisions; the broken-ring Cinder Notch is stamped through the lower brace.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "corren_dask"
+},
+"skills": {
+"basicAttack": {
+"id": "corren_dask_basic_assigned_threat",
+"name": "Assigned Threat",
+"description": "Deals 90% of Attack damage to 1 enemy and applies Taunt for 1 round.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.9
+},
+{
+"kind": "ApplyStatus",
+"target": "Enemy",
+"status": "Taunt",
+"duration": 1
+}
+]
+},
+"activeSkill": {
+"id": "corren_dask_active_all_lines_here",
+"name": "All Lines Here",
+"energyCost": 100,
+"description": "Deals 115% of Attack damage to all enemies, applies Taunt to them for 2 rounds, and applies DefenseUp to Corren for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "AllEnemies",
+"power": 1.15
+},
+{
+"kind": "ApplyStatus",
+"target": "AllEnemies",
+"status": "Taunt",
+"duration": 2
+},
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.25,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "corren_dask_passive_fixed_position",
+"name": "Fixed Position",
+"description": "The first time Corren is hit each round, apply DefenseUp to him for 1 round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.1,
+"duration": 1
+}
+]
+},
+"passive2": {
+"id": "corren_dask_passive_one_valid_answer",
+"name": "One Valid Answer",
+"description": "Enemies carrying Taunt from Corren direct their single-target attacks at Corren while he remains a valid target.",
+"effects": []
+}
+},
+"talents": {
+"talentI": {
+"id": "corren_dask_talent_longer_assignment",
+"name": "Longer Assignment",
+"description": "Assigned Threat applies Taunt for 2 rounds instead of 1.",
+"effects": []
+},
+"talentII": {
+"id": "corren_dask_talent_reinforced_boundary",
+"name": "Reinforced Boundary",
+"description": "All Lines Here applies DefenseUp to Corren for 1 additional round.",
+"effects": []
+},
+"talentIII": {
+"id": "corren_dask_talent_repeat_the_answer",
+"name": "Repeat the Answer",
+"description": "The first time each round an enemy's Taunt from Corren expires, Corren gains 10 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 10
+}
+]
+}
+}
+},
+{
+"id": "pell_dray",
+"name": "Pell Dray",
+"title": "Lockbreaker",
+"role": "Warrior",
+"aspect": "Ember",
+"startingHero": false,
+"stars": 1,
+"lore": "Pell believed a barrier that refused to open had already chosen to be broken.",
+"stats": {
+"hp": 228,
+"attack": 18,
+"defense": 12,
+"speed": 142,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0
+},
+"visual": {
+"primary": "4A443E",
+"secondary": "A89580",
+"accent": "E84532",
+"silhouette": "Simple irreversible asymmetry: one repaired shoulder guard has become visibly larger than the untouched side. The Cinder Seam crosses the neck and left arm; one belt loop fastens nothing.",
+"weapon": "A blunt forged pry-bar rebuilt thicker after each break, with the broken-ring Cinder Notch punched near the grip.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "pell_dray"
+},
+"skills": {
+"basicAttack": {
+"id": "pell_dray_basic_force_open",
+"name": "Force Open",
+"description": "Deals 95% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.95
+}
+]
+},
+"activeSkill": null,
+"passive1": null,
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "ena_var",
+"name": "Ena Var",
+"title": "The Kept Tool",
+"role": "Ranger",
+"aspect": "Verdant",
+"startingHero": false,
+"stars": 2,
+"lore": "Ena repaired hunting tools long after others would have replaced them, convinced that anything still capable of service deserved another season.",
+"stats": {
+"hp": 246,
+"attack": 24,
+"defense": 14,
+"speed": 180,
+"critChance": 0.03,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0
+},
+"visual": {
+"primary": "6D6356",
+"secondary": "A58B6C",
+"accent": "62A77A",
+"silhouette": "Simple accumulation: three generations of patched protection overlap around the draw arm. The Cinder Seam crosses the left cheek and right knee; the two boots merge into incompatible constructions halfway down.",
+"weapon": "A compact crossbow repaired with layered wood, horn, and tarnished copper brackets; the broken-ring Cinder Notch is carved into the stock.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "ena_var"
+},
+"skills": {
+"basicAttack": {
+"id": "ena_var_basic_still_serviceable",
+"name": "Still Serviceable",
+"description": "Deals 95% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.95
+}
+]
+},
+"activeSkill": null,
+"passive1": {
+"id": "ena_var_passive_one_more_season",
+"name": "One More Season",
+"description": "The first time each battle Ena falls below 50% Health, heal her for 80% of Attack.",
+"effects": [
+{
+"kind": "Heal",
+"target": "Self",
+"power": 0.8,
+"threshold": 0.5,
+"oncePerBattle": true
+}
+]
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "orrik_veil",
+"name": "Orrik Veil",
+"title": "The Unrecorded Wall",
+"role": "Warrior",
+"aspect": "Umbra",
+"startingHero": false,
+"stars": 4,
+"lore": "Orrik guarded people whose names had been removed from civic records. He learned that survival often meant giving an enemy less certainty than they needed to commit.",
+"stats": {
+"hp": 425,
+"attack": 28,
+"defense": 24,
+"speed": 160,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0.12
+},
+"visual": {
+"primary": "1B1B1D",
+"secondary": "555557",
+"accent": "E7E0D0",
+"silhouette": "Missing silhouette: a clean rectangular section is absent from the outer left shoulder without dividing the body. The Cinder Seam crosses the forehead and right hip; one chest strap disappears directly into exposed skin.",
+"weapon": "A broad matte ceramic guard-plate with one clean missing corner and a short undecorated mace; bone-white traces only the missing edge, and the broken-ring Cinder Notch is cut into the guard rim.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "orrik_veil"
+},
+"skills": {
+"basicAttack": {
+"id": "orrik_veil_basic_dead_angle",
+"name": "Dead Angle",
+"description": "Deals 85% of Attack damage to 1 enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 0.85
+}
+]
+},
+"activeSkill": {
+"id": "orrik_veil_active_no_clear_opening",
+"name": "No Clear Opening",
+"description": "Deals 145% of Attack damage to 1 enemy and applies DefenseUp to Orrik for 2 rounds.",
+"effects": [
+{
+"kind": "Damage",
+"target": "Enemy",
+"power": 1.45
+},
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.25,
+"duration": 2
+}
+]
+},
+"passive1": {
+"id": "orrik_veil_passive_hard_to_read",
+"name": "Hard to Read",
+"description": "The first time Orrik takes damage each round, apply DefenseUp to him for 1 round.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "Self",
+"status": "DefenseUp",
+"magnitude": 0.12,
+"duration": 1
+}
+]
+},
+"passive2": {
+"id": "orrik_veil_passive_uncertain_pressure",
+"name": "Uncertain Pressure",
+"description": "When Orrik falls below 40% Health, heal him for 100% of Attack. This can trigger once per battle.",
+"effects": [
+{
+"kind": "Heal",
+"target": "Self",
+"power": 1.0,
+"threshold": 0.4,
+"oncePerBattle": true
+}
+]
+}
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "mira_senn",
+"name": "Mira Senn",
+"title": "Last Arrow",
+"role": "Ranger",
+"aspect": "Ember",
+"startingHero": false,
+"stars": 3,
+"lore": "Mira tracked wounded war-beasts before they could recover and return to the line. She believed an unfinished conflict was only destruction postponed.",
+"stats": {
+"hp": 286,
+"attack": 31,
+"defense": 16,
+"speed": 204,
+"critChance": 0.04,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0
+},
+"visual": {
+"primary": "4C453E",
+"secondary": "AA9782",
+"accent": "E84532",
+"silhouette": "Irreversible asymmetry: repeated repairs have made the upper bow-side silhouette heavier and larger than the original lower side. The Cinder Seam crosses the right eye and left forearm; one glove changes finger count at the second knuckle.",
+"weapon": "A longbow whose rebuilt upper limb visibly overtakes the untouched lower limb, with the broken-ring Cinder Notch cut into the grip plate.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "mira_senn"
+},
+"skills": {
+"basicAttack": {
+"id": "mira_senn_basic_follow_the_wound",
+"name": "Follow the Wound",
+"description": "Deals 100% of Attack damage to the lowest-HP enemy.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.0
+}
+]
+},
+"activeSkill": {
+"id": "mira_senn_active_finish_the_work",
+"name": "Finish the Work",
+"description": "Deals 170% of Attack damage to the lowest-HP enemy. If that enemy is below 35% Health, deals an additional 80% of Attack damage.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.7
+},
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 0.8,
+"threshold": 0.35
+}
+]
+},
+"passive1": {
+"id": "mira_senn_passive_no_second_recovery",
+"name": "No Second Recovery",
+"description": "When Mira defeats an enemy, she gains 20 Energy.",
+"effects": [
+{
+"kind": "EnergyGain",
+"target": "Self",
+"energy": 20
+}
+]
+},
+"passive2": null
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+},
+{
+"id": "lysa_kett",
+"name": "Lysa Kett",
+"title": "Field Stitcher",
+"role": "Priest",
+"aspect": "Verdant",
+"startingHero": false,
+"stars": 4,
+"lore": "Lysa treated survival as a tactical resource, not an alternative to violence. She kept fighters standing so they could finish the danger that had wounded them.",
+"stats": {
+"hp": 392,
+"attack": 30,
+"defense": 20,
+"speed": 184,
+"critChance": 0,
+"critDamage": 0,
+"effectHit": 0,
+"effectResist": 0.05
+},
+"visual": {
+"primary": "746A5C",
+"secondary": "B09B7C",
+"accent": "62A77A",
+"silhouette": "Accumulation: layered protective wraps and old plates become densest around the arm she uses for treatment. The Cinder Seam crosses the chin and abdomen; one fastening strap loops behind itself and secures nothing.",
+"weapon": "A short staff reinforced by successive wood, horn, and copper braces, with the broken-ring Cinder Notch carved through the oldest support.",
+"scale": 1.0,
+"sigil": null,
+"sprite": "lysa_kett"
+},
+"skills": {
+"basicAttack": {
+"id": "lysa_kett_basic_stitch_and_strike",
+"name": "Stitch and Strike",
+"description": "Deals 80% of Attack damage to the lowest-HP enemy and heals the lowest-HP ally for 35% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 0.8
+},
+{
+"kind": "Heal",
+"target": "LowestHpAlly",
+"power": 0.35
+}
+]
+},
+"activeSkill": {
+"id": "lysa_kett_active_keep_them_fighting",
+"name": "Keep Them Fighting",
+"description": "Deals 155% of Attack damage to the lowest-HP enemy and heals the two lowest-HP allies for 120% of Attack.",
+"effects": [
+{
+"kind": "Damage",
+"target": "LowestHpEnemy",
+"power": 1.55
+},
+{
+"kind": "Heal",
+"target": "TwoLowestHpAllies",
+"power": 1.2
+}
+]
+},
+"passive1": {
+"id": "lysa_kett_passive_back_to_the_line",
+"name": "Back to the Line",
+"description": "When Lysa heals an ally below 50% Health, apply Regen to that ally for 2 rounds.",
+"effects": [
+{
+"kind": "ApplyStatus",
+"target": "HealedAllyBelow50PercentHp",
+"status": "Regen",
+"duration": 2
+}
+]
+},
+"passive2": {
+"id": "lysa_kett_passive_the_danger_must_end",
+"name": "The Danger Must End",
+"description": "If Keep Them Fighting defeats its target, heal the lowest-HP ally for 70% of Attack.",
+"effects": [
+{
+"kind": "Heal",
+"target": "LowestHpAlly",
+"power": 0.7,
+"condition": "ActiveDefeatedTarget"
+}
+]
+}
+},
+"talents": {
+"talentI": null,
+"talentII": null,
+"talentIII": null
+}
+}
+]

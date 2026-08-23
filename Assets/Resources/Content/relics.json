@@ -1,0 +1,41 @@
+{
+  "_comment": "Four relics, not the six in DESIGN-RELICS. Tidewrought Metronome and Green Hour Vessel are cut per DESIGN-HOOK-RESOLUTION sections 2 and 3: both were built on an overflow discard that an aspect now claims one hook earlier in the same method, so neither had any code left to run. Every 'rule' below is one sentence with no number in it, which is the test DESIGN-RELICS sets.",
+
+  "relics": [
+    {
+      "id": "splitting_prism",
+      "name": "Splitting Prism",
+      "pairedHero": "kalyx_emberwright",
+      "rule": "A blast that would strike every enemy strikes the front one instead, as many times over - and only the front one is afflicted.",
+      "hook": "SplitWideDamage"
+    },
+    {
+      "id": "wardens_debt",
+      "name": "Warden's Debt",
+      "pairedHero": "orrin_kaal",
+      "rule": "A ward the wearer raises for themself is raised for their most wounded ally instead.",
+      "hook": "Retarget",
+      "effectKind": "Shield",
+      "fromTarget": "Self",
+      "toTarget": "LowestHpAlly",
+      "excludeSelf": true
+    },
+    {
+      "id": "stormlance_oath",
+      "name": "Stormlance Oath",
+      "pairedHero": "ryn_solvarr",
+      "rule": "The wearer strikes at whichever enemy stands strongest, never at whichever is closest to falling.",
+      "hook": "Retarget",
+      "fromTarget": "LowestHpEnemy",
+      "toTarget": "HighestHpEnemy"
+    },
+    {
+      "id": "verdict_sigil",
+      "name": "Verdict Sigil",
+      "pairedHero": "nyx_serrow",
+      "rule": "What the wearer's strikes leave behind, their castings leave behind too.",
+      "hook": "WidenPassiveTrigger",
+      "fromTrigger": "AfterBasicAttack"
+    }
+  ]
+}

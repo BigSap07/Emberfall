@@ -1,0 +1,16 @@
+name: Build Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-check:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run build-check.ps1
+        shell: pwsh
+        run: ./Tools/build-check.ps1

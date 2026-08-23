@@ -15,6 +15,26 @@ namespace Emberfall.Core.Data
         public float Scale = 1f;
         public int Sigil = 0;                  // index of the emblem drawn on the portrait
 
+        /// <summary>
+        /// Optional sprite id for the battle screen rig. Empty (the default) means the unit
+        /// stays fully procedural - no behaviour change from today. A non-empty value loads
+        /// Resources/Sprites/Units/{Sprite}.png and the battle screen renders that image on a
+        /// billboard quad instead of building the primitive body. Menu portraits (hero cards,
+        /// hero detail, the summon reveal) are a separate rendering path and are unaffected
+        /// either way - this only concerns the 3D battle rig.
+        /// </summary>
+        public string Sprite = "";
+
+        /// <summary>
+        /// Sprite only. Fraction of the canvas, measured from the bottom (the feet), that is the
+        /// character's own body - head to feet, not counting anything raised above the head.
+        /// Defaults to 1: the whole canvas is body, today's behaviour, unchanged for every hero
+        /// that does not set this key. A raised weapon or prop needs the remaining top fraction
+        /// reserved for it; see UnitRig.BuildSprite for how that fraction turns into world space,
+        /// and DESIGN-ART-DELIVERY.md for how an artist measures it from their own file.
+        /// </summary>
+        public float SpriteBodyFraction = 1f;
+
         public static VisualDef FromJson(JsonValue j)
         {
             VisualDef v = new VisualDef();
@@ -26,6 +46,8 @@ namespace Emberfall.Core.Data
             v.Weapon = j.GetString("weapon", v.Weapon);
             v.Scale = j.GetFloat("scale", v.Scale);
             v.Sigil = j.GetInt("sigil", v.Sigil);
+            v.Sprite = j.GetString("sprite", v.Sprite);
+            v.SpriteBodyFraction = j.GetFloat("spriteBodyFraction", v.SpriteBodyFraction);
             return v;
         }
     }
@@ -58,6 +80,29 @@ namespace Emberfall.Core.Data
             e.Chance = j.GetFloat("chance", 1f);
             e.SelfHpRatio = j.GetFloat("selfHpRatio", 0f);
             return e;
+        }
+
+        /// <summary>
+        /// A field-for-field copy. Relics rewrite Target and Hits, and the EffectDef they are
+        /// handed is the one owned by the AbilityDef in the ContentDatabase - shared by every unit
+        /// in every battle for the life of the process. Mutating it in place would leak one
+        /// wearer's relic onto every future cast of that ability by anybody, including the enemy
+        /// side, and would survive across battles. Every relic rewrite goes through this.
+        /// </summary>
+        public EffectDef Clone()
+        {
+            EffectDef c = new EffectDef();
+            c.Kind = Kind;
+            c.Target = Target;
+            c.Power = Power;
+            c.Flat = Flat;
+            c.Hits = Hits;
+            c.Status = Status;
+            c.Duration = Duration;
+            c.Magnitude = Magnitude;
+            c.Chance = Chance;
+            c.SelfHpRatio = SelfHpRatio;
+            return c;
         }
     }
 
@@ -95,8 +140,6 @@ namespace Emberfall.Core.Data
         public PassiveTrigger Trigger = PassiveTrigger.None;
         public float Threshold = 0.5f;        // for OnHpBelowThreshold
         public bool OncePerBattle = true;     // for threshold style passives
-        public StatusKind BonusVsStatus = StatusKind.None;
-        public float BonusMultiplier;         // extra damage vs targets carrying BonusVsStatus
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -110,8 +153,6 @@ namespace Emberfall.Core.Data
             p.Trigger = EnumUtil.Parse(j.GetString("trigger", "None"), PassiveTrigger.None);
             p.Threshold = j.GetFloat("threshold", 0.5f);
             p.OncePerBattle = j.GetBool("oncePerBattle", p.Trigger == PassiveTrigger.OnHpBelowThreshold || p.Trigger == PassiveTrigger.BattleStart);
-            p.BonusVsStatus = EnumUtil.Parse(j.GetString("bonusVsStatus", "None"), StatusKind.None);
-            p.BonusMultiplier = j.GetFloat("bonusMultiplier", 0f);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));
@@ -131,6 +172,21 @@ namespace Emberfall.Core.Data
         public float BaseSpeed = 100;
         public float CritChance = 0.15f;
         public float CritDamage = 1.6f;
+        /// <summary>Flat landing-chance bonus/penalty for harmful ApplyStatus effects. Phase A: always 0, authored nowhere.</summary>
+        public float EffectHit;
+        public float EffectResist;
+        /// <summary>Phase B flat stat: multiplies activeSkill/passive-sourced Damage, never Basic Attack. See ApplyDamageEffect step 4.</summary>
+        public float SkillDamage;
+        /// <summary>Phase B flat stat: target-side chance to fully negate an incoming hit. See ApplyDamageEffect step 0 (before Base).</summary>
+        public float Block;
+        /// <summary>Phase B flat stat: source-side multiplicative reduction of the target's mitigation ratio. See ApplyDamageEffect step 6.</summary>
+        public float ArmorBreak;
+        /// <summary>Phase B flat stat: target-side chance reduction against Silence/Stun landing only. See ApplyEffect's ApplyStatus branch.</summary>
+        public float ControlImmunity;
+        /// <summary>Phase B flat stat: flat percentage reduction of incoming damage, applied after Defense mitigation. See ApplyDamageEffect step 7.</summary>
+        public float DamageReduction;
+        /// <summary>Phase B flat stat: source-side flat bonus damage added after Defense/Armor Break mitigation, so Defense never reduces it. See ApplyDamageEffect step 6.5.</summary>
+        public float HolyDamage;
         public float Growth = 0.11f;   // per level, applied to hp / attack / defense
         public int StartEnergy;
         public VisualDef Visual = new VisualDef();
@@ -149,6 +205,14 @@ namespace Emberfall.Core.Data
             BaseSpeed = j.GetFloat("speed", BaseSpeed);
             CritChance = j.GetFloat("critChance", CritChance);
             CritDamage = j.GetFloat("critDamage", CritDamage);
+            EffectHit = j.GetFloat("effectHit", EffectHit);
+            EffectResist = j.GetFloat("effectResist", EffectResist);
+            SkillDamage = j.GetFloat("skillDamage", SkillDamage);
+            Block = j.GetFloat("block", Block);
+            ArmorBreak = j.GetFloat("armorBreak", ArmorBreak);
+            ControlImmunity = j.GetFloat("controlImmunity", ControlImmunity);
+            DamageReduction = j.GetFloat("damageReduction", DamageReduction);
+            HolyDamage = j.GetFloat("holyDamage", HolyDamage);
             Growth = j.GetFloat("growth", Growth);
             StartEnergy = j.GetInt("startEnergy", 0);
             Visual = VisualDef.FromJson(j["visual"]);
@@ -279,6 +343,92 @@ namespace Emberfall.Core.Data
         public List<StageDef> Stages = new List<StageDef>();
     }
 
+    /// <summary>
+    /// One relic: a rule change in the effect pipeline, equipped on one hero.
+    ///
+    /// DESIGN-RELICS' founding constraint is enforced by this type's SHAPE, not by review: there
+    /// is no Power, Magnitude, Multiplier or Bonus field anywhere on it, so a relic that wanted to
+    /// be "+15% attack" has nowhere to put the 15. Everything here is an enum or a display string.
+    /// If a future relic needs a number to express itself, that is the signal DESIGN-RELICS
+    /// describes ("if a relic cannot be written as one sentence without a number, it is a stat
+    /// stick and should be cut"), and the answer is to cut it rather than to widen this class.
+    /// </summary>
+    public sealed class RelicDef
+    {
+        public string Id = "";
+        public string Name = "";
+
+        /// <summary>Display text, stated as a rule and never as a number. Shown on the hero card.</summary>
+        public string Rule = "";
+
+        /// <summary>The hero this relic was designed around. Display only - nothing enforces it.</summary>
+        public string PairedHeroId = "";
+
+        public RelicHook Hook = RelicHook.None;
+
+        // Retarget params.
+        public TargetMode FromTarget = TargetMode.Self;
+        public TargetMode ToTarget = TargetMode.Self;
+
+        /// <summary>
+        /// When true, Retarget only rewrites effects of FilterKind. Warden's Debt needs it: Orrin's
+        /// Cinderguard aims BOTH a Shield and a Taunt at Self, and the relic is specified as moving
+        /// the ward only. Without the filter it would also hand his Taunt to the lowest-HP ally,
+        /// which per DESIGN-HOOK-RESOLUTION section 5 is the one thing it must not touch - Taunt is
+        /// the targeting guarantee that survives the relabel, and the relic's whole argument is
+        /// that it costs him the ward while leaving the guarantee intact.
+        /// </summary>
+        public bool HasFilterKind;
+        public EffectKind FilterKind = EffectKind.Damage;
+
+        /// <summary>
+        /// Retarget only. Drops the caster from the rewritten effect's resolved targets.
+        ///
+        /// Warden's Debt needs it and needs it for a measured reason, not a hypothetical one.
+        /// DESIGN-RELICS states the behaviour in prose - the ward "leaves the tank and lands on Ryn
+        /// or Kalyx" - and LowestHpAlly, read literally, includes the caster. On its own named
+        /// wearer that literal reading is close to a no-op: Orrin is the Lumen anchor, so every
+        /// single-enemy ability aimed at his side resolves onto him, so he is very reliably the
+        /// most wounded ally, so the ward he was supposed to give away comes straight back. The
+        /// harness caught it on shipped content (CheckRelicsBiteOnShippedContent), where the ward
+        /// landed on Orrin every time.
+        ///
+        /// That is the same shape of failure that got Tidewrought Metronome and Green Hour Vessel
+        /// cut - an aspect rule claiming the thing one hook earlier and leaving the relic with
+        /// nothing to do on the one hero it was written for. The difference is that this one is
+        /// fixable in the relic rather than fatal to it, because the relic's premise (the ward
+        /// departs) never depended on the clamp; only the vocabulary did.
+        ///
+        /// When exclusion empties the target list the effect resolves against nobody and the ward
+        /// is simply lost. That is deliberate rather than a fallback to self: a last-man-standing
+        /// Orrin warding himself would quietly restore exactly the behaviour the relic is sold as
+        /// removing, at precisely the moment it matters most.
+        /// </summary>
+        public bool ExcludeSelf;
+
+        // WidenPassiveTrigger params.
+        public PassiveTrigger FromTrigger = PassiveTrigger.None;
+
+        public static RelicDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            RelicDef r = new RelicDef();
+            r.Id = j.GetString("id", "");
+            r.Name = j.GetString("name", "Relic");
+            r.Rule = j.GetString("rule", "");
+            r.PairedHeroId = j.GetString("pairedHero", "");
+            r.Hook = EnumUtil.Parse(j.GetString("hook", "None"), RelicHook.None);
+            r.FromTarget = EnumUtil.Parse(j.GetString("fromTarget", "Self"), TargetMode.Self);
+            r.ToTarget = EnumUtil.Parse(j.GetString("toTarget", "Self"), TargetMode.Self);
+            string filter = j.GetString("effectKind", "");
+            r.HasFilterKind = !string.IsNullOrEmpty(filter);
+            if (r.HasFilterKind) r.FilterKind = EnumUtil.Parse(filter, EffectKind.Damage);
+            r.ExcludeSelf = j.GetBool("excludeSelf", false);
+            r.FromTrigger = EnumUtil.Parse(j.GetString("fromTrigger", "None"), PassiveTrigger.None);
+            return r;
+        }
+    }
+
     /// <summary>Every tuning number the prototype uses, in one editable place.</summary>
     public sealed class BalanceConfig
     {
@@ -292,7 +442,43 @@ namespace Emberfall.Core.Data
         public float MinDamage = 1f;
         public float SpeedVariance = 0.08f;
 
-        public int MaxTeamSize = 3;
+        /// <summary>Gates BOTH sides of a battle: player deploys and enemy spawns. Keep equal to PlayerProfile.TeamSize.</summary>
+        public int MaxTeamSize = 5;
+
+        /// <summary>
+        /// Cap on extra turns a Gale unit's kill re-entry can grant per round. The re-entry
+        /// mechanic itself is not built yet (DESIGN-BUILD-ORDER task 11); this constant ships
+        /// ahead of it, with team size 5, because uncapped re-entry at five killable enemies
+        /// lets one Gale unit resolve a round unilaterally. Task 11 must read this, never
+        /// hardcode its own bound.
+        /// </summary>
+        public int GaleExtraTurnsPerRound = 1;
+
+        /// <summary>
+        /// Most simultaneous Burn entries one unit can carry from Ember stacking (DESIGN-ASPECTS
+        /// section 8). Ember's rule lets each Ember source add its own Burn instead of overwriting,
+        /// so the entry count scales with how many Embers are on the line: at team size 5, three
+        /// Embers casting an AllEnemies Burn against five enemies is 15 live StatusInstances all
+        /// ticking in TickDamageOverTime. The doc calls that a legibility and stability problem
+        /// rather than a balance one, which is why the bound is a flat entry cap and not a damage
+        /// scale. At the cap a further application degrades to the pre-Ember refresh: it keeps the
+        /// stronger magnitude and the longer duration on an existing entry instead of adding a new
+        /// one, so a strong Ember still deepens the fire and nothing is silently dropped.
+        /// </summary>
+        public int EmberBurnStackCap = 3;
+
+        /// <summary>
+        /// Relic slots on one hero (DESIGN-RELICS "Equipping"). One, and the document argues the
+        /// number rather than picking it: more than one slot stacks rule changes into a build, and
+        /// a team-wide slot would be an aura, which is a global multiplier, which is the stat stick
+        /// the design exists to avoid.
+        ///
+        /// DESIGN-RELICS also specifies a second balance key, relicEnergyBankMax, as "the ceiling
+        /// on the Metronome's carry so it cannot spiral". It is deliberately absent: Tidewrought
+        /// Metronome is cut (DESIGN-HOOK-RESOLUTION section 2), there is no bank to bound, and a
+        /// tuning key that no code reads is worse than no key - it reads as a live lever.
+        /// </summary>
+        public int RelicSlotsPerHero = 1;
 
         // hero levelling
         public float LevelCostA = 55f;
@@ -338,6 +524,9 @@ namespace Emberfall.Core.Data
             b.DamageVariance = j.GetFloat("damageVariance", b.DamageVariance);
             b.SpeedVariance = j.GetFloat("speedVariance", b.SpeedVariance);
             b.MaxTeamSize = j.GetInt("maxTeamSize", b.MaxTeamSize);
+            b.GaleExtraTurnsPerRound = j.GetInt("galeExtraTurnsPerRound", b.GaleExtraTurnsPerRound);
+            b.EmberBurnStackCap = j.GetInt("emberBurnStackCap", b.EmberBurnStackCap);
+            b.RelicSlotsPerHero = j.GetInt("relicSlotsPerHero", b.RelicSlotsPerHero);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
             b.LevelCostC = j.GetFloat("levelCostC", b.LevelCostC);

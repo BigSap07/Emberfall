@@ -16,13 +16,26 @@ namespace Emberfall.Core.Data
         public readonly List<EnemyDef> Enemies = new List<EnemyDef>();
         public readonly List<ChapterDef> Chapters = new List<ChapterDef>();
         public readonly List<StageDef> AllStages = new List<StageDef>();
+        public readonly List<RelicDef> Relics = new List<RelicDef>();
         public readonly List<string> Warnings = new List<string>();
 
         private readonly Dictionary<string, HeroDef> _heroById = new Dictionary<string, HeroDef>();
         private readonly Dictionary<string, EnemyDef> _enemyById = new Dictionary<string, EnemyDef>();
         private readonly Dictionary<string, StageDef> _stageById = new Dictionary<string, StageDef>();
+        private readonly Dictionary<string, RelicDef> _relicById = new Dictionary<string, RelicDef>();
 
+        /// <summary>
+        /// Four-file overload, kept so every existing caller compiles untouched - including the
+        /// harness's synthetic databases, which build content inline and have no relics to declare.
+        /// A database loaded this way has zero relics, and a HeroInstance.RelicId that resolves to
+        /// nothing simply leaves the unit relicless, which is the same path as an empty slot.
+        /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson)
+        {
+            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, null);
+        }
+
+        public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson, string relicsJson)
         {
             ContentDatabase db = new ContentDatabase();
 
@@ -37,8 +50,31 @@ namespace Emberfall.Core.Data
             db.ParseHeroes(heroesJson);
             db.ParseEnemies(enemiesJson);
             db.ParseCampaign(campaignJson);
+            db.ParseRelics(relicsJson);
             db.Validate();
             return db;
+        }
+
+        /// <summary>
+        /// Relics are optional content: a null or empty string is "this build has no relics", not
+        /// an error, which is what keeps the four-argument overload above honest.
+        /// </summary>
+        private void ParseRelics(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            JsonValue root;
+            string err;
+            if (!JsonValue.TryParse(text, out root, out err)) { Warnings.Add("relics.json: " + err); return; }
+            List<JsonValue> list = root.GetList("relics");
+            for (int i = 0; i < list.Count; i++)
+            {
+                RelicDef r = RelicDef.FromJson(list[i]);
+                if (r == null || string.IsNullOrEmpty(r.Id)) { Warnings.Add("relics.json: entry " + i + " has no id"); continue; }
+                if (_relicById.ContainsKey(r.Id)) { Warnings.Add("relics.json: duplicate relic id " + r.Id); continue; }
+                if (r.Hook == RelicHook.None) { Warnings.Add("relics.json: relic " + r.Id + " has no hook, so it would do nothing"); continue; }
+                Relics.Add(r);
+                _relicById[r.Id] = r;
+            }
         }
 
         private void ParseHeroes(string text)
@@ -119,6 +155,20 @@ namespace Emberfall.Core.Data
                         Warnings.Add("stage " + s.Id + " references unknown enemy " + s.Enemies[e].EnemyId);
                 }
             }
+            for (int i = 0; i < Relics.Count; i++)
+            {
+                RelicDef r = Relics[i];
+                // A relic paired with a hero that does not exist is a content typo, not a fatal
+                // error - the relic still works on anybody who equips it. Warn rather than drop.
+                if (!string.IsNullOrEmpty(r.PairedHeroId) && !_heroById.ContainsKey(r.PairedHeroId))
+                    Warnings.Add("relic " + r.Id + " is paired with unknown hero " + r.PairedHeroId);
+                if (r.Hook == RelicHook.Retarget && r.FromTarget == r.ToTarget)
+                    Warnings.Add("relic " + r.Id + " retargets " + r.FromTarget + " to itself, so it does nothing");
+                if (r.Hook == RelicHook.WidenPassiveTrigger && r.FromTrigger == PassiveTrigger.None)
+                    Warnings.Add("relic " + r.Id + " widens no trigger, so it does nothing");
+                if (string.IsNullOrEmpty(r.Rule))
+                    Warnings.Add("relic " + r.Id + " has no rule text, so the hero card cannot state what it does");
+            }
             if (Heroes.Count == 0) Warnings.Add("no heroes were loaded");
             if (StartingHeroes.Count == 0) Warnings.Add("no heroes are flagged startingHero:true");
         }
@@ -134,6 +184,13 @@ namespace Emberfall.Core.Data
         {
             EnemyDef e;
             if (id != null && _enemyById.TryGetValue(id, out e)) return e;
+            return null;
+        }
+
+        public RelicDef GetRelic(string id)
+        {
+            RelicDef r;
+            if (id != null && _relicById.TryGetValue(id, out r)) return r;
             return null;
         }
 

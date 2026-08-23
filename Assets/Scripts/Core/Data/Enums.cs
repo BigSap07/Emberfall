@@ -61,7 +61,8 @@ namespace Emberfall.Core.Data
         Shield,
         ApplyStatus,
         Cleanse,
-        EnergyGain
+        EnergyGain,
+        Dispel
     }
 
     public enum StatusKind
@@ -76,7 +77,10 @@ namespace Emberfall.Core.Data
         Shield,
         Taunt,
         Focus,   // increased critical chance
-        Slow     // reduced speed
+        Slow,    // reduced speed
+        Silence, // blocks the Active on the holder's next turn; a Basic Attack resolves instead
+        Stun,    // skips the holder's entire next turn - no Basic Attack, no Active
+        Stealth  // inert placeholder — no targeting-visibility logic yet
     }
 
     public enum PassiveTrigger
@@ -88,13 +92,58 @@ namespace Emberfall.Core.Data
         OnCriticalHit,
         OnKill,
         OnHpBelowThreshold,
-        OnDamaged
+        OnDamaged,
+        OnBlock
+    }
+
+    /// <summary>
+    /// Which rule in the effect pipeline a relic bends. One relic, one hook: DESIGN-RELICS' whole
+    /// constraint is that a relic changes a RULE, never a number, so there is deliberately no
+    /// "add N%" member here and adding one would be the stat stick the document exists to avoid.
+    ///
+    /// Three hooks, not six, because DESIGN-HOOK-RESOLUTION cut two of the six relics outright
+    /// (Tidewrought Metronome and Green Hour Vessel) rather than relocating them: both were built
+    /// on an overflow discard that an aspect now claims one hook earlier in the same method. See
+    /// sections 2 and 3 of that document. The remaining four need three hooks between them.
+    /// </summary>
+    public enum RelicHook
+    {
+        None,
+
+        /// <summary>
+        /// Rewrite an effect's TargetMode before targets resolve, optionally filtered to one
+        /// EffectKind. DESIGN-RELICS' first named modifiable: "rewrite a TargetMode before targets
+        /// resolve". Stormlance Oath (unfiltered) and Warden's Debt (Shield only) both use it.
+        /// </summary>
+        Retarget,
+
+        /// <summary>
+        /// Splitting Prism. An AllEnemies effect becomes FrontEnemy; a Damage effect additionally
+        /// multiplies its Hits by the number of enemies the wide version would have struck, so the
+        /// raw output is preserved and concentrated. Anything that is NOT Damage - the status
+        /// rider - retargets without any multiplication, which is exactly the relic's cost: one
+        /// landing roll for the whole cast instead of one per enemy.
+        /// </summary>
+        SplitWideDamage,
+
+        /// <summary>
+        /// Verdict Sigil. A passive whose Trigger is FromTrigger also fires after the wearer casts
+        /// its Active, in addition to whenever it already fired. Widens which condition fires a
+        /// passive, DESIGN-RELICS' "PassiveTrigger - which condition fires a passive".
+        /// </summary>
+        WidenPassiveTrigger
     }
 
     public static class AspectChart
     {
-        public const float Advantage = 1.20f;
-        public const float Disadvantage = 0.85f;
+        // Narrowed from 1.20/0.85 per DESIGN-ASPECTS section 4: a 41% swing between an advantaged
+        // and a disadvantaged attacker out-argues every aspect identity, which forces one correct
+        // counter-colour per stage and turns team building into a compliance check. At 1.10/0.92
+        // the wheel is a tiebreak between two lines you'd already be happy with, which is what a
+        // secondary layer is. Nothing reads these as literals - see Debrief.AspectFactorThreshold
+        // and DevHarness CheckDebriefAspect* for the two places that used to.
+        public const float Advantage = 1.10f;
+        public const float Disadvantage = 0.92f;
 
         /// <summary>Ember &gt; Verdant &gt; Tide &gt; Gale &gt; Ember. Lumen and Umbra counter each other.</summary>
         public static float Multiplier(Aspect attacker, Aspect defender)
@@ -131,7 +180,9 @@ namespace Emberfall.Core.Data
             return kind == StatusKind.AttackDown
                 || kind == StatusKind.DefenseDown
                 || kind == StatusKind.Burn
-                || kind == StatusKind.Slow;
+                || kind == StatusKind.Slow
+                || kind == StatusKind.Silence
+                || kind == StatusKind.Stun;
         }
 
         public static string DisplayName(StatusKind kind)
@@ -148,6 +199,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Taunt: return "Provoke";
                 case StatusKind.Focus: return "Focus";
                 case StatusKind.Slow: return "Mire";
+                case StatusKind.Silence: return "Silence";
+                case StatusKind.Stun: return "Stun";
+                case StatusKind.Stealth: return "Stealth";
             }
             return kind.ToString();
         }
@@ -167,6 +221,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Taunt: return "PRV";
                 case StatusKind.Focus: return "FOC";
                 case StatusKind.Slow: return "MIR";
+                case StatusKind.Silence: return "SIL";
+                case StatusKind.Stun: return "STN";
+                case StatusKind.Stealth: return "STH";
             }
             return "?";
         }

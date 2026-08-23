@@ -12,6 +12,14 @@ namespace Emberfall.Core.Progression
         public float Speed;
         public float CritChance;
         public float CritDamage;
+        public float EffectHit;
+        public float EffectResist;
+        public float SkillDamage;
+        public float Block;
+        public float ArmorBreak;
+        public float ControlImmunity;
+        public float DamageReduction;
+        public float HolyDamage;
 
         public int Power
         {
@@ -58,6 +66,17 @@ namespace Emberfall.Core.Progression
             s.Speed = Round(def.BaseSpeed + (level - 1) * 0.35f);
             s.CritChance = def.CritChance;
             s.CritDamage = def.CritDamage;
+            // Flat pass-through, like CritChance/CritDamage - never scaled by level or rarity.
+            // Scaling this would make every high-level unit incidentally debuff-immune as a side
+            // effect of its level, which nobody decided.
+            s.EffectHit = def.EffectHit;
+            s.EffectResist = def.EffectResist;
+            s.SkillDamage = def.SkillDamage;
+            s.Block = def.Block;
+            s.ArmorBreak = def.ArmorBreak;
+            s.ControlImmunity = def.ControlImmunity;
+            s.DamageReduction = def.DamageReduction;
+            s.HolyDamage = def.HolyDamage;
             return s;
         }
 

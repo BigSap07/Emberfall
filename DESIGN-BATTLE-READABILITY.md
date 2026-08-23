@@ -22,6 +22,7 @@ record it was handed.
 ## What the screen throws away
 
 - **`TurnStart`** — no case in `Handle`. Adding one costs nothing and fixes priority 1.
+  *Fixed. `BattleScreen.Handle` has a `TurnStart` case: the actor rises and the turn strip advances.*
 - **The real target.** `BasicAttack` and `AbilityCast` carry `SourceId == TargetId == self`; the
   target is only revealed by the `Damage` event that follows. So the screen guesses with
   `NearestOpponent()` — geometry. That is wrong for Ryn (LowestHpEnemy), Nyx (HighestAttackEnemy),
@@ -29,10 +30,13 @@ record it was handed.
   number lands on another. Fix by lookahead, not by a new field — scan forward from the
   `BasicAttack`/`AbilityCast` to the `Damage`/`Heal`/`ShieldGain` events before the next
   `TurnStart`, and you have the true target set, taunts included.
+  *Fixed. `LookaheadTargets()` scans forward from `BasicAttack`/`AbilityCast` to the next `TurnStart` and returns the real target set.*
 - **`Death.SourceId`** — the killer. Never used.
+  *Partly used. `Debrief.Fallback` names the killer; the playback screen does not show it inline.*
 - **`StatusApplied.Duration`** — the bar stores only the kind.
 - **The round's turn order.** Between one `RoundStart` and the next, the `TurnStart` events *are*
   the initiative list. Enough to draw a turn strip with no new data at all.
+  *Fixed. `BuildTurnStrip`/`RebuildTurnStrip`/`AdvanceTurnStrip` in `BattleScreen` read the round's `TurnStart` events and step the strip per turn.*
 - **Lethal lookahead.** Each unit's `Death` index is knowable up front — use it to *pace*, not
   to spoil: hold the beat before a killing blow rather than flagging it early.
 
@@ -44,9 +48,15 @@ variance all fold into one `int`, so ×1.20 is unrecoverable from the list. With
 mechanic that decides fights can never be shown or learned. This is the whole of "why was that
 hit big."
 
+*Done. `BattleEvent.AspectFactor` is set by `CombatSimulation` and read by both `BattleScreen`
+(the WEAK/RESIST tag) and `Debrief` (priority 3 clause).*
+
 **2. `AbilityName` on `Damage`.** Present on `BasicAttack`/`AbilityCast`, absent on the damage
 they cause. Back-scanning misattributes Burn ticks and passive damage to whatever the unit last
 cast. The Debrief names a killing blow out loud; it must not lie.
+
+*Done. `BattleEvent.AbilityName` is set on `Damage` events by `CombatSimulation`, read by
+`Debrief.TryAbilityDominant` for priority 2 and by the Fallback clause.*
 
 Nothing else. Ward breaks, crits, deaths, rounds and energy are already in the list.
 
@@ -95,7 +105,7 @@ numbers actually support:
 1. **Timeout** — `TimedOut` plus `EnemyHpRatio`.
 2. **One ability did the damage** — group `Damage` on player units by `AbilityName`; if the top
    one is >35% of damage taken, name it and its total.
-3. **Aspect** — share of damage taken with `AspectFactor >= 1.2`; if >35%, say the line was the
+3. **Aspect** — share of damage taken with `AspectFactor >= 1.01`; if >35%, say the line was the
    wrong colour.
 4. **Speed** — turn order is re-rolled each round (`RoundSpeedJitter`), so one round proves
    nothing. Count enemy `TurnStart` events preceding each player unit's turn across the whole
@@ -104,4 +114,4 @@ numbers actually support:
 6. **Fallback** — the first player `Death` (`Round`, `TargetId`, `SourceId` as killer) and the
    largest single `Damage`. Two true numbers beat a confident wrong cause.
 
-Every field above exists today except `AspectFactor` and `AbilityName` on `Damage`.
+All fields above now exist, including `AspectFactor` and `AbilityName` on `Damage`.

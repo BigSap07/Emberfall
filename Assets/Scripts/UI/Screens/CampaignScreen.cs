@@ -22,15 +22,20 @@ namespace Emberfall.UI.Screens
             ScreenChrome.Header(Root, "CAMPAIGN", Router, out _headerSubtitle);
             BuildTeamStrip();
 
+            // landscape: banner card sits to the left of the stage list rather than above it,
+            // both starting on the same line below the header
             _stageList = UIBuilder.ScrollList("Stages", Root, out _scroll, 14f, new RectOffset(0, 0, 6, 48));
             UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 292f, UITheme.ScreenPadding, 24f);
+                                 UITheme.ScreenPadding + TeamCardWidth + UITheme.Space24,
+                                 UITheme.TopBarHeight + 132f, UITheme.ScreenPadding, 24f);
         }
+
+        private const float TeamCardWidth = 520f;
 
         private void BuildTeamStrip()
         {
             RectTransform card = UIBuilder.Node("Team", Root);
-            UIBuilder.TopStrip(card, 146f, UITheme.TopBarHeight + 132f, UITheme.ScreenPadding);
+            UIBuilder.Box(card, UITheme.ScreenPadding, -(UITheme.TopBarHeight + 132f), TeamCardWidth, 146f, new Vector2(0f, 1f));
 
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
@@ -71,36 +76,39 @@ namespace Emberfall.UI.Screens
         {
             for (int i = _teamStrip.childCount - 1; i >= 0; i--) Destroy(_teamStrip.GetChild(i).gameObject);
 
+            // Five portraits in the 460f strip: 5 * 80 + 4 * 12 spacing = 448. They were 84f at three.
+            const float portraitSize = 80f;
             List<HeroInstance> team = App.Session.Profile.TeamHeroes();
-            for (int slot = 0; slot < 3; slot++)
+            for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
             {
                 if (slot < team.Count)
                 {
                     HeroInstance hero = team[slot];
-                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, 84f, true);
-                    UIBuilder.Sized(portrait, 84f, 84f);
-                    if (slot == 0) AddFrontSlotLabel(portrait);
+                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, portraitSize, true);
+                    UIBuilder.Sized(portrait, portraitSize, portraitSize);
+                    if (slot == 0) AddFrontSlotLabel(portrait, portraitSize);
                 }
                 else
                 {
                     RectTransform empty = UIBuilder.Node("Empty" + slot, _teamStrip);
-                    UIBuilder.Sized(empty, 84f, 84f);
+                    UIBuilder.Sized(empty, portraitSize, portraitSize);
                     Image image = empty.gameObject.AddComponent<Image>();
                     image.sprite = TextureLab.Ring(96, 5);
                     image.color = UITheme.BorderSoft;
-                    if (slot == 0) AddFrontSlotLabel(empty);
+                    if (slot == 0) AddFrontSlotLabel(empty, portraitSize);
                 }
             }
 
             _teamPower.text = "POWER " + App.Session.Profile.TeamPower();
         }
 
-        /// <summary>FrontEnemy targeting picks the lowest living slot, so slot 1 is the one that gets hit - name it.</summary>
-        private static void AddFrontSlotLabel(RectTransform portrait)
+        /// <summary>FrontEnemy targeting picks the lowest living slot, so slot 1 is the one that gets hit - name it.
+        /// Width tracks the portrait rather than the old fixed 84f, so the tag stays centred at five slots.</summary>
+        private static void AddFrontSlotLabel(RectTransform portrait, float width)
         {
             Text tag = UIBuilder.Label("FrontTag", portrait, "FRONT", UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.LowerCenter);
-            UIBuilder.Box(tag.rectTransform, 0f, -4f, 84f, 20f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(tag, new Color(0f, 0f, 0f, 0.92f), 1.4f);
+            UIBuilder.Box(tag.rectTransform, 0f, -4f, width, 20f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(tag, UITheme.InkArt, 1.4f);
         }
 
         private void RebuildStages()
@@ -181,9 +189,9 @@ namespace Emberfall.UI.Screens
             Text subtitle = UIBuilder.Label("Sub", row, stage.Subtitle, UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             UIBuilder.Box(subtitle.rectTransform, 138f, -58f, 640f, 26f, new Vector2(0f, 1f));
 
-            // enemy preview
+            // enemy preview - wide enough for five pips now stages spawn up to five enemies
             RectTransform pips = UIBuilder.Node("Enemies", row);
-            UIBuilder.Box(pips, 138f, 20f, 300f, 62f, new Vector2(0f, 0f));
+            UIBuilder.Box(pips, 138f, 20f, 380f, 62f, new Vector2(0f, 0f));
             UIBuilder.HStack(pips, 10f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleLeft);
             for (int i = 0; i < stage.Enemies.Count; i++)
             {
@@ -204,6 +212,14 @@ namespace Emberfall.UI.Screens
             // state marker / action
             if (!unlocked)
             {
+                // THEME: deliberately NOT migrated to a UITheme.Scrim tier, because it is not
+                // clear this value is right and the migration's rule was to move numbers, not
+                // change them. Every other locked or disabled state in the project scrims at 0.72
+                // (see UITheme.ScrimModal, used by both locked hero portraits); this is 0.22, a
+                // third of that. Either the hatch texture is carrying the "locked" read on its own
+                // and the low alpha is correct, or this is drift and locked stages sit too close
+                // to available ones. That is a call about how locked should feel, so it wants a
+                // human rather than a find-and-replace. See DESIGN-UI-THEME.md.
                 Image hatch = UIBuilder.Img("Locked", row, TextureLab.Hatch(32, 10), new Color(0f, 0f, 0f, 0.22f));
                 UIBuilder.FillParent(hatch.rectTransform, 2f);
                 Text lockLabel = UIBuilder.Label("LockText", row, "LOCKED", UITheme.FontSmall, UITheme.TextDim, TextAnchor.UpperRight);

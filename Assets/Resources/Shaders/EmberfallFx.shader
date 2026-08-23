@@ -1,6 +1,13 @@
-// Unlit quad shader for every battle effect: glows, slash arcs, ground rings, blob shadows
-// and the sky backdrop. The blend mode is script-controlled, so one shader covers both
-// additive effects and alpha-blended surfaces.
+// Unlit quad shader for every battle effect: glows, slash arcs, ground rings, blob shadows,
+// the sky backdrop, and (added for the sprite unit path) a textured character billboard.
+// The blend mode is script-controlled, so one shader covers both additive effects and
+// alpha-blended surfaces.
+//
+// _Flash, _Fade and _Emission default to no-ops (0, 1, 0) so every existing caller - none of
+// which sets them - renders bit-identical to before. They exist so a sprite-based UnitRig can
+// share BattleAssets.NewFx materials with UnitRig.SetFlash/SetFade/SetEmission, the same calls
+// the procedural rig's Emberfall/Lit materials already answer to, without UnitActor needing to
+// know or care which kind of rig it is animating.
 //
 // Like Emberfall/Lit, the pass carries no LightMode tag so it renders under both the
 // Built-In pipeline and URP.
@@ -12,6 +19,9 @@ Shader "Emberfall/Fx"
         _Color ("Tint", Color) = (1,1,1,1)
         _SrcBlend ("Src Blend", Float) = 5   // SrcAlpha
         _DstBlend ("Dst Blend", Float) = 1   // One
+        _Flash ("Hit Flash", Range(0,1)) = 0
+        _Fade ("Fade", Range(0,1)) = 1
+        _Emission ("Emission", Range(0,4)) = 0
     }
 
     SubShader
@@ -33,6 +43,9 @@ Shader "Emberfall/Fx"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             fixed4 _Color;
+            float _Flash;
+            float _Fade;
+            float _Emission;
 
             struct appdata
             {
@@ -56,7 +69,11 @@ Shader "Emberfall/Fx"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                return tex2D(_MainTex, i.uv) * _Color;
+                fixed4 c = tex2D(_MainTex, i.uv) * _Color;
+                c.rgb += c.rgb * _Emission;
+                c.rgb = lerp(c.rgb, fixed3(1, 1, 1), _Flash);
+                c.a *= _Fade;
+                return c;
             }
             ENDCG
         }

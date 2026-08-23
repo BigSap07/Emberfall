@@ -38,6 +38,80 @@ namespace Emberfall.UI
         public static readonly Color HealthEnemy = Hex("D9504A");
         public static readonly Color Shield = Hex("8FD8FF");
 
+        // ---------- ink: text edge treatment ----------
+        // The near-black a label is outlined or shadowed with to hold it apart from whatever sits
+        // behind it. Every one of these was a raw new Color(0,0,0,a) at a call site before, at
+        // eleven drifted alphas between 0.5 and 0.95, which is three intentions and eight
+        // accidents. Consolidated to the three intentions, at values already in use.
+        //
+        // Colour only. The DISTANCE argument to Outlined/Shadowed stays at the call site on
+        // purpose: it scales with the label's font size, so a shared constant would be wrong at
+        // both ends of the type scale. A 20pt status tag wants 1.2 and a 62pt logo wants 5.
+        //
+        // Two coloured (non-black) edges are deliberately NOT here and stay per-screen: the main
+        // menu logo's warm ember rim and the battle result title's. Those are accents belonging to
+        // one moment each, not a shared treatment.
+
+        /// <summary>Text sitting on a solid UI panel. Quiet, just enough to stop it dissolving.</summary>
+        public static readonly Color InkPanel = new Color(0f, 0f, 0f, 0.55f);
+
+        /// <summary>
+        /// Text over artwork, a portrait or the battlefield, where the backing is busy and moving.
+        ///
+        /// THEME: seven of this tier's eight users are in BattleScreen, and they were the highest
+        /// alphas in the project before consolidation (0.9 to 0.95) because that text sits over a
+        /// painted backdrop and moving characters rather than a flat panel. It is arguable that
+        /// the battle screen wants its own tier here, or a different technique entirely (a soft
+        /// backing plate behind the text rather than a rim on it, which is what the banner already
+        /// does with ScrimBacking). Grouping it with the rest of the UI is the conservative choice
+        /// for a migration, not a claim that it is right. Flagged for a human; see
+        /// DESIGN-UI-THEME.md.
+        /// </summary>
+        public static readonly Color InkArt = new Color(0f, 0f, 0f, 0.9f);
+
+        /// <summary>Display text over a dimmed screen, wanting a soft drop shadow rather than a hard rim.</summary>
+        public static readonly Color InkDisplay = new Color(0f, 0f, 0f, 0.7f);
+
+        // ---------- scrim: overlays that push content back ----------
+        // Unlike Ink above, these are kept at their exact existing values rather than merged into
+        // fewer tiers. A full-screen dim is a much more visible surface than a 1.5px text rim, so
+        // the same 0.05 rounding that is imperceptible on an outline is not obviously safe here,
+        // and the differences between them read as deliberate rather than as drift. Named for
+        // intent so they can be tuned as a set later; not re-valued as part of this migration.
+
+        /// <summary>Behind a modal, and over locked content that should read as a shape but not a reveal.</summary>
+        public static readonly Color ScrimModal = new Color(0f, 0f, 0f, 0.72f);
+
+        /// <summary>Behind the battle result panel.</summary>
+        public static readonly Color ScrimResult = new Color(0f, 0f, 0f, 0.78f);
+
+        /// <summary>Behind a summon reveal, the most opaque of the three: this one is a moment.</summary>
+        public static readonly Color ScrimReveal = new Color(0f, 0f, 0f, 0.85f);
+
+        /// <summary>A backing plate under floating text, dark enough to read against, light enough to see through.</summary>
+        public static readonly Color ScrimBacking = new Color(0f, 0f, 0f, 0.34f);
+
+        // ---------- interactive: button state ----------
+        // These were already central, inside UIBuilder.MakeButton's body, so they were never
+        // scattered. They were unnamed though, which meant the one place the whole project's
+        // button feel is decided read as five magic numbers in the middle of a construction
+        // method. Same values, stated as theme.
+
+        /// <summary>Multiplied over a button's fill on hover. Above 1 to lift it.</summary>
+        public static readonly Color ButtonHighlight = new Color(1.08f, 1.08f, 1.08f, 1f);
+
+        /// <summary>Multiplied over a button's fill while held.</summary>
+        public static readonly Color ButtonPressed = new Color(0.82f, 0.82f, 0.82f, 1f);
+
+        /// <summary>Multiplied over a button's fill when it cannot be used.</summary>
+        public static readonly Color ButtonDisabled = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+
+        /// <summary>The glass highlight across a button's upper half.</summary>
+        public static readonly Color ButtonSheen = new Color(1f, 1f, 1f, 0.07f);
+
+        /// <summary>Seconds to cross-fade between button states.</summary>
+        public const float ButtonFadeDuration = 0.06f;
+
         // ---------- type scale ----------
         public const int FontDisplay = 62;
         public const int FontTitle = 44;
@@ -47,12 +121,31 @@ namespace Emberfall.UI
         public const int FontTiny = 20;
 
         // ---------- layout ----------
-        public static readonly Vector2 ReferenceResolution = new Vector2(1080f, 1920f);
+        // Landscape since the 5v5 team size change: ten characters across a battle line need
+        // width, and 1080 of portrait width did not carry that read. The Game view in the
+        // editor must be set to a 1920x1080 (or 16:9) preset to match - a portrait Game view
+        // against this canvas has already produced one apparent layout bug that was really a
+        // preview mismatch.
+        public static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
         public const float ScreenPadding = 32f;
         public const float TopBarHeight = 132f;
         public const float NavBarHeight = 168f;
         public const float CornerRadius = 22f;
         public const float CornerRadiusSmall = 14f;
+
+        // ---------- spacing scale ----------
+        // Shared gap/padding units - screens should compose layouts from these instead of
+        // inventing a new literal per call site. Card/button/portrait sizes stay bespoke;
+        // this scale is for the space *between* things.
+        public const float Space4 = 4f;
+        public const float Space8 = 8f;
+        public const float Space12 = 12f;
+        public const float Space16 = 16f;
+        public const float Space24 = 24f;
+        public const float Space32 = ScreenPadding;
+        public const float Space48 = 48f;
+        public const float Space64 = 64f;
+        public const float Space96 = 96f;
 
         private static Font _font;
 
