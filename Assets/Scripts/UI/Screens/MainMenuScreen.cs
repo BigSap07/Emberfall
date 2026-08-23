@@ -209,7 +209,7 @@ namespace Emberfall.UI.Screens
 
             AddNavButton(nav, "HEROES", 0, UITheme.Shard, OpenHeroes);
             AddNavButton(nav, "CAMPAIGN", 4, UITheme.Ember, OpenCampaign);
-            AddNavButton(nav, "SUMMON", 13, UITheme.RarityColor(Rarity.Epic), OpenSummon);
+            AddNavButton(nav, "SUMMON", 13, UITheme.StarColor(5), OpenSummon);
         }
 
         private void AddNavButton(RectTransform parent, string label, int sigil, Color tint, System.Action action)
@@ -315,7 +315,7 @@ namespace Emberfall.UI.Screens
                 }
 
                 HeroInstance hero = team[slot];
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Rarity, 122f, true);
+                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, 122f, true);
                 UIBuilder.Box(portrait, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
 
                 Text name = UIBuilder.Label("Name", cell, hero.Def.Name, UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperCenter);

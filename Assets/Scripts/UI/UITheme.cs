@@ -224,24 +224,22 @@ namespace Emberfall.UI
             return TextMuted;
         }
 
-        public static Color RarityColor(Rarity rarity)
+        /// <summary>
+        /// Color for a hero's star tier. Provides a clear visual hierarchy from 1 to 5.
+        /// Stars 4 and 5 reuse the old Rare/Epic colors so existing hero cards read identically
+        /// at their new tier; stars 1-3 fill in the lower end of the progression.
+        /// </summary>
+        public static Color StarColor(int stars)
         {
-            switch (rarity)
+            switch (stars)
             {
-                case Rarity.Rare: return Hex("7B6BE0");
-                case Rarity.Epic: return Hex("F2A93B");
+                case 1: return Hex("8FA7C4"); // steel blue
+                case 2: return Hex("5EA87A"); // muted green
+                case 3: return Hex("7B6BE0"); // purple
+                case 4: return Hex("C070E0"); // violet
+                case 5: return Hex("F2A93B"); // amber
             }
             return Hex("8FA7C4");
-        }
-
-        public static string RarityName(Rarity rarity)
-        {
-            switch (rarity)
-            {
-                case Rarity.Rare: return "RARE";
-                case Rarity.Epic: return "EPIC";
-            }
-            return "COMMON";
         }
 
         public static Color RoleColor(HeroRole role)
@@ -263,12 +261,5 @@ namespace Emberfall.UI
             return role.ToString().ToUpperInvariant();
         }
 
-        public static string Stars(Rarity rarity)
-        {
-            int count = (int)rarity;
-            string s = "";
-            for (int i = 0; i < count; i++) s += "*";
-            return s;
-        }
     }
 }

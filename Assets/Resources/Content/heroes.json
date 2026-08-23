@@ -1,6 +1,6 @@
 {
   // Emberfall prototype roster. Six original heroes, one per combat role.
-  // Base stats are role-comparable; rarity is applied as a multiplier in StatMath.
+  // Base stats are role-comparable; star tier is applied as a multiplier in StatMath.
   "heroes": [
     {
       "id": "orrin_kaal",
@@ -8,7 +8,8 @@
       "title": "Bulwark of Ash",
       "role": "Bulwark",
       "aspect": "Lumen",
-      "rarity": "Common",
+      "stars": 5,
+      "fusable": true,
       "startingHero": true,
       "lore": "Held the Cinder Gate alone for nine nights. The ash never fully washed out of his skin.",
       "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
@@ -44,7 +45,8 @@
       "title": "Bloom of Cinders",
       "role": "Breaker",
       "aspect": "Ember",
-      "rarity": "Common",
+      "stars": 5,
+      "fusable": true,
       "startingHero": true,
       "lore": "Forge-taught, temple-exiled. Believes fire is simply an argument that wins.",
       "hp": 1450, "attack": 186, "defense": 62, "speed": 96,
@@ -73,7 +75,8 @@
       "title": "Keeper of the Green Hour",
       "role": "Mender",
       "aspect": "Verdant",
-      "rarity": "Common",
+      "stars": 5,
+      "fusable": true,
       "startingHero": true,
       "lore": "Grew a garden in a crater. Insists that was the easy part.",
       "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
@@ -107,7 +110,8 @@
       "title": "Stormlance",
       "role": "Striker",
       "aspect": "Gale",
-      "rarity": "Rare",
+      "stars": 5,
+      "fusable": true,
       "startingHero": false,
       "lore": "Rides ahead of her own thunder and complains when it is late.",
       "hp": 1500, "attack": 205, "defense": 66, "speed": 118,
@@ -141,7 +145,8 @@
       "title": "Cadence of the Deep",
       "role": "Warden",
       "aspect": "Tide",
-      "rarity": "Rare",
+      "stars": 5,
+      "fusable": true,
       "startingHero": false,
       "lore": "Conducts a battle the way other people conduct a choir.",
       "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
@@ -176,7 +181,8 @@
       "title": "The Quiet Verdict",
       "role": "Stalker",
       "aspect": "Umbra",
-      "rarity": "Epic",
+      "stars": 5,
+      "fusable": true,
       "startingHero": false,
       "lore": "Contracted to end a war. Ended the people who were profiting from it instead.",
       "hp": 1420, "attack": 227, "defense": 58, "speed": 126,

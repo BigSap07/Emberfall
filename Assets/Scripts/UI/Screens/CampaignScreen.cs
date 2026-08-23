@@ -85,7 +85,7 @@ namespace Emberfall.UI.Screens
                 if (slot < team.Count)
                 {
                     HeroInstance hero = team[slot];
-                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Rarity, portraitSize, true);
+                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Stars, portraitSize, true);
                     UIBuilder.Sized(portrait, portraitSize, portraitSize);
                     if (slot == 0) AddFrontSlotLabel(portrait, portraitSize);
                 }

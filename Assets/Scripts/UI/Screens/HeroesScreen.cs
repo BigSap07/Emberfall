@@ -87,8 +87,8 @@ namespace Emberfall.UI.Screens
 
         private static int CompareLockedHeroes(HeroDef a, HeroDef b)
         {
-            int byRarity = a.Rarity.CompareTo(b.Rarity);
-            if (byRarity != 0) return byRarity;
+            int byStars = b.Stars.CompareTo(a.Stars); // descending: higher star first
+            if (byStars != 0) return byStars;
             return string.CompareOrdinal(a.Id, b.Id);
         }
 

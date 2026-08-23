@@ -52,7 +52,7 @@ namespace Emberfall.UI.Screens
             _portal = UIBuilder.Node("Portal", Root);
             UIBuilder.Box(_portal, -480f, -20f, 680f, 680f, new Vector2(0.5f, 0.5f));
 
-            Image halo = UIBuilder.Img("Halo", _portal, TextureLab.Glow(256, 1.6f), UITheme.WithAlpha(UITheme.RarityColor(Rarity.Epic), 0.20f));
+            Image halo = UIBuilder.Img("Halo", _portal, TextureLab.Glow(256, 1.6f), UITheme.WithAlpha(UITheme.StarColor(5), 0.20f));
             UIBuilder.FillParent(halo.rectTransform, -70f);
 
             _portalRingOuter = UIBuilder.Img("RingOuter", _portal, TextureLab.Ring(256, 10), UITheme.WithAlpha(UITheme.Shard, 0.75f));
@@ -61,7 +61,7 @@ namespace Emberfall.UI.Screens
             _portalRingInner = UIBuilder.Img("RingInner", _portal, TextureLab.Ring(256, 16), UITheme.WithAlpha(UITheme.Ember, 0.6f));
             UIBuilder.FillParent(_portalRingInner.rectTransform, 92f);
 
-            _portalCore = UIBuilder.Img("Core", _portal, TextureLab.Glow(192, 2.4f), UITheme.WithAlpha(UITheme.RarityColor(Rarity.Epic), 0.55f));
+            _portalCore = UIBuilder.Img("Core", _portal, TextureLab.Glow(192, 2.4f), UITheme.WithAlpha(UITheme.StarColor(5), 0.55f));
             UIBuilder.FillParent(_portalCore.rectTransform, 150f);
 
             Image sigil = UIBuilder.Img("Sigil", _portal, TextureLab.Sigil(13, 128), UITheme.WithAlpha(UITheme.TextPrimary, 0.85f));
@@ -87,20 +87,22 @@ namespace Emberfall.UI.Screens
             UIBuilder.HStack(row, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
             BalanceConfig balance = App.Session.Balance;
-            float total = balance.SummonWeightCommon + balance.SummonWeightRare + balance.SummonWeightEpic;
-            AddRate(row, Rarity.Common, balance.SummonWeightCommon / total);
-            AddRate(row, Rarity.Rare, balance.SummonWeightRare / total);
-            AddRate(row, Rarity.Epic, balance.SummonWeightEpic / total);
+            float[] w = { balance.SummonWeight1, balance.SummonWeight2, balance.SummonWeight3,
+                           balance.SummonWeight4, balance.SummonWeight5 };
+            float total = 0f;
+            for (int i = 0; i < w.Length; i++) total += w[i];
+            if (total <= 0f) total = 1f;
+            for (int s = 1; s <= 5; s++)
+                if (w[s - 1] > 0f) AddRate(row, s, w[s - 1] / total);
         }
 
-        private void AddRate(RectTransform parent, Rarity rarity, float chance)
+        private void AddRate(RectTransform parent, int stars, float chance)
         {
-            RectTransform cell = UIBuilder.Node("Rate" + rarity, parent);
+            RectTransform cell = UIBuilder.Node("Rate" + stars, parent);
             UIBuilder.Flexible(cell, 1f, 0f);
 
-            Text label = UIBuilder.Label("Label", cell, UITheme.RarityName(rarity), UITheme.FontTiny,
-                                         UITheme.RarityColor(rarity), TextAnchor.UpperCenter);
-            UIBuilder.Box(label.rectTransform, 0f, 0f, 260f, 26f, new Vector2(0.5f, 1f));
+            RectTransform starRow = Widgets.StarRow("Stars", cell, stars, 18f);
+            UIBuilder.Box(starRow, 0f, 0f, 96f, 18f, new Vector2(0.5f, 1f));
 
             Text value = UIBuilder.Label("Value", cell, Mathf.Round(chance * 1000f) / 10f + "%", UITheme.FontBody,
                                          UITheme.TextPrimary, TextAnchor.LowerCenter);
@@ -222,18 +224,19 @@ namespace Emberfall.UI.Screens
         private IEnumerator PlayReveal(SummonOutcome outcome)
         {
             HeroDef def = outcome.Hero;
-            Color rarityColor = UITheme.RarityColor(def.Rarity);
+            Color starColor = UITheme.StarColor(def.Stars);
             _lastSummoned = outcome.Instance;
 
             for (int i = _revealPortraitHost.childCount - 1; i >= 0; i--)
                 Destroy(_revealPortraitHost.GetChild(i).gameObject);
-            RectTransform portrait = Widgets.Portrait("Portrait", _revealPortraitHost, def, def.Rarity, 340f, true);
+            RectTransform portrait = Widgets.Portrait("Portrait", _revealPortraitHost, def, def.Stars, 340f, true);
             UIBuilder.FillParent(portrait, 0f);
 
-            _revealGlow.color = UITheme.WithAlpha(rarityColor, 0.34f);
-            _revealTag.text = UITheme.RarityName(def.Rarity) + "  -  " + UITheme.RoleName(def.Role)
+            _revealGlow.color = UITheme.WithAlpha(starColor, 0.34f);
+            string starGlyphs = new string('★', def.Stars) + new string('☆', 5 - def.Stars);
+            _revealTag.text = starGlyphs + "  -  " + UITheme.RoleName(def.Role)
                               + "  -  " + AspectChart.DisplayName(def.Aspect);
-            _revealTag.color = rarityColor;
+            _revealTag.color = starColor;
             _revealName.text = def.Name;
             _revealTitle.text = def.Title.ToUpperInvariant();
             _revealNote.text = outcome.IsNew
@@ -258,7 +261,7 @@ namespace Emberfall.UI.Screens
             _revealGroup.alpha = 1f;
             _revealPortraitHost.localScale = Vector3.one;
 
-            if (def.Rarity == Rarity.Epic) App.Audio.Victory();
+            if (def.Stars >= 5) App.Audio.Victory();
             else App.Audio.Reward();
         }
 

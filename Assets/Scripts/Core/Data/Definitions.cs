@@ -245,7 +245,8 @@ namespace Emberfall.Core.Data
         public string Title = "";
         public string Lore = "";
         public HeroRole Role = HeroRole.Striker;
-        public Rarity Rarity = Rarity.Common;
+        public int Stars = 5;
+        public bool Fusable = true;
         public bool StartingHero;
 
         public static HeroDef FromJson(JsonValue j)
@@ -255,7 +256,8 @@ namespace Emberfall.Core.Data
             h.Title = j.GetString("title", "");
             h.Lore = j.GetString("lore", "");
             h.Role = EnumUtil.Parse(j.GetString("role", "Striker"), HeroRole.Striker);
-            h.Rarity = EnumUtil.Parse(j.GetString("rarity", "Common"), Rarity.Common);
+            h.Stars = Math.Max(1, Math.Min(5, j.GetInt("stars", 5)));
+            h.Fusable = j.GetBool("fusable", true);
             h.StartingHero = j.GetBool("startingHero", false);
             return h;
         }
@@ -534,9 +536,11 @@ namespace Emberfall.Core.Data
 
         // summoning
         public int SummonCost = 120;
-        public float SummonWeightCommon = 62f;
-        public float SummonWeightRare = 29f;
-        public float SummonWeightEpic = 9f;
+        public float SummonWeight1 = 0f;
+        public float SummonWeight2 = 0f;
+        public float SummonWeight3 = 62f;
+        public float SummonWeight4 = 29f;
+        public float SummonWeight5 = 9f;
         public int DuplicateGold = 450;
         public int DuplicateShards = 30;
 
@@ -579,9 +583,11 @@ namespace Emberfall.Core.Data
             b.RelicMaxTier = j.GetInt("relicMaxTier", b.RelicMaxTier);
             b.RelicShopPrice = j.GetInt("relicShopPrice", b.RelicShopPrice);
             b.SummonCost = j.GetInt("summonCost", b.SummonCost);
-            b.SummonWeightCommon = j.GetFloat("summonWeightCommon", b.SummonWeightCommon);
-            b.SummonWeightRare = j.GetFloat("summonWeightRare", b.SummonWeightRare);
-            b.SummonWeightEpic = j.GetFloat("summonWeightEpic", b.SummonWeightEpic);
+            b.SummonWeight1 = j.GetFloat("summonWeight1", b.SummonWeight1);
+            b.SummonWeight2 = j.GetFloat("summonWeight2", b.SummonWeight2);
+            b.SummonWeight3 = j.GetFloat("summonWeight3", b.SummonWeight3);
+            b.SummonWeight4 = j.GetFloat("summonWeight4", b.SummonWeight4);
+            b.SummonWeight5 = j.GetFloat("summonWeight5", b.SummonWeight5);
             b.DuplicateGold = j.GetInt("duplicateGold", b.DuplicateGold);
             b.DuplicateShards = j.GetInt("duplicateShards", b.DuplicateShards);
             b.StartingGold = j.GetInt("startingGold", b.StartingGold);

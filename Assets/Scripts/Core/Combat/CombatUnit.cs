@@ -25,7 +25,7 @@ namespace Emberfall.Core.Combat
         public int Level = 1;
         public Aspect Aspect = Aspect.Ember;
         public HeroRole Role = HeroRole.Striker;
-        public Rarity Rarity = Rarity.Common;
+        public int Stars = 5;
         public bool IsBoss;
         public VisualDef Visual = new VisualDef();
 
@@ -262,7 +262,7 @@ namespace Emberfall.Core.Combat
             s.Speed = Speed;
             s.Aspect = Aspect;
             s.Role = Role;
-            s.Rarity = Rarity;
+            s.Stars = Stars;
             s.IsBoss = IsBoss;
             s.Visual = Visual;
             s.EnergyMax = EnergyMax;
@@ -315,7 +315,7 @@ namespace Emberfall.Core.Combat
             if (hero != null)
             {
                 u.Role = hero.Role;
-                u.Rarity = hero.Rarity;
+                u.Stars = hero.Stars;
             }
             EnemyDef enemy = def as EnemyDef;
             if (enemy != null)

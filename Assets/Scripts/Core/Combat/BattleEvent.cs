@@ -126,7 +126,7 @@ namespace Emberfall.Core.Combat
         public int Power;
         public Aspect Aspect = Aspect.Ember;
         public HeroRole Role = HeroRole.Striker;
-        public Rarity Rarity = Rarity.Common;
+        public int Stars = 5;
         public bool IsBoss;
         public VisualDef Visual = new VisualDef();
         public string ActiveAbilityName = "";

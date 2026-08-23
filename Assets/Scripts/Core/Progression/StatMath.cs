@@ -33,21 +33,28 @@ namespace Emberfall.Core.Progression
     /// </summary>
     public static class StatMath
     {
-        /// <summary>Rarity is applied here rather than baked into the JSON so base stats stay role-comparable.</summary>
-        public static float RarityMultiplier(Rarity rarity)
+        /// <summary>
+        /// Star tier is applied here rather than baked into the JSON so base stats stay
+        /// role-comparable. Curve is a placeholder subject to task-14 retuning.
+        /// Stars 3/4/5 preserve the old Common/Rare/Epic multipliers exactly.
+        /// </summary>
+        public static float StarMultiplier(int stars)
         {
-            switch (rarity)
+            switch (stars)
             {
-                case Rarity.Rare: return 1.16f;
-                case Rarity.Epic: return 1.34f;
+                case 1: return 0.70f;
+                case 2: return 0.85f;
+                case 3: return 1.00f;
+                case 4: return 1.16f;
+                case 5: return 1.34f;
             }
-            return 1f;
+            return 1.00f;
         }
 
         public static UnitStats ForHero(HeroDef def, int level)
         {
-            float rarity = RarityMultiplier(def.Rarity);
-            return Build(def, level, rarity);
+            float starMult = StarMultiplier(def.Stars);
+            return Build(def, level, starMult);
         }
 
         public static UnitStats ForEnemy(EnemyDef def, int level)

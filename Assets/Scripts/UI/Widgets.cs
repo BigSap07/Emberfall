@@ -9,8 +9,8 @@ namespace Emberfall.UI
     /// <summary>Reusable game-specific pieces built on top of UIBuilder.</summary>
     public static class Widgets
     {
-        /// <summary>Circular unit portrait: aspect-tinted disc, emblem, rarity ring.</summary>
-        public static RectTransform Portrait(string name, Transform parent, UnitDef def, Rarity rarity, float size, bool showRing)
+        /// <summary>Circular unit portrait: aspect-tinted disc, emblem, star-tier ring.</summary>
+        public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing)
         {
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Size(root, size, size);
@@ -33,23 +33,36 @@ namespace Emberfall.UI
 
             if (showRing)
             {
-                Image ring = UIBuilder.Img("Ring", root, TextureLab.Ring(160, 8), UITheme.RarityColor(rarity));
+                Image ring = UIBuilder.Img("Ring", root, TextureLab.Ring(160, 8), UITheme.StarColor(stars));
                 UIBuilder.FillParent(ring.rectTransform, 0f);
             }
 
             return root;
         }
 
-        /// <summary>Row of small stars indicating rarity.</summary>
-        public static RectTransform StarRow(string name, Transform parent, Rarity rarity, float starSize)
+        /// <summary>
+        /// Row of five star glyphs: hero's earned stars filled (★), remaining empty (☆).
+        /// Uses Unicode characters so it never depends on a separate star sprite asset.
+        /// Flag for art: replace with sprite-based stars once assets are available.
+        /// </summary>
+        public static RectTransform StarRow(string name, Transform parent, int stars, float starSize)
         {
-            int count = (int)rarity;
+            const int Total = 5;
+            float gap = 3f;
             RectTransform root = UIBuilder.Node(name, parent);
-            UIBuilder.Size(root, starSize * count + 4f * (count - 1), starSize);
-            UIBuilder.HStack(root, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-            for (int i = 0; i < count; i++)
+            UIBuilder.Size(root, starSize * Total + gap * (Total - 1), starSize);
+            UIBuilder.HStack(root, gap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+            Color filled = UITheme.StarColor(stars);
+            Color empty  = UITheme.WithAlpha(UITheme.TextDim, 0.55f);
+            int fontSize = (int)starSize;
+            for (int i = 0; i < Total; i++)
             {
-                Image star = UIBuilder.Img("Star" + i, root, TextureLab.Sigil(13, 48), UITheme.RarityColor(rarity));
+                bool isFilled = i < stars;
+                Text star = UIBuilder.Label("Star" + i, root,
+                    isFilled ? "★" : "☆",
+                    fontSize,
+                    isFilled ? filled : empty,
+                    TextAnchor.MiddleCenter);
                 UIBuilder.Sized(star.rectTransform, starSize, starSize);
             }
             return root;
@@ -141,15 +154,15 @@ namespace Emberfall.UI
             Image wash = UIBuilder.Img("Wash", card.Root, TextureLab.Glow(128, 1.5f), UITheme.WithAlpha(aspect, 0.16f));
             UIBuilder.FillParent(wash.rectTransform, 0f);
 
-            card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.RarityColor(def.Rarity), 0.6f), 20, 2);
+            card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.StarColor(def.Stars), 0.6f), 20, 2);
 
-            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Rarity, 128f, true);
+            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, true);
             UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
 
             Text nameLabel = UIBuilder.Label("Name", card.Root, def.Name, UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
             UIBuilder.Box(nameLabel.rectTransform, 0f, -156f, 260f, 30f, new Vector2(0.5f, 1f));
 
-            RectTransform stars = StarRow("Stars", card.Root, def.Rarity, 18f);
+            RectTransform stars = StarRow("Stars", card.Root, def.Stars, 18f);
             UIBuilder.Box(stars, 0f, -190f, 120f, 18f, new Vector2(0.5f, 1f));
 
             RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), UITheme.FontTiny);
@@ -193,7 +206,7 @@ namespace Emberfall.UI
 
             card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.BorderSoft, 0.7f), 20, 2);
 
-            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Rarity, 128f, false);
+            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, false);
             UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
             // dimmed silhouette: a dark scrim over the portrait hides the palette/sigil detail
             // without hiding the shape, and the whole card fades to signal "not yours yet"

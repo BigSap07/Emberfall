@@ -205,7 +205,7 @@ namespace Emberfall.UI.Screens
             bool locked = _hero == null;
 
             for (int i = _portraitHost.childCount - 1; i >= 0; i--) Destroy(_portraitHost.GetChild(i).gameObject);
-            RectTransform portrait = Widgets.Portrait("Portrait", _portraitHost, def, def.Rarity, 176f, !locked);
+            RectTransform portrait = Widgets.Portrait("Portrait", _portraitHost, def, def.Stars, 176f, !locked);
             UIBuilder.FillParent(portrait, 0f);
             if (locked)
             {
@@ -215,7 +215,7 @@ namespace Emberfall.UI.Screens
             }
 
             for (int i = _chipRow.childCount - 1; i >= 0; i--) Destroy(_chipRow.GetChild(i).gameObject);
-            AddChip(UITheme.RarityName(def.Rarity), UITheme.RarityColor(def.Rarity), 180f);
+            Widgets.StarRow("Stars", _chipRow, def.Stars, 22f);
             AddChip(UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), 190f);
             AddChip(AspectChart.DisplayName(def.Aspect), UITheme.AspectColor(def.Aspect), 170f);
 
@@ -230,7 +230,7 @@ namespace Emberfall.UI.Screens
                                     def.Active.Description, UITheme.Energy, def.Visual.Sigil);
             if (def.Passive != null)
                 Widgets.AbilityCard("Passive", _abilityHost, "PASSIVE", def.Passive.Name,
-                                    def.Passive.Description, UITheme.RarityColor(def.Rarity), def.Visual.Sigil);
+                                    def.Passive.Description, UITheme.StarColor(def.Stars), def.Visual.Sigil);
 
             _nameLabel.text = def.Name;
             _titleLabel.text = def.Title.ToUpperInvariant();

@@ -24,13 +24,6 @@ namespace Emberfall.Core.Data
         Stalker  // assassin
     }
 
-    public enum Rarity
-    {
-        Common = 3,
-        Rare = 4,
-        Epic = 5
-    }
-
     public enum AbilityKind
     {
         BasicAttack,

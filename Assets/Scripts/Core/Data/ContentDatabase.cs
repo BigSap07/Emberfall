@@ -217,10 +217,10 @@ namespace Emberfall.Core.Data
             }
         }
 
-        public List<HeroDef> HeroesOfRarity(Rarity rarity)
+        public List<HeroDef> HeroesOfStars(int stars)
         {
             List<HeroDef> result = new List<HeroDef>();
-            for (int i = 0; i < Heroes.Count; i++) if (Heroes[i].Rarity == rarity) result.Add(Heroes[i]);
+            for (int i = 0; i < Heroes.Count; i++) if (Heroes[i].Stars == stars) result.Add(Heroes[i]);
             return result;
         }
     }

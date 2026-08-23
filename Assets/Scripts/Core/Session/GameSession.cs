@@ -603,16 +603,20 @@ namespace Emberfall.Core.Session
 
         private HeroDef RollHero(DeterministicRng rng)
         {
-            float common = Balance.SummonWeightCommon;
-            float rare = Balance.SummonWeightRare;
-            float epic = Balance.SummonWeightEpic;
+            float[] weights = {
+                Balance.SummonWeight1,
+                Balance.SummonWeight2,
+                Balance.SummonWeight3,
+                Balance.SummonWeight4,
+                Balance.SummonWeight5,
+            };
 
-            // only offer rarities that actually have heroes
-            if (Content.HeroesOfRarity(Rarity.Common).Count == 0) common = 0f;
-            if (Content.HeroesOfRarity(Rarity.Rare).Count == 0) rare = 0f;
-            if (Content.HeroesOfRarity(Rarity.Epic).Count == 0) epic = 0f;
+            // zero out star tiers that have no heroes in the pool
+            for (int s = 1; s <= 5; s++)
+                if (Content.HeroesOfStars(s).Count == 0) weights[s - 1] = 0f;
 
-            float total = common + rare + epic;
+            float total = 0f;
+            for (int i = 0; i < weights.Length; i++) total += weights[i];
             if (total <= 0f)
             {
                 if (Content.Heroes.Count == 0) return null;
@@ -620,12 +624,15 @@ namespace Emberfall.Core.Session
             }
 
             float roll = rng.NextFloat() * total;
-            Rarity rarity;
-            if (roll < epic) rarity = Rarity.Epic;
-            else if (roll < epic + rare) rarity = Rarity.Rare;
-            else rarity = Rarity.Common;
+            int stars = 5;
+            float acc = 0f;
+            for (int i = 0; i < 5; i++)
+            {
+                acc += weights[i];
+                if (roll < acc) { stars = i + 1; break; }
+            }
 
-            List<HeroDef> pool = Content.HeroesOfRarity(rarity);
+            List<HeroDef> pool = Content.HeroesOfStars(stars);
             if (pool.Count == 0) pool = Content.Heroes;
             if (pool.Count == 0) return null;
             return pool[rng.Range(0, pool.Count)];

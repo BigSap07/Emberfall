@@ -1974,7 +1974,7 @@ namespace Emberfall.DevHarness
             clone.Active        = active;
             clone.Passive       = null;
             clone.Role          = src.Role;
-            clone.Rarity        = src.Rarity;
+            clone.Stars         = src.Stars;
             return clone;
         }
 
@@ -2096,7 +2096,7 @@ namespace Emberfall.DevHarness
             clone.Title = src.Title;
             clone.Lore = src.Lore;
             clone.Role = src.Role;
-            clone.Rarity = src.Rarity;
+            clone.Stars = src.Stars;
             clone.StartingHero = src.StartingHero;
             return clone;
         }
@@ -4993,7 +4993,7 @@ namespace Emberfall.DevHarness
                 Line("    " + (profile.IsDeployed(h.Uid) ? "*" : " ") + " "
                      + h.DisplayName.PadRight(20) + " Lv" + h.Level.ToString().PadLeft(2)
                      + "  power " + h.Power.ToString().PadLeft(6)
-                     + "  " + h.Def.Role + "/" + h.Def.Aspect + "  " + (int)h.Def.Rarity + "*");
+                     + "  " + h.Def.Role + "/" + h.Def.Aspect + "  " + h.Def.Stars + "*");
             }
 
             Check(stuckAt < 0, "a normal player can clear the whole campaign");
@@ -5058,7 +5058,7 @@ namespace Emberfall.DevHarness
             clone.Title = src.Title;
             clone.Lore = src.Lore;
             clone.Role = src.Role;
-            clone.Rarity = src.Rarity;
+            clone.Stars = src.Stars;
             clone.StartingHero = src.StartingHero;
 
             AbilityDef activeClone = new AbilityDef();

@@ -66,9 +66,11 @@
   "relicShopPrice": 80,
 
   "summonCost": 120,
-  "summonWeightCommon": 62,
-  "summonWeightRare": 29,
-  "summonWeightEpic": 9,
+  "summonWeight1": 0,
+  "summonWeight2": 0,
+  "summonWeight3": 0,
+  "summonWeight4": 0,
+  "summonWeight5": 100,
   "duplicateGold": 450,
   "duplicateShards": 30,
 
