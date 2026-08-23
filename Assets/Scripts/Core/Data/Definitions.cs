@@ -499,6 +499,16 @@ namespace Emberfall.Core.Data
         public float IdleShardsPerHourPerStage = 2.2f;
         public float IdleCapHours = 8f;
 
+        // replay economy - see DESIGN-REPLAY-ECONOMY.md
+        /// <summary>Repeat clears of an already-cleared stage that still pay the full purse,
+        /// per stage per UTC day. A player's first clear of a stage is never counted here.</summary>
+        public int RepeatFullClearsPerDay = 3;
+        /// <summary>Fraction of the purse a repeat clear pays once the allowance is spent.
+        /// Zero by design: any positive floor still out-earns the idle cache many times over.</summary>
+        public float RepeatRewardFloor = 0f;
+        /// <summary>Hour of the UTC day the per-stage repeat counters roll over.</summary>
+        public int DailyResetHourUtc = 4;
+
         // summoning
         public int SummonCost = 120;
         public float SummonWeightCommon = 62f;
@@ -540,6 +550,9 @@ namespace Emberfall.Core.Data
             b.IdleShardsPerHourBase = j.GetFloat("idleShardsPerHourBase", b.IdleShardsPerHourBase);
             b.IdleShardsPerHourPerStage = j.GetFloat("idleShardsPerHourPerStage", b.IdleShardsPerHourPerStage);
             b.IdleCapHours = j.GetFloat("idleCapHours", b.IdleCapHours);
+            b.RepeatFullClearsPerDay = j.GetInt("repeatFullClearsPerDay", b.RepeatFullClearsPerDay);
+            b.RepeatRewardFloor = j.GetFloat("repeatRewardFloor", b.RepeatRewardFloor);
+            b.DailyResetHourUtc = j.GetInt("dailyResetHourUtc", b.DailyResetHourUtc);
             b.SummonCost = j.GetInt("summonCost", b.SummonCost);
             b.SummonWeightCommon = j.GetFloat("summonWeightCommon", b.SummonWeightCommon);
             b.SummonWeightRare = j.GetFloat("summonWeightRare", b.SummonWeightRare);

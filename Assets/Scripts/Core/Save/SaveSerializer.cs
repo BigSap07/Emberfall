@@ -26,8 +26,16 @@ namespace Emberfall.Core.Save
         /// key and reads as empty, which is an empty relic slot, which is the default. The bump is
         /// again for the downgrade direction: a version 3 save read by version 2 code silently
         /// drops every equipped relic, and the guard below turns that into a refusal.
+        ///
+        /// 4: the repeat cap's dailyResetUnix and stageClearsToday map (DESIGN-REPLAY-ECONOMY).
+        /// Upgrade needs no migration: a version 3 save has neither key, reads as stamp 0 with an
+        /// empty map, and the first clear afterwards rolls the stamp to the current reward day -
+        /// which is exactly a player who has spent none of today's paid repeats, the correct and
+        /// generous default. The bump is once more for the downgrade direction: version 3 code
+        /// drops both keys, so a capped-out player who rolled back would silently get their whole
+        /// day of paid repeats handed back, and the guard below refuses instead.
         /// </summary>
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 4;
 
         public static string Serialize(PlayerProfile profile)
         {
@@ -41,6 +49,7 @@ namespace Emberfall.Core.Save
             root.Set("stagesCleared", profile.StagesCleared);
             root.Set("lastIdleClaimUnix", profile.LastIdleClaimUnix);
             root.Set("lastSaveUnix", profile.LastSaveUnix);
+            root.Set("dailyResetUnix", profile.DailyResetUnix);
             root.Set("nextHeroUid", profile.NextHeroUid);
             root.Set("totalSummons", profile.TotalSummons);
             root.Set("totalBattlesWon", profile.TotalBattlesWon);
@@ -65,6 +74,15 @@ namespace Emberfall.Core.Save
                 heroes.Add(hj);
             }
             root.Set("heroes", heroes);
+
+            // Zero counts are dropped rather than written: absent already means zero on the way
+            // back in, so a player who has farmed nothing today serialises no map at all.
+            JsonValue clearsToday = JsonValue.NewObject();
+            foreach (KeyValuePair<string, int> pair in profile.StageClearsToday)
+            {
+                if (pair.Value > 0) clearsToday.Set(pair.Key, pair.Value);
+            }
+            root.Set("stageClearsToday", clearsToday);
 
             JsonValue team = JsonValue.NewArray();
             for (int i = 0; i < profile.Team.Length; i++) team.Add(new JsonValue(profile.Team[i]));
@@ -99,6 +117,7 @@ namespace Emberfall.Core.Save
             profile.StagesCleared = Math.Max(0, root.GetInt("stagesCleared", 0));
             profile.LastIdleClaimUnix = root.GetLong("lastIdleClaimUnix", 0);
             profile.LastSaveUnix = root.GetLong("lastSaveUnix", 0);
+            profile.DailyResetUnix = Math.Max(0, root.GetLong("dailyResetUnix", 0));
             profile.NextHeroUid = Math.Max(1, root.GetInt("nextHeroUid", 1));
             profile.TotalSummons = root.GetInt("totalSummons", 0);
             profile.TotalBattlesWon = root.GetInt("totalBattlesWon", 0);
@@ -131,6 +150,16 @@ namespace Emberfall.Core.Save
                 // to content restores the equip rather than silently having wiped it.
                 h.RelicId = hj.GetString("relicId", "");
                 profile.Heroes.Add(h);
+            }
+
+            // Stage ids are not validated against content here for the same reason relic ids are
+            // not: a stage that vanished and came back should not have had its counter wiped in
+            // between, and a counter against an id nothing can launch is inert either way.
+            JsonValue clearsToday = root["stageClearsToday"];
+            foreach (string stageId in clearsToday.Keys)
+            {
+                int count = clearsToday[stageId].AsInt(0);
+                if (count > 0) profile.StageClearsToday[stageId] = count;
             }
 
             List<JsonValue> team = root.GetList("team");

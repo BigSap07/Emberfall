@@ -39,6 +39,16 @@
   "idleShardsPerHourPerStage": 2.2,
   "idleCapHours": 10,
 
+  // Replay economy - see DESIGN-REPLAY-ECONOMY.md. Repeat clears of an already-cleared stage that
+  // still pay the full purse, counted per stage per UTC day. Past the allowance the fight still
+  // runs, still counts as a win and still teaches, but pays repeatRewardFloor of the purse.
+  "repeatFullClearsPerDay": 3,
+  // Has to be 0. A 25% floor still leaves ~19,200 gold/hour at 240 clears an hour, 15x the idle
+  // cache; only zero actually bites. A player's FIRST clear of a stage is never capped.
+  "repeatRewardFloor": 0.0,
+  // Hour of the UTC day the per-stage counters roll over.
+  "dailyResetHourUtc": 4,
+
   "summonCost": 120,
   "summonWeightCommon": 62,
   "summonWeightRare": 29,

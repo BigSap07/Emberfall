@@ -64,6 +64,22 @@ namespace Emberfall.Core.Model
 
         public long LastIdleClaimUnix;
         public long LastSaveUnix;
+
+        /// <summary>
+        /// Start of the reward day the StageClearsToday counters below belong to: the most recent
+        /// BalanceConfig.DailyResetHourUtc boundary at or before the clear that last touched them.
+        /// GameSession only ever moves this forward - with no server the device clock is the only
+        /// source of truth, so winding it backwards must not hand out a fresh day of paid clears.
+        /// </summary>
+        public long DailyResetUnix;
+
+        /// <summary>
+        /// Repeat clears banked against each stage id since DailyResetUnix - stage id to count,
+        /// absent meaning zero. A player's FIRST clear of a stage is progress rather than farming
+        /// and is never counted here. Emptied wholesale when the reward day rolls over.
+        /// </summary>
+        public readonly Dictionary<string, int> StageClearsToday = new Dictionary<string, int>();
+
         public int NextHeroUid = 1;
         public int TotalSummons;
         public int TotalBattlesWon;
@@ -161,6 +177,15 @@ namespace Emberfall.Core.Model
         public bool HasClearedStage(string stageId)
         {
             return ClearedStageIds.Contains(stageId);
+        }
+
+        /// <summary>Repeat clears already banked against a stage today. Never throws on an
+        /// unknown id - a stage nobody has farmed today simply reads zero.</summary>
+        public int ClearsTodayFor(string stageId)
+        {
+            int count;
+            if (string.IsNullOrEmpty(stageId)) return 0;
+            return StageClearsToday.TryGetValue(stageId, out count) ? count : 0;
         }
 
         public string AllocateUid()
