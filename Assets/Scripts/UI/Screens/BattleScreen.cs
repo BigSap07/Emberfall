@@ -1123,6 +1123,9 @@ namespace Emberfall.UI.Screens
             if (_result.Victory)
             {
                 if (rewards.FirstClear) AddRewardRow("FIRST CLEAR BONUS", "INCLUDED", UITheme.Success);
+                // Why the purse below reads zero, said before the player reads it as a bug.
+                else if (rewards.RepeatCapped) AddRewardRow("DAILY REPEAT CAP", "REACHED", UITheme.Warning);
+                else AddRewardRow("PAID REPEATS LEFT TODAY", rewards.RepeatClearsRemaining.ToString(), UITheme.TextMuted);
                 AddRewardRow("GOLD", "+" + rewards.Gold, UITheme.Gold);
                 AddRewardRow("EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
                 AddRewardRow("WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);

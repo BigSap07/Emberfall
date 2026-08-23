@@ -54,6 +54,7 @@ namespace Emberfall.DevHarness
             CheckRelics(content);
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
+            CheckRepeatCap(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckPinnedFiveBodyCurve(content);
@@ -3792,6 +3793,158 @@ namespace Emberfall.DevHarness
             string error2;
             PlayerProfile fromGarbage = SaveSerializer.Deserialize("{ not json", db, out error2);
             Check(fromGarbage == null && error2 != null, "corrupt save is rejected instead of throwing");
+            Line("");
+        }
+
+        /// <summary>
+        /// The daily repeat cap, forced at every boundary rather than read off the diff
+        /// (DESIGN-REPLAY-ECONOMY). Proves: a first clear is never counted or capped; the next
+        /// repeatFullClearsPerDay repeats pay the full purse; the one after pays the floor, which
+        /// is zero, while still counting as a win; the counter is per stage, not global; the reset
+        /// lands exactly on dailyResetHourUtc and not a second early; a clock wound backwards
+        /// grants nothing; and both new fields survive a save round trip.
+        /// </summary>
+        private static void CheckRepeatCap(ContentDatabase db)
+        {
+            Line("REPEAT CAP");
+
+            int allowance = db.Balance.RepeatFullClearsPerDay;
+            Check(allowance == 3, "balance.repeatFullClearsPerDay is 3 (" + allowance + ")");
+            Check(db.Balance.RepeatRewardFloor == 0f,
+                  "balance.repeatRewardFloor is 0 - a positive floor still out-earns idle (" + Fmt(db.Balance.RepeatRewardFloor) + ")");
+            Check(db.Balance.DailyResetHourUtc == 4, "balance.dailyResetHourUtc is 4 (" + db.Balance.DailyResetHourUtc + ")");
+            Check(SaveSerializer.CurrentVersion == 4, "save version bumped to 4 (" + SaveSerializer.CurrentVersion + ")");
+
+            if (db.AllStages.Count < 2) { Check(false, "need two stages to check per-stage counting"); Line(""); return; }
+            StageDef stageA = db.AllStages[0];
+            StageDef stageB = db.AllStages[1];
+
+            // 2023-11-14 12:00:00 UTC - mid-afternoon of a reward day that started at 04:00.
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+
+            long dayStart = session.DayStartUnix(Noon);
+            Check(dayStart == Noon - 8L * 3600L,
+                  "reward day starts at 04:00 UTC, 8h before noon (" + (Noon - dayStart) + "s back)");
+
+            // ---- first clear: full purse including the first-clear bonus, nothing counted
+            long before = profile.Gold;
+            BattleRewards first = session.GrantBattleResult(stageA, true, Noon);
+            Check(first.Gold == stageA.RewardGold + stageA.FirstClearGold,
+                  "first clear pays purse + first-clear bonus (" + first.Gold + ")");
+            Check(!first.RepeatCapped, "first clear is not capped");
+            Check(profile.ClearsTodayFor(stageA.Id) == 0, "first clear banks no repeat (" + profile.ClearsTodayFor(stageA.Id) + ")");
+            Check(first.RepeatClearsRemaining == allowance,
+                  "a stage just cleared has the full allowance left (" + first.RepeatClearsRemaining + ")");
+            Check(profile.Gold == before + first.Gold, "first clear gold reached the purse");
+
+            // ---- the paid repeats: full purse, no first-clear bonus, counter climbing
+            bool paidOk = true;
+            for (int i = 1; i <= allowance; i++)
+            {
+                BattleRewards r = session.GrantBattleResult(stageA, true, Noon + i);
+                if (r.Gold != stageA.RewardGold || r.Shards != stageA.RewardShards) paidOk = false;
+                if (r.AccountXp != stageA.RewardAccountXp) paidOk = false;
+                if (r.RepeatCapped) paidOk = false;
+                if (profile.ClearsTodayFor(stageA.Id) != i) paidOk = false;
+                if (r.RepeatClearsRemaining != allowance - i) paidOk = false;
+            }
+            Check(paidOk, "the first " + allowance + " repeats pay the full purse and count down to zero");
+            Check(session.RepeatCapReached(stageA, Noon), "the allowance is spent");
+
+            // ---- the clear past the cap: fight ran, win banked, purse zero
+            long goldBefore = profile.Gold;
+            long shardsBefore = profile.Shards;
+            int winsBefore = profile.TotalBattlesWon;
+            int xpBefore = profile.PlayerXp;
+            BattleRewards capped = session.GrantBattleResult(stageA, true, Noon + 100);
+            Check(capped.RepeatCapped, "the clear past the allowance is flagged capped");
+            Check(capped.Gold == 0 && capped.Shards == 0 && capped.AccountXp == 0,
+                  "a capped clear pays nothing at all, not a reduced purse (" + capped.Gold + "g " + capped.Shards + "s " + capped.AccountXp + "xp)");
+            Check(profile.Gold == goldBefore && profile.Shards == shardsBefore, "a capped clear moves no currency");
+            Check(profile.PlayerXp == xpBefore, "a capped clear grants no account xp");
+            Check(profile.TotalBattlesWon == winsBefore + 1, "a capped clear still counts as a win - the fight stays free");
+            Check(profile.ClearsTodayFor(stageA.Id) == allowance,
+                  "a capped clear does not inflate the counter past the allowance (" + profile.ClearsTodayFor(stageA.Id) + ")");
+            Check(session.RepeatClearsRemaining(stageA, Noon + 100) == 0, "the card reads zero left");
+
+            // ---- the cap is per stage, and a NEW stage's first clear is never touched by it
+            BattleRewards otherFirst = session.GrantBattleResult(stageB, true, Noon + 200);
+            Check(otherFirst.Gold == stageB.RewardGold + stageB.FirstClearGold && !otherFirst.RepeatCapped,
+                  "a first clear elsewhere pays in full while stage 1 is capped out - the cap never blocks progress");
+            Check(!session.RepeatCapReached(stageB, Noon + 200), "the fresh stage has its own untouched allowance");
+            Check(session.RepeatCapReached(stageA, Noon + 200), "clearing a neighbour did not uncap stage 1");
+            Check(!session.RepeatCapReached(db.AllStages[db.AllStages.Count - 1], Noon + 200),
+                  "an uncleared stage is never reported as capped");
+
+            // ---- the boundary: one second early is the same day, the boundary itself is not
+            long nextReset = dayStart + 86400L;
+            Check(!session.RollDailyReset(nextReset - 1L), "one second before 04:00 UTC does not roll the day");
+            Check(session.RepeatCapReached(stageA, nextReset - 1L), "and the stage is still capped at 03:59:59");
+            Check(session.RollDailyReset(nextReset), "04:00 UTC exactly rolls the day");
+            Check(profile.StageClearsToday.Count == 0, "the roll empties every stage counter");
+            Check(!session.RepeatCapReached(stageA, nextReset), "the stage is farmable again after the reset");
+            Check(profile.DailyResetUnix == nextReset, "the stamp moved to the new day start (" + profile.DailyResetUnix + ")");
+
+            BattleRewards afterReset = session.GrantBattleResult(stageA, true, nextReset + 60L);
+            Check(afterReset.Gold == stageA.RewardGold && !afterReset.RepeatCapped,
+                  "the first clear of the new day pays the full purse again (" + afterReset.Gold + ")");
+            Check(!afterReset.FirstClear, "and it is still a repeat, not a re-run first clear");
+
+            // ---- a clock wound backwards buys nothing
+            for (int i = 0; i < allowance * 2; i++) session.GrantBattleResult(stageA, true, nextReset + 100L + i);
+            Check(session.RepeatCapReached(stageA, nextReset + 500L), "capped out again on the new day");
+            long stampBefore = profile.DailyResetUnix;
+            Check(!session.RollDailyReset(nextReset - 86400L * 30L), "a clock wound 30 days back does not roll the day");
+            Check(profile.DailyResetUnix == stampBefore, "and the stamp did not move backwards");
+            Check(session.RepeatCapReached(stageA, nextReset - 86400L * 30L),
+                  "the stage stays capped under a backwards clock - the device clock cannot buy a reset");
+
+            // ---- both fields survive the save
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && error == null, "a profile mid-cap serialises" + (error != null ? " (" + error + ")" : ""));
+            if (loaded != null)
+            {
+                Check(loaded.DailyResetUnix == profile.DailyResetUnix,
+                      "dailyResetUnix survives the round trip (" + loaded.DailyResetUnix + ")");
+                Check(loaded.ClearsTodayFor(stageA.Id) == profile.ClearsTodayFor(stageA.Id),
+                      "stageClearsToday survives the round trip (" + loaded.ClearsTodayFor(stageA.Id) + ")");
+                GameSession reloaded = new GameSession(db, loaded);
+                Check(reloaded.RepeatCapReached(stageA, nextReset + 500L),
+                      "a capped player who closes the app is still capped when it reopens");
+            }
+
+            // ---- a pre-cap save, with neither key, reads as a clean uncapped day
+            JsonValue parsed;
+            string parseError;
+            JsonValue.TryParse(json, out parsed, out parseError);
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in parsed.Keys)
+            {
+                if (key == "dailyResetUnix" || key == "stageClearsToday") continue;
+                legacy.Set(key, key == "version" ? new JsonValue((double)3) : parsed[key]);
+            }
+            string error2;
+            PlayerProfile bare = SaveSerializer.Deserialize(legacy.ToJson(true), db, out error2);
+            Check(bare != null && error2 == null, "a version 3 save with neither key still loads" + (error2 != null ? " (" + error2 + ")" : ""));
+            if (bare != null)
+            {
+                Check(bare.DailyResetUnix == 0 && bare.StageClearsToday.Count == 0,
+                      "and reads as stamp 0 with no counters");
+                GameSession upgraded = new GameSession(db, bare);
+                Check(!upgraded.RepeatCapReached(stageA, nextReset + 500L),
+                      "so an upgrading player starts with a full allowance rather than capped");
+            }
+
+            // ---- a save from a newer build is still refused rather than silently uncapped
+            string future = json.Replace("\"version\": 4", "\"version\": 5");
+            string error3;
+            PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out error3);
+            Check(fromFuture == null && error3 != null, "a version 5 save is refused rather than silently uncapped");
+
             Line("");
         }
 

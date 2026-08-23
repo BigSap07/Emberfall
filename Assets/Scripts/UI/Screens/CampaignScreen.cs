@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
@@ -229,8 +230,25 @@ namespace Emberfall.UI.Screens
 
             if (cleared)
             {
-                RectTransform tick = UIBuilder.Chip("Cleared", row, "CLEARED", UITheme.Success, UITheme.FontTiny);
-                UIBuilder.Box(tick, -24f, -20f, 180f, 34f, new Vector2(1f, 1f));
+                // A cleared stage carries one more state than CLEARED: the daily repeat cap
+                // (DESIGN-REPLAY-ECONOMY). It reuses the chip-plus-reward-line language the card
+                // already speaks for LOCKED / CLEARED / NEXT rather than adding a new one, and it
+                // is the only place a player can find out the farm run they are about to start
+                // will pay nothing. The fight itself is still free - the card stays tappable.
+                int repeatsLeft = App.Session.RepeatClearsRemaining(stage, TimeUtil.NowUnix());
+                if (repeatsLeft > 0)
+                {
+                    RectTransform tick = UIBuilder.Chip("Cleared", row, "CLEARED", UITheme.Success, UITheme.FontTiny);
+                    UIBuilder.Box(tick, -24f, -20f, 180f, 34f, new Vector2(1f, 1f));
+                    rewards.text += "   " + repeatsLeft + " LEFT";
+                }
+                else
+                {
+                    RectTransform capped = UIBuilder.Chip("Capped", row, "NO REWARD", UITheme.Warning, UITheme.FontTiny);
+                    UIBuilder.Box(capped, -24f, -20f, 200f, 34f, new Vector2(1f, 1f));
+                    rewards.text = "NO REWARD TODAY";
+                    rewards.color = UITheme.TextDim;
+                }
             }
             else
             {
