@@ -186,6 +186,13 @@ exists yet.
 
 ## Undecided, needs a human
 
+**Opening Gambit — explicitly cut.** A mandatory per-battle choice (one pre-battle decision,
+every fight) is structurally incompatible with idle/auto-battle: the game resolves fights
+unattended, and there is no moment to surface a choice. Reframings considered (per-stage
+standing loadout, pre-stage modifier selection) were not judged worth building at this stage
+of the prototype. This was a deliberate cut, not an oversight — do not re-add it without
+revisiting whether the core loop has changed enough to make active pre-battle decisions viable.
+
 **Smaller forks, not blocking yet.** Umbra at team size 5: DESIGN-ASPECTS flags it as diluted
 (a third of the enemy line removed at team size 3, a fifth at 5) and offers a spread-on-death rule
 or accepting Umbra as a boss-stage specialist. Decide when task 12 reaches Umbra, not before.
@@ -424,7 +431,7 @@ summon weights.
 ## The build order
 
 1. **Push `build-order-1-3`**, land the starting purse change it already contains. `[H]`
-   Blocked by: nothing but the push. Blocks: 3, and the final retune (14) absorbs its win-rate shift.
+   Blocked by: nothing but the push. Blocks: 3, and the final retune (13) absorbs its win-rate shift.
 
 2. **`idleCapHours` 8 to 10.** JSON only. `[H]`
    Blocked by: nothing. Blocks: nothing hard, bundle with 4 or 5 if convenient.
@@ -473,7 +480,7 @@ summon weights.
    task 10. The `[U]` half (five deploys fitting without overlap, an empty slot reading as open) is
    covered by task 9's Play mode pass below, which went through several rounds specifically because
    the first layout did not clear it.
-   Blocks: 9, 10, 11, 12, 14 - all now unblocked on task 8's side.
+   Blocks: 9, 10, 11, 12, 13 - all now unblocked on task 8's side.
 
 **8, 9 and 10 landed together as one merge unit, not 8 and 9 alone, as planned.** Build order
 already paired 8 and 9 for the slot layout, 9 re-lays out exactly the positions 8 builds, so
@@ -519,7 +526,7 @@ confirmed green on CI on `main` after the merge.
      per-environment images replace the sky quad, ground plane and ridge geometry that used to
      dress the 3D scene. See "Art pipeline, outside the numbered order" above for the loader
      itself and the new `Resources/Backgrounds/{environmentId}.png` convention.
-   Blocks: 10, 11, 12, 13, 14 - all now unblocked on task 9's side. Two things are still genuinely
+   Blocks: 10, 11, 12, 13 - all now unblocked on task 9's side. Two things are still genuinely
    unverified and belong to whoever looks next, not to this document: whether the painted
    backdrop's ground line matches where units actually stand, and Orrin's sprite against both the
    final framing and the new three-quarter rotation (see "Art pipeline" above).
@@ -534,7 +541,7 @@ confirmed green on CI on `main` after the merge.
     1. Enemy count ramps 3/3/3/3 (chapter 1), 4/4/4/4 (chapter 1 continued), 5/5/5/5 (the last
     third), not flat five everywhere. `recommendedPower` was raised on six of the twelve stages
     where the composition demanded it; nothing here is final, task 14 is still the real retune.
-    Blocks: 11, 12, 14 - all now unblocked on task 10's side.
+    Blocks: 11, 12, 13 - all now unblocked on task 10's side.
 
 11. **Effect Hit / Effect Resist, phase B.** Author values on six heroes and eight enemies, add
     `StatusResisted`, wire it into the battle screen and Debrief, add the direction check to the
@@ -542,35 +549,30 @@ confirmed green on CI on `main` after the merge.
     battle screen and so wants orientation settled first.
     **Unblocked.** 7, 8, 9 and 10 have all landed on `main`. Nothing is stopping this from
     starting.
-    Blocked by: nothing remaining. Blocks: 14.
+    Blocked by: nothing remaining. Blocks: 13.
 
 12. **Resolve the relic/aspect hook conflict**, then build whichever of Relics and Aspects follows
     from that. `[D]` for the decision, `[H+U]` for the code after, which renders in hero detail and
     on the battle screen.
     Blocked by: the conflict resolution itself, the one blocker left - 8, 9 and 10 have landed.
-    Blocks: 14. If the resolution follows DESIGN-ASPECTS'
+    Blocks: 13. If the resolution follows DESIGN-ASPECTS'
     suggested direction, build Aspects before Relics: two of six relics need rewriting once Aspects
     lands and two more need re-arguing, so building Relics first means doing part of that work twice.
 
-13. **Opening Gambit**, one pre-battle choice, every battle. Touches `BattleRequest`. `[H]` for
-    Core, `[U]` for the pre-battle choice screen, which is new UI and should be built once, in
-    whichever orientation ships.
-    Blocked by: nothing remaining, 9 has landed. Blocks: 14, it changes win rates.
-
-14. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
+13. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
     handful of spot-check battles in `[U]` are still worth watching.
     ⚠️ **`RunCampaignBalancePass` alone is no longer "exactly the tool".** See "Task 14's
     instrument was broken" below: it reported 100% on all twelve stages for reasons that had
     nothing to do with the content, and two prerequisites had to land before it could be tuned
     against at all. Both have now landed; the line above is kept because the retune is still one
     pass, still last.
-    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12 (whatever of it shipped this pass), 13, everything
+    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12 (whatever of it shipped this pass), everything
     above that changes a win rate or an economy number. Blocks: nothing, this is the last task.
 
-Task 14 is the only step that produces a valid win-rate table. Nothing tuned before it should be
+Task 13 is the only step that produces a valid win-rate table. Nothing tuned before it should be
 read as final.
 
-## Task 14's instrument was broken, and what was done about it
+## Task 13's instrument was broken, and what was done about it
 
 Found while checking why the wheel narrowing did not move any win rate: `RunCampaignBalancePass`
 reported **100% on all twelve stages**, and had been doing so since well before that change. An
