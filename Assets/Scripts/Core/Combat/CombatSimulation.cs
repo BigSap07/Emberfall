@@ -171,8 +171,8 @@ namespace Emberfall.Core.Combat
                     // exactly like a hero's level, resolved once here. An id that resolves to
                     // nothing leaves Relic null, which is the same path as an empty slot - content
                     // can drop a relic without bricking a save that still names it.
-                    if (_request.Content != null && !string.IsNullOrEmpty(hero.RelicId))
-                        unit.Relic = _request.Content.GetRelic(hero.RelicId);
+                    if (_request.Content != null && !string.IsNullOrEmpty(hero.EquippedRelicId))
+                        unit.Relic = _request.Content.GetRelic(hero.EquippedRelicId);
                     _units.Add(unit);
                 }
 

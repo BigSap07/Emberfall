@@ -77,7 +77,7 @@ namespace Emberfall.Core.Combat
         public bool PassiveFired;
 
         /// <summary>
-        /// The equipped relic, resolved from HeroInstance.RelicId during setup, or null. Only ever
+        /// The equipped relic, resolved from HeroInstance.EquippedRelicId during setup, or null. Only ever
         /// non-null on a player unit: enemies come from EnemyDef, which has no relic slot, and
         /// DESIGN-RELICS scopes the slot to an owned hero on the hero detail screen.
         /// </summary>

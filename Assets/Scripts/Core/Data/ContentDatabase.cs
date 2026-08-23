@@ -27,8 +27,8 @@ namespace Emberfall.Core.Data
         /// <summary>
         /// Four-file overload, kept so every existing caller compiles untouched - including the
         /// harness's synthetic databases, which build content inline and have no relics to declare.
-        /// A database loaded this way has zero relics, and a HeroInstance.RelicId that resolves to
-        /// nothing simply leaves the unit relicless, which is the same path as an empty slot.
+        /// A database loaded this way has zero relics, and a HeroInstance.EquippedRelicId that
+        /// resolves to nothing simply leaves the unit relicless, the same path as an empty slot.
         /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson)
         {
