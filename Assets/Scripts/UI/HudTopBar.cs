@@ -15,6 +15,7 @@ namespace Emberfall.UI
         private Image _xpFill;
         private Text _goldText;
         private Text _shardText;
+        private Text _dustText;
 
         public void Build(RectTransform parent)
         {
@@ -62,8 +63,9 @@ namespace Emberfall.UI
 
         private void BuildCurrencies()
         {
-            _goldText = BuildCurrencyChip("Gold", -UITheme.ScreenPadding - 220f, UITheme.Gold, "G");
-            _shardText = BuildCurrencyChip("Shards", -UITheme.ScreenPadding, UITheme.Shard, "S");
+            _dustText  = BuildCurrencyChip("Dust",   -UITheme.ScreenPadding - 440f, UITheme.Ember, "D");
+            _goldText  = BuildCurrencyChip("Gold",   -UITheme.ScreenPadding - 220f, UITheme.Gold,  "G");
+            _shardText = BuildCurrencyChip("Shards", -UITheme.ScreenPadding,        UITheme.Shard, "S");
         }
 
         private Text BuildCurrencyChip(string name, float x, Color tint, string glyph)
@@ -100,7 +102,8 @@ namespace Emberfall.UI
             int needed = StatMath.PlayerXpForNextLevel(session.Balance, session.Profile.PlayerLevel);
             UIBuilder.SetBar(_xpFill, needed > 0 ? session.Profile.PlayerXp / (float)needed : 0f);
 
-            _goldText.text = Format(session.Profile.Gold);
+            _dustText.text  = Format(session.Profile.RelicDust);
+            _goldText.text  = Format(session.Profile.Gold);
             _shardText.text = Format(session.Profile.Shards);
         }
 
