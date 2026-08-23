@@ -99,6 +99,106 @@
           "enemies": [ { "id": "sundered_colossus", "level": 20 }, { "id": "hollow_husk", "level": 12 }, { "id": "hollow_husk", "level": 12 }, { "id": "grave_moth", "level": 14 }, { "id": "grave_moth", "level": 14 } ]
         }
       ]
+    },
+
+    {
+      // Chapter 2: The Wandering Coast. Tide-dominant, mixed roster. See DESIGN-CHAPTER-2.md.
+      // All numbers are provisional (pre-task-13). Level range ~20-38 is a structural
+      // placeholder — the player EXP/level-gate system is not yet designed, so these levels
+      // are extrapolated from chapter 1's curve, not derived. Environments coast/tidal/deep
+      // have no background assets; the loader will fall back to its missing-file behaviour.
+      // riptide_channeler and tideturned have no sprite art; both render as invisible units.
+      "id": "ch2",
+      "number": 2,
+      "name": "The Wandering Coast",
+      "subtitle": "Follow the redirected tide south, and find out what chose to change.",
+      "stages": [
+        {
+          "id": "ch2_1", "index": 1, "name": "Shorebreak Flats", "subtitle": "The tide doesn't leave. It waits.",
+          "environment": "coast", "gold": 960, "shards": 48, "accountXp": 160, "recommendedPower": 8000,
+          "idleGoldPerHour": 860, "idleShardsPerHour": 35,
+          "firstClearGold": 1600, "firstClearShards": 260,
+          "enemies": [ { "id": "hollow_husk", "level": 20 }, { "id": "grave_moth", "level": 20 }, { "id": "hollow_husk", "level": 21 } ]
+        },
+        {
+          "id": "ch2_2", "index": 2, "name": "The Bleeding Shoal", "subtitle": "Red water, always moving somewhere else.",
+          "environment": "coast", "gold": 1080, "shards": 54, "accountXp": 175, "recommendedPower": 9000,
+          "idleGoldPerHour": 930, "idleShardsPerHour": 38,
+          "firstClearGold": 1800, "firstClearShards": 290,
+          "enemies": [ { "id": "grave_moth", "level": 21 }, { "id": "hollow_husk", "level": 22 }, { "id": "grave_moth", "level": 22 } ]
+        },
+        {
+          "id": "ch2_3", "index": 3, "name": "Saltwind Rise", "subtitle": "Everything carries the smell of a place it left.",
+          "environment": "coast", "gold": 1210, "shards": 60, "accountXp": 192, "recommendedPower": 10000,
+          "idleGoldPerHour": 1000, "idleShardsPerHour": 41,
+          "firstClearGold": 2000, "firstClearShards": 320,
+          "enemies": [ { "id": "tidecaller_wretch", "level": 22 }, { "id": "grave_moth", "level": 23 }, { "id": "hollow_husk", "level": 22 } ]
+        },
+        {
+          "id": "ch2_4", "index": 4, "name": "The Drifting Causeway", "subtitle": "The road was here last month.",
+          "environment": "coast", "gold": 1360, "shards": 68, "accountXp": 212, "recommendedPower": 11500,
+          "idleGoldPerHour": 1080, "idleShardsPerHour": 44,
+          "firstClearGold": 2250, "firstClearShards": 360,
+          "enemies": [ { "id": "tidecaller_wretch", "level": 24 }, { "id": "hollow_husk", "level": 24 }, { "id": "grave_moth", "level": 23 } ]
+        },
+        {
+          "id": "ch2_5", "index": 5, "name": "Tidal Grottos", "subtitle": "The sea decides which passages stay open.",
+          "environment": "tidal", "gold": 1520, "shards": 76, "accountXp": 233, "recommendedPower": 13000,
+          "idleGoldPerHour": 1160, "idleShardsPerHour": 48,
+          "firstClearGold": 2500, "firstClearShards": 400,
+          "enemies": [ { "id": "riptide_channeler", "level": 25 }, { "id": "grave_moth", "level": 25 }, { "id": "tidecaller_wretch", "level": 24 }, { "id": "hollow_husk", "level": 24 } ]
+        },
+        {
+          "id": "ch2_6", "index": 6, "name": "Undertow Channel", "subtitle": "Strong swimmers have disappeared here.",
+          "environment": "tidal", "gold": 1700, "shards": 85, "accountXp": 256, "recommendedPower": 14500,
+          "idleGoldPerHour": 1250, "idleShardsPerHour": 52,
+          "firstClearGold": 2780, "firstClearShards": 445,
+          "enemies": [ { "id": "riptide_channeler", "level": 27 }, { "id": "tidecaller_wretch", "level": 27 }, { "id": "grave_moth", "level": 26 }, { "id": "hollow_husk", "level": 26 } ]
+        },
+        {
+          "id": "ch2_7", "index": 7, "name": "Kelp Vault", "subtitle": "Something owns what was once a road.",
+          "environment": "tidal", "gold": 1900, "shards": 95, "accountXp": 280, "recommendedPower": 16000,
+          "idleGoldPerHour": 1340, "idleShardsPerHour": 56,
+          "firstClearGold": 3070, "firstClearShards": 490,
+          "enemies": [ { "id": "tidecaller_wretch", "level": 28 }, { "id": "grave_moth", "level": 28 }, { "id": "grave_moth", "level": 28 }, { "id": "riptide_channeler", "level": 27 } ]
+        },
+        {
+          "id": "ch2_8", "index": 8, "name": "Hollow Anchorage", "subtitle": "The ships that turned around, and the ones that didn't.",
+          "environment": "tidal", "gold": 2100, "shards": 105, "accountXp": 306, "recommendedPower": 17500,
+          "idleGoldPerHour": 1430, "idleShardsPerHour": 60,
+          "firstClearGold": 3380, "firstClearShards": 540,
+          "enemies": [ { "id": "riptide_channeler", "level": 30 }, { "id": "tidecaller_wretch", "level": 29 }, { "id": "grave_moth", "level": 29 }, { "id": "hollow_husk", "level": 28 } ]
+        },
+        {
+          "id": "ch2_9", "index": 9, "name": "The Shifting Berm", "subtitle": "Four hours ago this was solid ground.",
+          "environment": "deep", "gold": 2340, "shards": 117, "accountXp": 335, "recommendedPower": 19500,
+          "idleGoldPerHour": 1530, "idleShardsPerHour": 65,
+          "firstClearGold": 3720, "firstClearShards": 600,
+          "enemies": [ { "id": "riptide_channeler", "level": 32 }, { "id": "tidecaller_wretch", "level": 31 }, { "id": "grave_moth", "level": 31 }, { "id": "grave_moth", "level": 31 }, { "id": "hollow_husk", "level": 30 } ]
+        },
+        {
+          "id": "ch2_10", "index": 10, "name": "Wrackline Reach", "subtitle": "What the Tide discards, it keeps.",
+          "environment": "deep", "gold": 2600, "shards": 130, "accountXp": 365, "recommendedPower": 21500,
+          "idleGoldPerHour": 1630, "idleShardsPerHour": 69,
+          "firstClearGold": 4090, "firstClearShards": 660,
+          "enemies": [ { "id": "riptide_channeler", "level": 33 }, { "id": "riptide_channeler", "level": 32 }, { "id": "tidecaller_wretch", "level": 32 }, { "id": "grave_moth", "level": 32 }, { "id": "hollow_husk", "level": 31 } ]
+        },
+        {
+          "id": "ch2_11", "index": 11, "name": "The Deep Reckoning", "subtitle": "Far enough out that land is a theory.",
+          "environment": "deep", "gold": 2880, "shards": 144, "accountXp": 398, "recommendedPower": 23500,
+          "idleGoldPerHour": 1730, "idleShardsPerHour": 74,
+          "firstClearGold": 4480, "firstClearShards": 725,
+          "enemies": [ { "id": "tidecaller_wretch", "level": 35 }, { "id": "riptide_channeler", "level": 34 }, { "id": "grave_moth", "level": 35 }, { "id": "grave_moth", "level": 34 }, { "id": "hollow_husk", "level": 33 } ]
+        },
+        {
+          "id": "ch2_12", "index": 12, "name": "The Tideturned Throne", "subtitle": "It did not break. It redirected.",
+          "boss": true,
+          "environment": "deep", "gold": 3600, "shards": 180, "accountXp": 500, "recommendedPower": 26000,
+          "idleGoldPerHour": 1850, "idleShardsPerHour": 78,
+          "firstClearGold": 6100, "firstClearShards": 1040,
+          "enemies": [ { "id": "tideturned", "level": 36 }, { "id": "tidecaller_wretch", "level": 33 }, { "id": "riptide_channeler", "level": 34 }, { "id": "hollow_husk", "level": 32 }, { "id": "grave_moth", "level": 32 } ]
+        }
+      ]
     }
   ]
 }

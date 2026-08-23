@@ -147,6 +147,64 @@
         "description": "Breaking the Colossus only makes the pieces angrier.",
         "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.45, "duration": 99 } ]
       }
+    },
+
+    // Chapter 2: The Wandering Coast — new enemies. See DESIGN-CHAPTER-2.md.
+    // All stats are provisional (pre-task-13). Neither entry has art.
+
+    {
+      // ⚠️ PROPOSED DESIGN — needs Matthias's sign-off before chapter-2-content merges.
+      // See DESIGN-CHAPTER-2.md for rationale. Stats and kit are a first-pass proposal.
+      "id": "riptide_channeler", "name": "Riptide Channeler", "kind": "elite", "aspect": "Tide",
+      "hp": 1280, "attack": 152, "defense": 58, "speed": 105,
+      "critChance": 0.08, "critDamage": 1.45, "growth": 0.12, "startEnergy": 30,
+      "effectHit": 0.10, "effectResist": 0.12,
+      "visual": { "primary": "2E8FA3", "secondary": "142030", "accent": "7FE4F0", "silhouette": "wisp", "weapon": "staff", "scale": 1.05, "sigil": 14 },
+      "basic": {
+        "id": "channeler_basic", "name": "Surge Strike", "vfx": "bolt",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.90 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "AttackDown", "magnitude": 0.20, "duration": 2, "chance": 0.60 }
+        ]
+      },
+      "active": {
+        "id": "channeler_active", "name": "Riptide Surge", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.70 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 45 }
+        ]
+      }
+    },
+
+    {
+      // Chapter 2 boss. No art; visual block only. See DESIGN-CHAPTER-2.md.
+      "id": "tideturned", "name": "The Tideturned", "kind": "boss", "aspect": "Tide",
+      "hp": 2650, "attack": 248, "defense": 110, "speed": 90,
+      "critChance": 0.15, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "1B5E72", "secondary": "0A1C24", "accent": "4FC3E0", "silhouette": "golem", "weapon": "none", "scale": 1.20, "sigil": 15 },
+      "basic": {
+        "id": "tideturned_basic", "name": "Surge Ebb", "vfx": "bolt",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.10 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Slow", "magnitude": 0.20, "duration": 2, "chance": 0.85 }
+        ]
+      },
+      "active": {
+        "id": "tideturned_active", "name": "Undertow", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.25 },
+          // ⚠️ SwapPositions is a NEW EffectKind not yet implemented. This entry is inert
+          // until the EffectKind lands. See DESIGN-CHAPTER-2.md "New code required" section.
+          { "kind": "SwapPositions", "target": "AllEnemies" }
+        ]
+      },
+      "passive": {
+        "id": "tideturned_passive", "name": "Backwash", "trigger": "OnDamaged",
+        "oncePerBattle": false, "vfx": "shadow",
+        "description": "Every hit the Tideturned receives is partially redirected onto a random attacker ally.",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.30 } ]
+      }
     }
   ]
 }
