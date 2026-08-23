@@ -166,7 +166,14 @@ namespace Emberfall.Core.Combat
                     HeroInstance hero = team[i];
                     if (hero == null || hero.Def == null) continue;
                     UnitStats stats = StatMath.ForHero(hero.Def, hero.Level);
-                    _units.Add(CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax));
+                    CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
+                    // DESIGN-RELICS "Entering the simulation": a relic is data on the request,
+                    // exactly like a hero's level, resolved once here. An id that resolves to
+                    // nothing leaves Relic null, which is the same path as an empty slot - content
+                    // can drop a relic without bricking a save that still names it.
+                    if (_request.Content != null && !string.IsNullOrEmpty(hero.RelicId))
+                        unit.Relic = _request.Content.GetRelic(hero.RelicId);
+                    _units.Add(unit);
                 }
 
                 if (_request.Stage != null && _request.Content != null)
@@ -349,6 +356,12 @@ namespace Emberfall.Core.Combat
                     cast.Vfx = unit.Active.Vfx;
                     EmitEnergy(unit);
                     ResolveAbility(unit, unit.Active, 0);
+
+                    // Verdict Sigil (DESIGN-RELICS). Placed here rather than inside ResolveAbility
+                    // so it fires once per CAST, not once per effect, and so it mirrors the
+                    // AfterBasicAttack call in the else-branch below exactly - same depth 0, same
+                    // aliveness guard, same position after the ability has fully resolved.
+                    TryRelicPassiveAfterActive(unit);
                 }
                 else
                 {
@@ -453,8 +466,25 @@ namespace Emberfall.Core.Combat
                 if (ability == null) return;
                 for (int i = 0; i < ability.Effects.Count; i++)
                 {
-                    EffectDef effect = ability.Effects[i];
-                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target);
+                    // Relics rewrite the effect BEFORE targets resolve, which is the placement
+                    // DESIGN-RELICS specifies ("rewrite a TargetMode before targets resolve") and
+                    // is load bearing rather than stylistic: ResolveTargets is where the Lumen
+                    // anchor and Taunt override live, so rewriting after it would let a relic
+                    // target around the anchor. Rewriting before means the relic proposes a mode
+                    // and the anchor still gets the final say, which is the correct precedence -
+                    // an aspect identity outranks a piece of equipment.
+                    // Warden's Debt's exclusion is passed INTO resolution rather than filtered
+                    // out of its result, and the difference is the whole mechanic. LowestHpAlly
+                    // returns exactly one unit, the single lowest; striking the caster out of that
+                    // one-element answer afterwards yields an empty list, never the second-lowest.
+                    // The relic would then lose the ward on exactly the turns the wearer is most
+                    // hurt - which, for the Lumen anchor it was written for, is most turns. Asked
+                    // during selection instead, "lowest ally other than me" is a question with a
+                    // real answer. Measured, not reasoned: filtering afterwards shipped for one
+                    // harness run and the ward went to nobody in both forced and shipped content.
+                    bool excludeCaster;
+                    EffectDef effect = ShapeByRelic(caster, ability.Effects[i], out excludeCaster);
+                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target, excludeCaster ? caster : null);
                     for (int t = 0; t < targets.Count; t++)
                     {
                         CombatUnit target = targets[t];
@@ -952,6 +982,124 @@ namespace Emberfall.Core.Combat
                 e.Value = unit.Energy;
             }
 
+            // ------------------------------------------------------------------ relics
+
+            /// <summary>
+            /// Runs one authored effect through the caster's relic, returning either the original
+            /// effect unchanged or a rewritten COPY. Never mutates the argument: the EffectDef
+            /// handed in belongs to the AbilityDef in the ContentDatabase and is shared by every
+            /// unit in every battle for the process lifetime, so an in-place edit would leak one
+            /// wearer's relic onto everybody's future casts. EffectDef.Clone exists for this.
+            ///
+            /// Draws nothing from _rng. Relics still change a battle's RNG stream, because they
+            /// change how many draws happen downstream (Splitting Prism most obviously - one
+            /// landing roll instead of one per enemy), which is the caveat DESIGN-RELICS states
+            /// plainly: "the same seed with a different relic is a different battle".
+            /// </summary>
+            private EffectDef ShapeByRelic(CombatUnit caster, EffectDef effect, out bool excludeCaster)
+            {
+                excludeCaster = false;
+                RelicDef relic = caster.Relic;
+                if (relic == null) return effect;
+
+                switch (relic.Hook)
+                {
+                    case RelicHook.Retarget:
+                    {
+                        if (effect.Target != relic.FromTarget) return effect;
+                        if (relic.HasFilterKind && effect.Kind != relic.FilterKind) return effect;
+                        AnnounceRelic(caster, relic);
+                        excludeCaster = relic.ExcludeSelf;
+                        EffectDef retargeted = effect.Clone();
+                        retargeted.Target = relic.ToTarget;
+                        return retargeted;
+                    }
+
+                    case RelicHook.SplitWideDamage:
+                    {
+                        if (effect.Target != TargetMode.AllEnemies) return effect;
+
+                        // How many the wide version WOULD have struck, counted the same way
+                        // ResolveTargets counts it (living units on the far side) so the multiplied
+                        // Hits is exactly the output the spread cast would have produced,
+                        // concentrated rather than inflated. Draws no RNG.
+                        int wide = CountLiving(!caster.IsPlayer);
+                        if (wide <= 0) return effect;
+
+                        AnnounceRelic(caster, relic);
+                        EffectDef split = effect.Clone();
+                        split.Target = TargetMode.FrontEnemy;
+
+                        // Damage concentrates; everything else merely narrows. That asymmetry IS
+                        // the relic's cost, per DESIGN-HOOK-RESOLUTION section 4: Kalyx's Cinder
+                        // Bloom aims a Damage effect and a Burn rider at AllEnemies, and after this
+                        // the Damage lands `wide` times on one target while the Burn gets exactly
+                        // one landing roll for the whole cast instead of one per enemy. Multiplying
+                        // Hits on the rider too would hand it `wide` rolls at the same target and
+                        // delete the cost, leaving the pure-upside relic the design forbids.
+                        if (split.Kind == EffectKind.Damage) split.Hits = effect.Hits * wide;
+                        return split;
+                    }
+                }
+
+                return effect;
+            }
+
+            private int CountLiving(bool playerSide)
+            {
+                int n = 0;
+                for (int i = 0; i < _units.Count; i++)
+                    if (_units[i].Alive && _units[i].IsPlayer == playerSide) n++;
+                return n;
+            }
+
+            /// <summary>
+            /// Verdict Sigil. Fires the wearer's AfterBasicAttack passive after an Active resolves,
+            /// in addition to wherever it already fires - it widens the trigger, it does not move
+            /// it, so a turn spent on a Basic still marks exactly as before.
+            ///
+            /// Routed through the ordinary TriggerPassive rather than a parallel path, so every
+            /// guard that method already enforces still applies: the once-per-battle flag, the
+            /// HP-threshold gate, the empty-effects check, and MaxPassiveDepth. TriggerPassive's
+            /// own `passive.Trigger != trigger` test is what makes this safe to call blindly -
+            /// a wearer whose passive is not an AfterBasicAttack one is a no-op here.
+            /// </summary>
+            private void TryRelicPassiveAfterActive(CombatUnit unit)
+            {
+                RelicDef relic = unit.Relic;
+                if (relic == null || relic.Hook != RelicHook.WidenPassiveTrigger) return;
+                if (relic.FromTrigger == PassiveTrigger.None) return;
+                if (!unit.Alive || IsBattleOver()) return;
+
+                // Checked before announcing so the banner means "the relic did something", not
+                // "the wearer cast an Active while holding a relic". A wearer with no passive, or
+                // with a passive on a different trigger, never announces.
+                PassiveDef passive = unit.Passive;
+                if (passive == null || passive.Trigger != relic.FromTrigger) return;
+
+                AnnounceRelic(unit, relic);
+                TriggerPassive(unit, relic.FromTrigger, 0);
+            }
+
+            /// <summary>
+            /// DESIGN-RELICS "Presentation": relics announce through the EXISTING PassiveTrigger
+            /// event with the relic name in AbilityName, so the battle screen's existing
+            /// "NAME - PASSIVE" banner covers them and no new BattleEventType is added. Once per
+            /// battle, the first time the relic actually alters something, not on every tick.
+            ///
+            /// Emitting draws no RNG, so a relic that announces cannot desync a seeded replay
+            /// relative to the same relic not announcing.
+            /// </summary>
+            private void AnnounceRelic(CombatUnit wearer, RelicDef relic)
+            {
+                if (wearer.RelicAnnounced) return;
+                wearer.RelicAnnounced = true;
+                BattleEvent e = Emit(BattleEventType.PassiveTrigger, wearer.Id, wearer.Id);
+                e.AbilityId = relic.Id;
+                e.AbilityName = relic.Name;
+                e.Vfx = "buff";
+            }
+
             // ------------------------------------------------------------------ passives
 
             private void TriggerPassive(CombatUnit owner, PassiveTrigger trigger, int depth)
@@ -983,19 +1131,35 @@ namespace Emberfall.Core.Combat
 
             private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode)
             {
+                return ResolveTargets(caster, mode, null);
+            }
+
+            /// <summary>
+            /// `excluded` is a unit that cannot be picked no matter what the mode asks for, or null
+            /// for every caller that is not a relic. Only Warden's Debt passes one today.
+            ///
+            /// Null is the untouched path by construction, not by care: every guard added for this
+            /// is `u == excluded`, which is false for every real unit when excluded is null, so the
+            /// four-mode switch below and the anchor and pick loops that follow it all behave
+            /// exactly as they did before relics existed. No RNG draw changes either - the one
+            /// draw site in here (RandomAlly / RandomEnemy) only sees a shortened candidate list
+            /// when a relic is actually excluding somebody from it.
+            /// </summary>
+            private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded)
+            {
                 List<CombatUnit> result = new List<CombatUnit>();
                 switch (mode)
                 {
                     case TargetMode.Self:
-                        if (caster.Alive) result.Add(caster);
+                        if (caster.Alive && caster != excluded) result.Add(caster);
                         return result;
 
                     case TargetMode.AllAllies:
-                        CollectSide(result, caster.IsPlayer);
+                        CollectSide(result, caster.IsPlayer, excluded);
                         return result;
 
                     case TargetMode.AllEnemies:
-                        CollectSide(result, !caster.IsPlayer);
+                        CollectSide(result, !caster.IsPlayer, excluded);
                         return result;
 
                     case TargetMode.LowestHpAlly:
@@ -1004,7 +1168,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
                             if (best == null || u.HpRatio < best.HpRatio) best = u;
                         }
                         if (best != null) result.Add(best);
@@ -1014,7 +1178,7 @@ namespace Emberfall.Core.Combat
                     case TargetMode.RandomAlly:
                     {
                         List<CombatUnit> allies = new List<CombatUnit>();
-                        CollectSide(allies, caster.IsPlayer);
+                        CollectSide(allies, caster.IsPlayer, excluded);
                         if (allies.Count > 0) result.Add(allies[_rng.Range(0, allies.Count)]);
                         return result;
                     }
@@ -1030,6 +1194,7 @@ namespace Emberfall.Core.Combat
                 // below, so RandomEnemy does not draw when a side has an anchor. That was already
                 // true for Taunt; Lumen simply makes it true far more often.
                 CombatUnit anchor = FindTargetAnchor(!caster.IsPlayer);
+                if (anchor == excluded) anchor = null;
                 if (anchor != null)
                 {
                     // Recorded only where the Lumen rule is what produced the answer and Taunt does
@@ -1052,7 +1217,7 @@ namespace Emberfall.Core.Combat
                     case TargetMode.LastAttacker:
                     {
                         CombatUnit remembered = FindUnit(caster.LastAttackerId);
-                        if (remembered != null && remembered.Alive && remembered.IsPlayer != caster.IsPlayer)
+                        if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
                         {
                             result.Add(remembered);
                             return result;
@@ -1064,7 +1229,7 @@ namespace Emberfall.Core.Combat
                     case TargetMode.LastTarget:
                     {
                         CombatUnit remembered = FindUnit(caster.LastTargetId);
-                        if (remembered != null && remembered.Alive && remembered.IsPlayer != caster.IsPlayer)
+                        if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
                         {
                             result.Add(remembered);
                             return result;
@@ -1080,7 +1245,7 @@ namespace Emberfall.Core.Combat
                     case TargetMode.RandomEnemy:
                     {
                         List<CombatUnit> enemies = new List<CombatUnit>();
-                        CollectSide(enemies, !caster.IsPlayer);
+                        CollectSide(enemies, !caster.IsPlayer, excluded);
                         if (enemies.Count > 0) picked = enemies[_rng.Range(0, enemies.Count)];
                         break;
                     }
@@ -1089,7 +1254,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
                             if (picked == null) { picked = u; continue; }
                             if (mode == TargetMode.LowestHpEnemy && u.Hp < picked.Hp) picked = u;
                             else if (mode == TargetMode.HighestHpEnemy && u.Hp > picked.Hp) picked = u;
@@ -1105,10 +1270,15 @@ namespace Emberfall.Core.Combat
 
             private void CollectSide(List<CombatUnit> into, bool playerSide)
             {
+                CollectSide(into, playerSide, null);
+            }
+
+            private void CollectSide(List<CombatUnit> into, bool playerSide, CombatUnit excluded)
+            {
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (u.Alive && u.IsPlayer == playerSide) into.Add(u);
+                    if (u.Alive && u.IsPlayer == playerSide && u != excluded) into.Add(u);
                 }
             }
 

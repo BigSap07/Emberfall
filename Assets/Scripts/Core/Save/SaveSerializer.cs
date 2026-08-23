@@ -19,8 +19,15 @@ namespace Emberfall.Core.Save
         /// truncates silently, dropping two heroes with no error. Older builds never checked the
         /// version at all, so this build is where the guard starts existing; from here on, a save
         /// from a newer build is refused instead of quietly mangled.
+        ///
+        /// 3: HeroInstance.RelicId, written beside uid/defId. DESIGN-RELICS allows this to ride
+        /// the team-size bump only if relics ship in the same pass; they did not, so 2 -> 3 as
+        /// that document specifies. Upgrade needs no migration - a version 2 save has no relicId
+        /// key and reads as empty, which is an empty relic slot, which is the default. The bump is
+        /// again for the downgrade direction: a version 3 save read by version 2 code silently
+        /// drops every equipped relic, and the guard below turns that into a refusal.
         /// </summary>
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         public static string Serialize(PlayerProfile profile)
         {
@@ -52,6 +59,9 @@ namespace Emberfall.Core.Save
                 hj.Set("level", h.Level);
                 hj.Set("copies", h.Copies);
                 hj.Set("acquired", h.AcquiredUnix);
+                // Written only when set, so a profile with no relics equipped serialises byte for
+                // byte the way it did before relics existed apart from the version number.
+                if (!string.IsNullOrEmpty(h.RelicId)) hj.Set("relicId", h.RelicId);
                 heroes.Add(hj);
             }
             root.Set("heroes", heroes);
@@ -115,6 +125,11 @@ namespace Emberfall.Core.Save
                 h.Level = Math.Max(1, hj.GetInt("level", 1));
                 h.Copies = Math.Max(1, hj.GetInt("copies", 1));
                 h.AcquiredUnix = hj.GetLong("acquired", 0);
+                // Missing reads as empty per DESIGN-RELICS. A relic id whose def no longer exists
+                // is deliberately NOT dropped here: the simulation resolves ids to defs and treats
+                // an unresolvable one as no relic, so keeping the string means re-adding the relic
+                // to content restores the equip rather than silently having wiped it.
+                h.RelicId = hj.GetString("relicId", "");
                 profile.Heroes.Add(h);
             }
 

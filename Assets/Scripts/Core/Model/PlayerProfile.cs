@@ -14,6 +14,13 @@ namespace Emberfall.Core.Model
         public int Copies = 1;         // duplicates pulled from summoning
         public long AcquiredUnix;
 
+        /// <summary>
+        /// Equipped relic id, or empty for an empty slot. Resolved against the ContentDatabase by
+        /// the simulation during setup, not stored as a RelicDef - a save holds ids, exactly like
+        /// DefId, so content can change under it without bricking it.
+        /// </summary>
+        public string RelicId = "";
+
         [NonSerialized] public HeroDef Def;
 
         public UnitStats Stats
