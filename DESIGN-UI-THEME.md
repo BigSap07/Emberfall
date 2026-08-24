@@ -113,7 +113,7 @@ for `Resources/Sprites/Units/{spriteId}.png`.
 
 `UISkin` mirrors that exactly, for `Resources/Art/UI/{name}.png`:
 
-- A named request (`UISkin.Panel`, `UISkin.ButtonFill`) resolves to a painted sprite if the file
+- A named request (`UISkin.Panel`, `UISkin.Button`) resolves to a painted sprite if the file
   exists, and to the current `TextureLab` generator if it does not.
 - Missing is the normal case, not a bug, so the fallback is silent and never magenta. This matches
   `BackdropTexture`'s reasoning, not `UnitSprite`'s.
