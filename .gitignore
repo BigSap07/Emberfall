@@ -23,6 +23,12 @@
 /Tools/DevHarness/bin/
 /Tools/**/*.rsp
 
+# Unity AI generation history (raw model output + metadata, keyed by asset GUID)
+/GeneratedAssets/
+
+# Working reference reports, not design docs
+/Reports/
+
 # OS
 Thumbs.db
 .DS_Store
