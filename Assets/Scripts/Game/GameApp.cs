@@ -49,6 +49,10 @@ namespace Emberfall.Game
 
             Content = ContentService.Load();
 
+#if UNITY_EDITOR
+            CombatSimulation.OnBattleComplete += CombatLogger.Write;
+#endif
+
             PlayerProfile profile = SaveService.Load(Content);
             bool freshStart = profile == null;
             if (freshStart) profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());

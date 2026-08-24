@@ -21,6 +21,12 @@ namespace Emberfall.Core.Combat
     /// </summary>
     public static class CombatSimulation
     {
+        /// <summary>
+        /// Fired once after every completed fight. Subscribe in editor-only code to receive the
+        /// full event list for debugging. Never assigned in production — invocation is a no-op when null.
+        /// </summary>
+        public static Action<BattleResult> OnBattleComplete;
+
         private const int MaxPassiveDepth = 2;
 
         /// <summary>
@@ -37,7 +43,9 @@ namespace Emberfall.Core.Combat
         public static BattleResult Run(BattleRequest request)
         {
             Sim sim = new Sim(request);
-            return sim.Execute();
+            BattleResult result = sim.Execute();
+            if (OnBattleComplete != null) OnBattleComplete(result);
+            return result;
         }
 
         /// <summary>
