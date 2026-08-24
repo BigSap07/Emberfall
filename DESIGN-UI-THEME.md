@@ -111,7 +111,7 @@ falls back to a generated texture when the file is absent, and caches both paths
 adding a painting is a file drop rather than a code change. `BattleAssets.UnitSprite` does the same
 for `Resources/Sprites/Units/{spriteId}.png`.
 
-`UISkin` mirrors that exactly, for `Resources/UI/{name}.png`:
+`UISkin` mirrors that exactly, for `Resources/Art/UI/{name}.png`:
 
 - A named request (`UISkin.Panel`, `UISkin.ButtonFill`) resolves to a painted sprite if the file
   exists, and to the current `TextureLab` generator if it does not.
