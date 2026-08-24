@@ -211,18 +211,27 @@ Mechanical extrapolation from chapter 1's final values. Task 13 retunes all of t
 
 ---
 
-## New code required
+## New code — implemented
 
 ### `SwapPositions` EffectKind
 
-Used in the Tideturned's "Undertow" active. Swaps the formation positions of two randomly-
-selected units on the player's side. Nothing in the existing `EffectKind` vocabulary handles
-positional manipulation — this is a new enum value and a new branch in `Sim.ApplyEffect`.
+Implemented on branch `swap-positions-effectkind` (cut from `chapter-2-content`).
 
-The JSON entry for this effect is present in the `tideturned` active's effects array
-(flagged by comment inline). Until `SwapPositions` is implemented, the entry is either
-a no-op or a parse warning depending on how `ContentLoader` handles an unknown `kind` string.
-Chapter 2 is not fully testable in Play mode until this is implemented.
+Added to `EffectKind` in `Enums.cs`. Branch in `Sim.ApplyEffect`: receives one random
+player unit via `RandomEnemy` targeting (one `_rng.Range` draw), picks one more at random
+from the remaining living units on that side (second draw), swaps `CombatUnit.Slot` on
+both. `FrontEnemy` targeting reads `Slot` directly, so subsequent targeting in the same
+fight resolves against the new positions. Turn order is speed-sorted, not slot-sorted, so
+initiative is unaffected.
+
+New `BattleEventType.PositionSwapped` records the swap: `SourceId` = caster, `TargetId`
+= first unit, `Value` = second unit's Id. Without this event the swap would be invisible
+in the record and the battle screen could not explain why units moved.
+
+Authored target changed from `AllEnemies` to `RandomEnemy` in `enemies.json`. `AllEnemies`
+would have fed one player unit per loop iteration into `ApplyEffect`, firing the swap N
+times. `RandomEnemy` feeds exactly one and the second unit is selected internally — one
+swap per cast.
 
 No other new EffectKind is required. `Backwash` uses `OnDamaged` + `Damage` +
 `RandomEnemy` — entirely existing vocabulary.

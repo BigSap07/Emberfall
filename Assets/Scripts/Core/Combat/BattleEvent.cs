@@ -76,6 +76,15 @@ namespace Emberfall.Core.Combat
         /// </summary>
         TargetAnchored,
 
+        /// <summary>
+        /// Two units on the same side swapped formation slots. SourceId is the caster.
+        /// TargetId is the first swapped unit; Value holds the Id of the second.
+        /// Without this, the swap is invisible: units silently reposition and nothing
+        /// in the record explains why — violating DESIGN-BATTLE-READABILITY's rule that
+        /// the screen reads the record rather than recomputing the fight.
+        /// </summary>
+        PositionSwapped,
+
         BattleEnd
     }
 

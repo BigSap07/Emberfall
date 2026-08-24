@@ -641,6 +641,28 @@ namespace Emberfall.Core.Combat
                         AddEnergy(target, amount, source.Id);
                         break;
                     }
+                    case EffectKind.SwapPositions:
+                    {
+                        // target is one unit drawn by ResolveTargets (authored as RandomEnemy).
+                        // Pick one more living unit from the same side (not target) and swap slots.
+                        // Swapping slots reshuffles who FrontEnemy resolves to; turn order is
+                        // speed-sorted, not slot-sorted, so initiative is unaffected.
+                        if (!target.Alive) break;
+                        List<CombatUnit> candidates = new List<CombatUnit>();
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (u != target && u.Alive && u.IsPlayer == target.IsPlayer) candidates.Add(u);
+                        }
+                        if (candidates.Count == 0) break;
+                        CombatUnit other = candidates[_rng.Range(0, candidates.Count)];
+                        int tmp = target.Slot;
+                        target.Slot = other.Slot;
+                        other.Slot = tmp;
+                        BattleEvent swapEvent = Emit(BattleEventType.PositionSwapped, source.Id, target.Id);
+                        swapEvent.Value = other.Id;
+                        break;
+                    }
                 }
             }
 
