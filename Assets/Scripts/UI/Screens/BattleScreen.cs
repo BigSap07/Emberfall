@@ -222,29 +222,40 @@ namespace Emberfall.UI.Screens
             cardImage.color = UITheme.Panel;
             UIBuilder.Frame("Edge", card, UITheme.Border, 24, 2);
 
+            // Rewards — always visible, top section of card.
+            Text spoilsHeading = UIBuilder.Label("Heading", card, "SPOILS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+            UIBuilder.Box(spoilsHeading.rectTransform, 0f, -6f, 400f, 26f, new Vector2(0.5f, 1f));
+
+            _rewardList = UIBuilder.Node("List", card);
+            UIBuilder.Box(_rewardList, 0f, -38f, 764f, 208f, new Vector2(0.5f, 1f));
+            UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+
+            // Divider between rewards and stat breakdown.
+            RectTransform divider = UIBuilder.Node("Divider", card);
+            UIBuilder.Box(divider, 0f, -252f, 760f, 1f, new Vector2(0.5f, 1f));
+            Image dividerImage = divider.gameObject.AddComponent<Image>();
+            dividerImage.sprite = TextureLab.White;
+            dividerImage.color = UITheme.Border;
+
+            // Stat tab strip — 3 tabs: DEALT / HEALED / TAKEN. Rewards are never behind a tab.
             RectTransform tabStrip = UIBuilder.Node("Tabs", card);
-            UIBuilder.Box(tabStrip, 0f, -6f, 780f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(tabStrip, 0f, -261f, 780f, 34f, new Vector2(0.5f, 1f));
             UIBuilder.HStack(tabStrip, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            string[] tabNames = { "SPOILS", "DEALT", "HEALED", "TAKEN" };
+            string[] tabNames = { "DEALT", "HEALED", "TAKEN" };
             _statTabs = new UIButton[tabNames.Length];
             for (int ti = 0; ti < tabNames.Length; ti++)
             {
                 int idx = ti;
                 UIButton tab = UIBuilder.SecondaryButton("Tab_" + tabNames[ti], tabStrip, tabNames[ti], UITheme.FontTiny - 2);
-                UIBuilder.Sized(tab.Root, 183f, 30f);
+                UIBuilder.Sized(tab.Root, 256f, 30f);
                 tab.OnClick(() => SelectStatTab(idx));
                 _statTabs[ti] = tab;
             }
 
-            _rewardList = UIBuilder.Node("List", card);
-            UIBuilder.FillParent(_rewardList, 28f, 50f, 28f, 24f);
-            UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
-
             _statsPanel = UIBuilder.Node("Stats", card);
-            UIBuilder.FillParent(_statsPanel, 28f, 50f, 28f, 24f);
-            UIBuilder.VStack(_statsPanel, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
-            _statsPanel.gameObject.SetActive(false);
+            UIBuilder.Box(_statsPanel, 0f, -303f, 764f, 229f, new Vector2(0.5f, 1f));
+            UIBuilder.VStack(_statsPanel, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
             // the Debrief line - one sentence, the single biggest reason the fight went this way -
             // sits directly under the outcome it explains, in the left pane's reading order:
@@ -1187,7 +1198,6 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < _result.Units.Count; i++)
             {
                 UnitSnapshot u = _result.Units[i];
-                if (!u.IsPlayer) continue;
                 _statsDealt[u.Id] = 0;
                 _statsHealed[u.Id] = 0;
                 _statsTaken[u.Id] = 0;
@@ -1210,15 +1220,8 @@ namespace Emberfall.UI.Screens
         private void SelectStatTab(int index)
         {
             _statTabActive = index;
-            bool spoils = index == 0;
-            _rewardList.gameObject.SetActive(spoils);
-            _statsPanel.gameObject.SetActive(!spoils);
-
-            if (!spoils)
-            {
-                Dictionary<int, int> map = index == 1 ? _statsDealt : index == 2 ? _statsHealed : _statsTaken;
-                ShowStats(map);
-            }
+            Dictionary<int, int> map = index == 1 ? _statsHealed : index == 2 ? _statsTaken : _statsDealt;
+            ShowStats(map);
 
             for (int i = 0; i < _statTabs.Length; i++)
             {
@@ -1233,23 +1236,38 @@ namespace Emberfall.UI.Screens
             for (int i = _statsPanel.childCount - 1; i >= 0; i--)
                 Destroy(_statsPanel.GetChild(i).gameObject);
 
-            List<UnitSnapshot> players = new List<UnitSnapshot>();
+            List<UnitSnapshot> heroes = new List<UnitSnapshot>();
+            List<UnitSnapshot> enemies = new List<UnitSnapshot>();
             for (int i = 0; i < _result.Units.Count; i++)
-                if (_result.Units[i].IsPlayer) players.Add(_result.Units[i]);
+            {
+                if (_result.Units[i].IsPlayer) heroes.Add(_result.Units[i]);
+                else enemies.Add(_result.Units[i]);
+            }
 
-            players.Sort((a, b) =>
+            AddStatSection("YOUR TEAM", heroes, statMap);
+            AddStatSection("ENEMIES", enemies, statMap);
+        }
+
+        private void AddStatSection(string header, List<UnitSnapshot> units, Dictionary<int, int> statMap)
+        {
+            units.Sort((a, b) =>
             {
                 int va; statMap.TryGetValue(a.Id, out va);
                 int vb; statMap.TryGetValue(b.Id, out vb);
                 return vb.CompareTo(va);
             });
 
-            for (int i = 0; i < players.Count; i++)
+            RectTransform hdrNode = UIBuilder.Node("Hdr_" + header, _statsPanel);
+            UIBuilder.Sized(hdrNode, 0f, 22f);
+            Text hdrText = UIBuilder.Label("Text", hdrNode, header, UITheme.FontTiny - 2, UITheme.TextDim, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(hdrText.rectTransform, 12f, 0f, 0f, 0f);
+
+            for (int i = 0; i < units.Count; i++)
             {
                 int val;
-                statMap.TryGetValue(players[i].Id, out val);
+                statMap.TryGetValue(units[i].Id, out val);
                 Color tint = i == 0 ? UITheme.Gold : UITheme.TextPrimary;
-                Widgets.StatRow(players[i].Name, _statsPanel, players[i].Name, val.ToString(), tint, 56f);
+                Widgets.StatRow(units[i].Name, _statsPanel, units[i].Name, val.ToString(), tint, 44f);
             }
         }
 
