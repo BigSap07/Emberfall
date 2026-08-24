@@ -79,6 +79,13 @@ namespace Emberfall.UI.Screens
         private UIButton _resultPrimary;
         private UIButton _resultSecondary;
 
+        private UIButton[] _statTabs;
+        private int _statTabActive;
+        private RectTransform _statsPanel;
+        private readonly Dictionary<int, int> _statsDealt = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _statsHealed = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _statsTaken = new Dictionary<int, int>();
+
         private readonly Dictionary<int, UnitBar> _bars = new Dictionary<int, UnitBar>();
         private readonly List<FloatText> _floatPool = new List<FloatText>();
 
@@ -215,12 +222,29 @@ namespace Emberfall.UI.Screens
             cardImage.color = UITheme.Panel;
             UIBuilder.Frame("Edge", card, UITheme.Border, 24, 2);
 
-            Text heading = UIBuilder.Label("Heading", card, "SPOILS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -18f, 400f, 26f, new Vector2(0.5f, 1f));
+            RectTransform tabStrip = UIBuilder.Node("Tabs", card);
+            UIBuilder.Box(tabStrip, 0f, -6f, 780f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.HStack(tabStrip, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+
+            string[] tabNames = { "SPOILS", "DEALT", "HEALED", "TAKEN" };
+            _statTabs = new UIButton[tabNames.Length];
+            for (int ti = 0; ti < tabNames.Length; ti++)
+            {
+                int idx = ti;
+                UIButton tab = UIBuilder.SecondaryButton("Tab_" + tabNames[ti], tabStrip, tabNames[ti], UITheme.FontTiny - 2);
+                UIBuilder.Sized(tab.Root, 183f, 30f);
+                tab.OnClick(() => SelectStatTab(idx));
+                _statTabs[ti] = tab;
+            }
 
             _rewardList = UIBuilder.Node("List", card);
-            UIBuilder.FillParent(_rewardList, 28f, 58f, 28f, 24f);
+            UIBuilder.FillParent(_rewardList, 28f, 50f, 28f, 24f);
             UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+
+            _statsPanel = UIBuilder.Node("Stats", card);
+            UIBuilder.FillParent(_statsPanel, 28f, 50f, 28f, 24f);
+            UIBuilder.VStack(_statsPanel, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+            _statsPanel.gameObject.SetActive(false);
 
             // the Debrief line - one sentence, the single biggest reason the fight went this way -
             // sits directly under the outcome it explains, in the left pane's reading order:
@@ -1118,6 +1142,9 @@ namespace Emberfall.UI.Screens
             DebriefResult debrief = Debrief.Summarize(_result);
             _debriefText.text = debrief.Text;
 
+            ComputeStats();
+            SelectStatTab(0);
+
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
 
             if (_result.Victory)
@@ -1150,6 +1177,80 @@ namespace Emberfall.UI.Screens
         private void AddRewardRow(string label, string value, Color tint)
         {
             Widgets.StatRow(label, _rewardList, label, value, tint, 56f);
+        }
+
+        private void ComputeStats()
+        {
+            _statsDealt.Clear();
+            _statsHealed.Clear();
+            _statsTaken.Clear();
+            for (int i = 0; i < _result.Units.Count; i++)
+            {
+                UnitSnapshot u = _result.Units[i];
+                if (!u.IsPlayer) continue;
+                _statsDealt[u.Id] = 0;
+                _statsHealed[u.Id] = 0;
+                _statsTaken[u.Id] = 0;
+            }
+            for (int i = 0; i < _result.Events.Count; i++)
+            {
+                BattleEvent e = _result.Events[i];
+                if (e.Type == BattleEventType.Damage && e.Value > 0)
+                {
+                    if (_statsDealt.ContainsKey(e.SourceId)) _statsDealt[e.SourceId] += e.Value;
+                    if (_statsTaken.ContainsKey(e.TargetId)) _statsTaken[e.TargetId] += e.Value;
+                }
+                else if (e.Type == BattleEventType.Heal && e.Value > 0)
+                {
+                    if (_statsHealed.ContainsKey(e.SourceId)) _statsHealed[e.SourceId] += e.Value;
+                }
+            }
+        }
+
+        private void SelectStatTab(int index)
+        {
+            _statTabActive = index;
+            bool spoils = index == 0;
+            _rewardList.gameObject.SetActive(spoils);
+            _statsPanel.gameObject.SetActive(!spoils);
+
+            if (!spoils)
+            {
+                Dictionary<int, int> map = index == 1 ? _statsDealt : index == 2 ? _statsHealed : _statsTaken;
+                ShowStats(map);
+            }
+
+            for (int i = 0; i < _statTabs.Length; i++)
+            {
+                if (_statTabs[i] == null) continue;
+                Text lbl = _statTabs[i].Root.GetComponentInChildren<Text>();
+                if (lbl != null) lbl.color = i == index ? UITheme.Gold : UITheme.TextDim;
+            }
+        }
+
+        private void ShowStats(Dictionary<int, int> statMap)
+        {
+            for (int i = _statsPanel.childCount - 1; i >= 0; i--)
+                Destroy(_statsPanel.GetChild(i).gameObject);
+
+            List<UnitSnapshot> players = new List<UnitSnapshot>();
+            for (int i = 0; i < _result.Units.Count; i++)
+                if (_result.Units[i].IsPlayer) players.Add(_result.Units[i]);
+
+            players.Sort((a, b) =>
+            {
+                int va; statMap.TryGetValue(a.Id, out va);
+                int vb; statMap.TryGetValue(b.Id, out vb);
+                return vb.CompareTo(va);
+            });
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                int val;
+                statMap.TryGetValue(players[i].Id, out val);
+                Color tint = i == 0 ? UITheme.Gold : UITheme.TextPrimary;
+                Widgets.StatRow(players[i].Name, _statsPanel, players[i].Name, val.ToString(), tint, 56f);
+            }
         }
 
         // ------------------------------------------------------------------ actions
