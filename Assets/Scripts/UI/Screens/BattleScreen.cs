@@ -79,6 +79,13 @@ namespace Emberfall.UI.Screens
         private UIButton _resultPrimary;
         private UIButton _resultSecondary;
 
+        private UIButton[] _statTabs;
+        private int _statTabActive;
+        private RectTransform _statsPanel;
+        private readonly Dictionary<int, int> _statsDealt = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _statsHealed = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _statsTaken = new Dictionary<int, int>();
+
         private readonly Dictionary<int, UnitBar> _bars = new Dictionary<int, UnitBar>();
         private readonly List<FloatText> _floatPool = new List<FloatText>();
 
@@ -215,12 +222,40 @@ namespace Emberfall.UI.Screens
             cardImage.color = UITheme.Panel;
             UIBuilder.Frame("Edge", card, UITheme.Border, 24, 2);
 
-            Text heading = UIBuilder.Label("Heading", card, "SPOILS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -18f, 400f, 26f, new Vector2(0.5f, 1f));
+            // Rewards — always visible, top section of card.
+            Text spoilsHeading = UIBuilder.Label("Heading", card, "SPOILS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+            UIBuilder.Box(spoilsHeading.rectTransform, 0f, -6f, 400f, 26f, new Vector2(0.5f, 1f));
 
             _rewardList = UIBuilder.Node("List", card);
-            UIBuilder.FillParent(_rewardList, 28f, 58f, 28f, 24f);
+            UIBuilder.Box(_rewardList, 0f, -38f, 764f, 208f, new Vector2(0.5f, 1f));
             UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+
+            // Divider between rewards and stat breakdown.
+            RectTransform divider = UIBuilder.Node("Divider", card);
+            UIBuilder.Box(divider, 0f, -252f, 760f, 1f, new Vector2(0.5f, 1f));
+            Image dividerImage = divider.gameObject.AddComponent<Image>();
+            dividerImage.sprite = TextureLab.White;
+            dividerImage.color = UITheme.Border;
+
+            // Stat tab strip — 3 tabs: DEALT / HEALED / TAKEN. Rewards are never behind a tab.
+            RectTransform tabStrip = UIBuilder.Node("Tabs", card);
+            UIBuilder.Box(tabStrip, 0f, -261f, 780f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.HStack(tabStrip, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+
+            string[] tabNames = { "DEALT", "HEALED", "TAKEN" };
+            _statTabs = new UIButton[tabNames.Length];
+            for (int ti = 0; ti < tabNames.Length; ti++)
+            {
+                int idx = ti;
+                UIButton tab = UIBuilder.SecondaryButton("Tab_" + tabNames[ti], tabStrip, tabNames[ti], UITheme.FontTiny - 2);
+                UIBuilder.Sized(tab.Root, 256f, 30f);
+                tab.OnClick(() => SelectStatTab(idx));
+                _statTabs[ti] = tab;
+            }
+
+            _statsPanel = UIBuilder.Node("Stats", card);
+            UIBuilder.Box(_statsPanel, 0f, -303f, 764f, 229f, new Vector2(0.5f, 1f));
+            UIBuilder.VStack(_statsPanel, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
             // the Debrief line - one sentence, the single biggest reason the fight went this way -
             // sits directly under the outcome it explains, in the left pane's reading order:
@@ -1118,6 +1153,9 @@ namespace Emberfall.UI.Screens
             DebriefResult debrief = Debrief.Summarize(_result);
             _debriefText.text = debrief.Text;
 
+            ComputeStats();
+            SelectStatTab(0);
+
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
 
             if (_result.Victory)
@@ -1150,6 +1188,87 @@ namespace Emberfall.UI.Screens
         private void AddRewardRow(string label, string value, Color tint)
         {
             Widgets.StatRow(label, _rewardList, label, value, tint, 56f);
+        }
+
+        private void ComputeStats()
+        {
+            _statsDealt.Clear();
+            _statsHealed.Clear();
+            _statsTaken.Clear();
+            for (int i = 0; i < _result.Units.Count; i++)
+            {
+                UnitSnapshot u = _result.Units[i];
+                _statsDealt[u.Id] = 0;
+                _statsHealed[u.Id] = 0;
+                _statsTaken[u.Id] = 0;
+            }
+            for (int i = 0; i < _result.Events.Count; i++)
+            {
+                BattleEvent e = _result.Events[i];
+                if (e.Type == BattleEventType.Damage && e.Value > 0)
+                {
+                    if (_statsDealt.ContainsKey(e.SourceId)) _statsDealt[e.SourceId] += e.Value;
+                    if (_statsTaken.ContainsKey(e.TargetId)) _statsTaken[e.TargetId] += e.Value;
+                }
+                else if (e.Type == BattleEventType.Heal && e.Value > 0)
+                {
+                    if (_statsHealed.ContainsKey(e.SourceId)) _statsHealed[e.SourceId] += e.Value;
+                }
+            }
+        }
+
+        private void SelectStatTab(int index)
+        {
+            _statTabActive = index;
+            Dictionary<int, int> map = index == 1 ? _statsHealed : index == 2 ? _statsTaken : _statsDealt;
+            ShowStats(map);
+
+            for (int i = 0; i < _statTabs.Length; i++)
+            {
+                if (_statTabs[i] == null) continue;
+                Text lbl = _statTabs[i].Root.GetComponentInChildren<Text>();
+                if (lbl != null) lbl.color = i == index ? UITheme.Gold : UITheme.TextDim;
+            }
+        }
+
+        private void ShowStats(Dictionary<int, int> statMap)
+        {
+            for (int i = _statsPanel.childCount - 1; i >= 0; i--)
+                Destroy(_statsPanel.GetChild(i).gameObject);
+
+            List<UnitSnapshot> heroes = new List<UnitSnapshot>();
+            List<UnitSnapshot> enemies = new List<UnitSnapshot>();
+            for (int i = 0; i < _result.Units.Count; i++)
+            {
+                if (_result.Units[i].IsPlayer) heroes.Add(_result.Units[i]);
+                else enemies.Add(_result.Units[i]);
+            }
+
+            AddStatSection("YOUR TEAM", heroes, statMap);
+            AddStatSection("ENEMIES", enemies, statMap);
+        }
+
+        private void AddStatSection(string header, List<UnitSnapshot> units, Dictionary<int, int> statMap)
+        {
+            units.Sort((a, b) =>
+            {
+                int va; statMap.TryGetValue(a.Id, out va);
+                int vb; statMap.TryGetValue(b.Id, out vb);
+                return vb.CompareTo(va);
+            });
+
+            RectTransform hdrNode = UIBuilder.Node("Hdr_" + header, _statsPanel);
+            UIBuilder.Sized(hdrNode, 0f, 22f);
+            Text hdrText = UIBuilder.Label("Text", hdrNode, header, UITheme.FontTiny - 2, UITheme.TextDim, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(hdrText.rectTransform, 12f, 0f, 0f, 0f);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                int val;
+                statMap.TryGetValue(units[i].Id, out val);
+                Color tint = i == 0 ? UITheme.Gold : UITheme.TextPrimary;
+                Widgets.StatRow(units[i].Name, _statsPanel, units[i].Name, val.ToString(), tint, 44f);
+            }
         }
 
         // ------------------------------------------------------------------ actions
