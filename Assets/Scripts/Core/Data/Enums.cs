@@ -55,7 +55,8 @@ namespace Emberfall.Core.Data
         ApplyStatus,
         Cleanse,
         EnergyGain,
-        Dispel
+        Dispel,
+        SwapPositions
     }
 
     public enum StatusKind

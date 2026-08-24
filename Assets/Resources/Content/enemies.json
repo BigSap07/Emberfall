@@ -194,9 +194,7 @@
         "id": "tideturned_active", "name": "Undertow", "energyCost": 100, "vfx": "burst",
         "effects": [
           { "kind": "Damage", "target": "AllEnemies", "power": 1.25 },
-          // ⚠️ SwapPositions is a NEW EffectKind not yet implemented. This entry is inert
-          // until the EffectKind lands. See DESIGN-CHAPTER-2.md "New code required" section.
-          { "kind": "SwapPositions", "target": "AllEnemies" }
+          { "kind": "SwapPositions", "target": "RandomEnemy" }
         ]
       },
       "passive": {
