@@ -576,7 +576,11 @@ namespace Emberfall.UI.Screens
                 case BattleEventType.TurnStart:
                 {
                     UnitBar bar = BarOf(e.SourceId);
-                    if (_activeTurnBar != null && _activeTurnBar != bar) SettleTurnBar(_activeTurnBar);
+                    // TurnPip is checked, not just the wrapper: ClearBars destroys the bar's
+                    // GameObject but leaves this UnitBar instance alive, so a non-null wrapper can
+                    // still hold a destroyed Image. SettleTurnBar dereferences TurnPip directly.
+                    if (_activeTurnBar != null && _activeTurnBar != bar && _activeTurnBar.TurnPip != null)
+                        SettleTurnBar(_activeTurnBar);
                     _activeTurnBar = bar;
                     AdvanceTurnStrip(e.SourceId);
                     if (bar != null) yield return TurnCue(bar);

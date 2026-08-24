@@ -61,13 +61,12 @@ namespace Emberfall.UI.Screens
         {
             ScreenChrome.Header(Root, "HERO", Router, out _headerSubtitle);
 
-            // the card stack keeps its portrait-era width as a centred column - stretched to the
-            // full 1920 the identity card's fixed-position internals would float in dead space
-            float columnInset = (UITheme.ReferenceResolution.x - 1100f) * 0.5f;
+            // Full canvas width, side gutters carried by the content padding - the same shape
+            // RelicShopScreen and InventoryScreen use for their ScrollLists.
             ScrollRect scroll;
-            RectTransform content = UIBuilder.ScrollList("Detail", Root, out scroll, 18f, new RectOffset(0, 0, 8, 40));
+            RectTransform content = UIBuilder.ScrollList("Detail", Root, out scroll, 18f, new RectOffset(32, 32, 8, 40));
             UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 columnInset, UITheme.TopBarHeight + 130f, columnInset, 236f);
+                                 0f, UITheme.TopBarHeight + 130f, 0f, 236f);
 
             BuildIdentityCard(content);
             BuildStatsCard(content);

@@ -14,12 +14,12 @@ namespace Emberfall.UI
     /// otherwise mean editing every site that draws it.
     ///
     /// UISkin puts a name in between. A call asks for "the panel surface" and gets a painted sprite
-    /// if one exists at Resources/UI/{name}.png, or the generated one if it does not.
+    /// if one exists at Resources/Art/UI/{name}.png, or the generated one if it does not.
     ///
     /// This deliberately mirrors BattleAssets.BackdropTexture rather than inventing a convention:
     ///
     ///   - Same lookup shape. BackdropTexture loads Resources/Backgrounds/{environmentId}; this
-    ///     loads Resources/UI/{name}. Adding art is a file drop, not a code change.
+    ///     loads Resources/Art/UI/{name}. Adding art is a file drop, not a code change.
     ///   - Same fallback POLICY, and the distinction matters. BattleAssets.UnitSprite treats a
     ///     missing file as a content bug and returns magenta, because a unit that names a sprite
     ///     must have one. BackdropTexture treats it as the ordinary case and falls through
@@ -28,7 +28,7 @@ namespace Emberfall.UI
     ///   - Same cache discipline. Painted and generated results are cached on one key, so
     ///     downstream code cannot tell which path it got and behaves identically either way.
     ///
-    /// **Until art is added this class is inert by construction.** Resources/UI does not exist, so
+    /// **Until art is added this class is inert by construction.** Resources/Art/UI is empty, so
     /// every Resources.Load returns null, so every call returns exactly the TextureLab sprite the
     /// call site used before. That is the point of landing the seam now: it can be proven to change
     /// nothing today, rather than being invented under pressure on the day the art arrives.
@@ -36,7 +36,7 @@ namespace Emberfall.UI
     /// ---------------------------------------------------------------------------------------
     /// FOR WHOEVER DELIVERS THE ART
     ///
-    /// Drop a PNG at Assets/Resources/UI/{name}.png and it is used automatically. No code change,
+    /// Drop a PNG at Assets/Resources/Art/UI/{name}.png and it is used automatically. No code change,
     /// no registration step, no rebuild of anything but Unity's own import. The names currently
     /// requested are listed in Surface below.
     ///
@@ -80,7 +80,7 @@ namespace Emberfall.UI
             public const string PanelFrame = "panel_frame";
         }
 
-        private const string ResourceFolder = "UI/";
+        private const string ResourceFolder = "Art/UI/";
 
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
 
