@@ -1,5 +1,14 @@
 # Emberfall — relics
 
+⚠️ **Needs a full rewrite. The standard on the line below is withdrawn.** DESIGN-BUILD-ORDER's
+"One conflict to resolve, not silently pick" records a deliberate reversal, decided 2026-08-26:
+relics move to a **two-tier model** — a common tier of flat and percentage stat relics that never
+touch the simulation and live in `StatMath` / `UnitStats`, and a rare legendary tier of
+rule-breaking relics that may not compete for a hook an aspect owns and are never paired to a
+specific aspect. The no-percentage rule stated immediately below is the specific thing that was
+reversed. Everything in this document still accurately describes what is **built** today, so read
+it as a record of that, not as the target. The rewrite is its own task and has not been done.
+
 A relic changes a **rule** in the effect pipeline. No relic contains an attack percentage.
 
 ## What is actually modifiable

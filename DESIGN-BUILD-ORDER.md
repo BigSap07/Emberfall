@@ -224,6 +224,60 @@ effects, not targeting, so the relic is compatible with the Lumen identity. Task
 `claude/relics-rework` merged to `main` (`f3d4936`), with relic progression shipped on top of it.
 See task 12 below for the commit list, and DESIGN-HOOK-RESOLUTION for the full account.
 
+### Relics move to a two-tier model. Decided 2026-08-26, and a deliberate reversal
+
+This replaces DESIGN-RELICS' founding standard — *"A relic changes a **rule** in the effect
+pipeline. No relic contains an attack percentage."* That standard is withdrawn knowingly, not
+drifted away from. Relics are now two tiers.
+
+**Common.** Flat and percentage stat relics — Attack%, HP%, Crit% and their like. Simple,
+numerous, easy to balance, and needing no simulation hooks at all: they live entirely in
+`StatMath` / `UnitStats` and never reach `CombatSimulation`. This tier exists to solve the two
+things the rule-only standard did not — legibility for a player who does not read the effect
+pipeline, and enough distinct drops for a pull to feel like it paid out.
+
+**Legendary, and rare.** Rule-breaking relics that alter simulation behaviour instead of adding a
+number — the same *kind* of thing an aspect identity is, but never flavoured or paired to a
+specific aspect. That last clause reaffirms the existing rule rather than bending it: a relic is
+equipment on a hero, not a second way to be Ember. The one-slot-per-hero rule and the
+state-it-as-one-sentence presentation rule both survive the reversal. Only the no-percentage
+clause is gone, and only for the common tier.
+
+**Hook contention is unchanged, and the resolution above is the tiebreak.** Aspects own the four
+previously contested hooks by default: Tide's `AddEnergy` overflow redirect, Verdant's
+`ApplyHealValue` overflow banking, Ember's Burn stacking, and Orrin relabelled to Lumen. A
+legendary relic that needs simulation access must find a distinct hook, or justify one, and may
+not compete for an aspect's. Common relics never enter that argument at all, which is a large part
+of why the tier is worth having.
+
+**Task 12 is not blocked by this and does not reopen.** ⚠️ One correction against the decision as
+handed down: it unblocks task 12 to "build Aspects as specified", but Aspects are already built.
+All six identities are live in `CombatSimulation.cs` today — Gale (`:252`, `:299`), Ember's Burn
+stacking (`:588`), Verdant's heal banking (`:877`), Tide's energy redirect (`:921`), Lumen's
+interception (`:1236`, `:1351`) and Umbra (`:1367`). Nothing in the two-tier reversal touches any
+of them, so the intended effect holds either way: Aspects stand as specified and stay built.
+
+**DESIGN-RELICS needs a full rewrite to this model — separately, later, not in this change.** This
+entry records the decision; it is not the rewrite, and DESIGN-RELICS still reads as the
+single-tier, rule-only document until someone does that pass. One trap for whoever picks it up:
+**the word "tier" is already taken.** DESIGN-RELIC-PROGRESSION §2 and `balance.json`'s
+`relicMaxTier` use "tier" for a relic's *upgrade level* — tier 1 to tier 2 of the same relic,
+bought with Relic Dust. Common versus Legendary is a *rarity* axis, orthogonal to it. Pick
+distinct words before either lands in content or code, or the two will be read as one.
+
+**Flagged as needing review against this direction, not rewritten here.** Both carry a banner
+saying so at the top of the file:
+
+- **DESIGN-RELICS.md** — written end to end against the withdrawn standard, opening line included.
+  Accurate as a record of what shipped; wrong as a target. Full rewrite, its own task.
+- **DESIGN-COMBAT-STATS.md** — its rejection of **Block** ("its mean effect is exactly a Defence
+  increase", "precisely the stat the constraint forbids") is reasoned *from* the no-percentage
+  standard. With that standard reversed for the common tier the premise is gone, so the verdict has
+  to be re-argued rather than inherited. Its "what would earn its place" note — `OnBlock`, or
+  status negation, argued against Lumen — is still the right frame for the legendary tier. What
+  changed is that "it is only a number" has stopped being an automatic disqualification. The
+  Effect Hit / Effect Resist half of that document is untouched by any of this.
+
 ## Known traps, carried forward
 
 1. **Resolved by task 10, kept for the record.** `MaxTeamSize` gates enemy spawns too, not just

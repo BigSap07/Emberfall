@@ -1,5 +1,16 @@
 # Emberfall - combat stats
 
+⚠️ **The Block verdict needs re-arguing; its premise was reversed.** "Block does not earn its
+place" below is reasoned from DESIGN-RELICS' no-percentage standard — Block is "precisely the stat
+the constraint forbids". That standard was deliberately withdrawn on 2026-08-26 (see
+DESIGN-BUILD-ORDER, "One conflict to resolve, not silently pick"): relics now have a common tier
+that is explicitly flat and percentage stats. The constraint the verdict leans on no longer
+exists, so the verdict has to be re-derived rather than inherited — the RNG-cost half of the
+argument survives on its own, the "it is only a number" half does not. The "what would earn its
+place" note (`OnBlock`, or status negation, argued against Lumen) is now the frame for the
+legendary tier. Nothing else in this document depends on it; the Effect Hit / Effect Resist half
+is untouched. Flagged only, not rewritten here.
+
 An evaluation of a proposal to add four stats to the combat pipeline: **Effect Hit**, **Effect
 Resist**, **Defence**, and **Block**. The stated reason is that relic and hero design keeps
 reaching for hooks that do not exist.
