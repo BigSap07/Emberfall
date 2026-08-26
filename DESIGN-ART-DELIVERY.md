@@ -56,6 +56,36 @@ character in a screenshot, the file is either missing or misnamed.
   There's no required exact size beyond staying at or under that cap; what determines the
   character's proportions on screen is the width-to-height *ratio* of the canvas, covered next.
 
+### Sprite sheets: two import settings that must not be left at their defaults
+
+This applies only to a **sprite sheet** - one file holding a grid of animation frames - and not
+to the single-figure sprites the rest of this section describes. Sheet support lives on the
+`feat/sprite-sheet-player` branch and is not merged yet (section 8 still describes the shipped
+behaviour), so deliver a sheet only if you have been asked for one.
+
+The game works out how wide to draw each frame from the *shape of one cell*, and it gets that
+shape by dividing the imported image's dimensions by the grid size the content file declares.
+That means it measures the image **as Unity imported it**, not as you exported it - so an import
+setting that changes the image's proportions silently changes the character's proportions on
+screen. Two fields decide this, and Unity's defaults are wrong for a sheet:
+
+- **Non-Power of 2** must be set to **None**. The default, *ToNearest*, rounds the width and the
+  height each to the nearest power of two, and it rounds them *independently*. A 4096 x 7192
+  sheet becomes 4096 x 8192 - the height stretched by about 14%, the width untouched. Every cell
+  in it is now the wrong shape, and so is the character drawn from it.
+- **Max Size** must be at least the sheet's real longest edge - 4096 for a 4096-wide sheet. The
+  default cap of 2048 shrinks anything larger. On its own that scales evenly and costs only
+  sharpness, but stacked on the rounding above it compounds the distortion and throws away
+  detail the sheet needed in the first place.
+
+Neither one announces itself. A sheet imported at the defaults renders perfectly happily, just
+at the wrong proportions, so it is worth checking on the asset first rather than hunting for the
+problem in the animation data or the grid numbers.
+
+Found during verification of `feat/sprite-sheet-player`. The test sheet shipped with *ToNearest*
+and a 2048 cap; the verification was run with **None** and **4096**, at which the cell shape the
+game derived matched the file's own measured cell exactly.
+
 ## 3. Sizing: fixed height, no fixed box
 
 This is the part most different from drawing a portrait or an icon into a set frame, so it's
