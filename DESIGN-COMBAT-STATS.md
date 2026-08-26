@@ -1,15 +1,41 @@
 # Emberfall - combat stats
 
-⚠️ **The Block verdict needs re-arguing; its premise was reversed.** "Block does not earn its
-place" below is reasoned from DESIGN-RELICS' no-percentage standard — Block is "precisely the stat
-the constraint forbids". That standard was deliberately withdrawn on 2026-08-26 (see
-DESIGN-BUILD-ORDER, "One conflict to resolve, not silently pick"): relics now have a common tier
-that is explicitly flat and percentage stats. The constraint the verdict leans on no longer
-exists, so the verdict has to be re-derived rather than inherited — the RNG-cost half of the
-argument survives on its own, the "it is only a number" half does not. The "what would earn its
-place" note (`OnBlock`, or status negation, argued against Lumen) is now the frame for the
-legendary tier. Nothing else in this document depends on it; the Effect Hit / Effect Resist half
-is untouched. Flagged only, not rewritten here.
+⚠️ **The Block verdict is superseded twice over — once by code, once by a design reversal.
+Read it as history.** Two things happened after this document was written.
+
+**Block shipped, in the shape this document said would earn its place.** "Block does not earn its
+place" below rejects Block *as proposed* — a chance to reduce a hit — and then names what would
+clear the bar: "a `PassiveTrigger.OnBlock` makes 'blocks feed the counterattack' writable", and a
+Block that negates rather than shaves. That is what exists. `CombatUnit.Block` / `EffectiveBlock`
+are live, `_rng.Chance(target.EffectiveBlock)` resolves on the defender at the top of
+`ApplyDamageEffect` (`CombatSimulation.cs:714`), a success negates the entire hit rather than a
+slice of it, and `PassiveTrigger.OnBlock` is fired (`:716`) and is in the enum. Block defaults to 0
+on every unit, so it is inert in shipped content, but the verdict below was honoured and then
+overtaken — it is not describing the current state of the code.
+
+**The premise the rejection leans on was withdrawn.** Half the argument below is that Block's mean
+effect is a flat damage multiplier and so is "precisely the stat the constraint forbids". That
+constraint was DESIGN-RELICS' no-percentage standard, deliberately reversed on 2026-08-26: relics
+now have a **common grade** that is explicitly flat and percentage stats (DESIGN-RELICS;
+DESIGN-BUILD-ORDER, "Relics move to a two-tier model"). The stat-stick objection no longer
+disqualifies anything on its own. The RNG-cost half of the argument survives intact on its
+merits — and is now already paid, since the draw exists in the hot path regardless.
+
+**The open question, noted and not decided here: should Block be a common-grade relic stat?** It is
+worth reconsidering, and this banner is not the place to settle it. For: the stat exists, the draw
+is already spent, it is inert at 0 today, and "a flat damage multiplier with extra steps" is a
+description of every common relic rather than an objection to this one. Against: unlike +Defense it
+adds variance to a fight the player does not watch, and `OnBlock` is a hook — the moment a relic
+makes Block non-zero, every `OnBlock` passive in content becomes reachable through equipment, which
+is a legendary-grade consequence arriving through a common-grade relic. DESIGN-RELICS' starting
+common set deliberately does **not** include Block. Whoever picks this up should argue it there,
+against Lumen as the caution below still says, not here.
+
+Two smaller staleness notes. The Effect Hit / Effect Resist half of this document shipped and is
+accurate. The stat surface it describes is not complete: `UnitStats` now also carries
+`SkillDamage`, `ArmorBreak`, `ControlImmunity`, `DamageReduction` and `HolyDamage`, and
+`ControlImmunity` in particular acts as a second, narrower resist on the Silence/Stun landing roll
+that this document predates entirely.
 
 An evaluation of a proposal to add four stats to the combat pipeline: **Effect Hit**, **Effect
 Resist**, **Defence**, and **Block**. The stated reason is that relic and hero design keeps

@@ -228,11 +228,12 @@ See task 12 below for the commit list, and DESIGN-HOOK-RESOLUTION for the full a
 
 This replaces DESIGN-RELICS' founding standard — *"A relic changes a **rule** in the effect
 pipeline. No relic contains an attack percentage."* That standard is withdrawn knowingly, not
-drifted away from. Relics are now two tiers.
+drifted away from. Relics are now two grades (see the naming note below; the axis is not
+called "tier").
 
 **Common.** Flat and percentage stat relics — Attack%, HP%, Crit% and their like. Simple,
 numerous, easy to balance, and needing no simulation hooks at all: they live entirely in
-`StatMath` / `UnitStats` and never reach `CombatSimulation`. This tier exists to solve the two
+`StatMath` / `UnitStats` and never reach `CombatSimulation`. This grade exists to solve the two
 things the rule-only standard did not — legibility for a player who does not read the effect
 pipeline, and enough distinct drops for a pull to feel like it paid out.
 
@@ -241,14 +242,14 @@ number — the same *kind* of thing an aspect identity is, but never flavoured o
 specific aspect. That last clause reaffirms the existing rule rather than bending it: a relic is
 equipment on a hero, not a second way to be Ember. The one-slot-per-hero rule and the
 state-it-as-one-sentence presentation rule both survive the reversal. Only the no-percentage
-clause is gone, and only for the common tier.
+clause is gone, and only for the common grade.
 
 **Hook contention is unchanged, and the resolution above is the tiebreak.** Aspects own the four
 previously contested hooks by default: Tide's `AddEnergy` overflow redirect, Verdant's
 `ApplyHealValue` overflow banking, Ember's Burn stacking, and Orrin relabelled to Lumen. A
 legendary relic that needs simulation access must find a distinct hook, or justify one, and may
 not compete for an aspect's. Common relics never enter that argument at all, which is a large part
-of why the tier is worth having.
+of why the grade is worth having.
 
 **Task 12 is not blocked by this and does not reopen.** ⚠️ One correction against the decision as
 handed down: it unblocks task 12 to "build Aspects as specified", but Aspects are already built.
@@ -257,26 +258,41 @@ stacking (`:588`), Verdant's heal banking (`:877`), Tide's energy redirect (`:92
 interception (`:1236`, `:1351`) and Umbra (`:1367`). Nothing in the two-tier reversal touches any
 of them, so the intended effect holds either way: Aspects stand as specified and stay built.
 
-**DESIGN-RELICS needs a full rewrite to this model — separately, later, not in this change.** This
-entry records the decision; it is not the rewrite, and DESIGN-RELICS still reads as the
-single-tier, rule-only document until someone does that pass. One trap for whoever picks it up:
-**the word "tier" is already taken.** DESIGN-RELIC-PROGRESSION §2 and `balance.json`'s
-`relicMaxTier` use "tier" for a relic's *upgrade level* — tier 1 to tier 2 of the same relic,
-bought with Relic Dust. Common versus Legendary is a *rarity* axis, orthogonal to it. Pick
-distinct words before either lands in content or code, or the two will be read as one.
+**DESIGN-RELICS has been rewritten to this model. Done, 2026-08-26.** This entry is the decision;
+DESIGN-RELICS is the specification, and it now carries the grade split, a starting set of eight
+common and two legendary relics (explicitly a starting set, unbalanced by admission), the
+arithmetic rules, both entry points, and the presentation split. The ⚠️ banner that stood at the
+top of it while it was stale is gone.
 
-**Flagged as needing review against this direction, not rewritten here.** Both carry a banner
-saying so at the top of the file:
+**The axis is called "grade", not "tier" and not "rarity".** Both obvious words were already taken:
+"tier" is a relic's upgrade level (DESIGN-RELIC-PROGRESSION §2, `balance.json`'s `relicMaxTier`),
+and "rarity" is a hero's star rarity (`StatMath.Build`'s `rarityMultiplier`). So: common grade,
+legendary grade, `RelicGrade { Common, Legendary }`. Grade and tier are orthogonal — a common relic
+still upgrades tier 1 to tier 2 like any other. Do not write "tier 2 relic" for "legendary relic".
+The heading above keeps its original wording because two documents cite it by name; read
+"two-tier" there as "two-grade".
 
-- **DESIGN-RELICS.md** — written end to end against the withdrawn standard, opening line included.
-  Accurate as a record of what shipped; wrong as a target. Full rewrite, its own task.
-- **DESIGN-COMBAT-STATS.md** — its rejection of **Block** ("its mean effect is exactly a Defence
-  increase", "precisely the stat the constraint forbids") is reasoned *from* the no-percentage
-  standard. With that standard reversed for the common tier the premise is gone, so the verdict has
-  to be re-argued rather than inherited. Its "what would earn its place" note — `OnBlock`, or
-  status negation, argued against Lumen — is still the right frame for the legendary tier. What
-  changed is that "it is only a number" has stopped being an automatic disqualification. The
-  Effect Hit / Effect Resist half of that document is untouched by any of this.
+**Three code findings came out of that rewrite, and two of them moved the design:**
+
+- **The status landing gate is no longer `_rng.Chance(effect.Chance)`.** Effect Hit and Effect
+  Resist shipped; it is now `_rng.Chance(landing)` at `CombatSimulation.cs:565`, with `landing`
+  built by `ResolveLandingChance` (`:59`) and further reduced by Control Immunity for Silence and
+  Stun. It is still unclaimed by any relic or aspect, so The Unbroken Ledger is compatible — but it
+  hooks `ResolveLandingChance`, not the raw chance.
+- **`PassiveTrigger.OnDamaged` is fired but is not unused.** Dispatched at `:843`, and already
+  consumed by `tideturned_passive` ("Backwash") in `enemies.json`. No collision with Mirrored
+  Wound, but it must be built to coexist rather than assume an empty trigger.
+- **Block is already implemented**, and not as DESIGN-COMBAT-STATS rejected it: full negation of
+  the hit, with `PassiveTrigger.OnBlock` fired (`:714`, `:716`), which is the shape that document
+  itself said would earn its place. Inert at 0 on every unit today.
+
+**DESIGN-COMBAT-STATS.md still carries a banner, now saying something different.** Its Block
+rejection is superseded twice — by the code above, and by the reversal recorded here, since half
+its argument was that Block is "precisely the stat the constraint forbids" and that constraint is
+gone. The banner records the open question (should Block be a common-grade relic stat?) with the
+case both ways and **does not decide it**; DESIGN-RELICS' starting common set deliberately excludes
+Block. The RNG-cost half of the original argument still stands on its own merits. The Effect Hit /
+Effect Resist half of that document shipped and is accurate.
 
 ## Known traps, carried forward
 
