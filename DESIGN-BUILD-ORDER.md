@@ -41,8 +41,8 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   narrowing in DESIGN-ASPECTS 4 and everything below it, and gets folded into task 14, not treated
   as sacred.
 - DESIGN-RELICS, DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS, DESIGN-ART-BIBLE,
-  DESIGN-HOOK-CONFLICT, DESIGN-RECOLLECTION. All committed to `main`. None of them implemented yet,
-  all of them decided.
+  DESIGN-HOOK-CONFLICT, DESIGN-RECOLLECTION. All committed to `main`, all decided. DESIGN-RELICS
+  is now also implemented (task 12, below); the rest are still design-only.
 - CI. `.github/workflows/build-check.yml` runs `Tools/build-check.ps1` on every push and every
   pull request, on `windows-latest`. It doesn't stop at compiling, it runs DevHarness, so a green
   run covers content validation, determinism, stage winnability, ability potency and status expiry
@@ -220,8 +220,9 @@ either Relics or Aspects is implemented** (task 12), not discovered mid-build.
 redirected: Tidewrought Metronome cut (Tide owns `AddEnergy` overflow), Green Hour Vessel cut
 (Verdant owns `ApplyHealValue` overflow). `Kindling` is cut per §3, changing Splitting Prism's
 stated cost to Burn-spread-lost. Orrin is relabelled to Lumen; `Warden's Debt` redirects `Shield`
-effects, not targeting, so the relic is compatible with the Lumen identity. Task 12 is in progress
-on `claude/relics-rework`. See DESIGN-HOOK-RESOLUTION for the full account.
+effects, not targeting, so the relic is compatible with the Lumen identity. Task 12 is done:
+`claude/relics-rework` merged to `main` (`f3d4936`), with relic progression shipped on top of it.
+See task 12 below for the commit list, and DESIGN-HOOK-RESOLUTION for the full account.
 
 ## Known traps, carried forward
 
@@ -272,10 +273,11 @@ on `claude/relics-rework`. See DESIGN-HOOK-RESOLUTION for the full account.
    pass `CheckStageWinnability`, including the five named above, and CI is green on `main`. The
    self-applied status duration failure named alongside it in task 8's entry below turned out to
    be a separate, unrelated bug (stage 1-1's enemy count, not team size), fixed in the same pass.
-2. **`Debrief.AspectFactorThreshold` (1.2f) must move in the same change as the wheel narrowing**
-   (`AspectChart.Advantage` 1.20 to 1.10). Miss it and the Aspect debrief clause silently stops
-   firing, no test fails, no error appears. Re-check `AspectDominantShare` (0.35) at the same time.
-   Task 12.
+2. **Resolved. `Debrief.AspectFactorThreshold` has already moved.** It reads 1.01f today
+   (`Debrief.cs` line 64), matching the narrowed wheel (`AspectChart.Advantage` 1.10,
+   `AspectChart.Disadvantage` 0.92, `Enums.cs` lines 139-140), not the stale 1.2f this item used
+   to warn about. `AspectDominantShare` is likewise already 0.35f (`Debrief.cs` line 54). No
+   further action needed; kept here for the record rather than deleted.
 3. **Gale's re-entry-on-kill must ship with `galeExtraTurnsPerRound` (1) in the same change**, never
    after. Team size will already be 5 by the time this is built; uncapped, a single Gale unit can
    resolve a round unilaterally, the same failure `MaxPassiveDepth` prevents one level down with no
@@ -425,8 +427,9 @@ revision of the document or is simply a mistake, nothing in the diff says.
 `startingGold` 400 · `startingShards` 40 · `idleCapHours` 10 · `repeatFullClearsPerDay` 3 ·
 `repeatRewardFloor` 0.0 · `dailyResetHourUtc` 4 · Forge multiplier 0.9 (re-check it's still a real
 choice against Collect, not always correct) · `maxTeamSize` 5 · `AspectChart.Advantage` 1.10 ·
-`AspectChart.Disadvantage` 0.92. Unchanged: `summonCost` 120, the level curve, duplicate conversion,
-summon weights.
+`AspectChart.Disadvantage` 0.92 · `Debrief.AspectDominantShare` 0.35 ·
+`Debrief.AspectFactorThreshold` 1.01. Unchanged: `summonCost` 120, the level curve, duplicate
+conversion, summon weights.
 
 ## The build order
 
@@ -447,6 +450,14 @@ summon weights.
 
 5. **Repeat cap** (`dailyResetUnix`, `stageClearsToday`, cleared stages only, save version 1 to 2).
    `[H+U]` for the daily-reset UI feedback.
+   **Done.** `SaveSerializer.cs` writes and reads both `dailyResetUnix` (line 78/164) and
+   `stageClearsToday` (line 128/233), and `CurrentVersion` documents the 3 -> 4 bump for exactly
+   this field pair (line 30, "the repeat cap's dailyResetUnix and stageClearsToday map
+   (DESIGN-REPLAY-ECONOMY)"). `balance.json` carries `repeatFullClearsPerDay` (3). Note the save
+   version has moved further since - `CurrentVersion` is 5 today, not 2; task 8's team-size bump
+   (2) and this task's repeat-cap bump (4) are two separate version increments, not the same one,
+   with a relic-inventory bump (3, then 5) landing between and after them. See `SaveSerializer.cs`
+   lines 15-56 for the full version history.
    Blocked by: 4, reversed order leaves a stuck player no grind path. Blocks: 6.
 
 6. **Collect vs Forge.** `[H+U]`
@@ -547,17 +558,28 @@ confirmed green on CI on `main` after the merge.
     `StatusResisted`, wire it into the battle screen and Debrief, add the direction check to the
     harness. `[H]` for the logic, `[U]` for the new event's presentation, which renders on the
     battle screen and so wants orientation settled first.
-    **Unblocked.** 7, 8, 9 and 10 have all landed on `main`. Nothing is stopping this from
-    starting.
+    **Done.** `heroes.json` carries non-zero `effectHit`/`effectResist` on all six heroes and
+    `enemies.json` carries them on all ten enemies (more than the eight the task line named, not
+    fewer). `StatusResisted` is emitted, not just declared: `CombatSimulation.cs` line 573
+    (`Emit(BattleEventType.StatusResisted, ...)`), and read on the presentation side in
+    `BattleScreen.cs` line 729, `Debrief.cs` line 210 (the resisted-status clause), and
+    `CombatLogger.cs` line 135.
     Blocked by: nothing remaining. Blocks: 13.
 
 12. **Resolve the relic/aspect hook conflict**, then build whichever of Relics and Aspects follows
     from that. `[D]` for the decision, `[H+U]` for the code after, which renders in hero detail and
     on the battle screen.
-    Blocked by: the conflict resolution itself, the one blocker left - 8, 9 and 10 have landed.
-    Blocks: 13. If the resolution follows DESIGN-ASPECTS'
-    suggested direction, build Aspects before Relics: two of six relics need rewriting once Aspects
-    lands and two more need re-arguing, so building Relics first means doing part of that work twice.
+    **Done.** `claude/relics-rework` merged to `main` (`f3d4936`), and relic progression shipped on
+    top of it: the relic data model and the four surviving relics (`75f430f`), the relic equipped
+    in the save at version 3 (`b5ae037`), relics resolved in the effect pipeline (`ca27105`),
+    the owned-relics inventory model with `RelicId` -> `EquippedRelicId` (`dddde91`), the save
+    version 4 -> 5 migration for it (`f1284a2`), Relic Dust and tier constants in `balance.json`
+    (`09bc8fd`), the dust drop plus relic API and harness checks (`6fbe951`), a Relic Dust counter
+    in the header (`c6a8d6a`), and the relic shop/inventory screens (`5fee3b0`,
+    `Assets/Scripts/UI/Screens/RelicShopScreen.cs`). `CombatSimulation.cs` resolves relic hooks
+    at effect-shaping time (`ShapeByRelic`, ~line 1029), matching the resolution recorded under
+    "One conflict to resolve" above. All of this is on `main` today, not on an unmerged branch.
+    Blocked by: nothing remaining. Blocks: 13.
 
 13. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
     handful of spot-check battles in `[U]` are still worth watching.
