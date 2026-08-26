@@ -5,15 +5,22 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
-**Status, as of this revision.** `build-order-7-effect-hit-resist` and `sprite-path-orrin` were
-already merged to `main` and green. `build-order-8-team-size-5` and `build-order-9-landscape` are
-now merged too: task 10's `campaign.json` refill was committed directly onto
-`build-order-9-landscape` rather than its own branch, so all three tasks (8, 9, 10) landed
-together in one merge, exactly as this document already called for below. Tasks 8, 9 and 10 are
-done. One branch remains unmerged: `build-order-1-3` (still local only, still unpushed). CI now
-runs `build-check.ps1` on every push and pull request, so status claims below about compiling or
-running are claims about an actual run, not a reading of a diff, wherever a branch has actually
-been pushed through it.
+**Status, as of tonight's audit.** Tasks **1 through 11 are all done on `main`**, verified against
+the actual code and content, not against this document's own prior claims — several were found
+stale and are corrected in place below. `build-order-7-effect-hit-resist` and `sprite-path-orrin`
+were merged and green; `build-order-8-team-size-5` and `build-order-9-landscape` merged together
+with task 10's `campaign.json` refill riding on `build-order-9-landscape` rather than its own
+branch, exactly as this document called for. `build-order-1-3` (task 1, the starting purse) also
+landed — a previous revision of this document claimed it was still unpushed; that was wrong, and
+the section that made that claim has been removed. Task 12 is split: 12a (the relic/aspect hook
+resolution and the original four-relic implementation) is done; 12b (the two-grade relic model
+DESIGN-RELICS now specifies) is a written design with **no code or content behind it yet** — no
+`RelicGrade` type, `relics.json` unchanged. Task 13, the retune, is not done and is no longer a
+twelve-stage retune: chapter 2 shipped (12 more stages, `f1f5b71`), entirely outside this
+document's numbered order until now — see the new chapter 2 entry under "Already done." CI runs
+`build-check.ps1` on every push and pull request, so status claims below about compiling or running
+are claims about an actual run, not a reading of a diff, wherever a branch has actually been pushed
+through it.
 
 Task 9 grew far beyond its original one-line description while unmerged, through several rounds
 of Play mode feedback the document did not originally anticipate: portrait to landscape pulled in
@@ -38,11 +45,12 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   WEAK/RESIST tags, cause-before-effect targeting.
 - Debrief: the one-line cause sentence, Adjust Line, Rematch.
 - Chapter 1's first aspect-identity tuning pass. Superseded, not final: it predates the wheel
-  narrowing in DESIGN-ASPECTS 4 and everything below it, and gets folded into task 14, not treated
+  narrowing in DESIGN-ASPECTS 4 and everything below it, and gets folded into task 13, not treated
   as sacred.
 - DESIGN-RELICS, DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS, DESIGN-ART-BIBLE,
   DESIGN-HOOK-CONFLICT, DESIGN-RECOLLECTION. All committed to `main`, all decided. DESIGN-RELICS
-  is now also implemented (task 12, below); the rest are still design-only.
+  is now also implemented (task 12a, below) for its original four relics; the two-grade rewrite
+  (task 12b) is design-only, not yet implemented. The rest are still design-only.
 - CI. `.github/workflows/build-check.yml` runs `Tools/build-check.ps1` on every push and every
   pull request, on `windows-latest`. It doesn't stop at compiling, it runs DevHarness, so a green
   run covers content validation, determinism, stage winnability, ability potency and status expiry
@@ -113,19 +121,29 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   literals at 11 different alphas across the screens. Two intentionally per-screen edges (main
   menu logo warm rim, battle result title) were left in place and documented as deliberate
   exclusions.
+- **Chapter 2: The Wandering Coast.** 12 stages (`ch2_1`–`ch2_12`), Tide-themed per DESIGN-WORLD's
+  "single-aspect chapter, not single-aspect roster" rule, shipped in `f1f5b71`
+  ("build-chapter-2: content authoring pass"). Two new enemies in `enemies.json`: `riptide_channeler`
+  (Tide elite) and `tideturned` (chapter 2 boss — `Backwash`, an `OnDamaged` passive, and
+  `Undertow`, an Active built on a new `EffectKind`). `campaign.json` now carries **24 stages
+  total**, not twelve; chapter 2 mirrors chapter 1's enemy-count ramp exactly (3/3/3/3, 4/4/4/4,
+  5/5/5/5). Numbers are provisional by the shipping commit's own admission ("provisional economy
+  numbers throughout") — chapter 2 has not been through the retune (task 13) any more than chapter
+  1 has. This entry did not previously exist anywhere in this document; the whole chapter landed
+  outside the numbered order.
+  - **`EffectKind.SwapPositions`**, added for Undertow (`c597e29`, "implement SwapPositions
+    EffectKind for Tideturned Undertow") and **implemented, not a stub**:
+    `CombatSimulation.cs:652`. Picks a second living unit on the same side as the resolved target
+    and swaps their `Slot`. Reshuffles who `FrontEnemy` resolves to; turn order is speed-sorted,
+    not slot-sorted, so initiative is unaffected. Emits `BattleEventType.PositionSwapped`.
 
-## Blocked on a push, not lost
+## `build-order-1-3` landed. This section is history, not status
 
-**`build-order-1-3`**, local only, never pushed. Contains the starting purse change (1500/260 to
-400/40) and it already shifted chapter 1 win rates out of band. `[H]`
-
-Still local-only, still unpushed, unchanged since the last revision of this document. It's the
-one branch of the five named in the status line above that can't be inspected from here at all -
-it exists only on a machine outside this repository's remotes, so nothing about it can be
-confirmed beyond what was already known.
-
-Blocked by: a push. Blocks: task 3, and the final retune (14), which needs to absorb that shift
-anyway. Do not re-author the purse change from scratch once the branch is pushed; fold it in.
+Kept only so the correction is on the record. This section used to claim the branch was "local
+only, never pushed," blocking task 3 and the final retune. That was wrong by the time of tonight's
+audit: it was pushed and merged (`c5f54ce`), `startingGold`/`startingShards` are live on `main`
+today, and task 1 above is marked done. Nothing is actually blocked on a push. See task 1 for the
+current numbers, including the later `startingShards` retune to 120.
 
 ## Art pipeline, outside the numbered order
 
@@ -144,9 +162,11 @@ task-order cross-reference. Three parts, meant to land in this order:
   rendering, so a green run confirms it compiles and breaks nothing DevHarness checks, not that it
   looks right; the Play mode look is still completely unverified. Gives `VisualDef` an
   optional sprite field; when set, the battle screen renders that image on a billboard instead
-  of building the procedural body. Wired to exactly one hero, Orrin Kaal, as a pipeline test,
-  with a hand-built placeholder shipped alongside it. Every other hero and every enemy is
-  untouched and stays procedural.
+  of building the procedural body. ⚠️ **No longer wired to exactly one hero.** That was true when
+  this was written, as a pipeline test on Orrin Kaal alone; verified tonight, `heroes.json` now
+  carries a `"sprite"` field on all **6 of 6 heroes**, and `enemies.json` on **3** of its 10 enemies
+  (`hollow_husk`, `grave_moth`, `sundered_colossus`) — every file named has a matching PNG
+  committed under `Assets/Resources/Sprites/Units/`. The remaining 7 enemies stay procedural.
 
 The loader landing before the check screen exists is a reordering, not the plan. The intended
 sequence was spec, then a way to look at what the spec produces, then the loader that makes it
@@ -161,8 +181,11 @@ generated sky quad, an arena ground plane and a ridge of rotated blocks - one pa
 carries sky, ground and horizon together, sized and positioned off the live camera
 (`orthographicSize`, aspect, the rig's own rotation) rather than hardcoded, specifically so it
 cannot go stale the way the ridge and sky quad did across three camera changes in one session. The
-environment ids campaign.json actually authors are `ashen`, `ember` and `hollow`, four stages
-each. Only `ashen.png` exists and is committed; `ember` and `hollow` have no painting yet and fall
+environment ids chapter 1 authors are `ashen`, `ember` and `hollow`, four stages each (chapter 2
+adds `coast`, `tidal` and `deep`, four stages each, and has no painting for any of them). ⚠️
+**`ember.png` and `hollow.png` are no longer missing.** All three chapter 1 backgrounds are
+committed under `Assets/Resources/Backgrounds/` (`ashen.png`, `ember.png`, `hollow.png`), plus an
+undocumented `hub.png` this section never mentioned. Chapter 2's three environments still fall
 back to a generated gradient built from that environment's existing colour palette, never to black
 or to the sprite path's magenta (a missing environment painting is the ordinary case here, not a
 content bug, so it does not get treated like one). Verified only against `build-check.ps1`, same
@@ -197,7 +220,9 @@ revisiting whether the core loop has changed enough to make active pre-battle de
 (a third of the enemy line removed at team size 3, a fifth at 5) and offers a spread-on-death rule
 or accepting Umbra as a boss-stage specialist. Decide when task 12 reaches Umbra, not before.
 DESIGN-WORLD's chapter 3 (and optionally chapter 5) contested-region proposal: moot until chapters
-2 to 6 exist, which they don't yet, `campaign.json` has chapter 1 only.
+3 to 6 exist, which they don't yet. ⚠️ Corrected: chapter 2 shipped (see "Already done" above),
+so `campaign.json` is no longer chapter-1-only — the proposal is still moot, just one chapter
+closer.
 
 ## One conflict to resolve, not silently pick
 
@@ -494,7 +519,8 @@ revision of the document or is simply a mistake, nothing in the diff says.
 
 ## Numbers already decided
 
-`startingGold` 400 · `startingShards` 40 · `idleCapHours` 10 · `repeatFullClearsPerDay` 3 ·
+`startingGold` 400 · `startingShards` 120 (retuned from 40 by `af13bb6`, one guaranteed pity
+summon on day 0 — see task 1) · `idleCapHours` 10 · `repeatFullClearsPerDay` 3 ·
 `repeatRewardFloor` 0.0 · `dailyResetHourUtc` 4 · Forge multiplier 0.9 (re-check it's still a real
 choice against Collect, not always correct) · `maxTeamSize` 5 · `AspectChart.Advantage` 1.10 ·
 `AspectChart.Disadvantage` 0.92 · `Debrief.AspectDominantShare` 0.35 ·
@@ -504,18 +530,32 @@ conversion, summon weights.
 ## The build order
 
 1. **Push `build-order-1-3`**, land the starting purse change it already contains. `[H]`
-   Blocked by: nothing but the push. Blocks: 3, and the final retune (13) absorbs its win-rate shift.
+   **Done. On `main`.** ⚠️ Corrects a stale claim carried by this document until tonight's audit:
+   the "Blocked on a push, not lost" framing this task used to have was wrong, and has been
+   removed (see below) — the branch was pushed and merged (`c5f54ce`, "balance: retune starting
+   purse"). `startingGold` is 400 in `balance.json`. `startingShards` is **120**, not the 40 this
+   document quoted elsewhere: a later, deliberate commit (`af13bb6`, "startingShards 40 -> 120,
+   one guaranteed pity summon on day 0") retuned it again, tying it to task 3's pity guarantee so
+   the day-0 free pull can actually afford to hit it. See "Numbers already decided" below, also
+   corrected.
+   Blocked by: nothing remaining. Blocks: 3, and the final retune absorbs its win-rate shift.
 
 2. **`idleCapHours` 8 to 10.** JSON only. `[H]`
+   **Done.** `balance.json`: `idleCapHours` is 10.
    Blocked by: nothing. Blocks: nothing hard, bundle with 4 or 5 if convenient.
 
 3. **Summon pity**: pulls 1 to 3 guaranteed from unowned heroes, plus enemy Aspects and a slot-1
    label on the campaign card. `[H+U]`
-   Blocked by: 1, the guarantee fires on the day-0 free pull and a wrong purse wastes it.
-   Blocks: nothing hard.
+   **Done.** `GameSession.PityGuaranteedSummons` is 3 (`GameSession.cs:593`); `TotalSummons` is
+   tracked and saved (`PlayerProfile.cs:125`, `SaveSerializer.cs:80/166`), and `RollUnownedHero`
+   gates on it (`GameSession.cs:560`).
+   Blocked by: 1, the guarantee fires on the day-0 free pull and a wrong purse wastes it. Both are
+   done now, in the right order. Blocks: nothing hard.
 
 4. **Idle rate resolved from best cleared stage.** Retire the four flat idle constants, add two,
    resolve the `StageDef` at `StagesCleared - 1`. `[H]`
+   **Done.** `StatMath.IdleGoldPerSecond` / `IdleShardsPerSecond` resolve off
+   `Content.GetStageByGlobalIndex(Profile.StagesCleared - 1)`, read in `GameSession.cs:500-503`.
    Blocked by: nothing. Blocks: 5.
 
 5. **Repeat cap** (`dailyResetUnix`, `stageClearsToday`, cleared stages only, save version 1 to 2).
@@ -621,8 +661,8 @@ confirmed green on CI on `main` after the merge.
     them. All twelve stages pass `CheckStageWinnability`, including the five named in Known trap
     1. Enemy count ramps 3/3/3/3 (chapter 1), 4/4/4/4 (chapter 1 continued), 5/5/5/5 (the last
     third), not flat five everywhere. `recommendedPower` was raised on six of the twelve stages
-    where the composition demanded it; nothing here is final, task 14 is still the real retune.
-    Blocks: 11, 12, 13 - all now unblocked on task 10's side.
+    where the composition demanded it; nothing here is final, task 13 is still the real retune.
+    Blocks: 11, 12a, 13 - all now unblocked on task 10's side.
 
 11. **Effect Hit / Effect Resist, phase B.** Author values on six heroes and eight enemies, add
     `StatusResisted`, wire it into the battle screen and Debrief, add the direction check to the
@@ -636,7 +676,7 @@ confirmed green on CI on `main` after the merge.
     `CombatLogger.cs` line 135.
     Blocked by: nothing remaining. Blocks: 13.
 
-12. **Resolve the relic/aspect hook conflict**, then build whichever of Relics and Aspects follows
+12a. **Resolve the relic/aspect hook conflict**, then build whichever of Relics and Aspects follows
     from that. `[D]` for the decision, `[H+U]` for the code after, which renders in hero detail and
     on the battle screen.
     **Done.** `claude/relics-rework` merged to `main` (`f3d4936`), and relic progression shipped on
@@ -649,20 +689,41 @@ confirmed green on CI on `main` after the merge.
     `Assets/Scripts/UI/Screens/RelicShopScreen.cs`). `CombatSimulation.cs` resolves relic hooks
     at effect-shaping time (`ShapeByRelic`, ~line 1029), matching the resolution recorded under
     "One conflict to resolve" above. All of this is on `main` today, not on an unmerged branch.
-    Blocked by: nothing remaining. Blocks: 13.
+    Blocked by: nothing remaining. Blocks: 12b, 13.
 
-13. **Full twelve-stage retune. Once, last.** `[H]`, `RunCampaignBalancePass` is exactly the tool; a
+12b. **The two-grade relic model** — Common (flat/percentage stats, no simulation hooks) and
+    Legendary (rule-breaking, aspect-neutral), per "Relics move to a two-tier model" above and
+    the DESIGN-RELICS rewrite (`9ed2879`). `[D]` for the decision and the document, `[H+U]` for
+    the code, which does not exist yet.
+    ⚠️ **Still open. Written, not built.** DESIGN-RELICS specifies the model, a naming convention
+    (`grade`, not `tier`), a starting set of 8 common relics and 2 legendary relics (The Unbroken
+    Ledger, Mirrored Wound), and the two code entry points (`StatMath.ApplyRelic` for common,
+    `RelicHook` for legendary) — but none of it is implemented. Verified tonight: no `RelicGrade`
+    type anywhere in `Assets/Scripts`, `relics.json` is unchanged (still the original four relics,
+    no `grade` field), and `RelicHook` still has only its original three members. This is real
+    remaining work, not a formality.
+    Blocked by: 12a. Blocks: nothing hard — the starting sets are explicitly provisional and don't
+    need to land before 13, but landing after 13 means a second retune pass for whatever ships.
+
+13. **Full campaign retune. Once, last.** ⚠️ No longer twelve stages: chapter 2 shipped (`f1f5b71`,
+    see "Already done" above), so `campaign.json` now holds **24 stages across two chapters**, and
+    both need this pass — chapter 2's numbers are provisional by its own commit message, exactly
+    like chapter 1's pre-retune numbers were. `[H]`, `RunCampaignBalancePass` is exactly the tool; a
     handful of spot-check battles in `[U]` are still worth watching.
-    ⚠️ **`RunCampaignBalancePass` alone is no longer "exactly the tool".** See "Task 14's
+    ⚠️ **`RunCampaignBalancePass` alone is no longer "exactly the tool".** See "Task 13's
     instrument was broken" below: it reported 100% on all twelve stages for reasons that had
     nothing to do with the content, and two prerequisites had to land before it could be tuned
     against at all. Both have now landed; the line above is kept because the retune is still one
-    pass, still last.
-    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12 (whatever of it shipped this pass), everything
-    above that changes a win rate or an economy number. Blocks: nothing, this is the last task.
+    pass, still last — now over twice the stage count it was scoped against.
+    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a (all done), 12b (if it lands first, fold it in;
+    otherwise this pass covers only the four shipped relics and chapter 2 gets retuned again once
+    12b ships content). Blocks: nothing, this is the last task.
 
 Task 13 is the only step that produces a valid win-rate table. Nothing tuned before it should be
-read as final.
+read as final. I could not run `RunCampaignBalancePass` myself to confirm current output — no
+`dotnet`/`mono` in this environment — so "not done" here is inferred from `campaign.json`'s
+provisional numbers and the absence of any retune commit after chapter 2 landed, not from a
+harness run.
 
 ## Task 13's instrument was broken, and what was done about it
 
@@ -701,7 +762,7 @@ have been wrong, because the two added slots take the weakest two heroes, not av
 
 Nine of twelve stages now sit above the floor, up from four. **1-1 to 1-4 remain under it, and
 that predates task 8**: their old values were already below the three-body floor of 3739. No
-scaling fixes that; enemy levels do, and that is task 14's.
+scaling fixes that; enemy levels do, and that is task 13's.
 
 One consequence to own: `CheckStageWinnability` is the only check `recommendedPower` gates, and it
 levels a team **to** that number, so raising the target makes it **strictly easier to pass**. It
@@ -741,4 +802,4 @@ one: filler below the existing roster. Counts went up, levels did not. Measured 
 line each stage actually spawns, `recommendedPower` before the re-base ranged from 1.27x the enemy
 line's power on 1-1 down to 0.70x on 1-10, with the break falling exactly where spawn counts go
 from three to four. **Five weak enemies lose to five strong heroes**, so enemy count alone will not
-restore the curve. Enemy levels are task 14's first lever, not its last.
+restore the curve. Enemy levels are task 13's first lever, not its last.

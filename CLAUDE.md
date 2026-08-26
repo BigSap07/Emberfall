@@ -1,7 +1,7 @@
 # Emberfall — working notes for agents
 
-An original mobile idle RPG prototype: collectible heroes, automatic 3v3 turn-based combat,
-campaign progression, summoning, idle income, local saving. Portrait, touch-first, Android.
+An original mobile idle RPG prototype: collectible heroes, automatic 5-a-side turn-based combat,
+campaign progression, summoning, idle income, local saving. Landscape, touch-first, Android.
 
 ## Project facts
 
