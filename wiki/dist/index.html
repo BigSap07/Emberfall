@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home · Emberfall Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">
+  <span></span><span></span><span></span>
+</button>
+<nav class="sidebar" id="sidebar"><div class="brand"><svg class="cinder-notch" width="28" height="28" viewBox="0 0 28 28" role="img" aria-label="The Cinder"><line x1="15.47" y1="4.21" x2="21.74" y2="7.83" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /><line x1="23.21" y1="10.38" x2="23.21" y2="17.62" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /><line x1="21.74" y1="20.17" x2="15.47" y2="23.79" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /><line x1="12.53" y1="23.79" x2="6.26" y2="20.17" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /><line x1="4.79" y1="17.62" x2="4.79" y2="10.38" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /><line x1="6.26" y1="7.83" x2="12.53" y2="4.21" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" /></svg><span class="brand-name">Emberfall<br><small>reference wiki</small></span></div><ul class="nav-list"><li><a class="nav-link active" href="index.html" aria-current="page">Home</a></li><li><a class="nav-link" href="the-world.html">The World</a></li><li><a class="nav-link" href="aspects.html">Aspects</a></li><li><a class="nav-link" href="combat-systems.html">Combat Systems</a></li><li><a class="nav-link" href="heroes.html">Heroes</a></li><li><a class="nav-link" href="open-questions.html">Open Questions</a></li><li><a class="nav-link" href="glossary.html">Glossary</a></li></ul><div class="sidebar-foot">generated from live content JSON</div></nav>
+<div class="backdrop" id="backdrop"></div>
+<main class="content">
+<article>
+<h1 id="emberfall-wiki">Emberfall Wiki</h1>
+<p>Emberfall is an original mobile idle RPG prototype: collectible heroes, automatic 3v3 (soon 5v5) turn-based combat, campaign progression, summoning, idle income, local saving. Built in Unity 6.5 on the <strong>Built-In Render Pipeline</strong> (not URP), portrait, touch-first, targeting Android. Combat is a pure function — <code>CombatSimulation.Run()</code> resolves an entire fight up front into a list of <code>BattleEvent</code>s, and the battle screen only plays that list back; it never computes damage or picks targets. Content (heroes, enemies, campaign, balance) lives in JSON under <code>Assets/Resources/Content</code>, not in code.</p>
+<p>This wiki is a condensed reference distilled from the <code>DESIGN-*.md</code> documents and the current code and content, for the solo dev and a designer friend who don't want to re-read five long docs to remember how something works. It is not a replacement for those docs — where something needs the full argument, the page says so and points at the source.</p>
+<h2 id="pages">Pages</h2>
+<ul><li><strong><a href="the-world.html">The World</a></strong> — the fiction: the six beliefs, the First Light, the Cinder and the Keeper, the six regions.</li><li><strong><a href="aspects.html">Aspects</a></strong> — what each of the six aspects actually does mechanically, which heroes fit their aspect and which don't, and what's implemented vs. still proposed.</li><li><strong><a href="combat-systems.html">Combat Systems</a></strong> — the damage pipeline, Effect Hit/Resist, Defence — clearly split into what's live in code today vs. what's still a proposal.</li><li><strong><a href="heroes.html">Heroes</a></strong> — the six current heroes, their kits, and how each squares with its aspect.</li><li><strong><a href="open-questions.html">Open Questions</a></strong> — everything flagged as undecided, parked, or needing a human across all the design docs, grouped by topic.</li><li><strong><a href="glossary.html">Glossary</a></strong> — every <code>StatusKind</code>, <code>PassiveTrigger</code>, and <code>EffectKind</code> in the game, one line each.</li></ul>
+</article>
+</main>
+<script src="nav.js"></script>
+</body>
+</html>
