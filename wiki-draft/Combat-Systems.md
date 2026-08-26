@@ -24,6 +24,12 @@ Worth knowing: mitigation (step 5) is multiplicative and lands *after* the crit 
 crit and a non-crit hit are reduced by the same fraction — Defence doesn't blunt crit spikes
 specifically, it scales everything equally.
 
+The results-screen "you were the wrong colour" Debrief clause moved with the wheel narrowing and
+is shipped at the narrowed values today: `Debrief.AspectFactorThreshold` is **1.01** and
+`Debrief.AspectDominantShare` is **0.35**, confirmed live in `Debrief.cs`. Both were re-checked
+against the ×1.10/×0.92 wheel above in the same pass, so the clause still fires correctly rather
+than silently going dark at a stale 1.2 threshold.
+
 ## Defence — already existed, no change needed
 
 The original proposal that spawned `DESIGN-COMBAT-STATS.md` asked for a "Defence" stat to be added
