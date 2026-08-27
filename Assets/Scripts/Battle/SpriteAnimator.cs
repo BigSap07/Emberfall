@@ -27,6 +27,19 @@ namespace Emberfall.Battle
         /// </summary>
         public float ImpactFraction = 0.5f;
 
+        /// <summary>
+        /// Playback-speed multiplier for this clip, authored on the sidecar for the same reason
+        /// ImpactFraction is - a presentation-pace decision, not gameplay data. Defaults to 1 (the
+        /// export's own 30fps) for a clip that doesn't set it - idle, which loops at rest and
+        /// isn't expected to feel snappy. 145 frames at 30fps is ~4.8s, far slower than an
+        /// auto-battler's normal pace, so Kael's basic/skill/hit_reaction/death all set this above
+        /// 1 to compress that down. Applied as a straight multiplier on effective fps (see
+        /// SpriteAnimator.Update), so ClipDuration already reports the SCALED duration - everything
+        /// that reads ClipDuration (ImpactFraction sync, the death hold, the pending-tail return)
+        /// sees the sped-up number automatically rather than needing its own copy of this value.
+        /// </summary>
+        public float PlaybackSpeed = 1f;
+
         public int FrameCount { get { return EndFrame - StartFrame + 1; } }
     }
 
@@ -68,16 +81,20 @@ namespace Emberfall.Battle
         public int FrameHeight { get { return _current != null ? _current.FrameHeight : 0; } }
 
         /// <summary>
-        /// Nominal (1x speed) seconds a single play-through of this clip takes, or 0 if this unit
-        /// never shipped it. This is the number BattleScreen's event pacing was missing entirely -
-        /// it was holding each event on screen for a fixed, clip-agnostic duration that happened to
-        /// match an instant snap/flash, and had no way to ask "how long does this unit's own basic/
-        /// skill/death clip actually take" before this existed.
+        /// Nominal (1x battle speed) seconds a single play-through of this clip takes at its own
+        /// authored PlaybackSpeed, or 0 if this unit never shipped it. This is the SCALED duration,
+        /// not the raw frameCount/fps - every caller (BattleScreen's ImpactFraction sync, the
+        /// pending-tail return, UnitActor's death hold) must see the sped-up number or their timing
+        /// drifts out of sync with what's actually on screen the moment a clip's PlaybackSpeed
+        /// stops being 1. This is the one place that division happens, so nothing downstream needs
+        /// its own copy of PlaybackSpeed to stay correct.
         /// </summary>
         public float ClipDuration(string clipId)
         {
             SpriteAnimClip clip = GetOrLoad(clipId);
-            return clip != null ? clip.FrameCount / clip.Fps : 0f;
+            if (clip == null) return 0f;
+            float playbackSpeed = clip.PlaybackSpeed > 0f ? clip.PlaybackSpeed : 1f;
+            return clip.FrameCount / clip.Fps / playbackSpeed;
         }
 
         /// <summary>
@@ -157,7 +174,11 @@ namespace Emberfall.Battle
             if (_current == null || _material == null) return;
 
             int frameCount = Math.Max(1, _current.FrameCount);
-            _frameTime += deltaTime * _current.Fps;
+            // PlaybackSpeed multiplies effective fps directly, so the frames actually advance
+            // faster - the ONLY thing that makes ClipDuration's scaled-down number true on screen
+            // rather than just true on paper.
+            float playbackSpeed = _current.PlaybackSpeed > 0f ? _current.PlaybackSpeed : 1f;
+            _frameTime += deltaTime * _current.Fps * playbackSpeed;
             int local = (int)_frameTime;
             bool finished = false;
 

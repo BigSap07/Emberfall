@@ -16,10 +16,12 @@
                              "end":  144,
                              "fps":  30,
                              "loop":  true,
-                             "impactFraction":  0.5
+                             "impactFraction":  0.5,
+                             "playbackSpeed":  2.75
                          },
     "note":  "No sections defined — treat as a single looping animation over the listed frames.",
     "correctionNote":  "end corrected from the exported 149 to 144: frames 145-149 are fully transparent in this sheet (verified by alpha bounding box), so playing through the exported range flashed the unit invisible for the last 5 frames before falling back to idle.",
     "impactFractionNote":  "Not part of the export - there is no impact-frame data in this clip (a single flat animation, no sections). 0.5 is a starting guess for where the shockwave actually lands, meant to be eyeballed and retuned in Play mode - see BattleScreen's AbilityCast handling for how it drives the Damage events' timing.",
+    "playbackSpeedNote":  "145 frames at 30fps is ~4.8s, far slower than this game's normal attack pace. 2.75 is a starting guess (not derived from anything) to bring that down to ~1.76s - retune in Play mode. ClipDuration() already reports the scaled duration, so the impact sync above and the pending-tail return both follow this automatically.",
     "playbackGuide":  "This config describes how to set up the sprite sheet exactly as configured in the Sorceress Sprite Analyzer. When an `animation` object is present, `animation.sections` is the authoritative list of named animation sections. Each section has a `role` (start | middle | end | custom), the `frames` it covers, its own `fps`, and three playback toggles: `loop` (repeat), `pingPong` (play forward then reversed, omitting shared endpoints, for a seamless back-and-forth), and `reverse` (play the frames backwards). The `playback` string restates those toggles in words. Sections may overlap. Custom sections also carry a `name` and `description` — treat these as gameplay tags (e.g. a \"kick\" section to play when the character kicks). The canonical phased flow is: play `start` once, then the `middle` section honoring its loop/pingPong, then `end` once; `animation.phases` lists which of those exist and `animation.start`/`middle`/`end` mirror them for older consumers. If no sections are defined use `defaultAnimation`. Frame numbers index the sheet left-to-right, top-to-bottom, 0-based."
 }

@@ -166,6 +166,7 @@ namespace Emberfall.Battle
             clip.EndFrame = Math.Max(clip.StartFrame, defaultAnim.GetInt("end", clip.StartFrame));
             clip.Fps = Math.Max(1f, defaultAnim.GetFloat("fps", 30f));
             clip.ImpactFraction = Math.Max(0f, Math.Min(1f, defaultAnim.GetFloat("impactFraction", clip.ImpactFraction)));
+            clip.PlaybackSpeed = Math.Max(0.01f, defaultAnim.GetFloat("playbackSpeed", clip.PlaybackSpeed));
 
             ClipCache[key] = clip;
             return clip;
