@@ -58,6 +58,17 @@ namespace Emberfall.UI.Screens
         private float _speed = 1f;
         private bool _finished;
 
+        /// <summary>
+        /// Nominal (pre-_speed) seconds owed before the NEXT event may render, drained at the top
+        /// of Handle regardless of what event that turns out to be. Exists for a SpriteAnimator
+        /// unit's basic/skill choreography: the event that TRIGGERED the clip only holds long
+        /// enough for the outbound half (so the following Damage event fires exactly when the
+        /// strike connects, not before and not after); the follow-through/return half is deferred
+        /// here so it still finishes before anything else advances, without delaying Damage itself.
+        /// Always 0 for a unit with no SpriteAnimator, so nothing changes for the other six heroes.
+        /// </summary>
+        private float _pendingAnimationTail;
+
         private Text _stageLabel;
         private Text _roundLabel;
         private UIButton _speedButton;
@@ -564,6 +575,13 @@ namespace Emberfall.UI.Screens
 
         private IEnumerator Handle(int index)
         {
+            if (_pendingAnimationTail > 0f)
+            {
+                float tail = _pendingAnimationTail;
+                _pendingAnimationTail = 0f;
+                yield return Wait(tail);
+            }
+
             BattleEvent e = _result.Events[index];
             switch (e.Type)
             {
@@ -591,22 +609,46 @@ namespace Emberfall.UI.Screens
                 {
                     UnitActor source = ActorOf(e.SourceId);
                     List<int> targetIds = LookaheadTargets(index);
-                    if (source != null)
+                    UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
+                    Vector3 towards = focus != null ? focus.transform.position : (source != null ? source.transform.position : Vector3.zero);
+
+                    // A unit with a "basic" clip syncs the lunge and the following Damage event to
+                    // ImpactFraction instead of the fixed 0.16s snap below: out to reach the target
+                    // when the clip says the strike connects, landing the hit VFX and (by returning
+                    // from Handle right there) the very next BattleEvent - Damage, resolving the
+                    // actual hit - at that same moment. The return trip is deferred to
+                    // _pendingAnimationTail so it still finishes before anything else advances,
+                    // without delaying Damage itself. Zero for a unit with no such clip: falls
+                    // through to the exact original fixed-timing lunge, unchanged.
+                    float clipDuration = source != null && source.Rig != null && source.Rig.Animation != null
+                        ? source.Rig.Animation.ClipDuration("basic") : 0f;
+                    if (source != null && clipDuration > 0f)
                     {
-                        // intent + motion: lunge toward the real target now, land the strike vfx at arrival
-                        UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
-                        source.PlayAttackLunge(focus != null ? focus.transform.position : source.transform.position, _speed);
-                    }
-                    yield return Wait(0.16f);
-                    if (source != null)
-                    {
+                        float impact = clipDuration * source.Rig.Animation.ImpactFraction("basic");
+                        float outSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
+                        float backSeconds = clipDuration - outSeconds;
+                        source.PlayAttackLunge(towards, outSeconds, backSeconds, _speed);
+                        yield return Wait(outSeconds);
                         for (int t = 0; t < targetIds.Count; t++)
                         {
                             UnitActor hit = ActorOf(targetIds[t]);
                             if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
                         }
+                        _pendingAnimationTail = backSeconds;
                     }
-                    yield return ExtraHoldForClip(source, "basic", 0.16f);
+                    else
+                    {
+                        if (source != null) source.PlayAttackLunge(towards, _speed);
+                        yield return Wait(0.16f);
+                        if (source != null)
+                        {
+                            for (int t = 0; t < targetIds.Count; t++)
+                            {
+                                UnitActor hit = ActorOf(targetIds[t]);
+                                if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
+                            }
+                        }
+                    }
                     break;
                 }
 
@@ -621,10 +663,30 @@ namespace Emberfall.UI.Screens
                         ShowBanner(e.AbilityName, source.Snapshot.Name);
                         _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
                     }
-                    yield return Wait(0.36f);
-                    if (source != null) PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
-                    yield return Wait(0.12f);
-                    yield return ExtraHoldForClip(source, "skill", 0.48f);
+
+                    // Kael's Breaking Point hits AllEnemies, so there is no single target to lunge
+                    // toward - only the "when does it land" half of the choreography applies here.
+                    // A unit with a "skill" clip syncs the strike VFX (and, by returning from
+                    // Handle right there, the following Damage events) to ImpactFraction instead of
+                    // the fixed 0.36s/0.12s below; the clip's remaining follow-through is deferred
+                    // to _pendingAnimationTail. Zero for a unit with no such clip: falls through to
+                    // the exact original fixed timing, unchanged.
+                    float clipDuration = source != null && source.Rig != null && source.Rig.Animation != null
+                        ? source.Rig.Animation.ClipDuration("skill") : 0f;
+                    if (source != null && clipDuration > 0f)
+                    {
+                        float impact = clipDuration * source.Rig.Animation.ImpactFraction("skill");
+                        float impactSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
+                        yield return Wait(impactSeconds);
+                        PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
+                        _pendingAnimationTail = clipDuration - impactSeconds;
+                    }
+                    else
+                    {
+                        yield return Wait(0.36f);
+                        if (source != null) PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
+                        yield return Wait(0.12f);
+                    }
                     break;
                 }
 
@@ -806,30 +868,6 @@ namespace Emberfall.UI.Screens
                 remaining -= Time.deltaTime;
                 yield return null;
             }
-        }
-
-        /// <summary>
-        /// Extends an event's pacing to cover a source's own SpriteAnimator clip.
-        /// alreadyElapsedNominal is the fixed Wait(...) time this event already spent before
-        /// calling this, e.g. BasicAttack's 0.16s; only the shortfall against the clip's own
-        /// duration is waited out here, through the same Wait() (and so the same _speed) every
-        /// other pause in this method already goes through.
-        ///
-        /// A unit with no SpriteAnimator, or no clip named clipId, gets ClipDuration back as 0,
-        /// so this yields nothing at all - not even an extra frame - and every hero without clip
-        /// data keeps its exact current pacing. This is the fix for "his basic attack and skill
-        /// animations play out of sync with the hit/cast they represent": those clips run several
-        /// seconds while the fixed 0.16s/0.48s this event used to hold for was sized for an instant
-        /// snap/flash, so the next BattleEvent (typically the Damage event resolving the actual
-        /// hit) used to fire while the swing had barely started.
-        /// </summary>
-        private IEnumerator ExtraHoldForClip(UnitActor source, string clipId, float alreadyElapsedNominal)
-        {
-            if (source == null || source.Rig == null || source.Rig.Animation == null) yield break;
-            float clipDuration = source.Rig.Animation.ClipDuration(clipId);
-            float extra = clipDuration - alreadyElapsedNominal;
-            if (extra <= 0f) yield break;
-            yield return Wait(extra);
         }
 
         // ------------------------------------------------------------------ presentation helpers

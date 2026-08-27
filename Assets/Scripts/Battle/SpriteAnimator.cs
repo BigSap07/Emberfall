@@ -16,6 +16,17 @@ namespace Emberfall.Battle
         public int EndFrame;
         public float Fps = 30f;
 
+        /// <summary>
+        /// Fraction of this clip's own duration, from its start, where the strike actually
+        /// connects - an authored animation-timing value, not gameplay data, which is why it
+        /// lives on the clip sidecar rather than in heroes.json. There is no impact-frame data in
+        /// the export (a single flat clip, no sections), so this is a tunable approximation
+        /// rather than a derived value; 0.5 (roughly windup, then reach) is the default for a clip
+        /// that doesn't set it. Only meaningful for an attack-shaped clip (basic, skill) - idle,
+        /// hit_reaction and death never read it.
+        /// </summary>
+        public float ImpactFraction = 0.5f;
+
         public int FrameCount { get { return EndFrame - StartFrame + 1; } }
     }
 
@@ -67,6 +78,18 @@ namespace Emberfall.Battle
         {
             SpriteAnimClip clip = GetOrLoad(clipId);
             return clip != null ? clip.FrameCount / clip.Fps : 0f;
+        }
+
+        /// <summary>
+        /// Where the strike connects, as a fraction of ClipDuration(clipId) from its start. See
+        /// SpriteAnimClip.ImpactFraction for why this is authored per-clip rather than derived.
+        /// Meaningless (and unread) for a clip with no attack shape - callers only ever ask this
+        /// for "basic"/"skill".
+        /// </summary>
+        public float ImpactFraction(string clipId)
+        {
+            SpriteAnimClip clip = GetOrLoad(clipId);
+            return clip != null ? clip.ImpactFraction : 0.5f;
         }
 
         public static SpriteAnimator TryCreate(string spriteId)

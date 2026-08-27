@@ -83,12 +83,26 @@ namespace Emberfall.Battle
 
         public void PlayAttackLunge(Vector3 towards, float speed)
         {
-            if (!Alive) return;
-            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("basic", false);
-            Restart(LungeRoutine(towards, speed));
+            PlayAttackLunge(towards, 0.10f, 0.20f, speed);
         }
 
-        private IEnumerator LungeRoutine(Vector3 towards, float speed)
+        /// <summary>
+        /// outSeconds/backSeconds are nominal (1x speed) - divided by speed here, the same way the
+        /// two-argument overload's fixed 0.10f/0.20f always were, so a caller driving these from a
+        /// SpriteAnimator clip (BattleScreen's BasicAttack case) and the plain instant-lunge caller
+        /// stay on the same footing. Exists so the lunge's own timing can be synced to a clip's
+        /// ImpactFraction - out to reach the target when the strike actually connects, back over
+        /// the clip's remaining follow-through - instead of the fixed snap/return every unit
+        /// without a SpriteAnimator still gets from the overload above.
+        /// </summary>
+        public void PlayAttackLunge(Vector3 towards, float outSeconds, float backSeconds, float speed)
+        {
+            if (!Alive) return;
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("basic", false);
+            Restart(LungeRoutine(towards, outSeconds, backSeconds, speed));
+        }
+
+        private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed)
         {
             Vector3 home = Vector3.zero;
             Vector3 direction = towards - transform.position;
@@ -96,8 +110,8 @@ namespace Emberfall.Battle
             if (direction.sqrMagnitude > 0.001f) direction = direction.normalized;
             Vector3 forward = direction * 0.85f;
 
-            yield return Move(home, forward, 0.10f / speed, true);
-            yield return Move(forward, home, 0.20f / speed, false);
+            yield return Move(home, forward, outSeconds / speed, true);
+            yield return Move(forward, home, backSeconds / speed, false);
             if (Rig != null) Rig.Root.localPosition = Vector3.zero;
         }
 
