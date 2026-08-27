@@ -207,6 +207,36 @@
         "description": "Whatever she cuts stays cut: -22% Guard on her last target.",
         "effects": [ { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.22, "duration": 2 } ]
       }
+    },
+
+    {
+      "id": "kael_the_ashbound",
+      "name": "Kael",
+      "title": "The Ashbound",
+      "role": "Breaker",
+      "aspect": "Ember",
+      "stars": 5,
+      "fusable": true,
+      "startingHero": false,
+      "lore": "Kael was once the commander of a fortress that could no longer be defended. Rather than retreat when defeat became inevitable, he ordered its gates opened and destroyed the fortress himself, denying the enemy everything they came to claim. He came to believe that destruction is not failure when it creates the chance for something stronger to follow.",
+      "hp": 480, "attack": 33, "defense": 24, "speed": 162,
+      "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.00, "effectResist": 0.10,
+      "skillDamage": 0, "block": 0.08, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
+      "visual": { "primary": "5A3030", "secondary": "2A2523", "accent": "C08A5A", "silhouette": "brute", "weapon": "greatsword", "scale": 1.08, "sigil": 6, "sprite": "kael_the_ashbound" },
+      "basic": {
+        "id": "kael_heavy_cleave", "name": "Heavy Cleave", "vfx": "slash",
+        "description": "A crushing two-handed blow at the enemy directly in front of him.",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.10 } ]
+      },
+      "active": {
+        "id": "kael_breaking_point", "name": "Breaking Point", "energyCost": 100, "vfx": "burst",
+        "description": "Kael brings his axe down in a shockwave that tears through the whole enemy line.",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 2.20 }
+        ]
+      },
+      "passive": null
     }
   ]
 }

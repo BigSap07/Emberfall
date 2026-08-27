@@ -59,6 +59,16 @@ namespace Emberfall.Game
             if (freshStart) profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());
             Session = new GameSession(Content, profile);
 
+#if UNITY_EDITOR
+            // Animation pipeline proof (kael-hero-animations task): Kael has no summon banner
+            // wiring yet, so this is the smallest path onto a team for a real test battle -
+            // GrantHeroDirect already exists and already calls NormaliseTeam, which slots him
+            // into whichever team slot is empty. Editor-only, so it never touches a device build.
+            HeroDef kael = Content.GetHero("kael_the_ashbound");
+            if (kael != null && !Session.Profile.Owns(kael.Id))
+                Session.GrantHeroDirect(kael, TimeUtil.NowUnix());
+#endif
+
             BuildCanvas();
             EnsureEventSystem();
 
