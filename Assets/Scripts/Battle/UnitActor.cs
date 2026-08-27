@@ -148,6 +148,30 @@ namespace Emberfall.Battle
             if (Rig != null) Rig.Root.localPosition = Vector3.zero;
         }
 
+        /// <summary>
+        /// Seconds a sprite death holds fully visible after its clip's own play-through, before
+        /// fading. Shared with BattleScreen (DeathHoldNominalSeconds below) so the event pacing
+        /// and the actual fade this method runs agree on the same number rather than two literals
+        /// that could drift apart.
+        /// </summary>
+        public const float SpriteDeathFadeSeconds = 0.4f;
+
+        /// <summary>
+        /// Nominal (1x speed) seconds BattleScreen's Death event pacing should hold beyond its own
+        /// existing 0.28s, so a unit with a death clip finishes playing AND fading before the next
+        /// BattleEvent starts. Zero for a unit with no SpriteAnimator or no death clip - the exact
+        /// same "no clip data, no behaviour change" fold-back every other trigger here uses.
+        /// </summary>
+        public float DeathHoldNominalSeconds
+        {
+            get
+            {
+                if (Rig == null || Rig.Animation == null) return 0f;
+                float clip = Rig.Animation.ClipDuration("death");
+                return clip > 0f ? clip + SpriteDeathFadeSeconds : 0f;
+            }
+        }
+
         public IEnumerator PlayDeath(float speed)
         {
             Alive = false;
@@ -155,11 +179,11 @@ namespace Emberfall.Battle
             _motion = null;
             if (Rig == null) yield break;
 
-            // holdOnFinish: true. A death clip plays exactly once and then freezes on its last
-            // frame - it never falls back to idle the way basic/skill/hit reaction do, because a
-            // dead unit has no idle to return to. Overrides whatever loop:true its own export
-            // authors, same as every other trigger here (see SpriteAnimator's own note).
-            if (Rig.Animation != null) Rig.Animation.PlayOnce("death", true);
+            if (Rig.Animation != null)
+            {
+                yield return PlaySpriteDeath(speed);
+                yield break;
+            }
 
             float duration = 0.75f / speed;
             float t = 0f;
@@ -178,6 +202,48 @@ namespace Emberfall.Battle
                     float shrink = 1f - k;
                     Rig.Shadow.localScale = new Vector3(UnitRig.ShadowWidth * shrink, UnitRig.ShadowDepth * shrink, 1f);
                 }
+                yield return null;
+            }
+
+            Rig.SetFade(0f);
+            if (Rig.Root != null) Rig.Root.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// A unit with its own death clip already conveys the fall in its art - the generic
+        /// rotate/drop/fade tumble above is a stand-in for a unit with none, so it does not also
+        /// run here (rotating the whole billboard while its own frames separately show a fall
+        /// would just be two conflicting motions). This is the fix for the actual reported bug:
+        /// that tumble's fixed 0.75s/speed duration used to race the clip's real ~4.8s play-through
+        /// (145 frames at 30fps) and lost - the rig faded to nothing and deactivated while the clip
+        /// had barely started, so the death was never actually seen. Held fully visible for the
+        /// clip's own duration instead (ticked by the ordinary Update() below, which already runs
+        /// regardless of Alive - see there), then a short fade using SpriteDeathFadeSeconds, then
+        /// the same deactivation the generic path ends on.
+        /// </summary>
+        private IEnumerator PlaySpriteDeath(float speed)
+        {
+            Rig.Animation.PlayOnce("death", true);
+
+            float holdSeconds = Rig.Animation.ClipDuration("death") / Mathf.Max(0.01f, speed);
+            float t = 0f;
+            while (t < holdSeconds)
+            {
+                t += Time.deltaTime;
+                yield return null;
+            }
+
+            float fadeSeconds = SpriteDeathFadeSeconds / Mathf.Max(0.01f, speed);
+            float f = 0f;
+            while (f < fadeSeconds)
+            {
+                f += Time.deltaTime;
+                float shrink = 1f - Mathf.Clamp01(f / fadeSeconds);
+                Rig.SetFade(shrink);
+                // Same shrink-with-fade the generic tumble above already does, so the shadow
+                // doesn't sit there full-size under a character that has otherwise vanished.
+                if (Rig.Shadow != null)
+                    Rig.Shadow.localScale = new Vector3(UnitRig.ShadowWidth * shrink, UnitRig.ShadowDepth * shrink, 1f);
                 yield return null;
             }
 

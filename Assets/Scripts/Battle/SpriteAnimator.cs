@@ -56,6 +56,19 @@ namespace Emberfall.Battle
         public int FrameWidth { get { return _current != null ? _current.FrameWidth : 0; } }
         public int FrameHeight { get { return _current != null ? _current.FrameHeight : 0; } }
 
+        /// <summary>
+        /// Nominal (1x speed) seconds a single play-through of this clip takes, or 0 if this unit
+        /// never shipped it. This is the number BattleScreen's event pacing was missing entirely -
+        /// it was holding each event on screen for a fixed, clip-agnostic duration that happened to
+        /// match an instant snap/flash, and had no way to ask "how long does this unit's own basic/
+        /// skill/death clip actually take" before this existed.
+        /// </summary>
+        public float ClipDuration(string clipId)
+        {
+            SpriteAnimClip clip = GetOrLoad(clipId);
+            return clip != null ? clip.FrameCount / clip.Fps : 0f;
+        }
+
         public static SpriteAnimator TryCreate(string spriteId)
         {
             SpriteAnimClip idle = BattleAssets.UnitAnimClip(spriteId, IdleClip);

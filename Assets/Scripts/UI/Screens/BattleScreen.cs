@@ -606,6 +606,7 @@ namespace Emberfall.UI.Screens
                             if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
                         }
                     }
+                    yield return ExtraHoldForClip(source, "basic", 0.16f);
                     break;
                 }
 
@@ -623,6 +624,7 @@ namespace Emberfall.UI.Screens
                     yield return Wait(0.36f);
                     if (source != null) PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
                     yield return Wait(0.12f);
+                    yield return ExtraHoldForClip(source, "skill", 0.48f);
                     break;
                 }
 
@@ -778,6 +780,15 @@ namespace Emberfall.UI.Screens
                         target.StartCoroutine(target.PlayDeath(_speed));
                     }
                     yield return Wait(0.28f);
+                    // A unit with a death clip (UnitActor.DeathHoldNominalSeconds) needs the timeline
+                    // to hold past the existing 0.28s or the next BattleEvent starts while it is still
+                    // mid-clip - the exact bug this exists to fix. Zero, and this Wait is skipped
+                    // entirely, for every unit with no clip - the other six heroes and every enemy.
+                    if (target != null)
+                    {
+                        float extra = Mathf.Max(0f, target.DeathHoldNominalSeconds - 0.28f);
+                        if (extra > 0f) yield return Wait(extra);
+                    }
                     break;
                 }
 
@@ -795,6 +806,30 @@ namespace Emberfall.UI.Screens
                 remaining -= Time.deltaTime;
                 yield return null;
             }
+        }
+
+        /// <summary>
+        /// Extends an event's pacing to cover a source's own SpriteAnimator clip.
+        /// alreadyElapsedNominal is the fixed Wait(...) time this event already spent before
+        /// calling this, e.g. BasicAttack's 0.16s; only the shortfall against the clip's own
+        /// duration is waited out here, through the same Wait() (and so the same _speed) every
+        /// other pause in this method already goes through.
+        ///
+        /// A unit with no SpriteAnimator, or no clip named clipId, gets ClipDuration back as 0,
+        /// so this yields nothing at all - not even an extra frame - and every hero without clip
+        /// data keeps its exact current pacing. This is the fix for "his basic attack and skill
+        /// animations play out of sync with the hit/cast they represent": those clips run several
+        /// seconds while the fixed 0.16s/0.48s this event used to hold for was sized for an instant
+        /// snap/flash, so the next BattleEvent (typically the Damage event resolving the actual
+        /// hit) used to fire while the swing had barely started.
+        /// </summary>
+        private IEnumerator ExtraHoldForClip(UnitActor source, string clipId, float alreadyElapsedNominal)
+        {
+            if (source == null || source.Rig == null || source.Rig.Animation == null) yield break;
+            float clipDuration = source.Rig.Animation.ClipDuration(clipId);
+            float extra = clipDuration - alreadyElapsedNominal;
+            if (extra <= 0f) yield break;
+            yield return Wait(extra);
         }
 
         // ------------------------------------------------------------------ presentation helpers
