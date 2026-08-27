@@ -223,7 +223,7 @@
       "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 0,
       "effectHit": 0.00, "effectResist": 0.10,
       "skillDamage": 0, "block": 0.08, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "5A3030", "secondary": "2A2523", "accent": "C08A5A", "silhouette": "brute", "weapon": "greatsword", "scale": 1.08, "sigil": 6, "sprite": "kael_the_ashbound" },
+      "visual": { "primary": "5A3030", "secondary": "2A2523", "accent": "C08A5A", "silhouette": "brute", "weapon": "greatsword", "scale": 1.08, "sigil": 6, "sprite": "kael_the_ashbound", "spriteBodyFraction": 0.555, "spriteFootFraction": 0.222, "spriteMirror": true },
       "basic": {
         "id": "kael_heavy_cleave", "name": "Heavy Cleave", "vfx": "slash",
         "description": "A crushing two-handed blow at the enemy directly in front of him.",

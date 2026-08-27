@@ -5,12 +5,16 @@ using UnityEngine.SceneManagement;
 
 namespace UnityEngine
 {
+    public enum KeyCode { LeftBracket = 91 }
+
     public static class Input
     {
         public static Vector3 mousePosition { get { return Vector3.zero; } }
         public static bool GetMouseButtonDown(int button) { return false; }
         public static bool anyKeyDown { get { return false; } }
         public static int touchCount { get { return 0; } }
+        public static bool GetKeyDown(KeyCode key) { return false; }
+        public static bool GetKey(KeyCode key) { return false; }
     }
 }
 

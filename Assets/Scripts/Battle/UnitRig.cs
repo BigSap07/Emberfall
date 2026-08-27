@@ -154,7 +154,7 @@ namespace Emberfall.Battle
             // same code, same output, no behaviour change.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.Silhouette);
+                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction, visual.SpriteMirror, visual.Silhouette);
             }
             else
             {
@@ -301,7 +301,7 @@ namespace Emberfall.Battle
         /// top of the body even when the quad extends above it for a raised weapon. See
         /// bodyFraction below for what does extend it, and why.
         /// </summary>
-        private void BuildSprite(string spriteId, float bodyFraction, string silhouette)
+        private void BuildSprite(string spriteId, float bodyFraction, float footFraction, bool mirror, string silhouette)
         {
             // The silhouette's own top, not a number of its own, and not HumanoidTop. This is the
             // line the whole sprite pipeline hangs off: the quad below is sized so the body's top
@@ -389,11 +389,24 @@ namespace Emberfall.Battle
             StripCollider(quad);
             Transform t = quad.transform;
             t.SetParent(Body, false);
-            // Bottom edge of the quad still sits at y 0 either way - centring on half the
-            // (possibly taller) canvasHeight is what keeps feet on the ground while letting the
-            // extra height for a raised weapon extend upward, never downward.
-            t.localPosition = new Vector3(0f, canvasHeight * 0.5f, 0f);
-            t.localScale = new Vector3(width, canvasHeight, 1f);
+            // Bottom edge of the quad sits at y (-footFraction * canvasHeight), not always y 0:
+            // footFraction is exactly how much of the canvas, below the character's own feet, is
+            // empty margin. Shifting the whole quad DOWN by that amount pushes the transparent
+            // margin below ground (hidden - there is nothing there to hide) so the ACTUAL feet,
+            // not the canvas edge, land at y 0. Centring on half of canvasHeight (as before)
+            // still lets a raised weapon's reserved headroom (SpriteBodyFraction < 1) extend
+            // upward past the feet-to-head span, never downward past it. footFraction defaults
+            // to 0 for every hero that doesn't set it, so this is an exact no-op there:
+            // canvasHeight * 0.5f - 0f * canvasHeight is algebraically identical to the old line.
+            float footShift = footFraction * canvasHeight;
+            t.localPosition = new Vector3(0f, canvasHeight * 0.5f - footShift, 0f);
+            // Cull is off in EmberfallFx (see the shader), so a negative X scale flips the quad's
+            // rendered image without going invisible from reversed winding - the only visible
+            // effect is the mirror. Mirror is authored per-hero (VisualDef.SpriteMirror), not
+            // per-side: heroes are never spawned as enemies, so there is only ever one facing to
+            // get right for a given sprite, unlike the ally/enemy turn direction above which
+            // already differs by side on its own.
+            t.localScale = new Vector3(mirror ? -width : width, canvasHeight, 1f);
 
             // No local rotation any more: the quad inherits Root's turn (180 -/+ ThreeQuarterTurn,
             // see Build) and so leans with the procedural rigs instead of staying square to the

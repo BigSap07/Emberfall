@@ -248,7 +248,36 @@ namespace Emberfall.Game
             if (_saveTimer < 0f) return;
             _saveTimer -= Time.unscaledDeltaTime;
             if (_saveTimer <= 0f) SaveNow();
+
+#if UNITY_EDITOR
+            DebugSlowMotionToggle();
+#endif
         }
+
+#if UNITY_EDITOR
+        private bool _debugSlowMotion;
+
+        /// <summary>
+        /// Animation-pipeline task: a battle at normal pace only holds each BattleEvent on screen
+        /// for a fraction of a second (BattleScreen.Handle's Wait calls), nowhere near long enough
+        /// to watch a multi-second sprite clip play out. Time.timeScale is the correct single lever
+        /// for that rather than a bespoke slowdown flag: every Wait() coroutine, UnitActor.Update's
+        /// per-frame ticks and SpriteAnimator's frame advance all already derive from Time.deltaTime,
+        /// which Unity itself scales by this value - so nothing downstream needs its own awareness
+        /// of "slow mode" for this to reach it.
+        ///
+        /// Deliberately separate from BattleScreen's player-facing Speed button (1x/2x/4x, never
+        /// below 1x - see _speed/CycleSpeed there): that field, its UI, and the shipped default
+        /// pace are untouched by this. This whole block is compiled out by the #if in every build
+        /// but the editor, so it can never reach a device and never ships to a player.
+        /// </summary>
+        private void DebugSlowMotionToggle()
+        {
+            if (!UnityEngine.Input.GetKeyDown(KeyCode.LeftBracket)) return;
+            _debugSlowMotion = !_debugSlowMotion;
+            Time.timeScale = _debugSlowMotion ? 0.2f : 1f;
+        }
+#endif
 
         private void OnApplicationPause(bool paused)
         {

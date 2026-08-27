@@ -35,6 +35,35 @@ namespace Emberfall.Core.Data
         /// </summary>
         public float SpriteBodyFraction = 1f;
 
+        /// <summary>
+        /// Sprite only. Fraction of the canvas, measured from the bottom, that is EMPTY margin
+        /// below the character's own feet - the counterpart SpriteBodyFraction does not cover.
+        /// Defaults to 0: feet touch the bottom edge of the canvas exactly, today's behaviour,
+        /// unchanged for every hero that does not set this key (every hero but Kael).
+        ///
+        /// Distinct from SpriteBodyFraction's reserved headroom above the body: that space is
+        /// legitimately used by some frames of a clip (a raised weapon mid-swing), so it stays
+        /// part of the canvas the quad renders. A margin below the feet has no equivalent use -
+        /// nothing in a battle animation extends below where a character stands - so instead of
+        /// being sized into the canvas it is measured out of it: the quad shifts upward by this
+        /// fraction of canvas height so the character's actual feet, not the transparent edge
+        /// below them, land on the ground. See UnitRig.BuildSprite for the shift, and
+        /// DESIGN-ART-DELIVERY.md for how an artist (or an automated sprite-sheet export) measures
+        /// it off their own file the same way SpriteBodyFraction already is.
+        /// </summary>
+        public float SpriteFootFraction = 0f;
+
+        /// <summary>
+        /// Sprite only. True mirrors the quad horizontally. The battle rig turns every ally
+        /// toward +X and every enemy toward -X by the same fixed angle in opposite directions
+        /// (UnitRig.Build's ThreeQuarterTurn), which is what DESIGN-ART-DELIVERY.md's sprites are
+        /// drawn against - a hero authored facing that convention needs nothing else. This exists
+        /// for art that was authored facing the opposite way: rather than re-exporting the source
+        /// frames, the quad flips instead. Defaults to false - unchanged for every hero whose art
+        /// already matches the convention.
+        /// </summary>
+        public bool SpriteMirror;
+
         public static VisualDef FromJson(JsonValue j)
         {
             VisualDef v = new VisualDef();
@@ -48,6 +77,8 @@ namespace Emberfall.Core.Data
             v.Sigil = j.GetInt("sigil", v.Sigil);
             v.Sprite = j.GetString("sprite", v.Sprite);
             v.SpriteBodyFraction = j.GetFloat("spriteBodyFraction", v.SpriteBodyFraction);
+            v.SpriteFootFraction = j.GetFloat("spriteFootFraction", v.SpriteFootFraction);
+            v.SpriteMirror = j.GetBool("spriteMirror", v.SpriteMirror);
             return v;
         }
     }
