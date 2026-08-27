@@ -96,6 +96,15 @@ namespace Emberfall.Battle
         public Material Accent;
         public readonly List<Material> Materials = new List<Material>();
 
+        /// <summary>
+        /// Non-null only for a sprite rig whose VisualDef.Sprite has a matching animation clip set
+        /// (an "idle" clip found via BattleAssets.UnitAnimClip - Kael today, nobody else). Null for
+        /// every procedural rig and for every sprite rig without clip data, which is every other
+        /// unit in the game right now; UnitActor checks this before driving playback, so nothing
+        /// downstream needs a separate "does this unit animate" flag.
+        /// </summary>
+        public SpriteAnimator Animation;
+
         private static readonly Vector3 NoRotation = Vector3.zero;
 
         /// <summary>
@@ -313,8 +322,27 @@ namespace Emberfall.Battle
             // fix for the same reason it was introduced: a per-silhouette number collapsed to a
             // single constant that happened to be right for the only case anyone had.
             Height = SilhouetteTop(silhouette);
-            Texture2D tex = BattleAssets.UnitSprite(spriteId);
-            float aspect = tex.height > 0 ? tex.width / (float)tex.height : 0.6f;
+
+            // An animated unit sizes off one FRAME, not the whole sheet - the sheet's own aspect
+            // (all frames laid out in a cols x rows grid) has nothing to do with the character's
+            // own proportions. A unit with no clip data (everyone but Kael today) takes the exact
+            // path this always took, unchanged.
+            SpriteAnimator animator = SpriteAnimator.TryCreate(spriteId);
+            Texture2D tex;
+            float frameWidth, frameHeight;
+            if (animator != null)
+            {
+                tex = animator.Texture;
+                frameWidth = animator.FrameWidth;
+                frameHeight = animator.FrameHeight;
+            }
+            else
+            {
+                tex = BattleAssets.UnitSprite(spriteId);
+                frameWidth = tex.width;
+                frameHeight = tex.height;
+            }
+            float aspect = frameHeight > 0 ? frameWidth / frameHeight : 0.6f;
 
             // Canvas height was previously just Height, which assumes the whole image is body -
             // true for a plain full-bleed figure, false for anything drawn holding a raised weapon:
@@ -346,6 +374,15 @@ namespace Emberfall.Battle
             // meaningful for a rig with only one material to glow.
             Primary = Secondary = Accent = material;
             Materials.Add(material);
+
+            // Bind after the material exists, not before: Bind's first ApplyFrame writes into it
+            // immediately, landing the idle clip's first frame's UV rect rather than the whole
+            // sheet the quad was about to render un-cropped.
+            if (animator != null)
+            {
+                animator.Bind(material);
+                Animation = animator;
+            }
 
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Sprite";

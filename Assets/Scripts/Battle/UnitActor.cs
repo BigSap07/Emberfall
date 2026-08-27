@@ -58,6 +58,11 @@ namespace Emberfall.Battle
         {
             if (Rig == null || Rig.Body == null) return;
 
+            // Runs whether or not the unit is still alive - a death clip needs ticks after Alive
+            // flips false to reach and then hold its final frame. A no-op for every unit besides
+            // Kael today: Rig.Animation is null for every other rig (see UnitRig.Animation).
+            if (Rig.Animation != null) Rig.Animation.Update(Time.deltaTime);
+
             if (Alive)
             {
                 _idlePhase += Time.deltaTime * _bobSpeed;
@@ -79,6 +84,7 @@ namespace Emberfall.Battle
         public void PlayAttackLunge(Vector3 towards, float speed)
         {
             if (!Alive) return;
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("basic", false);
             Restart(LungeRoutine(towards, speed));
         }
 
@@ -98,6 +104,7 @@ namespace Emberfall.Battle
         public void PlayCast(float speed)
         {
             if (!Alive) return;
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("skill", false);
             Restart(CastRoutine(speed));
         }
 
@@ -129,6 +136,7 @@ namespace Emberfall.Battle
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
             if (Rig != null) Rig.SetFlash(_flash);
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("hit_reaction", false);
             Restart(FlinchRoutine(critical ? 0.24f : 0.15f));
         }
 
@@ -146,6 +154,12 @@ namespace Emberfall.Battle
             if (_motion != null) StopCoroutine(_motion);
             _motion = null;
             if (Rig == null) yield break;
+
+            // holdOnFinish: true. A death clip plays exactly once and then freezes on its last
+            // frame - it never falls back to idle the way basic/skill/hit reaction do, because a
+            // dead unit has no idle to return to. Overrides whatever loop:true its own export
+            // authors, same as every other trigger here (see SpriteAnimator's own note).
+            if (Rig.Animation != null) Rig.Animation.PlayOnce("death", true);
 
             float duration = 0.75f / speed;
             float t = 0f;
@@ -181,6 +195,7 @@ namespace Emberfall.Battle
             Rig.Body.localPosition = Vector3.zero;
             Rig.SetFade(1f);
             Rig.SetFlash(0f);
+            if (Rig.Animation != null) Rig.Animation.PlayLoop("idle");
         }
 
         private void Restart(IEnumerator routine)

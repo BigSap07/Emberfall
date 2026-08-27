@@ -485,6 +485,8 @@ namespace UnityEngine
         public Shader shader { get; set; }
         public int renderQueue { get; set; }
         public Texture mainTexture { get; set; }
+        public Vector2 mainTextureScale { get; set; }
+        public Vector2 mainTextureOffset { get; set; }
         public void SetColor(string name, Color value) { }
         public void SetColor(int id, Color value) { }
         public void SetFloat(string name, float value) { }

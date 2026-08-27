@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Emberfall.Core.Json;
 using Emberfall.UI;
 
 namespace Emberfall.Battle
@@ -107,6 +109,65 @@ namespace Emberfall.Battle
                 TextureCache["missingsprite"] = tex;
                 return tex;
             }
+        }
+
+        // ------------------------------------------------------------------ unit sprite-sheet clips
+
+        private static readonly Dictionary<string, SpriteAnimClip> ClipCache = new Dictionary<string, SpriteAnimClip>();
+
+        /// <summary>
+        /// Loads Resources/Sprites/Units/{spriteId}_{clipId}.png (+ its sidecar .json) as one
+        /// animated flipbook clip. Extends the plain UnitSprite convention above rather than
+        /// inventing a new one: same folder, same {spriteId} prefix, "_{clipId}" is the only new
+        /// part, so a hero with no clip data (everyone except Kael today) is entirely untouched -
+        /// the sidecar simply isn't there and this returns null.
+        ///
+        /// Unlike UnitSprite, a missing clip is NOT a content bug and logs nothing: it is the
+        /// normal shape of "this hero has no animation set" (every hero but Kael) or "this hero
+        /// ships fewer than five clips" (a real future case this is written to allow). Only a
+        /// malformed sidecar - one that exists but fails to parse - warns, since that is
+        /// distinguishable from "not authored yet".
+        /// </summary>
+        public static SpriteAnimClip UnitAnimClip(string spriteId, string clipId)
+        {
+            string key = spriteId + "_" + clipId;
+            SpriteAnimClip cached;
+            if (ClipCache.TryGetValue(key, out cached)) return cached;
+
+            TextAsset sidecar = Resources.Load<TextAsset>("Sprites/Units/" + key);
+            if (sidecar == null) { ClipCache[key] = null; return null; }
+
+            JsonValue root;
+            string err;
+            if (!JsonValue.TryParse(sidecar.text, out root, out err))
+            {
+                Debug.LogWarning("Emberfall: malformed sprite clip sidecar Sprites/Units/" + key + ".json - " + err);
+                ClipCache[key] = null;
+                return null;
+            }
+
+            Texture2D tex = Resources.Load<Texture2D>("Sprites/Units/" + key);
+            if (tex == null)
+            {
+                Debug.LogWarning("Emberfall: sprite clip sidecar Sprites/Units/" + key + ".json has no matching .png");
+                ClipCache[key] = null;
+                return null;
+            }
+
+            JsonValue sheet = root["sheet"];
+            JsonValue defaultAnim = root["defaultAnimation"];
+            SpriteAnimClip clip = new SpriteAnimClip();
+            clip.Texture = tex;
+            clip.FrameWidth = root.GetInt("frameWidth", tex.width);
+            clip.FrameHeight = root.GetInt("frameHeight", tex.height);
+            clip.Columns = Math.Max(1, sheet.GetInt("cols", 1));
+            clip.Rows = Math.Max(1, sheet.GetInt("rows", 1));
+            clip.StartFrame = Math.Max(0, defaultAnim.GetInt("start", 0));
+            clip.EndFrame = Math.Max(clip.StartFrame, defaultAnim.GetInt("end", clip.StartFrame));
+            clip.Fps = Math.Max(1f, defaultAnim.GetFloat("fps", 30f));
+
+            ClipCache[key] = clip;
+            return clip;
         }
 
         // ------------------------------------------------------------------ shared textures
