@@ -12,10 +12,15 @@ been confirmed by actually seeing it render. That branch has not merged and has 
 at in the editor by anyone yet. Treat the numbers as accurate to the code and the visuals as
 unverified.
 
-Right now, exactly one character in the whole game uses this path: Orrin Kaal, and only as a
-pipeline test. Every other hero and every enemy still uses the game's built-in procedural look
-(simple 3D shapes and colors, no image file involved) and will keep using it until someone
-hands over art for them the same way this document describes.
+As of this writing, six heroes and three enemies render from the single static image this
+document describes: Orrin Kaal, Kalyx Emberwright, Wren Ilyra, Ryn Solvarr, Maeve Corrin, Nyx
+Serrow, Grave Moth, Hollow Husk and Sundered Colossus. Kael the Ashbound, the roster's seventh
+hero, is the one exception this document does not cover: instead of a single file, he renders
+from five sprite-sheet clips (idle, basic attack, skill, hit reaction, death) - see the sprite
+sheet note in section 2 and section 8 for what that path adds. Every other hero and every enemy
+still uses the game's built-in procedural look (simple 3D shapes and colors, no image file
+involved) and will keep using it until someone hands over art for them the same way this
+document describes.
 
 ## 1. Where the file goes and what it's called
 
@@ -59,9 +64,11 @@ character in a screenshot, the file is either missing or misnamed.
 ### Sprite sheets: two import settings that must not be left at their defaults
 
 This applies only to a **sprite sheet** - one file holding a grid of animation frames - and not
-to the single-figure sprites the rest of this section describes. Sheet support lives on the
-`feat/sprite-sheet-player` branch and is not merged yet (section 8 still describes the shipped
-behaviour), so deliver a sheet only if you have been asked for one.
+to the single-figure sprites the rest of this section describes. Sheet support is shipped on
+main (merged from `claude/kael-hero-animations-se66qk`): Kael the Ashbound is the first, and
+currently only, hero built this way. Deliver a sheet only if you have been asked for one - every
+other hero still uses a single static image, and section 8 describes what changes once a hero
+has clip data instead.
 
 The game works out how wide to draw each frame from the *shape of one cell*, and it gets that
 shape by dividing the imported image's dimensions by the grid size the content file declares.
@@ -82,9 +89,11 @@ Neither one announces itself. A sheet imported at the defaults renders perfectly
 at the wrong proportions, so it is worth checking on the asset first rather than hunting for the
 problem in the animation data or the grid numbers.
 
-Found during verification of `feat/sprite-sheet-player`. The test sheet shipped with *ToNearest*
-and a 2048 cap; the verification was run with **None** and **4096**, at which the cell shape the
-game derived matched the file's own measured cell exactly.
+This matters in practice: Kael the Ashbound's shipped sheets are 3744 x 6144, well past the
+default 2048 cap, and were imported with **None** and **8192** to avoid exactly this. A
+downscaled or distorted sheet would still play back at the right timing (the frame math works in
+UV space, which is resolution-independent), just at a visibly lower resolution than the source
+art - so this is a quality issue on an otherwise-working sheet, not a correctness one.
 
 ## 3. Sizing: fixed height, no fixed box
 
@@ -232,14 +241,16 @@ hasn't been looked at yet and is worth an early look once someone can see it in 
 
 Stated plainly, so nothing here is assumed that doesn't exist yet:
 
-- **No animation.** The image is a single rigid card. The game can move, tilt and fade that
-  whole card (idle sway, a lunge toward a target, a flinch on being hit, the death tip described
-  above), but nothing inside the image itself animates. A cape can't flutter on its own, a blade
-  can't swing independently, eyes can't blink. Whatever the character is doing has to already be
-  true in the single frame you deliver.
-- **No multi-frame or flipbook support.** There's no mechanism today for swapping between
-  several images for the same hero (an attack pose versus an idle pose, for instance). One hero,
-  one file.
+- **No animation, for a hero with a single static image (every hero but Kael).** The image is a
+  single rigid card. The game can move, tilt and fade that whole card (idle sway, a lunge toward
+  a target, a flinch on being hit, the death tip described above), but nothing inside the image
+  itself animates. A cape can't flutter on its own, a blade can't swing independently, eyes can't
+  blink. Whatever the character is doing has to already be true in the single frame you deliver.
+- **No multi-frame or flipbook support, for a hero with a single static image.** There's no
+  mechanism for swapping between several images for the same hero (an attack pose versus an idle
+  pose, for instance). One hero, one file - unless that hero has clip data instead, per the
+  sprite sheet note in section 2. Kael the Ashbound is the only hero built that way today; he has
+  five clips (idle, basic attack, skill, hit reaction, death) instead of one image.
 - **No separate weapon layer.** The built-in procedural look assembles a weapon as its own
   piece, positioned and held independently of the body. The sprite path has no equivalent; a
   weapon has to be painted directly into the same single image as the character. There's no way
