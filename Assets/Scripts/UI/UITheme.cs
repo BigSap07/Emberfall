@@ -210,6 +210,26 @@ namespace Emberfall.UI
 
         // ---------- game-specific colours ----------
 
+        /// <summary>
+        /// Badge tint for a relic's grade. Gold for legendary, muted for common, and the gap
+        /// between them is the point: DESIGN-RELICS asks the card to show the grade because it is
+        /// what tells a player whether they are about to read a rule or a list of numbers.
+        ///
+        /// Deliberately not an aspect colour and not Ember. A legendary relic is never flavoured or
+        /// paired to an aspect, so tinting its badge with one would say the opposite in the one
+        /// place a player actually looks.
+        /// </summary>
+        public static Color RelicGradeColor(RelicGrade grade)
+        {
+            return grade == RelicGrade.Legendary ? Gold : TextMuted;
+        }
+
+        /// <summary>The display word, with no noun after it - "Legendary", not "Legendary relic".</summary>
+        public static string RelicGradeLabel(RelicGrade grade)
+        {
+            return grade == RelicGrade.Legendary ? "LEGENDARY" : "COMMON";
+        }
+
         public static Color AspectColor(Aspect aspect)
         {
             switch (aspect)

@@ -20,6 +20,10 @@
   // would be an aura, which is a global multiplier. DESIGN-RELICS' relicEnergyBankMax is absent on
   // purpose: it bounded the Tidewrought Metronome's carry, and that relic is cut.
   "relicSlotsPerHero": 1,
+  // Fraction of a hit that Mirrored Wound returns to the attacker. The relic's card says "part of
+  // that damage returns" and never a number - a legendary relic contains none - so the magnitude
+  // lives here, exactly as emberBurnStackCap does for Ember. Placeholder; task 13's retune owns it.
+  "mirroredWoundReflectFraction": 0.25,
 
   // hero level up cost = A + B*level + C*level^2
   "levelCostA": 55,

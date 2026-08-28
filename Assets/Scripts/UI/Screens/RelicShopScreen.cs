@@ -8,8 +8,13 @@ namespace Emberfall.UI.Screens
 {
     /// <summary>
     /// Lists every relic the player can purchase with Relic Dust. Each entry shows the relic name,
-    /// its one-sentence rule, and the price. Buying adds it to the player's collection unassigned;
-    /// assigning it to a hero is done from the Inventory screen.
+    /// its grade badge, its own text - a legendary's one-sentence rule or a common's stat line -
+    /// and the price. Buying adds it to the player's collection unassigned; assigning it to a hero
+    /// is done from the Inventory screen.
+    ///
+    /// Both grades sell from the same list at the same price, which is a placeholder rather than a
+    /// decision: DESIGN-RELIC-PROGRESSION defers relative pricing to the balance pass, and a
+    /// legendary costing the same as a stat bundle is one of the things that pass has to fix.
     ///
     /// No aspect filtering of any kind: any relic can be purchased and assigned to any hero.
     /// </summary>
@@ -120,7 +125,14 @@ namespace Emberfall.UI.Screens
             nameLabel.rectTransform.offsetMin = new Vector2(128f, -56f);
             nameLabel.rectTransform.offsetMax = new Vector2(-200f, -22f);
 
-            // Paired hero hint (display only, not a restriction).
+            // Grade badge, then the paired-hero hint beside it. The badge is on every card of both
+            // grades: it is what tells a player whether the line below is a rule or a stat list.
+            RectTransform gradeBadge = UIBuilder.Chip("Grade", card, UITheme.RelicGradeLabel(relic.Grade),
+                                                      UITheme.RelicGradeColor(relic.Grade), UITheme.FontTiny);
+            UIBuilder.Box(gradeBadge, 128f, -60f, 132f, 30f, new Vector2(0f, 1f));
+
+            // Paired hero hint (display only, never a restriction, and legendary-only in practice -
+            // the common grade is universal and carries no pairing at all).
             string pairedText = "";
             if (!string.IsNullOrEmpty(relic.PairedHeroId))
             {
@@ -131,11 +143,13 @@ namespace Emberfall.UI.Screens
                                                UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             pairedLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
             pairedLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            pairedLabel.rectTransform.offsetMin = new Vector2(128f, -82f);
+            pairedLabel.rectTransform.offsetMin = new Vector2(272f, -82f);
             pairedLabel.rectTransform.offsetMax = new Vector2(-200f, -56f);
 
-            // Rule text.
-            Text ruleLabel = UIBuilder.WrappedLabel("Rule", card, relic.Rule,
+            // The relic's own text: a legendary states its rule, a common states its numbers.
+            // Both come from CardText() rather than being chosen here, so this screen and the
+            // inventory cannot drift into describing the same relic two different ways.
+            Text ruleLabel = UIBuilder.WrappedLabel("Rule", card, relic.CardText(),
                                                     UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
             ruleLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
             ruleLabel.rectTransform.anchorMax = new Vector2(1f, 1f);

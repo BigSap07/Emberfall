@@ -91,41 +91,117 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// Which rule in the effect pipeline a relic bends. One relic, one hook: DESIGN-RELICS' whole
-    /// constraint is that a relic changes a RULE, never a number, so there is deliberately no
-    /// "add N%" member here and adding one would be the stat stick the document exists to avoid.
+    /// A relic's grade, per DESIGN-RELICS "The word is grade, and it is not tier or rarity".
     ///
-    /// Three hooks, not six, because DESIGN-HOOK-RESOLUTION cut two of the six relics outright
-    /// (Tidewrought Metronome and Green Hour Vessel) rather than relocating them: both were built
-    /// on an overflow discard that an aspect now claims one hook earlier in the same method. See
-    /// sections 2 and 3 of that document. The remaining four need three hooks between them.
+    /// Deliberately NOT called tier or rarity, because both words are already taken and either
+    /// would silently overload one: "tier" is a relic's upgrade level (OwnedRelic.Tier,
+    /// BalanceConfig.RelicMaxTier), and "rarity" is a hero's star rarity (StatMath.StarMultiplier).
+    /// A relic has both a grade and a tier and they are orthogonal - a common relic upgrades from
+    /// tier 1 to tier 2 exactly like a legendary one does.
+    /// </summary>
+    public enum RelicGrade
+    {
+        /// <summary>
+        /// A bundle of flat and percentage stats, resolved entirely in StatMath before the
+        /// simulation starts. Carries RelicStatBonus entries and Hook is always None: a common
+        /// relic never enters the effect pipeline, so it cannot contest a hook with an aspect or
+        /// with a legendary relic. Numerous, cheap to author, aspect-neutral and universal.
+        /// </summary>
+        Common,
+
+        /// <summary>
+        /// Rare, rule-breaking, and number-free. Carries a Hook and no RelicStatBonus entries at
+        /// all. This is the grade DESIGN-RELICS' original founding standard still applies to in
+        /// full: it changes a rule in the effect pipeline, states itself as one sentence, and
+        /// contains no number. If it cannot be written that way, it is a common relic wearing the
+        /// wrong grade.
+        /// </summary>
+        Legendary
+    }
+
+    /// <summary>
+    /// Which rule in the effect pipeline a LEGENDARY relic bends. One relic, one hook.
+    ///
+    /// The "a relic changes a RULE, never a number" constraint that shapes this enum is now the
+    /// legendary grade's bar specifically, not a blanket rule for all relics - DESIGN-RELICS
+    /// withdrew the blanket version on 2026-08-26 when the common grade was introduced. It is
+    /// undiminished here: there is still deliberately no "add N%" member, because a relic that
+    /// wants one is a common relic and belongs in RelicStatBonus, which never reaches this enum.
+    ///
+    /// Both members below are hooks no aspect holds. DESIGN-RELICS "Hook contention: aspects win
+    /// by default" - Tide owns the AddEnergy overflow redirect, Verdant owns the ApplyHealValue
+    /// overflow banking, Ember owns Burn stacking, Orrin is Lumen - and a legendary relic must
+    /// find a hook none of them claims rather than compete for one.
     /// </summary>
     public enum RelicHook
     {
         None,
 
         /// <summary>
-        /// Rewrite an effect's TargetMode before targets resolve, optionally filtered to one
-        /// EffectKind. DESIGN-RELICS' first named modifiable: "rewrite a TargetMode before targets
-        /// resolve". Stormlance Oath (unfiltered) and Warden's Debt (Shield only) both use it.
+        /// The Unbroken Ledger. A harmful effect from the wearer passes through
+        /// ResolveLandingChance with the target's Effect Resist forced to zero.
+        ///
+        /// Not "hook the chance gate": the gate stopped being _rng.Chance(effect.Chance) when
+        /// Effect Hit and Effect Resist shipped. It is the landing chance that gets rebuilt, and
+        /// that arithmetic is claimed by the stat layer rather than by any aspect, which is what
+        /// makes it available. Control Immunity is deliberately NOT bypassed - it is a separate,
+        /// narrower layer that only ever touches Silence and Stun, and erasing both would make
+        /// hard control unanswerable by any defensive stat in the game.
         /// </summary>
-        Retarget,
+        BypassEffectResist,
 
         /// <summary>
-        /// Splitting Prism. An AllEnemies effect becomes FrontEnemy; a Damage effect additionally
-        /// multiplies its Hits by the number of enemies the wide version would have struck, so the
-        /// raw output is preserved and concentrated. Anything that is NOT Damage - the status
-        /// rider - retargets without any multiplication, which is exactly the relic's cost: one
-        /// landing roll for the whole cast instead of one per enemy.
+        /// Mirrored Wound. When the wearer takes damage, a fraction of it returns to whoever dealt
+        /// it. The fraction lives in balance.json (MirroredWoundReflectFraction), never in the
+        /// relic's text, exactly as emberBurnStackCap and galeExtraTurnsPerRound do for aspects -
+        /// which is how a legendary relic states itself with no number and still has a magnitude.
+        ///
+        /// Shares PassiveTrigger.OnDamaged's dispatch point but not its mechanism, and that trigger
+        /// is NOT unused: tideturned_passive ("Backwash") already listens on it in enemies.json.
+        /// The reflect is built to coexist with it rather than to assume an empty trigger.
         /// </summary>
-        SplitWideDamage,
+        ReflectDamage
+    }
+
+    /// <summary>
+    /// How one RelicStatBonus combines with the stat it names. Which mode a stat takes is not one
+    /// answer, and DESIGN-RELICS decides it per stat rather than leaving it to the content author:
+    /// the eight starting common relics use one "%" sign for two different operations because the
+    /// stats they touch are stored in two different shapes.
+    /// </summary>
+    public enum RelicStatMode
+    {
+        /// <summary>
+        /// Attack, Defense, MaxHp, Speed. Large scaled numbers built off BaseAttack * scale *
+        /// rarityMultiplier, so "+14% Attack" means Attack *= 1.14.
+        /// </summary>
+        Multiply,
 
         /// <summary>
-        /// Verdict Sigil. A passive whose Trigger is FromTrigger also fires after the wearer casts
-        /// its Active, in addition to whenever it already fired. Widens which condition fires a
-        /// passive, DESIGN-RELICS' "PassiveTrigger - which condition fires a passive".
+        /// CritChance, CritDamage, EffectHit, EffectResist. Stored as small fractions or as a
+        /// multiplier and deliberately never scaled by level or star rarity, so multiplying them
+        /// does not work: a multiplicative +12% on a 0.08 crit chance is +0.0096, which is nothing,
+        /// and on Kalyx's 0.00 Effect Hit it is exactly zero. So "+12% Crit Chance" means
+        /// CritChance += 0.12, and "+20% Crit Damage" means CritDamage += 0.20 - 1.5 becomes 1.7.
         /// </summary>
-        WidenPassiveTrigger
+        Add
+    }
+
+    /// <summary>
+    /// Which UnitStats field a RelicStatBonus moves. Deliberately a closed enum rather than a
+    /// string field name: the common grade adds no new stat, every member below already exists on
+    /// UnitStats and is already read by the simulation, and a typo'd stat name should not parse.
+    /// </summary>
+    public enum RelicStat
+    {
+        MaxHp,
+        Attack,
+        Defense,
+        Speed,
+        CritChance,
+        CritDamage,
+        EffectHit,
+        EffectResist
     }
 
     public static class AspectChart

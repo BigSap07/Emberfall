@@ -71,7 +71,21 @@ namespace Emberfall.Core.Data
                 RelicDef r = RelicDef.FromJson(list[i]);
                 if (r == null || string.IsNullOrEmpty(r.Id)) { Warnings.Add("relics.json: entry " + i + " has no id"); continue; }
                 if (_relicById.ContainsKey(r.Id)) { Warnings.Add("relics.json: duplicate relic id " + r.Id); continue; }
-                if (r.Hook == RelicHook.None) { Warnings.Add("relics.json: relic " + r.Id + " has no hook, so it would do nothing"); continue; }
+
+                // The grade split, enforced at load rather than trusted. Dropping the entry rather
+                // than warning past it is what replaces the no-numbers guarantee RelicDef used to
+                // get from having no numeric field at all: a legendary relic carrying a stat block
+                // does not load, so it cannot reach a hero and quietly be a stat stick.
+                if (r.Grade == RelicGrade.Legendary)
+                {
+                    if (r.Stats.Count > 0) { Warnings.Add("relics.json: legendary relic " + r.Id + " carries a stat block - the legendary grade contains no numbers"); continue; }
+                    if (r.Hook == RelicHook.None) { Warnings.Add("relics.json: legendary relic " + r.Id + " has no hook, so it would do nothing"); continue; }
+                }
+                else
+                {
+                    if (r.Hook != RelicHook.None) { Warnings.Add("relics.json: common relic " + r.Id + " declares hook " + r.Hook + " - the common grade never enters the effect pipeline"); continue; }
+                    if (r.Stats.Count == 0) { Warnings.Add("relics.json: common relic " + r.Id + " has an empty stat block, so it would do nothing"); continue; }
+                }
                 Relics.Add(r);
                 _relicById[r.Id] = r;
             }
@@ -162,12 +176,24 @@ namespace Emberfall.Core.Data
                 // error - the relic still works on anybody who equips it. Warn rather than drop.
                 if (!string.IsNullOrEmpty(r.PairedHeroId) && !_heroById.ContainsKey(r.PairedHeroId))
                     Warnings.Add("relic " + r.Id + " is paired with unknown hero " + r.PairedHeroId);
-                if (r.Hook == RelicHook.Retarget && r.FromTarget == r.ToTarget)
-                    Warnings.Add("relic " + r.Id + " retargets " + r.FromTarget + " to itself, so it does nothing");
-                if (r.Hook == RelicHook.WidenPassiveTrigger && r.FromTrigger == PassiveTrigger.None)
-                    Warnings.Add("relic " + r.Id + " widens no trigger, so it does nothing");
-                if (string.IsNullOrEmpty(r.Rule))
-                    Warnings.Add("relic " + r.Id + " has no rule text, so the hero card cannot state what it does");
+
+                if (r.Grade == RelicGrade.Legendary)
+                {
+                    if (string.IsNullOrEmpty(r.Rule))
+                        Warnings.Add("relic " + r.Id + " has no rule text, so the hero card cannot state what it does");
+                }
+                else
+                {
+                    // A common relic's card text is BUILT from the stat block, so authored prose
+                    // there would be a second, unreachable description of the same relic.
+                    if (!string.IsNullOrEmpty(r.Rule))
+                        Warnings.Add("common relic " + r.Id + " authors rule text, which no card reads - its card states its numbers");
+                    if (!string.IsNullOrEmpty(r.PairedHeroId))
+                        Warnings.Add("common relic " + r.Id + " is paired to a hero - the common grade is universal and carries no pairing");
+                    for (int s = 0; s < r.Stats.Count; s++)
+                        if (r.Stats[s].Value == 0f)
+                            Warnings.Add("relic " + r.Id + " has a zero-value " + r.Stats[s].Stat + " bonus, so that half of it does nothing");
+                }
             }
             if (Heroes.Count == 0) Warnings.Add("no heroes were loaded");
             if (StartingHeroes.Count == 0) Warnings.Add("no heroes are flagged startingHero:true");

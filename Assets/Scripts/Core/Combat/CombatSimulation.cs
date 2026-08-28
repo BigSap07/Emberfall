@@ -98,6 +98,16 @@ namespace Emberfall.Core.Combat
             private bool _inRedirect;
 
             /// <summary>
+            /// True while a Mirrored Wound reflect is being delivered, bounding it to one hop.
+            ///
+            /// Not latent, unlike _inRedirect: two Mirrored Wound wearers on opposite sides is an
+            /// ordinary thing for a player to build toward, and without this the first hit between
+            /// them recurses until the stack gives out. The reflect cannot use MaxPassiveDepth for
+            /// this because it is not a passive and never passes through TriggerPassive.
+            /// </summary>
+            private bool _inReflect;
+
+            /// <summary>
             /// The round's live initiative list, and the index of the turn being taken out of it.
             /// Null outside the round loop - Execute() fires the BattleStart passives before any
             /// round exists, and a kill there has no round order to re-enter. Both Gale hooks check
@@ -173,14 +183,22 @@ namespace Emberfall.Core.Combat
                 {
                     HeroInstance hero = team[i];
                     if (hero == null || hero.Def == null) continue;
-                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level);
-                    CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
                     // DESIGN-RELICS "Entering the simulation": a relic is data on the request,
                     // exactly like a hero's level, resolved once here. An id that resolves to
-                    // nothing leaves Relic null, which is the same path as an empty slot - content
+                    // nothing leaves relic null, which is the same path as an empty slot - content
                     // can drop a relic without bricking a save that still names it.
+                    RelicDef relic = null;
                     if (_request.Content != null && !string.IsNullOrEmpty(hero.EquippedRelicId))
-                        unit.Relic = _request.Content.GetRelic(hero.EquippedRelicId);
+                        relic = _request.Content.GetRelic(hero.EquippedRelicId);
+
+                    // The two grades enter here at two deliberately different depths. A COMMON
+                    // relic is folded into the stat line and then forgotten - the simulation below
+                    // never learns it existed, and every damage number it touches is already
+                    // inside the numbers ApplyRelic returned. A LEGENDARY relic is carried onto the
+                    // unit instead, because its hook is read at a resolution point further in.
+                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic);
+                    CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
+                    if (relic != null && relic.Grade == RelicGrade.Legendary) unit.Relic = relic;
                     _units.Add(unit);
                 }
 
@@ -364,12 +382,6 @@ namespace Emberfall.Core.Combat
                     cast.Vfx = unit.Active.Vfx;
                     EmitEnergy(unit);
                     ResolveAbility(unit, unit.Active, 0);
-
-                    // Verdict Sigil (DESIGN-RELICS). Placed here rather than inside ResolveAbility
-                    // so it fires once per CAST, not once per effect, and so it mirrors the
-                    // AfterBasicAttack call in the else-branch below exactly - same depth 0, same
-                    // aliveness guard, same position after the ability has fully resolved.
-                    TryRelicPassiveAfterActive(unit);
                 }
                 else
                 {
@@ -474,25 +486,14 @@ namespace Emberfall.Core.Combat
                 if (ability == null) return;
                 for (int i = 0; i < ability.Effects.Count; i++)
                 {
-                    // Relics rewrite the effect BEFORE targets resolve, which is the placement
-                    // DESIGN-RELICS specifies ("rewrite a TargetMode before targets resolve") and
-                    // is load bearing rather than stylistic: ResolveTargets is where the Lumen
-                    // anchor and Taunt override live, so rewriting after it would let a relic
-                    // target around the anchor. Rewriting before means the relic proposes a mode
-                    // and the anchor still gets the final say, which is the correct precedence -
-                    // an aspect identity outranks a piece of equipment.
-                    // Warden's Debt's exclusion is passed INTO resolution rather than filtered
-                    // out of its result, and the difference is the whole mechanic. LowestHpAlly
-                    // returns exactly one unit, the single lowest; striking the caster out of that
-                    // one-element answer afterwards yields an empty list, never the second-lowest.
-                    // The relic would then lose the ward on exactly the turns the wearer is most
-                    // hurt - which, for the Lumen anchor it was written for, is most turns. Asked
-                    // during selection instead, "lowest ally other than me" is a question with a
-                    // real answer. Measured, not reasoned: filtering afterwards shipped for one
-                    // harness run and the ward went to nobody in both forced and shipped content.
-                    bool excludeCaster;
-                    EffectDef effect = ShapeByRelic(caster, ability.Effects[i], out excludeCaster);
-                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target, excludeCaster ? caster : null);
+                    // No relic reshapes an effect any more. Both legendary relics in the current
+                    // set hook further in - The Unbroken Ledger at the landing roll, Mirrored Wound
+                    // at the damage funnel - so an authored effect reaches ResolveTargets exactly
+                    // as written. The three hooks that did rewrite effects here (Retarget,
+                    // SplitWideDamage, WidenPassiveTrigger) went with the four relics that were
+                    // their only users; git has them if a future legendary relic wants one back.
+                    EffectDef effect = ability.Effects[i];
+                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null);
                     for (int t = 0; t < targets.Count; t++)
                     {
                         CombatUnit target = targets[t];
@@ -541,6 +542,13 @@ namespace Emberfall.Core.Combat
                         if (!target.Alive || effect.Status == StatusKind.None) break;
                         float landing = ResolveLandingChance(effect.Chance, effect.Status,
                                                               source.EffectiveEffectHit, target.EffectiveEffectResist);
+
+                        // The Unbroken Ledger, applied BEFORE Control Immunity below and never
+                        // after it. The relic erases Effect Resist only, and the ordering is what
+                        // makes that true: recomputing the landing chance after the Control
+                        // Immunity subtraction would silently discard that subtraction too, and
+                        // hard control would stop being answerable by any defensive stat.
+                        landing = ApplyLedger(source, target, effect, landing);
 
                         // Control Immunity: a second, narrower resist than Effect Resist - it only
                         // ever reduces Silence/Stun landing chance, never any other harmful status
@@ -841,6 +849,16 @@ namespace Emberfall.Core.Combat
                 // granted. A Tide attacker must not redirect its victim's line's energy.
                 AddEnergy(target, _cfg.EnergyOnDamaged, -1);
                 TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+
+                // Mirrored Wound shares this dispatch point with the OnDamaged passive above and
+                // deliberately runs AFTER it. That trigger is not free real estate - Backwash
+                // (tideturned_passive) already listens on it in enemies.json - and a hero passive
+                // listening on a trigger is a different thing from a relic reflecting damage, so
+                // the two coexist rather than compete. Placed second so a passive that heals or
+                // shields its owner resolves before the reflect can kill the attacker out from
+                // under it, which keeps the passive's behaviour identical with and without a relic.
+                ApplyMirroredWound(sourceId, target, damage);
+
                 TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
             }
 
@@ -1015,101 +1033,80 @@ namespace Emberfall.Core.Combat
             // ------------------------------------------------------------------ relics
 
             /// <summary>
-            /// Runs one authored effect through the caster's relic, returning either the original
-            /// effect unchanged or a rewritten COPY. Never mutates the argument: the EffectDef
-            /// handed in belongs to the AbilityDef in the ContentDatabase and is shared by every
-            /// unit in every battle for the process lifetime, so an in-place edit would leak one
-            /// wearer's relic onto everybody's future casts. EffectDef.Clone exists for this.
+            /// The Unbroken Ledger. Rebuilds a harmful effect's landing chance with the target's
+            /// Effect Resist forced to zero, leaving every other term of it alone.
             ///
-            /// Draws nothing from _rng. Relics still change a battle's RNG stream, because they
-            /// change how many draws happen downstream (Splitting Prism most obviously - one
-            /// landing roll instead of one per enemy), which is the caveat DESIGN-RELICS states
-            /// plainly: "the same seed with a different relic is a different battle".
+            /// Only the wearer's OWN Effect Hit and the effect's authored chance survive into the
+            /// recomputation, which is the relic's sentence read literally: what this hero inflicts
+            /// cannot be shrugged off. Control Immunity is deliberately untouched - it is applied by
+            /// the caller AFTER this returns, so a Silence or a Stun from a Ledger wearer still
+            /// meets it. That is the decision DESIGN-RELICS states rather than leaves ambiguous:
+            /// erasing both layers would make hard control unanswerable by any defensive stat in
+            /// the game, which is a much larger change than the one the relic asks for.
+            ///
+            /// Beneficial statuses are excluded by ResolveLandingChance itself (only harmful ones
+            /// are ever contested), so a Ledger wearer's Shield or Taunt resolves on its authored
+            /// chance exactly as it did before - the relic cannot accidentally buff its own buffs.
+            ///
+            /// Determinism: forcing Effect Resist to zero can push landing to exactly 1.0, and
+            /// DeterministicRng.Chance returns true at p >= 1 WITHOUT drawing. This relic removes
+            /// draws from the stream reliably, not incidentally. That is the DESIGN-RELICS caveat
+            /// working as stated ("the same seed with a different relic is a different battle"),
+            /// not a defect.
             /// </summary>
-            private EffectDef ShapeByRelic(CombatUnit caster, EffectDef effect, out bool excludeCaster)
+            private float ApplyLedger(CombatUnit source, CombatUnit target, EffectDef effect, float landing)
             {
-                excludeCaster = false;
-                RelicDef relic = caster.Relic;
-                if (relic == null) return effect;
+                RelicDef relic = source.Relic;
+                if (relic == null || relic.Hook != RelicHook.BypassEffectResist) return landing;
+                if (!StatusInfo.IsHarmful(effect.Status)) return landing;
 
-                switch (relic.Hook)
-                {
-                    case RelicHook.Retarget:
-                    {
-                        if (effect.Target != relic.FromTarget) return effect;
-                        if (relic.HasFilterKind && effect.Kind != relic.FilterKind) return effect;
-                        AnnounceRelic(caster, relic);
-                        excludeCaster = relic.ExcludeSelf;
-                        EffectDef retargeted = effect.Clone();
-                        retargeted.Target = relic.ToTarget;
-                        return retargeted;
-                    }
+                // Nothing to shrug off means nothing to announce. Checked against the target's
+                // resist rather than against the recomputed number so the banner means "this
+                // target's resist was erased", not "the wearer cast at somebody".
+                if (target.EffectiveEffectResist == 0f) return landing;
 
-                    case RelicHook.SplitWideDamage:
-                    {
-                        if (effect.Target != TargetMode.AllEnemies) return effect;
-
-                        // How many the wide version WOULD have struck, counted the same way
-                        // ResolveTargets counts it (living units on the far side) so the multiplied
-                        // Hits is exactly the output the spread cast would have produced,
-                        // concentrated rather than inflated. Draws no RNG.
-                        int wide = CountLiving(!caster.IsPlayer);
-                        if (wide <= 0) return effect;
-
-                        AnnounceRelic(caster, relic);
-                        EffectDef split = effect.Clone();
-                        split.Target = TargetMode.FrontEnemy;
-
-                        // Damage concentrates; everything else merely narrows. That asymmetry IS
-                        // the relic's cost, per DESIGN-HOOK-RESOLUTION section 4: Kalyx's Cinder
-                        // Bloom aims a Damage effect and a Burn rider at AllEnemies, and after this
-                        // the Damage lands `wide` times on one target while the Burn gets exactly
-                        // one landing roll for the whole cast instead of one per enemy. Multiplying
-                        // Hits on the rider too would hand it `wide` rolls at the same target and
-                        // delete the cost, leaving the pure-upside relic the design forbids.
-                        if (split.Kind == EffectKind.Damage) split.Hits = effect.Hits * wide;
-                        return split;
-                    }
-                }
-
-                return effect;
-            }
-
-            private int CountLiving(bool playerSide)
-            {
-                int n = 0;
-                for (int i = 0; i < _units.Count; i++)
-                    if (_units[i].Alive && _units[i].IsPlayer == playerSide) n++;
-                return n;
+                AnnounceRelic(source, relic);
+                return ResolveLandingChance(effect.Chance, effect.Status, source.EffectiveEffectHit, 0f);
             }
 
             /// <summary>
-            /// Verdict Sigil. Fires the wearer's AfterBasicAttack passive after an Active resolves,
-            /// in addition to wherever it already fires - it widens the trigger, it does not move
-            /// it, so a turn spent on a Basic still marks exactly as before.
+            /// Mirrored Wound. Returns a fraction of the damage the wearer just took to whoever
+            /// dealt it, rounded away from zero so a small hit still reflects at least a point.
             ///
-            /// Routed through the ordinary TriggerPassive rather than a parallel path, so every
-            /// guard that method already enforces still applies: the once-per-battle flag, the
-            /// HP-threshold gate, the empty-effects check, and MaxPassiveDepth. TriggerPassive's
-            /// own `passive.Trigger != trigger` test is what makes this safe to call blindly -
-            /// a wearer whose passive is not an AfterBasicAttack one is a no-op here.
+            /// Routed through DealRawDamage like every other point of damage in the game, so the
+            /// reflected hit is shielded, banked, killed off and reported by exactly the same code
+            /// as any other - a reflect that kills its attacker fires their death, their killer's
+            /// OnKill and Gale re-entry, because it went through the funnel rather than around it.
+            ///
+            /// Bounded by _inReflect rather than by MaxPassiveDepth, and it has to be: the reflect
+            /// is not a passive and never enters TriggerPassive, so the depth argument that bounds
+            /// passive recursion never sees it. Two Mirrored Wound wearers hitting each other would
+            /// otherwise reflect into each other without limit. Same shape as the _inRedirect guard
+            /// Tide uses one method over, for the same reason.
+            ///
+            /// Self-damage cannot start a loop either: sourceId is the attacker's, and an attacker
+            /// who is also the target is skipped outright.
             /// </summary>
-            private void TryRelicPassiveAfterActive(CombatUnit unit)
+            private void ApplyMirroredWound(int sourceId, CombatUnit target, int damage)
             {
-                RelicDef relic = unit.Relic;
-                if (relic == null || relic.Hook != RelicHook.WidenPassiveTrigger) return;
-                if (relic.FromTrigger == PassiveTrigger.None) return;
-                if (!unit.Alive || IsBattleOver()) return;
+                if (_inReflect || damage <= 0 || sourceId < 0) return;
+                RelicDef relic = target.Relic;
+                if (relic == null || relic.Hook != RelicHook.ReflectDamage) return;
 
-                // Checked before announcing so the banner means "the relic did something", not
-                // "the wearer cast an Active while holding a relic". A wearer with no passive, or
-                // with a passive on a different trigger, never announces.
-                PassiveDef passive = unit.Passive;
-                if (passive == null || passive.Trigger != relic.FromTrigger) return;
+                CombatUnit attacker = FindUnit(sourceId);
+                if (attacker == null || !attacker.Alive || attacker == target) return;
 
-                AnnounceRelic(unit, relic);
-                TriggerPassive(unit, relic.FromTrigger, 0);
+                float fraction = _cfg.MirroredWoundReflectFraction;
+                if (fraction <= 0f) return;
+                int reflected = (int)Math.Round(damage * fraction, MidpointRounding.AwayFromZero);
+                if (reflected <= 0) return;
+
+                AnnounceRelic(target, relic);
+                _inReflect = true;
+                DealRawDamage(target.Id, attacker, reflected, false, "impact", StatusKind.None, 1f, relic.Name);
+                _inReflect = false;
             }
+
 
             /// <summary>
             /// DESIGN-RELICS "Presentation": relics announce through the EXISTING PassiveTrigger

@@ -57,6 +57,85 @@ namespace Emberfall.Core.Progression
             return Build(def, level, starMult);
         }
 
+        /// <summary>
+        /// A hero's stats with an equipped relic already folded in. THE entry point for the common
+        /// grade, and deliberately the only one: both CombatSimulation's setup and the hero detail
+        /// screen's preview call this, so the number a player reads on the card is by construction
+        /// the number the simulation fights with. A null relic, or a legendary one, returns exactly
+        /// what ForHero(def, level) returns.
+        /// </summary>
+        public static UnitStats ForHero(HeroDef def, int level, RelicDef relic)
+        {
+            UnitStats s = ForHero(def, level);
+            ApplyRelic(s, relic);
+            return s;
+        }
+
+        /// <summary>
+        /// Folds a common relic's stat bundle into an already-built UnitStats, in place. This one
+        /// function is the whole of the common grade: a common relic resolves entirely here and
+        /// never reaches CombatSimulation, so it cannot contest a hook with an aspect, with a
+        /// legendary relic, or with anything else - it never enters the effect pipeline at all.
+        ///
+        /// A legendary relic is a deliberate no-op rather than an error. Both grades share one
+        /// equipment slot, so this is called with whatever the hero is wearing and has to be safe
+        /// on either; a legendary relic's Stats list is empty by validation anyway, so the loop
+        /// below would do nothing even without the grade test. The test is here to say so.
+        ///
+        /// Rounding follows Build exactly rather than inventing its own rule: the four multiplied
+        /// stats are the four Build rounds, and the four added ones are the four Build passes
+        /// through raw. That is what keeps a relicced stat line the same SHAPE as an unrelicced one
+        /// (whole HP, fractional crit chance) instead of showing a hero 4271.4 max HP.
+        ///
+        /// NOT seed-safe, and nobody should write down that it is. Common relics change stat values
+        /// rather than the number of RNG draws, with one real edge: DeterministicRng.Chance
+        /// short-circuits at p &lt;= 0 and p &gt;= 1 WITHOUT drawing, so a relic that pushes a landing
+        /// chance across either boundary adds or removes a draw. Marksman's Coil's Effect Hit is
+        /// the one in the shipped set that can do it.
+        /// </summary>
+        public static void ApplyRelic(UnitStats stats, RelicDef relic)
+        {
+            if (stats == null || relic == null) return;
+            if (relic.Grade != RelicGrade.Common) return;
+
+            for (int i = 0; i < relic.Stats.Count; i++)
+            {
+                RelicStatBonus b = relic.Stats[i];
+                bool multiply = b.Mode == RelicStatMode.Multiply;
+                switch (b.Stat)
+                {
+                    case RelicStat.MaxHp:
+                        stats.MaxHp = Round(multiply ? stats.MaxHp * (1f + b.Value) : stats.MaxHp + b.Value);
+                        break;
+                    case RelicStat.Attack:
+                        stats.Attack = Round(multiply ? stats.Attack * (1f + b.Value) : stats.Attack + b.Value);
+                        break;
+                    case RelicStat.Defense:
+                        stats.Defense = Round(multiply ? stats.Defense * (1f + b.Value) : stats.Defense + b.Value);
+                        break;
+                    case RelicStat.Speed:
+                        stats.Speed = Round(multiply ? stats.Speed * (1f + b.Value) : stats.Speed + b.Value);
+                        break;
+                    case RelicStat.CritChance:
+                        stats.CritChance = multiply ? stats.CritChance * (1f + b.Value) : stats.CritChance + b.Value;
+                        break;
+                    case RelicStat.CritDamage:
+                        stats.CritDamage = multiply ? stats.CritDamage * (1f + b.Value) : stats.CritDamage + b.Value;
+                        break;
+                    case RelicStat.EffectHit:
+                        stats.EffectHit = multiply ? stats.EffectHit * (1f + b.Value) : stats.EffectHit + b.Value;
+                        break;
+                    case RelicStat.EffectResist:
+                        stats.EffectResist = multiply ? stats.EffectResist * (1f + b.Value) : stats.EffectResist + b.Value;
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Enemies do not wear relics, so this takes none. Stated as a signature rather than as a
+        /// comment on the call site.
+        /// </summary>
         public static UnitStats ForEnemy(EnemyDef def, int level)
         {
             return Build(def, level, 1f);

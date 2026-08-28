@@ -259,10 +259,18 @@ namespace Emberfall.UI.Screens
             GameSession session = App.Session;
             HeroDef def = _hero.Def;
 
-            UnitStats now = StatMath.ForHero(def, _hero.Level);
+            // The equipped relic is folded into the preview, not just into the battle. A common
+            // relic's whole contribution is these numbers, so a card that showed the unrelicced
+            // line would be showing a stat block the simulation does not use. Both calls take it,
+            // so the per-level deltas below stay honest too: they compare like with like rather
+            // than reading as a relic's bonus arriving on the next level up.
+            RelicDef relic = string.IsNullOrEmpty(_hero.EquippedRelicId)
+                           ? null : session.Content.GetRelic(_hero.EquippedRelicId);
+
+            UnitStats now = StatMath.ForHero(def, _hero.Level, relic);
             int cap = session.HeroLevelCap;
             bool atCap = _hero.Level >= cap;
-            UnitStats next = atCap ? now : StatMath.ForHero(def, _hero.Level + 1);
+            UnitStats next = atCap ? now : StatMath.ForHero(def, _hero.Level + 1, relic);
 
             _levelLabel.text = "LEVEL " + _hero.Level + "<color=#6C6382> / " + cap + "</color>";
             _powerLabel.text = "POWER " + now.Power;

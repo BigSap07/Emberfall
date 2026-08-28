@@ -1,41 +1,95 @@
 {
-  "_comment": "Four relics, not the six in DESIGN-RELICS. Tidewrought Metronome and Green Hour Vessel are cut per DESIGN-HOOK-RESOLUTION sections 2 and 3: both were built on an overflow discard that an aspect now claims one hook earlier in the same method, so neither had any code left to run. Every 'rule' below is one sentence with no number in it, which is the test DESIGN-RELICS sets.",
+  "_comment": "Two grades, per DESIGN-RELICS. A COMMON relic is a stat bundle: it carries a 'stats' block, never a 'hook', and resolves entirely in StatMath.ApplyRelic before the simulation starts. A LEGENDARY relic is the opposite: it carries a 'hook', never a 'stats' block, states itself as one sentence with no number in it, and resolves inside CombatSimulation. ContentDatabase drops any entry that mixes the two, so the legendary grade's no-numbers rule is enforced at load rather than by review. 'mode' is Multiply for Attack/Defense/MaxHp/Speed (large scaled numbers - value 0.14 means x1.14) and Add for CritChance/CritDamage/EffectHit/EffectResist (small fractions that are never scaled by level or star rarity - value 0.12 means +0.12). The four relics that shipped before this rewrite (Splitting Prism, Warden's Debt, Stormlance Oath, Verdict Sigil) are cut, along with the three hooks only they used. Tidewrought Metronome and Green Hour Vessel stay cut, per DESIGN-HOOK-RESOLUTION sections 2 and 3: Tide owns the energy clamp and Verdant owns the heal clamp, so neither had any code left to run.",
+
+  "_valuesComment": "All sixteen numbers below are first-pass and unbalanced by admission, not by oversight. They have not been through RunCampaignBalancePass. DESIGN-RELICS task 13's retune is the only pass that produces real values, and it has to run after this lands. Note that six of the eight move PowerScore, so a relicced team reaches a recommendedPower budget at a lower level than an unrelicced one.",
 
   "relics": [
     {
-      "id": "splitting_prism",
-      "name": "Splitting Prism",
-      "pairedHero": "kalyx_emberwright",
-      "rule": "A blast that would strike every enemy strikes the front one instead, as many times over - and only the front one is afflicted.",
-      "hook": "SplitWideDamage"
+      "id": "warband_standard",
+      "name": "Warband Standard",
+      "grade": "Common",
+      "stats": [
+        { "stat": "Attack", "mode": "Multiply", "value": 0.14 },
+        { "stat": "Speed",  "mode": "Multiply", "value": 0.10 }
+      ]
     },
     {
-      "id": "wardens_debt",
-      "name": "Warden's Debt",
-      "pairedHero": "orrin_kaal",
-      "rule": "A ward the wearer raises for themself is raised for their most wounded ally instead.",
-      "hook": "Retarget",
-      "effectKind": "Shield",
-      "fromTarget": "Self",
-      "toTarget": "LowestHpAlly",
-      "excludeSelf": true
+      "id": "bastion_core",
+      "name": "Bastion Core",
+      "grade": "Common",
+      "stats": [
+        { "stat": "Defense", "mode": "Multiply", "value": 0.18 },
+        { "stat": "MaxHp",   "mode": "Multiply", "value": 0.12 }
+      ]
     },
     {
-      "id": "stormlance_oath",
-      "name": "Stormlance Oath",
-      "pairedHero": "ryn_solvarr",
-      "rule": "The wearer strikes at whichever enemy stands strongest, never at whichever is closest to falling.",
-      "hook": "Retarget",
-      "fromTarget": "LowestHpEnemy",
-      "toTarget": "HighestHpEnemy"
+      "id": "cutting_edge",
+      "name": "Cutting Edge",
+      "grade": "Common",
+      "stats": [
+        { "stat": "CritChance", "mode": "Add", "value": 0.12 },
+        { "stat": "CritDamage", "mode": "Add", "value": 0.20 }
+      ]
     },
     {
-      "id": "verdict_sigil",
-      "name": "Verdict Sigil",
-      "pairedHero": "nyx_serrow",
-      "rule": "What the wearer's strikes leave behind, their castings leave behind too.",
-      "hook": "WidenPassiveTrigger",
-      "fromTrigger": "AfterBasicAttack"
+      "id": "hollow_reserve",
+      "name": "Hollow Reserve",
+      "grade": "Common",
+      "stats": [
+        { "stat": "MaxHp",        "mode": "Multiply", "value": 0.12 },
+        { "stat": "EffectResist", "mode": "Add",      "value": 0.10 }
+      ]
+    },
+    {
+      "id": "marksmans_coil",
+      "name": "Marksman's Coil",
+      "grade": "Common",
+      "stats": [
+        { "stat": "EffectHit", "mode": "Add",      "value": 0.12 },
+        { "stat": "Speed",     "mode": "Multiply", "value": 0.08 }
+      ]
+    },
+    {
+      "id": "warlords_momentum",
+      "name": "Warlord's Momentum",
+      "grade": "Common",
+      "stats": [
+        { "stat": "Attack",     "mode": "Multiply", "value": 0.10 },
+        { "stat": "CritDamage", "mode": "Add",      "value": 0.15 }
+      ]
+    },
+    {
+      "id": "ironroot_ward",
+      "name": "Ironroot Ward",
+      "grade": "Common",
+      "stats": [
+        { "stat": "Defense",      "mode": "Multiply", "value": 0.16 },
+        { "stat": "EffectResist", "mode": "Add",      "value": 0.10 }
+      ]
+    },
+    {
+      "id": "vanguards_pulse",
+      "name": "Vanguard's Pulse",
+      "grade": "Common",
+      "stats": [
+        { "stat": "Speed",      "mode": "Multiply", "value": 0.10 },
+        { "stat": "CritChance", "mode": "Add",      "value": 0.10 }
+      ]
+    },
+
+    {
+      "id": "unbroken_ledger",
+      "name": "The Unbroken Ledger",
+      "grade": "Legendary",
+      "rule": "What this hero inflicts cannot be shrugged off.",
+      "hook": "BypassEffectResist"
+    },
+    {
+      "id": "mirrored_wound",
+      "name": "Mirrored Wound",
+      "grade": "Legendary",
+      "rule": "Every wound dealt to the wearer is a wound taken.",
+      "hook": "ReflectDamage"
     }
   ]
 }

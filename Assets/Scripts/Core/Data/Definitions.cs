@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Emberfall.Core.Json;
 
 namespace Emberfall.Core.Data
@@ -381,70 +382,134 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// One relic: a rule change in the effect pipeline, equipped on one hero.
+    /// One stat a common relic moves, and how. Numbers live HERE and only here.
     ///
-    /// DESIGN-RELICS' founding constraint is enforced by this type's SHAPE, not by review: there
-    /// is no Power, Magnitude, Multiplier or Bonus field anywhere on it, so a relic that wanted to
-    /// be "+15% attack" has nowhere to put the 15. Everything here is an enum or a display string.
-    /// If a future relic needs a number to express itself, that is the signal DESIGN-RELICS
-    /// describes ("if a relic cannot be written as one sentence without a number, it is a stat
-    /// stick and should be cut"), and the answer is to cut it rather than to widen this class.
+    /// This type is the whole reason RelicDef can carry a stat bundle without the legendary grade
+    /// losing the no-numbers guarantee it used to get from RelicDef having no numeric field at all.
+    /// The guarantee moved rather than weakened: it used to be enforced by RelicDef's shape, and it
+    /// is now enforced by grade, at load (ContentDatabase rejects a legendary relic carrying any of
+    /// these, and a common relic carrying a hook) and again in the harness. A legendary relic still
+    /// has nowhere to put a 15, because a legendary relic's Stats list is required to be empty.
+    /// </summary>
+    public sealed class RelicStatBonus
+    {
+        public RelicStat Stat = RelicStat.Attack;
+        public RelicStatMode Mode = RelicStatMode.Multiply;
+
+        /// <summary>
+        /// Read against Mode, never on its own. 0.14 with Multiply is "+14% Attack" and means
+        /// Attack *= 1.14; 0.12 with Add is "+12% Crit Chance" and means CritChance += 0.12. The
+        /// mode is stored rather than inferred from Stat so the two arithmetic rules are explicit
+        /// in the data instead of implied by the stat name.
+        /// </summary>
+        public float Value;
+
+        public static RelicStatBonus FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            RelicStatBonus b = new RelicStatBonus();
+            b.Stat = EnumUtil.Parse(j.GetString("stat", "Attack"), RelicStat.Attack);
+            b.Mode = EnumUtil.Parse(j.GetString("mode", "Multiply"), RelicStatMode.Multiply);
+            b.Value = j.GetFloat("value", 0f);
+            return b;
+        }
+    }
+
+    /// <summary>
+    /// One relic, at one of two grades (DESIGN-RELICS). The grade decides which half of this class
+    /// is live, and the two halves are mutually exclusive by validation rather than by convention:
+    ///
+    /// - A COMMON relic carries Stats and leaves Hook at None. It resolves entirely in StatMath
+    ///   before the simulation starts, and CombatSimulation never learns it exists.
+    /// - A LEGENDARY relic carries a Hook and leaves Stats empty. It resolves inside the
+    ///   simulation at the hook's own resolution point, and states itself as one sentence in Rule
+    ///   with no number in it.
+    ///
+    /// DESIGN-RELICS' founding "no relic contains an attack percentage" standard used to be
+    /// enforced by this type's SHAPE - there was no numeric field anywhere on it, so a relic that
+    /// wanted to be "+15% attack" had nowhere to put the 15. That standard was withdrawn as a
+    /// blanket rule on 2026-08-26 and kept, unchanged, as the bar the legendary grade is held to.
+    /// The enforcement moved with it: ContentDatabase rejects a legendary relic with any Stats
+    /// entry and a common relic with any Hook, so the 15 still has nowhere to go on a legendary.
     /// </summary>
     public sealed class RelicDef
     {
         public string Id = "";
         public string Name = "";
 
-        /// <summary>Display text, stated as a rule and never as a number. Shown on the hero card.</summary>
+        /// <summary>
+        /// Legendary only: the rule, stated as one sentence and never as a number. Empty on a
+        /// common relic, which has no rule to state - its card shows DescribeStats() instead, and
+        /// writing prose for it would be dressing up a stat bundle as something it is not.
+        /// </summary>
         public string Rule = "";
 
-        /// <summary>The hero this relic was designed around. Display only - nothing enforces it.</summary>
+        /// <summary>
+        /// The hero this relic was designed around. Display only - nothing enforces it. A common
+        /// relic never carries one: the grade is aspect-neutral and universal by design, and a
+        /// stat bundle that only fits one kind of hero is a worse stat bundle, not a design.
+        /// </summary>
         public string PairedHeroId = "";
 
+        public RelicGrade Grade = RelicGrade.Legendary;
+
+        /// <summary>Legendary only. None on every common relic - see the class summary.</summary>
         public RelicHook Hook = RelicHook.None;
 
-        // Retarget params.
-        public TargetMode FromTarget = TargetMode.Self;
-        public TargetMode ToTarget = TargetMode.Self;
+        /// <summary>
+        /// Common only. Empty on every legendary relic, which is what keeps the legendary grade's
+        /// no-numbers guarantee real now that RelicDef can hold numbers at all.
+        /// </summary>
+        public readonly List<RelicStatBonus> Stats = new List<RelicStatBonus>();
 
         /// <summary>
-        /// When true, Retarget only rewrites effects of FilterKind. Warden's Debt needs it: Orrin's
-        /// Cinderguard aims BOTH a Shield and a Taunt at Self, and the relic is specified as moving
-        /// the ward only. Without the filter it would also hand his Taunt to the lowest-HP ally,
-        /// which per DESIGN-HOOK-RESOLUTION section 5 is the one thing it must not touch - Taunt is
-        /// the targeting guarantee that survives the relabel, and the relic's whole argument is
-        /// that it costs him the ward while leaving the guarantee intact.
+        /// The common grade's card text, built from the stat block rather than authored: "+14%
+        /// Attack, +10% Speed". Lives here rather than in either screen so the shop and the
+        /// inventory cannot drift into describing the same relic two different ways.
+        ///
+        /// One "%" for both modes is deliberate and is the player-facing half of the decision
+        /// RelicStatMode documents: "+12% Crit Chance" reads the same whether the 12 multiplies or
+        /// adds percentage points, and the difference is not something a player can act on.
         /// </summary>
-        public bool HasFilterKind;
-        public EffectKind FilterKind = EffectKind.Damage;
+        public string DescribeStats()
+        {
+            if (Stats.Count == 0) return "";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < Stats.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                int pct = (int)Math.Round(Stats[i].Value * 100f, MidpointRounding.AwayFromZero);
+                sb.Append(pct >= 0 ? "+" : "").Append(pct).Append("% ").Append(StatLabel(Stats[i].Stat));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>Display spelling of a RelicStat. "Max HP" and "Crit Chance", not the enum name.</summary>
+        public static string StatLabel(RelicStat stat)
+        {
+            switch (stat)
+            {
+                case RelicStat.MaxHp: return "Max HP";
+                case RelicStat.Attack: return "Attack";
+                case RelicStat.Defense: return "Defense";
+                case RelicStat.Speed: return "Speed";
+                case RelicStat.CritChance: return "Crit Chance";
+                case RelicStat.CritDamage: return "Crit Damage";
+                case RelicStat.EffectHit: return "Effect Hit";
+                case RelicStat.EffectResist: return "Effect Resist";
+            }
+            return stat.ToString();
+        }
 
         /// <summary>
-        /// Retarget only. Drops the caster from the rewritten effect's resolved targets.
-        ///
-        /// Warden's Debt needs it and needs it for a measured reason, not a hypothetical one.
-        /// DESIGN-RELICS states the behaviour in prose - the ward "leaves the tank and lands on Ryn
-        /// or Kalyx" - and LowestHpAlly, read literally, includes the caster. On its own named
-        /// wearer that literal reading is close to a no-op: Orrin is the Lumen anchor, so every
-        /// single-enemy ability aimed at his side resolves onto him, so he is very reliably the
-        /// most wounded ally, so the ward he was supposed to give away comes straight back. The
-        /// harness caught it on shipped content (CheckRelicsBiteOnShippedContent), where the ward
-        /// landed on Orrin every time.
-        ///
-        /// That is the same shape of failure that got Tidewrought Metronome and Green Hour Vessel
-        /// cut - an aspect rule claiming the thing one hook earlier and leaving the relic with
-        /// nothing to do on the one hero it was written for. The difference is that this one is
-        /// fixable in the relic rather than fatal to it, because the relic's premise (the ward
-        /// departs) never depended on the clamp; only the vocabulary did.
-        ///
-        /// When exclusion empties the target list the effect resolves against nobody and the ward
-        /// is simply lost. That is deliberate rather than a fallback to self: a last-man-standing
-        /// Orrin warding himself would quietly restore exactly the behaviour the relic is sold as
-        /// removing, at precisely the moment it matters most.
+        /// What a card shows for this relic, whichever grade it is. The split is the point
+        /// (DESIGN-RELICS "Presentation"): a legendary states the rule, a common states the
+        /// numbers, and the grade badge is what tells a player which of the two they are reading.
         /// </summary>
-        public bool ExcludeSelf;
-
-        // WidenPassiveTrigger params.
-        public PassiveTrigger FromTrigger = PassiveTrigger.None;
+        public string CardText()
+        {
+            return Grade == RelicGrade.Common ? DescribeStats() : Rule;
+        }
 
         public static RelicDef FromJson(JsonValue j)
         {
@@ -454,14 +519,18 @@ namespace Emberfall.Core.Data
             r.Name = j.GetString("name", "Relic");
             r.Rule = j.GetString("rule", "");
             r.PairedHeroId = j.GetString("pairedHero", "");
+            r.Grade = EnumUtil.Parse(j.GetString("grade", "Legendary"), RelicGrade.Legendary);
             r.Hook = EnumUtil.Parse(j.GetString("hook", "None"), RelicHook.None);
-            r.FromTarget = EnumUtil.Parse(j.GetString("fromTarget", "Self"), TargetMode.Self);
-            r.ToTarget = EnumUtil.Parse(j.GetString("toTarget", "Self"), TargetMode.Self);
-            string filter = j.GetString("effectKind", "");
-            r.HasFilterKind = !string.IsNullOrEmpty(filter);
-            if (r.HasFilterKind) r.FilterKind = EnumUtil.Parse(filter, EffectKind.Damage);
-            r.ExcludeSelf = j.GetBool("excludeSelf", false);
-            r.FromTrigger = EnumUtil.Parse(j.GetString("fromTrigger", "None"), PassiveTrigger.None);
+
+            JsonValue stats = j["stats"];
+            if (stats != null && stats.IsArray)
+            {
+                for (int i = 0; i < stats.Count; i++)
+                {
+                    RelicStatBonus b = RelicStatBonus.FromJson(stats[i]);
+                    if (b != null) r.Stats.Add(b);
+                }
+            }
             return r;
         }
     }
@@ -516,6 +585,20 @@ namespace Emberfall.Core.Data
         /// tuning key that no code reads is worse than no key - it reads as a live lever.
         /// </summary>
         public int RelicSlotsPerHero = 1;
+
+        /// <summary>
+        /// Fraction of the damage Mirrored Wound returns to the attacker.
+        ///
+        /// Lives here rather than in the relic's text because a LEGENDARY relic contains no number
+        /// (DESIGN-RELICS), exactly as EmberBurnStackCap and GaleExtraTurnsPerRound do for aspect
+        /// identities: the card says "part of that damage returns", this constant says how much.
+        /// Named for the relic rather than for the grade, so a second reflecting relic gets its own
+        /// constant instead of silently inheriting this one's tuning.
+        ///
+        /// Placeholder, like every other number the relic pass ships - task 13's retune owns the
+        /// real value.
+        /// </summary>
+        public float MirroredWoundReflectFraction = 0.25f;
 
         // hero levelling
         public float LevelCostA = 55f;
@@ -595,6 +678,7 @@ namespace Emberfall.Core.Data
             b.GaleExtraTurnsPerRound = j.GetInt("galeExtraTurnsPerRound", b.GaleExtraTurnsPerRound);
             b.EmberBurnStackCap = j.GetInt("emberBurnStackCap", b.EmberBurnStackCap);
             b.RelicSlotsPerHero = j.GetInt("relicSlotsPerHero", b.RelicSlotsPerHero);
+            b.MirroredWoundReflectFraction = j.GetFloat("mirroredWoundReflectFraction", b.MirroredWoundReflectFraction);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
             b.LevelCostC = j.GetFloat("levelCostC", b.LevelCostC);
