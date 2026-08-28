@@ -81,7 +81,7 @@
       "id": "unbroken_ledger",
       "name": "The Unbroken Ledger",
       "grade": "Mythic",
-      "rule": "What this hero inflicts cannot be shrugged off.",
+      "rule": "Harmful effects from the wearer bypass the target's Effect Resist entirely.",
       "hook": "BypassEffectResist",
       "stats": [
         { "stat": "Speed",        "mode": "Multiply", "value": 0.08 },
@@ -92,7 +92,7 @@
       "id": "mirrored_wound",
       "name": "Mirrored Wound",
       "grade": "Mythic",
-      "rule": "Every wound dealt to the wearer is a wound taken.",
+      "rule": "Part of any damage the wearer takes returns to whoever dealt it.",
       "hook": "ReflectDamage",
       "stats": [
         { "stat": "EffectHit",  "mode": "Add", "value": 0.10 },

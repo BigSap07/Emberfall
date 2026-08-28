@@ -1039,8 +1039,9 @@ namespace Emberfall.Core.Combat
             /// Effect Resist forced to zero, leaving every other term of it alone.
             ///
             /// Only the wearer's OWN Effect Hit and the effect's authored chance survive into the
-            /// recomputation, which is the relic's sentence read literally: what this hero inflicts
-            /// cannot be shrugged off. Control Immunity is deliberately untouched - it is applied by
+            /// recomputation, which is the relic's card text read literally: harmful effects from
+            /// the wearer bypass the target's Effect Resist entirely. Control Immunity is
+            /// deliberately untouched - it is applied by
             /// the caller AFTER this returns, so a Silence or a Stun from a Ledger wearer still
             /// meets it. That is the decision DESIGN-RELICS states rather than leaves ambiguous:
             /// erasing both layers would make hard control unanswerable by any defensive stat in
