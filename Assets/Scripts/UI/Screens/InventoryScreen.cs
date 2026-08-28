@@ -14,10 +14,11 @@ namespace Emberfall.UI.Screens
     /// resource later is one new entry, not a new field.
     ///
     /// Owned relics section: shows every relic the player holds, assigned or not, each with its
-    /// grade badge and its own text - a legendary's rule or a common's stat line. Tapping a relic's
-    /// ASSIGN button opens an in-screen hero picker. Tapping UNASSIGN returns the relic to the
-    /// unassigned pool. No aspect restriction of any kind, and none by grade either: the one slot
-    /// is shared between the grades, so a hero wears one relic, common or legendary, not one of each.
+    /// grade badge and its own text - a legendary's stat line, or a mythic's rule plus its stat
+    /// line. Tapping a relic's ASSIGN button opens an in-screen hero picker. Tapping UNASSIGN
+    /// returns the relic to the unassigned pool. No aspect restriction of any kind, and none by
+    /// grade either: the one slot is shared between the grades, so a hero wears one relic,
+    /// legendary or mythic, not one of each.
     /// </summary>
     public sealed class InventoryScreen : UIScreen
     {
@@ -278,8 +279,8 @@ namespace Emberfall.UI.Screens
         {
             RelicDef def = App.Session.Content.GetRelic(owned.RelicId);
             string name = def != null ? def.Name : owned.RelicId;
-            // A legendary's rule or a common's stat line, picked by the def rather than here. A
-            // relic id the content no longer defines falls back to empty, same as it always did.
+            // A legendary's stat line, or a mythic's rule plus its stat line, picked by the def
+            // rather than here. A relic id the content no longer defines falls back to empty.
             string cardText = def != null ? def.CardText() : "";
 
             HeroInstance holder = App.Session.Profile.HeroHoldingRelic(owned.RelicId);
@@ -314,9 +315,10 @@ namespace Emberfall.UI.Screens
             nameLabel.rectTransform.offsetMax = new Vector2(-190f, -16f);
 
             // Grade badge, on every row of both grades - it is what tells a player whether the
-            // line at the bottom of the card is a rule or a stat list. Falls back to Common for a
-            // relic id the content no longer defines, which is also what CardText() falls back to.
-            RelicGrade grade = def != null ? def.Grade : RelicGrade.Common;
+            // line at the bottom of the card is a plain stat list or a rule with stats stacked on
+            // it. Falls back to Legendary for a relic id the content no longer defines, which is
+            // also what CardText() falls back to via RelicDef's own default.
+            RelicGrade grade = def != null ? def.Grade : RelicGrade.Legendary;
             RectTransform gradeBadge = UIBuilder.Chip("Grade", card, UITheme.RelicGradeLabel(grade),
                                                       UITheme.RelicGradeColor(grade), UITheme.FontTiny);
             UIBuilder.Box(gradeBadge, 108f, -46f, 132f, 28f, new Vector2(0f, 1f));
@@ -331,7 +333,7 @@ namespace Emberfall.UI.Screens
             statusLabel.rectTransform.offsetMin = new Vector2(252f, -72f);
             statusLabel.rectTransform.offsetMax = new Vector2(-190f, -46f);
 
-            // The relic's own text: a legendary's rule, or a common's numbers.
+            // The relic's own text: a legendary's numbers, or a mythic's rule plus its numbers.
             Text ruleLabel = UIBuilder.WrappedLabel("Rule", card, cardText,
                                                     UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             ruleLabel.rectTransform.anchorMin = new Vector2(0f, 0f);

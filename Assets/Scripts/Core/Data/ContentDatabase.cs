@@ -74,17 +74,16 @@ namespace Emberfall.Core.Data
 
                 // The grade split, enforced at load rather than trusted. Dropping the entry rather
                 // than warning past it is what replaces the no-numbers guarantee RelicDef used to
-                // get from having no numeric field at all: a legendary relic carrying a stat block
-                // does not load, so it cannot reach a hero and quietly be a stat stick.
-                if (r.Grade == RelicGrade.Legendary)
+                // get from having no numeric field at all: the guarantee now binds Rule rather than
+                // the whole relic, since a mythic relic can carry a stat block on top of its hook.
+                if (r.Grade == RelicGrade.Mythic)
                 {
-                    if (r.Stats.Count > 0) { Warnings.Add("relics.json: legendary relic " + r.Id + " carries a stat block - the legendary grade contains no numbers"); continue; }
-                    if (r.Hook == RelicHook.None) { Warnings.Add("relics.json: legendary relic " + r.Id + " has no hook, so it would do nothing"); continue; }
+                    if (r.Hook == RelicHook.None) { Warnings.Add("relics.json: mythic relic " + r.Id + " has no hook, so its unique passive would do nothing"); continue; }
                 }
                 else
                 {
-                    if (r.Hook != RelicHook.None) { Warnings.Add("relics.json: common relic " + r.Id + " declares hook " + r.Hook + " - the common grade never enters the effect pipeline"); continue; }
-                    if (r.Stats.Count == 0) { Warnings.Add("relics.json: common relic " + r.Id + " has an empty stat block, so it would do nothing"); continue; }
+                    if (r.Hook != RelicHook.None) { Warnings.Add("relics.json: legendary relic " + r.Id + " declares hook " + r.Hook + " - the legendary grade never enters the effect pipeline"); continue; }
+                    if (r.Stats.Count == 0) { Warnings.Add("relics.json: legendary relic " + r.Id + " has an empty stat block, so it would do nothing"); continue; }
                 }
                 Relics.Add(r);
                 _relicById[r.Id] = r;
@@ -177,23 +176,27 @@ namespace Emberfall.Core.Data
                 if (!string.IsNullOrEmpty(r.PairedHeroId) && !_heroById.ContainsKey(r.PairedHeroId))
                     Warnings.Add("relic " + r.Id + " is paired with unknown hero " + r.PairedHeroId);
 
-                if (r.Grade == RelicGrade.Legendary)
+                if (r.Grade == RelicGrade.Mythic)
                 {
                     if (string.IsNullOrEmpty(r.Rule))
-                        Warnings.Add("relic " + r.Id + " has no rule text, so the hero card cannot state what it does");
+                        Warnings.Add("relic " + r.Id + " has no rule text, so the hero card cannot state its unique passive");
                 }
                 else
                 {
-                    // A common relic's card text is BUILT from the stat block, so authored prose
-                    // there would be a second, unreachable description of the same relic.
+                    // A legendary (stat-only) relic's card text is BUILT from the stat block, so
+                    // authored prose there would be a second, unreachable description of the relic.
                     if (!string.IsNullOrEmpty(r.Rule))
-                        Warnings.Add("common relic " + r.Id + " authors rule text, which no card reads - its card states its numbers");
+                        Warnings.Add("legendary relic " + r.Id + " authors rule text, which no card reads - its card states its numbers");
                     if (!string.IsNullOrEmpty(r.PairedHeroId))
-                        Warnings.Add("common relic " + r.Id + " is paired to a hero - the common grade is universal and carries no pairing");
-                    for (int s = 0; s < r.Stats.Count; s++)
-                        if (r.Stats[s].Value == 0f)
-                            Warnings.Add("relic " + r.Id + " has a zero-value " + r.Stats[s].Stat + " bonus, so that half of it does nothing");
+                        Warnings.Add("legendary relic " + r.Id + " is paired to a hero - the grade is universal and carries no pairing");
                 }
+
+                // A zero-value stat bonus does nothing, whichever grade carries it - a mythic
+                // relic's stat block is just as capable of authoring a dead half as a legendary
+                // relic's is.
+                for (int s = 0; s < r.Stats.Count; s++)
+                    if (r.Stats[s].Value == 0f)
+                        Warnings.Add("relic " + r.Id + " has a zero-value " + r.Stats[s].Stat + " bonus, so that half of it does nothing");
             }
             if (Heroes.Count == 0) Warnings.Add("no heroes were loaded");
             if (StartingHeroes.Count == 0) Warnings.Add("no heroes are flagged startingHero:true");

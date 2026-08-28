@@ -20,8 +20,9 @@
   // would be an aura, which is a global multiplier. DESIGN-RELICS' relicEnergyBankMax is absent on
   // purpose: it bounded the Tidewrought Metronome's carry, and that relic is cut.
   "relicSlotsPerHero": 1,
-  // Fraction of a hit that Mirrored Wound returns to the attacker. The relic's card says "part of
-  // that damage returns" and never a number - a legendary relic contains none - so the magnitude
+  // Fraction of a hit that Mirrored Wound returns to the attacker. The relic's RULE text says
+  // "part of that damage returns" and never a number - a mythic relic's Rule contains none, even
+  // though (unlike when this relic shipped) a mythic relic's stat block now can - so the magnitude
   // lives here, exactly as emberBurnStackCap does for Ember. Placeholder; task 13's retune owns it.
   "mirroredWoundReflectFraction": 0.25,
 
@@ -66,8 +67,17 @@
   // and its save path exist now so that pass is a content and tuning change, not a save migration.
   // Nothing in the simulation reads tier, so a tier-2 relic would behave exactly like a tier-1 one.
   "relicMaxTier": 1,
-  // Relic Dust cost to purchase one relic from the shop. Balance pass placeholder.
+  // Relic Dust cost to purchase one LEGENDARY-grade (stat-only) relic from the shop.
   "relicShopPrice": 80,
+  // Relic Dust cost to purchase one MYTHIC-grade relic. Deliberately steep and Dust-only, no
+  // second currency: at relicDustPerRepeatClear/relicDustPerStageIndex's current rates, a player
+  // repeat-clearing their single highest-Dust stage 3x/day (the repeat cap) earns roughly
+  // 84/day mid-campaign (globalIndex ~11) to 156/day at the final stage (globalIndex 23). 2400
+  // Dust is about 3-4 weeks of that mid-campaign, 2-3 weeks at the endgame rate, and roughly a
+  // week even for an unusually dedicated player farming several of their highest stages per day.
+  // Steep on purpose so Mythic reads as a long goal, not a purchase. Balance pass placeholder,
+  // same as every other relic number here - expect this to move.
+  "relicMythicShopPrice": 2400,
 
   "summonCost": 120,
   "summonWeight1": 0,

@@ -27,6 +27,11 @@ namespace Emberfall.UI
         public static readonly Color GoldDeep = Hex("B8862A");
         public static readonly Color Ember = Hex("E8642F");
         public static readonly Color EmberDeep = Hex("A83C16");
+        // The mythic relic grade's badge colour - the tier above legendary/gold, so it is
+        // deliberately not gold and not any AspectColor value (a relic badge must never read as an
+        // aspect tint). Picked, not derived; a real visual pass in the editor should confirm it
+        // reads clearly against Panel and next to Gold rather than clashing with it.
+        public static readonly Color Mythic = Hex("E84FD1");
         public static readonly Color Shard = Hex("7FA8FF");
         public static readonly Color ShardDeep = Hex("3B5BB8");
 
@@ -211,23 +216,25 @@ namespace Emberfall.UI
         // ---------- game-specific colours ----------
 
         /// <summary>
-        /// Badge tint for a relic's grade. Gold for legendary, muted for common, and the gap
-        /// between them is the point: DESIGN-RELICS asks the card to show the grade because it is
-        /// what tells a player whether they are about to read a rule or a list of numbers.
+        /// Badge tint for a relic's grade. Gold for legendary (the stat-only grade - formerly
+        /// labelled Common, values unchanged, only the word moved), the Mythic accent for mythic
+        /// (the hook-plus-stats grade above it), and the gap between them is the point: a relic
+        /// card shows its grade because it is what tells a player whether they are reading a plain
+        /// stat list or a stat list stacked on a unique passive.
         ///
-        /// Deliberately not an aspect colour and not Ember. A legendary relic is never flavoured or
-        /// paired to an aspect, so tinting its badge with one would say the opposite in the one
-        /// place a player actually looks.
+        /// Deliberately not an aspect colour anywhere in this function. A mythic relic is never
+        /// flavoured or paired to an aspect, so tinting its badge with one would say the opposite
+        /// in the one place a player actually looks.
         /// </summary>
         public static Color RelicGradeColor(RelicGrade grade)
         {
-            return grade == RelicGrade.Legendary ? Gold : TextMuted;
+            return grade == RelicGrade.Mythic ? Mythic : Gold;
         }
 
-        /// <summary>The display word, with no noun after it - "Legendary", not "Legendary relic".</summary>
+        /// <summary>The display word, with no noun after it - "Mythic", not "Mythic relic".</summary>
         public static string RelicGradeLabel(RelicGrade grade)
         {
-            return grade == RelicGrade.Legendary ? "LEGENDARY" : "COMMON";
+            return grade == RelicGrade.Mythic ? "MYTHIC" : "LEGENDARY";
         }
 
         public static Color AspectColor(Aspect aspect)

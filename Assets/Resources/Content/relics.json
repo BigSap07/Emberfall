@@ -1,13 +1,13 @@
 {
-  "_comment": "Two grades, per DESIGN-RELICS. A COMMON relic is a stat bundle: it carries a 'stats' block, never a 'hook', and resolves entirely in StatMath.ApplyRelic before the simulation starts. A LEGENDARY relic is the opposite: it carries a 'hook', never a 'stats' block, states itself as one sentence with no number in it, and resolves inside CombatSimulation. ContentDatabase drops any entry that mixes the two, so the legendary grade's no-numbers rule is enforced at load rather than by review. 'mode' is Multiply for Attack/Defense/MaxHp/Speed (large scaled numbers - value 0.14 means x1.14) and Add for CritChance/CritDamage/EffectHit/EffectResist (small fractions that are never scaled by level or star rarity - value 0.12 means +0.12). The four relics that shipped before this rewrite (Splitting Prism, Warden's Debt, Stormlance Oath, Verdict Sigil) are cut, along with the three hooks only they used. Tidewrought Metronome and Green Hour Vessel stay cut, per DESIGN-HOOK-RESOLUTION sections 2 and 3: Tide owns the energy clamp and Verdant owns the heal clamp, so neither had any code left to run.",
+  "_comment": "Two grades, renamed from an earlier Common/Legendary pair to a Legendary/Mythic pair - values on the eight relics below are unchanged, only the grade label moved. A LEGENDARY relic is a stat bundle: it carries a 'stats' block, never a 'hook', and resolves entirely in StatMath.ApplyRelic before the simulation starts. A MYTHIC relic carries a 'hook' plus a 'stats' block stacked on top of it - the hook is its unchanged unique passive, the stats are new as of this rename. Its 'rule' still states the hook as one sentence with no number in it; the numbers for a mythic relic live in 'stats', same as a legendary's. ContentDatabase drops a mythic entry with no hook and a legendary entry with either a hook or an empty stats block. 'mode' is Multiply for Attack/Defense/MaxHp/Speed (large scaled numbers - value 0.14 means x1.14) and Add for CritChance/CritDamage/EffectHit/EffectResist (small fractions that are never scaled by level or star rarity - value 0.12 means +0.12). The four relics cut in the prior rewrite (Splitting Prism, Warden's Debt, Stormlance Oath, Verdict Sigil) and the two cut before that (Tidewrought Metronome, Green Hour Vessel) all stay cut - unaffected by this rename.",
 
-  "_valuesComment": "All sixteen numbers below are first-pass and unbalanced by admission, not by oversight. They have not been through RunCampaignBalancePass. DESIGN-RELICS task 13's retune is the only pass that produces real values, and it has to run after this lands. Note that six of the eight move PowerScore, so a relicced team reaches a recommendedPower budget at a lower level than an unrelicced one.",
+  "_valuesComment": "All twenty numbers below are first-pass and unbalanced by admission, not by oversight. They have not been through RunCampaignBalancePass. DESIGN-RELICS task 13's retune is the only pass that produces real values. The two mythic relics' stat additions (Speed/Effect Resist on The Unbroken Ledger, Effect Hit/Crit Damage on Mirrored Wound) are sized deliberately modest relative to the eight legendary relics' pairs, since most of a mythic relic's power budget is already spent on its unique passive - the stat block is a bonus stacked on top, not a second reason to equip it.",
 
   "relics": [
     {
       "id": "warband_standard",
       "name": "Warband Standard",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "Attack", "mode": "Multiply", "value": 0.14 },
         { "stat": "Speed",  "mode": "Multiply", "value": 0.10 }
@@ -16,7 +16,7 @@
     {
       "id": "bastion_core",
       "name": "Bastion Core",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "Defense", "mode": "Multiply", "value": 0.18 },
         { "stat": "MaxHp",   "mode": "Multiply", "value": 0.12 }
@@ -25,7 +25,7 @@
     {
       "id": "cutting_edge",
       "name": "Cutting Edge",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "CritChance", "mode": "Add", "value": 0.12 },
         { "stat": "CritDamage", "mode": "Add", "value": 0.20 }
@@ -34,7 +34,7 @@
     {
       "id": "hollow_reserve",
       "name": "Hollow Reserve",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "MaxHp",        "mode": "Multiply", "value": 0.12 },
         { "stat": "EffectResist", "mode": "Add",      "value": 0.10 }
@@ -43,7 +43,7 @@
     {
       "id": "marksmans_coil",
       "name": "Marksman's Coil",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "EffectHit", "mode": "Add",      "value": 0.12 },
         { "stat": "Speed",     "mode": "Multiply", "value": 0.08 }
@@ -52,7 +52,7 @@
     {
       "id": "warlords_momentum",
       "name": "Warlord's Momentum",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "Attack",     "mode": "Multiply", "value": 0.10 },
         { "stat": "CritDamage", "mode": "Add",      "value": 0.15 }
@@ -61,7 +61,7 @@
     {
       "id": "ironroot_ward",
       "name": "Ironroot Ward",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "Defense",      "mode": "Multiply", "value": 0.16 },
         { "stat": "EffectResist", "mode": "Add",      "value": 0.10 }
@@ -70,7 +70,7 @@
     {
       "id": "vanguards_pulse",
       "name": "Vanguard's Pulse",
-      "grade": "Common",
+      "grade": "Legendary",
       "stats": [
         { "stat": "Speed",      "mode": "Multiply", "value": 0.10 },
         { "stat": "CritChance", "mode": "Add",      "value": 0.10 }
@@ -80,16 +80,24 @@
     {
       "id": "unbroken_ledger",
       "name": "The Unbroken Ledger",
-      "grade": "Legendary",
+      "grade": "Mythic",
       "rule": "What this hero inflicts cannot be shrugged off.",
-      "hook": "BypassEffectResist"
+      "hook": "BypassEffectResist",
+      "stats": [
+        { "stat": "Speed",        "mode": "Multiply", "value": 0.08 },
+        { "stat": "EffectResist", "mode": "Add",      "value": 0.10 }
+      ]
     },
     {
       "id": "mirrored_wound",
       "name": "Mirrored Wound",
-      "grade": "Legendary",
+      "grade": "Mythic",
       "rule": "Every wound dealt to the wearer is a wound taken.",
-      "hook": "ReflectDamage"
+      "hook": "ReflectDamage",
+      "stats": [
+        { "stat": "EffectHit",  "mode": "Add", "value": 0.10 },
+        { "stat": "CritDamage", "mode": "Add", "value": 0.15 }
+      ]
     }
   ]
 }

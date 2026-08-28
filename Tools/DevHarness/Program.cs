@@ -3154,24 +3154,25 @@ namespace Emberfall.DevHarness
         // ---------------------------------------------------------------- relics
 
         /// <summary>
-        /// Two grades, and every mechanic forced rather than inspected. Each behavioural check
-        /// below runs the SAME synthetic content twice - once with the relic equipped and once
-        /// without - and asserts on the difference, so a relic that silently did nothing fails on
-        /// the control matching the treatment rather than passing because the assertion was
-        /// written loosely.
+        /// Two grades, renamed from Common/Legendary to Legendary/Mythic, and every mechanic forced
+        /// rather than inspected. Each behavioural check below runs the SAME synthetic content
+        /// twice - once with the relic equipped and once without - and asserts on the difference,
+        /// so a relic that silently did nothing fails on the control matching the treatment rather
+        /// than passing because the assertion was written loosely.
         ///
         /// The four relics that shipped before the two-grade rewrite (Splitting Prism, Warden's
         /// Debt, Stormlance Oath, Verdict Sigil) are cut, along with the three hooks only they
         /// used. CheckRelicContent asserts their absence rather than leaving it to be noticed, the
-        /// same way it already did for Tidewrought Metronome and Green Hour Vessel.
+        /// same way it already did for Tidewrought Metronome and Green Hour Vessel. That is
+        /// unaffected by the grade rename - out of scope here, not reopened.
         /// </summary>
         private static void CheckRelics(ContentDatabase db)
         {
             Line("");
             Line("RELICS");
             CheckRelicContent(db);
-            CheckCommonRelicArithmetic(db);
-            CheckCommonRelicReachesTheSimulation();
+            CheckRelicStatArithmetic(db);
+            CheckLegendaryRelicReachesTheSimulation();
             CheckRelicUnbrokenLedger();
             CheckRelicMirroredWound();
             CheckRelicDoesNotLeakAcrossBattles();
@@ -3179,47 +3180,84 @@ namespace Emberfall.DevHarness
 
         /// <summary>
         /// The shipped relics.json against the two-grade model, including the grade split itself:
-        /// a legendary relic carrying numbers and a common relic carrying a hook are both content
+        /// a legendary relic carrying a hook and a mythic relic carrying no hook are both content
         /// errors that ContentDatabase drops at load, and this asserts none got that far.
         ///
         /// The digit test is DESIGN-RELICS' own stated test, mechanised - "if it cannot be written
-        /// as one sentence without a number, it is a common relic wearing the wrong grade" - and it
-        /// is now scoped to the legendary grade specifically. Running it over common relics would
-        /// be backwards: their card text is nothing BUT numbers.
+        /// as one sentence without a number, it is a legendary relic wearing the wrong grade" - and
+        /// it is scoped to Rule specifically, checked on the mythic grade (the only grade that
+        /// authors Rule). Running it over a legendary's card text would be backwards: DescribeStats
+        /// is nothing BUT numbers.
         /// </summary>
         private static void CheckRelicContent(ContentDatabase db)
         {
-            int common = 0, legendary = 0;
+            int legendary = 0, mythic = 0;
             for (int i = 0; i < db.Relics.Count; i++)
             {
-                if (db.Relics[i].Grade == RelicGrade.Common) common++; else legendary++;
+                if (db.Relics[i].Grade == RelicGrade.Mythic) mythic++; else legendary++;
             }
 
             Check(db.Relics.Count == 10,
                   "relics.json loads all 10 relics (got " + db.Relics.Count + ")");
-            Check(common == 8, "8 of them are common grade (got " + common + ")");
-            Check(legendary == 2, "2 of them are legendary grade (got " + legendary + ")");
+            Check(legendary == 8, "8 of them are legendary grade (got " + legendary + ")");
+            Check(mythic == 2, "2 of them are mythic grade (got " + mythic + ")");
 
-            string[] expectedCommon = { "warband_standard", "bastion_core", "cutting_edge", "hollow_reserve",
-                                        "marksmans_coil", "warlords_momentum", "ironroot_ward", "vanguards_pulse" };
-            for (int i = 0; i < expectedCommon.Length; i++)
-            {
-                RelicDef r = db.GetRelic(expectedCommon[i]);
-                Check(r != null && r.Grade == RelicGrade.Common, "common relic " + expectedCommon[i] + " exists at common grade");
-            }
-
-            string[] expectedLegendary = { "unbroken_ledger", "mirrored_wound" };
+            string[] expectedLegendary = { "warband_standard", "bastion_core", "cutting_edge", "hollow_reserve",
+                                           "marksmans_coil", "warlords_momentum", "ironroot_ward", "vanguards_pulse" };
             for (int i = 0; i < expectedLegendary.Length; i++)
             {
                 RelicDef r = db.GetRelic(expectedLegendary[i]);
                 Check(r != null && r.Grade == RelicGrade.Legendary, "legendary relic " + expectedLegendary[i] + " exists at legendary grade");
             }
 
+            string[] expectedMythic = { "unbroken_ledger", "mirrored_wound" };
+            for (int i = 0; i < expectedMythic.Length; i++)
+            {
+                RelicDef r = db.GetRelic(expectedMythic[i]);
+                Check(r != null && r.Grade == RelicGrade.Mythic, "mythic relic " + expectedMythic[i] + " exists at mythic grade");
+            }
+
+            // The two mythic relics were promoted with a stat block stacked on top of their
+            // existing hook, per DESIGN-RELICS' Mythic pricing/stat-block decision. Asserted by
+            // exact pair, not just "non-empty", so a future content edit that quietly drops or
+            // swaps the intended stat pair fails loudly rather than passing on "it has stats".
+            RelicDef ledger = db.GetRelic("unbroken_ledger");
+            if (ledger != null)
+            {
+                bool hasSpeed = false, hasEffectResist = false;
+                for (int s = 0; s < ledger.Stats.Count; s++)
+                {
+                    if (ledger.Stats[s].Stat == RelicStat.Speed) hasSpeed = true;
+                    if (ledger.Stats[s].Stat == RelicStat.EffectResist) hasEffectResist = true;
+                }
+                Check(ledger.Stats.Count == 2 && hasSpeed && hasEffectResist,
+                      "The Unbroken Ledger's promotion stat block is Speed + Effect Resist, per spec (got "
+                      + ledger.Stats.Count + " entries)");
+                Check(ledger.Hook == RelicHook.BypassEffectResist,
+                      "and its unique passive is untouched by the promotion (still BypassEffectResist)");
+            }
+            RelicDef mirror = db.GetRelic("mirrored_wound");
+            if (mirror != null)
+            {
+                bool hasEffectHit = false, hasCritDamage = false;
+                for (int s = 0; s < mirror.Stats.Count; s++)
+                {
+                    if (mirror.Stats[s].Stat == RelicStat.EffectHit) hasEffectHit = true;
+                    if (mirror.Stats[s].Stat == RelicStat.CritDamage) hasCritDamage = true;
+                }
+                Check(mirror.Stats.Count == 2 && hasEffectHit && hasCritDamage,
+                      "Mirrored Wound's promotion stat block is Effect Hit + Crit Damage, per spec (got "
+                      + mirror.Stats.Count + " entries)");
+                Check(mirror.Hook == RelicHook.ReflectDamage,
+                      "and its unique passive is untouched by the promotion (still ReflectDamage)");
+            }
+
             // Cut, and asserted rather than assumed: re-adding any of these is the mistake this
             // pass exists to prevent, and it would otherwise be silent. The first two lost their
             // hook to an aspect (DESIGN-HOOK-RESOLUTION sections 2 and 3); the last four were cut
             // with the two-grade rewrite, explicitly, as the content change DESIGN-RELICS' flagged
-            // assumption asked to be made rather than left implied.
+            // assumption asked to be made rather than left implied. The grade rename touches none
+            // of this list.
             string[] cut = { "tidewrought_metronome", "green_hour_vessel",
                              "splitting_prism", "wardens_debt", "stormlance_oath", "verdict_sigil" };
             for (int i = 0; i < cut.Length; i++)
@@ -3227,71 +3265,88 @@ namespace Emberfall.DevHarness
 
             // The grade split, asserted on what actually loaded. ContentDatabase drops a mixed
             // entry, so a failure here means the drop stopped working, not that content is wrong.
+            // Note this is no longer "each grade owns exactly one of {Hook, Stats}" - a mythic
+            // relic legitimately owns both since the rename. The only thing still forbidden is a
+            // legendary relic with a Hook, and either grade doing nothing at all.
             List<string> mixed = new List<string>();
             for (int i = 0; i < db.Relics.Count; i++)
             {
                 RelicDef r = db.Relics[i];
-                if (r.Grade == RelicGrade.Legendary && r.Stats.Count > 0) mixed.Add(r.Id + " (legendary with stats)");
-                if (r.Grade == RelicGrade.Legendary && r.Hook == RelicHook.None) mixed.Add(r.Id + " (legendary with no hook)");
-                if (r.Grade == RelicGrade.Common && r.Hook != RelicHook.None) mixed.Add(r.Id + " (common with a hook)");
-                if (r.Grade == RelicGrade.Common && r.Stats.Count == 0) mixed.Add(r.Id + " (common with no stats)");
+                if (r.Grade == RelicGrade.Legendary && r.Hook != RelicHook.None) mixed.Add(r.Id + " (legendary with a hook)");
+                if (r.Grade == RelicGrade.Legendary && r.Stats.Count == 0) mixed.Add(r.Id + " (legendary with no stats)");
+                if (r.Grade == RelicGrade.Mythic && r.Hook == RelicHook.None) mixed.Add(r.Id + " (mythic with no hook)");
             }
             Check(mixed.Count == 0,
-                  "no relic mixes the grades - a legendary carries a hook and no numbers, a common carries numbers and no hook"
+                  "no relic violates the grade split - a legendary carries stats and no hook, a mythic carries a hook"
                   + (mixed.Count == 0 ? "" : " (" + string.Join(", ", mixed.ToArray()) + ")"));
 
-            // The stat-stick test, legendary grade only.
+            // The stat-stick test, mythic grade only (the only grade that authors Rule).
             int withDigits = 0;
             List<string> offenders = new List<string>();
             for (int i = 0; i < db.Relics.Count; i++)
             {
                 RelicDef r = db.Relics[i];
-                if (r.Grade != RelicGrade.Legendary) continue;
+                if (r.Grade != RelicGrade.Mythic) continue;
                 bool digit = false;
                 for (int c = 0; c < r.Rule.Length; c++) if (char.IsDigit(r.Rule[c])) digit = true;
                 if (digit) { withDigits++; offenders.Add(r.Id); }
             }
             Check(withDigits == 0,
-                  "no legendary relic states its rule with a number in it - DESIGN-RELICS' own stat-stick test"
+                  "no mythic relic states its rule with a number in it - DESIGN-RELICS' own stat-stick"
+                  + " test, scoped to Rule now that a mythic relic's Stats can legitimately have numbers"
                   + (withDigits == 0 ? "" : " (offenders: " + string.Join(", ", offenders.ToArray()) + ")"));
 
-            // The common grade is aspect-neutral and universal: no pairing, on any of them.
+            // The legendary grade is aspect-neutral and universal: no pairing, on any of them.
             List<string> paired = new List<string>();
             for (int i = 0; i < db.Relics.Count; i++)
-                if (db.Relics[i].Grade == RelicGrade.Common && !string.IsNullOrEmpty(db.Relics[i].PairedHeroId))
+                if (db.Relics[i].Grade == RelicGrade.Legendary && !string.IsNullOrEmpty(db.Relics[i].PairedHeroId))
                     paired.Add(db.Relics[i].Id);
             Check(paired.Count == 0,
-                  "no common relic is paired to a hero - the grade is universal, and a stat bundle that"
+                  "no legendary relic is paired to a hero - the grade is universal, and a stat bundle that"
                   + " only fits one kind of hero is a worse stat bundle, not a design"
                   + (paired.Count == 0 ? "" : " (" + string.Join(", ", paired.ToArray()) + ")"));
 
-            // Every common relic's card text is buildable, since it is the only text it has.
+            // Every relic's card text is buildable, since a legendary has nothing else and a mythic
+            // with no rule text would show only its numbers with a dangling missing sentence.
             List<string> textless = new List<string>();
             for (int i = 0; i < db.Relics.Count; i++)
                 if (string.IsNullOrEmpty(db.Relics[i].CardText())) textless.Add(db.Relics[i].Id);
             Check(textless.Count == 0,
-                  "every relic has card text - a rule for a legendary, a stat line for a common"
+                  "every relic has card text - numbers for a legendary, a rule (plus numbers, if any) for a mythic"
                   + (textless.Count == 0 ? "" : " (empty: " + string.Join(", ", textless.ToArray()) + ")"));
 
             Check(db.Balance.RelicSlotsPerHero == 1,
                   "balance.json still sets relicSlotsPerHero to 1 - the one slot is SHARED between the"
-                  + " grades, and a second slot reserved for a common would make that grade mandatory"
+                  + " grades, and a second slot reserved for a legendary would make that grade mandatory"
                   + " rather than chosen (got " + db.Balance.RelicSlotsPerHero + ")");
 
             Check(db.Balance.MirroredWoundReflectFraction > 0f,
-                  "balance.json carries Mirrored Wound's reflected fraction, so the relic's card can"
+                  "balance.json carries Mirrored Wound's reflected fraction, so the relic's RULE can"
                   + " say 'part of that damage' and contain no number (got "
                   + Fmt(db.Balance.MirroredWoundReflectFraction) + ")");
+
+            // Mythic pricing, per DESIGN-RELICS' Mythic pricing section: steep enough that it reads
+            // as a long grind, not a five-minute purchase. Checked as a ratio against the ordinary
+            // shop price rather than a fixed number, so a balance-pass retune of one alone does not
+            // silently defeat the intent this asserts - only collapsing the GAP between them would.
+            Check(db.Balance.RelicMythicShopPrice >= db.Balance.RelicShopPrice * 10,
+                  "a mythic relic costs at least 10x a legendary's shop price, so it reads as a long"
+                  + " grinding goal rather than a quick buy (legendary " + db.Balance.RelicShopPrice
+                  + ", mythic " + db.Balance.RelicMythicShopPrice + ")");
         }
         /// <summary>
-        /// The common grade's arithmetic, asserted against DESIGN-RELICS' own per-stat decision
-        /// rather than against whatever the data happens to say. This is the check that catches the
-        /// failure the document spends a section warning about: authoring a crit or effect bonus as
-        /// Multiply makes it worthless (a multiplicative +12% on a 0.08 crit chance is +0.0096) and
-        /// on a 0.00 Effect Hit it is exactly zero, so Marksman's Coil would be a dead relic on
-        /// Kalyx specifically and nothing would fail.
+        /// The per-stat arithmetic rule, asserted against DESIGN-RELICS' own decision rather than
+        /// against whatever the data happens to say. This is the check that catches the failure the
+        /// document spends a section warning about: authoring a crit or effect bonus as Multiply
+        /// makes it worthless (a multiplicative +12% on a 0.08 crit chance is +0.0096) and on a 0.00
+        /// Effect Hit it is exactly zero, so Marksman's Coil would be a dead relic on Kalyx
+        /// specifically and nothing would fail.
+        ///
+        /// Checked over EVERY relic's Stats, not scoped to one grade - the rule is per-stat, and
+        /// since the grade rename a mythic relic's stat block is just as capable of getting this
+        /// wrong as a legendary's.
         /// </summary>
-        private static void CheckCommonRelicArithmetic(ContentDatabase db)
+        private static void CheckRelicStatArithmetic(ContentDatabase db)
         {
             // The mode each stat MUST carry, per DESIGN-RELICS "What +12% means, per stat".
             Dictionary<RelicStat, RelicStatMode> required = new Dictionary<RelicStat, RelicStatMode>();
@@ -3308,23 +3363,22 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < db.Relics.Count; i++)
             {
                 RelicDef r = db.Relics[i];
-                if (r.Grade != RelicGrade.Common) continue;
                 for (int s = 0; s < r.Stats.Count; s++)
                     if (r.Stats[s].Mode != required[r.Stats[s].Stat])
                         wrong.Add(r.Id + "." + r.Stats[s].Stat + " is " + r.Stats[s].Mode);
             }
             Check(wrong.Count == 0,
-                  "every common relic uses the mode DESIGN-RELICS decides for the stat it touches"
+                  "every relic's stat block uses the mode DESIGN-RELICS decides for the stat it touches"
                   + (wrong.Count == 0 ? "" : " (wrong: " + string.Join(", ", wrong.ToArray()) + ")"));
 
             // ApplyRelic itself, on a hero whose numbers are known, forced rather than inspected.
             HeroDef hero = db.Heroes.Count > 0 ? db.Heroes[0] : null;
-            if (hero == null) { Check(false, "common relic arithmetic: a hero exists to apply to"); return; }
+            if (hero == null) { Check(false, "relic stat arithmetic: a hero exists to apply to"); return; }
 
             Emberfall.Core.Progression.UnitStats bare = Emberfall.Core.Progression.StatMath.ForHero(hero, 20);
 
             RelicDef mult = new RelicDef();
-            mult.Grade = RelicGrade.Common;
+            mult.Grade = RelicGrade.Legendary;
             mult.Stats.Add(NewBonus(RelicStat.Attack, RelicStatMode.Multiply, 0.14f));
             Emberfall.Core.Progression.UnitStats multiplied = Emberfall.Core.Progression.StatMath.ForHero(hero, 20, mult);
             float expectAtk = (float)Math.Round(bare.Attack * 1.14f, MidpointRounding.AwayFromZero);
@@ -3333,7 +3387,7 @@ namespace Emberfall.DevHarness
                   + " (expected " + Fmt(expectAtk) + ")");
 
             RelicDef add = new RelicDef();
-            add.Grade = RelicGrade.Common;
+            add.Grade = RelicGrade.Legendary;
             add.Stats.Add(NewBonus(RelicStat.CritChance, RelicStatMode.Add, 0.12f));
             add.Stats.Add(NewBonus(RelicStat.CritDamage, RelicStatMode.Add, 0.20f));
             Emberfall.Core.Progression.UnitStats added = Emberfall.Core.Progression.StatMath.ForHero(hero, 20, add);
@@ -3344,14 +3398,30 @@ namespace Emberfall.DevHarness
                   "+20% Crit Damage adds percentage points: " + Fmt(bare.CritDamage) + " -> "
                   + Fmt(added.CritDamage) + " (1.5 becomes 1.7, not 1.8)");
 
-            // A legendary relic through the same entry point is a no-op, which is what lets one
-            // shared slot hold either grade without the caller testing the grade first.
-            RelicDef legendary = new RelicDef();
-            legendary.Grade = RelicGrade.Legendary;
-            legendary.Hook = RelicHook.ReflectDamage;
-            Emberfall.Core.Progression.UnitStats untouched = Emberfall.Core.Progression.StatMath.ForHero(hero, 20, legendary);
+            // A mythic relic with NO stat block is a no-op through ApplyRelic, same as before the
+            // rename - its hook alone does not move a number.
+            RelicDef mythicBare = new RelicDef();
+            mythicBare.Grade = RelicGrade.Mythic;
+            mythicBare.Hook = RelicHook.ReflectDamage;
+            Emberfall.Core.Progression.UnitStats untouched = Emberfall.Core.Progression.StatMath.ForHero(hero, 20, mythicBare);
             Check(untouched.Attack == bare.Attack && untouched.CritChance == bare.CritChance,
-                  "a legendary relic through ApplyRelic changes no stat - the grades share a slot, not a path");
+                  "a mythic relic with an empty stat block changes no stat through ApplyRelic - a hook alone does not move a number");
+
+            // The shape change the rename actually made: a mythic relic's stat block reaches
+            // ApplyRelic too, stacked on top of its hook. Before the rename this was impossible -
+            // the hook-carrying grade was required to have an empty Stats list. Forced directly
+            // here rather than inferred from the shipped Unbroken Ledger/Mirrored Wound content,
+            // so this keeps testing the MECHANISM even if a future balance pass changes their numbers.
+            RelicDef mythicStatted = new RelicDef();
+            mythicStatted.Grade = RelicGrade.Mythic;
+            mythicStatted.Hook = RelicHook.ReflectDamage;
+            mythicStatted.Stats.Add(NewBonus(RelicStat.Speed, RelicStatMode.Multiply, 0.08f));
+            Emberfall.Core.Progression.UnitStats mythicResult = Emberfall.Core.Progression.StatMath.ForHero(hero, 20, mythicStatted);
+            float expectSpeed = (float)Math.Round(bare.Speed * 1.08f, MidpointRounding.AwayFromZero);
+            Check(mythicResult.Speed == expectSpeed,
+                  "a mythic relic's stat block ALSO reaches ApplyRelic on top of its hook - the two"
+                  + " entry points are not mutually exclusive any more (" + Fmt(bare.Speed) + " -> "
+                  + Fmt(mythicResult.Speed) + ", expected " + Fmt(expectSpeed) + ")");
 
             Check(Emberfall.Core.Progression.StatMath.ForHero(hero, 20, null).Attack == bare.Attack,
                   "a null relic through ApplyRelic changes no stat - an empty slot is not a special case");
@@ -3367,16 +3437,17 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// A common relic reaches the SIMULATION, not just the preview. Runs the same synthetic
-        /// fight twice, once with a heavy Attack bundle and once bare, and asserts the wearer's
-        /// damage actually moved - the control is what stops this passing because the assertion was
-        /// written loosely.
+        /// A legendary (stat-only) relic reaches the SIMULATION, not just the preview. Runs the
+        /// same synthetic fight twice, once with a heavy Attack bundle and once bare, and asserts
+        /// the wearer's damage actually moved - the control is what stops this passing because the
+        /// assertion was written loosely.
         ///
-        /// Also asserts the relic stays silent in the log. DESIGN-RELICS is explicit that a common
-        /// relic announces nothing: its contribution is already inside every damage number on
-        /// screen, and a banner reading "+14% Attack" fires once and tells the player nothing.
+        /// Also asserts the relic stays silent in the log. DESIGN-RELICS is explicit that a
+        /// stat-only relic announces nothing: its contribution is already inside every damage
+        /// number on screen, and a banner reading "+14% Attack" fires once and tells the player
+        /// nothing.
         /// </summary>
-        private static void CheckCommonRelicReachesTheSimulation()
+        private static void CheckLegendaryRelicReachesTheSimulation()
         {
             ContentDatabase db = BuildRelicTestContent();
             if (db == null) return;
@@ -3386,7 +3457,7 @@ namespace Emberfall.DevHarness
 
             Check(bare > 0, "control: the test wearer deals damage with no relic (" + bare + ")");
             Check(relicced > bare,
-                  "a common relic's Attack bonus reaches the simulation: " + bare + " damage bare, "
+                  "a legendary relic's Attack bonus reaches the simulation: " + bare + " damage bare, "
                   + relicced + " with the relic");
 
             List<HeroInstance> team = new List<HeroInstance>();
@@ -3397,7 +3468,7 @@ namespace Emberfall.DevHarness
                 if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityId == "test_big_attack")
                     announcements++;
             Check(announcements == 0,
-                  "a common relic announces nothing in the battle log (got " + announcements + " banner(s))");
+                  "a legendary relic announces nothing in the battle log (got " + announcements + " banner(s))");
         }
 
         private static int TotalWearerDamage(ContentDatabase db, string relicId)
@@ -3547,7 +3618,7 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// A legendary relic announces once per battle, not once per use, and does not leak from
+        /// A mythic relic announces once per battle, not once per use, and does not leak from
         /// one battle into the next - the ContentDatabase is shared for the process lifetime, so a
         /// relic that wrote to a def rather than to its wearer would contaminate every later fight.
         /// </summary>
@@ -3667,11 +3738,11 @@ namespace Emberfall.DevHarness
 
             string relicsJson = @"{
   ""relics"": [
-    { ""id"": ""test_big_attack"", ""name"": ""Test Bundle"", ""grade"": ""Common"",
+    { ""id"": ""test_big_attack"", ""name"": ""Test Bundle"", ""grade"": ""Legendary"",
       ""stats"": [ { ""stat"": ""Attack"", ""mode"": ""Multiply"", ""value"": 0.5 } ] },
-    { ""id"": ""unbroken_ledger"", ""name"": ""The Unbroken Ledger"", ""grade"": ""Legendary"",
+    { ""id"": ""unbroken_ledger"", ""name"": ""The Unbroken Ledger"", ""grade"": ""Mythic"",
       ""rule"": ""What this hero inflicts cannot be shrugged off."", ""hook"": ""BypassEffectResist"" },
-    { ""id"": ""mirrored_wound"", ""name"": ""Mirrored Wound"", ""grade"": ""Legendary"",
+    { ""id"": ""mirrored_wound"", ""name"": ""Mirrored Wound"", ""grade"": ""Mythic"",
       ""rule"": ""Every wound dealt to the wearer is a wound taken."", ""hook"": ""ReflectDamage"" }
   ]
 }";
@@ -4297,6 +4368,31 @@ namespace Emberfall.DevHarness
             Check(profile.RelicTier("warband_standard") == 1, "granted at tier 1");
             Check(!session.GrantRelic("warband_standard"), "granting the same relic twice is refused - one entry per relic id");
             Check(!session.GrantRelic("relic_that_does_not_exist"), "granting a relic content does not define is refused");
+
+            // ---- Mythic pricing, on a fresh profile so dust math is isolated from the grants above
+            RelicDef legendaryForPrice = db.GetRelic("warband_standard");
+            RelicDef mythicForPrice = db.GetRelic("unbroken_ledger");
+            Check(session.RelicPrice(legendaryForPrice) == db.Balance.RelicShopPrice,
+                  "RelicPrice reads a legendary relic's price off RelicShopPrice ("
+                  + session.RelicPrice(legendaryForPrice) + ")");
+            Check(session.RelicPrice(mythicForPrice) == db.Balance.RelicMythicShopPrice,
+                  "RelicPrice reads a mythic relic's price off the much steeper RelicMythicShopPrice ("
+                  + session.RelicPrice(mythicForPrice) + ")");
+
+            PlayerProfile priceProfile = GameSession.CreateNewProfile(db, Noon);
+            GameSession priceSession = new GameSession(db, priceProfile);
+            priceProfile.RelicDust = db.Balance.RelicMythicShopPrice - 1;
+            Check(!priceSession.BuyRelic("unbroken_ledger"),
+                  "BuyRelic refuses a mythic purchase one dust short of its steep price");
+            Check(!priceProfile.OwnsRelic("unbroken_ledger") && priceProfile.RelicDust == db.Balance.RelicMythicShopPrice - 1,
+                  "and charges nothing on a refused purchase (dust untouched at "
+                  + priceProfile.RelicDust + ")");
+            priceProfile.RelicDust = db.Balance.RelicMythicShopPrice;
+            Check(priceSession.BuyRelic("unbroken_ledger"),
+                  "BuyRelic accepts the mythic purchase at exactly its price");
+            Check(priceProfile.RelicDust == 0,
+                  "and deducts the full mythic price, not the ordinary legendary one (dust now "
+                  + priceProfile.RelicDust + ")");
 
             // ---- assignment, reassignment, and the one-holder rule
             HeroInstance heroA = profile.Heroes[0];

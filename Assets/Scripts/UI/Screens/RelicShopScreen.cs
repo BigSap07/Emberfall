@@ -8,13 +8,14 @@ namespace Emberfall.UI.Screens
 {
     /// <summary>
     /// Lists every relic the player can purchase with Relic Dust. Each entry shows the relic name,
-    /// its grade badge, its own text - a legendary's one-sentence rule or a common's stat line -
-    /// and the price. Buying adds it to the player's collection unassigned; assigning it to a hero
-    /// is done from the Inventory screen.
+    /// its grade badge, its own text - a legendary's stat line, or a mythic's rule plus its stat
+    /// line - and its price. Buying adds it to the player's collection unassigned; assigning it to
+    /// a hero is done from the Inventory screen.
     ///
-    /// Both grades sell from the same list at the same price, which is a placeholder rather than a
-    /// decision: DESIGN-RELIC-PROGRESSION defers relative pricing to the balance pass, and a
-    /// legendary costing the same as a stat bundle is one of the things that pass has to fix.
+    /// The two grades price differently, and deliberately so: GameSession.RelicPrice reads
+    /// RelicShopPrice for a legendary relic and the much steeper RelicMythicShopPrice for a mythic
+    /// one, which is the single source both this screen's display and BuyRelic's deduction read -
+    /// they cannot show one number and charge another.
     ///
     /// No aspect filtering of any kind: any relic can be purchased and assigned to any hero.
     /// </summary>
@@ -71,8 +72,9 @@ namespace Emberfall.UI.Screens
         private void Rebuild()
         {
             int dust = (int)App.Session.Profile.RelicDust;
-            int price = App.Session.Balance.RelicShopPrice;
-            _dustDisplay.text = "RELIC DUST   " + dust + "   (each relic costs " + price + " dust)";
+            _dustDisplay.text = "RELIC DUST   " + dust
+                + "   (legendary " + App.Session.Balance.RelicShopPrice
+                + " - mythic " + App.Session.Balance.RelicMythicShopPrice + " dust)";
             _headerSubtitle.text = App.Session.Content.Relics.Count + " RELICS AVAILABLE";
 
             // Clear old cards and button refs.
@@ -81,7 +83,7 @@ namespace Emberfall.UI.Screens
             _buyButtons.Clear();
 
             List<RelicDef> relics = App.Session.Content.Relics;
-            for (int i = 0; i < relics.Count; i++) BuildRelicCard(relics[i], dust, price);
+            for (int i = 0; i < relics.Count; i++) BuildRelicCard(relics[i], dust);
 
             if (relics.Count == 0)
             {
@@ -91,8 +93,9 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        private void BuildRelicCard(RelicDef relic, int dust, int price)
+        private void BuildRelicCard(RelicDef relic, int dust)
         {
+            int price = App.Session.RelicPrice(relic);
             bool owned = App.Session.Profile.OwnsRelic(relic.Id);
             bool affordable = !owned && dust >= price;
 
@@ -131,8 +134,8 @@ namespace Emberfall.UI.Screens
                                                       UITheme.RelicGradeColor(relic.Grade), UITheme.FontTiny);
             UIBuilder.Box(gradeBadge, 128f, -60f, 132f, 30f, new Vector2(0f, 1f));
 
-            // Paired hero hint (display only, never a restriction, and legendary-only in practice -
-            // the common grade is universal and carries no pairing at all).
+            // Paired hero hint (display only, never a restriction, and mythic-only in practice -
+            // the legendary grade is universal and carries no pairing at all).
             string pairedText = "";
             if (!string.IsNullOrEmpty(relic.PairedHeroId))
             {
@@ -146,9 +149,9 @@ namespace Emberfall.UI.Screens
             pairedLabel.rectTransform.offsetMin = new Vector2(272f, -82f);
             pairedLabel.rectTransform.offsetMax = new Vector2(-200f, -56f);
 
-            // The relic's own text: a legendary states its rule, a common states its numbers.
-            // Both come from CardText() rather than being chosen here, so this screen and the
-            // inventory cannot drift into describing the same relic two different ways.
+            // The relic's own text: a legendary states its numbers, a mythic states its rule and
+            // then its numbers. Comes from CardText() rather than being chosen here, so this
+            // screen and the inventory cannot drift into describing the same relic two ways.
             Text ruleLabel = UIBuilder.WrappedLabel("Rule", card, relic.CardText(),
                                                     UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
             ruleLabel.rectTransform.anchorMin = new Vector2(0f, 0f);

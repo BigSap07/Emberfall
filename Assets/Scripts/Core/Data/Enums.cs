@@ -91,47 +91,62 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// A relic's grade, per DESIGN-RELICS "The word is grade, and it is not tier or rarity".
+    /// A relic's grade, per DESIGN-RELICS "The word is grade, and it is not tier or rarity" -
+    /// with a rename layered on top of that same axis, not a new axis.
     ///
     /// Deliberately NOT called tier or rarity, because both words are already taken and either
     /// would silently overload one: "tier" is a relic's upgrade level (OwnedRelic.Tier,
-    /// BalanceConfig.RelicMaxTier), and "rarity" is a hero's star rarity (StatMath.StarMultiplier).
-    /// A relic has both a grade and a tier and they are orthogonal - a common relic upgrades from
-    /// tier 1 to tier 2 exactly like a legendary one does.
+    /// BalanceConfig.RelicMaxTier), and "rarity" is a hero's star rarity (StatMath.StarMultiplier,
+    /// an int, not an enum - hero rarity has no "Legendary" value to collide with). Checked before
+    /// this rename: no shared Rarity-style enum exists between relics and heroes, so no separate
+    /// RelicTier type was needed - this enum was renamed in place instead.
+    ///
+    /// The two members are a straight relabel of what used to be Common and Legendary, plus one
+    /// new value above them. What was Common is now LEGENDARY; what was Legendary (the two
+    /// hook-based relics) is now MYTHIC, and Mythic additionally gained a stat block on top of its
+    /// hook - the one shape change that came with the rename, not a pure label swap. A relic
+    /// therefore has a grade and a tier and they are orthogonal - either grade upgrades from tier 1
+    /// to tier 2 exactly the same way.
     /// </summary>
     public enum RelicGrade
     {
         /// <summary>
         /// A bundle of flat and percentage stats, resolved entirely in StatMath before the
-        /// simulation starts. Carries RelicStatBonus entries and Hook is always None: a common
-        /// relic never enters the effect pipeline, so it cannot contest a hook with an aspect or
-        /// with a legendary relic. Numerous, cheap to author, aspect-neutral and universal.
+        /// simulation starts. Carries RelicStatBonus entries and Hook is always None: this grade
+        /// never enters the effect pipeline, so it cannot contest a hook with an aspect or with a
+        /// mythic relic. Numerous, cheap to author, aspect-neutral and universal. This is what the
+        /// grade named Common was before the rename - the eight starting stat bundles are
+        /// unchanged in every value, only the label moved.
         /// </summary>
-        Common,
+        Legendary,
 
         /// <summary>
-        /// Rare, rule-breaking, and number-free. Carries a Hook and no RelicStatBonus entries at
-        /// all. This is the grade DESIGN-RELICS' original founding standard still applies to in
-        /// full: it changes a rule in the effect pipeline, states itself as one sentence, and
-        /// contains no number. If it cannot be written that way, it is a common relic wearing the
-        /// wrong grade.
+        /// Rare, rule-breaking, and NOT number-free any more - that is what promotion to this
+        /// grade changed. Carries a Hook, exactly as the grade named Legendary did before the
+        /// rename, and the rule-changing half is held to DESIGN-RELICS' original founding standard
+        /// without exception: the hook changes a rule in the effect pipeline and states itself as
+        /// one sentence with no number in it, in Rule. What is new is that a mythic relic ALSO
+        /// carries RelicStatBonus entries on top of that hook - a stat block stacked onto an
+        /// unchanged unique passive, not a replacement for either half. The no-numbers guarantee
+        /// therefore now applies to Rule specifically, not to the relic as a whole.
         /// </summary>
-        Legendary
+        Mythic
     }
 
     /// <summary>
-    /// Which rule in the effect pipeline a LEGENDARY relic bends. One relic, one hook.
+    /// Which rule in the effect pipeline a MYTHIC relic bends. One relic, one hook.
     ///
-    /// The "a relic changes a RULE, never a number" constraint that shapes this enum is now the
-    /// legendary grade's bar specifically, not a blanket rule for all relics - DESIGN-RELICS
-    /// withdrew the blanket version on 2026-08-26 when the common grade was introduced. It is
-    /// undiminished here: there is still deliberately no "add N%" member, because a relic that
-    /// wants one is a common relic and belongs in RelicStatBonus, which never reaches this enum.
+    /// The "a relic changes a RULE, never a number" constraint that shapes this enum is the mythic
+    /// grade's bar specifically, not a blanket rule for all relics - DESIGN-RELICS withdrew the
+    /// blanket version on 2026-08-26 when the stat-bundle grade was introduced. It is undiminished
+    /// here: there is still deliberately no "add N%" member, because a relic that wants one belongs
+    /// in RelicStatBonus, which a mythic relic can also carry but this enum never reaches.
     ///
     /// Both members below are hooks no aspect holds. DESIGN-RELICS "Hook contention: aspects win
     /// by default" - Tide owns the AddEnergy overflow redirect, Verdant owns the ApplyHealValue
-    /// overflow banking, Ember owns Burn stacking, Orrin is Lumen - and a legendary relic must
-    /// find a hook none of them claims rather than compete for one.
+    /// overflow banking, Ember owns Burn stacking, Orrin is Lumen - and a relic hook must find one
+    /// none of them claims rather than compete for one. That conflict is unchanged and out of
+    /// scope for the grade rename: nothing here reopens it.
     /// </summary>
     public enum RelicHook
     {
@@ -166,8 +181,9 @@ namespace Emberfall.Core.Data
     /// <summary>
     /// How one RelicStatBonus combines with the stat it names. Which mode a stat takes is not one
     /// answer, and DESIGN-RELICS decides it per stat rather than leaving it to the content author:
-    /// the eight starting common relics use one "%" sign for two different operations because the
-    /// stats they touch are stored in two different shapes.
+    /// relic stat bonuses use one "%" sign for two different operations because the stats they
+    /// touch are stored in two different shapes. The rule is per-stat, not per-grade, so it applies
+    /// identically whether the bonus sits on a legendary stat bundle or stacked onto a mythic hook.
     /// </summary>
     public enum RelicStatMode
     {
@@ -189,7 +205,7 @@ namespace Emberfall.Core.Data
 
     /// <summary>
     /// Which UnitStats field a RelicStatBonus moves. Deliberately a closed enum rather than a
-    /// string field name: the common grade adds no new stat, every member below already exists on
+    /// string field name: relic stat bonuses add no new stat, every member below already exists on
     /// UnitStats and is already read by the simulation, and a typo'd stat name should not parse.
     /// </summary>
     public enum RelicStat

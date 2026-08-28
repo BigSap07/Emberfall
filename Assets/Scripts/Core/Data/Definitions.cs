@@ -382,14 +382,15 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// One stat a common relic moves, and how. Numbers live HERE and only here.
+    /// One stat a relic moves, and how. Numbers live HERE and only here.
     ///
-    /// This type is the whole reason RelicDef can carry a stat bundle without the legendary grade
-    /// losing the no-numbers guarantee it used to get from RelicDef having no numeric field at all.
-    /// The guarantee moved rather than weakened: it used to be enforced by RelicDef's shape, and it
-    /// is now enforced by grade, at load (ContentDatabase rejects a legendary relic carrying any of
-    /// these, and a common relic carrying a hook) and again in the harness. A legendary relic still
-    /// has nowhere to put a 15, because a legendary relic's Stats list is required to be empty.
+    /// This type is the whole reason RelicDef can carry a stat bundle without a hook-based relic's
+    /// unique passive losing its own no-numbers guarantee. That guarantee is no longer "this relic
+    /// carries no numbers anywhere" - a mythic relic's Stats can be non-empty - it is narrower and
+    /// just as real: Rule itself is still required to be a number-free sentence for any relic that
+    /// carries a Hook, and the digit test is enforced against Rule specifically, in the harness and
+    /// at content load. A relic with no Hook is required to carry a non-empty Stats list instead, or
+    /// it does nothing. Both rules are enforced by ContentDatabase at load, not by review.
     /// </summary>
     public sealed class RelicStatBonus
     {
@@ -416,21 +417,25 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// One relic, at one of two grades (DESIGN-RELICS). The grade decides which half of this class
-    /// is live, and the two halves are mutually exclusive by validation rather than by convention:
+    /// One relic, at one of two grades (DESIGN-RELICS, renamed since). The grade decides which
+    /// fields are live, enforced by validation rather than by convention:
     ///
-    /// - A COMMON relic carries Stats and leaves Hook at None. It resolves entirely in StatMath
-    ///   before the simulation starts, and CombatSimulation never learns it exists.
-    /// - A LEGENDARY relic carries a Hook and leaves Stats empty. It resolves inside the
-    ///   simulation at the hook's own resolution point, and states itself as one sentence in Rule
-    ///   with no number in it.
+    /// - A LEGENDARY relic (formerly "Common" - the label moved, the eight starting relics and
+    ///   their values did not) carries Stats and leaves Hook at None. It resolves entirely in
+    ///   StatMath before the simulation starts, and CombatSimulation never learns it exists.
+    /// - A MYTHIC relic (formerly "Legendary") carries a Hook and states itself as one sentence in
+    ///   Rule with no number in it, exactly as the grade named Legendary always did. What changed
+    ///   at the rename is that a mythic relic can ALSO carry Stats now - a stat block stacked on
+    ///   top of its unique passive, not a replacement for it. It resolves inside the simulation at
+    ///   the hook's own resolution point, and its Stats fold in at the same setup step a legendary
+    ///   relic's do.
     ///
     /// DESIGN-RELICS' founding "no relic contains an attack percentage" standard used to be
     /// enforced by this type's SHAPE - there was no numeric field anywhere on it, so a relic that
     /// wanted to be "+15% attack" had nowhere to put the 15. That standard was withdrawn as a
-    /// blanket rule on 2026-08-26 and kept, unchanged, as the bar the legendary grade is held to.
-    /// The enforcement moved with it: ContentDatabase rejects a legendary relic with any Stats
-    /// entry and a common relic with any Hook, so the 15 still has nowhere to go on a legendary.
+    /// blanket rule on 2026-08-26 and narrowed rather than removed: it now binds Rule specifically,
+    /// for any relic carrying a Hook. The 15 still cannot go in Rule; it can now go in Stats, on
+    /// either grade, which is the whole point of promoting a relic to mythic.
     /// </summary>
     public sealed class RelicDef
     {
@@ -438,32 +443,35 @@ namespace Emberfall.Core.Data
         public string Name = "";
 
         /// <summary>
-        /// Legendary only: the rule, stated as one sentence and never as a number. Empty on a
-        /// common relic, which has no rule to state - its card shows DescribeStats() instead, and
-        /// writing prose for it would be dressing up a stat bundle as something it is not.
+        /// Set only on a relic that carries a Hook (today: mythic grade): the rule, stated as one
+        /// sentence and never as a number. Empty on a relic with no Hook, which has no rule to
+        /// state - its card shows DescribeStats() instead, and writing prose for it would be
+        /// dressing up a stat bundle as something it is not.
         /// </summary>
         public string Rule = "";
 
         /// <summary>
-        /// The hero this relic was designed around. Display only - nothing enforces it. A common
-        /// relic never carries one: the grade is aspect-neutral and universal by design, and a
-        /// stat bundle that only fits one kind of hero is a worse stat bundle, not a design.
+        /// The hero this relic was designed around. Display only - nothing enforces it. A
+        /// legendary (stat-only) relic never carries one: the grade is aspect-neutral and universal
+        /// by design, and a stat bundle that only fits one kind of hero is a worse stat bundle, not
+        /// a design.
         /// </summary>
         public string PairedHeroId = "";
 
         public RelicGrade Grade = RelicGrade.Legendary;
 
-        /// <summary>Legendary only. None on every common relic - see the class summary.</summary>
+        /// <summary>Mythic only. None on every legendary relic - see the class summary.</summary>
         public RelicHook Hook = RelicHook.None;
 
         /// <summary>
-        /// Common only. Empty on every legendary relic, which is what keeps the legendary grade's
-        /// no-numbers guarantee real now that RelicDef can hold numbers at all.
+        /// The stat bundle. Required to be non-empty on a legendary relic, since a legendary relic
+        /// with no Hook and no Stats does nothing. Optional on a mythic relic - both shipped mythic
+        /// relics carry one, stacked on top of their Hook, but nothing requires a future one to.
         /// </summary>
         public readonly List<RelicStatBonus> Stats = new List<RelicStatBonus>();
 
         /// <summary>
-        /// The common grade's card text, built from the stat block rather than authored: "+14%
+        /// The stat half of a card's text, built from the stat block rather than authored: "+14%
         /// Attack, +10% Speed". Lives here rather than in either screen so the shop and the
         /// inventory cannot drift into describing the same relic two different ways.
         ///
@@ -502,13 +510,19 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
-        /// What a card shows for this relic, whichever grade it is. The split is the point
-        /// (DESIGN-RELICS "Presentation"): a legendary states the rule, a common states the
-        /// numbers, and the grade badge is what tells a player which of the two they are reading.
+        /// What a card shows for this relic. A legendary (stat-only) relic shows its numbers and
+        /// nothing else - there is no rule to state. A mythic relic shows its rule AND its numbers,
+        /// on two lines, because a mythic relic now genuinely has both halves and hiding either one
+        /// would misrepresent what the player is equipping. `Rule` alone, with no Stats, still
+        /// renders as just the rule - the second line only appears when there is something for it
+        /// to say.
         /// </summary>
         public string CardText()
         {
-            return Grade == RelicGrade.Common ? DescribeStats() : Rule;
+            if (Grade == RelicGrade.Legendary) return DescribeStats();
+
+            string stats = DescribeStats();
+            return string.IsNullOrEmpty(stats) ? Rule : Rule + "\n" + stats;
         }
 
         public static RelicDef FromJson(JsonValue j)
@@ -645,8 +659,17 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int RelicMaxTier = 1;
 
-        /// <summary>Relic Dust cost to purchase one relic from the shop.</summary>
+        /// <summary>Relic Dust cost to purchase one LEGENDARY-grade relic from the shop.</summary>
         public int RelicShopPrice = 80;
+
+        /// <summary>
+        /// Relic Dust cost to purchase one MYTHIC-grade relic from the shop. Deliberately steep and
+        /// deliberately Dust-only - no second currency track - so a mythic relic reads as a long
+        /// grinding goal rather than a purchase, per DESIGN-RELICS' Mythic pricing section. At
+        /// today's repeat-clear rates this is roughly 2-4 weeks of normal, single-stage daily
+        /// farming, not a five-minute buy. A first-pass placeholder like every other relic number.
+        /// </summary>
+        public int RelicMythicShopPrice = 2400;
 
         // summoning
         public int SummonCost = 120;
@@ -697,6 +720,7 @@ namespace Emberfall.Core.Data
             b.RelicDustPerStageIndex = j.GetInt("relicDustPerStageIndex", b.RelicDustPerStageIndex);
             b.RelicMaxTier = j.GetInt("relicMaxTier", b.RelicMaxTier);
             b.RelicShopPrice = j.GetInt("relicShopPrice", b.RelicShopPrice);
+            b.RelicMythicShopPrice = j.GetInt("relicMythicShopPrice", b.RelicMythicShopPrice);
             b.SummonCost = j.GetInt("summonCost", b.SummonCost);
             b.SummonWeight1 = j.GetFloat("summonWeight1", b.SummonWeight1);
             b.SummonWeight2 = j.GetFloat("summonWeight2", b.SummonWeight2);

@@ -191,14 +191,16 @@ namespace Emberfall.Core.Combat
                     if (_request.Content != null && !string.IsNullOrEmpty(hero.EquippedRelicId))
                         relic = _request.Content.GetRelic(hero.EquippedRelicId);
 
-                    // The two grades enter here at two deliberately different depths. A COMMON
-                    // relic is folded into the stat line and then forgotten - the simulation below
-                    // never learns it existed, and every damage number it touches is already
-                    // inside the numbers ApplyRelic returned. A LEGENDARY relic is carried onto the
-                    // unit instead, because its hook is read at a resolution point further in.
+                    // A relic's stat block, whichever grade carries one, is folded into the stat
+                    // line here and then forgotten - the simulation below never learns it existed,
+                    // and every damage number it touches is already inside the numbers ApplyRelic
+                    // returned. A MYTHIC relic is ALSO carried onto the unit, because its hook is
+                    // read at its own resolution point further in - the two entry points are not
+                    // mutually exclusive on a mythic relic the way they were before it could carry
+                    // both a hook and a stat block.
                     UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic);
                     CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
-                    if (relic != null && relic.Grade == RelicGrade.Legendary) unit.Relic = relic;
+                    if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
                     _units.Add(unit);
                 }
 

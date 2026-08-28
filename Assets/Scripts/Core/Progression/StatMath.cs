@@ -58,11 +58,11 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
-        /// A hero's stats with an equipped relic already folded in. THE entry point for the common
-        /// grade, and deliberately the only one: both CombatSimulation's setup and the hero detail
-        /// screen's preview call this, so the number a player reads on the card is by construction
-        /// the number the simulation fights with. A null relic, or a legendary one, returns exactly
-        /// what ForHero(def, level) returns.
+        /// A hero's stats with an equipped relic's stat bundle already folded in. THE entry point
+        /// for relic stat bonuses, and deliberately the only one: both CombatSimulation's setup and
+        /// the hero detail screen's preview call this, so the number a player reads on the card is
+        /// by construction the number the simulation fights with. A null relic, or one with an
+        /// empty Stats list, returns exactly what ForHero(def, level) returns.
         /// </summary>
         public static UnitStats ForHero(HeroDef def, int level, RelicDef relic)
         {
@@ -72,22 +72,21 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
-        /// Folds a common relic's stat bundle into an already-built UnitStats, in place. This one
-        /// function is the whole of the common grade: a common relic resolves entirely here and
-        /// never reaches CombatSimulation, so it cannot contest a hook with an aspect, with a
-        /// legendary relic, or with anything else - it never enters the effect pipeline at all.
-        ///
-        /// A legendary relic is a deliberate no-op rather than an error. Both grades share one
-        /// equipment slot, so this is called with whatever the hero is wearing and has to be safe
-        /// on either; a legendary relic's Stats list is empty by validation anyway, so the loop
-        /// below would do nothing even without the grade test. The test is here to say so.
+        /// Folds a relic's stat bundle into an already-built UnitStats, in place. Grade-agnostic on
+        /// purpose: a legendary (stat-only) relic's whole contribution runs through here and never
+        /// reaches CombatSimulation, but a mythic relic's stat block ALSO runs through here - only
+        /// its Hook is read separately, at its own resolution point inside the simulation. Both
+        /// grades share one equipment slot, so this has to be safe to call with whatever is
+        /// equipped; a relic with an empty Stats list (nothing shipped has one, but validation does
+        /// not force one to be non-empty on the mythic grade) is a no-op through the loop below with
+        /// no grade test needed to make it one.
         ///
         /// Rounding follows Build exactly rather than inventing its own rule: the four multiplied
         /// stats are the four Build rounds, and the four added ones are the four Build passes
         /// through raw. That is what keeps a relicced stat line the same SHAPE as an unrelicced one
         /// (whole HP, fractional crit chance) instead of showing a hero 4271.4 max HP.
         ///
-        /// NOT seed-safe, and nobody should write down that it is. Common relics change stat values
+        /// NOT seed-safe, and nobody should write down that it is. A stat bundle changes stat values
         /// rather than the number of RNG draws, with one real edge: DeterministicRng.Chance
         /// short-circuits at p &lt;= 0 and p &gt;= 1 WITHOUT drawing, so a relic that pushes a landing
         /// chance across either boundary adds or removes a draw. Marksman's Coil's Effect Hit is
@@ -96,7 +95,6 @@ namespace Emberfall.Core.Progression
         public static void ApplyRelic(UnitStats stats, RelicDef relic)
         {
             if (stats == null || relic == null) return;
-            if (relic.Grade != RelicGrade.Common) return;
 
             for (int i = 0; i < relic.Stats.Count; i++)
             {

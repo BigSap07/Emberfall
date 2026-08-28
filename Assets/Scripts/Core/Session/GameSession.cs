@@ -440,15 +440,30 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
-        /// Purchases a relic from the shop: deducts RelicShopPrice Relic Dust and adds it to the
-        /// collection unassigned. Returns false when the relic is unknown, already owned, or the
-        /// player cannot afford it — the caller should surface whichever message fits.
+        /// The Relic Dust cost to buy one relic from the shop, by its grade. The single source both
+        /// BuyRelic and the shop screen read, so a displayed price and a charged price cannot drift
+        /// apart. A legendary (stat-only) relic prices at RelicShopPrice, unchanged from before the
+        /// grade rename; a mythic relic prices at the much steeper RelicMythicShopPrice, per
+        /// DESIGN-RELICS' Mythic pricing section - deliberately a long grind, not a quick buy.
+        /// </summary>
+        public int RelicPrice(RelicDef relic)
+        {
+            if (relic == null) return Balance.RelicShopPrice;
+            return relic.Grade == RelicGrade.Mythic ? Balance.RelicMythicShopPrice : Balance.RelicShopPrice;
+        }
+
+        /// <summary>
+        /// Purchases a relic from the shop: deducts its grade's price in Relic Dust and adds it to
+        /// the collection unassigned. Returns false when the relic is unknown, already owned, or
+        /// the player cannot afford it — the caller should surface whichever message fits.
         /// </summary>
         public bool BuyRelic(string relicId)
         {
             if (string.IsNullOrEmpty(relicId)) return false;
             if (Profile.OwnsRelic(relicId)) return false;
-            int price = Balance.RelicShopPrice;
+            RelicDef relic = Content.GetRelic(relicId);
+            if (relic == null) return false;
+            int price = RelicPrice(relic);
             if (Profile.RelicDust < price) return false;
             if (!GrantRelic(relicId)) return false;
             Profile.RelicDust -= price;
