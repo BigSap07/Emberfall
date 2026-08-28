@@ -207,6 +207,32 @@ placeholder gets redrawn; until then it will read visibly flatter than the proce
 it, which now turn correctly because the rotation is geometric, not baked into art. Neither check
 exists yet.
 
+**A third loader arrived after this, for animated sprite-sheet clips - also outside the original
+three-part plan, following the same convention on purpose.** `SpriteAnimator`
+(`Assets/Scripts/Battle/SpriteAnimator.cs`) plays a per-unit set of clips - idle (looped), basic
+attack, skill, hit reaction, death - by writing the active frame's UV rect into the same billboard
+quad the static-sprite loader builds; `UnitRig.BuildSprite` takes the animated path only when a
+unit's `{spriteId}_idle` clip exists, so every unit without one takes the exact static-sprite path,
+unchanged. Two authored fields ride on the clip's own JSON sidecar rather than in `heroes.json`
+(animation timing, not gameplay data): `ImpactFraction` (where in the clip the strike connects,
+syncing the lunge and the Damage BattleEvent to that point instead of the clip's start or end) and
+`PlaybackSpeed` (a per-clip speed multiplier, since a raw 30fps export runs far slower than this
+game's attack pace). Two new `VisualDef` fields cover art the static-sprite loader's assumptions
+don't fit: `SpriteFootFraction` (empty margin below the feet, which `spriteBodyFraction` alone
+doesn't cover) and `SpriteMirror` (for art authored facing the opposite of what the rig's turn
+expects). Merged to `main` from `claude/kael-hero-animations-se66qk`. `[U]` - and actually
+Play-mode verified this time, on Kael, not left as the open question the static-sprite and
+background loaders above still are.
+
+Kael the Ashbound (`kael_the_ashbound`) shipped alongside this as the roster's **7th hero** and
+the pipeline's first real animated hero, not a placeholder - Ember aspect, 5 stars, Breaker role,
+`startingHero: false`. His kit is deliberately simplified to what `CombatSimulation` actually
+supports today: Heavy Cleave (single-target Damage, 110% power) and Breaking Point (`AllEnemies`
+Damage, 220% power, 100 energy). **Not built, and not scoped or sequenced as a task yet:** his full
+designed kit's Ruin stacking resource, the HP-conditional bonus on Heavy Cleave, Breaking Point's
+execute-below-25% bonus, both passives, and all three talents - none of that exists in code or
+content today, and none of it is assumed by anything above.
+
 ## Undecided, needs a human
 
 **Opening Gambit — explicitly cut.** A mandatory per-battle choice (one pre-battle decision,
