@@ -9,6 +9,11 @@ effect pipeline. No relic contains an attack percentage."* That standard is with
 decided 2026-08-26; see DESIGN-BUILD-ORDER, "Relics move to a two-tier model", for the argument.
 It is not withdrawn everywhere: it is still exactly the rule the legendary grade is held to.
 
+> **Status: built.** The grade split, both grades' content, and every mechanic below are shipped
+> and covered by `Tools/build-check.ps1`. This document describes what the code does, not what it
+> should do. Where something is *not* built, or where the code and this document disagree, it is
+> called out inline with a ⚠️ — there are three, and they are the only ones.
+
 ## The word is "grade", and it is not "tier" or "rarity"
 
 Both of the obvious words are already taken by something else in this project, and using either
@@ -20,8 +25,8 @@ here would silently overload it:
 | **rarity** | A **hero's** star rarity, the 1-to-5-star multiplier on base stats. | `StatMath.Build`'s `rarityMultiplier` parameter, `StarMultiplier`, DESIGN-COMBAT-STATS §1. |
 
 So: **grade**. Common grade, legendary grade. The content field is `grade`, the enum is
-`RelicGrade { Common, Legendary }`, and the display word on the hero card and in the shop is
-"Common" / "Legendary" with no noun after it. A relic therefore has both a grade and a tier, and
+`RelicGrade { Common, Legendary }`, and the display word on every relic card in the shop and the
+inventory is "Common" / "Legendary" with no noun after it. A relic therefore has both a grade and a tier, and
 they are orthogonal: a common relic can be upgraded from tier 1 to tier 2 exactly like a legendary
 one, and nothing about the grade changes how tiers work. Do not write "tier 2 relic" when you mean
 "legendary relic". Nothing in this document uses "tier" for anything but the upgrade level.
@@ -87,11 +92,16 @@ stacked Effect Hit cannot run away.
 
 ### Where a common relic actually applies
 
-`StatMath.ForHero(def, level)` returns a `UnitStats`, and `CombatSimulation` calls it once per hero
-at setup (`CombatSimulation.cs:176`). The natural entry point is a `StatMath.ApplyRelic(UnitStats,
-RelicDef)` called immediately after `Build`, so that **one** function is the whole of the common
-grade and the hero detail screen's stat preview (`HeroDetailScreen.cs:262`) gets the same answer the
-simulation does for free. `ForEnemy` does not take relics; enemies do not wear them.
+**Built.** `StatMath.ApplyRelic(UnitStats, RelicDef)` (`StatMath.cs:96`) folds the bundle into an
+already-built `UnitStats` in place, and `StatMath.ForHero(def, level, relic)` (`StatMath.cs:67`) is
+the overload that calls `Build` and then it. That one function is the whole of the common grade.
+Both readers go through it: `CombatSimulation` at setup (`CombatSimulation.cs:199`) and the hero
+detail screen's stat preview (`HeroDetailScreen.cs:270`), so the numbers on the card are by
+construction the numbers the simulation fights with. `ForEnemy` does not take a relic; enemies do
+not wear them, and that is stated as a signature rather than as a comment on a call site.
+
+A legendary relic passed to `ApplyRelic` is a deliberate no-op rather than an error, because the
+two grades share one equipment slot and the caller should not have to test the grade first.
 
 **Consequence to own: common relics move `PowerScore`, and legendary relics do not.** `PowerScore`
 reads MaxHp, Attack, Defense, Speed, CritChance and CritDamage, so six of the eight relics above
@@ -101,6 +111,13 @@ Ward contribute power only through their Max HP or Speed half. This lands on `re
 comparisons on the campaign card, and on `CheckStageWinnability`, which levels a team *to* a power
 budget — a relicced team reaches that budget at a lower level. Neither is a reason not to do it;
 both are reasons task 13's retune must happen after the common grade exists, not before.
+
+⚠️ **Known gap, and it is only half-true today.** `HeroInstance.Stats` and `HeroInstance.Power`
+(`PlayerProfile.cs`) do **not** apply the relic, because that property has no `ContentDatabase`
+handle to resolve `EquippedRelicId` against. So the hero detail screen shows the relicced line
+while team power totals, the hero-list sort and the roster cards all still show the unrelicced one.
+The two disagree today. Closing it means threading content into that property and updating its call
+sites; it is its own pass and is deliberately not folded into the grade split.
 
 ### Determinism
 
@@ -126,9 +143,11 @@ not written so its flavour text only makes sense on one, not balanced on the ass
 wearer is one. A relic is equipment a player chooses to put on a hero; an aspect is what a hero
 *is*, on every battle, whether or not anything is equipped. A legendary relic that reads as "the
 Ember one" is a second, optional, worse way to be Ember, and it makes both weaker. Pairing to a
-specific **hero** is a different axis and is not forbidden by this rule — the shipped relics carry
-a display-only `pairedHeroId` — but neither new relic below uses it, and the grade is better off
-without it.
+specific **hero** is a different axis and is not forbidden by this rule — `RelicDef` keeps a
+display-only `pairedHeroId` field for it — but **no shipped relic uses it any more.** The four that
+did were cut; neither surviving legendary carries one, and the common grade is forbidden one
+outright. The field is kept rather than removed because the axis is still legitimate, not because
+anything is waiting on it.
 
 **Hook contention: aspects win by default.** The four hooks contested between the two systems are
 settled and are not reopened — Tide owns the `AddEnergy` overflow redirect, Verdant owns the
@@ -149,13 +168,17 @@ the wearer bypass the target's Effect Resist entirely on the landing roll.
 **Mirrored Wound** — *"Every wound dealt to the wearer is a wound taken."* When the wearer is
 damaged, part of that damage returns to whoever dealt it.
 
-Neither is paired to a hero and neither is flavoured to an aspect. Both need a new `RelicHook`
-member; neither can reuse one of the three that exist.
+Neither is paired to a hero and neither is flavoured to an aspect. Both got a new `RelicHook`
+member — `BypassEffectResist` and `ReflectDamage` — and **those two are now the only members the
+enum has.** The three that existed when this was written (`Retarget`, `SplitWideDamage`,
+`WidenPassiveTrigger`) were the four cut relics' hooks and went with them, along with
+`ShapeByRelic`, the method that dispatched them. No relic reshapes an authored effect any more.
 
 ### Where each one hooks, verified against the code
 
 Both hook assumptions were checked against `CombatSimulation.cs` before this was written, and
-**both need correcting**. Neither correction sinks the relic; both change what has to be built.
+**both needed correcting**. Neither correction sank the relic; both changed what had to be built,
+and both are built as corrected.
 
 **The Unbroken Ledger — the gate is no longer `_rng.Chance(effect.Chance)`.** It was, when the
 original document listed `effect.Chance` as a modifiable. Effect Hit and Effect Resist have since
@@ -168,13 +191,13 @@ float landing = ResolveLandingChance(effect.Chance, effect.Status,
 if (!_rng.Chance(landing)) { ... }
 ```
 
-The gate is `_rng.Chance(landing)` at `CombatSimulation.cs:565`, and `landing` is built by
-`ResolveLandingChance` at `:59`. **It is unclaimed by any relic and by any aspect** — no
-`RelicHook` member touches it, `ShapeByRelic` does not reach it, and no aspect identity modifies a
-landing chance (Ember stacks a Burn *after* the roll succeeds, Umbra governs cleanse resistance,
-not landing). What claims it is the stat layer: Effect Hit, Effect Resist, and Control Immunity.
-The relic is therefore compatible, but it is not "hook the chance gate" — it is "pass this effect's
-landing through `ResolveLandingChance` with `targetEffectResist` forced to zero".
+The gate is `_rng.Chance(landing)` at `CombatSimulation.cs:573`, and `landing` is built by
+`ResolveLandingChance` at `:59`. **It was unclaimed by any relic and by any aspect** — no aspect
+identity modifies a landing chance (Ember stacks a Burn *after* the roll succeeds, Umbra governs
+cleanse resistance, not landing). What claims it is the stat layer: Effect Hit, Effect Resist, and
+Control Immunity. So the relic is not "hook the chance gate" — it is "pass this effect's landing
+through `ResolveLandingChance` with `targetEffectResist` forced to zero", and that is what
+`ApplyLedger` (`CombatSimulation.cs:1057`) does, called at `:551`.
 
 One decision this forces, stated rather than left ambiguous: **Control Immunity is not bypassed.**
 The relic says Effect Resist, and Control Immunity is a deliberately separate, narrower layer that
@@ -182,64 +205,101 @@ only ever touches Silence and Stun. A relic that erased both would make hard con
 by any defensive stat in the game, which is a much larger change than the one being asked for. If
 that is wanted, it should be argued on its own.
 
+**That decision is load-bearing on call order, not just on intent.** `ApplyLedger` runs *before*
+the Control Immunity subtraction, never after. Recomputing the landing chance after it would
+silently discard that subtraction too and quietly implement the larger change this section
+declines. The harness pins it in three arms rather than two, because two cannot tell a working
+Control Immunity apart from a Stun that never fired: 0 stuns land without the relic, 6 with it, and
+14 with the same relic against a target carrying no Control Immunity at all.
+
 And a determinism note specific to this relic: forcing Effect Resist to zero can push `landing` to
 exactly 1.0, and `Chance(p >= 1f)` returns true **without drawing**. This relic will remove draws
 from the stream, reliably, not incidentally.
 
 **Mirrored Wound — `PassiveTrigger.OnDamaged` is fired, but it is not unused.** It is dispatched at
-`CombatSimulation.cs:843`, immediately after the on-damaged energy grant. It already has one
+`CombatSimulation.cs:851`, immediately after the on-damaged energy grant. It already has one
 consumer in shipped content: `tideturned_passive` ("Backwash") on The Tideturned, in
-`enemies.json`. That is not a collision — a hero passive listening on a trigger and a relic hooking
-the same trigger are different things, and Verdict Sigil's `WidenPassiveTrigger` hook touches
-`AfterBasicAttack`, not this — but "unused" is wrong and the reflect must be built to coexist with
-Backwash rather than assume an empty trigger.
+`enemies.json`. That is not a collision — a hero passive listening on a trigger and a relic
+reflecting damage at the same dispatch point are different things — but "unused" is wrong, and the
+reflect is built to coexist with Backwash rather than to assume an empty trigger.
+`ApplyMirroredWound` (`CombatSimulation.cs:1090`) is called at `:860`, deliberately *after* the
+passive, so a passive that heals or shields its owner resolves before the reflect can kill the
+attacker out from under it — the passive behaves identically with and without the relic.
 
-Two things already in place that this relic needs, and neither has to be added: recursion is
-bounded by `MaxPassiveDepth` (2), so a reflect that damages an attacker and re-enters their own
-`OnDamaged` terminates; and `TriggerPassive` already takes the `depth` argument that bound is read
-from.
+The reflect goes through `DealRawDamage`, the single funnel for every point of damage in the game,
+rather than around it. A reflect that kills its attacker therefore fires their death, their
+killer's `OnKill` and Gale re-entry, exactly as any other killing blow does.
 
-The word "portion" in the relic's description is the one thing that is not yet a rule. **A
-legendary relic contains no number, so the reflected fraction lives in `balance.json`, not in the
-relic's text**, exactly as `emberBurnStackCap` and `galeExtraTurnsPerRound` do for aspects. The
-card says "part of that damage returns"; the constant says how much.
+⚠️ **One correction this document got wrong, and it matters.** The claim that recursion is already
+bounded by `MaxPassiveDepth` (2) is **false for this relic**. That bound is read inside
+`TriggerPassive`, and a reflect is not a passive — it never enters that method, so the depth
+argument never sees it. Two Mirrored Wound wearers facing each other would reflect into each other
+until the stack gave out. The relic carries its own guard, `_inReflect`, which bounds it to one
+hop; it is the same shape as the `_inRedirect` guard Tide uses one method over, and for the same
+reason. Unlike Tide's, it is not latent — two wearers on opposite sides is an ordinary thing for a
+player to build toward, and the harness runs that fight.
 
-## What was removed from this document, and what survives
+**A legendary relic contains no number, so the reflected fraction lives in `balance.json`, not in
+the relic's text**, exactly as `emberBurnStackCap` and `galeExtraTurnsPerRound` do for aspects. The
+card says "part of that damage returns"; the constant, `mirroredWoundReflectFraction`, says how
+much. It is named for the relic rather than for the grade, so a second reflecting relic gets its
+own constant instead of silently inheriting this one's tuning. It ships at 0.25, which is a
+placeholder like every other number in this pass.
 
-Removed, per the two-grade decision:
+## What was removed, and what the roster is now
 
-- **Tidewrought Metronome** and **Green Hour Vessel** — already cut before this rewrite, by
+**All six relics that predate the two-grade model are cut. None of them is provisional, and none is
+coming back.** This is settled — signed off by Matthias — and is not an open question for a later
+pass to revisit. The cuts landed in `relics.json` alongside the grade split itself, so the design
+and the content agree rather than the document describing an intention.
+
+- **Tidewrought Metronome** and **Green Hour Vessel** — cut before this rewrite, by
   DESIGN-HOOK-RESOLUTION §§2–3, because Tide and Verdant own the two overflow discards they were
   built on. Their entries are gone rather than carried as tombstones; DESIGN-HOOK-RESOLUTION is
   where that reasoning lives.
-- **Splitting Prism** and **Warden's Debt** — both are shipped code (`relics.json`, `RelicHook`
-  `SplitWideDamage` and `Retarget`), and both are removed from this document's specification. Their
-  write-ups were arguments about the hook conflict, and that conflict is resolved.
+- **Splitting Prism** and **Warden's Debt** — **cut for good.** Both were shipped code, and both
+  are now removed from `relics.json` as well as from this specification. Their write-ups were
+  arguments about the hook conflict; that conflict is resolved, and the relics that existed to
+  carry the argument went with it. Splitting Prism's invented cost (roll the status once, on the
+  first target only) and Warden's Debt's `ExcludeSelf` clamp were both real and both worked — the
+  harness proved each on shipped content — and neither is a reason to keep a relic the two-grade
+  model has no place for.
+- **Stormlance Oath** and **Verdict Sigil** — **cut as well.** An earlier draft of this section
+  carried them under a flagged assumption that they survived at legendary grade, on the argument
+  that removing them would leave live content with no design record. That assumption asked to be
+  resolved explicitly if the intent was to cut them, and it was: they are cut, in the same pass,
+  and the concern it raised is answered by the cut being total rather than partial. No live content
+  is left undocumented, because no live content refers to them.
 
-⚠️ **Assumption, flagged rather than silently applied.** The two shipped relics *not* named for
-removal — **Stormlance Oath** (`Retarget`, `LowestHpEnemy` → `HighestHpEnemy`) and **Verdict
-Sigil** (`WidenPassiveTrigger`) — are treated here as **surviving, at legendary grade**. Both meet
-the legendary bar already: each changes a rule, each states itself in one sentence with no number,
-and neither is flavoured to an aspect. Removing them from the design while they run in shipped code
-would leave live content with no design record, which is worse than carrying them. If the intent
-was to cut them too, that is a content change as well as a document change, and it should be made
-explicitly.
+Their three hooks went with them. `RelicHook.Retarget`, `RelicHook.SplitWideDamage` and
+`RelicHook.WidenPassiveTrigger`, the `ShapeByRelic` dispatch that read them, its call site in
+`ResolveAbility`, and the `RelicDef` parameter fields that fed it (`FromTarget`, `ToTarget`,
+`FilterKind`, `ExcludeSelf`, `FromTrigger`) are all removed. Nothing could reach them once the
+relics were gone, and the codebase does not carry unreachable machinery on the chance a future
+relic wants it — git has all of it if one ever does.
 
-That leaves the removals as a **document** change and the relic **content** as: four shipped relics
-today, two of which (Splitting Prism, Warden's Debt) are now unspecified here and are candidates
-for removal from `relics.json` in the implementation pass, two of which (Stormlance Oath, Verdict
-Sigil) are legendary-grade and stay.
+**The roster is therefore ten relics: the eight common ones above, and two legendary ones — The
+Unbroken Ledger and Mirrored Wound.** The harness asserts the count, the split (8 and 2), each
+relic's presence at its stated grade, and the absence of all six cut ids by name, so re-adding one
+fails loudly instead of silently.
 
 ## Equipping
 
-**One slot, per hero, on the hero detail screen**, beside the level and banner-slot rows. Unchanged
-by the grade split, and the reason is unchanged: a team-wide relic is an aura, an aura is a global
-multiplier, and per-hero is what makes the pairing legible.
+**One slot, per hero.** Unchanged by the grade split, and the reason is unchanged: a team-wide
+relic is an aura, an aura is a global multiplier, and per-hero is what makes the pairing legible.
 
 The one slot is **shared** between the grades — a hero wears one relic, common or legendary, not
 one of each. A second slot reserved for a common relic would make the common grade mandatory rather
 than chosen, and would turn "which relic" into "which two relics", which is a different design.
 `relicSlotsPerHero` stays at 1.
+
+⚠️ **Where assignment actually happens is not what this section used to say.** It said "on the hero
+detail screen, beside the level and banner-slot rows". It is not there and never was: assignment
+lives in `InventoryScreen`, which lists every owned relic and opens an in-screen hero picker per
+relic, and `HeroDetailScreen` carries no relic UI at all. That divergence predates the grade split
+and the split did not change it. Recorded as the state of things rather than quietly corrected in
+either direction — moving the affordance onto the hero card is a defensible piece of work, but it
+is a UI change nobody has argued for yet, and the doc should not imply it already happened.
 
 ## Entering the simulation
 
@@ -249,11 +309,15 @@ There are now **two** entry points, one per grade, and they are deliberately far
 `ApplyRelic` folds the bundle in, and `CombatSimulation` receives a hero whose numbers already
 include the relic. The simulation never learns a common relic exists.
 
-**Legendary** resolves inside the simulation, as it already does. `BattleRequest.Team` is a
-`List<HeroInstance>`; `HeroInstance` carries `RelicId`; `Sim` resolves it to a `RelicDef` on the
-`CombatUnit` during setup, and the hooks are read at the existing resolution points. No new state,
-no clock, no ambient lookup — a relic is data on the request, exactly like a hero's level.
-`Run(request)` remains a pure function of `(content, team, stage, seed)`.
+**Legendary** resolves inside the simulation, as it already did. `BattleRequest.Team` is a
+`List<HeroInstance>`; `HeroInstance` carries `EquippedRelicId`; `Sim` resolves it to a `RelicDef`
+during setup and carries it on the `CombatUnit`, and the hooks are read at their own resolution
+points. No new state, no clock, no ambient lookup — a relic is data on the request, exactly like a
+hero's level. `Run(request)` remains a pure function of `(content, team, stage, seed)`.
+
+`BuildUnits` is where the two paths visibly separate: a common relic is folded into the stat line
+and then dropped, and only a legendary one is attached to the unit. The simulation cannot see a
+common relic even if it wanted to, because nothing holds a reference to it past setup.
 
 The honest caveat is unchanged and now applies to both grades: relics change how many RNG draws a
 battle consumes, so the same seed with a different relic is a different battle. Determinism is
@@ -269,7 +333,7 @@ the relic alters an effect in a fight, not on every tick. A common relic has not
 its contribution is already inside every damage number on screen, and a banner saying "+14% Attack"
 fires once and tells the player nothing they can act on.
 
-Statically, the hero detail card states each grade in its own language, and the split is the point:
+Statically, a relic card states its grade in its own language, and the split is the point:
 
 - A **legendary** card states the rule, in rule language — *"What this hero inflicts cannot be
   shrugged off"* — and never a number. The old test still applies to this grade unchanged: if it
@@ -277,43 +341,59 @@ Statically, the hero detail card states each grade in its own language, and the 
 - A **common** card states the numbers, plainly — *"+14% Attack, +10% Speed"*. There is no rule to
   state, and writing one would be dressing up a stat bundle as something it is not.
 
-The card should show the grade, because it is what tells a player which of those two things they
-are reading.
+The card shows the grade, because it is what tells a player which of those two things they are
+reading. Both the relic shop and the inventory carry a grade badge on every card — gold for
+legendary, muted for common, and deliberately never an aspect colour, since a legendary relic is
+never flavoured to an aspect and the badge is the one place a player actually looks.
 
-## New fields
+Which of the two texts a card shows is decided by `RelicDef.CardText()`, not by either screen. A
+common relic's line is *built* from its stat block by `DescribeStats()` rather than authored, so
+there is no second, hand-written description of the same relic to drift out of step — and
+`ContentDatabase` warns if a common relic authors `rule` text that nothing will ever read.
 
-**Content** — `Assets/Resources/Content/relics.json` gains `grade` on every entry
-(`"Common"` / `"Legendary"`), and `RelicDef` gains `RelicGrade Grade`. Common entries carry a stat
-block — the shape wants deciding in the implementation pass, but a flat list of
-`{ stat, mode, value }` where `mode` is `Multiply` or `Add` is enough to express all eight relics
-above and keeps the two arithmetic rules explicit in the data instead of implied by the stat name.
-Legendary entries keep the existing `hook` plus its per-hook `params` block, and gain two new
-`RelicHook` members for the two relics above. No change to `heroes.json` or `enemies.json`.
+## Fields, as built
 
-**Save** — no new field and **no save version bump**. `HeroInstance.RelicId` already exists and
-already holds any relic id; `ownedRelics` in the profile already holds `{ relicId, tier }`. Grade is
-a property of the definition, not of the save, so it is looked up from `relics.json` and never
-written down. `SaveSerializer.CurrentVersion` stays at 5.
+**Content** — every entry in `Assets/Resources/Content/relics.json` carries `grade`
+(`"Common"` / `"Legendary"`), and `RelicDef` carries `RelicGrade Grade`. Common entries carry a
+`stats` array of `{ stat, mode, value }` where `mode` is `Multiply` or `Add`, which expresses all
+eight relics above and keeps the two arithmetic rules explicit in the data instead of implied by
+the stat name. Legendary entries carry `hook` and no stat block. The per-hook `params` block an
+earlier draft expected is **gone**, not kept: it existed for the three cut hooks' arguments, and
+neither surviving hook takes a parameter. No change to `heroes.json` or `enemies.json`.
 
-**Stale code comments this rewrite does not touch.** Two places in the code still assert the
-withdrawn standard as a constraint, and will read as contradicting this document until the
-implementation pass reaches them: the `RelicHook` doc comment in `Enums.cs` ("a relic changes a
-RULE, never a number, so there is deliberately no 'add N%' member here"), and the `_comment` at the
-top of `relics.json` ("Every 'rule' below is one sentence with no number in it, which is the test
-DESIGN-RELICS sets"). Both are correct about the legendary grade and wrong as a blanket rule.
-Flagged, not edited — this is a document change.
+**The grades are mutually exclusive, and it is enforced at load rather than by review.**
+`ContentDatabase` drops a legendary relic that carries any stat block, a legendary with no hook, a
+common that declares a hook, and a common with an empty stat block. This is what replaces the
+guarantee `RelicDef` used to get from its own shape. The founding standard was previously enforced
+structurally — there was no `Power`, `Magnitude`, `Multiplier` or `Bonus` field anywhere on the
+class, so a relic that wanted to be "+15% attack" had nowhere to put the 15. Numbers now live on a
+separate `RelicStatBonus`, and a legendary relic's stat block is required to be empty, so the 15
+still has nowhere to go. **The guarantee moved mechanism; it did not weaken.**
+
+**Save** — no new field and **no save version bump**. `HeroInstance.EquippedRelicId` already exists
+and already holds any relic id; `ownedRelics` in the profile already holds `{ relicId, tier }`.
+Grade is a property of the definition, not of the save, so it is looked up from `relics.json` and
+never written down. `SaveSerializer.CurrentVersion` stays at 5, as designed.
 
 **Balance** — `relicSlotsPerHero` stays 1. `relicMaxTier` is unchanged and still means upgrade
-level. Mirrored Wound's reflected fraction needs a new constant; name it for the relic, not for the
-grade. Nothing else.
+level. `mirroredWoundReflectFraction` is the one new constant, named for the relic rather than for
+the grade. Nothing else.
+
+**The two stale code comments an earlier draft flagged are fixed.** Both asserted the withdrawn
+blanket standard as a constraint: the `RelicHook` doc comment in `Enums.cs` and the `_comment` at
+the top of `relics.json`. Each now scopes that standard to the legendary grade, which is where it
+still holds in full. Nothing in the code now contradicts this document.
 
 ## This is a starting set
 
-Both lists above are first drafts. Eight common relics and two legendary ones are enough to build
-the grade split against and not enough to ship a game on: the common grade is justified by being
-numerous and the legendary grade by being rare, and neither of those is true at these counts yet.
-The numbers are unbalanced by admission, not by oversight — task 13's retune is the only pass that
-produces real values, and it has to run after this lands, not before.
+Both lists above are first drafts, and shipping them did not make them final. Eight common relics
+and two legendary ones are enough to build the grade split against and not enough to ship a game
+on: the common grade is justified by being numerous and the legendary grade by being rare, and
+neither of those is true at these counts yet. The numbers are unbalanced by admission, not by
+oversight — task 13's retune is the only pass that produces real values, and it now has what it
+was waiting for, since the grade split has landed.
 
-Two things that are **not** provisional and should not be re-opened casually: the grade split
-itself, and aspects owning the four contested hooks. Everything else here is a first pass.
+Three things that are **not** provisional and should not be re-opened casually: the grade split
+itself, aspects owning the four contested hooks, and the six cut relics staying cut. Everything
+else here — the counts, all sixteen common numbers, the reflect fraction, and which relics exist —
+is a first pass and is expected to move.
