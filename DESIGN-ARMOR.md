@@ -122,9 +122,18 @@ One piece per slot per hero. Six pieces, six slots, no stacking, no second Weapo
 Temper does not change *which* stats can roll, only how many. A Rough Weapon and a Radiant Weapon
 both grant Attack; the Radiant one grants more of it and brings three more lines.
 
-Temper is fixed at the moment the piece drops and never improves. There is no upgrade path in this
-pass - a better piece is a better drop, not a fed one. That is a deliberate scope cut, not an
-oversight: an upgrade track would need its own currency sink, and the Anvil already is one.
+Temper is fixed at the moment a piece **exists** and never changes on that piece afterward - that
+was true at launch and is still true. What changed in the Forge Tiers revision (see section 7) is
+where a piece with a higher Temper comes from: it is never fed into an existing one, only produced
+fresh by consuming three others. No piece is ever "upgraded in place" - there is still no version
+of this system where a specific piece gets stronger over time, only ways to end up owning a
+stronger one.
+
+**Rough and Honed are the only rungs a stage clear can drop.** Gilded and Radiant are reachable by
+nothing but combining three matching pieces one rung down - see section 7. This is not merely the
+weight `armor.json` happens to author for those two rungs; `ArmorInfo.MaxDropTemper` is a code
+constant `RollTemper` filters against before it even reads the drop table, so a future content edit
+that gave Radiant a nonzero drop weight still could not make it drop.
 
 ---
 
@@ -185,38 +194,67 @@ the wheel argue with itself.
 
 ## 7. The Anvil
 
-The reroll sink. **Not the Forge** - `DESIGN-BUILD-ORDER` task 6 is "Collect vs Forge", the
-idle-income mechanic, and one word cannot name both.
+The reroll-and-forge sink. **Not the Forge** - `DESIGN-BUILD-ORDER` task 6 is "Collect vs Forge",
+the idle-income mechanic, and one word cannot name both.
 
 **Currency: Slag.** New, not Shards, not Gold, not Relic Dust. A separate purse on `PlayerProfile`,
 a separate save key, and no shared code path with Relic Dust - `SpendRelicDust` stays the choke
 point for Dust and only for Dust, so the `RelicDustSpent` event activity keeps meaning exactly what
 it means today.
 
-Two operations, both on the inventory screen:
+Three operations, all on the inventory screen:
 
 - **Salvage.** Destroys a piece and pays Slag scaled by its Temper. This is where unwanted pieces
   go instead of accumulating. A piece equipped on a hero cannot be salvaged; unequip first.
 - **Reroll.** Spends Slag and rerolls **every substat on a piece**, keeping its slot, primary,
   aspect and temper. All-or-nothing: there is no per-line lock, because a lock turns a sink into a
   ratchet and the sink is the point.
+- **Combine.** Takes **three** pieces sharing a slot and a Temper, destroys all three, and produces
+  **one new piece** in that slot, one Temper rung higher, with its own uid and freshly rolled
+  substats. Not a mutation of any of the three inputs and not a stat graft off the strongest one -
+  `ArmorRoller.Roll` builds the output exactly as it would build a drop, including a freshly rolled
+  Aspect independent of what the three inputs carried, since "same slot, same Temper" is the entire
+  input constraint and the three need not agree on Aspect at all.
+
+  Works at **every** rung boundary, not only the top: three Rough Weapons combine into one Honed
+  Weapon exactly as three Gilded combine into one Radiant, even though Honed also drops naturally.
+  Cannot skip a rung - the output is always `ArmorInfo.NextTemper` of the shared input Temper, and
+  there is no parameter through which a caller could ask for anything else. Radiant cannot combine
+  further; there is no rung above it.
+
+  Refuses an equipped input, the same rule Salvage enforces and for the same reason: Combine is
+  destructive, and an accidental one that also stripped a hero's slot would be two mistakes deep
+  before the player noticed. Reroll allows an equipped piece because reroll is not destructive;
+  Combine follows Salvage's rule instead of Reroll's.
 
 Costs are per temper, in `armor.json`. Salvage pays less than reroll costs at every rung, so the
-loop consumes pieces rather than printing Slag.
+loop consumes pieces rather than printing Slag. Combine's price is keyed by the rung it **produces**
+- combining three Gilded pieces costs Radiant's `combineSlag`, not Gilded's - and climbs the same
+direction `rerollSlag` already does. Same per-temper field pattern as Salvage and Reroll; this did
+not invent a new pricing curve.
 
-Slag has exactly one use. When a second use appears it will need an argument, not just a price.
+Slag now has two uses. A third will need its own argument, not just a price.
 
 ---
 
 ## 8. Where a piece comes from
 
-Stage clears. A clear that pays its full purse also rolls one armor piece; a clear past the daily
-repeat cap rolls nothing, exactly as it pays no Gold and no Relic Dust. Reusing the existing capped
-branch rather than adding a source is what keeps armor from handing the uncapped farming loop back
-in a new denomination.
+**Rough and Honed only, from stage clears.** A clear that pays its full purse also rolls one armor
+piece, capped at those two rungs; a clear past the daily repeat cap rolls nothing, exactly as it
+pays no Gold and no Relic Dust. Reusing the existing capped branch rather than adding a source is
+what keeps armor from handing the uncapped farming loop back in a new denomination.
 
-Temper is weighted by `stage.GlobalIndex`, so deep stages skew toward Gilded and Radiant without
-ever guaranteeing them. Aspect and substats are uniform-random within the content weights.
+**Gilded and Radiant never drop. They exist only through the Anvil's Combine action** (section 7):
+three same-slot, same-Temper pieces one rung down, consumed to produce one fresh piece a rung up.
+Three Honed Weapons make one Gilded Weapon; three Gilded Weapons make one Radiant Weapon. There is
+no other source for either rung, and the ceiling is enforced in code
+(`ArmorInfo.MaxDropTemper`, read by `ArmorRoller.RollTemper` before it even looks at
+`armor.json`'s drop weights) rather than left to a content author remembering to keep those two
+rungs' `dropWeight` at zero.
+
+Within the Rough/Honed ceiling, Temper is weighted by `stage.GlobalIndex`, so deep stages skew
+toward Honed without ever guaranteeing it and without ever reaching past it. Aspect and substats
+are uniform-random within the content weights.
 
 Armor never drops from summons, and the Deep Recital is deliberately left alone in this pass.
 
@@ -308,10 +346,16 @@ hero-picker overlay for assign and unassign. Armor extends it rather than gettin
 - **Slag** becomes a third row in RESOURCES. The card was written so that a third resource is one
   entry; this is that entry.
 - An **ARMOR** section lists owned pieces. Each row: name, slot, aspect chip, temper chip, its stat
-  lines, and its holder. Buttons: EQUIP (opens the existing hero picker), SALVAGE, and ANVIL
-  (reroll).
-- The picker overlay is reused unchanged in shape - it is already written against "pick a hero for
-  this item".
+  lines, and its holder. Buttons: EQUIP (opens the existing hero picker), COMBINE, ANVIL (reroll),
+  and SALVAGE.
+- **COMBINE** needs no picker of its own. Tapping it on a piece finds up to two other unequipped
+  pieces sharing that piece's slot and Temper (`PlayerProfile.ArmorCombineCandidates`, walked in
+  acquisition order) and combines all three in one call; the button is disabled whenever fewer than
+  two exist, whenever the piece is already Radiant, or whenever Slag falls short of the price -
+  same "disabled rather than a tap that fails after the fact" rule EQUIP, ANVIL and SALVAGE already
+  follow. Its border is tinted with the OUTPUT Temper's colour, previewing what rarity a tap forges.
+- The hero picker overlay (for EQUIP) is reused unchanged in shape - it is already written against
+  "pick a hero for this item".
 
 `HeroDetailScreen` gains a read-only armor block: the six slots, what is in each, and the current
 attunement count.
@@ -324,8 +368,10 @@ No new art. A piece is a name, two chips and a stat list, exactly as a relic is.
 
 - No unique effects, no hooks, no pipeline entry. Enforced by `ArmorStatRoll` having nowhere to put
   one.
-- No upgrade or enhancement track. Temper is fixed at drop.
-- No substat locking. See section 7.
+- No per-piece feeding or levelling. A specific piece never gets stronger over its own lifetime -
+  Combine (section 7) consumes three pieces and produces a distinct fourth, it does not enhance any
+  of the three that went in.
+- No substat locking, on Reroll or on Combine. See section 7.
 - No relic changes. `RelicStat`, `RelicDef`, `OwnedRelic`, `ApplyRelic` and the relic save keys are
   untouched.
 - No art dependency, no hero-model rendering, no sprite work.
