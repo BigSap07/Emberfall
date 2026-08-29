@@ -678,6 +678,13 @@ conversion, summon weights.
    Blocked by: 4, reversed order leaves a stuck player no grind path. Blocks: 6.
 
 6. **Collect vs Forge.** `[H+U]`
+   ⚠️ **Superseded, not built.** This was an idle-income discount mechanic - "Forge" here meant
+   collecting idle Gold/Shards at a reduced instant rate versus waiting for the full amount. It
+   never got built, and nothing downstream ever ended up blocked on it in practice. The word
+   itself has since been reclaimed: task 16's Armor system named its reroll-and-forge Anvil sink
+   "The Forge" once this task's own use of the word was confirmed dead, and DESIGN-ARMOR.md
+   documents that screen now. If an idle-income discount mechanic is ever built, it needs a
+   different name - "Forge" belongs to the armor screen from here on.
    Blocked by: 4 and 5, the discount is only tunable once income is capped. Blocks: nothing hard.
 
 7. **Effect Hit / Effect Resist, phase A.** Add both stats at zero default, wire the existing
@@ -964,6 +971,115 @@ someone has already started.
     Blocked by: nothing remaining - summoning (task 3) and the relic shop (task 12a/12b) already
     exist for the two starter events to hook. Blocks: nothing, including task 13: the two systems
     are independent, and Events does not need the retune to have happened first.
+
+15. **The Deep Recital.** Not part of the original numbered plan - new system work on the same
+    footing as task 14, an endless PvE mode that gives a player with a full campaign clear
+    something to keep doing. `[H+U]`
+
+    **Done. Merged to `main`** (`adf4038`, "feat(recital): The Deep Recital - endless floor ladder,
+    aspect cycling, Echoes"; a follow-up fix `40a0439` corrected a capture-tooling double-spend and
+    is verification-only, no gameplay change). `DESIGN-DEEP-RECITAL.md` is the spec.
+
+    A persistent, one-way floor ladder - never resets, only climbs. `RecitalGenerator.
+    AspectForFloor` cycles the six Aspects every `AspectCycleLength` (6) floors
+    (`RecitalGenerator.cs:33`); `LevelForFloor` derives enemy level from `BalanceConfig`'s Recital
+    curve. Attempts are gated by Echoes, a capped-and-regenerating resource
+    (`PlayerProfile.RecitalEchoesBanked` / `RecitalEchoesClockUnix`), spent by
+    `GameSession.TryStartRecitalAttempt` and only ever actually deducted from
+    `BattleScreen.OnShow` - `RecitalScreen.OnFight` only peeks affordability, so a Rematch and a
+    first attempt both spend exactly one Echo, never two.
+
+    **Save version 6 to 7**, additive (`SaveSerializer.cs:66`): `RecitalCurrentFloor`,
+    `RecitalHighestFloor`, `RecitalEchoesBanked`, `RecitalEchoesClockUnix`. The Echo bank is the one
+    field here that does not default to the bare-field zero on upgrade - it defaults to
+    `BalanceConfig.RecitalEchoesMax`, so a player updating into this version can attempt a floor
+    immediately rather than staring at a multi-hour recharge for a resource their save never had an
+    opinion on.
+
+    Milestones (`recitalMilestoneInterval`, `recitalDeepMilestoneInterval` in `balance.json`) pay
+    Relic Dust on ordinary floors and can grant an unowned relic outright on deep ones, falling back
+    to Dust once nothing is left to grant. `RecitalScreen` is the new screen (`ScreenId.Recital`),
+    reachable from `MainMenuScreen`'s second nav row.
+
+    **DevHarness DEEP RECITAL section**, ~44 checks, all `[ok]`: aspect cycling, difficulty
+    escalation, Echo spend/regen including a backwards-clock-immunity check (the same discipline
+    the daily repeat cap already proves), save round-trip, and every Aspect having at least one
+    enemy template to draw from.
+
+    Blocked by: nothing remaining - the full campaign (task 13) gives a player a reason to want an
+    endless mode once it's cleared, but Recital does not require the retune to exist first. Blocks:
+    nothing hard.
+
+16. **Armor.** Not part of the original numbered plan - new system work commissioned after an audit
+    found six `UnitDef` stats (Skill Damage, Block, Armor Break, Control Immunity, Damage
+    Reduction, Holy Damage) live in `CombatSimulation` and harness-tested, but reachable by no
+    relic and no other player-facing system. `[H+U]`
+
+    **Done. Merged to `main`** across four commits: `5f980b0` (`DESIGN-ARMOR.md`, the audit and the
+    design), `861221e` (engine: `ArmorSlot`/`ArmorTemper`/`ArmorStat`, `ArmorRoller`,
+    `StatMath.ApplyArmor`, save v8), `8d53624` (UI: the Inventory screen's armor section and the
+    hero-detail six-slot block), `ce392ab` (Editor verification tooling and its save-isolation
+    discipline).
+
+    Six equip slots per hero (`ArmorSlot`: Weapon, Helm, Plate, Boots, AccessoryA, AccessoryB), each
+    guaranteeing its own primary stat. A rarity ladder, Temper (`ArmorTemper`: Rough/Honed/Gilded/
+    Radiant - see task 17, since that ladder's top two rungs changed how they're reached shortly
+    after this task shipped), gates how many random substats roll alongside the primary, drawn from
+    the full fourteen-stat pool `CombatSimulation` actually reads - the six otherwise-unreachable
+    stats included, which is this system's whole reason to exist. No unique effects, no pipeline
+    hooks: `ArmorStatRoll` has three fields (stat, mode, value) and nowhere to put one.
+
+    Resolves entirely in `StatMath.ApplyArmor`, `ApplyRelic`'s sibling, before the simulation
+    starts - `CombatSimulation.cs` itself was not touched. An Attunement set bonus
+    (`ArmorConfig.AttunementsFor`) counts equipped pieces whose own Aspect matches the wearer's,
+    cumulative at 2 and 4 pieces.
+
+    **Save version 7 to 8**, additive (`SaveSerializer.cs:76`): `slag` (a new purse, no shared code
+    path with Relic Dust), `ownedArmor` (pieces store their resolved rolls, not a seed - a
+    `armor.json` retune must never silently reroll what a player already owns), `equippedArmor` per
+    hero, positional against `ArmorInfo.AllSlots`.
+
+    **DevHarness ARMOR section**, ~69 checks, all `[ok]`, including the one that matters most for
+    every OTHER fingerprint in this harness: an unarmored profile resolves a battle byte-identically
+    to no profile at all, proven because armor genuinely CAN move a seeded battle (Block adds an
+    RNG draw the moment it's non-zero) - so what has to be proven is that its absence is exact, not
+    that it never does anything.
+
+    Blocked by: nothing - relics (task 12a/12b) exist as the sibling equipment system this reuses
+    the `StatMath` mechanism from, but Armor does not modify or depend on relic code. Blocks: 17.
+
+17. **Forge Tiers.** A same-day follow-up to task 16, after playing the shipped system surfaced two
+    decisions: Temper's top two rungs were reachable by plain RNG, and there was no sink that
+    produced a stronger piece rather than just rerolling or destroying one. `[H+U]`
+
+    **Done. Merged to `main`** across five commits: `83e08ca` (`DESIGN-ARMOR.md` sections 4/7/8/12
+    updated), `1cb635f` (engine: the drop ceiling and `GameSession.CombineArmor`), `aaf2f12` (UI:
+    the COMBINE button), `d223b4c` (harness), `4ce82a4` (Editor verification: a real forge-chain
+    demo, plus a fix for a stale-scratch-save false alarm the first verification run surfaced).
+
+    `ArmorInfo.MaxDropTemper` (Honed) is a **code constant** `ArmorRoller.RollTemper` filters
+    against before it reads `armor.json`'s drop weights at all - not merely today's shipped content
+    happening to zero out Gilded and Radiant. A harness check proves this the hard way: it hands
+    those two rungs a hostile `dropWeight` of 100000 each and confirms the ceiling still holds.
+    Gilded and Radiant are reachable only through `GameSession.CombineArmor`: three same-slot,
+    same-Temper pieces consumed, one fresh piece (new uid, freshly rolled substats and Aspect) one
+    rung up produced. Cannot skip a rung by construction - the output is always
+    `ArmorInfo.NextTemper` of the shared input Temper, and there is no parameter to ask for
+    anything else. Priced by `ArmorTemperDef.CombineSlag`, keyed by the OUTPUT temper, the same
+    per-temper field pattern Salvage and Reroll already use.
+
+    No save version bump - this landed inside version 8, adding a field (`ArmorTemperDef.
+    CombineSlag`) and a code-level ceiling, not a new save shape.
+
+    **DevHarness ARMOR - FORGE TIERS section**, ~24 checks, all `[ok]`: the structural drop-ceiling
+    proof above, Combine consuming exactly three matching inputs (with every refusal path proven to
+    leave the profile untouched), the ladder walked one rung at a time from Rough to Radiant across
+    three successive real combines, and the Slag pricing pattern.
+
+    Blocked by: 16, this extends Armor's own Temper ladder rather than standing alone. Blocks:
+    nothing hard - the Forge screen (a UI-only relocation of Reroll/Salvage/Combine off the
+    Inventory screen's per-row buttons into their own hub, reclaiming the word "Forge" - see task 6
+    above) is a separate pass, not tracked as its own numbered task here.
 
 ## Task 13's instrument was broken, and what was done about it
 
