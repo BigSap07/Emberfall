@@ -74,12 +74,16 @@ obvious word is taken: `RelicGrade` owns *Legendary* and *Mythic* and the word *
 `OwnedRelic.Tier` owns *tier*, and `HeroDef.Stars` owns hero rarity - it is an `int`, not an enum,
 which is why hero rarity has no member to collide with. *Common* is free but is the pre-rename
 label of what is now `RelicGrade.Legendary`, so reusing it points at a word that moved. Temper is
-new, is metallurgical, and pairs with the Anvil.
+new, is metallurgical, and pairs with the Forge.
 
-One near-collision, noted and left alone: `Tools/DevHarness/Program.cs` has a synthetic test hero
-with id `test_anvil` and name `Anvil` in an inline JSON fixture. It is harness-local, never loaded
-from `Assets/Resources/Content`, and never player-visible. Renaming it would touch a fixture that
-several checks read; naming the reroll sink around it would be worse.
+**The reroll/salvage/combine sink is called the Forge**, not the Anvil. It shipped under the name
+Anvil for its first two passes, deliberately avoiding a real collision: `DESIGN-BUILD-ORDER` task 6
+was "Collect vs Forge," an idle-income discount mechanic, and one word cannot name both an
+unrelated economy lever and this system. Task 6 was never built and, once confirmed dead, was
+marked superseded rather than left to keep squatting on the word - see `DESIGN-BUILD-ORDER.md`'s
+task 6 entry. With that collision retired, the sink was renamed to what it always more naturally
+was: a Forge, with its own screen (section 11), and Anvil retired everywhere - code comments, UI
+text, and this document.
 
 ---
 
@@ -192,17 +196,21 @@ the wheel argue with itself.
 
 ---
 
-## 7. The Anvil
+## 7. The Forge
 
-The reroll-and-forge sink. **Not the Forge** - `DESIGN-BUILD-ORDER` task 6 is "Collect vs Forge",
-the idle-income mechanic, and one word cannot name both.
+The reroll/salvage/combine sink, and its own screen (section 11) - `ScreenId.Forge`, reachable from
+the main menu. Named the Forge now that the word is free: `DESIGN-BUILD-ORDER` task 6, "Collect vs
+Forge," was the idle-income mechanic that once reserved it, never got built, and is marked
+superseded rather than left squatting on a word nothing used. This system shipped its first two
+passes as "the Anvil" specifically to avoid that collision while it was still live; see section 2's
+note on the rename.
 
 **Currency: Slag.** New, not Shards, not Gold, not Relic Dust. A separate purse on `PlayerProfile`,
 a separate save key, and no shared code path with Relic Dust - `SpendRelicDust` stays the choke
 point for Dust and only for Dust, so the `RelicDustSpent` event activity keeps meaning exactly what
 it means today.
 
-Three operations, all on the inventory screen:
+Three operations, all on the Forge screen:
 
 - **Salvage.** Destroys a piece and pays Slag scaled by its Temper. This is where unwanted pieces
   go instead of accumulating. A piece equipped on a hero cannot be salvaged; unequip first.
@@ -244,7 +252,7 @@ piece, capped at those two rungs; a clear past the daily repeat cap rolls nothin
 pays no Gold and no Relic Dust. Reusing the existing capped branch rather than adding a source is
 what keeps armor from handing the uncapped farming loop back in a new denomination.
 
-**Gilded and Radiant never drop. They exist only through the Anvil's Combine action** (section 7):
+**Gilded and Radiant never drop. They exist only through the Forge's Combine action** (section 7):
 three same-slot, same-Temper pieces one rung down, consumed to produce one fresh piece a rung up.
 Three Honed Weapons make one Gilded Weapon; three Gilded Weapons make one Radiant Weapon. There is
 no other source for either rung, and the ceiling is enforced in code
@@ -340,27 +348,40 @@ the wrong slot for its own kind is unequipped. None of the three is reachable th
 
 ## 11. UI
 
-`InventoryScreen` already holds a data-driven RESOURCES card and an OWNED RELICS list with a
-hero-picker overlay for assign and unassign. Armor extends it rather than getting its own screen:
+Split across three screens by what kind of decision each action is, not bundled onto one.
 
-- **Slag** becomes a third row in RESOURCES. The card was written so that a third resource is one
-  entry; this is that entry.
-- An **ARMOR** section lists owned pieces. Each row: name, slot, aspect chip, temper chip, its stat
-  lines, and its holder. Buttons: EQUIP (opens the existing hero picker), COMBINE, ANVIL (reroll),
-  and SALVAGE.
-- **COMBINE** needs no picker of its own. Tapping it on a piece finds up to two other unequipped
-  pieces sharing that piece's slot and Temper (`PlayerProfile.ArmorCombineCandidates`, walked in
-  acquisition order) and combines all three in one call; the button is disabled whenever fewer than
-  two exist, whenever the piece is already Radiant, or whenever Slag falls short of the price -
-  same "disabled rather than a tap that fails after the fact" rule EQUIP, ANVIL and SALVAGE already
-  follow. Its border is tinted with the OUTPUT Temper's colour, previewing what rarity a tap forges.
-- The hero picker overlay (for EQUIP) is reused unchanged in shape - it is already written against
-  "pick a hero for this item".
+**`InventoryScreen`** stays the place a player looks at what they own. It holds a data-driven
+RESOURCES card (Gold, Relic Dust, and now Slag - the card was written so a third resource is one
+entry) and an OWNED ARMOR list, one row per piece: name, slot, aspect chip, temper chip, its stat
+lines, its holder, and a single **EQUIP** button opening the existing hero picker overlay (shared,
+unchanged in shape, with OWNED RELICS' assign/unassign - it was already written against "pick a
+hero for this item"). Equip is a per-hero decision, made in the presence of the hero it affects, so
+it stays here rather than moving to the Forge.
 
-`HeroDetailScreen` gains a read-only armor block: the six slots, what is in each, and the current
-attunement count.
+**`ScreenId.Forge`**, its own screen, same shape `RelicShopScreen` and `RecitalScreen` already
+establish - `ScreenChrome.Header`, a resource banner, a scrollable list beneath - reachable from
+`MainMenuScreen`'s nav. Reroll, Salvage and Combine all move here: none of the three needs a hero
+in context, they are bulk decisions over the whole owned-armor pool, and cramming them onto
+per-hero rows in the Inventory screen (which is what the first two passes of this system did) put
+Combine's real precondition - three pieces sharing a slot AND a Temper - in front of a player one
+row at a time, with no way to see the rest of the pool while deciding.
 
-No new art. A piece is a name, two chips and a stat list, exactly as a relic is.
+The Forge's list is grouped by slot (`ArmorInfo.AllSlots`, all six sections always shown, same
+"a slot with nothing in it is information, not absence" rule `HeroDetailScreen`'s six-slot block
+already follows), and within a slot, sorted by Temper - the two facts Combine's own precondition
+turns on, so three matching pieces sit visibly next to each other rather than needing to be found
+by eye across an unsorted list. Each row keeps its temper/aspect chips and stat lines from the
+original design, drops EQUIP, and carries **REROLL**, **COMBINE** and **SALVAGE** - COMBINE
+finds its own two partners the same way it always has
+(`PlayerProfile.ArmorCombineCandidates`, acquisition order), needing no picker; all three follow
+the same "disabled rather than a tap that fails after the fact" rule the Inventory screen's
+buttons already established, and COMBINE's border is still tinted with the OUTPUT Temper's colour.
+
+`HeroDetailScreen` keeps its read-only armor block: the six slots, what is in each, and the current
+attunement count. It was already read-only before this split - equipping happens on the Inventory
+screen's picker, never here - so nothing about it changed.
+
+No new art anywhere. A piece is a name, two chips and a stat list, exactly as a relic is.
 
 ---
 
