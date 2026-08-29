@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
@@ -33,6 +34,14 @@ namespace Emberfall.UI.Screens
         private Text _hpDelta, _atkDelta, _defDelta, _spdDelta;
 
         private RectTransform _abilityHost;
+
+        // The armor block: six fixed slot rows plus one attunement line. Read-only by design -
+        // equipping happens in one place (InventoryScreen), and a second equip path would mean two
+        // screens that could disagree about what is worn.
+        private RectTransform _armorCard;
+        private Text[] _armorSlotLabels;
+        private Text[] _armorSlotValues;
+        private Text _attunementLabel;
         private UIButton _levelUpButton;
         private UIButton _levelUpTenButton;
         private UIButton _obtainButton;
@@ -70,6 +79,7 @@ namespace Emberfall.UI.Screens
 
             BuildIdentityCard(content);
             BuildStatsCard(content);
+            BuildArmorCard(content);
             _abilityHost = content;
 
             BuildActionBar();
@@ -123,6 +133,103 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Flexible(button.Root, 1f, 0f);
                 button.OnClick(delegate { Deploy(slot); });
                 _slotButtons[i] = button;
+            }
+        }
+
+        /// <summary>
+        /// The six armor slots and the wearer's attunement count. Built once with fixed rows -
+        /// there are always exactly ArmorInfo.AllSlots.Length of them, empty or not, because a slot
+        /// a hero has not filled is information rather than absence, and a list that only showed
+        /// what was worn would hide the six-slot shape from a player who owns two pieces.
+        /// </summary>
+        private void BuildArmorCard(RectTransform parent)
+        {
+            int slots = ArmorInfo.AllSlots.Length;
+            _armorCard = UIBuilder.Node("Armor", parent);
+            UIBuilder.Sized(_armorCard, 0f, 62f + slots * 44f + 44f);
+
+            Image background = _armorCard.gameObject.AddComponent<Image>();
+            background.sprite = TextureLab.RoundedRect(22);
+            background.type = Image.Type.Sliced;
+            background.color = UITheme.Panel;
+            UIBuilder.Frame("Edge", _armorCard, UITheme.BorderSoft, 22, 2);
+
+            Text heading = UIBuilder.Label("Heading", _armorCard, "ARMOR",
+                                           UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            UIBuilder.Box(heading.rectTransform, 26f, -20f, 300f, 26f, new Vector2(0f, 1f));
+
+            _armorSlotLabels = new Text[slots];
+            _armorSlotValues = new Text[slots];
+            for (int i = 0; i < slots; i++)
+            {
+                float y = -58f - i * 44f;
+
+                _armorSlotLabels[i] = UIBuilder.Label("SlotName" + i, _armorCard,
+                                                      ArmorInfo.SlotLabel(ArmorInfo.AllSlots[i]),
+                                                      UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleLeft);
+                UIBuilder.Box(_armorSlotLabels[i].rectTransform, 26f, y, 300f, 40f, new Vector2(0f, 1f));
+
+                _armorSlotValues[i] = UIBuilder.Label("SlotValue" + i, _armorCard, "",
+                                                      UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleRight);
+                _armorSlotValues[i].rectTransform.anchorMin = new Vector2(0f, 1f);
+                _armorSlotValues[i].rectTransform.anchorMax = new Vector2(1f, 1f);
+                _armorSlotValues[i].rectTransform.pivot = new Vector2(0.5f, 1f);
+                _armorSlotValues[i].rectTransform.offsetMin = new Vector2(330f, y - 20f);
+                _armorSlotValues[i].rectTransform.offsetMax = new Vector2(-26f, y + 20f);
+            }
+
+            _attunementLabel = UIBuilder.WrappedLabel("Attunement", _armorCard, "",
+                                                      UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            _attunementLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
+            _attunementLabel.rectTransform.anchorMax = new Vector2(1f, 0f);
+            _attunementLabel.rectTransform.pivot = new Vector2(0.5f, 0f);
+            _attunementLabel.rectTransform.offsetMin = new Vector2(26f, 12f);
+            _attunementLabel.rectTransform.offsetMax = new Vector2(-26f, 46f);
+        }
+
+        /// <summary>
+        /// Fills the armor block for the current hero. `resolved` is the stat line armor is already
+        /// folded into - passed in rather than recomputed so this cannot show a total the card above
+        /// it disagrees with.
+        /// </summary>
+        private void RefreshArmorBlock(GameSession session, UnitStats resolved)
+        {
+            PlayerProfile profile = session.Profile;
+
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+            {
+                ArmorPiece piece = profile.ArmorInSlot(_hero, ArmorInfo.AllSlots[i]);
+                if (piece == null)
+                {
+                    _armorSlotValues[i].text = "empty";
+                    _armorSlotValues[i].color = UITheme.TextDim;
+                    continue;
+                }
+                _armorSlotValues[i].text = piece.Name + "   <color=#6C6382>" + ArmorInfo.TemperLabel(piece.Temper) + "</color>";
+                // Tinted by the piece's aspect, so the rows a player is counting toward an
+                // attunement are the ones that visually group.
+                _armorSlotValues[i].color = piece.Aspect == _hero.Def.Aspect
+                                          ? UITheme.AspectColor(piece.Aspect)
+                                          : UITheme.TextMuted;
+            }
+
+            int matching = profile.AttunementCount(_hero);
+            string aspectName = AspectChart.DisplayName(_hero.Def.Aspect);
+            List<ArmorAttunementDef> met = session.Content.Armor.AttunementsFor(_hero.Def.Aspect, matching);
+
+            if (met.Count == 0)
+            {
+                _attunementLabel.text = "Attunement  " + matching + "/6 " + aspectName
+                                      + "  -  2 matching pieces unlocks the first bonus.";
+                _attunementLabel.color = UITheme.TextDim;
+            }
+            else
+            {
+                string names = "";
+                for (int i = 0; i < met.Count; i++)
+                    names += (names.Length > 0 ? ", " : "") + met[i].Name + " (" + met[i].Pieces + ")";
+                _attunementLabel.text = "Attunement  " + matching + "/6 " + aspectName + "  -  " + names;
+                _attunementLabel.color = UITheme.AspectColor(_hero.Def.Aspect);
             }
         }
 
@@ -218,8 +325,10 @@ namespace Emberfall.UI.Screens
             AddChip(UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), 190f);
             AddChip(AspectChart.DisplayName(def.Aspect), UITheme.AspectColor(def.Aspect), 170f);
 
-            // ability cards live after the two fixed cards, so clear anything past index 1
-            for (int i = _abilityHost.childCount - 1; i >= 2; i--) Destroy(_abilityHost.GetChild(i).gameObject);
+            // ability cards live after the three fixed cards (identity, stats, armor), so clear
+            // anything past index 2. This index tracks BuildArmorCard's position in Build() - it
+            // was 2 when there were two fixed cards, and it must move with them.
+            for (int i = _abilityHost.childCount - 1; i >= 3; i--) Destroy(_abilityHost.GetChild(i).gameObject);
 
             if (def.BasicAttack != null)
                 Widgets.AbilityCard("Basic", _abilityHost, "BASIC ATTACK", def.BasicAttack.Name,
@@ -236,6 +345,7 @@ namespace Emberfall.UI.Screens
             _headerSubtitle.text = def.Lore;
 
             _statsCard.gameObject.SetActive(!locked);
+            _armorCard.gameObject.SetActive(!locked);
             _slotHint.gameObject.SetActive(!locked);
             _slotRow.gameObject.SetActive(!locked);
             _levelUpButton.Root.gameObject.SetActive(!locked);
@@ -267,10 +377,19 @@ namespace Emberfall.UI.Screens
             RelicDef relic = string.IsNullOrEmpty(_hero.EquippedRelicId)
                            ? null : session.Content.GetRelic(_hero.EquippedRelicId);
 
-            UnitStats now = StatMath.ForHero(def, _hero.Level, relic);
+            // Armor is folded into the preview for exactly the reason the relic above it is: a
+            // card showing the unarmored line would be showing a stat block the simulation does not
+            // use. Both calls take it, so the per-level deltas stay honest - they compare like with
+            // like rather than reading as a piece's bonus arriving on the next level up.
+            List<ArmorPiece> armor = session.Profile.EquippedArmorOf(_hero);
+            ArmorConfig armorConfig = session.Content.Armor;
+
+            UnitStats now = StatMath.ForHero(def, _hero.Level, relic, armor, armorConfig);
             int cap = session.HeroLevelCap;
             bool atCap = _hero.Level >= cap;
-            UnitStats next = atCap ? now : StatMath.ForHero(def, _hero.Level + 1, relic);
+            UnitStats next = atCap ? now : StatMath.ForHero(def, _hero.Level + 1, relic, armor, armorConfig);
+
+            RefreshArmorBlock(session, now);
 
             _levelLabel.text = "LEVEL " + _hero.Level + "<color=#6C6382> / " + cap + "</color>";
             _powerLabel.text = "POWER " + now.Power;

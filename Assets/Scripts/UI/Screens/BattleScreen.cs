@@ -1302,6 +1302,11 @@ namespace Emberfall.UI.Screens
                 if (rewards.PlayerLevelsGained > 0)
                     AddRewardRow("RANK UP", "+" + rewards.PlayerLevelsGained + "  (hero cap " + App.Session.HeroLevelCap + ")", UITheme.Success);
                 if (rewards.UnlockedNextStage) AddRewardRow("NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
+                // Named by its temper rather than just "ARMOR", because the temper is the only part
+                // of the drop a player can judge before opening the inventory.
+                if (rewards.ArmorDrop != null)
+                    AddRewardRow(ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper) + " " + ArmorInfo.SlotLabel(rewards.ArmorDrop.Slot).ToUpperInvariant(),
+                                 rewards.ArmorDrop.Name, UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
                 App.Audio.Victory();
             }
             else

@@ -237,6 +237,28 @@ namespace Emberfall.UI
             return grade == RelicGrade.Mythic ? "MYTHIC" : "LEGENDARY";
         }
 
+        /// <summary>
+        /// Colour for an armor piece's Temper rung. A four-step ramp from muted to bright, so the
+        /// ladder reads as a ladder at a glance in a list of pieces - which is the one thing a
+        /// player scanning an inventory needs from it.
+        ///
+        /// Deliberately shares no colour with RelicGradeColor. Gold means "legendary relic" and
+        /// Mythic means "mythic relic" everywhere else in the UI, and a Radiant armor piece is
+        /// neither - reusing either would say the two ladders were one ladder, which is exactly the
+        /// confusion the Temper naming exists to avoid.
+        /// </summary>
+        public static Color ArmorTemperColor(ArmorTemper temper)
+        {
+            switch (temper)
+            {
+                case ArmorTemper.Rough: return TextDim;
+                case ArmorTemper.Honed: return Hex("8FB3C9");
+                case ArmorTemper.Gilded: return Hex("6FD0A8");
+                case ArmorTemper.Radiant: return Hex("FF9E4A");
+            }
+            return TextMuted;
+        }
+
         public static Color AspectColor(Aspect aspect)
         {
             switch (aspect)
