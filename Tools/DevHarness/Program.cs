@@ -5285,6 +5285,7 @@ namespace Emberfall.DevHarness
             CheckArmorReachesTheSimulation(db);
             CheckArmorAttunement(db);
             CheckArmorAnvil(db);
+            CheckArmorForgeTiers(db);
             CheckArmorSaveRoundTrip(db);
             CheckArmorDoesNotTouchRelics(db);
             Line("");
@@ -5881,23 +5882,28 @@ namespace Emberfall.DevHarness
             Check(slotMin > 0 && slotMax * 3 <= total * 1,
                   "and across all six slots with none dominating - " + slotSpread);
 
-            // Temper is SUPPOSED to be lopsided - Rough is common and Radiant is rare, and the
-            // stage-depth slope tilts it further. All this asserts is that every rung is reachable
-            // and that the ladder still runs the right way round at the population level.
+            // Temper is SUPPOSED to be lopsided within the drop ceiling - Rough is common and Honed
+            // is rarer, and the stage-depth slope tilts it further. Gilded and Radiant are the
+            // Forge Tiers revision: they are supposed to be UNREACHABLE here, full stop - drops cap
+            // at ArmorInfo.MaxDropTemper and exist only through GameSession.CombineArmor. This is
+            // the population-level echo of CheckArmorDropCeiling's structural proof; that check is
+            // the one that matters, this one is what a very large sample of real play would show.
             int rough = byTemper.ContainsKey(ArmorTemper.Rough) ? byTemper[ArmorTemper.Rough] : 0;
+            int honed = byTemper.ContainsKey(ArmorTemper.Honed) ? byTemper[ArmorTemper.Honed] : 0;
+            int gilded = byTemper.ContainsKey(ArmorTemper.Gilded) ? byTemper[ArmorTemper.Gilded] : 0;
             int radiant = byTemper.ContainsKey(ArmorTemper.Radiant) ? byTemper[ArmorTemper.Radiant] : 0;
             string temperSpread = "";
             Array tempers = Enum.GetValues(typeof(ArmorTemper));
-            bool everyRungReachable = true;
             for (int i = 0; i < tempers.Length; i++)
             {
                 ArmorTemper t = (ArmorTemper)tempers.GetValue(i);
                 int n = byTemper.ContainsKey(t) ? byTemper[t] : 0;
-                if (n == 0) everyRungReachable = false;
                 temperSpread += (temperSpread.Length > 0 ? " " : "") + t + ":" + (100 * n / total) + "%";
             }
-            Check(everyRungReachable, "every temper rung is reachable from real drops - " + temperSpread);
-            Check(rough > radiant, "and Rough outnumbers Radiant, so the ladder is a ladder (" + rough + " vs " + radiant + ")");
+            Check(rough > 0 && honed > 0, "both drop-reachable rungs, Rough and Honed, actually appear - " + temperSpread);
+            Check(gilded == 0 && radiant == 0,
+                  "and Gilded and Radiant never do - they are combine-only under the Forge Tiers revision (" + temperSpread + ")");
+            Check(rough > honed, "and Rough outnumbers Honed, so the ladder still runs the right way round (" + rough + " vs " + honed + ")");
 
             CheckArmorDropsDoNotCluster(db);
         }
@@ -5981,6 +5987,298 @@ namespace Emberfall.DevHarness
                   + clustered + " of " + measured + " sessions had " + ClusterThreshold + "+ of "
                   + DropsPerSession + " share an aspect"
                   + (firstExample.Length > 0 ? " (e.g. " + firstExample + ")" : ""));
+        }
+
+        /// <summary>
+        /// The Forge Tiers revision: a hard drop ceiling at ArmorInfo.MaxDropTemper, and the
+        /// Anvil's third operation, Combine, as the only way past it. Four things asked of this
+        /// pass, each its own check below: the drop table can never yield Gilded or Radiant;
+        /// Combine always consumes exactly three same-slot, same-temper inputs; Combine cannot
+        /// skip a tier; and its Slag cost follows the same per-temper pricing pattern SalvageValue
+        /// and RerollCost already use.
+        /// </summary>
+        private static void CheckArmorForgeTiers(ContentDatabase db)
+        {
+            Line("ARMOR - FORGE TIERS");
+            CheckArmorDropCeiling(db);
+            CheckCombineConsumesExactlyThreeMatchingInputs(db);
+            CheckCombineCannotSkipATier(db);
+            CheckCombineSlagPricing(db);
+            Line("");
+        }
+
+        /// <summary>
+        /// Two proofs, not one. The first sweeps RollTemper against the SHIPPED config, across
+        /// every stage in the campaign and many seeds, and asserts every result is Rough or Honed -
+        /// what a player actually experiences. The second is the one that matters more: it
+        /// hand-mutates the real config's Gilded and Radiant entries to an enormous dropWeight
+        /// (proving the ceiling is not merely "the shipped content happens to zero them out"),
+        /// sweeps again, and asserts the ceiling still holds - then restores the config, verified,
+        /// before returning, so no later check in this file sees the mutated version. If only the
+        /// first proof existed, a future content edit that gave Radiant a nonzero dropWeight would
+        /// silently start dropping it and nothing here would ever notice.
+        /// </summary>
+        private static void CheckArmorDropCeiling(ContentDatabase db)
+        {
+            bool everyDropAtOrBelowCeiling = true;
+            int sampled = 0;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                for (int seed = 1; seed <= 30; seed++)
+                {
+                    ArmorTemper t = ArmorRoller.RollTemper(db.Armor, stage.GlobalIndex, seed * 92821 + s);
+                    sampled++;
+                    if ((int)t > (int)ArmorInfo.MaxDropTemper) everyDropAtOrBelowCeiling = false;
+                }
+            }
+            Check(everyDropAtOrBelowCeiling, "across " + sampled + " rolls spanning every campaign stage, "
+                + "RollTemper never returns above " + ArmorInfo.MaxDropTemper + " against the shipped config");
+
+            ArmorTemperDef gilded = db.Armor.GetTemper(ArmorTemper.Gilded);
+            ArmorTemperDef radiant = db.Armor.GetTemper(ArmorTemper.Radiant);
+            Check(gilded != null && radiant != null, "the shipped config defines both Gilded and Radiant temper entries");
+            if (gilded == null || radiant == null) return;
+
+            int gildedWeightBefore = gilded.DropWeight;
+            float gildedSlopeBefore = gilded.DropWeightPerStageIndex;
+            int radiantWeightBefore = radiant.DropWeight;
+            float radiantSlopeBefore = radiant.DropWeightPerStageIndex;
+
+            gilded.DropWeight = 100000;
+            gilded.DropWeightPerStageIndex = 0f;
+            radiant.DropWeight = 100000;
+            radiant.DropWeightPerStageIndex = 0f;
+
+            bool ceilingHoldsAgainstHostileContent = true;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                for (int seed = 1; seed <= 30; seed++)
+                {
+                    ArmorTemper t = ArmorRoller.RollTemper(db.Armor, stage.GlobalIndex, seed * 55117 + s);
+                    if ((int)t > (int)ArmorInfo.MaxDropTemper) ceilingHoldsAgainstHostileContent = false;
+                }
+            }
+
+            gilded.DropWeight = gildedWeightBefore;
+            gilded.DropWeightPerStageIndex = gildedSlopeBefore;
+            radiant.DropWeight = radiantWeightBefore;
+            radiant.DropWeightPerStageIndex = radiantSlopeBefore;
+
+            Check(ceilingHoldsAgainstHostileContent,
+                  "and still holds even with Gilded and Radiant given a hostile dropWeight of 100000 each - "
+                + "the ceiling is enforced in ArmorRoller.RollTemper itself, not by the shipped content's zeroes");
+
+            Check(db.Armor.GetTemper(ArmorTemper.Gilded).DropWeight == gildedWeightBefore
+               && db.Armor.GetTemper(ArmorTemper.Radiant).DropWeight == radiantWeightBefore,
+                  "and the shipped config is restored after the probe, unmutated for every check that runs after this one");
+        }
+
+        /// <summary>
+        /// Structural refusals, each proven to leave the profile completely untouched - no piece
+        /// removed, no Slag spent - because a combine that fails should look, to the player, exactly
+        /// like nothing happened. Then the success case: three real pieces vanish and exactly one
+        /// new one appears, with its own uid and freshly rolled substats.
+        /// </summary>
+        private static void CheckCombineConsumesExactlyThreeMatchingInputs(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            profile.Slag = 100000;
+
+            ArmorPiece a = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Rough, Aspect.Ember, 11);
+            ArmorPiece b = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Rough, Aspect.Tide, 22);
+            ArmorPiece c = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Rough, Aspect.Gale, 33);
+            a.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(a);
+            b.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(b);
+            c.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(c);
+
+            // Mismatched slot: same temper, different slot.
+            ArmorPiece wrongSlot = ArmorRoller.Roll(db.Armor, ArmorSlot.Helm, ArmorTemper.Rough, Aspect.Ember, 44);
+            wrongSlot.Uid = profile.AllocateArmorUid();
+            profile.OwnedArmor.Add(wrongSlot);
+            int countBefore = profile.OwnedArmor.Count;
+            long slagBefore = profile.Slag;
+            Check(!session.CombineArmor(a.Uid, b.Uid, wrongSlot.Uid, Noon), "combine refuses three pieces that do not share a slot");
+            Check(profile.OwnedArmor.Count == countBefore && profile.Slag == slagBefore,
+                  "and removes nothing and charges nothing on that refusal");
+            profile.OwnedArmor.Remove(wrongSlot);
+
+            // Mismatched temper: same slot, one piece a rung higher.
+            ArmorPiece wrongTemper = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Honed, Aspect.Ember, 55);
+            wrongTemper.Uid = profile.AllocateArmorUid();
+            profile.OwnedArmor.Add(wrongTemper);
+            countBefore = profile.OwnedArmor.Count;
+            Check(!session.CombineArmor(a.Uid, b.Uid, wrongTemper.Uid, Noon), "combine refuses three pieces that do not share a temper");
+            Check(profile.OwnedArmor.Count == countBefore && profile.Slag == slagBefore,
+                  "and removes nothing and charges nothing on that refusal either");
+            profile.OwnedArmor.Remove(wrongTemper);
+            // Refreshed after the removal above - reusing the stale value here would compare
+            // against a count that no longer includes wrongTemper, and fail for a reason that has
+            // nothing to do with what this next check is actually testing.
+            countBefore = profile.OwnedArmor.Count;
+
+            // The same uid repeated is not three distinct inputs.
+            Check(!session.CombineArmor(a.Uid, a.Uid, b.Uid, Noon), "combine refuses a repeated uid - three DISTINCT pieces are required");
+            Check(profile.OwnedArmor.Count == countBefore, "and removes nothing on that refusal");
+
+            // An equipped input refuses the whole combine - the same rule Salvage enforces, and for
+            // the same reason: combine is destructive.
+            HeroInstance wearer = profile.Heroes[0];
+            session.EquipArmor(wearer, a.Uid);
+            Check(!session.CombineArmor(a.Uid, b.Uid, c.Uid, Noon), "combine refuses when one of the three inputs is equipped");
+            Check(profile.OwnedArmor.Count == countBefore, "and removes nothing while an input is worn");
+            session.UnequipArmor(wearer, ArmorSlot.Weapon);
+
+            // The real combine: three matching Rough Weapons in, one Honed Weapon out.
+            int cost = session.CombineCost(ArmorTemper.Honed);
+            profile.Slag = cost;
+            int ownedBeforeReal = profile.OwnedArmor.Count;
+            Check(session.CombineArmor(a.Uid, b.Uid, c.Uid, Noon), "combine accepts three matching Rough Weapons");
+            Check(profile.OwnedArmor.Count == ownedBeforeReal - 2,
+                  "and the owned count drops by exactly two - three pieces removed, one produced ("
+                + profile.OwnedArmor.Count + " vs " + ownedBeforeReal + ")");
+            Check(profile.FindArmor(a.Uid) == null && profile.FindArmor(b.Uid) == null && profile.FindArmor(c.Uid) == null,
+                  "and none of the three original uids exist any more");
+            Check(profile.Slag == 0, "and the full combine cost was charged (" + cost + ")");
+
+            ArmorPiece produced = null;
+            for (int i = 0; i < profile.OwnedArmor.Count; i++)
+                if (profile.OwnedArmor[i].Slot == ArmorSlot.Weapon && profile.OwnedArmor[i].Temper == ArmorTemper.Honed)
+                    produced = profile.OwnedArmor[i];
+            Check(produced != null, "and a Honed Weapon exists in its place");
+            if (produced == null) return;
+            Check(produced.Uid != a.Uid && produced.Uid != b.Uid && produced.Uid != c.Uid,
+                  "with a uid distinct from all three inputs - a genuinely new piece, not a relabelled one");
+            Check(produced.SubStats.Count == ArmorInfo.SubStatCount(ArmorTemper.Honed),
+                  "and its substats are freshly rolled to Honed's own count (" + produced.SubStats.Count
+                + "), not copied from any input");
+        }
+
+        /// <summary>
+        /// "Cannot skip a tier" is enforced by construction in CombineArmor - the output is always
+        /// ArmorInfo.NextTemper of the shared input temper, and there is no parameter through which
+        /// a caller could ask for anything else. Proven here two ways: walking the whole ladder one
+        /// rung at a time (Rough -> Honed -> Gilded -> Radiant, three successive combines, each
+        /// checked to land on exactly the next rung and no further), and confirming Radiant itself
+        /// refuses to combine at all, since there is no rung above the top.
+        /// </summary>
+        private static void CheckCombineCannotSkipATier(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            profile.Slag = 1000000;
+
+            ArmorTemper current = ArmorTemper.Rough;
+            List<ArmorTemper> reached = new List<ArmorTemper>();
+            reached.Add(current);
+
+            bool everyStepLandedOneRungUp = true;
+            for (int rung = 0; rung < 3; rung++)
+            {
+                List<string> uids = new List<string>();
+                for (int i = 0; i < 3; i++)
+                {
+                    ArmorPiece p = ArmorRoller.Roll(db.Armor, ArmorSlot.Boots, current, Aspect.Umbra, 1000 + rung * 10 + i);
+                    p.Uid = profile.AllocateArmorUid();
+                    profile.OwnedArmor.Add(p);
+                    uids.Add(p.Uid);
+                }
+
+                ArmorTemper? expectedNext = ArmorInfo.NextTemper(current);
+                if (!expectedNext.HasValue) { everyStepLandedOneRungUp = false; break; }
+
+                bool combined = session.CombineArmor(uids[0], uids[1], uids[2], Noon + rung);
+                if (!combined) { everyStepLandedOneRungUp = false; break; }
+
+                ArmorPiece produced = null;
+                for (int i = 0; i < profile.OwnedArmor.Count; i++)
+                {
+                    ArmorPiece candidate = profile.OwnedArmor[i];
+                    if (candidate.Slot != ArmorSlot.Boots || candidate.Temper != expectedNext.Value) continue;
+                    if (uids.Contains(candidate.Uid)) continue;
+                    produced = candidate;
+                }
+                if (produced == null) { everyStepLandedOneRungUp = false; break; }
+
+                current = expectedNext.Value;
+                reached.Add(current);
+            }
+
+            string[] path = new string[reached.Count];
+            for (int i = 0; i < reached.Count; i++) path[i] = reached[i].ToString();
+            Check(everyStepLandedOneRungUp && reached.Count == 4
+               && reached[0] == ArmorTemper.Rough && reached[1] == ArmorTemper.Honed
+               && reached[2] == ArmorTemper.Gilded && reached[3] == ArmorTemper.Radiant,
+                  "three successive combines walk the whole ladder one rung at a time: "
+                + string.Join(" -> ", path));
+
+            // Radiant is the top: nothing combines further. Combined with CheckArmorDropCeiling
+            // proving RollArmorDrop can never produce Radiant either, this is genuinely the ONLY
+            // way a Radiant piece can come to exist, and it cannot go any higher than that.
+            List<string> radiantUids = new List<string>();
+            for (int i = 0; i < 3; i++)
+            {
+                ArmorPiece p = ArmorRoller.Roll(db.Armor, ArmorSlot.Boots, ArmorTemper.Radiant, Aspect.Umbra, 2000 + i);
+                p.Uid = profile.AllocateArmorUid();
+                profile.OwnedArmor.Add(p);
+                radiantUids.Add(p.Uid);
+            }
+            int countBeforeTopAttempt = profile.OwnedArmor.Count;
+            Check(!session.CombineArmor(radiantUids[0], radiantUids[1], radiantUids[2], Noon + 999),
+                  "combining three Radiant pieces is refused - there is no rung above the top of the ladder");
+            Check(profile.OwnedArmor.Count == countBeforeTopAttempt, "and nothing is consumed by that refusal");
+        }
+
+        /// <summary>
+        /// The Slag cost follows the exact pattern DESIGN-ARMOR's Anvil already established for
+        /// Salvage and Reroll: one number per temper in armor.json, read through a single
+        /// GameSession method that is also what actually charges it, so a shown price and a paid
+        /// one cannot drift. Checked: CombineCost reads exactly what ArmorTemperDef.CombineSlag
+        /// carries for the OUTPUT temper; a combine one Slag short of the price is refused and
+        /// changes nothing; one at exactly the price succeeds and charges exactly that much; and
+        /// the shipped curve climbs the same direction rerollSlag already does.
+        /// </summary>
+        private static void CheckCombineSlagPricing(ContentDatabase db)
+        {
+            ArmorTemperDef honed = db.Armor.GetTemper(ArmorTemper.Honed);
+            ArmorTemperDef gilded = db.Armor.GetTemper(ArmorTemper.Gilded);
+            ArmorTemperDef radiant = db.Armor.GetTemper(ArmorTemper.Radiant);
+            Check(honed != null && gilded != null && radiant != null, "Honed, Gilded and Radiant all have temper entries");
+            if (honed == null || gilded == null || radiant == null) return;
+
+            const long Noon = 1699963200L;
+            GameSession probeSession = new GameSession(db, GameSession.CreateNewProfile(db, Noon));
+            Check(probeSession.CombineCost(ArmorTemper.Honed) == honed.CombineSlag
+               && probeSession.CombineCost(ArmorTemper.Gilded) == gilded.CombineSlag
+               && probeSession.CombineCost(ArmorTemper.Radiant) == radiant.CombineSlag,
+                  "GameSession.CombineCost reads the same combineSlag armor.json authors, per output temper ("
+                + honed.CombineSlag + " / " + gilded.CombineSlag + " / " + radiant.CombineSlag + ")");
+
+            Check(honed.CombineSlag > 0 && gilded.CombineSlag > honed.CombineSlag && radiant.CombineSlag > gilded.CombineSlag,
+                  "and the shipped curve climbs by rung, the same direction rerollSlag already climbs");
+
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            ArmorPiece a = ArmorRoller.Roll(db.Armor, ArmorSlot.AccessoryA, ArmorTemper.Honed, Aspect.Lumen, 71);
+            ArmorPiece b = ArmorRoller.Roll(db.Armor, ArmorSlot.AccessoryA, ArmorTemper.Honed, Aspect.Verdant, 72);
+            ArmorPiece c = ArmorRoller.Roll(db.Armor, ArmorSlot.AccessoryA, ArmorTemper.Honed, Aspect.Ember, 73);
+            a.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(a);
+            b.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(b);
+            c.Uid = profile.AllocateArmorUid(); profile.OwnedArmor.Add(c);
+
+            profile.Slag = gilded.CombineSlag - 1;
+            int countBefore = profile.OwnedArmor.Count;
+            Check(!session.CombineArmor(a.Uid, b.Uid, c.Uid, Noon), "a combine one Slag short of the price is refused");
+            Check(profile.OwnedArmor.Count == countBefore && profile.Slag == gilded.CombineSlag - 1,
+                  "and neither the inputs nor the Slag purse move on that refusal");
+
+            profile.Slag = gilded.CombineSlag;
+            Check(session.CombineArmor(a.Uid, b.Uid, c.Uid, Noon), "and it succeeds at exactly the price");
+            Check(profile.Slag == 0, "deducting exactly gilded.combineSlag, no more and no less (" + gilded.CombineSlag + ")");
         }
 
         /// <summary>
