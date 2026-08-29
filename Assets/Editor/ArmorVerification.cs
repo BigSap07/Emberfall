@@ -64,7 +64,7 @@ namespace Emberfall.EditorTools
         /// <summary>Bumped on every real edit and logged unconditionally on load, so a trigger file
         /// is never dropped against a stale assembly - see PlayModeScreenshot's note on the two
         /// wasted runs that lesson cost.</summary>
-        private const string BuildMarker = "ARMORV5-clear-scratch-save";
+        private const string BuildMarker = "ARMORV6-forge-screen";
 
         static ArmorVerification()
         {
@@ -222,7 +222,11 @@ namespace Emberfall.EditorTools
         /// file from a previous run.</summary>
         private static void ClearOutputs()
         {
-            string[] names = { "armor_inventory.png", "armor_inventory_list.png", "armor_hero_detail.png" };
+            string[] names =
+            {
+                "armor_inventory.png", "armor_inventory_list.png", "armor_hero_detail.png",
+                "forge_top.png", "forge_bottom.png"
+            };
             for (int i = 0; i < names.Length; i++)
             {
                 string path = PathFor(names[i]);
@@ -365,17 +369,58 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(StageKey, 7);
             }
 
+            // 4. The Forge screen - proves the new ScreenId.Forge actually renders the pool
+            // grouped by slot with working REROLL/COMBINE/SALVAGE, not just that GameSession's
+            // Combine/Reroll/Salvage calls succeed (PopulateArmor already proved that part).
+            string forgeTopPath = PathFor("forge_top.png");
+            string forgeBottomPath = PathFor("forge_bottom.png");
+
+            if (stage == 7 && frame == 150)
+            {
+                GameApp.Instance.Router.Show(ScreenId.Forge);
+                Canvas.ForceUpdateCanvases();
+                Debug.Log("ArmorVerification: opened the Forge screen.");
+                SessionState.SetInt(StageKey, 8);
+            }
+
+            if (stage == 8 && frame == 165)
+            {
+                ScreenCapture.CaptureScreenshot(forgeTopPath, 1);
+                Debug.Log("ArmorVerification: requested forge_top.png");
+                SessionState.SetInt(StageKey, 9);
+            }
+
+            // Scrolled to the bottom for the second capture - the Helm section (the deliberately
+            // unconsumed Rough trio, a live COMBINE target) and the Weapon section (empty, since
+            // the forge chain consumed every Honed/Gilded Weapon into the equipped Radiant one)
+            // both sit later in slot order than the top of the list shows.
+            if (stage == 9 && frame == 180)
+            {
+                ScrollTo(ScrollOf(GameApp.Instance.Router.Forge), null);
+                SessionState.SetInt(StageKey, 10);
+            }
+
+            if (stage == 10 && frame == 195)
+            {
+                ScreenCapture.CaptureScreenshot(forgeBottomPath, 1);
+                Debug.Log("ArmorVerification: requested forge_bottom.png");
+                SessionState.SetInt(StageKey, 11);
+            }
+
             // Gated on the files actually landing rather than on a frame count - CaptureScreenshot
             // writes asynchronously, and exiting Play Mode triggers a domain reload that has eaten
             // a pending write on this project before.
-            if (stage == 7)
+            if (stage == 11)
             {
-                bool allExist = File.Exists(inventoryPath) && File.Exists(listPath) && File.Exists(heroPath);
-                if (allExist || frame >= 400)
+                bool allExist = File.Exists(inventoryPath) && File.Exists(listPath) && File.Exists(heroPath)
+                              && File.Exists(forgeTopPath) && File.Exists(forgeBottomPath);
+                if (allExist || frame >= 500)
                 {
                     Debug.Log("ArmorVerification: done. inventory=" + File.Exists(inventoryPath)
                             + " list=" + File.Exists(listPath)
-                            + " heroDetail=" + File.Exists(heroPath));
+                            + " heroDetail=" + File.Exists(heroPath)
+                            + " forgeTop=" + File.Exists(forgeTopPath)
+                            + " forgeBottom=" + File.Exists(forgeBottomPath));
                     Stop();
                 }
             }
