@@ -22,9 +22,11 @@ namespace Emberfall.UI.Screens
     /// legendary or mythic, not one of each.
     ///
     /// Armor section (DESIGN-ARMOR section 11): every piece the player owns, with its slot, aspect
-    /// and temper chips, its stat lines, and three actions - EQUIP (the same hero picker), SALVAGE
-    /// and ANVIL. This is where the Anvil lives; there is no separate screen, because the inventory
-    /// is already the place a player looks at things they own and decides what to do with them.
+    /// and temper chips, its stat lines, and one action - EQUIP, the same hero picker relics use.
+    /// Reroll, Salvage and Combine live on their own screen, the Forge (`ScreenId.Forge`) - they
+    /// need no hero in context, so they moved out to a pool-wide hub rather than staying crammed
+    /// onto per-hero rows here. Equip stays: it is a per-hero decision, made in the presence of the
+    /// hero it affects.
     ///
     /// The picker overlay is shared between relics and armor rather than duplicated. It was already
     /// written against "pick a hero for this item", so what changed is that the item it is holding
@@ -440,11 +442,12 @@ namespace Emberfall.UI.Screens
 
         /// <summary>
         /// One armor piece. Taller than a relic row because a piece carries more to say: two chips
-        /// (temper and aspect) plus a slot label, its stat lines, and three actions rather than one.
+        /// (temper and aspect) plus a slot label and its stat lines. One action - EQUIP - unlike a
+        /// relic row's ASSIGN, but laid out the same way, on the same right-edge anchor.
         ///
-        /// The salvage and reroll buttons carry their PRICES in their labels rather than in a
-        /// tooltip nobody on a phone can reach, and both read that price off GameSession - the same
-        /// method that charges it - so a shown price and a paid one cannot drift.
+        /// Reroll, Salvage and Combine used to live here too (three more stacked buttons); they
+        /// moved to the Forge screen, which is why this row is back to its original, shorter
+        /// height rather than the four-action stack it briefly grew to.
         /// </summary>
         private void BuildArmorRow(ArmorPiece piece)
         {
@@ -452,10 +455,8 @@ namespace Emberfall.UI.Screens
             bool equipped = wearer != null;
             Color temperColor = UITheme.ArmorTemperColor(piece.Temper);
 
-            // Card height grew from 176 to fit a fourth stacked action (Combine) - see the button
-            // block below for the math behind 248.
             RectTransform card = UIBuilder.Node("Armor_" + piece.Uid, _listContent);
-            UIBuilder.Sized(card, 0f, 248f);
+            UIBuilder.Sized(card, 0f, 176f);
 
             Image bg = card.gameObject.AddComponent<Image>();
             bg.sprite = TextureLab.RoundedRect(18);
@@ -507,129 +508,12 @@ namespace Emberfall.UI.Screens
             statsLabel.rectTransform.offsetMin = new Vector2(108f, 14f);
             statsLabel.rectTransform.offsetMax = new Vector2(-190f, -76f);
 
-            // Four stacked actions down the right edge, all pinned from the same top-right anchor
-            // with a uniform step - the three-button version used three DIFFERENT anchors (top,
-            // middle, bottom) to spread evenly, a trick that stops working cleanly at four. EQUIP
-            // first because it is the common action; SALVAGE last and visually flagged (Danger tint)
-            // because it is destructive and irreversible, kept furthest from the thumb's resting spot.
-            //
-            // BTN_H 46 + GAP 12, four of them, 14px margin top and bottom: 14 + 4*46 + 3*12 + 14 =
-            // 248, which is where the card's own height above comes from.
-            const float btnH = 46f;
-            const float step = 58f;   // btnH + 12px gap between buttons
-            const float topMargin = -14f;
-
-            UIButton equipBtn = UIBuilder.PrimaryButton("Equip", card, equipped ? "MOVE" : "EQUIP", UITheme.FontTiny);
-            UIBuilder.Box(equipBtn.Root, -18f, topMargin, 160f, btnH, new Vector2(1f, 1f));
+            // One action, laid out exactly like the relic row's ASSIGN button - centred on the
+            // right edge rather than stacked, since there is only the one now.
+            UIButton equipBtn = UIBuilder.PrimaryButton("Equip", card, equipped ? "MOVE" : "EQUIP", UITheme.FontSmall);
+            UIBuilder.Box(equipBtn.Root, -18f, 0f, 160f, 72f, new Vector2(1f, 0.5f));
             ArmorPiece capturedForEquip = piece;
             equipBtn.OnClick(delegate { OpenArmorPicker(capturedForEquip); });
-
-            // Combine: only meaningful when there is a rung above this one AND two other same-slot,
-            // same-temper pieces sitting unequipped in the pool to consume alongside this one. Its
-            // edge is tinted with the OUTPUT temper's colour rather than the input's - a glance at
-            // the border previews what rarity tapping it forges, which the label's plain price
-            // cannot show on its own. At the top of the ladder (Radiant) there is no output temper
-            // to preview, so the edge falls back to a neutral border and the label says why.
-            ArmorTemper? nextTemper = ArmorInfo.NextTemper(piece.Temper);
-            List<ArmorPiece> combinePartners = App.Session.Profile.ArmorCombineCandidates(piece);
-            int combineCost = nextTemper.HasValue ? App.Session.CombineCost(nextTemper.Value) : 0;
-            string combineLabel = nextTemper.HasValue ? "COMBINE  " + combineCost : "MAX TIER";
-            Color combineEdge = nextTemper.HasValue ? UITheme.ArmorTemperColor(nextTemper.Value) : UITheme.Border;
-            UIButton combineBtn = UIBuilder.MakeButton("Combine", card, combineLabel, UITheme.FontTiny,
-                                                       UITheme.PanelRaised, combineEdge, UITheme.TextPrimary);
-            UIBuilder.Box(combineBtn.Root, -18f, topMargin - step, 160f, btnH, new Vector2(1f, 1f));
-            combineBtn.Interactable = nextTemper.HasValue && combinePartners.Count == 2
-                                    && App.Session.Profile.Slag >= combineCost;
-            string combineUidA = piece.Uid;
-            string combineUidB = combinePartners.Count > 0 ? combinePartners[0].Uid : "";
-            string combineUidC = combinePartners.Count > 1 ? combinePartners[1].Uid : "";
-            combineBtn.OnClick(delegate { OnCombine(combineUidA, combineUidB, combineUidC); });
-
-            int rerollCost = App.Session.RerollCost(piece);
-            UIButton anvilBtn = UIBuilder.SecondaryButton("Anvil", card, "ANVIL  " + rerollCost, UITheme.FontTiny);
-            UIBuilder.Box(anvilBtn.Root, -18f, topMargin - step * 2f, 160f, btnH, new Vector2(1f, 1f));
-            anvilBtn.Interactable = App.Session.Profile.Slag >= rerollCost && rerollCost > 0;
-            string capturedUid = piece.Uid;
-            anvilBtn.OnClick(delegate { OnAnvil(capturedUid); });
-
-            int salvageValue = App.Session.SalvageValue(piece);
-            UIButton salvageBtn = UIBuilder.MakeButton("Salvage", card, "SALVAGE  " + salvageValue, UITheme.FontTiny,
-                                                       UITheme.PanelRaised, UITheme.Danger, UITheme.TextPrimary);
-            UIBuilder.Box(salvageBtn.Root, -18f, topMargin - step * 3f, 160f, btnH, new Vector2(1f, 1f));
-            // Salvage refuses an equipped piece in GameSession; the button says so up front rather
-            // than letting the tap fail silently.
-            salvageBtn.Interactable = !equipped;
-            salvageBtn.OnClick(delegate { OnSalvage(capturedUid); });
-        }
-
-        /// <summary>
-        /// Combine's handler intentionally re-resolves the piece and its next temper here rather
-        /// than trusting closure-captured values from BuildArmorRow, the same discipline OnAnvil and
-        /// OnSalvage already follow for their own captured uid - the profile can only have changed
-        /// since the button was built by another action from THIS screen, and RebuildAll runs after
-        /// every one of those, but re-resolving costs nothing and removes the assumption entirely.
-        /// </summary>
-        private void OnCombine(string armorUidA, string armorUidB, string armorUidC)
-        {
-            ArmorPiece piece = App.Session.Profile.FindArmor(armorUidA);
-            if (piece == null) { RebuildAll(); return; }
-
-            ArmorTemper? next = ArmorInfo.NextTemper(piece.Temper);
-            int cost = next.HasValue ? App.Session.CombineCost(next.Value) : 0;
-            string slot = ArmorInfo.SlotLabel(piece.Slot);
-
-            if (!App.Session.CombineArmor(armorUidA, armorUidB, armorUidC, TimeUtil.NowUnix()))
-            {
-                App.Notify(next.HasValue
-                    ? "Combining needs three matching " + slot + " pieces and " + cost + " Slag."
-                    : "Already at the top of the ladder.");
-                return;
-            }
-
-            App.Audio.Tap();
-            App.Notify("Forged a " + (next.HasValue ? ArmorInfo.TemperLabel(next.Value) + " " : "") + slot + ".");
-            App.RequestSave();
-            App.RefreshHud();
-            RebuildAll();
-        }
-
-        private void OnAnvil(string armorUid)
-        {
-            ArmorPiece piece = App.Session.Profile.FindArmor(armorUid);
-            if (piece == null) { RebuildAll(); return; }
-
-            int cost = App.Session.RerollCost(piece);
-            if (!App.Session.RerollArmor(armorUid, TimeUtil.NowUnix()))
-            {
-                App.Notify("Not enough Slag — the Anvil wants " + cost + ".");
-                return;
-            }
-
-            App.Audio.Tap();
-            App.Notify(piece.Name + " reforged: " + piece.DescribeStats());
-            App.RequestSave();
-            App.RefreshHud();
-            RebuildAll();
-        }
-
-        private void OnSalvage(string armorUid)
-        {
-            ArmorPiece piece = App.Session.Profile.FindArmor(armorUid);
-            if (piece == null) { RebuildAll(); return; }
-
-            string name = piece.Name;
-            int value = App.Session.SalvageValue(piece);
-            if (!App.Session.SalvageArmor(armorUid))
-            {
-                App.Notify("Unequip " + name + " before salvaging it.");
-                return;
-            }
-
-            App.Audio.Tap();
-            App.Notify(name + " salvaged for " + value + " Slag.");
-            App.RequestSave();
-            App.RefreshHud();
-            RebuildAll();
         }
 
         // ------------------------------------------------------------------ helpers
