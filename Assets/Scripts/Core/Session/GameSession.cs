@@ -74,6 +74,17 @@ namespace Emberfall.Core.Session
         /// <summary>Relic Dust this win paid. Zero on a first clear and zero past the repeat
         /// cap, both by design - see GameSession.RelicDustForRepeatClear.</summary>
         public int RelicDust;
+
+        /// <summary>
+        /// The armor piece this win dropped, or null. Null is the common case - the drop is a roll
+        /// against ArmorConfig.DropChance - and null is also what a repeat-capped clear always
+        /// gets, for the same reason it gets no gold: a currency or an item exempt from the cap
+        /// hands the uncapped farming loop straight back in a new denomination.
+        ///
+        /// The piece is already in Profile.OwnedArmor by the time this is returned. It is carried
+        /// here so the UI can name what dropped, not so the UI can grant it.
+        /// </summary>
+        public ArmorPiece ArmorDrop;
     }
 
     /// <summary>Echoes available right now, as GameSession.PeekRecitalEchoes reports it - a
@@ -261,6 +272,10 @@ namespace Emberfall.Core.Session
             request.Stage = stage;
             request.Seed = seed;
             request.Team = Profile.TeamHeroes();
+            // The profile rides along solely so the simulation can resolve each hero's armor uids
+            // into pieces - an armor uid resolves against the save, not against content, which is
+            // the one thing Content on this request cannot do.
+            request.Profile = Profile;
             return request;
         }
 
@@ -334,10 +349,181 @@ namespace Emberfall.Core.Session
                 }
             }
 
+            // The armor drop rides the repeat cap on exactly the branch Relic Dust does, per
+            // DESIGN-ARMOR section 8: a capped clear drops nothing, so armor cannot become the
+            // uncapped farming loop in a new denomination. Rolled last, after the purse is settled,
+            // so its seed cannot depend on anything the purse did.
+            rewards.ArmorDrop = rewards.RepeatCapped ? null : RollArmorDrop(stage, nowUnix);
+
             rewards.PlayerLevelsGained = GrantAccountXp(rewards.AccountXp);
             rewards.RepeatClearsRemaining = RepeatClearsRemaining(stage, nowUnix);
             Profile.LastSaveUnix = nowUnix;
             return rewards;
+        }
+
+        // ------------------------------------------------------------------ armor
+
+        /// <summary>
+        /// Rolls one armor piece for a full-purse stage clear and adds it to the collection, or
+        /// returns null - which is the common case, since the whole thing is gated on
+        /// ArmorConfig.DropChance.
+        ///
+        /// The seed is derived from data the caller already has (the clock, the stage's depth and
+        /// how many pieces the player already owns) rather than from a shared RNG, for the same
+        /// reason the roller takes an int at all: a drop must be reproducible in a test, and it
+        /// must not touch the battle's RNG stream. TotalBattlesWon is deliberately NOT in the mix -
+        /// it is incremented above this line, and a seed that moved with the purse would tie a
+        /// piece's rolls to reward tuning.
+        /// </summary>
+        public ArmorPiece RollArmorDrop(StageDef stage, long nowUnix)
+        {
+            if (stage == null) return null;
+            ArmorConfig config = Content != null ? Content.Armor : null;
+            if (config == null || !config.IsUsable) return null;
+
+            int baseSeed = ArmorSeed(nowUnix, stage.GlobalIndex, Profile.OwnedArmor.Count);
+
+            // Four independent draws off four derived seeds rather than one RNG walked four times:
+            // each of RollSlot/RollAspect/RollTemper/Roll builds its own DeterministicRng, so they
+            // must not be handed the same integer or a slot and an aspect would move together.
+            DeterministicRng gate = new DeterministicRng(baseSeed);
+            if (!gate.Chance(config.DropChance)) return null;
+
+            ArmorSlot slot = ArmorRoller.RollSlot(baseSeed + 1);
+            Aspect aspect = ArmorRoller.RollAspect(baseSeed + 2);
+            ArmorTemper temper = ArmorRoller.RollTemper(config, stage.GlobalIndex, baseSeed + 3);
+
+            ArmorPiece piece = ArmorRoller.Roll(config, slot, temper, aspect, baseSeed + 4);
+            if (piece == null) return null;
+
+            piece.Uid = Profile.AllocateArmorUid();
+            Profile.OwnedArmor.Add(piece);
+            return piece;
+        }
+
+        /// <summary>
+        /// A stable, cheap mix of the three inputs a drop is allowed to depend on. Not
+        /// cryptographic and not trying to be - it exists so two drops in the same second at the
+        /// same stage do not produce the same piece, and so a test can reproduce one exactly.
+        /// </summary>
+        private static int ArmorSeed(long nowUnix, int stageIndex, int ownedCount)
+        {
+            unchecked
+            {
+                int h = (int)(nowUnix ^ (nowUnix >> 32));
+                h = h * 486187739 + stageIndex * 31 + ownedCount * 7919;
+                return h == 0 ? 1 : h;
+            }
+        }
+
+        /// <summary>Slag one piece salvages for, by its temper. The single source both SalvageArmor
+        /// and the inventory screen read, so a displayed payout and a paid one cannot drift - the
+        /// same reason RelicPrice exists for relics.</summary>
+        public int SalvageValue(ArmorPiece piece)
+        {
+            if (piece == null || Content == null) return 0;
+            ArmorTemperDef def = Content.Armor.GetTemper(piece.Temper);
+            return def != null ? def.SalvageSlag : 0;
+        }
+
+        /// <summary>Slag one reroll costs, by the piece's temper. Same single-source reasoning as
+        /// SalvageValue.</summary>
+        public int RerollCost(ArmorPiece piece)
+        {
+            if (piece == null || Content == null) return 0;
+            ArmorTemperDef def = Content.Armor.GetTemper(piece.Temper);
+            return def != null ? def.RerollSlag : 0;
+        }
+
+        /// <summary>
+        /// Puts a piece in its own slot on a hero, displacing whatever was there and taking it off
+        /// whoever else was wearing it. Modelled on AssignRelic, with the one extra rule a
+        /// six-slot system needs: a piece only ever goes in the slot it is FOR, so the slot is read
+        /// off the piece rather than passed in and cannot be got wrong by a caller.
+        /// </summary>
+        public bool EquipArmor(HeroInstance hero, string armorUid)
+        {
+            if (hero == null) return false;
+            ArmorPiece piece = Profile.FindArmor(armorUid);
+            if (piece == null) return false;
+
+            int index = PlayerProfile.SlotIndex(piece.Slot);
+            if (index < 0 || index >= hero.EquippedArmor.Length) return false;
+
+            // Taking it off its previous wearer first covers the case where that wearer IS this
+            // hero in a different slot, which cannot happen through this method but can through a
+            // hand-edited save that NormaliseArmor has not run over yet.
+            HeroInstance previous = Profile.HeroWearingArmor(armorUid);
+            if (previous != null)
+            {
+                int previousIndex = PlayerProfile.SlotIndex(piece.Slot);
+                if (previousIndex >= 0 && previousIndex < previous.EquippedArmor.Length
+                    && previous.EquippedArmor[previousIndex] == armorUid)
+                    previous.EquippedArmor[previousIndex] = "";
+            }
+
+            // Whatever was in the slot returns to the pool rather than being destroyed. There is no
+            // "swap" concept here for the same reason there is none for relics: the pool is where an
+            // unequipped thing lives, so displacing one is just clearing a reference.
+            hero.EquippedArmor[index] = armorUid;
+            return true;
+        }
+
+        /// <summary>Empties one of a hero's slots, returning whatever was in it to the pool.</summary>
+        public bool UnequipArmor(HeroInstance hero, ArmorSlot slot)
+        {
+            if (hero == null) return false;
+            int index = PlayerProfile.SlotIndex(slot);
+            if (index < 0 || index >= hero.EquippedArmor.Length) return false;
+            if (string.IsNullOrEmpty(hero.EquippedArmor[index])) return false;
+            hero.EquippedArmor[index] = "";
+            return true;
+        }
+
+        /// <summary>
+        /// Destroys a piece and pays its Slag. Refuses a piece somebody is wearing rather than
+        /// silently unequipping it: salvage is irreversible, and an accidental one that also
+        /// stripped a hero's slot would be two mistakes deep before the player noticed.
+        ///
+        /// Pays BEFORE removing, so a piece can never be removed without being paid for.
+        /// </summary>
+        public bool SalvageArmor(string armorUid)
+        {
+            ArmorPiece piece = Profile.FindArmor(armorUid);
+            if (piece == null) return false;
+            if (Profile.HeroWearingArmor(armorUid) != null) return false;
+
+            Profile.Slag += SalvageValue(piece);
+            Profile.OwnedArmor.Remove(piece);
+            return true;
+        }
+
+        /// <summary>
+        /// The Anvil. Spends Slag and rerolls every substat on a piece, keeping its slot, primary,
+        /// aspect and temper.
+        ///
+        /// Order matters and is deliberate: the reroll is attempted FIRST and the Slag is deducted
+        /// only once it actually happened. ArmorRoller.Reroll returns false without touching the
+        /// piece when the content cannot roll, and charging before that check would take a
+        /// player's currency for nothing. It works on an equipped piece as well as a pooled one -
+        /// unlike salvage, a reroll is not destructive, so making the player unequip first would be
+        /// friction with no failure behind it.
+        /// </summary>
+        public bool RerollArmor(string armorUid, long nowUnix)
+        {
+            ArmorPiece piece = Profile.FindArmor(armorUid);
+            if (piece == null) return false;
+            ArmorConfig config = Content != null ? Content.Armor : null;
+            if (config == null || !config.IsUsable) return false;
+
+            int cost = RerollCost(piece);
+            if (Profile.Slag < cost) return false;
+
+            int seed = ArmorSeed(nowUnix, PlayerProfile.SlotIndex(piece.Slot), Profile.OwnedArmor.Count + piece.SubStats.Count);
+            if (!ArmorRoller.Reroll(config, piece, seed)) return false;
+
+            Profile.Slag -= cost;
+            return true;
         }
 
         // ------------------------------------------------------------------ repeat cap

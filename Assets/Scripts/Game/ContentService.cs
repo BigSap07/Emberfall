@@ -19,8 +19,11 @@ namespace Emberfall.Game
             // instead of ReadText.
             string relics = ReadTextOptional("relics");
             string events = ReadTextOptional("events");
+            // Optional for the same reason: a build with no armor.json loads an unusable ArmorConfig
+            // and simply never drops a piece, rather than erroring.
+            string armor = ReadTextOptional("armor");
 
-            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events);
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor);
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

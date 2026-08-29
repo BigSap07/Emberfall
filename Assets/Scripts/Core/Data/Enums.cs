@@ -241,6 +241,230 @@ namespace Emberfall.Core.Data
         EffectResist
     }
 
+    /// <summary>
+    /// One of the six equipment slots a hero carries (DESIGN-ARMOR section 3). The slot decides
+    /// the piece's primary stat outright - see ArmorInfo.PrimaryStat - so a Weapon is always an
+    /// Attack piece and only its magnitude and its substats vary.
+    ///
+    /// The chest slot is PLATE, not Armor. One word naming both the system and one of its slots is
+    /// the collision DESIGN-BUILD-ORDER already carries for Forge (task 6's idle-income mechanic),
+    /// and reproducing it inside the system commissioned to avoid it would be worse than an odd
+    /// slot name.
+    ///
+    /// The two accessory slots are deliberately a hard A/B pair rather than "two accessory slots":
+    /// each guarantees its own primary (Crit Chance, Crit Damage), so a hero cannot wear two Crit
+    /// Chance accessories, and every slot in the enum has exactly one answer to "what does this
+    /// guarantee".
+    /// </summary>
+    public enum ArmorSlot
+    {
+        Weapon,
+        Helm,
+        Plate,
+        Boots,
+        AccessoryA,
+        AccessoryB
+    }
+
+    /// <summary>
+    /// An armor piece's quality rung (DESIGN-ARMOR section 4). It gates how many substats roll
+    /// alongside the guaranteed primary, and scales the primary itself. It never changes WHICH
+    /// stats can roll.
+    ///
+    /// Deliberately NOT called rarity, grade or tier, and its rungs deliberately avoid Legendary
+    /// and Mythic: "grade" and both of those labels belong to RelicGrade, "tier" belongs to
+    /// OwnedRelic.Tier, and hero rarity is HeroDef.Stars (an int, which is why hero rarity has no
+    /// enum member to collide with - see RelicGrade's own note on that check). "Common" is
+    /// technically free but is the pre-rename label of RelicGrade.Legendary, so reusing it would
+    /// point a reader at a word that moved. Temper is new to the project and pairs with the Anvil.
+    ///
+    /// Fixed at the moment a piece drops. There is no upgrade path in this pass - a better piece is
+    /// a better drop, not a fed one.
+    /// </summary>
+    public enum ArmorTemper
+    {
+        Rough,
+        Honed,
+        Gilded,
+        Radiant
+    }
+
+    /// <summary>
+    /// Which UnitStats field an armor roll moves. Closed, like RelicStat, and for the same reason:
+    /// armor adds no new stat, every member below already exists on UnitStats and is already read
+    /// by the simulation, and a typo'd stat name should not parse.
+    ///
+    /// This is a SEPARATE enum from RelicStat rather than a reuse of it, per DESIGN-ARMOR section 9.
+    /// RelicStat has eight members and reaches none of the six stats at the end of this list;
+    /// extending it to fourteen would put armor's pool inside the enum ContentDatabase.ParseRelics
+    /// validates relic content against, which means an armor stat could break relic loading. The
+    /// two systems share the MECHANISM (StatMath folding a bonus list into an already-built
+    /// UnitStats) and share no type.
+    ///
+    /// The last six members are the point of the whole system: they are live in CombatSimulation,
+    /// each has its own harness check, and before armor no relic and no player-reachable path could
+    /// grant any of them.
+    /// </summary>
+    public enum ArmorStat
+    {
+        MaxHp,
+        Attack,
+        Defense,
+        Speed,
+        CritChance,
+        CritDamage,
+        EffectHit,
+        EffectResist,
+        SkillDamage,
+        Block,
+        ArmorBreak,
+        ControlImmunity,
+        DamageReduction,
+        HolyDamage
+    }
+
+    /// <summary>
+    /// How one armor roll combines with the stat it names. The rule is per STAT, not per system:
+    /// it is a fact about how UnitStats stores that stat, so armor and relics necessarily agree on
+    /// it and RelicStatMode's own reasoning applies verbatim.
+    ///
+    /// Multiply: MaxHp, Attack, Defense, Speed - large numbers built off base * scale * starMult,
+    /// so "+14% Attack" means Attack *= 1.14.
+    /// Add: everything else - small fractions (or a multiplier, for Crit Damage) that are never
+    /// scaled by level or star rarity, where multiplying does nothing. A multiplicative +12% on a
+    /// 0.15 Crit Chance is +0.018, and on a 0.00 Block it is exactly zero.
+    ///
+    /// Holy Damage is the one member of the Add family that is not a fraction at all - it is flat
+    /// damage in the same units as a damage number. See ArmorInfo.IsPercentStat, which is what the
+    /// UI reads to decide whether to print a "%" sign.
+    /// </summary>
+    public enum ArmorStatMode
+    {
+        Multiply,
+        Add
+    }
+
+    /// <summary>
+    /// Display and rule helpers for the armor types above. The slot-to-primary table lives here
+    /// rather than in content because it is the guarantee, not a tuning value: DESIGN-ARMOR section
+    /// 3 makes the primary a property of the slot, so a Weapon that granted Defense would not be a
+    /// mistuned drop, it would be a broken one.
+    /// </summary>
+    public static class ArmorInfo
+    {
+        /// <summary>Every slot, in display order. One array so the UI, the roller, the profile and
+        /// the save all iterate the same six in the same order rather than each writing their own
+        /// loop - the save in particular reads a hero's slots positionally.</summary>
+        public static readonly ArmorSlot[] AllSlots =
+        {
+            ArmorSlot.Weapon, ArmorSlot.Helm, ArmorSlot.Plate,
+            ArmorSlot.Boots, ArmorSlot.AccessoryA, ArmorSlot.AccessoryB
+        };
+
+        /// <summary>The stat a slot guarantees. Total over ArmorSlot - every member has an answer,
+        /// and the trailing return exists only to satisfy the compiler, not as a real fallback.</summary>
+        public static ArmorStat PrimaryStat(ArmorSlot slot)
+        {
+            switch (slot)
+            {
+                case ArmorSlot.Weapon: return ArmorStat.Attack;
+                case ArmorSlot.Helm: return ArmorStat.MaxHp;
+                case ArmorSlot.Plate: return ArmorStat.Defense;
+                case ArmorSlot.Boots: return ArmorStat.Speed;
+                case ArmorSlot.AccessoryA: return ArmorStat.CritChance;
+                case ArmorSlot.AccessoryB: return ArmorStat.CritDamage;
+            }
+            return ArmorStat.Attack;
+        }
+
+        /// <summary>
+        /// The arithmetic mode a stat takes, derived rather than authored. RelicStatBonus stores
+        /// its mode in the data so a content author can see the two rules explicitly; armor derives
+        /// it, because armor rolls are GENERATED rather than authored and a generator that could
+        /// emit the wrong mode is a generator with a bug in it. Content still names a mode on its
+        /// roll ranges (armor.json) for readability, and the roller passes it through here rather
+        /// than trusting it - see ArmorRoller.
+        /// </summary>
+        public static ArmorStatMode ModeFor(ArmorStat stat)
+        {
+            switch (stat)
+            {
+                case ArmorStat.MaxHp:
+                case ArmorStat.Attack:
+                case ArmorStat.Defense:
+                case ArmorStat.Speed:
+                    return ArmorStatMode.Multiply;
+            }
+            return ArmorStatMode.Add;
+        }
+
+        /// <summary>
+        /// Whether a stat's value reads as a percentage on a card. False for Holy Damage alone: it
+        /// is flat damage in damage units, so "+40 Holy Damage" is right and the "+4000% Holy
+        /// Damage" that printing every Add stat as a percentage produces is not.
+        /// </summary>
+        public static bool IsPercentStat(ArmorStat stat)
+        {
+            return stat != ArmorStat.HolyDamage;
+        }
+
+        /// <summary>How many substats a temper rolls. The ladder itself, in one place.</summary>
+        public static int SubStatCount(ArmorTemper temper)
+        {
+            switch (temper)
+            {
+                case ArmorTemper.Rough: return 1;
+                case ArmorTemper.Honed: return 2;
+                case ArmorTemper.Gilded: return 3;
+                case ArmorTemper.Radiant: return 4;
+            }
+            return 1;
+        }
+
+        public static string SlotLabel(ArmorSlot slot)
+        {
+            switch (slot)
+            {
+                case ArmorSlot.Weapon: return "Weapon";
+                case ArmorSlot.Helm: return "Helm";
+                case ArmorSlot.Plate: return "Plate";
+                case ArmorSlot.Boots: return "Boots";
+                case ArmorSlot.AccessoryA: return "Accessory I";
+                case ArmorSlot.AccessoryB: return "Accessory II";
+            }
+            return slot.ToString();
+        }
+
+        /// <summary>Display spelling of an ArmorStat. "Max HP" and "Crit Chance", not the enum
+        /// name - the same job RelicDef.StatLabel does for RelicStat, over a wider pool.</summary>
+        public static string StatLabel(ArmorStat stat)
+        {
+            switch (stat)
+            {
+                case ArmorStat.MaxHp: return "Max HP";
+                case ArmorStat.Attack: return "Attack";
+                case ArmorStat.Defense: return "Defense";
+                case ArmorStat.Speed: return "Speed";
+                case ArmorStat.CritChance: return "Crit Chance";
+                case ArmorStat.CritDamage: return "Crit Damage";
+                case ArmorStat.EffectHit: return "Effect Hit";
+                case ArmorStat.EffectResist: return "Effect Resist";
+                case ArmorStat.SkillDamage: return "Skill Damage";
+                case ArmorStat.Block: return "Block";
+                case ArmorStat.ArmorBreak: return "Armor Break";
+                case ArmorStat.ControlImmunity: return "Control Immunity";
+                case ArmorStat.DamageReduction: return "Damage Reduction";
+                case ArmorStat.HolyDamage: return "Holy Damage";
+            }
+            return stat.ToString();
+        }
+
+        public static string TemperLabel(ArmorTemper temper)
+        {
+            return temper.ToString().ToUpperInvariant();
+        }
+    }
+
     public static class AspectChart
     {
         // Narrowed from 1.20/0.85 per DESIGN-ASPECTS section 4: a 41% swing between an advantaged

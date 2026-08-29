@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 
 namespace Emberfall.Core.Progression
 {
@@ -131,8 +133,150 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
+        /// A hero's stats with an equipped relic AND equipped armor folded in - THE entry point for
+        /// both, and the reason armor reuses this mechanism rather than getting its own. Both
+        /// CombatSimulation's setup and the hero detail screen call this, so the number a player
+        /// reads on the card is by construction the number the simulation fights with.
+        ///
+        /// Order is relic, then armor, and it is fixed rather than incidental: the two do not
+        /// commute for multiplicative stats, and a stat line that depended on which system happened
+        /// to resolve first would be a stat line nobody could reproduce.
+        ///
+        /// Every argument after `level` is optional in the "null is an exact no-op" sense - a null
+        /// relic, a null or empty armor list, and a null config each return exactly what
+        /// ForHero(def, level) returns, with no branch anywhere downstream needing to know which of
+        /// them was absent.
+        /// </summary>
+        public static UnitStats ForHero(HeroDef def, int level, RelicDef relic, List<ArmorPiece> armor, ArmorConfig config)
+        {
+            UnitStats s = ForHero(def, level);
+            ApplyRelic(s, relic);
+            ApplyArmor(s, armor, def != null ? def.Aspect : Aspect.Ember, config);
+            return s;
+        }
+
+        /// <summary>
+        /// Folds every equipped armor piece's rolls, plus whatever attunement thresholds the wearer
+        /// has met, into an already-built UnitStats, in place. ApplyRelic's sibling: same in-place
+        /// signature, same rounding rule, same "absent argument is an exact no-op" contract.
+        ///
+        /// Two passes, in a fixed order. First every piece's own rolls, primary and substats, in
+        /// slot order - so the result does not depend on the order the caller happened to assemble
+        /// the list in, which is why PlayerProfile.EquippedArmorOf is the only sanctioned way to
+        /// build it. Then the attunement bonuses, last, because a set bonus is a bonus ON a
+        /// completed set rather than a seventh piece.
+        ///
+        /// Attunement counts pieces whose OWN aspect matches the WEARER's, and reads nothing else -
+        /// no counter-aspect penalty, no off-aspect bonus. A second aspect axis layered on top of
+        /// AspectChart would make the wheel argue with itself.
+        ///
+        /// NOT seed-safe, for a stronger reason than ApplyRelic's: DeterministicRng.Chance
+        /// short-circuits at p &lt;= 0 without drawing, and Block is exactly zero on every unit in
+        /// shipped content, so the first armor piece that rolls Block adds one RNG draw to every
+        /// incoming hit that unit takes. Effect Hit can do the same at the landing gate. That is
+        /// what it means for these stats to be live and it is not a defect - it means no harness
+        /// fingerprint check may equip armor. See DESIGN-ARMOR section 9.
+        /// </summary>
+        public static void ApplyArmor(UnitStats stats, List<ArmorPiece> armor, Aspect wearerAspect, ArmorConfig config)
+        {
+            if (stats == null || armor == null || armor.Count == 0) return;
+
+            int matching = 0;
+            for (int i = 0; i < armor.Count; i++)
+            {
+                ArmorPiece piece = armor[i];
+                if (piece == null) continue;
+                if (piece.Aspect == wearerAspect) matching++;
+
+                List<ArmorStatRoll> rolls = piece.AllRolls();
+                for (int r = 0; r < rolls.Count; r++) ApplyRoll(stats, rolls[r]);
+            }
+
+            if (config == null || matching <= 0) return;
+            List<ArmorAttunementDef> met = config.AttunementsFor(wearerAspect, matching);
+            for (int a = 0; a < met.Count; a++)
+            {
+                List<ArmorRollDef> bonuses = met[a].Bonuses;
+                for (int b = 0; b < bonuses.Count; b++)
+                {
+                    ArmorRollDef def = bonuses[b];
+                    // An attunement bonus is authored as a degenerate range (Min == Max), so Min is
+                    // its value. Read through ArmorInfo.ModeFor rather than trusting a mode key,
+                    // for the same reason the roller does - the mode is a fact about the stat.
+                    ApplyRoll(stats, new ArmorStatRoll(def.Stat, ArmorInfo.ModeFor(def.Stat), def.Min));
+                }
+            }
+        }
+
+        /// <summary>
+        /// One roll onto one stat. The rounding follows Build and ApplyRelic exactly rather than
+        /// inventing a third rule: the four multiplied stats are the four Build rounds, everything
+        /// else passes through raw. That is what keeps an armoured stat line the same SHAPE as an
+        /// unarmoured one - whole HP, fractional crit chance - instead of showing 4271.4 max HP.
+        ///
+        /// The switch is total over ArmorStat and has no default case on purpose: adding a member
+        /// to ArmorStat without adding it here would silently make that stat inert, and a stat the
+        /// UI advertises and the maths ignores is the worst failure this system can have. There is
+        /// a harness check (CheckArmorEveryStatReachesUnitStats) that proves every member moves its
+        /// field.
+        /// </summary>
+        private static void ApplyRoll(UnitStats stats, ArmorStatRoll roll)
+        {
+            if (roll == null) return;
+            bool multiply = roll.Mode == ArmorStatMode.Multiply;
+            float v = roll.Value;
+
+            switch (roll.Stat)
+            {
+                case ArmorStat.MaxHp:
+                    stats.MaxHp = Round(multiply ? stats.MaxHp * (1f + v) : stats.MaxHp + v);
+                    break;
+                case ArmorStat.Attack:
+                    stats.Attack = Round(multiply ? stats.Attack * (1f + v) : stats.Attack + v);
+                    break;
+                case ArmorStat.Defense:
+                    stats.Defense = Round(multiply ? stats.Defense * (1f + v) : stats.Defense + v);
+                    break;
+                case ArmorStat.Speed:
+                    stats.Speed = Round(multiply ? stats.Speed * (1f + v) : stats.Speed + v);
+                    break;
+                case ArmorStat.CritChance:
+                    stats.CritChance = multiply ? stats.CritChance * (1f + v) : stats.CritChance + v;
+                    break;
+                case ArmorStat.CritDamage:
+                    stats.CritDamage = multiply ? stats.CritDamage * (1f + v) : stats.CritDamage + v;
+                    break;
+                case ArmorStat.EffectHit:
+                    stats.EffectHit = multiply ? stats.EffectHit * (1f + v) : stats.EffectHit + v;
+                    break;
+                case ArmorStat.EffectResist:
+                    stats.EffectResist = multiply ? stats.EffectResist * (1f + v) : stats.EffectResist + v;
+                    break;
+                case ArmorStat.SkillDamage:
+                    stats.SkillDamage = multiply ? stats.SkillDamage * (1f + v) : stats.SkillDamage + v;
+                    break;
+                case ArmorStat.Block:
+                    stats.Block = multiply ? stats.Block * (1f + v) : stats.Block + v;
+                    break;
+                case ArmorStat.ArmorBreak:
+                    stats.ArmorBreak = multiply ? stats.ArmorBreak * (1f + v) : stats.ArmorBreak + v;
+                    break;
+                case ArmorStat.ControlImmunity:
+                    stats.ControlImmunity = multiply ? stats.ControlImmunity * (1f + v) : stats.ControlImmunity + v;
+                    break;
+                case ArmorStat.DamageReduction:
+                    stats.DamageReduction = multiply ? stats.DamageReduction * (1f + v) : stats.DamageReduction + v;
+                    break;
+                case ArmorStat.HolyDamage:
+                    stats.HolyDamage = multiply ? stats.HolyDamage * (1f + v) : stats.HolyDamage + v;
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Enemies do not wear relics, so this takes none. Stated as a signature rather than as a
-        /// comment on the call site.
+        /// comment on the call site. Enemies do not wear armor either, for the same reason and by
+        /// the same means - there is no overload here that takes any.
         /// </summary>
         public static UnitStats ForEnemy(EnemyDef def, int level)
         {

@@ -12,6 +12,17 @@ namespace Emberfall.Core.Combat
         public List<HeroInstance> Team = new List<HeroInstance>();
         public StageDef Stage;
         public int Seed;
+
+        /// <summary>
+        /// The profile the team came from, or null. Read for ONE thing: resolving each hero's armor
+        /// uids into the pieces they name, which only the profile's OwnedArmor collection can do.
+        ///
+        /// Optional on purpose. Every synthetic request the harness builds leaves it null, and a
+        /// null profile means no armor, which is an exact no-op through StatMath.ApplyArmor - so
+        /// every existing seeded fingerprint is untouched by armor's existence. Relics did not need
+        /// this because a relic id resolves against content; an armor uid resolves against the save.
+        /// </summary>
+        public PlayerProfile Profile;
     }
 
     /// <summary>
@@ -198,7 +209,20 @@ namespace Emberfall.Core.Combat
                     // read at its own resolution point further in - the two entry points are not
                     // mutually exclusive on a mythic relic the way they were before it could carry
                     // both a hook and a stat block.
-                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic);
+                    // Armor, DESIGN-ARMOR section 9: resolved here and then forgotten, exactly the
+                    // way a legendary relic's stat block is. Nothing below this line learns armor
+                    // exists - there is no armor field on CombatUnit and no armor branch anywhere
+                    // in the effect pipeline, because every bonus a piece can carry is already
+                    // inside the numbers ApplyArmor returned.
+                    //
+                    // The equipped list comes from the profile on the request rather than being
+                    // assembled here, so the battle and the hero-detail preview cannot build it two
+                    // different ways. A null profile - every synthetic harness request - leaves it
+                    // null, which ApplyArmor treats as an exact no-op.
+                    List<ArmorPiece> armor = _request.Profile != null ? _request.Profile.EquippedArmorOf(hero) : null;
+                    ArmorConfig armorConfig = _request.Content != null ? _request.Content.Armor : null;
+
+                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic, armor, armorConfig);
                     CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
                     if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
                     _units.Add(unit);

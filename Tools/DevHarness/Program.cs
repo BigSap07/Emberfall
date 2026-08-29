@@ -60,6 +60,7 @@ namespace Emberfall.DevHarness
             CheckRepeatCap(content);
             CheckRelicDust(content);
             CheckRelicInventoryModel(content);
+            CheckArmor(content);
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckPinnedFiveBodyCurve(content);
@@ -112,7 +113,9 @@ namespace Emberfall.DevHarness
                 string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
                 string eventsPath = Path.Combine(dir, "events.json");
                 string events = File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null;
-                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events);
+                string armorPath = Path.Combine(dir, "armor.json");
+                string armor = File.Exists(armorPath) ? File.ReadAllText(armorPath) : null;
+                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor);
             }
             catch (Exception ex)
             {
@@ -3083,7 +3086,17 @@ namespace Emberfall.DevHarness
 
         private static string BattleFingerprint(GameSession session, StageDef stage, int seed)
         {
-            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+            return FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(stage, seed)));
+        }
+
+        /// <summary>
+        /// The fingerprint itself, split out of BattleFingerprint above so a caller that had to
+        /// build its own BattleRequest can still produce a comparable one. The armor checks need
+        /// that: CheckArmorIsAbsentByDefault compares a request with a profile attached against the
+        /// same request with it removed, which no session-and-stage signature can express.
+        /// </summary>
+        private static string FingerprintOf(BattleResult r)
+        {
             StringBuilder sb = new StringBuilder();
             sb.Append(r.Victory).Append('|').Append(r.Rounds).Append('|').Append(r.Events.Count).Append('|');
             for (int i = 0; i < r.Events.Count; i++)
@@ -5239,6 +5252,706 @@ namespace Emberfall.DevHarness
             owned.RelicId = relicId;
             owned.Tier = tier;
             return owned;
+        }
+
+        // ---------------------------------------------------------------- armor
+
+        /// <summary>
+        /// The armor system (DESIGN-ARMOR), end to end. Ten checks under one heading, in the order
+        /// a piece actually travels: content loads, the roller obeys its guarantees, every stat it
+        /// can grant reaches the field it names, the stats reach a real battle, attunement resolves,
+        /// the Anvil charges correctly, the save survives a round trip and an upgrade, and none of
+        /// it disturbs relics.
+        ///
+        /// The determinism half is load bearing rather than decorative. Armor can move an existing
+        /// seeded battle - Block and Effect Hit both change how many draws DeterministicRng makes -
+        /// so CheckArmorIsAbsentByDefault below proves the thing that keeps every OTHER fingerprint
+        /// in this harness valid: an unarmored profile resolves a battle byte-identically to one
+        /// built before armor existed, because a null profile and an empty armor list are both exact
+        /// no-ops through StatMath.ApplyArmor.
+        /// </summary>
+        private static void CheckArmor(ContentDatabase db)
+        {
+            Line("ARMOR");
+
+            Check(SaveSerializer.CurrentVersion >= 8,
+                  "save version is at least 8, where armor bumped it (" + SaveSerializer.CurrentVersion + ")");
+
+            CheckArmorContent(db);
+            CheckArmorEveryStatReachesUnitStats();
+            CheckArmorRollGuarantees(db);
+            CheckArmorRollDeterminism(db);
+            CheckArmorIsAbsentByDefault(db);
+            CheckArmorReachesTheSimulation(db);
+            CheckArmorAttunement(db);
+            CheckArmorAnvil(db);
+            CheckArmorSaveRoundTrip(db);
+            CheckArmorDoesNotTouchRelics(db);
+            Line("");
+        }
+
+        /// <summary>armor.json against the shape ArmorConfig expects and DESIGN-ARMOR states.</summary>
+        private static void CheckArmorContent(ContentDatabase db)
+        {
+            ArmorConfig c = db.Armor;
+            Check(c != null && c.IsUsable, "armor.json loads a usable config");
+            if (c == null || !c.IsUsable) return;
+
+            bool everySlotCanDrop = true;
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+                if (c.GetPrimaryRoll(ArmorInfo.AllSlots[i]) == null) everySlotCanDrop = false;
+            Check(everySlotCanDrop, "every one of the " + ArmorInfo.AllSlots.Length
+                + " slots has a primary roll range, so every slot can actually drop");
+
+            // The substat table must cover the whole live pool - that is armor's stated reason to
+            // exist, so a missing entry is a design failure rather than a tuning gap.
+            Array stats = Enum.GetValues(typeof(ArmorStat));
+            bool poolComplete = true;
+            string missing = "";
+            for (int i = 0; i < stats.Length; i++)
+            {
+                ArmorStat stat = (ArmorStat)stats.GetValue(i);
+                bool found = false;
+                for (int r = 0; r < c.SubRolls.Count; r++) if (c.SubRolls[r].Stat == stat && c.SubRolls[r].Weight > 0) found = true;
+                if (!found) { poolComplete = false; missing += (missing.Length > 0 ? ", " : "") + stat; }
+            }
+            Check(poolComplete, "the substat table covers all " + stats.Length
+                + " live stats" + (poolComplete ? "" : " - missing " + missing));
+
+            // The six that no relic can reach. This is the check that would catch someone quietly
+            // narrowing the pool back to what relics already do.
+            ArmorStat[] unreachableByRelics =
+            {
+                ArmorStat.SkillDamage, ArmorStat.Block, ArmorStat.ArmorBreak,
+                ArmorStat.ControlImmunity, ArmorStat.DamageReduction, ArmorStat.HolyDamage
+            };
+            bool allSix = true;
+            for (int i = 0; i < unreachableByRelics.Length; i++)
+            {
+                bool found = false;
+                for (int r = 0; r < c.SubRolls.Count; r++)
+                    if (c.SubRolls[r].Stat == unreachableByRelics[i] && c.SubRolls[r].Weight > 0) found = true;
+                if (!found) allSix = false;
+            }
+            Check(allSix, "and includes all six stats no relic can grant - Skill Damage, Block, Armor Break, "
+                + "Control Immunity, Damage Reduction and Holy Damage - which is armor's reason to exist");
+
+            Check(c.Tempers.Count == 4, "all four temper rungs are authored (" + c.Tempers.Count + ")");
+
+            // Salvage under reroll at every rung, or the Anvil prints Slag instead of consuming it.
+            bool sinkIsASink = true;
+            for (int i = 0; i < c.Tempers.Count; i++)
+                if (c.Tempers[i].RerollSlag > 0 && c.Tempers[i].SalvageSlag >= c.Tempers[i].RerollSlag) sinkIsASink = false;
+            Check(sinkIsASink, "salvage pays less than a reroll costs at every rung, so the Anvil consumes pieces rather than printing Slag");
+
+            // Every aspect needs both thresholds, or an aspect's heroes have no set to chase.
+            Array aspects = Enum.GetValues(typeof(Aspect));
+            bool everyAspectAttuned = true;
+            for (int i = 0; i < aspects.Length; i++)
+            {
+                Aspect a = (Aspect)aspects.GetValue(i);
+                if (c.AttunementsFor(a, ArmorInfo.AllSlots.Length).Count < 2) everyAspectAttuned = false;
+            }
+            Check(everyAspectAttuned, "all " + aspects.Length + " aspects have both attunement thresholds authored");
+
+            Check(db.Warnings.Count == 0 || !WarningsMention(db, "armor.json"),
+                  "armor.json produced no content warnings");
+        }
+
+        private static bool WarningsMention(ContentDatabase db, string needle)
+        {
+            for (int i = 0; i < db.Warnings.Count; i++) if (db.Warnings[i].Contains(needle)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Every ArmorStat member actually moves its UnitStats field. The check StatMath.ApplyRoll's
+        /// comment promises, and the one that matters most: a member added to the enum but not to
+        /// that switch would be silently inert, and a stat the UI advertises while the maths ignores
+        /// it is the worst failure this system can have. Exhaustive over the enum rather than
+        /// sampled, so adding a fifteenth stat without wiring it fails here immediately.
+        /// </summary>
+        private static void CheckArmorEveryStatReachesUnitStats()
+        {
+            Array stats = Enum.GetValues(typeof(ArmorStat));
+            bool allReach = true;
+            string inert = "";
+
+            for (int i = 0; i < stats.Length; i++)
+            {
+                ArmorStat stat = (ArmorStat)stats.GetValue(i);
+
+                // A baseline with every field non-zero, so a Multiply-mode stat has something to
+                // multiply - a zero field would be unchanged by any multiplier and read as inert.
+                UnitStats before = BaselineStats();
+                UnitStats after = BaselineStats();
+
+                ArmorPiece piece = new ArmorPiece();
+                piece.Slot = ArmorSlot.Weapon;
+                piece.Primary = new ArmorStatRoll(stat, ArmorInfo.ModeFor(stat), 0.5f);
+
+                List<ArmorPiece> worn = new List<ArmorPiece>();
+                worn.Add(piece);
+                StatMath.ApplyArmor(after, worn, Aspect.Ember, null);
+
+                if (StatsEqual(before, after)) { allReach = false; inert += (inert.Length > 0 ? ", " : "") + stat; }
+            }
+
+            Check(allReach, "every one of the " + stats.Length + " ArmorStat members moves its UnitStats field"
+                + (allReach ? "" : " - inert: " + inert));
+        }
+
+        private static UnitStats BaselineStats()
+        {
+            UnitStats s = new UnitStats();
+            s.MaxHp = 1000f; s.Attack = 100f; s.Defense = 60f; s.Speed = 100f;
+            s.CritChance = 0.15f; s.CritDamage = 1.6f;
+            s.EffectHit = 0.1f; s.EffectResist = 0.1f;
+            s.SkillDamage = 0.1f; s.Block = 0.1f; s.ArmorBreak = 0.1f;
+            s.ControlImmunity = 0.1f; s.DamageReduction = 0.1f; s.HolyDamage = 10f;
+            return s;
+        }
+
+        private static bool StatsEqual(UnitStats a, UnitStats b)
+        {
+            return a.MaxHp == b.MaxHp && a.Attack == b.Attack && a.Defense == b.Defense && a.Speed == b.Speed
+                && a.CritChance == b.CritChance && a.CritDamage == b.CritDamage
+                && a.EffectHit == b.EffectHit && a.EffectResist == b.EffectResist
+                && a.SkillDamage == b.SkillDamage && a.Block == b.Block && a.ArmorBreak == b.ArmorBreak
+                && a.ControlImmunity == b.ControlImmunity && a.DamageReduction == b.DamageReduction
+                && a.HolyDamage == b.HolyDamage;
+        }
+
+        /// <summary>
+        /// The roller's three structural guarantees, swept over every slot and every temper rather
+        /// than sampled: the slot decides the primary, the temper decides the substat count, and
+        /// substats never repeat within a piece.
+        /// </summary>
+        private static void CheckArmorRollGuarantees(ContentDatabase db)
+        {
+            bool primaryAlwaysMatchesSlot = true;
+            bool countAlwaysMatchesTemper = true;
+            bool neverDuplicatesASubStat = true;
+            int rolled = 0;
+
+            Array tempers = Enum.GetValues(typeof(ArmorTemper));
+            for (int s = 0; s < ArmorInfo.AllSlots.Length; s++)
+            {
+                for (int t = 0; t < tempers.Length; t++)
+                {
+                    ArmorSlot slot = ArmorInfo.AllSlots[s];
+                    ArmorTemper temper = (ArmorTemper)tempers.GetValue(t);
+
+                    for (int seed = 1; seed <= 40; seed++)
+                    {
+                        ArmorPiece piece = ArmorRoller.Roll(db.Armor, slot, temper, Aspect.Ember, seed * 7919 + s * 31 + t);
+                        if (piece == null) { primaryAlwaysMatchesSlot = false; continue; }
+                        rolled++;
+
+                        if (piece.Primary.Stat != ArmorInfo.PrimaryStat(slot)) primaryAlwaysMatchesSlot = false;
+                        if (piece.SubStats.Count != ArmorInfo.SubStatCount(temper)) countAlwaysMatchesTemper = false;
+
+                        List<ArmorStat> seen = new List<ArmorStat>();
+                        for (int i = 0; i < piece.SubStats.Count; i++)
+                        {
+                            if (seen.Contains(piece.SubStats[i].Stat)) neverDuplicatesASubStat = false;
+                            seen.Add(piece.SubStats[i].Stat);
+                        }
+                    }
+                }
+            }
+
+            Check(primaryAlwaysMatchesSlot, "across " + rolled
+                + " rolls, every piece's primary is the stat its slot guarantees - the slot decides it, the roll never does");
+            Check(countAlwaysMatchesTemper, "and every piece carries exactly the substat count its temper gates");
+            Check(neverDuplicatesASubStat, "and no piece ever rolls the same substat twice");
+        }
+
+        /// <summary>
+        /// Same seed, same piece - the property every other armor check here depends on, and the
+        /// reason ArmorRoller takes an int rather than sharing an RNG with anything.
+        /// </summary>
+        private static void CheckArmorRollDeterminism(ContentDatabase db)
+        {
+            ArmorPiece a = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant, Aspect.Ember, 4242);
+            ArmorPiece b = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant, Aspect.Ember, 4242);
+            ArmorPiece c = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant, Aspect.Ember, 4243);
+
+            Check(a != null && b != null && c != null && ArmorFingerprint(a) == ArmorFingerprint(b),
+                  "the same seed rolls an identical piece");
+            Check(a != null && c != null && ArmorFingerprint(a) != ArmorFingerprint(c),
+                  "and a different seed rolls a different one");
+
+            // A reroll must move the substats and leave everything else exactly where it was -
+            // that is the whole contract the Anvil's price is charged against.
+            ArmorPiece rerolled = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant, Aspect.Ember, 4242);
+            string primaryBefore = rerolled.Primary.Stat + ":" + rerolled.Primary.Value.ToString("F4", CultureInfo.InvariantCulture);
+            string subsBefore = SubStatFingerprint(rerolled);
+            ArmorRoller.Reroll(db.Armor, rerolled, 999001);
+
+            Check(SubStatFingerprint(rerolled) != subsBefore, "a reroll changes the substats");
+            Check(rerolled.Primary.Stat + ":" + rerolled.Primary.Value.ToString("F4", CultureInfo.InvariantCulture) == primaryBefore
+                  && rerolled.Slot == ArmorSlot.Weapon && rerolled.Temper == ArmorTemper.Radiant && rerolled.Aspect == Aspect.Ember,
+                  "and leaves the primary, slot, temper and aspect untouched");
+            Check(rerolled.SubStats.Count == ArmorInfo.SubStatCount(ArmorTemper.Radiant),
+                  "and still carries its temper's substat count after the reroll ("
+                  + rerolled.SubStats.Count + ")");
+        }
+
+        private static string ArmorFingerprint(ArmorPiece p)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append(p.Slot).Append('|').Append(p.Temper).Append('|').Append(p.Aspect).Append('|').Append(p.Name).Append('|');
+            sb.Append(p.Primary.Stat).Append(':').Append(p.Primary.Value.ToString("F4", CultureInfo.InvariantCulture)).Append('|');
+            sb.Append(SubStatFingerprint(p));
+            return sb.ToString();
+        }
+
+        private static string SubStatFingerprint(ArmorPiece p)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < p.SubStats.Count; i++)
+                sb.Append(p.SubStats[i].Stat).Append(':')
+                  .Append(p.SubStats[i].Value.ToString("F4", CultureInfo.InvariantCulture)).Append(';');
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// THE check that keeps every other fingerprint in this harness valid. Armor can genuinely
+        /// move a seeded battle - Block adds an RNG draw to every incoming hit, Effect Hit can add
+        /// or remove one at the landing gate - so what has to be proven is not that armor never
+        /// changes anything, but that its ABSENCE is exact.
+        ///
+        /// Three ways of expressing "no armor" must all give the same numbers: a null armor list, an
+        /// empty one, and a real profile with six empty slots. If any of them diverged, every
+        /// pre-armor fingerprint in this file would silently be measuring something else.
+        /// </summary>
+        private static void CheckArmorIsAbsentByDefault(ContentDatabase db)
+        {
+            HeroDef hero = db.Heroes[0];
+            UnitStats bare = StatMath.ForHero(hero, 20);
+            UnitStats nullArmor = StatMath.ForHero(hero, 20, null, null, db.Armor);
+            UnitStats emptyArmor = StatMath.ForHero(hero, 20, null, new List<ArmorPiece>(), db.Armor);
+
+            Check(StatsEqual(bare, nullArmor) && StatsEqual(bare, emptyArmor),
+                  "a null armor list and an empty one are both exact no-ops - identical to ForHero(def, level)");
+
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+
+            Check(profile.OwnedArmor.Count == 0, "a new profile owns no armor");
+            Check(profile.Slag == 0, "and no Slag");
+
+            bool everySlotEmpty = true;
+            for (int h = 0; h < profile.Heroes.Count; h++)
+                for (int s = 0; s < profile.Heroes[h].EquippedArmor.Length; s++)
+                    if (!string.IsNullOrEmpty(profile.Heroes[h].EquippedArmor[s])) everySlotEmpty = false;
+            Check(everySlotEmpty, "and every hero's six slots are empty");
+
+            // The profile now rides on BattleRequest. An unarmored one must resolve exactly as a
+            // request with no profile at all did before armor existed.
+            StageDef stage = db.AllStages[0];
+            BattleRequest withProfile = session.BuildBattleRequest(stage, 31337);
+            BattleRequest withoutProfile = session.BuildBattleRequest(stage, 31337);
+            withoutProfile.Profile = null;
+
+            Check(FingerprintOf(CombatSimulation.Run(withProfile)) == FingerprintOf(CombatSimulation.Run(withoutProfile)),
+                  "and an unarmored profile on the request resolves the battle byte-identically to no profile at all - "
+                  + "which is what keeps every pre-armor fingerprint in this harness valid");
+        }
+
+        /// <summary>
+        /// Armor actually changes a fight. The end-to-end proof that the wiring reaches the
+        /// simulation at all: same seed, same stage, same team, one hero wearing one piece, and the
+        /// battle must resolve differently. Uses a large Attack roll rather than a subtle one -
+        /// this proves the path exists, not that a particular magnitude is balanced.
+        /// </summary>
+        private static void CheckArmorReachesTheSimulation(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            StageDef stage = db.AllStages[0];
+
+            PlayerProfile bare = GameSession.CreateNewProfile(db, Noon);
+            GameSession bareSession = new GameSession(db, bare);
+            string before = FingerprintOf(CombatSimulation.Run(bareSession.BuildBattleRequest(stage, 5150)));
+
+            PlayerProfile armored = GameSession.CreateNewProfile(db, Noon);
+            GameSession armoredSession = new GameSession(db, armored);
+            HeroInstance wearer = armored.Heroes[0];
+
+            ArmorPiece piece = new ArmorPiece();
+            piece.Uid = armored.AllocateArmorUid();
+            piece.Name = "Test Blade";
+            piece.Slot = ArmorSlot.Weapon;
+            piece.Temper = ArmorTemper.Radiant;
+            piece.Aspect = wearer.Def.Aspect;
+            piece.Primary = new ArmorStatRoll(ArmorStat.Attack, ArmorStatMode.Multiply, 0.5f);
+            armored.OwnedArmor.Add(piece);
+
+            Check(armoredSession.EquipArmor(wearer, piece.Uid), "a piece equips to a hero");
+            Check(armored.ArmorInSlot(wearer, ArmorSlot.Weapon) == piece, "and reads back out of its own slot");
+            Check(armored.HeroWearingArmor(piece.Uid) == wearer, "and the profile knows who is wearing it");
+            Check(armored.UnequippedArmor().Count == 0, "and it is no longer in the pool");
+
+            UnitStats withPiece = StatMath.ForHero(wearer.Def, wearer.Level, null, armored.EquippedArmorOf(wearer), db.Armor);
+            UnitStats withoutPiece = StatMath.ForHero(wearer.Def, wearer.Level);
+            Check(withPiece.Attack > withoutPiece.Attack,
+                  "a +50% Attack piece raises the wearer's Attack (" + withoutPiece.Attack + " -> " + withPiece.Attack + ")");
+
+            string after = FingerprintOf(CombatSimulation.Run(armoredSession.BuildBattleRequest(stage, 5150)));
+            Check(before != after, "and the same seeded battle resolves differently with it equipped - armor reaches the simulation");
+
+            // A piece only ever sits in its own slot, and unequipping returns it to the pool
+            // rather than destroying it.
+            Check(armoredSession.UnequipArmor(wearer, ArmorSlot.Weapon), "it comes off again");
+            Check(armored.UnequippedArmor().Count == 1 && armored.FindArmor(piece.Uid) != null,
+                  "back to owned-but-unequipped, not destroyed");
+
+            // Normalisation: a slot holding a piece that belongs in a different slot is emptied.
+            // Not reachable through EquipArmor, which reads the slot off the piece - this is the
+            // hand-edited-save case NormaliseArmor exists for.
+            wearer.EquippedArmor[PlayerProfile.SlotIndex(ArmorSlot.Boots)] = piece.Uid;
+            armored.NormaliseArmor();
+            Check(string.IsNullOrEmpty(wearer.EquippedArmor[PlayerProfile.SlotIndex(ArmorSlot.Boots)]),
+                  "normalising empties a slot holding a piece that belongs in a different one");
+
+            wearer.EquippedArmor[PlayerProfile.SlotIndex(ArmorSlot.Weapon)] = "a_piece_nobody_owns";
+            armored.NormaliseArmor();
+            Check(string.IsNullOrEmpty(wearer.EquippedArmor[PlayerProfile.SlotIndex(ArmorSlot.Weapon)]),
+                  "and empties a reference to a piece nobody owns");
+        }
+
+        /// <summary>
+        /// Attunement: counted against the WEARER's aspect, cumulative across thresholds, and
+        /// nothing at all below the first one. Built from synthetic pieces with zero-value rolls, so
+        /// the only thing that can move a stat is the set bonus itself.
+        /// </summary>
+        private static void CheckArmorAttunement(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            HeroInstance wearer = profile.Heroes[0];
+            Aspect worn = wearer.Def.Aspect;
+            Aspect other = worn == Aspect.Umbra ? Aspect.Lumen : Aspect.Umbra;
+
+            // Six inert pieces, one per slot. Every roll is zero, so any stat change below comes
+            // from attunement and from nothing else.
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+            {
+                ArmorSlot slot = ArmorInfo.AllSlots[i];
+                ArmorPiece p = new ArmorPiece();
+                p.Uid = profile.AllocateArmorUid();
+                p.Slot = slot;
+                p.Aspect = other;
+                p.Temper = ArmorTemper.Rough;
+                p.Primary = new ArmorStatRoll(ArmorInfo.PrimaryStat(slot), ArmorInfo.ModeFor(ArmorInfo.PrimaryStat(slot)), 0f);
+                profile.OwnedArmor.Add(p);
+                session.EquipArmor(wearer, p.Uid);
+            }
+
+            Check(profile.AttunementCount(wearer) == 0,
+                  "six pieces of the wrong aspect attune nothing (" + profile.AttunementCount(wearer) + ")");
+            UnitStats offAspect = StatMath.ForHero(wearer.Def, wearer.Level, null, profile.EquippedArmorOf(wearer), db.Armor);
+            UnitStats bare = StatMath.ForHero(wearer.Def, wearer.Level);
+            Check(StatsEqual(bare, offAspect), "and grant nothing at all - six inert off-aspect pieces are exactly no armor");
+
+            // One matching piece: still below the 2-piece threshold.
+            List<ArmorPiece> equipped = profile.EquippedArmorOf(wearer);
+            equipped[0].Aspect = worn;
+            Check(profile.AttunementCount(wearer) == 1, "one matching piece counts as one");
+            Check(StatsEqual(bare, StatMath.ForHero(wearer.Def, wearer.Level, null, profile.EquippedArmorOf(wearer), db.Armor)),
+                  "and still grants nothing - one piece is below the first threshold");
+
+            // Two matching: the 2-piece bonus and only that one.
+            equipped[1].Aspect = worn;
+            UnitStats atTwo = StatMath.ForHero(wearer.Def, wearer.Level, null, profile.EquippedArmorOf(wearer), db.Armor);
+            Check(profile.AttunementCount(wearer) == 2, "two matching pieces count as two");
+            Check(!StatsEqual(bare, atTwo), "and the 2-piece attunement lands");
+
+            // Four matching: the 4-piece bonus lands ON TOP of the 2-piece one, not instead of it.
+            equipped[2].Aspect = worn;
+            equipped[3].Aspect = worn;
+            UnitStats atFour = StatMath.ForHero(wearer.Def, wearer.Level, null, profile.EquippedArmorOf(wearer), db.Armor);
+            Check(profile.AttunementCount(wearer) == 4, "four matching pieces count as four");
+            Check(!StatsEqual(atTwo, atFour), "and the 4-piece attunement lands on top of the 2-piece one");
+
+            List<ArmorAttunementDef> metAtFour = db.Armor.AttunementsFor(worn, 4);
+            List<ArmorAttunementDef> metAtTwo = db.Armor.AttunementsFor(worn, 2);
+            Check(metAtTwo.Count == 1 && metAtFour.Count == 2,
+                  "thresholds are cumulative rather than exclusive - " + worn + " meets "
+                  + metAtTwo.Count + " at two pieces and " + metAtFour.Count + " at four");
+
+            // The 2-piece bonus must still be present at four. Proven by the stat it names rather
+            // than by re-reading the table that produced it.
+            ArmorStat twoPieceStat = metAtTwo[0].Bonuses[0].Stat;
+            Check(StatValue(atFour, twoPieceStat) >= StatValue(atTwo, twoPieceStat),
+                  "and the 2-piece bonus is still applied at four pieces, not replaced by the deeper one");
+        }
+
+        private static float StatValue(UnitStats s, ArmorStat stat)
+        {
+            switch (stat)
+            {
+                case ArmorStat.MaxHp: return s.MaxHp;
+                case ArmorStat.Attack: return s.Attack;
+                case ArmorStat.Defense: return s.Defense;
+                case ArmorStat.Speed: return s.Speed;
+                case ArmorStat.CritChance: return s.CritChance;
+                case ArmorStat.CritDamage: return s.CritDamage;
+                case ArmorStat.EffectHit: return s.EffectHit;
+                case ArmorStat.EffectResist: return s.EffectResist;
+                case ArmorStat.SkillDamage: return s.SkillDamage;
+                case ArmorStat.Block: return s.Block;
+                case ArmorStat.ArmorBreak: return s.ArmorBreak;
+                case ArmorStat.ControlImmunity: return s.ControlImmunity;
+                case ArmorStat.DamageReduction: return s.DamageReduction;
+                case ArmorStat.HolyDamage: return s.HolyDamage;
+            }
+            return 0f;
+        }
+
+        /// <summary>
+        /// The Anvil: salvage pays and destroys, reroll charges and rerolls, and both refuse
+        /// cleanly rather than half-completing. The refusal cases are the ones worth having - a
+        /// salvage that stripped an equipped hero, or a reroll that charged for nothing, are both
+        /// silent losses a player would not notice until much later.
+        /// </summary>
+        private static void CheckArmorAnvil(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+
+            ArmorPiece piece = ArmorRoller.Roll(db.Armor, ArmorSlot.Plate, ArmorTemper.Gilded, Aspect.Verdant, 777);
+            piece.Uid = profile.AllocateArmorUid();
+            profile.OwnedArmor.Add(piece);
+
+            int salvageValue = session.SalvageValue(piece);
+            int rerollCost = session.RerollCost(piece);
+            Check(salvageValue > 0 && rerollCost > salvageValue,
+                  "a Gilded piece salvages for " + salvageValue + " Slag and rerolls for " + rerollCost);
+
+            // Reroll with an empty purse: refused, and nothing moves.
+            string subsBefore = SubStatFingerprint(piece);
+            Check(!session.RerollArmor(piece.Uid, Noon), "the Anvil refuses a reroll the player cannot afford");
+            Check(profile.Slag == 0 && SubStatFingerprint(piece) == subsBefore,
+                  "and charges nothing and changes nothing on the refusal");
+
+            profile.Slag = rerollCost;
+            Check(session.RerollArmor(piece.Uid, Noon), "it accepts the reroll at exactly the price");
+            Check(profile.Slag == 0, "and deducts the full cost (Slag now " + profile.Slag + ")");
+            Check(SubStatFingerprint(piece) != subsBefore, "and the substats actually moved");
+
+            // Salvage refuses an equipped piece rather than silently stripping the hero.
+            HeroInstance wearer = profile.Heroes[0];
+            session.EquipArmor(wearer, piece.Uid);
+            Check(!session.SalvageArmor(piece.Uid), "salvage refuses a piece a hero is wearing");
+            Check(profile.FindArmor(piece.Uid) != null && profile.Slag == 0,
+                  "and neither destroys it nor pays for it");
+
+            // A reroll IS allowed on an equipped piece - it is not destructive.
+            profile.Slag = session.RerollCost(piece);
+            Check(session.RerollArmor(piece.Uid, Noon + 60), "but a reroll works on an equipped piece - it destroys nothing");
+
+            session.UnequipArmor(wearer, piece.Slot);
+            profile.Slag = 0;
+            Check(session.SalvageArmor(piece.Uid), "salvage accepts it once it is off the hero");
+            Check(profile.Slag == salvageValue, "and pays its temper's value (" + profile.Slag + ")");
+            Check(profile.FindArmor(piece.Uid) == null, "and the piece is gone");
+            Check(!session.SalvageArmor(piece.Uid), "salvaging it a second time is refused");
+
+            CheckArmorDropRidesTheRepeatCap(db);
+        }
+
+        /// <summary>
+        /// A repeat-capped clear drops no armor, exactly as it pays no gold and no Relic Dust
+        /// (DESIGN-ARMOR section 8). The one rule keeping armor from handing the uncapped farming
+        /// loop back in a new denomination, so it is checked rather than assumed.
+        /// </summary>
+        private static void CheckArmorDropRidesTheRepeatCap(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            StageDef stage = db.AllStages[0];
+
+            session.GrantBattleResult(stage, true, Noon);   // first clear - never capped, never counted
+            for (int i = 0; i < session.RepeatFullClearsPerDay; i++)
+                session.GrantBattleResult(stage, true, Noon);
+
+            BattleRewards capped = session.GrantBattleResult(stage, true, Noon);
+            Check(capped.RepeatCapped, "the clear past the daily allowance is capped");
+            Check(capped.ArmorDrop == null, "and drops no armor - armor rides the repeat cap exactly as gold and Relic Dust do");
+
+            // The uncapped path must be able to drop, or the check above would pass for the wrong
+            // reason. Swept over many seconds because a drop is a chance, not a certainty.
+            PlayerProfile lucky = GameSession.CreateNewProfile(db, Noon);
+            GameSession luckySession = new GameSession(db, lucky);
+            int drops = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                StageDef s = db.AllStages[i % db.AllStages.Count];
+                if (luckySession.RollArmorDrop(s, Noon + i * 37) != null) drops++;
+            }
+            Check(drops > 0, "an uncapped clear can drop a piece (" + drops + " of 60 rolls)");
+            Check(lucky.OwnedArmor.Count == drops, "and every dropped piece landed in the collection");
+
+            bool everyDropIsWellFormed = true;
+            for (int i = 0; i < lucky.OwnedArmor.Count; i++)
+            {
+                ArmorPiece p = lucky.OwnedArmor[i];
+                if (string.IsNullOrEmpty(p.Uid)) everyDropIsWellFormed = false;
+                if (p.Primary == null || p.Primary.Stat != ArmorInfo.PrimaryStat(p.Slot)) everyDropIsWellFormed = false;
+                if (p.SubStats.Count != ArmorInfo.SubStatCount(p.Temper)) everyDropIsWellFormed = false;
+            }
+            Check(everyDropIsWellFormed, "and every dropped piece has a uid, its slot's primary and its temper's substat count");
+        }
+
+        /// <summary>
+        /// The save, both directions: a full armor collection round trips, and a version 7 document
+        /// with no armor keys at all upgrades to an empty collection rather than to anything
+        /// synthesised. The second half is the version 4 -> 5 relic bump's counterexample - armor
+        /// has no prior format to translate out of, so the correct upgrade is genuinely nothing.
+        /// </summary>
+        private static void CheckArmorSaveRoundTrip(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+            profile.Slag = 137;
+
+            HeroInstance wearer = profile.Heroes[0];
+            List<string> uids = new List<string>();
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+            {
+                ArmorPiece p = ArmorRoller.Roll(db.Armor, ArmorInfo.AllSlots[i], ArmorTemper.Radiant, Aspect.Lumen, 900 + i);
+                p.Uid = profile.AllocateArmorUid();
+                profile.OwnedArmor.Add(p);
+                uids.Add(p.Uid);
+                session.EquipArmor(wearer, p.Uid);
+            }
+            // One extra piece left in the pool, so the round trip covers the unequipped state too.
+            ArmorPiece pooled = ArmorRoller.Roll(db.Armor, ArmorSlot.Boots, ArmorTemper.Rough, Aspect.Gale, 4711);
+            pooled.Uid = profile.AllocateArmorUid();
+            profile.OwnedArmor.Add(pooled);
+
+            string json = SaveSerializer.Serialize(profile);
+            string err;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out err);
+
+            Check(loaded != null, "an armored profile round trips" + (loaded == null ? " (" + err + ")" : ""));
+            if (loaded == null) return;
+
+            Check(loaded.Slag == 137, "the Slag purse survives (" + loaded.Slag + ")");
+            Check(loaded.OwnedArmor.Count == profile.OwnedArmor.Count,
+                  "every owned piece survives (" + loaded.OwnedArmor.Count + " of " + profile.OwnedArmor.Count + ")");
+            Check(loaded.NextArmorUid == profile.NextArmorUid,
+                  "and the uid counter survives, so a reload cannot reissue a uid");
+
+            bool everyPieceIdentical = true;
+            for (int i = 0; i < profile.OwnedArmor.Count; i++)
+            {
+                ArmorPiece before = profile.OwnedArmor[i];
+                ArmorPiece after = loaded.FindArmor(before.Uid);
+                if (after == null || ArmorFingerprint(before) != ArmorFingerprint(after)) everyPieceIdentical = false;
+            }
+            Check(everyPieceIdentical, "and every piece comes back with the same name, slot, aspect, temper and rolls");
+
+            HeroInstance loadedWearer = loaded.FindHeroByUid(wearer.Uid);
+            bool everySlotRestored = loadedWearer != null;
+            for (int i = 0; i < uids.Count && loadedWearer != null; i++)
+            {
+                ArmorPiece inSlot = loaded.ArmorInSlot(loadedWearer, ArmorInfo.AllSlots[i]);
+                if (inSlot == null || inSlot.Uid != uids[i]) everySlotRestored = false;
+            }
+            Check(everySlotRestored, "and all six slots come back on the same hero, in the same slots");
+            Check(loaded.UnequippedArmor().Count == 1, "and the pooled piece is still pooled, not silently equipped");
+
+            // Stat identity is the check that matters more than field identity: the reloaded
+            // profile must fight with exactly the numbers the original did.
+            UnitStats beforeStats = StatMath.ForHero(wearer.Def, wearer.Level, null, profile.EquippedArmorOf(wearer), db.Armor);
+            UnitStats afterStats = StatMath.ForHero(loadedWearer.Def, loadedWearer.Level, null, loaded.EquippedArmorOf(loadedWearer), db.Armor);
+            Check(StatsEqual(beforeStats, afterStats), "and the reloaded hero resolves to exactly the same stat line");
+
+            CheckArmorSaveUpgrade(db);
+        }
+
+        /// <summary>
+        /// A hand-built version 7 document - no slag, no ownedArmor, no equippedArmor anywhere -
+        /// must read as a player who has never seen armor, with nothing invented for them.
+        /// </summary>
+        private static void CheckArmorSaveUpgrade(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile source = GameSession.CreateNewProfile(db, Noon);
+            source.Slag = 999;
+            source.RelicDust = 42;
+
+            // Serialise at the current version, then strip the armor keys and stamp it back to 7.
+            // Built by removing rather than by hand-writing a document, so this stays honest about
+            // what a real version 7 save contained as the rest of the format moves on.
+            string json = SaveSerializer.Serialize(source);
+            JsonValue root;
+            string parseErr;
+            if (!JsonValue.TryParse(json, out root, out parseErr)) { Check(false, "could not rebuild a version 7 document: " + parseErr); return; }
+
+            JsonValue downgraded = JsonValue.NewObject();
+            foreach (string key in root.Keys)
+            {
+                if (key == "slag" || key == "ownedArmor" || key == "nextArmorUid") continue;
+                downgraded.Set(key, root[key]);
+            }
+            downgraded.Set("version", 7);
+
+            string err;
+            PlayerProfile loaded = SaveSerializer.Deserialize(downgraded.ToJson(false), db, out err);
+            Check(loaded != null, "a version 7 save still loads" + (loaded == null ? " (" + err + ")" : ""));
+            if (loaded == null) return;
+
+            Check(loaded.Slag == 0, "with no Slag - the key's absence reads as zero, not as anything synthesised");
+            Check(loaded.OwnedArmor.Count == 0, "and an empty armor collection");
+            Check(loaded.NextArmorUid == 1, "and a fresh uid counter");
+            Check(loaded.RelicDust == 42, "and everything it DID carry intact - the relic purse is untouched");
+
+            bool everySlotEmpty = true;
+            for (int h = 0; h < loaded.Heroes.Count; h++)
+                for (int s = 0; s < loaded.Heroes[h].EquippedArmor.Length; s++)
+                    if (!string.IsNullOrEmpty(loaded.Heroes[h].EquippedArmor[s])) everySlotEmpty = false;
+            Check(everySlotEmpty, "and six empty slots on every hero");
+
+            // The downgrade guard, unchanged in shape from every bump since 2.
+            JsonValue future = JsonValue.NewObject();
+            foreach (string key in root.Keys) future.Set(key, root[key]);
+            future.Set("version", SaveSerializer.CurrentVersion + 1);
+            string futureErr;
+            PlayerProfile refused = SaveSerializer.Deserialize(future.ToJson(false), db, out futureErr);
+            Check(refused == null && !string.IsNullOrEmpty(futureErr),
+                  "and a save from a newer build is still refused rather than quietly mangled");
+        }
+
+        /// <summary>
+        /// Armor changed nothing about relics. DESIGN-ARMOR's "no shared hooks, no shared save
+        /// fields" stated as a check rather than as a promise: RelicStat keeps its eight members,
+        /// and a relic resolves to the same stat line it did before armor existed.
+        /// </summary>
+        private static void CheckArmorDoesNotTouchRelics(ContentDatabase db)
+        {
+            Check(Enum.GetValues(typeof(RelicStat)).Length == 8,
+                  "RelicStat still has exactly 8 members - armor took its own enum rather than widening this one ("
+                  + Enum.GetValues(typeof(RelicStat)).Length + ")");
+
+            HeroDef hero = db.Heroes[0];
+            RelicDef relic = db.GetRelic("warband_standard");
+            Check(relic != null, "the reference relic still loads");
+            if (relic == null) return;
+
+            UnitStats viaOldPath = StatMath.ForHero(hero, 20, relic);
+            UnitStats viaNewPath = StatMath.ForHero(hero, 20, relic, null, db.Armor);
+            Check(StatsEqual(viaOldPath, viaNewPath),
+                  "and the relic-only entry point resolves identically to the armor-aware one with no armor - "
+                  + "the new overload did not change what relics do");
         }
 
         private static void CheckStageWinnability(ContentDatabase db)

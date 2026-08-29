@@ -550,6 +550,248 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
+    /// One rollable stat line in armor.json: a stat, and the closed range its value is drawn from.
+    /// Used for both the primary and the substat tables, and for the attunement bonuses, which is
+    /// why Min and Max are allowed to be equal - an attunement bonus is a fixed number, expressed
+    /// as a degenerate range rather than as a second type.
+    ///
+    /// Weight is read only by the substat table. A primary is chosen by the slot, not rolled, and
+    /// an attunement bonus is chosen by the aspect, so neither of those competes for a draw.
+    /// </summary>
+    public sealed class ArmorRollDef
+    {
+        public ArmorStat Stat = ArmorStat.Attack;
+        public float Min;
+        public float Max;
+
+        /// <summary>Relative draw weight in the substat table. Clamped to at least 0 - an entry at
+        /// zero is authored-but-disabled, which is a legitimate thing to want and is why this is
+        /// not forced to 1.</summary>
+        public int Weight = 10;
+
+        public static ArmorRollDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            ArmorRollDef r = new ArmorRollDef();
+            r.Stat = EnumUtil.Parse(j.GetString("stat", "Attack"), ArmorStat.Attack);
+            r.Min = j.GetFloat("min", 0f);
+            r.Max = j.GetFloat("max", r.Min);
+            if (r.Max < r.Min) { float swap = r.Min; r.Min = r.Max; r.Max = swap; }
+            r.Weight = Math.Max(0, j.GetInt("weight", 10));
+            return r;
+        }
+    }
+
+    /// <summary>
+    /// The economy and generosity numbers for one temper rung. PrimaryScale multiplies whatever
+    /// the primary table rolled, which is what makes a Radiant Weapon strictly better than a Rough
+    /// one without needing a second primary table per rung.
+    ///
+    /// SalvageSlag and RerollSlag are the Anvil's two prices. DESIGN-ARMOR section 7 requires
+    /// salvage to pay less than reroll costs at every rung so the loop consumes pieces instead of
+    /// printing Slag; ContentDatabase.Validate enforces it rather than trusting the author.
+    /// </summary>
+    public sealed class ArmorTemperDef
+    {
+        public ArmorTemper Temper = ArmorTemper.Rough;
+        public float PrimaryScale = 1f;
+        public int SalvageSlag;
+        public int RerollSlag;
+
+        /// <summary>Relative draw weight for a drop at stage index 0. See ArmorDropWeightPerStageIndex
+        /// for how deep stages tilt away from this.</summary>
+        public int DropWeight = 10;
+
+        /// <summary>
+        /// How much this rung's drop weight moves per point of StageDef.GlobalIndex. Positive on
+        /// the high rungs and negative on the low ones, so deep stages skew toward Gilded and
+        /// Radiant without any rung ever becoming impossible - the roller floors the resulting
+        /// weight at 1 rather than at 0, so a Rough piece stays reachable at the final stage and a
+        /// Radiant one stays reachable at the first.
+        /// </summary>
+        public float DropWeightPerStageIndex;
+
+        public static ArmorTemperDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            ArmorTemperDef t = new ArmorTemperDef();
+            t.Temper = EnumUtil.Parse(j.GetString("temper", "Rough"), ArmorTemper.Rough);
+            t.PrimaryScale = j.GetFloat("primaryScale", 1f);
+            t.SalvageSlag = Math.Max(0, j.GetInt("salvageSlag", 0));
+            t.RerollSlag = Math.Max(0, j.GetInt("rerollSlag", 0));
+            t.DropWeight = Math.Max(0, j.GetInt("dropWeight", 10));
+            t.DropWeightPerStageIndex = j.GetFloat("dropWeightPerStageIndex", 0f);
+            return t;
+        }
+    }
+
+    /// <summary>
+    /// One attunement threshold for one aspect (DESIGN-ARMOR section 6): "an Ember hero wearing at
+    /// least 2 Ember pieces gets these bonuses". Thresholds are CUMULATIVE, not exclusive - a hero
+    /// at 4 matching pieces receives the 2-piece entry and the 4-piece entry both - so the 4-piece
+    /// entry lists only what it adds on top.
+    ///
+    /// Bonuses are ArmorRollDef with Min == Max. That is deliberate reuse rather than a fixed-value
+    /// type of its own: it makes it structurally impossible for a set bonus to express anything a
+    /// substat could not, which is the whole "no unique effects, ever" guarantee restated for the
+    /// set layer.
+    /// </summary>
+    public sealed class ArmorAttunementDef
+    {
+        public Aspect Aspect = Aspect.Ember;
+        public int Pieces = 2;
+        public string Name = "";
+        public readonly List<ArmorRollDef> Bonuses = new List<ArmorRollDef>();
+
+        public static ArmorAttunementDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            ArmorAttunementDef a = new ArmorAttunementDef();
+            a.Aspect = EnumUtil.Parse(j.GetString("aspect", "Ember"), Aspect.Ember);
+            a.Pieces = Math.Max(1, j.GetInt("pieces", 2));
+            a.Name = j.GetString("name", "");
+            List<JsonValue> bonuses = j.GetList("bonuses");
+            for (int i = 0; i < bonuses.Count; i++)
+            {
+                ArmorRollDef b = ArmorRollDef.FromJson(bonuses[i]);
+                if (b != null) a.Bonuses.Add(b);
+            }
+            return a;
+        }
+    }
+
+    /// <summary>
+    /// Everything armor.json carries. Deliberately NOT a per-item catalogue the way relics.json is:
+    /// an armor piece is generated, not authored, so what content owns is the roll tables, the
+    /// naming pools and the prices. There is no ArmorDef for an individual piece and there is no
+    /// id to reference, which is also why a saved piece stores its resolved values rather than a
+    /// reference into here (DESIGN-ARMOR section 10).
+    ///
+    /// A build with no armor.json loads an empty config, which ArmorRoller treats as "this build
+    /// cannot roll armor" - the same shape relics.json and events.json already have.
+    /// </summary>
+    public sealed class ArmorConfig
+    {
+        public readonly List<ArmorRollDef> PrimaryRolls = new List<ArmorRollDef>();
+        public readonly List<ArmorRollDef> SubRolls = new List<ArmorRollDef>();
+        public readonly List<ArmorTemperDef> Tempers = new List<ArmorTemperDef>();
+        public readonly List<ArmorAttunementDef> Attunements = new List<ArmorAttunementDef>();
+
+        /// <summary>Flavour names per slot, drawn from at roll time. Purely cosmetic - a piece's
+        /// behaviour is its slot, temper, aspect and rolls, never its name.</summary>
+        public readonly Dictionary<ArmorSlot, List<string>> SlotNames = new Dictionary<ArmorSlot, List<string>>();
+
+        /// <summary>Chance, 0..1, that a full-purse stage clear drops a piece at all. One at the
+        /// default so an unauthored armor.json is obvious rather than silently stingy.</summary>
+        public float DropChance = 1f;
+
+        /// <summary>True once the config carries enough to roll a piece. Everything downstream tests
+        /// this instead of testing four collections for emptiness in four places.</summary>
+        public bool IsUsable
+        {
+            get { return PrimaryRolls.Count > 0 && SubRolls.Count > 0 && Tempers.Count > 0; }
+        }
+
+        public ArmorTemperDef GetTemper(ArmorTemper temper)
+        {
+            for (int i = 0; i < Tempers.Count; i++) if (Tempers[i].Temper == temper) return Tempers[i];
+            return null;
+        }
+
+        /// <summary>The primary roll range for a slot, resolved through the slot's guaranteed stat
+        /// rather than by looking a slot up - the guarantee lives in ArmorInfo, and this reads it
+        /// rather than restating it.</summary>
+        public ArmorRollDef GetPrimaryRoll(ArmorSlot slot)
+        {
+            ArmorStat wanted = ArmorInfo.PrimaryStat(slot);
+            for (int i = 0; i < PrimaryRolls.Count; i++) if (PrimaryRolls[i].Stat == wanted) return PrimaryRolls[i];
+            return null;
+        }
+
+        public List<string> NamesFor(ArmorSlot slot)
+        {
+            List<string> names;
+            return SlotNames.TryGetValue(slot, out names) ? names : null;
+        }
+
+        /// <summary>
+        /// Every attunement entry an aspect has at or below a matching-piece count, in ascending
+        /// threshold order. Cumulative by construction: the caller applies all of them, which is
+        /// what makes the 4-piece entry an addition to the 2-piece one rather than a replacement.
+        /// </summary>
+        public List<ArmorAttunementDef> AttunementsFor(Aspect aspect, int matchingPieces)
+        {
+            List<ArmorAttunementDef> result = new List<ArmorAttunementDef>();
+            for (int i = 0; i < Attunements.Count; i++)
+            {
+                ArmorAttunementDef a = Attunements[i];
+                if (a.Aspect == aspect && a.Pieces <= matchingPieces) result.Add(a);
+            }
+            result.Sort(delegate (ArmorAttunementDef x, ArmorAttunementDef y) { return x.Pieces.CompareTo(y.Pieces); });
+            return result;
+        }
+
+        public static ArmorConfig FromJson(JsonValue j)
+        {
+            ArmorConfig c = new ArmorConfig();
+            if (j == null || j.IsNull) return c;
+
+            c.DropChance = j.GetFloat("dropChance", 1f);
+            if (c.DropChance < 0f) c.DropChance = 0f;
+            if (c.DropChance > 1f) c.DropChance = 1f;
+
+            List<JsonValue> primaries = j.GetList("primaryRolls");
+            for (int i = 0; i < primaries.Count; i++)
+            {
+                ArmorRollDef r = ArmorRollDef.FromJson(primaries[i]);
+                if (r != null) c.PrimaryRolls.Add(r);
+            }
+
+            List<JsonValue> subs = j.GetList("subRolls");
+            for (int i = 0; i < subs.Count; i++)
+            {
+                ArmorRollDef r = ArmorRollDef.FromJson(subs[i]);
+                if (r != null) c.SubRolls.Add(r);
+            }
+
+            List<JsonValue> tempers = j.GetList("tempers");
+            for (int i = 0; i < tempers.Count; i++)
+            {
+                ArmorTemperDef t = ArmorTemperDef.FromJson(tempers[i]);
+                if (t != null && c.GetTemper(t.Temper) == null) c.Tempers.Add(t);
+            }
+
+            List<JsonValue> attunements = j.GetList("attunements");
+            for (int i = 0; i < attunements.Count; i++)
+            {
+                ArmorAttunementDef a = ArmorAttunementDef.FromJson(attunements[i]);
+                if (a != null) c.Attunements.Add(a);
+            }
+
+            JsonValue names = j["slotNames"];
+            if (names != null && names.IsObject)
+            {
+                foreach (string key in names.Keys)
+                {
+                    ArmorSlot slot;
+                    try { slot = (ArmorSlot)Enum.Parse(typeof(ArmorSlot), key, true); }
+                    catch (Exception) { continue; }   // an unknown slot key is dropped, not defaulted
+                    List<string> pool = new List<string>();
+                    List<JsonValue> entries = names.GetList(key);
+                    for (int i = 0; i < entries.Count; i++)
+                    {
+                        string n = entries[i].AsString(null);
+                        if (!string.IsNullOrEmpty(n)) pool.Add(n);
+                    }
+                    if (pool.Count > 0) c.SlotNames[slot] = pool;
+                }
+            }
+
+            return c;
+        }
+    }
+
+    /// <summary>
     /// A flat bundle of currency an event can hand out - a milestone claim or a currency-ladder
     /// redemption, same shape either way. Deliberately as small as StageDef's own reward fields:
     /// no hero grants, no relic grants, nothing content does not already know how to apply. All

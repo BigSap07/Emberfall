@@ -18,6 +18,13 @@ namespace Emberfall.Core.Data
         public readonly List<StageDef> AllStages = new List<StageDef>();
         public readonly List<RelicDef> Relics = new List<RelicDef>();
         public readonly List<EventDef> Events = new List<EventDef>();
+
+        /// <summary>
+        /// The armor roll tables (DESIGN-ARMOR). Never null - a build with no armor.json gets an
+        /// empty config whose IsUsable is false, so every armor path has one thing to test instead
+        /// of a null check plus four emptiness checks.
+        /// </summary>
+        public ArmorConfig Armor = new ArmorConfig();
         public readonly List<string> Warnings = new List<string>();
 
         private readonly Dictionary<string, HeroDef> _heroById = new Dictionary<string, HeroDef>();
@@ -47,7 +54,19 @@ namespace Emberfall.Core.Data
             return Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, null);
         }
 
+        /// <summary>
+        /// Six-file overload, kept so every pre-armor caller compiles untouched - a database loaded
+        /// this way has an empty ArmorConfig, which ArmorConfig.IsUsable reports as unusable and
+        /// which every armor path treats as "this build cannot roll armor". Exactly as one loaded
+        /// through the four-file overload has zero relics.
+        /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson, string relicsJson, string eventsJson)
+        {
+            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, null);
+        }
+
+        public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson,
+                                           string relicsJson, string eventsJson, string armorJson)
         {
             ContentDatabase db = new ContentDatabase();
 
@@ -64,8 +83,27 @@ namespace Emberfall.Core.Data
             db.ParseCampaign(campaignJson);
             db.ParseRelics(relicsJson);
             db.ParseEvents(eventsJson);
+            db.ParseArmor(armorJson);
             db.Validate();
             return db;
+        }
+
+        /// <summary>
+        /// Armor is optional content, same reasoning as relics and events: a build with no
+        /// armor.json loads an ArmorConfig that IsUsable reports false for, rather than erroring,
+        /// which is what keeps the shorter Load overloads honest.
+        ///
+        /// Unlike relics.json this parses ONE object rather than a catalogue - an armor piece is
+        /// generated, not authored, so what content owns is the roll tables and the prices. There
+        /// is no per-piece id here and nothing for a save to reference.
+        /// </summary>
+        private void ParseArmor(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            JsonValue root;
+            string err;
+            if (!JsonValue.TryParse(text, out root, out err)) { Warnings.Add("armor.json: " + err); return; }
+            Armor = ArmorConfig.FromJson(root);
         }
 
         /// <summary>
@@ -204,6 +242,80 @@ namespace Emberfall.Core.Data
             }
         }
 
+        /// <summary>
+        /// The armor tables against the rules DESIGN-ARMOR states, warned rather than dropped -
+        /// unlike relics.json, there is no per-entry id to drop and a half-authored table still
+        /// rolls pieces, so refusing would take the whole system out rather than one bad item.
+        ///
+        /// Silent on an unauthored config: a build with no armor.json is a legitimate build, and
+        /// warning about every missing table would drown ContentService's warning log for it.
+        /// </summary>
+        private void ValidateArmor()
+        {
+            if (Armor == null) { Armor = new ArmorConfig(); return; }
+            bool authored = Armor.PrimaryRolls.Count > 0 || Armor.SubRolls.Count > 0
+                         || Armor.Tempers.Count > 0 || Armor.Attunements.Count > 0;
+            if (!authored) return;
+
+            // Every slot must have a primary range for the stat its slot guarantees, or that slot
+            // cannot drop at all - ArmorRoller.Roll returns null for it. This is the one armor
+            // fault that silently removes content rather than mistuning it.
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+            {
+                ArmorSlot slot = ArmorInfo.AllSlots[i];
+                if (Armor.GetPrimaryRoll(slot) == null)
+                    Warnings.Add("armor.json: no primaryRolls entry for " + ArmorInfo.StatLabel(ArmorInfo.PrimaryStat(slot))
+                               + ", so the " + ArmorInfo.SlotLabel(slot) + " slot can never drop");
+            }
+
+            // The deepest temper wants this many distinct substats, and the substat table draws
+            // without replacement - a table shorter than that silently produces short pieces.
+            int deepest = 0;
+            for (int i = 0; i < Armor.Tempers.Count; i++)
+            {
+                int wanted = ArmorInfo.SubStatCount(Armor.Tempers[i].Temper);
+                if (wanted > deepest) deepest = wanted;
+            }
+            int drawable = 0;
+            for (int i = 0; i < Armor.SubRolls.Count; i++) if (Armor.SubRolls[i].Weight > 0) drawable++;
+            if (deepest > 0 && drawable < deepest)
+                Warnings.Add("armor.json: subRolls has " + drawable + " drawable entries but the deepest temper rolls "
+                           + deepest + " substats, and substats never repeat within a piece - deep pieces will roll short");
+
+            for (int i = 0; i < Armor.SubRolls.Count; i++)
+            {
+                ArmorRollDef r = Armor.SubRolls[i];
+                if (r.Max == 0f && r.Min == 0f)
+                    Warnings.Add("armor.json: subRolls entry for " + ArmorInfo.StatLabel(r.Stat)
+                               + " rolls zero at both ends, so drawing it wastes a substat slot");
+            }
+
+            // DESIGN-ARMOR section 7: salvage must pay less than reroll costs at every rung, or the
+            // loop prints Slag instead of consuming pieces. Enforced rather than trusted.
+            for (int i = 0; i < Armor.Tempers.Count; i++)
+            {
+                ArmorTemperDef t = Armor.Tempers[i];
+                if (t.RerollSlag > 0 && t.SalvageSlag >= t.RerollSlag)
+                    Warnings.Add("armor.json: " + t.Temper + " salvages for " + t.SalvageSlag + " Slag but rerolls for "
+                               + t.RerollSlag + " - salvage must pay less than reroll costs or the Anvil prints currency");
+                if (t.PrimaryScale <= 0f)
+                    Warnings.Add("armor.json: " + t.Temper + " has a primaryScale of " + t.PrimaryScale
+                               + ", so its pieces grant nothing from their guaranteed primary");
+            }
+
+            // An attunement threshold with no bonuses is a set bonus that does nothing, and a
+            // threshold above six is unreachable - there are only six slots to fill.
+            for (int i = 0; i < Armor.Attunements.Count; i++)
+            {
+                ArmorAttunementDef a = Armor.Attunements[i];
+                if (a.Bonuses.Count == 0)
+                    Warnings.Add("armor.json: " + a.Aspect + " attunement at " + a.Pieces + " pieces grants no bonuses");
+                if (a.Pieces > ArmorInfo.AllSlots.Length)
+                    Warnings.Add("armor.json: " + a.Aspect + " attunement needs " + a.Pieces + " matching pieces but there are only "
+                               + ArmorInfo.AllSlots.Length + " slots, so it can never be met");
+            }
+        }
+
         private void Validate()
         {
             for (int i = 0; i < AllStages.Count; i++)
@@ -246,6 +358,7 @@ namespace Emberfall.Core.Data
                     if (r.Stats[s].Value == 0f)
                         Warnings.Add("relic " + r.Id + " has a zero-value " + r.Stats[s].Stat + " bonus, so that half of it does nothing");
             }
+            ValidateArmor();
             for (int i = 0; i < Events.Count; i++)
             {
                 EventDef e = Events[i];

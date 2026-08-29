@@ -1,0 +1,104 @@
+{
+  // Armor roll tables - see DESIGN-ARMOR.md. Not a catalogue: an armor piece is GENERATED, so what
+  // lives here is the tables, the naming pools and the Anvil's prices. There is no per-piece id.
+  //
+  // Every number is a first-pass placeholder in the same sense every relic number is. The shapes
+  // are the decisions; DESIGN-BUILD-ORDER task 14's retune owns the values.
+
+  // Chance a full-purse stage clear drops a piece at all. A clear past the daily repeat cap drops
+  // nothing regardless, the same way it pays no gold and no Relic Dust.
+  "dropChance": 0.45,
+
+  // The primary a slot guarantees is decided by ArmorInfo.PrimaryStat, not here - these are only
+  // the magnitude ranges those guaranteed stats roll in, before the temper's primaryScale.
+  // One entry per slot primary; a missing one means that slot can never drop, and content
+  // validation says so.
+  "primaryRolls": [
+    { "stat": "Attack",     "min": 0.08, "max": 0.16 },
+    { "stat": "MaxHp",      "min": 0.09, "max": 0.18 },
+    { "stat": "Defense",    "min": 0.08, "max": 0.16 },
+    { "stat": "Speed",      "min": 0.05, "max": 0.11 },
+    { "stat": "CritChance", "min": 0.04, "max": 0.10 },
+    { "stat": "CritDamage", "min": 0.10, "max": 0.24 }
+  ],
+
+  // The substat pool: all fourteen live stats. Weights make the six that no relic can reach
+  // (skillDamage, block, armorBreak, controlImmunity, damageReduction, holyDamage) rarer than the
+  // bread-and-butter four without a code change - that rarity is the only thing gating them, since
+  // nothing else in the game grants them at all.
+  //
+  // Substats never repeat within one piece, so this table must hold at least as many drawable
+  // entries as the deepest temper rolls substats. It holds fourteen against a deepest of four.
+  "subRolls": [
+    { "stat": "Attack",          "min": 0.03, "max": 0.09, "weight": 14 },
+    { "stat": "MaxHp",           "min": 0.03, "max": 0.10, "weight": 14 },
+    { "stat": "Defense",         "min": 0.03, "max": 0.09, "weight": 14 },
+    { "stat": "Speed",           "min": 0.02, "max": 0.06, "weight": 12 },
+    { "stat": "CritChance",      "min": 0.02, "max": 0.06, "weight": 10 },
+    { "stat": "CritDamage",      "min": 0.04, "max": 0.12, "weight": 10 },
+    { "stat": "EffectHit",       "min": 0.02, "max": 0.07, "weight": 8 },
+    { "stat": "EffectResist",    "min": 0.02, "max": 0.07, "weight": 8 },
+    { "stat": "SkillDamage",     "min": 0.03, "max": 0.08, "weight": 5 },
+    { "stat": "DamageReduction", "min": 0.02, "max": 0.05, "weight": 5 },
+    { "stat": "ArmorBreak",      "min": 0.03, "max": 0.08, "weight": 4 },
+    { "stat": "ControlImmunity", "min": 0.03, "max": 0.09, "weight": 4 },
+    // Block adds an RNG draw to every incoming hit the wearer takes - DeterministicRng.Chance
+    // short-circuits at zero without drawing, and Block is zero on every unit in shipped content
+    // except Kael. That is not a bug (see DESIGN-ARMOR section 9), but it is a reason to keep this
+    // rare rather than routine.
+    { "stat": "Block",           "min": 0.02, "max": 0.05, "weight": 3 },
+    // Flat damage, not a fraction - the one Add-mode stat that is not a percentage. Read against
+    // MinDamage and a mid-campaign hit, not against the 0.0x entries above it.
+    { "stat": "HolyDamage",      "min": 12,   "max": 44,   "weight": 3 }
+  ],
+
+  // The Temper ladder. subStats per rung lives in code (ArmorInfo.SubStatCount) because it is the
+  // ladder's definition rather than a tuning value; what is tunable is how hard the primary hits,
+  // what the Anvil charges, and how stage depth tilts the draw.
+  //
+  // salvageSlag must stay below rerollSlag at every rung or the loop prints currency; content
+  // validation enforces it.
+  "tempers": [
+    { "temper": "Rough",   "primaryScale": 0.55, "salvageSlag": 4,  "rerollSlag": 12, "dropWeight": 55, "dropWeightPerStageIndex": -1.6 },
+    { "temper": "Honed",   "primaryScale": 0.75, "salvageSlag": 9,  "rerollSlag": 24, "dropWeight": 30, "dropWeightPerStageIndex": -0.2 },
+    { "temper": "Gilded",  "primaryScale": 1.00, "salvageSlag": 20, "rerollSlag": 48, "dropWeight": 12, "dropWeightPerStageIndex": 0.9 },
+    { "temper": "Radiant", "primaryScale": 1.30, "salvageSlag": 45, "rerollSlag": 96, "dropWeight": 3,  "dropWeightPerStageIndex": 0.9 }
+  ],
+
+  // Attunement - pieces whose own aspect matches the WEARER's aspect. Thresholds are cumulative:
+  // a hero at 4 matching pieces receives the 2-piece entry AND the 4-piece entry, so each 4-piece
+  // entry lists only what it adds. Every bonus is a fixed value, expressed as a stat and a number,
+  // and there is nowhere in the shape to put an effect.
+  //
+  // The 4-piece rungs deliberately hand out the stats nothing else in the game grants.
+  "attunements": [
+    { "aspect": "Ember",   "pieces": 2, "name": "Kindling",    "bonuses": [ { "stat": "Attack", "min": 0.08, "max": 0.08 } ] },
+    { "aspect": "Ember",   "pieces": 4, "name": "Conflagration","bonuses": [ { "stat": "SkillDamage", "min": 0.12, "max": 0.12 } ] },
+
+    { "aspect": "Tide",    "pieces": 2, "name": "Undertow",    "bonuses": [ { "stat": "EffectHit", "min": 0.08, "max": 0.08 } ] },
+    { "aspect": "Tide",    "pieces": 4, "name": "Deep Current","bonuses": [ { "stat": "ControlImmunity", "min": 0.12, "max": 0.12 } ] },
+
+    { "aspect": "Verdant", "pieces": 2, "name": "Rootfast",    "bonuses": [ { "stat": "MaxHp", "min": 0.08, "max": 0.08 } ] },
+    { "aspect": "Verdant", "pieces": 4, "name": "Heartwood",   "bonuses": [ { "stat": "DamageReduction", "min": 0.10, "max": 0.10 } ] },
+
+    { "aspect": "Gale",    "pieces": 2, "name": "Quickstep",   "bonuses": [ { "stat": "Speed", "min": 0.08, "max": 0.08 } ] },
+    { "aspect": "Gale",    "pieces": 4, "name": "Stormsight",  "bonuses": [ { "stat": "CritChance", "min": 0.10, "max": 0.10 } ] },
+
+    { "aspect": "Umbra",   "pieces": 2, "name": "Longshadow",  "bonuses": [ { "stat": "CritDamage", "min": 0.10, "max": 0.10 } ] },
+    { "aspect": "Umbra",   "pieces": 4, "name": "Hollowing",   "bonuses": [ { "stat": "ArmorBreak", "min": 0.12, "max": 0.12 } ] },
+
+    { "aspect": "Lumen",   "pieces": 2, "name": "Wardlight",   "bonuses": [ { "stat": "Defense", "min": 0.08, "max": 0.08 } ] },
+    { "aspect": "Lumen",   "pieces": 4, "name": "Reliquary",   "bonuses": [ { "stat": "Block", "min": 0.06, "max": 0.06 },
+                                                                            { "stat": "HolyDamage", "min": 40, "max": 40 } ] }
+  ],
+
+  // Flavour only. A piece's behaviour is its slot, temper, aspect and rolls - never its name.
+  "slotNames": {
+    "Weapon":     ["Ashen Edge", "Cinderpoint", "Splitwood Haft", "Emberlash", "Quiet Fang", "Longreach"],
+    "Helm":       ["Wayfarer's Cowl", "Soot Crown", "Watchman's Casque", "Pale Circlet", "Grave Helm"],
+    "Plate":      ["Ferrier's Vest", "Scorchplate", "Wardenmail", "Ashcloth Wrap", "Hollow Cuirass"],
+    "Boots":      ["Roadworn Boots", "Stepless Tread", "Ferry Sandals", "Cindergait", "Longmarch Greaves"],
+    "AccessoryA": ["Tallow Ring", "Knot of Names", "Ferryman's Token", "Small Certainty"],
+    "AccessoryB": ["Cold Pendant", "Second Bell", "Widow's Clasp", "Held Breath"]
+  }
+}
