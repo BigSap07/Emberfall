@@ -5,22 +5,32 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
-**Status, as of tonight's audit.** Tasks **1 through 11 are all done on `main`**, verified against
-the actual code and content, not against this document's own prior claims — several were found
-stale and are corrected in place below. `build-order-7-effect-hit-resist` and `sprite-path-orrin`
-were merged and green; `build-order-8-team-size-5` and `build-order-9-landscape` merged together
-with task 10's `campaign.json` refill riding on `build-order-9-landscape` rather than its own
-branch, exactly as this document called for. `build-order-1-3` (task 1, the starting purse) also
-landed — a previous revision of this document claimed it was still unpushed; that was wrong, and
-the section that made that claim has been removed. Task 12 is split: 12a (the relic/aspect hook
-resolution and the original four-relic implementation) is done; 12b (the two-grade relic model
-DESIGN-RELICS now specifies) is a written design with **no code or content behind it yet** — no
-`RelicGrade` type, `relics.json` unchanged. Task 13, the retune, is not done and is no longer a
-twelve-stage retune: chapter 2 shipped (12 more stages, `f1f5b71`), entirely outside this
-document's numbered order until now — see the new chapter 2 entry under "Already done." CI runs
-`build-check.ps1` on every push and pull request, so status claims below about compiling or running
-are claims about an actual run, not a reading of a diff, wherever a branch has actually been pushed
-through it.
+**Status, as of tonight's audit (2026-08-29).** Tasks **1 through 12 are all done on `main`**,
+verified against the actual code and content and against a live `Tools/build-check.ps1` run
+tonight (compiles clean, `RESULT: all checks passed`), not against this document's own prior
+claims — several of those were found stale and are corrected in place below.
+`build-order-7-effect-hit-resist` and `sprite-path-orrin` were merged and green;
+`build-order-8-team-size-5` and `build-order-9-landscape` merged together with task 10's
+`campaign.json` refill riding on `build-order-9-landscape` rather than its own branch, exactly as
+this document called for. `build-order-1-3` (task 1, the starting purse) also landed. Task 12 was
+split into 12a and 12b in a prior revision of this document; both are now done. **12b was wrongly
+marked "written, not built" until tonight** — that was stale by the time it was written: `RelicGrade`
+exists (`Enums.cs:111`), `relics.json` carries a `grade` field on all ten relics, and a live harness
+run passes 51 dedicated RELICS checks. It has also moved again since DESIGN-RELICS was last
+reconciled with the code: the two grades were renamed **Legendary/Mythic** (`7819bf2`, `dff5f22`),
+and the two Mythic (formerly Legendary) relics were promoted to also carry a stat block on top of
+their hook. See task 12b below for the full account; DESIGN-RELICS.md still describes the
+superseded Common/Legendary naming and has not been re-reconciled against this rename — that is a
+separate, smaller doc debt this pass does not fix. Task 13, the retune, is still not done: content
+is unchanged since the last audit, and a live harness run tonight still reports "Authored values are
+UNTUNED" and "Nothing here is tuned." A small, unmerged first pass exists on branch
+`retune/ch2-late-stages` (one commit, `a91a2f6`, touching only the Tideturned boss and three late
+chapter-2 stages) — not on `main`, so it does not change task 13's status, but it is active work
+worth knowing about. Chapter 2 shipped (12 more stages, `f1f5b71`), entirely outside this document's
+numbered order until a prior audit added it — see the chapter 2 entry under "Already done." CI runs
+`build-check.ps1` on every push and pull request (`.github/workflows/build-check.yml`, confirmed
+present), so status claims below about compiling or running are claims about an actual run, not a
+reading of a diff, wherever a branch has actually been pushed through it.
 
 Task 9 grew far beyond its original one-line description while unmerged, through several rounds
 of Play mode feedback the document did not originally anticipate: portrait to landscape pulled in
@@ -49,8 +59,13 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   as sacred.
 - DESIGN-RELICS, DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS, DESIGN-ART-BIBLE,
   DESIGN-HOOK-CONFLICT, DESIGN-RECOLLECTION. All committed to `main`, all decided. DESIGN-RELICS
-  is now also implemented (task 12a, below) for its original four relics; the two-grade rewrite
-  (task 12b) is design-only, not yet implemented. The rest are still design-only.
+  is now fully implemented, both halves: task 12a (the relic/aspect hook resolution and the
+  original four-relic implementation) and task 12b (the grade split). ⚠️ Corrected: a prior
+  revision of this document called 12b "design-only, not yet implemented." Verified tonight against
+  a live harness run, it is built — see task 12b below. One thing DESIGN-RELICS.md itself has not
+  caught up to: the grade names it documents (Common/Legendary) were renamed to Legendary/Mythic
+  after it was last reconciled with the code (`7819bf2`); that document is stale on naming, not on
+  substance. The rest of the list above is still design-only.
 - CI. `.github/workflows/build-check.yml` runs `Tools/build-check.ps1` on every push and every
   pull request, on `windows-latest`. It doesn't stop at compiling, it runs DevHarness, so a green
   run covers content validation, determinism, stage winnability, ability potency and status expiry
@@ -164,9 +179,15 @@ task-order cross-reference. Three parts, meant to land in this order:
   optional sprite field; when set, the battle screen renders that image on a billboard instead
   of building the procedural body. ⚠️ **No longer wired to exactly one hero.** That was true when
   this was written, as a pipeline test on Orrin Kaal alone; verified tonight, `heroes.json` now
-  carries a `"sprite"` field on all **6 of 6 heroes**, and `enemies.json` on **3** of its 10 enemies
+  carries a `"sprite"` field on all **7 of 7 heroes** (Kael the Ashbound, added since the last
+  count, carries one too — see his own entry below), and `enemies.json` on **3** of its 10 enemies
   (`hollow_husk`, `grave_moth`, `sundered_colossus`) — every file named has a matching PNG
-  committed under `Assets/Resources/Sprites/Units/`. The remaining 7 enemies stay procedural.
+  committed under `Assets/Resources/Sprites/Units/`. The remaining 7 enemies stay procedural — with
+  one flagged exception: `campaign.json`'s own comment on chapter 2 says `riptide_channeler` and
+  `tideturned` "have no sprite art" and "render as invisible units," which does not match how every
+  other spriteless enemy (including chapter 1's own `tidecaller_wretch`, same "wisp" silhouette)
+  falls back to the procedural rig. That claim is unverified either way without opening the editor
+  — recorded here because it is the content's own comment, not a guess added by this audit.
 
 The loader landing before the check screen exists is a reordering, not the plan. The intended
 sequence was spec, then a way to look at what the spec produces, then the loader that makes it
@@ -277,23 +298,39 @@ See task 12 below for the commit list, and DESIGN-HOOK-RESOLUTION for the full a
 
 ### Relics move to a two-tier model. Decided 2026-08-26, and a deliberate reversal
 
+⚠️ **The grade names below (Common/Legendary) are what was decided on 2026-08-26 and what
+DESIGN-RELICS still documents. They are no longer what's shipped.** `relics.json` and the code
+were renamed a second time, to **Legendary/Mythic** (`7819bf2`, "Rename relic grades to
+Legendary/Mythic and promote two relics to Mythic", plus `dff5f22`) — what this section calls
+"Common" is now called Legendary in the content and the code, and what this section calls
+"Legendary" is now called Mythic and additionally carries a stat block on top of its hook. Nothing
+about the mechanics below changed in that rename except that promotion; only the labels moved. See
+task 12b for the shipped state, verified against a live harness run. This section is kept as
+written because it is the record of the decision and its reasoning, not a description of current
+naming.
+
 This replaces DESIGN-RELICS' founding standard — *"A relic changes a **rule** in the effect
 pipeline. No relic contains an attack percentage."* That standard is withdrawn knowingly, not
 drifted away from. Relics are now two grades (see the naming note below; the axis is not
 called "tier").
 
-**Common.** Flat and percentage stat relics — Attack%, HP%, Crit% and their like. Simple,
-numerous, easy to balance, and needing no simulation hooks at all: they live entirely in
-`StatMath` / `UnitStats` and never reach `CombatSimulation`. This grade exists to solve the two
-things the rule-only standard did not — legibility for a player who does not read the effect
-pipeline, and enough distinct drops for a pull to feel like it paid out.
+**Common** (now **Legendary** in the shipped content and code — see the ⚠️ above). Flat and
+percentage stat relics — Attack%, HP%, Crit% and their like. Simple, numerous, easy to balance, and
+needing no simulation hooks at all: they live entirely in `StatMath` / `UnitStats` and never reach
+`CombatSimulation`. This grade exists to solve the two things the rule-only standard did not —
+legibility for a player who does not read the effect pipeline, and enough distinct drops for a pull
+to feel like it paid out.
 
-**Legendary, and rare.** Rule-breaking relics that alter simulation behaviour instead of adding a
+**Legendary, and rare** (now **Mythic** in the shipped content and code — see the ⚠️ above).
+Rule-breaking relics that alter simulation behaviour instead of adding a
 number — the same *kind* of thing an aspect identity is, but never flavoured or paired to a
 specific aspect. That last clause reaffirms the existing rule rather than bending it: a relic is
 equipment on a hero, not a second way to be Ember. The one-slot-per-hero rule and the
 state-it-as-one-sentence presentation rule both survive the reversal. Only the no-percentage
-clause is gone, and only for the common grade.
+clause is gone, and only for the common (now legendary-named) grade — the rule-breaking (now
+mythic-named) grade was later promoted to also carry a stat block (see task 12b), so as shipped the
+no-percentage guarantee applies to that grade's `Rule` text specifically, not to the relic as a
+whole.
 
 **Hook contention is unchanged, and the resolution above is the tiebreak.** Aspects own the four
 previously contested hooks by default: Tide's `AddEnergy` overflow redirect, Verdant's
@@ -304,21 +341,30 @@ of why the grade is worth having.
 
 **Task 12 is not blocked by this and does not reopen.** ⚠️ One correction against the decision as
 handed down: it unblocks task 12 to "build Aspects as specified", but Aspects are already built.
-All six identities are live in `CombatSimulation.cs` today — Gale (`:252`, `:299`), Ember's Burn
-stacking (`:588`), Verdant's heal banking (`:877`), Tide's energy redirect (`:921`), Lumen's
-interception (`:1236`, `:1351`) and Umbra (`:1367`). Nothing in the two-tier reversal touches any
-of them, so the intended effect holds either way: Aspects stand as specified and stay built.
+All six identities are live in `CombatSimulation.cs` today — Gale (`TryGaleReentry` at `:268`,
+`TryGaleSlowShift` at `:316`), Ember's Burn stacking (`AddStack` at `:599`), Verdant's heal banking
+(`AddOrRefresh(StatusKind.Regen...)` at `:902`), Tide's energy redirect (`_inRedirect` guard at
+`:946`), Lumen's interception (`FindTargetAnchor` called at `:1226`, defined at `:1343`) and Umbra
+(`IsUmbraSourced` at `:1364`). Line numbers drift as later commits (chiefly the relic hooks) add
+code above them; re-verified tonight against the current file, not copied from a prior pass.
+Nothing in the two-tier reversal touches any of them, so the intended effect holds either way:
+Aspects stand as specified and stay built.
 
 **DESIGN-RELICS has been rewritten to this model. Done, 2026-08-26.** This entry is the decision;
 DESIGN-RELICS is the specification, and it now carries the grade split, a starting set of eight
 common and two legendary relics (explicitly a starting set, unbalanced by admission), the
 arithmetic rules, both entry points, and the presentation split. The ⚠️ banner that stood at the
-top of it while it was stale is gone.
+top of it while it was stale is gone. ⚠️ **Since then, DESIGN-RELICS has fallen behind the code
+again, on naming only.** The grades it documents as Common/Legendary shipped, then were renamed to
+Legendary/Mythic (`7819bf2`) with the former-Legendary grade promoted to also carry a stat block —
+DESIGN-RELICS was not updated for either change. This document's task 12b entry below describes the
+current, shipped naming; DESIGN-RELICS.md is a separate cleanup this audit did not do.
 
 **The axis is called "grade", not "tier" and not "rarity".** Both obvious words were already taken:
 "tier" is a relic's upgrade level (DESIGN-RELIC-PROGRESSION §2, `balance.json`'s `relicMaxTier`),
 and "rarity" is a hero's star rarity (`StatMath.Build`'s `rarityMultiplier`). So: common grade,
-legendary grade, `RelicGrade { Common, Legendary }`. Grade and tier are orthogonal — a common relic
+legendary grade, `RelicGrade { Common, Legendary }` at the time of this decision — see the ⚠️ above
+for what it's actually called today. Grade and tier are orthogonal — a common relic
 still upgrades tier 1 to tier 2 like any other. Do not write "tier 2 relic" for "legendary relic".
 The heading above keeps its original wording because two documents cite it by name; read
 "two-tier" there as "two-grade".
@@ -326,16 +372,22 @@ The heading above keeps its original wording because two documents cite it by na
 **Three code findings came out of that rewrite, and two of them moved the design:**
 
 - **The status landing gate is no longer `_rng.Chance(effect.Chance)`.** Effect Hit and Effect
-  Resist shipped; it is now `_rng.Chance(landing)` at `CombatSimulation.cs:565`, with `landing`
-  built by `ResolveLandingChance` (`:59`) and further reduced by Control Immunity for Silence and
-  Stun. It is still unclaimed by any relic or aspect, so The Unbroken Ledger is compatible — but it
-  hooks `ResolveLandingChance`, not the raw chance.
-- **`PassiveTrigger.OnDamaged` is fired but is not unused.** Dispatched at `:843`, and already
-  consumed by `tideturned_passive` ("Backwash") in `enemies.json`. No collision with Mirrored
-  Wound, but it must be built to coexist rather than assume an empty trigger.
+  Resist shipped; it is now `_rng.Chance(landing)` at `CombatSimulation.cs:575` (`:565` when this
+  was written; line numbers drift as later commits add code above them), with `landing` built by
+  `ResolveLandingChance` (`:59`) and further reduced by Control Immunity for Silence and Stun. It
+  was unclaimed by any relic or aspect at the time this was written; it has since been claimed —
+  The Unbroken Ledger hooks it (`ApplyLedger`, `CombatSimulation.cs:1060`, called at `:553`), by
+  design, not by collision — it rebuilds `landing` via `ResolveLandingChance` with the target's
+  Effect Resist forced to zero, rather than hooking the raw chance.
+- **`PassiveTrigger.OnDamaged` is fired but is not unused.** Dispatched at `:853` (`:843` when this
+  was written), and already consumed by `tideturned_passive` ("Backwash") in `enemies.json`. Since
+  built to coexist with it, not just designed to: Mirrored Wound's `ApplyMirroredWound`
+  (`CombatSimulation.cs:1093`) is called at `:862`, after Backwash, so a passive that heals or
+  shields its owner resolves before the reflect can undo it.
 - **Block is already implemented**, and not as DESIGN-COMBAT-STATS rejected it: full negation of
-  the hit, with `PassiveTrigger.OnBlock` fired (`:714`, `:716`), which is the shape that document
-  itself said would earn its place. Inert at 0 on every unit today.
+  the hit, with `PassiveTrigger.OnBlock` fired at `CombatSimulation.cs:726` (the RNG draw is at
+  `:724`), which is the shape that document itself said would earn its place. Inert at 0 on every
+  unit today; the shipped relic set does not touch it either — see task 12b.
 
 **DESIGN-COMBAT-STATS.md still carries a banner, now saying something different.** Its Block
 rejection is superseded twice — by the code above, and by the reversal recorded here, since half
@@ -712,24 +764,46 @@ confirmed green on CI on `main` after the merge.
     version 4 -> 5 migration for it (`f1284a2`), Relic Dust and tier constants in `balance.json`
     (`09bc8fd`), the dust drop plus relic API and harness checks (`6fbe951`), a Relic Dust counter
     in the header (`c6a8d6a`), and the relic shop/inventory screens (`5fee3b0`,
-    `Assets/Scripts/UI/Screens/RelicShopScreen.cs`). `CombatSimulation.cs` resolves relic hooks
-    at effect-shaping time (`ShapeByRelic`, ~line 1029), matching the resolution recorded under
-    "One conflict to resolve" above. All of this is on `main` today, not on an unmerged branch.
+    `Assets/Scripts/UI/Screens/RelicShopScreen.cs`). ⚠️ Stale by task 12b, corrected here:
+    `CombatSimulation.cs` no longer resolves relic hooks through `ShapeByRelic` — that method, and
+    the three hooks it dispatched for the relics task 12b went on to cut, were removed along with
+    them. What ships today calls `ApplyLedger` / `ApplyMirroredWound` directly at each hook's own
+    resolution point (see task 12b for exact lines); confirmed absent from `CombatSimulation.cs`
+    tonight by search. All of this is on `main` today, not on an unmerged branch.
     Blocked by: nothing remaining. Blocks: 12b, 13.
 
 12b. **The two-grade relic model** — Common (flat/percentage stats, no simulation hooks) and
     Legendary (rule-breaking, aspect-neutral), per "Relics move to a two-tier model" above and
     the DESIGN-RELICS rewrite (`9ed2879`). `[D]` for the decision and the document, `[H+U]` for
-    the code, which does not exist yet.
-    ⚠️ **Still open. Written, not built.** DESIGN-RELICS specifies the model, a naming convention
-    (`grade`, not `tier`), a starting set of 8 common relics and 2 legendary relics (The Unbroken
-    Ledger, Mirrored Wound), and the two code entry points (`StatMath.ApplyRelic` for common,
-    `RelicHook` for legendary) — but none of it is implemented. Verified tonight: no `RelicGrade`
-    type anywhere in `Assets/Scripts`, `relics.json` is unchanged (still the original four relics,
-    no `grade` field), and `RelicHook` still has only its original three members. This is real
-    remaining work, not a formality.
-    Blocked by: 12a. Blocks: nothing hard — the starting sets are explicitly provisional and don't
-    need to land before 13, but landing after 13 means a second retune pass for whatever ships.
+    the code.
+    **Done.** ⚠️ Corrects a stale claim this document carried until tonight: a prior revision marked
+    this "written, not built," citing no `RelicGrade` type and an unchanged `relics.json`. That was
+    checked freshly tonight and found wrong — the grade split is built, on `main`, and covered by a
+    live harness run (51 checks under "RELICS", all passing). Evidence: `RelicGrade` enum at
+    `Assets/Scripts/Core/Data/Enums.cs:111`; `relics.json` carries a `grade` field on all ten
+    entries; `StatMath`/`Definitions.cs` (`ApplyRelic`, `RelicDef.CardText()`, `DescribeStats()`)
+    resolve the common-style grade before the simulation starts; `RelicHook.BypassEffectResist` and
+    `RelicHook.ReflectDamage` resolve inside it (`ApplyLedger` at `CombatSimulation.cs:1060`,
+    `ApplyMirroredWound` at `:1093`); `InventoryScreen.cs` and `RelicShopScreen.cs` render a grade
+    badge per card. The starting set matches DESIGN-RELICS: 8 stat-bundle relics and The Unbroken
+    Ledger / Mirrored Wound, with all six previously-cut relics confirmed absent by name in the
+    harness.
+    ⚠️ **What's built is not what either DESIGN-RELICS.md or this document's own "Relics move to a
+    two-tier model" section above call it.** The grade split shipped as Common/Legendary, exactly
+    as decided, then was renamed a second time to **Legendary/Mythic** (`7819bf2`, "Rename relic
+    grades to Legendary/Mythic and promote two relics to Mythic", card-text follow-up in `dff5f22`)
+    — no design doc records this second rename, and it is not just a label swap: the promoted
+    Mythic grade (formerly Legendary) now also carries a `stats` block on top of its hook (The
+    Unbroken Ledger gained Speed + Effect Resist; Mirrored Wound gained Effect Hit + Crit Damage),
+    so the old "a legendary relic contains no number" guarantee now applies to its `Rule` text
+    specifically, not to the relic as a whole. `RelicGrade` is `{ Legendary, Mythic }` today, not
+    `{ Common, Legendary }`. `RelicMythicShopPrice` (2400, thirty times `RelicShopPrice`'s 80) prices
+    the promoted grade. This document has been updated to reflect the shipped naming; DESIGN-RELICS
+    and DESIGN-HOOK-RESOLUTION have not been re-reconciled and still describe Common/Legendary — a
+    real, separate doc debt this audit did not close.
+    Blocked by: 12a (done). Blocks: nothing hard — the starting sets are explicitly provisional and
+    don't need to land before 13, but landing after 13 (which it already has) means the retune
+    covers all ten shipped relics, not the four task 12a alone would have left.
 
 13. **Full campaign retune. Once, last.** ⚠️ No longer twelve stages: chapter 2 shipped (`f1f5b71`,
     see "Already done" above), so `campaign.json` now holds **24 stages across two chapters**, and
@@ -741,15 +815,33 @@ confirmed green on CI on `main` after the merge.
     nothing to do with the content, and two prerequisites had to land before it could be tuned
     against at all. Both have now landed; the line above is kept because the retune is still one
     pass, still last — now over twice the stage count it was scoped against.
-    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a (all done), 12b (if it lands first, fold it in;
-    otherwise this pass covers only the four shipped relics and chapter 2 gets retuned again once
-    12b ships content). Blocks: nothing, this is the last task.
+    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b — all done, 12b included: it landed before this
+    task rather than after, so the retune this task describes covers all ten shipped relics (8
+    Legendary, 2 Mythic — see task 12b's naming correction), not four. Blocks: nothing, this is the
+    last task.
+
+    ⚠️ **The code itself still calls this task 14, not 13.** `Tools/DevHarness/Program.cs`'s own
+    output ("Authored values are UNTUNED... task 14 is the retune", "this is the instrument task 14
+    tunes against") uses the older numbering, and so does `6bd559c` ("docs: record task 14's two new
+    blockers..." — this one is on `main`, verified an ancestor of `HEAD`) and the unmerged
+    `a91a2f6` ("...task 14 pass 1"). All predate Opening Gambit being cut out of the numbered list
+    and this task moving down from 14 to 13. Nobody has gone back to update those comments and
+    commit messages for the renumbering; they are not wrong about the content, only about which
+    number it answers to. Same shape as Known trap 3's `galeExtraTurnsPerRound` comment below, which
+    has the identical mismatch for the identical reason.
 
 Task 13 is the only step that produces a valid win-rate table. Nothing tuned before it should be
-read as final. I could not run `RunCampaignBalancePass` myself to confirm current output — no
-`dotnet`/`mono` in this environment — so "not done" here is inferred from `campaign.json`'s
-provisional numbers and the absence of any retune commit after chapter 2 landed, not from a
-harness run.
+read as final. **Run tonight**, not merely inferred: `Tools/build-check.ps1` compiles and executes
+`Tools/DevHarness` against a real C# compiler in this environment (`csc.exe`, found and used), and
+its live output confirms "not done" directly rather than by absence of a commit —
+`campaign.json`'s numbers are unchanged, and the harness prints "Authored values are UNTUNED" and,
+in its final instrument-comparison table, "Nothing here is tuned. Task 14 is the retune; this table
+is its input." One first, partial pass exists but is not on `main`: branch `retune/ch2-late-stages`
+carries a single unmerged commit (`a91a2f6`, "balance(ch2): retune Tideturned boss + late ch2
+stages (task 14 pass 1)") that raises the Tideturned boss's kit and levels on three late chapter-2
+stages, moving that boss stage's five-body pinned win rate from 100% to 79.2% by its own commit
+message. It does not change task 13's status here because it is not merged, but it is live evidence
+someone has already started.
 
 ## Task 13's instrument was broken, and what was done about it
 
