@@ -549,6 +549,172 @@ namespace Emberfall.Core.Data
         }
     }
 
+    /// <summary>
+    /// A flat bundle of currency an event can hand out - a milestone claim or a currency-ladder
+    /// redemption, same shape either way. Deliberately as small as StageDef's own reward fields:
+    /// no hero grants, no relic grants, nothing content does not already know how to apply. All
+    /// three fields default to zero, and IsEmpty exists so content validation can catch an entry
+    /// that would silently hand out nothing.
+    /// </summary>
+    public sealed class EventReward
+    {
+        public int Gold;
+        public int Shards;
+        public int RelicDust;
+
+        public bool IsEmpty { get { return Gold <= 0 && Shards <= 0 && RelicDust <= 0; } }
+
+        /// <summary>Player-facing summary, e.g. "200 Gold, 50 Shards" - built rather than authored,
+        /// same reasoning as RelicDef.DescribeStats: one source, so a card and a claim confirmation
+        /// cannot drift into describing the same reward two different ways.</summary>
+        public string Describe()
+        {
+            List<string> parts = new List<string>();
+            if (Gold > 0) parts.Add(Gold + " Gold");
+            if (Shards > 0) parts.Add(Shards + " Shards");
+            if (RelicDust > 0) parts.Add(RelicDust + " Relic Dust");
+            return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "Nothing";
+        }
+
+        public static EventReward FromJson(JsonValue j)
+        {
+            EventReward r = new EventReward();
+            if (j == null || j.IsNull) return r;
+            r.Gold = j.GetInt("gold", 0);
+            r.Shards = j.GetInt("shards", 0);
+            r.RelicDust = j.GetInt("relicDust", 0);
+            return r;
+        }
+    }
+
+    /// <summary>One rung of an event's points ladder: reach Threshold cumulative points, claim
+    /// Reward once. Threshold is the rung's own identity - GameSession.ClaimEventMilestone and the
+    /// save format both key off it rather than a list index, so re-ordering milestones in content
+    /// never repoints an already-claimed entry at a different reward.</summary>
+    public sealed class EventMilestone
+    {
+        public long Threshold;
+        public EventReward Reward = new EventReward();
+    }
+
+    /// <summary>One rung of an event's optional currency ladder: spend Cost of the event's own
+    /// currency, receive Reward. Unlike a milestone this is a genuine purchase - the currency is
+    /// deducted - so nothing tracks whether a tier was redeemed before; redeeming it again is a
+    /// second purchase, not a double-claim, and simply costs the currency a second time.</summary>
+    public sealed class EventCurrencyTier
+    {
+        public long Cost;
+        public EventReward Reward = new EventReward();
+    }
+
+    /// <summary>
+    /// One limited-time event: a UTC window (same startUnix/endUnix style as
+    /// BalanceConfig.DailyResetHourUtc, but an absolute pair rather than an hour-of-day), one
+    /// EventActivityKind it earns points from, a milestone ladder every event has, and an optional
+    /// event-specific currency with its own small redeemable ladder.
+    ///
+    /// Content, not code: a new event is a new entry in events.json, never a new class or a new
+    /// case anywhere in GameSession. The two starter events (The Recollection Rite,
+    /// The Ledger's Week) are both ordinary EventDef entries - nothing about either is special-cased.
+    /// </summary>
+    public sealed class EventDef
+    {
+        public string Id = "";
+        public string Name = "";
+
+        /// <summary>UTC Unix seconds. Points are earned only while IsActive; a milestone or
+        /// currency tier already earned stays claimable after EndUnix passes - see GameSession.</summary>
+        public long StartUnix;
+        public long EndUnix;
+
+        public EventActivityKind Activity = EventActivityKind.SummonPerformed;
+
+        /// <summary>Display name for the point currency this event's ladder climbs, e.g.
+        /// "Memory Fragments" - never hardcoded as "points" anywhere UI-facing.</summary>
+        public string PointsLabel = "Points";
+
+        /// <summary>Points earned per unit of Activity's own amount - 1 for a per-occurrence
+        /// activity like SummonPerformed, or a rate against a quantity like RelicDustSpent.</summary>
+        public float PointsPerActivity = 1f;
+
+        public readonly List<EventMilestone> Milestones = new List<EventMilestone>();
+
+        /// <summary>Empty means this event has no currency - a pure point ladder, per The
+        /// Recollection Rite. Non-empty is both the display name and the flag that HasCurrency
+        /// reads, so there is exactly one source of truth for whether the currency half exists.</summary>
+        public string CurrencyName = "";
+
+        /// <summary>Currency earned per unit of Activity's own amount, at the same dispatch point
+        /// and the same time as Points - both accrue from one RecordEventActivity call, at their
+        /// own independent rates. Meaningless while CurrencyName is empty.</summary>
+        public float CurrencyPerActivity = 0f;
+
+        public readonly List<EventCurrencyTier> CurrencyRewards = new List<EventCurrencyTier>();
+
+        public bool HasCurrency { get { return !string.IsNullOrEmpty(CurrencyName); } }
+
+        public bool IsActive(long nowUnix) { return nowUnix >= StartUnix && nowUnix < EndUnix; }
+        public bool HasEnded(long nowUnix) { return nowUnix >= EndUnix; }
+        public bool HasNotStarted(long nowUnix) { return nowUnix < StartUnix; }
+
+        public EventMilestone FindMilestone(long threshold)
+        {
+            for (int i = 0; i < Milestones.Count; i++) if (Milestones[i].Threshold == threshold) return Milestones[i];
+            return null;
+        }
+
+        public EventCurrencyTier FindCurrencyTier(long cost)
+        {
+            for (int i = 0; i < CurrencyRewards.Count; i++) if (CurrencyRewards[i].Cost == cost) return CurrencyRewards[i];
+            return null;
+        }
+
+        /// <summary>The highest milestone threshold this event's points can ever reach a claim
+        /// against - the ladder's ceiling, for a progress bar that wants a denominator.</summary>
+        public long HighestThreshold
+        {
+            get { return Milestones.Count > 0 ? Milestones[Milestones.Count - 1].Threshold : 0; }
+        }
+
+        public static EventDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            EventDef e = new EventDef();
+            e.Id = j.GetString("id", "");
+            e.Name = j.GetString("name", "Event");
+            e.StartUnix = j.GetLong("startUnix", 0);
+            e.EndUnix = j.GetLong("endUnix", 0);
+            e.Activity = EnumUtil.Parse(j.GetString("activity", "SummonPerformed"), EventActivityKind.SummonPerformed);
+            e.PointsLabel = j.GetString("pointsLabel", "Points");
+            e.PointsPerActivity = j.GetFloat("pointsPerActivity", 1f);
+
+            List<JsonValue> milestones = j.GetList("milestones");
+            for (int i = 0; i < milestones.Count; i++)
+            {
+                JsonValue mj = milestones[i];
+                EventMilestone m = new EventMilestone();
+                m.Threshold = mj.GetLong("threshold", 0);
+                m.Reward = EventReward.FromJson(mj);
+                e.Milestones.Add(m);
+            }
+
+            e.CurrencyName = j.GetString("currencyName", "");
+            e.CurrencyPerActivity = j.GetFloat("currencyPerActivity", 0f);
+
+            List<JsonValue> currencyRewards = j.GetList("currencyRewards");
+            for (int i = 0; i < currencyRewards.Count; i++)
+            {
+                JsonValue cj = currencyRewards[i];
+                EventCurrencyTier t = new EventCurrencyTier();
+                t.Cost = cj.GetLong("cost", 0);
+                t.Reward = EventReward.FromJson(cj);
+                e.CurrencyRewards.Add(t);
+            }
+
+            return e;
+        }
+    }
+
     /// <summary>Every tuning number the prototype uses, in one editable place.</summary>
     public sealed class BalanceConfig
     {

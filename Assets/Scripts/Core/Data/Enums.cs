@@ -91,6 +91,27 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
+    /// One kind of player activity a live event can award points for. Deliberately closed and
+    /// small today, but the events engine never switches on this enum anywhere - GameSession.
+    /// RecordEventActivity walks every active EventDef and compares its own Activity field against
+    /// the kind passed in, so adding a member here is never itself a behaviour change. What makes a
+    /// new kind actually earn points is one call to RecordEventActivity at that activity's own
+    /// natural call site - e.g. StageCleared would go inside GameSession.GrantBattleResult - not a
+    /// new case anywhere in the engine. Neither member below needed a CombatSimulation change to
+    /// wire, because neither activity happens inside a battle; a future kind that does would be the
+    /// first one to test that promise.
+    /// </summary>
+    public enum EventActivityKind
+    {
+        /// <summary>One completed summon, successful or a duplicate - GameSession.Summon.</summary>
+        SummonPerformed,
+
+        /// <summary>Relic Dust spent, amount-scaled - GameSession.SpendRelicDust, the one choke
+        /// point every Dust-spending path (today: GameSession.BuyRelic) routes through.</summary>
+        RelicDustSpent
+    }
+
+    /// <summary>
     /// A relic's grade, per DESIGN-RELICS "The word is grade, and it is not tier or rarity" -
     /// with a rename layered on top of that same axis, not a new axis.
     ///

@@ -67,6 +67,24 @@ namespace Emberfall.Core.Model
         public int Tier = 1;
     }
 
+    /// <summary>
+    /// One player's progress against one live event: points earned, which milestone thresholds
+    /// have already been claimed, and the event's own currency balance if it has one. Held by the
+    /// profile the same way OwnedRelic is - by event id, not by a reference into content, so a
+    /// save from before an event existed simply has no entry for it (the default, empty state) and
+    /// a save from after the event's window closes keeps its claimed history intact.
+    /// </summary>
+    public sealed class EventProgressEntry
+    {
+        public string EventId = "";
+        public long Points;
+        public long Currency;
+
+        /// <summary>Milestone thresholds already claimed, keyed by the threshold itself rather than
+        /// a list index - see EventMilestone. The only guard against double-paying a milestone.</summary>
+        public readonly List<long> ClaimedMilestoneThresholds = new List<long>();
+    }
+
     /// <summary>Everything the player owns. Pure data - serialised by SaveSerializer.</summary>
     public sealed class PlayerProfile
     {
@@ -101,6 +119,13 @@ namespace Emberfall.Core.Model
         /// entries here by relic id; an entry nothing references is simply unassigned.
         /// </summary>
         public readonly List<OwnedRelic> OwnedRelics = new List<OwnedRelic>();
+
+        /// <summary>Per-event progress, one entry per event the player has ever earned a point or
+        /// currency toward. Absent entirely on a save from before the events engine existed, or for
+        /// any event the player has not touched - both read as "no progress", the correct default,
+        /// with no migration needed (see SaveSerializer.CurrentVersion).</summary>
+        public readonly List<EventProgressEntry> EventProgress = new List<EventProgressEntry>();
+
         public readonly string[] Team = new string[TeamSize]; // hero uids, null = empty slot
 
         public long LastIdleClaimUnix;
@@ -286,6 +311,15 @@ namespace Emberfall.Core.Model
                 if (!OwnsRelic(relicId) || claimed.Contains(relicId)) { Heroes[i].EquippedRelicId = ""; continue; }
                 claimed.Add(relicId);
             }
+        }
+
+        // ---------- event helpers ----------
+
+        public EventProgressEntry FindEventProgress(string eventId)
+        {
+            if (string.IsNullOrEmpty(eventId)) return null;
+            for (int i = 0; i < EventProgress.Count; i++) if (EventProgress[i].EventId == eventId) return EventProgress[i];
+            return null;
         }
 
         public string AllocateUid()

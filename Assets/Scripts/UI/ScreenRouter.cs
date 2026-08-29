@@ -15,7 +15,8 @@ namespace Emberfall.UI
         Summon,
         Battle,
         RelicShop,
-        Inventory
+        Inventory,
+        Events
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -66,6 +67,7 @@ namespace Emberfall.UI
         public Screens.BattleScreen Battle;
         public Screens.RelicShopScreen RelicShop;
         public Screens.InventoryScreen Inventory;
+        public Screens.EventsScreen Events;
 
         public UIScreen Current { get; private set; }
 
@@ -83,6 +85,7 @@ namespace Emberfall.UI
             Battle = Create<Screens.BattleScreen>();
             RelicShop = Create<Screens.RelicShopScreen>();
             Inventory = Create<Screens.InventoryScreen>();
+            Events = Create<Screens.EventsScreen>();
         }
 
         /// <summary>

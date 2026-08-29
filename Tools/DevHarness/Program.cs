@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
             CheckHolyBlockControlImmunity(content);
             CheckDebrief();
             CheckRelics(content);
+            CheckEvents(content);
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
@@ -107,7 +108,9 @@ namespace Emberfall.DevHarness
                 string balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
                 string relicsPath = Path.Combine(dir, "relics.json");
                 string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
-                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics);
+                string eventsPath = Path.Combine(dir, "events.json");
+                string events = File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null;
+                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events);
             }
             catch (Exception ex)
             {
@@ -3895,6 +3898,295 @@ namespace Emberfall.DevHarness
             r.Events.Add(e);
         }
 
+        private static void CheckEvents(ContentDatabase db)
+        {
+            Line("");
+            Line("EVENTS");
+            CheckEventContent(db);
+            CheckEventActivityHooksFire(db);
+            CheckEventActivityWindowGate(db);
+            CheckEventMilestoneClaimNoDoublePay(db);
+            CheckEventCurrencyRedeem(db);
+            CheckEventSaveRoundTrip(db);
+        }
+
+        /// <summary>
+        /// events.json against the engine's own shape: two starter events, each authored with the
+        /// activity, ladder and (for one of them) currency the design calls for. Every number in
+        /// the file is a placeholder by its own admission - this checks structure, not tuning.
+        /// </summary>
+        private static void CheckEventContent(ContentDatabase db)
+        {
+            Check(db.Events.Count == 2, "events.json loads both starter events (got " + db.Events.Count + ")");
+
+            EventDef rite = db.GetEvent("recollection_rite");
+            Check(rite != null, "The Recollection Rite exists");
+            if (rite != null)
+            {
+                Check(rite.Activity == EventActivityKind.SummonPerformed,
+                      "Recollection Rite earns points from SummonPerformed (got " + rite.Activity + ")");
+                Check(!rite.HasCurrency, "Recollection Rite has no event currency - a pure point ladder, per spec");
+                Check(rite.Milestones.Count >= 3, "Recollection Rite has a real ladder (got " + rite.Milestones.Count + " milestones)");
+                Check(rite.EndUnix > rite.StartUnix, "Recollection Rite's window is well-formed");
+            }
+
+            EventDef ledger = db.GetEvent("ledgers_week");
+            Check(ledger != null, "The Ledger's Week exists");
+            if (ledger != null)
+            {
+                Check(ledger.Activity == EventActivityKind.RelicDustSpent,
+                      "Ledger's Week earns points from RelicDustSpent (got " + ledger.Activity + ")");
+                Check(ledger.HasCurrency, "Ledger's Week has its own event currency (" + ledger.CurrencyName + ")");
+                Check(ledger.CurrencyRewards.Count >= 2,
+                      "Ledger's Week has a real currency ladder (got " + ledger.CurrencyRewards.Count + " tiers)");
+                Check(ledger.CurrencyPerActivity > 0f,
+                      "Ledger's Week's currency actually accrues from RelicDustSpent (rate " + Fmt(ledger.CurrencyPerActivity) + ")");
+                Check(ledger.EndUnix > ledger.StartUnix, "Ledger's Week's window is well-formed");
+                Check(rite == null || ledger.StartUnix >= rite.EndUnix,
+                      "the two starter events do not overlap, so the isolation checks below are testing distinct windows, not luck");
+            }
+
+            Check(SaveSerializer.CurrentVersion == 6, "save version bumped to 6 for event progress (" + SaveSerializer.CurrentVersion + ")");
+        }
+
+        /// <summary>
+        /// The engine's whole reason to exist: RecordEventActivity is never called directly here,
+        /// only reached through the real GameSession.Summon and GameSession.BuyRelic call sites, so
+        /// this proves the hooks actually fire in a real simulated run rather than proving
+        /// RecordEventActivity works in isolation. Also proves activity-kind isolation both ways:
+        /// summoning does not move Ledger's Week, and spending Dust does not move the Recollection
+        /// Rite - the engine dispatches on EventActivityKind, not "credit everything active".
+        /// </summary>
+        private static void CheckEventActivityHooksFire(ContentDatabase db)
+        {
+            EventDef rite = db.GetEvent("recollection_rite");
+            EventDef ledger = db.GetEvent("ledgers_week");
+            if (rite == null || ledger == null) { Check(false, "both starter events must exist to check activity hooks"); return; }
+
+            long riteNow = rite.StartUnix + 3600L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, riteNow);
+            GameSession session = new GameSession(db, profile);
+            profile.Shards = 10000;
+
+            const int summons = 7;
+            for (int i = 0; i < summons; i++) session.Summon(1000 + i, riteNow);
+
+            EventProgressEntry riteProgress = profile.FindEventProgress("recollection_rite");
+            long expectedRitePoints = (long)Math.Floor(summons * rite.PointsPerActivity);
+            Check(riteProgress != null && riteProgress.Points == expectedRitePoints,
+                  "SummonPerformed fires through the real GameSession.Summon call site - " + summons
+                  + " summons earned " + (riteProgress != null ? riteProgress.Points : -1)
+                  + " points (expected " + expectedRitePoints + ")");
+            Check(profile.FindEventProgress("ledgers_week") == null,
+                  "and Ledger's Week, listening for a different activity, earned nothing from those summons");
+
+            long ledgerNow = ledger.StartUnix + 3600L;
+            profile.RelicDust = 10000;
+            string[] toBuy = { "warband_standard", "bastion_core" };
+            long dustSpent = 0;
+            for (int i = 0; i < toBuy.Length; i++)
+            {
+                if (db.GetRelic(toBuy[i]) == null) continue;
+                long before = profile.RelicDust;
+                Check(session.BuyRelic(toBuy[i], ledgerNow), "BuyRelic succeeds for " + toBuy[i] + " inside Ledger's Week's window");
+                dustSpent += before - profile.RelicDust;
+            }
+
+            EventProgressEntry ledgerProgress = profile.FindEventProgress("ledgers_week");
+            long expectedLedgerPoints = (long)Math.Floor(dustSpent * ledger.PointsPerActivity);
+            long expectedLedgerCurrency = (long)Math.Floor(dustSpent * ledger.CurrencyPerActivity);
+            Check(ledgerProgress != null && ledgerProgress.Points == expectedLedgerPoints,
+                  "RelicDustSpent fires through the real GameSession.BuyRelic call site - " + dustSpent
+                  + " dust spent earned " + (ledgerProgress != null ? ledgerProgress.Points : -1)
+                  + " points (expected " + expectedLedgerPoints + ")");
+            Check(ledgerProgress != null && ledgerProgress.Currency == expectedLedgerCurrency,
+                  "and " + ledger.CurrencyName + " accrued at its own rate in the same call ("
+                  + (ledgerProgress != null ? ledgerProgress.Currency : -1) + ", expected " + expectedLedgerCurrency + ")");
+
+            EventProgressEntry riteAfter = profile.FindEventProgress("recollection_rite");
+            Check(riteAfter != null && riteAfter.Points == expectedRitePoints,
+                  "and the earlier Recollection Rite points are untouched by spending Dust - dispatch is per-activity-kind, not blanket");
+        }
+
+        /// <summary>Earning is gated to the event's own window; claiming is not (see
+        /// ClaimEventMilestone). This proves the earning half of that split: activity before a
+        /// window opens earns nothing at all, not a discounted amount.</summary>
+        private static void CheckEventActivityWindowGate(ContentDatabase db)
+        {
+            EventDef rite = db.GetEvent("recollection_rite");
+            if (rite == null) { Check(false, "Recollection Rite must exist to check the window gate"); return; }
+
+            long before = rite.StartUnix - 3600L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, before);
+            GameSession session = new GameSession(db, profile);
+            profile.Shards = 10000;
+            session.Summon(5555, before);
+
+            Check(profile.FindEventProgress("recollection_rite") == null,
+                  "a summon one hour before the window opens earns no Recollection Rite points at all");
+        }
+
+        /// <summary>
+        /// The double-pay guard, forced directly against GameSession.ClaimEventMilestone rather
+        /// than walked up to through dozens of summons - the mechanism under test is the claim
+        /// gate, not the accrual math CheckEventActivityHooksFire already proved.
+        /// </summary>
+        private static void CheckEventMilestoneClaimNoDoublePay(ContentDatabase db)
+        {
+            EventDef rite = db.GetEvent("recollection_rite");
+            if (rite == null || rite.Milestones.Count == 0) { Check(false, "Recollection Rite needs a milestone to check claiming"); return; }
+            EventMilestone milestone = rite.Milestones[0];
+
+            long now = rite.StartUnix + 60L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, now);
+            GameSession session = new GameSession(db, profile);
+
+            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+                  "a milestone cannot be claimed before its threshold is reached");
+
+            EventProgressEntry progress = session.GetEventProgress("recollection_rite");
+            progress.Points = milestone.Threshold;
+
+            long goldBefore = profile.Gold;
+            long shardsBefore = profile.Shards;
+            long dustBefore = profile.RelicDust;
+            Check(session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+                  "the milestone claims once the threshold is reached");
+            Check(profile.Gold == goldBefore + milestone.Reward.Gold
+                  && profile.Shards == shardsBefore + milestone.Reward.Shards
+                  && profile.RelicDust == dustBefore + milestone.Reward.RelicDust,
+                  "and the reward actually reached the profile (" + milestone.Reward.Describe() + ")");
+
+            long goldAfterFirstClaim = profile.Gold;
+            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+                  "claiming the same milestone a second time is refused");
+            Check(profile.Gold == goldAfterFirstClaim,
+                  "and the second attempt paid nothing - this is the double-pay guard the milestone ladder depends on");
+
+            Check(!session.ClaimEventMilestone("recollection_rite", 999999999L),
+                  "claiming a threshold that does not exist on the ladder is refused");
+            Check(!session.ClaimEventMilestone("no_such_event", milestone.Threshold),
+                  "claiming against an unknown event id is refused");
+        }
+
+        /// <summary>
+        /// The currency ladder's own shape, distinct from a milestone's: redeeming spends the
+        /// balance rather than setting a claimed flag, so the same tier is redeemable again as soon
+        /// as the balance allows it - proven directly here, not merely asserted in a comment.
+        /// </summary>
+        private static void CheckEventCurrencyRedeem(ContentDatabase db)
+        {
+            EventDef ledger = db.GetEvent("ledgers_week");
+            if (ledger == null || ledger.CurrencyRewards.Count == 0) { Check(false, "Ledger's Week needs a currency tier to check redemption"); return; }
+            EventCurrencyTier tier = ledger.CurrencyRewards[0];
+
+            long now = ledger.StartUnix + 60L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, now);
+            GameSession session = new GameSession(db, profile);
+
+            Check(!session.RedeemEventCurrency("ledgers_week", tier.Cost),
+                  "a currency tier cannot be redeemed with an empty balance");
+
+            EventProgressEntry progress = session.GetEventProgress("ledgers_week");
+            progress.Currency = tier.Cost * 2;
+
+            long goldBefore = profile.Gold;
+            Check(session.RedeemEventCurrency("ledgers_week", tier.Cost), "the tier redeems once the balance covers its cost");
+            Check(progress.Currency == tier.Cost, "and the cost is actually deducted (" + progress.Currency + " left)");
+            Check(profile.Gold == goldBefore + tier.Reward.Gold, "and the reward reached the profile");
+
+            Check(session.RedeemEventCurrency("ledgers_week", tier.Cost),
+                  "redeeming the SAME tier again succeeds - unlike a milestone, this is a purchase, not a one-time claim");
+            Check(progress.Currency == 0, "and the balance is spent down accordingly (" + progress.Currency + " left)");
+            Check(!session.RedeemEventCurrency("ledgers_week", tier.Cost),
+                  "a third redemption is refused - the balance that funded the first two is gone");
+
+            Check(!session.RedeemEventCurrency("recollection_rite", tier.Cost),
+                  "redeeming against an event with no currency at all is refused, not treated as a free tier");
+        }
+
+        /// <summary>
+        /// The save half: a normal round trip with real progress, then the upgrade-from-nothing
+        /// case that matters most operationally - an existing player's save predates the events
+        /// engine entirely, not merely predates one event - and the downgrade guard every version
+        /// bump before this one relies on.
+        /// </summary>
+        private static void CheckEventSaveRoundTrip(ContentDatabase db)
+        {
+            EventDef rite = db.GetEvent("recollection_rite");
+            EventDef ledger = db.GetEvent("ledgers_week");
+            if (rite == null || ledger == null || rite.Milestones.Count == 0 || ledger.CurrencyRewards.Count == 0)
+            { Check(false, "both starter events, with a milestone and a currency tier, must exist to check the save format"); return; }
+
+            long now = rite.StartUnix + 60L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, now);
+            GameSession session = new GameSession(db, profile);
+
+            EventProgressEntry riteProgress = session.GetEventProgress("recollection_rite");
+            riteProgress.Points = rite.Milestones[0].Threshold;
+            session.ClaimEventMilestone("recollection_rite", rite.Milestones[0].Threshold);
+
+            EventProgressEntry ledgerProgress = session.GetEventProgress("ledgers_week");
+            ledgerProgress.Points = 42;
+            ledgerProgress.Currency = ledger.CurrencyRewards[0].Cost;
+
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && error == null,
+                  "a save carrying event progress deserialises without error" + (error != null ? " (" + error + ")" : ""));
+            if (loaded == null) { Line(""); return; }
+
+            EventProgressEntry loadedRite = loaded.FindEventProgress("recollection_rite");
+            Check(loadedRite != null && loadedRite.Points == riteProgress.Points,
+                  "points survive the round trip (" + (loadedRite != null ? loadedRite.Points : -1) + ")");
+            Check(loadedRite != null && loadedRite.ClaimedMilestoneThresholds.Contains(rite.Milestones[0].Threshold),
+                  "and the claimed milestone stays claimed after reload");
+
+            EventProgressEntry loadedLedger = loaded.FindEventProgress("ledgers_week");
+            Check(loadedLedger != null && loadedLedger.Currency == ledgerProgress.Currency,
+                  "a second event's currency balance survives the round trip independently of the first event's points");
+
+            // ---- upgrade from a save that predates the events engine entirely, not merely one event
+            PlayerProfile bare = GameSession.CreateNewProfile(db, now);
+            JsonValue bareCurrent;
+            string bareParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(bare), out bareCurrent, out bareParseError);
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in bareCurrent.Keys)
+            {
+                if (key == "eventProgress") continue;
+                legacy.Set(key, key == "version" ? new JsonValue((double)5) : bareCurrent[key]);
+            }
+            string legacyJson = legacy.ToJson(true);
+            Check(legacyJson.IndexOf("eventProgress", StringComparison.Ordinal) < 0,
+                  "the hand-built version 5 save really has no eventProgress array");
+
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacyJson, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null,
+                  "a version 5 save - an existing player who has never seen an event - loads under version 6 code"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            Check(upgraded != null && upgraded.EventProgress.Count == 0,
+                  "and reads as zero events touched, not a phantom entry or a crash ("
+                  + (upgraded == null ? "-" : upgraded.EventProgress.Count.ToString()) + ")");
+
+            // ---- the downgrade guard, same shape as every version bump before this one, and the
+            // same "current + 1" pattern CheckRelicSaveMigration uses so neither goes stale at the
+            // next bump.
+            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
+            string future = SaveSerializer.Serialize(profile).Replace(currentTag, futureTag);
+            string futureError;
+            PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
+            Check(fromFuture == null && futureError != null,
+                  "a save one version newer than this build is refused rather than silently stripped of its event progress");
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            Line("");
+        }
+
         private static void CheckSaveRoundTrip(ContentDatabase db)
         {
             Line("SAVE");
@@ -4351,8 +4643,11 @@ namespace Emberfall.DevHarness
         {
             Line("RELIC INVENTORY");
 
-            Check(SaveSerializer.CurrentVersion == 5,
-                  "save version bumped to 5 (" + SaveSerializer.CurrentVersion + ")");
+            // The relic model's own bump was 4 -> 5; CurrentVersion has since moved again to 6 for
+            // the events engine (see CheckEventContent), so this only asserts the relic-era floor
+            // rather than an exact number that would go stale at the next unrelated bump.
+            Check(SaveSerializer.CurrentVersion >= 5,
+                  "save version is at least 5, where the relic model bumped it (" + SaveSerializer.CurrentVersion + ")");
 
             const long Noon = 1699963200L;
             PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
@@ -4382,13 +4677,13 @@ namespace Emberfall.DevHarness
             PlayerProfile priceProfile = GameSession.CreateNewProfile(db, Noon);
             GameSession priceSession = new GameSession(db, priceProfile);
             priceProfile.RelicDust = db.Balance.RelicMythicShopPrice - 1;
-            Check(!priceSession.BuyRelic("unbroken_ledger"),
+            Check(!priceSession.BuyRelic("unbroken_ledger", Noon),
                   "BuyRelic refuses a mythic purchase one dust short of its steep price");
             Check(!priceProfile.OwnsRelic("unbroken_ledger") && priceProfile.RelicDust == db.Balance.RelicMythicShopPrice - 1,
                   "and charges nothing on a refused purchase (dust untouched at "
                   + priceProfile.RelicDust + ")");
             priceProfile.RelicDust = db.Balance.RelicMythicShopPrice;
-            Check(priceSession.BuyRelic("unbroken_ledger"),
+            Check(priceSession.BuyRelic("unbroken_ledger", Noon),
                   "BuyRelic accepts the mythic purchase at exactly its price");
             Check(priceProfile.RelicDust == 0,
                   "and deducts the full mythic price, not the ordinary legendary one (dust now "
@@ -4559,12 +4854,17 @@ namespace Emberfall.DevHarness
                   "and upgrades to an empty collection rather than a phantom entry ("
                   + (bareUpgraded == null ? "-" : bareUpgraded.OwnedRelics.Count.ToString()) + ")");
 
-            // ---- the downgrade guard, the same one versions 2, 3 and 4 rely on
-            string future = SaveSerializer.Serialize(source).Replace("\"version\": 5", "\"version\": 6");
+            // ---- the downgrade guard, the same one every version bump relies on. Bumps the
+            // CURRENT version number by one rather than hardcoding "6", so this keeps testing
+            // "one newer than what this build reads" instead of going stale (silently untested)
+            // the next time CurrentVersion itself moves, exactly as it just did for events.
+            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
+            string future = SaveSerializer.Serialize(source).Replace(currentTag, futureTag);
             string futureError;
             PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
             Check(fromFuture == null && futureError != null,
-                  "a version 6 save is refused rather than silently stripped of its relics");
+                  "a save one version newer than this build is refused rather than silently stripped of its relics");
             Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
                   "and refused with the same message the earlier bumps use (\"" + futureError + "\")");
         }

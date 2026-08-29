@@ -181,7 +181,7 @@ namespace Emberfall.UI.Screens
 
         private void OnBuy(RelicDef relic)
         {
-            bool success = App.Session.BuyRelic(relic.Id);
+            bool success = App.Session.BuyRelic(relic.Id, TimeUtil.NowUnix());
             if (!success)
             {
                 App.Notify("Not enough Relic Dust.");

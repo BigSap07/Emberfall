@@ -52,8 +52,18 @@ namespace Emberfall.Core.Save
         /// code reads no equippedRelicId and no ownedRelics, so it would silently unequip every
         /// relic AND drop the player's whole relic collection and dust purse. Refusing is the only
         /// safe answer, and refusing is what the existing guard already does once this constant moves.
+        ///
+        /// 6: the events engine's per-event progress (PlayerProfile.EventProgress) — points earned,
+        /// which milestone thresholds are claimed, and an event's own currency balance. Upgrade
+        /// needs no migration, unlike the version 4 -> 5 bump: a version 5 save simply has no
+        /// eventProgress array, which reads as an empty list, which is the correct state for a
+        /// player who has never seen an event - there is no prior format for event progress to
+        /// translate out of, the way a hero-level relicId had to become an owned-relics entry.
+        /// Downgrade is guarded the same way every bump above is: version 5 code reads no
+        /// eventProgress key at all, so it would silently drop every claimed milestone and currency
+        /// balance a player earned under version 6, and the version check below refuses that instead.
         /// </summary>
-        public const int CurrentVersion = 5;
+        public const int CurrentVersion = 6;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -117,6 +127,26 @@ namespace Emberfall.Core.Save
                 ownedRelics.Add(oj);
             }
             root.Set("ownedRelics", ownedRelics);
+
+            // Written even when empty, same reasoning as ownedRelics above: absent means "predates
+            // the events engine", empty means "has the engine, has touched nothing yet", and the
+            // two must read as the same thing on the way back in without needing to tell them apart.
+            JsonValue eventProgress = JsonValue.NewArray();
+            for (int i = 0; i < profile.EventProgress.Count; i++)
+            {
+                EventProgressEntry p = profile.EventProgress[i];
+                if (string.IsNullOrEmpty(p.EventId)) continue;
+                JsonValue pj = JsonValue.NewObject();
+                pj.Set("eventId", p.EventId);
+                pj.Set("points", p.Points);
+                pj.Set("currency", p.Currency);
+                JsonValue claimed = JsonValue.NewArray();
+                for (int c = 0; c < p.ClaimedMilestoneThresholds.Count; c++)
+                    claimed.Add(new JsonValue((double)p.ClaimedMilestoneThresholds[c]));
+                pj.Set("claimedMilestones", claimed);
+                eventProgress.Add(pj);
+            }
+            root.Set("eventProgress", eventProgress);
 
             // Zero counts are dropped rather than written: absent already means zero on the way
             // back in, so a player who has farmed nothing today serialises no map at all.
@@ -225,6 +255,24 @@ namespace Emberfall.Core.Save
                 synthesised.RelicId = relicId;
                 synthesised.Tier = 1;
                 profile.OwnedRelics.Add(synthesised);
+            }
+
+            // No migration to perform here (see CurrentVersion's doc comment): a pre-events save
+            // simply has no "eventProgress" key, GetList returns an empty list for it, and the loop
+            // below adds nothing - profile.EventProgress stays the empty list it was constructed
+            // with, which is exactly "this player has never touched an event".
+            List<JsonValue> eventProgress = root.GetList("eventProgress");
+            for (int i = 0; i < eventProgress.Count; i++)
+            {
+                string eventId = eventProgress[i].GetString("eventId", "");
+                if (string.IsNullOrEmpty(eventId) || profile.FindEventProgress(eventId) != null) continue;
+                EventProgressEntry p = new EventProgressEntry();
+                p.EventId = eventId;
+                p.Points = Math.Max(0, eventProgress[i].GetLong("points", 0));
+                p.Currency = Math.Max(0, eventProgress[i].GetLong("currency", 0));
+                List<JsonValue> claimed = eventProgress[i].GetList("claimedMilestones");
+                for (int c = 0; c < claimed.Count; c++) p.ClaimedMilestoneThresholds.Add(claimed[c].AsLong(0));
+                profile.EventProgress.Add(p);
             }
 
             // Stage ids are not validated against content here for the same reason relic ids are

@@ -14,11 +14,13 @@ namespace Emberfall.Game
             string enemies = ReadText("enemies");
             string campaign = ReadText("campaign");
             string balance = ReadText("balance");
-            // Optional: a build with no relics.json loads with zero relics rather than erroring,
-            // which is why this goes through ReadTextOptional instead of ReadText.
+            // Optional: a build with no relics.json (or no events.json) loads with zero relics (or
+            // zero events) rather than erroring, which is why these go through ReadTextOptional
+            // instead of ReadText.
             string relics = ReadTextOptional("relics");
+            string events = ReadTextOptional("events");
 
-            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics);
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events);
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

@@ -237,6 +237,7 @@ namespace Emberfall.UI.Screens
 
             AddNavButton(nav, "RELICS", 6, UITheme.Ember, OpenRelicShop);
             AddNavButton(nav, "INVENTORY", 7, UITheme.TextMuted, OpenInventory);
+            AddNavButton(nav, "EVENTS", 8, UITheme.Success, OpenEvents);
         }
 
         private void BuildOptions()
@@ -410,6 +411,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Inventory);
+        }
+
+        private void OpenEvents()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Events);
         }
 
         private void ShowOptions()

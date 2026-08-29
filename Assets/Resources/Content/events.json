@@ -1,0 +1,46 @@
+{
+  "_comment": "Limited-time events, content only - see the Events engine in Assets/Scripts/Core/Data (EventDef/Enums.EventActivityKind) and Assets/Scripts/Core/Session/GameSession.cs (RecordEventActivity/ClaimEventMilestone/RedeemEventCurrency). startUnix/endUnix are UTC Unix seconds, same style as balance.json's dailyResetHourUtc but an absolute window rather than an hour-of-day. 'activity' is one Enums.EventActivityKind member - today SummonPerformed or RelicDustSpent. 'pointsPerActivity' converts one unit of that activity into points on the milestone ladder every event has; 'currencyName' non-empty adds a second, optional ladder paid for in the event's own currency, earned from the same activity at 'currencyPerActivity'. Every number in this file - both windows, every threshold, every reward, both conversion rates - is a first-pass placeholder, not tuned content; nothing here has been through a balance pass.",
+
+  "events": [
+    {
+      "id": "recollection_rite",
+      "name": "The Recollection Rite",
+      "startUnix": 1788220800,
+      "endUnix": 1788825600,
+      "activity": "SummonPerformed",
+      "pointsLabel": "Memory Fragments",
+      "pointsPerActivity": 1,
+      "milestones": [
+        { "threshold": 5,  "gold": 200 },
+        { "threshold": 15, "gold": 400,  "shards": 50 },
+        { "threshold": 30, "gold": 800,  "relicDust": 40 },
+        { "threshold": 60, "gold": 1500, "shards": 300 }
+      ],
+      "currencyName": "",
+      "currencyPerActivity": 0,
+      "currencyRewards": []
+    },
+    {
+      "id": "ledgers_week",
+      "name": "The Ledger's Week",
+      "startUnix": 1789430400,
+      "endUnix": 1790035200,
+      "activity": "RelicDustSpent",
+      "pointsLabel": "Dust Spent",
+      "pointsPerActivity": 1,
+      "milestones": [
+        { "threshold": 200,  "gold": 150 },
+        { "threshold": 500,  "gold": 400,  "shards": 60 },
+        { "threshold": 1000, "gold": 900,  "shards": 120 },
+        { "threshold": 2000, "gold": 1800, "relicDust": 100 }
+      ],
+      "currencyName": "Ledger Marks",
+      "currencyPerActivity": 0.1,
+      "currencyRewards": [
+        { "cost": 25,  "gold": 100 },
+        { "cost": 75,  "gold": 300, "shards": 30 },
+        { "cost": 150, "relicDust": 200 }
+      ]
+    }
+  ]
+}

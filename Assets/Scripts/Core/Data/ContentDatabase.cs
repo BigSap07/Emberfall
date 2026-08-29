@@ -17,12 +17,14 @@ namespace Emberfall.Core.Data
         public readonly List<ChapterDef> Chapters = new List<ChapterDef>();
         public readonly List<StageDef> AllStages = new List<StageDef>();
         public readonly List<RelicDef> Relics = new List<RelicDef>();
+        public readonly List<EventDef> Events = new List<EventDef>();
         public readonly List<string> Warnings = new List<string>();
 
         private readonly Dictionary<string, HeroDef> _heroById = new Dictionary<string, HeroDef>();
         private readonly Dictionary<string, EnemyDef> _enemyById = new Dictionary<string, EnemyDef>();
         private readonly Dictionary<string, StageDef> _stageById = new Dictionary<string, StageDef>();
         private readonly Dictionary<string, RelicDef> _relicById = new Dictionary<string, RelicDef>();
+        private readonly Dictionary<string, EventDef> _eventById = new Dictionary<string, EventDef>();
 
         /// <summary>
         /// Four-file overload, kept so every existing caller compiles untouched - including the
@@ -32,10 +34,20 @@ namespace Emberfall.Core.Data
         /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson)
         {
-            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, null);
+            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, null, null);
         }
 
+        /// <summary>
+        /// Five-file overload, kept so every relics-era caller compiles untouched - a database
+        /// loaded this way has zero events, exactly as one loaded through the four-file overload
+        /// has zero relics.
+        /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson, string relicsJson)
+        {
+            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, null);
+        }
+
+        public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson, string relicsJson, string eventsJson)
         {
             ContentDatabase db = new ContentDatabase();
 
@@ -51,6 +63,7 @@ namespace Emberfall.Core.Data
             db.ParseEnemies(enemiesJson);
             db.ParseCampaign(campaignJson);
             db.ParseRelics(relicsJson);
+            db.ParseEvents(eventsJson);
             db.Validate();
             return db;
         }
@@ -87,6 +100,41 @@ namespace Emberfall.Core.Data
                 }
                 Relics.Add(r);
                 _relicById[r.Id] = r;
+            }
+        }
+
+        /// <summary>
+        /// Events are optional content, same reasoning as relics: a build with no events.json loads
+        /// with zero events rather than erroring, so the four- and five-file Load overloads above
+        /// stay honest.
+        /// </summary>
+        private void ParseEvents(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            JsonValue root;
+            string err;
+            if (!JsonValue.TryParse(text, out root, out err)) { Warnings.Add("events.json: " + err); return; }
+            List<JsonValue> list = root.GetList("events");
+            for (int i = 0; i < list.Count; i++)
+            {
+                EventDef e = EventDef.FromJson(list[i]);
+                if (e == null || string.IsNullOrEmpty(e.Id)) { Warnings.Add("events.json: entry " + i + " has no id"); continue; }
+                if (_eventById.ContainsKey(e.Id)) { Warnings.Add("events.json: duplicate event id " + e.Id); continue; }
+                if (e.EndUnix <= e.StartUnix) { Warnings.Add("events.json: event " + e.Id + " endUnix is not after startUnix"); continue; }
+                if (e.Milestones.Count == 0) { Warnings.Add("events.json: event " + e.Id + " has no milestones"); continue; }
+
+                bool ascending = true;
+                for (int m = 1; m < e.Milestones.Count; m++)
+                    if (e.Milestones[m].Threshold <= e.Milestones[m - 1].Threshold) ascending = false;
+                if (!ascending) { Warnings.Add("events.json: event " + e.Id + " milestones are not strictly ascending by threshold"); continue; }
+
+                bool costsAscending = true;
+                for (int c = 1; c < e.CurrencyRewards.Count; c++)
+                    if (e.CurrencyRewards[c].Cost <= e.CurrencyRewards[c - 1].Cost) costsAscending = false;
+                if (!costsAscending) { Warnings.Add("events.json: event " + e.Id + " currencyRewards are not strictly ascending by cost"); continue; }
+
+                Events.Add(e);
+                _eventById[e.Id] = e;
             }
         }
 
@@ -198,6 +246,29 @@ namespace Emberfall.Core.Data
                     if (r.Stats[s].Value == 0f)
                         Warnings.Add("relic " + r.Id + " has a zero-value " + r.Stats[s].Stat + " bonus, so that half of it does nothing");
             }
+            for (int i = 0; i < Events.Count; i++)
+            {
+                EventDef e = Events[i];
+                // A currency name with nothing to spend it on, or spendable rewards with no name
+                // to display them under, are both half-authored content rather than a hard error -
+                // ContentDatabase.ParseEvents already refused anything structurally broken (no id,
+                // an inverted window, an unordered ladder).
+                if (e.HasCurrency && e.CurrencyRewards.Count == 0)
+                    Warnings.Add("event " + e.Id + " defines a currency (" + e.CurrencyName + ") with no currencyRewards to spend it on");
+                if (!e.HasCurrency && e.CurrencyRewards.Count > 0)
+                    Warnings.Add("event " + e.Id + " has currencyRewards but no currencyName to display them under");
+
+                for (int m = 0; m < e.Milestones.Count; m++)
+                    if (e.Milestones[m].Reward.IsEmpty)
+                        Warnings.Add("event " + e.Id + " milestone at threshold " + e.Milestones[m].Threshold + " grants nothing");
+                for (int c = 0; c < e.CurrencyRewards.Count; c++)
+                    if (e.CurrencyRewards[c].Reward.IsEmpty)
+                        Warnings.Add("event " + e.Id + " currency tier at cost " + e.CurrencyRewards[c].Cost + " grants nothing");
+
+                if (e.PointsPerActivity <= 0f)
+                    Warnings.Add("event " + e.Id + " has pointsPerActivity <= 0, so its milestone ladder can never climb");
+            }
+
             if (Heroes.Count == 0) Warnings.Add("no heroes were loaded");
             if (StartingHeroes.Count == 0) Warnings.Add("no heroes are flagged startingHero:true");
         }
@@ -220,6 +291,13 @@ namespace Emberfall.Core.Data
         {
             RelicDef r;
             if (id != null && _relicById.TryGetValue(id, out r)) return r;
+            return null;
+        }
+
+        public EventDef GetEvent(string id)
+        {
+            EventDef e;
+            if (id != null && _eventById.TryGetValue(id, out e)) return e;
             return null;
         }
 

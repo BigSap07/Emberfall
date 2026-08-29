@@ -457,7 +457,7 @@ namespace Emberfall.Core.Session
         /// the collection unassigned. Returns false when the relic is unknown, already owned, or
         /// the player cannot afford it — the caller should surface whichever message fits.
         /// </summary>
-        public bool BuyRelic(string relicId)
+        public bool BuyRelic(string relicId, long nowUnix)
         {
             if (string.IsNullOrEmpty(relicId)) return false;
             if (Profile.OwnsRelic(relicId)) return false;
@@ -466,8 +466,21 @@ namespace Emberfall.Core.Session
             int price = RelicPrice(relic);
             if (Profile.RelicDust < price) return false;
             if (!GrantRelic(relicId)) return false;
-            Profile.RelicDust -= price;
+            SpendRelicDust(price, nowUnix);
             return true;
+        }
+
+        /// <summary>
+        /// The one choke point every Relic Dust expenditure routes through — today only BuyRelic
+        /// above, since relic upgrades (DESIGN-RELIC-PROGRESSION section 2, RelicMaxTier) are not
+        /// built yet. Whoever builds the upgrade spend should call this rather than decrementing
+        /// Profile.RelicDust directly, so RelicDustSpent events keep seeing every Dust expenditure
+        /// without a second call site to remember.
+        /// </summary>
+        private void SpendRelicDust(long amount, long nowUnix)
+        {
+            Profile.RelicDust -= amount;
+            RecordEventActivity(EventActivityKind.RelicDustSpent, amount, nowUnix);
         }
 
         /// <summary>Takes a hero's relic off them. The relic stays owned, just unassigned.</summary>
@@ -475,6 +488,109 @@ namespace Emberfall.Core.Session
         {
             if (hero == null || string.IsNullOrEmpty(hero.EquippedRelicId)) return false;
             hero.EquippedRelicId = "";
+            return true;
+        }
+
+        // ------------------------------------------------------------------ events
+        //
+        // Activity-driven, not switch-driven: RecordEventActivity takes an EventActivityKind and
+        // walks every currently-active EventDef, comparing its own Activity field against the kind
+        // passed in. Adding a new activity kind later is one enum member (Enums.cs) plus one call
+        // to RecordEventActivity at that activity's own natural call site (Summon and
+        // SpendRelicDust are the two today) — never a new case here, and never a touch to
+        // CombatSimulation, since no activity kind so far happens inside a battle.
+
+        /// <summary>Every event currently inside its UTC window - what the events screen lists.</summary>
+        public List<EventDef> ActiveEvents(long nowUnix)
+        {
+            List<EventDef> result = new List<EventDef>();
+            for (int i = 0; i < Content.Events.Count; i++)
+                if (Content.Events[i].IsActive(nowUnix)) result.Add(Content.Events[i]);
+            return result;
+        }
+
+        /// <summary>Progress for one event, created empty on first touch rather than requiring a
+        /// separate "start tracking this event" step - the same lazy pattern OwnedRelic's absence
+        /// already uses for "does not own it yet".</summary>
+        public EventProgressEntry GetEventProgress(string eventId)
+        {
+            EventProgressEntry existing = Profile.FindEventProgress(eventId);
+            if (existing != null) return existing;
+            EventProgressEntry created = new EventProgressEntry();
+            created.EventId = eventId;
+            Profile.EventProgress.Add(created);
+            return created;
+        }
+
+        /// <summary>
+        /// Records one occurrence of an activity against every currently-active event that earns
+        /// points from it. amount is the activity's own unit - 1 for a discrete occurrence like a
+        /// summon, or a quantity like the Relic Dust spent in one purchase. A no-op for any event
+        /// outside its window: points and currency are earned only during it, though a milestone or
+        /// currency tier already earned stays claimable after it closes (ClaimEventMilestone and
+        /// RedeemEventCurrency do not re-check the window).
+        /// </summary>
+        public void RecordEventActivity(EventActivityKind kind, long amount, long nowUnix)
+        {
+            if (amount <= 0) return;
+            for (int i = 0; i < Content.Events.Count; i++)
+            {
+                EventDef evt = Content.Events[i];
+                if (evt.Activity != kind || !evt.IsActive(nowUnix)) continue;
+                EventProgressEntry progress = GetEventProgress(evt.Id);
+                progress.Points += (long)Math.Floor(amount * evt.PointsPerActivity);
+                if (evt.HasCurrency) progress.Currency += (long)Math.Floor(amount * evt.CurrencyPerActivity);
+            }
+        }
+
+        private void ApplyEventReward(EventReward reward)
+        {
+            if (reward == null) return;
+            Profile.Gold += reward.Gold;
+            Profile.Shards += reward.Shards;
+            Profile.RelicDust += reward.RelicDust;
+        }
+
+        /// <summary>
+        /// Claims one milestone's reward. Points are never spent - the ladder is cumulative and
+        /// permanent - so ClaimedMilestoneThresholds is the only thing standing between this and a
+        /// repeat payout: checked and updated in the same call, before the reward is applied, so
+        /// there is no window where a second call could slip through between the check and the
+        /// grant. Returns false for an unknown event or milestone, an already-claimed one, or one
+        /// whose threshold the player has not reached yet.
+        /// </summary>
+        public bool ClaimEventMilestone(string eventId, long threshold)
+        {
+            EventDef evt = Content.GetEvent(eventId);
+            if (evt == null) return false;
+            EventMilestone milestone = evt.FindMilestone(threshold);
+            if (milestone == null) return false;
+            EventProgressEntry progress = GetEventProgress(eventId);
+            if (progress.ClaimedMilestoneThresholds.Contains(threshold)) return false;
+            if (progress.Points < threshold) return false;
+            progress.ClaimedMilestoneThresholds.Add(threshold);
+            ApplyEventReward(milestone.Reward);
+            return true;
+        }
+
+        /// <summary>
+        /// Redeems one tier of an event's currency ladder: spends Cost of the event's own currency,
+        /// grants Reward. Unlike a milestone this is a genuine purchase rather than an achievement -
+        /// the balance is actually deducted - so redeeming the same tier twice is two purchases, not
+        /// a double-claim, and nothing tracks a "redeemed" state the way ClaimedMilestoneThresholds
+        /// does. Returns false for an unknown event, an event with no currency, an unknown tier, or
+        /// insufficient balance.
+        /// </summary>
+        public bool RedeemEventCurrency(string eventId, long cost)
+        {
+            EventDef evt = Content.GetEvent(eventId);
+            if (evt == null || !evt.HasCurrency) return false;
+            EventCurrencyTier tier = evt.FindCurrencyTier(cost);
+            if (tier == null) return false;
+            EventProgressEntry progress = GetEventProgress(eventId);
+            if (progress.Currency < cost) return false;
+            progress.Currency -= cost;
+            ApplyEventReward(tier.Reward);
             return true;
         }
 
@@ -583,6 +699,7 @@ namespace Emberfall.Core.Session
 
             outcome.Success = true;
             outcome.Hero = pulled;
+            RecordEventActivity(EventActivityKind.SummonPerformed, 1, nowUnix);
 
             HeroInstance existing = Profile.FindHeroByDefId(pulled.Id);
             if (existing == null)
