@@ -58,6 +58,11 @@ namespace Emberfall.UI.Screens
         private float _speed = 1f;
         private bool _finished;
 
+        /// <summary>True once ShowResult has run - the fight is fully resolved and the result
+        /// panel is up. Exists for external observers (editor automation, tests driving a real
+        /// Play mode session) that need to know when to stop waiting; nothing in-game reads it.</summary>
+        public bool Finished { get { return _finished; } }
+
         /// <summary>
         /// Nominal (pre-_speed) seconds owed before the NEXT event may render, drained at the top
         /// of Handle regardless of what event that turns out to be. Exists for a SpriteAnimator
@@ -107,9 +112,30 @@ namespace Emberfall.UI.Screens
         private int _turnStripCursor;
         private UnitBar _activeTurnBar;
 
+        /// <summary>-1 when this battle is a campaign fight (the only mode that existed before The
+        /// Deep Recital); a floor number when it is a Recital attempt. Drives ShowResult's branch
+        /// between GameSession.GrantBattleResult and GrantRecitalResult - the two reward models are
+        /// different enough (repeat cap and stage unlocks vs. a one-way floor ladder and Echoes)
+        /// that sharing one result path would mean one of them lying about what happened.</summary>
+        private int _recitalFloor = -1;
+
         public void SetStage(StageDef stage)
         {
             _stage = stage;
+            _recitalFloor = -1;
+        }
+
+        /// <summary>
+        /// Launches this screen as a Recital attempt rather than a campaign fight. Spends nothing
+        /// itself - OnShow is the one place an Echo is actually deducted (see the
+        /// TryStartRecitalAttempt call there), because OnShow runs for both this initial entry AND
+        /// every Rematch, and an attempt has to cost an Echo either way. RecitalScreen's FIGHT
+        /// button only peeks affordability before calling this, it does not spend.
+        /// </summary>
+        public void SetRecitalFloor(int floor)
+        {
+            _recitalFloor = floor;
+            _stage = App.Session.BuildRecitalStage(floor);
         }
 
         // ------------------------------------------------------------------ construction
@@ -297,7 +323,7 @@ namespace Emberfall.UI.Screens
             _speedButton.SetText("1x");
             _skipButton.Interactable = true;
 
-            if (_stage == null) _stage = App.Session.NextStage;
+            if (_recitalFloor < 0 && _stage == null) _stage = App.Session.NextStage;
             if (_stage == null)
             {
                 // no campaign content: bail out next frame rather than re-entering the router
@@ -306,7 +332,25 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant();
+            if (_recitalFloor >= 0)
+            {
+                // The one and only spend point for a Recital attempt - covers both the first entry
+                // (RecitalScreen's FIGHT button only peeked affordability, it did not spend) and
+                // every Rematch (which calls OnShow again with no gate of its own otherwise). If
+                // Echoes ran out between then and now, bail back to the Recital screen instead of
+                // fighting a floor that was not paid for.
+                if (!App.Session.TryStartRecitalAttempt(TimeUtil.NowUnix()))
+                {
+                    App.Notify("Out of Echoes.");
+                    Router.Show(ScreenId.Recital, false);
+                    return;
+                }
+                _stageLabel.text = "FLOOR " + _recitalFloor + "   " + _stage.Name.ToUpperInvariant();
+            }
+            else
+            {
+                _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant();
+            }
             _roundLabel.text = "PREPARING";
 
             BuildWorld();
@@ -1215,7 +1259,6 @@ namespace Emberfall.UI.Screens
             _finished = true;
             _skipButton.Interactable = false;
 
-            BattleRewards rewards = App.Session.GrantBattleResult(_stage, _result.Victory, TimeUtil.NowUnix());
             App.RefreshHud();
             App.RequestSave();
 
@@ -1234,6 +1277,18 @@ namespace Emberfall.UI.Screens
             SelectStatTab(0);
 
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
+
+            if (_recitalFloor >= 0) ShowRecitalResult();
+            else ShowCampaignResult();
+
+            _resultPanel.gameObject.SetActive(true);
+            _resultPanel.SetAsLastSibling();
+            _resultGroup.alpha = 1f;
+        }
+
+        private void ShowCampaignResult()
+        {
+            BattleRewards rewards = App.Session.GrantBattleResult(_stage, _result.Victory, TimeUtil.NowUnix());
 
             if (_result.Victory)
             {
@@ -1256,10 +1311,39 @@ namespace Emberfall.UI.Screens
                 AddRewardRow("OR COLLECT THE CACHE", "MAIN SCREEN", UITheme.TextMuted);
                 App.Audio.Defeat();
             }
+        }
 
-            _resultPanel.gameObject.SetActive(true);
-            _resultPanel.SetAsLastSibling();
-            _resultGroup.alpha = 1f;
+        /// <summary>Echoes are never shown here as a reward line - one was already spent to reach
+        /// this screen, win or lose, by TryStartRecitalAttempt before the fight ran, so there is
+        /// nothing about them to report on the way out.</summary>
+        private void ShowRecitalResult()
+        {
+            RecitalRewards rewards = App.Session.GrantRecitalResult(_recitalFloor, _result.Victory, TimeUtil.NowUnix());
+
+            if (_result.Victory)
+            {
+                if (rewards.AdvancedFloor)
+                    AddRewardRow("FLOOR CLEARED", App.Session.Profile.RecitalHighestFloor.ToString(), UITheme.Success);
+                AddRewardRow("GOLD", "+" + rewards.Gold, UITheme.Gold);
+                AddRewardRow("EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
+                if (!string.IsNullOrEmpty(rewards.GrantedRelicId))
+                {
+                    RelicDef relic = App.Session.Content.GetRelic(rewards.GrantedRelicId);
+                    AddRewardRow("RELIC RECOVERED", relic != null ? relic.Name : rewards.GrantedRelicId, UITheme.Mythic);
+                }
+                else if (rewards.RelicDust > 0)
+                {
+                    AddRewardRow(rewards.IsDeepMilestone ? "DEEP MILESTONE DUST" : "MILESTONE DUST",
+                                 "+" + rewards.RelicDust, UITheme.Ember);
+                }
+                App.Audio.Victory();
+            }
+            else
+            {
+                AddRewardRow("NOTHING RECOVERED", "-", UITheme.TextDim);
+                AddRewardRow("THE LADDER HOLDS", "FLOOR " + App.Session.Profile.RecitalCurrentFloor + " STILL AHEAD", UITheme.TextMuted);
+                App.Audio.Defeat();
+            }
         }
 
         private void AddRewardRow(string label, string value, Color tint)

@@ -76,6 +76,40 @@ namespace Emberfall.Core.Session
         public int RelicDust;
     }
 
+    /// <summary>Echoes available right now, as GameSession.PeekRecitalEchoes reports it - a
+    /// snapshot, not a mutation, the same split IdleReport is for idle income.</summary>
+    public sealed class RecitalEchoesStatus
+    {
+        public int Banked;
+        public int Max;
+
+        /// <summary>Seconds until the next Echo, or 0 if the bank is already at Max.</summary>
+        public long SecondsToNext;
+    }
+
+    /// <summary>One floor attempt's outcome, from GameSession.GrantRecitalResult.</summary>
+    public sealed class RecitalRewards
+    {
+        public bool Victory;
+        public int Floor;
+
+        /// <summary>True when this win was against the player's current floor (the only case that
+        /// exists today) and RecitalHighestFloor/RecitalCurrentFloor moved forward because of it.</summary>
+        public bool AdvancedFloor;
+
+        public int Gold;
+        public int Shards;
+        public int RelicDust;
+
+        /// <summary>Non-empty only on a deep milestone that had an unowned relic left to grant -
+        /// "something rarer" at depth, per spec. Empty on every other floor, including a deep
+        /// milestone that fell back to RelicDust because nothing was left to grant.</summary>
+        public string GrantedRelicId = "";
+
+        public bool IsMilestone;
+        public bool IsDeepMilestone;
+    }
+
     /// <summary>
     /// The player's game, as a set of operations. Every rule that changes the profile
     /// lives here so the UI layer only has to render and call.
@@ -116,6 +150,15 @@ namespace Emberfall.Core.Session
             profile.Shards = content.Balance.StartingShards;
             profile.LastIdleClaimUnix = nowUnix;
             profile.LastSaveUnix = nowUnix;
+
+            // Deep Recital: a new account starts at floor 1 with a full Echo bank, not an empty
+            // one - nobody should have to wait hours after their first login just to try the mode
+            // once. The clock is stamped now so regen (if any accrues before the first attempt)
+            // measures from a real moment, not from unix epoch zero.
+            profile.RecitalCurrentFloor = 1;
+            profile.RecitalHighestFloor = 0;
+            profile.RecitalEchoesBanked = content.Balance.RecitalEchoesMax;
+            profile.RecitalEchoesClockUnix = nowUnix;
 
             List<HeroDef> starters = content.StartingHeroes;
             for (int i = 0; i < starters.Count; i++) AddHero(profile, starters[i], nowUnix);
@@ -366,10 +409,15 @@ namespace Emberfall.Core.Session
         /// PROGRESSION section 1 hangs Relic Dust off the repeat-clear loop because that loop was
         /// the only grind the game had when it was written. The intended long-term home is harder,
         /// dedicated content - the endless mode proposed as The Deep Recital in
-        /// DESIGN-DEEP-RECITAL.md, which is specified but not built. Repeat clears are a bootstrap
-        /// so the currency, the shop and the inventory have a source to exist against in the
-        /// meantime; they are NOT the final design, and whoever builds the Deep Recital should
-        /// expect to move this, not to add a second source beside it.
+        /// DESIGN-DEEP-RECITAL.md.
+        ///
+        /// ⚠️ The Deep Recital is now built (GameSession.GrantRecitalResult), and the instruction
+        /// this comment used to carry - "move this, don't add a second source" - was deliberately
+        /// NOT followed. Cutting repeat-clear Dust would strand a fresh account with zero Dust
+        /// income until their roster can survive Recital floors, which start well above a new
+        /// player's level; repeat clears stay as the early-game source, milestone Recital floors
+        /// as the deep-game one. This is a real, deliberate deviation from the original plan, not
+        /// an oversight - flagged here so it isn't mistaken for one.
         ///
         /// First clears pay nothing, per the doc: first-clear rewards are already designed and
         /// tuned, and adding a currency to them would mean rebalancing them.
@@ -592,6 +640,157 @@ namespace Emberfall.Core.Session
             progress.Currency -= cost;
             ApplyEventReward(tier.Reward);
             return true;
+        }
+
+        // ------------------------------------------------------------------ Deep Recital
+        //
+        // A persistent one-way floor ladder (PlayerProfile.RecitalHighestFloor), not a continuous
+        // run: each attempt is one floor's fight, always at full HP/energy like every other battle
+        // in the game, win or lose. See RecitalGenerator for how a floor number becomes a fightable
+        // StageDef, and DESIGN-BUILD-ORDER's Deep Recital entry for how this shape and
+        // DESIGN-DEEP-RECITAL.md disagree - that document specifies a continuous multi-floor run
+        // with no reset between floors, ended by a wipe. This is not that.
+
+        public StageDef BuildRecitalStage(int floor)
+        {
+            return RecitalGenerator.BuildFloor(Content, floor);
+        }
+
+        /// <summary>
+        /// Echoes available right now, without spending anything or mutating the profile - Peek,
+        /// not Settle, same split IdleReport/PeekIdle already uses for idle income. Backwards-clock
+        /// immune: if nowUnix is at or before the stored clock, elapsed reads as zero, never
+        /// negative, so a wound-back device clock manufactures no regen.
+        /// </summary>
+        public RecitalEchoesStatus PeekRecitalEchoes(long nowUnix)
+        {
+            RecitalEchoesStatus status = new RecitalEchoesStatus();
+            status.Max = Math.Max(0, Balance.RecitalEchoesMax);
+            long rechargeSeconds = RecitalRechargeSeconds();
+            long elapsed = nowUnix - Profile.RecitalEchoesClockUnix;
+            if (elapsed < 0) elapsed = 0;
+            long gained = rechargeSeconds > 0 ? elapsed / rechargeSeconds : 0;
+            status.Banked = (int)Math.Min(status.Max, Profile.RecitalEchoesBanked + gained);
+
+            if (status.Banked >= status.Max || rechargeSeconds <= 0) status.SecondsToNext = 0;
+            else status.SecondsToNext = rechargeSeconds - (elapsed % rechargeSeconds);
+            return status;
+        }
+
+        private long RecitalRechargeSeconds()
+        {
+            return (long)(Math.Max(0.01f, Balance.RecitalEchoesRechargeHours) * 3600f);
+        }
+
+        /// <summary>
+        /// Folds accrued regen into the stored banked count and advances the clock by only the
+        /// whole recharge-intervals actually consumed - not to nowUnix - so a fractional remainder
+        /// toward the next tick survives rather than resetting on every settle. Once the bank
+        /// reaches the cap the clock snaps to nowUnix instead, since further elapsed time produces
+        /// nothing worth preserving while full - the same "excess time is simply not banked" rule
+        /// IdleReport.Capped already applies to idle income. Never moves the clock backward: if
+        /// elapsed is zero or negative (a wound-back device clock), this is a no-op.
+        /// </summary>
+        private void SettleRecitalEchoes(long nowUnix)
+        {
+            int max = Math.Max(0, Balance.RecitalEchoesMax);
+            long rechargeSeconds = RecitalRechargeSeconds();
+            long elapsed = nowUnix - Profile.RecitalEchoesClockUnix;
+            if (elapsed <= 0 || rechargeSeconds <= 0) return;
+
+            long gained = elapsed / rechargeSeconds;
+            if (gained <= 0) return;
+
+            long banked = Profile.RecitalEchoesBanked + gained;
+            if (banked >= max)
+            {
+                Profile.RecitalEchoesBanked = max;
+                Profile.RecitalEchoesClockUnix = nowUnix;
+            }
+            else
+            {
+                Profile.RecitalEchoesBanked = (int)banked;
+                Profile.RecitalEchoesClockUnix += gained * rechargeSeconds;
+            }
+        }
+
+        /// <summary>
+        /// Spends one Echo for an attempt, settling regen first. Returns false - spending nothing -
+        /// when the bank is still empty after settling. The one gate on whether an attempt can
+        /// start at all; GrantRecitalResult below never checks Echoes, because by the time it runs
+        /// one has already been spent here, whether the fight that follows is a win or a loss.
+        /// </summary>
+        public bool TryStartRecitalAttempt(long nowUnix)
+        {
+            SettleRecitalEchoes(nowUnix);
+            if (Profile.RecitalEchoesBanked <= 0) return false;
+            Profile.RecitalEchoesBanked--;
+            return true;
+        }
+
+        /// <summary>
+        /// Resolves the outcome of one floor attempt: applies floor rewards and advances
+        /// RecitalCurrentFloor/RecitalHighestFloor on a win, grants nothing on a loss. Does NOT
+        /// touch Echoes - TryStartRecitalAttempt already spent one before the fight ran, regardless
+        /// of what this call reports.
+        /// </summary>
+        public RecitalRewards GrantRecitalResult(int floor, bool victory, long nowUnix)
+        {
+            RecitalRewards rewards = new RecitalRewards();
+            rewards.Victory = victory;
+            rewards.Floor = floor;
+            if (!victory) return rewards;
+
+            Profile.TotalBattlesWon++;
+
+            rewards.Gold = Balance.RecitalRewardGoldBase + Balance.RecitalRewardGoldPerFloor * floor;
+            rewards.Shards = Balance.RecitalRewardShardsBase + Balance.RecitalRewardShardsPerFloor * floor;
+            rewards.IsDeepMilestone = RecitalGenerator.IsDeepMilestone(Balance, floor);
+            rewards.IsMilestone = RecitalGenerator.IsMilestone(Balance, floor) && !rewards.IsDeepMilestone;
+
+            if (rewards.IsDeepMilestone)
+            {
+                string grantedId = GrantRandomUnownedRelic(floor);
+                if (!string.IsNullOrEmpty(grantedId)) rewards.GrantedRelicId = grantedId;
+                else rewards.RelicDust = Balance.RecitalDeepMilestoneDustFallback;
+            }
+            else if (rewards.IsMilestone)
+            {
+                int tier = Balance.RecitalMilestoneInterval > 0 ? floor / Balance.RecitalMilestoneInterval : 0;
+                rewards.RelicDust = Balance.RecitalMilestoneDustPerTier * Math.Max(1, tier);
+            }
+
+            Profile.Gold += rewards.Gold;
+            Profile.Shards += rewards.Shards;
+            Profile.RelicDust += rewards.RelicDust;
+
+            if (floor >= Profile.RecitalCurrentFloor)
+            {
+                rewards.AdvancedFloor = true;
+                if (floor > Profile.RecitalHighestFloor) Profile.RecitalHighestFloor = floor;
+                Profile.RecitalCurrentFloor = Profile.RecitalHighestFloor + 1;
+            }
+
+            Profile.LastSaveUnix = nowUnix;
+            return rewards;
+        }
+
+        /// <summary>"Something rarer" at a deep milestone, per spec - a guaranteed relic rather
+        /// than a bigger pile of an existing currency. Falls back to a Dust lump so the reward is
+        /// never a silent no-op once every relic in content is owned. Chosen by floor number alone
+        /// so which relic a given deep milestone grants is reproducible, not tied to unrelated
+        /// profile state that could reorder it.</summary>
+        private string GrantRandomUnownedRelic(int floor)
+        {
+            List<RelicDef> unowned = new List<RelicDef>();
+            for (int i = 0; i < Content.Relics.Count; i++)
+                if (!Profile.OwnsRelic(Content.Relics[i].Id)) unowned.Add(Content.Relics[i]);
+            if (unowned.Count == 0) return "";
+
+            int index = ((floor % unowned.Count) + unowned.Count) % unowned.Count;
+            RelicDef chosen = unowned[index];
+            GrantRelic(chosen.Id);
+            return chosen.Id;
         }
 
         public int GrantAccountXp(int amount)

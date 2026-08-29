@@ -851,6 +851,76 @@ namespace Emberfall.Core.Data
         public int StartingGold = 1500;
         public int StartingShards = 260;
 
+        // The Deep Recital - see DESIGN-DEEP-RECITAL.md. That document specifies an endless PvE
+        // mode in fiction and shape (floor structure, aspect bands, a stamina-like gate, milestone
+        // rewards) but explicitly leaves every number illustrative. It also names the gate
+        // "stamina" (recitalStaminaMax/recitalStaminaRechargeHours) and describes a continuous
+        // multi-floor run with no HP/energy reset between floors, ended by a wipe. What shipped
+        // here is a different shape, decided in the session that built it: a persistent one-way
+        // floor LADDER (PlayerProfile.RecitalHighestFloor is the permanent record, one floor is
+        // attempted at a time, each attempt is its own fresh-HP battle exactly like every other
+        // fight in the game) rather than a continuous run, and the gate is named Echoes rather than
+        // Stamina - which collides with the document's own "echoes" (the hostile degraded patterns
+        // you fight, not a resource you spend). Both are real, unreconciled conflicts with
+        // DESIGN-DEEP-RECITAL.md, not oversights; see DESIGN-BUILD-ORDER's Deep Recital entry for
+        // the full account. Every number below is a first-pass placeholder regardless of shape,
+        // same discipline as Mythic relic pricing and the two starter events.
+
+        /// <summary>Enemy level at floor 1. StatMath.ForEnemy(EnemyDef, level) needed no change to
+        /// reach this - the level parameter alone already does everything floor-scaling needs.</summary>
+        public int RecitalBaseLevel = 20;
+
+        /// <summary>Enemy level added per floor climbed, on top of RecitalBaseLevel.</summary>
+        public int RecitalLevelsPerFloor = 2;
+
+        /// <summary>
+        /// Extra enemy levels added once per completed 6-floor Aspect cycle (Ember, Tide, Verdant,
+        /// Gale, Umbra, Lumen, repeat - RecitalGenerator.AspectCycleLength), stacked on top of the
+        /// per-floor levels above. This is what makes difficulty step up at each cycle boundary
+        /// rather than climbing at the same flat per-floor rate forever.
+        /// </summary>
+        public int RecitalBonusLevelsPerCycle = 3;
+
+        /// <summary>Maximum Echoes banked at once. Regeneration pauses at this cap, the same shape
+        /// idleCapHours already uses for idle income.</summary>
+        public int RecitalEchoesMax = 5;
+
+        /// <summary>Hours to regenerate one Echo. DESIGN-DEEP-RECITAL section 3's illustrative
+        /// values (5 max, 4 hours) are kept as a starting point even though the resource's name and
+        /// per-attempt shape changed.</summary>
+        public float RecitalEchoesRechargeHours = 4f;
+
+        /// <summary>Base gold on any floor clear, before the per-floor scaling below.</summary>
+        public int RecitalRewardGoldBase = 200;
+
+        /// <summary>Extra gold per floor number on top of RecitalRewardGoldBase.</summary>
+        public int RecitalRewardGoldPerFloor = 20;
+
+        /// <summary>Base Ember Shards on any floor clear, before per-floor scaling.</summary>
+        public int RecitalRewardShardsBase = 10;
+
+        /// <summary>Extra shards per floor number on top of RecitalRewardShardsBase.</summary>
+        public int RecitalRewardShardsPerFloor = 1;
+
+        /// <summary>Every floor number divisible by this (and not also a deep milestone below)
+        /// grants a Relic Dust bonus on top of the ordinary gold/shard reward.</summary>
+        public int RecitalMilestoneInterval = 10;
+
+        /// <summary>Relic Dust granted at a milestone floor, times the milestone's own number
+        /// (floor / RecitalMilestoneInterval) - milestone 1 (floor 10) grants this much, milestone
+        /// 2 (floor 20) grants double, and so on.</summary>
+        public int RecitalMilestoneDustPerTier = 150;
+
+        /// <summary>Every floor number divisible by this grants a guaranteed relic instead of the
+        /// ordinary milestone's Dust bonus - "something rarer" at deep milestones, per spec. Falls
+        /// back to a large Dust grant if every relic in content is already owned, so the reward is
+        /// never a silent no-op.</summary>
+        public int RecitalDeepMilestoneInterval = 50;
+
+        /// <summary>The Relic Dust fallback when a deep milestone has no unowned relic left to
+        /// grant.</summary>
+        public int RecitalDeepMilestoneDustFallback = 1000;
+
         public static BalanceConfig FromJson(JsonValue j)
         {
             BalanceConfig b = new BalanceConfig();
@@ -897,6 +967,19 @@ namespace Emberfall.Core.Data
             b.DuplicateShards = j.GetInt("duplicateShards", b.DuplicateShards);
             b.StartingGold = j.GetInt("startingGold", b.StartingGold);
             b.StartingShards = j.GetInt("startingShards", b.StartingShards);
+            b.RecitalBaseLevel = j.GetInt("recitalBaseLevel", b.RecitalBaseLevel);
+            b.RecitalLevelsPerFloor = j.GetInt("recitalLevelsPerFloor", b.RecitalLevelsPerFloor);
+            b.RecitalBonusLevelsPerCycle = j.GetInt("recitalBonusLevelsPerCycle", b.RecitalBonusLevelsPerCycle);
+            b.RecitalEchoesMax = j.GetInt("recitalEchoesMax", b.RecitalEchoesMax);
+            b.RecitalEchoesRechargeHours = j.GetFloat("recitalEchoesRechargeHours", b.RecitalEchoesRechargeHours);
+            b.RecitalRewardGoldBase = j.GetInt("recitalRewardGoldBase", b.RecitalRewardGoldBase);
+            b.RecitalRewardGoldPerFloor = j.GetInt("recitalRewardGoldPerFloor", b.RecitalRewardGoldPerFloor);
+            b.RecitalRewardShardsBase = j.GetInt("recitalRewardShardsBase", b.RecitalRewardShardsBase);
+            b.RecitalRewardShardsPerFloor = j.GetInt("recitalRewardShardsPerFloor", b.RecitalRewardShardsPerFloor);
+            b.RecitalMilestoneInterval = j.GetInt("recitalMilestoneInterval", b.RecitalMilestoneInterval);
+            b.RecitalMilestoneDustPerTier = j.GetInt("recitalMilestoneDustPerTier", b.RecitalMilestoneDustPerTier);
+            b.RecitalDeepMilestoneInterval = j.GetInt("recitalDeepMilestoneInterval", b.RecitalDeepMilestoneInterval);
+            b.RecitalDeepMilestoneDustFallback = j.GetInt("recitalDeepMilestoneDustFallback", b.RecitalDeepMilestoneDustFallback);
             return b;
         }
     }

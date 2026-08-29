@@ -56,10 +56,11 @@
   // Relic Dust - see DESIGN-RELIC-PROGRESSION section 1. Paid off the repeat-clear loop above,
   // never off a first clear (first-clear rewards are already tuned and adding to them would mean
   // rebalancing them), and scaled by stage difficulty as base + perStageIndex * stage.globalIndex.
-  // PLACEHOLDER SOURCE: the intended long-term home for Relic Dust is harder, dedicated content -
-  // the endless mode proposed as The Deep Recital in DESIGN-DEEP-RECITAL.md, which is not built.
-  // Repeat-clears are a bootstrap so the currency and the shop have somewhere to come from in the
-  // meantime, not the final design. Both numbers are a balance pass, per the doc deferring the
+  // PLACEHOLDER SOURCE, and no longer the only one: The Deep Recital (DESIGN-DEEP-RECITAL.md) is
+  // now built and grants Relic Dust of its own at milestone floors (recitalMilestoneDustPerTier
+  // below), but repeat-clears remain live and untouched - the Recital is a second source, not a
+  // replacement, and a fresh account still needs the campaign's drip before it can reach deep
+  // Recital floors at all. Both numbers below are still a balance pass, per the doc deferring the
   // curve exactly the way DESIGN-BUILD-ORDER task 14 defers recommendedPower.
   "relicDustPerRepeatClear": 6,
   "relicDustPerStageIndex": 2,
@@ -89,5 +90,22 @@
   "duplicateShards": 30,
 
   "startingGold": 400,
-  "startingShards": 120
+  "startingShards": 120,
+
+  // The Deep Recital - endless floor ladder. First-pass placeholders throughout; see
+  // Definitions.cs BalanceConfig for the reasoning behind each and the unreconciled conflicts
+  // with DESIGN-DEEP-RECITAL.md this shape carries.
+  "recitalBaseLevel": 20,
+  "recitalLevelsPerFloor": 2,
+  "recitalBonusLevelsPerCycle": 3,
+  "recitalEchoesMax": 5,
+  "recitalEchoesRechargeHours": 4,
+  "recitalRewardGoldBase": 200,
+  "recitalRewardGoldPerFloor": 20,
+  "recitalRewardShardsBase": 10,
+  "recitalRewardShardsPerFloor": 1,
+  "recitalMilestoneInterval": 10,
+  "recitalMilestoneDustPerTier": 150,
+  "recitalDeepMilestoneInterval": 50,
+  "recitalDeepMilestoneDustFallback": 1000
 }

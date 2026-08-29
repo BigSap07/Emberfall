@@ -7,6 +7,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Save;
 using Emberfall.Core.Session;
 
@@ -53,6 +54,7 @@ namespace Emberfall.DevHarness
             CheckDebrief();
             CheckRelics(content);
             CheckEvents(content);
+            CheckRecital(content);
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
@@ -3946,7 +3948,11 @@ namespace Emberfall.DevHarness
                       "the two starter events do not overlap, so the isolation checks below are testing distinct windows, not luck");
             }
 
-            Check(SaveSerializer.CurrentVersion == 6, "save version bumped to 6 for event progress (" + SaveSerializer.CurrentVersion + ")");
+            // The events bump was 5 -> 6; CurrentVersion has since moved again to 7 for the Deep
+            // Recital (see CheckRecitalContent), so this only asserts the events-era floor rather
+            // than an exact number that would go stale at the next unrelated bump - same fix already
+            // applied to the relic section's equivalent check.
+            Check(SaveSerializer.CurrentVersion >= 6, "save version is at least 6, where events bumped it (" + SaveSerializer.CurrentVersion + ")");
         }
 
         /// <summary>
@@ -4181,6 +4187,297 @@ namespace Emberfall.DevHarness
             PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
             Check(fromFuture == null && futureError != null,
                   "a save one version newer than this build is refused rather than silently stripped of its event progress");
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            Line("");
+        }
+
+        private static void CheckRecital(ContentDatabase db)
+        {
+            Line("");
+            Line("DEEP RECITAL");
+            CheckRecitalContent(db);
+            CheckRecitalAspectCycling(db);
+            CheckRecitalDifficultyEscalates(db);
+            CheckRecitalEchoesSpendOnLossAndWin(db);
+            CheckRecitalEchoesEmptyBlocksAttempt(db);
+            CheckRecitalEchoesBackwardsClockImmune(db);
+            CheckRecitalSaveRoundTrip(db);
+        }
+
+        private static void CheckRecitalContent(ContentDatabase db)
+        {
+            bool allAspectsCovered = true;
+            List<string> missing = new List<string>();
+            foreach (Aspect aspect in Enum.GetValues(typeof(Aspect)))
+            {
+                bool found = false;
+                for (int i = 0; i < db.Enemies.Count; i++) if (db.Enemies[i].Aspect == aspect) { found = true; break; }
+                if (!found) { allAspectsCovered = false; missing.Add(aspect.ToString()); }
+            }
+            Check(allAspectsCovered,
+                  "every Aspect has at least one enemy template for the Recital to draw from - the mode's whole"
+                  + " point fails silently for any band that has none"
+                  + (allAspectsCovered ? "" : " (missing: " + string.Join(", ", missing.ToArray()) + ")"));
+
+            Check(db.Balance.RecitalEchoesMax > 0, "recitalEchoesMax is positive (" + db.Balance.RecitalEchoesMax + ")");
+            Check(db.Balance.RecitalEchoesRechargeHours > 0f,
+                  "recitalEchoesRechargeHours is positive (" + Fmt(db.Balance.RecitalEchoesRechargeHours) + ")");
+            Check(db.Balance.RecitalLevelsPerFloor > 0,
+                  "recitalLevelsPerFloor is positive, so level actually climbs with floor (" + db.Balance.RecitalLevelsPerFloor + ")");
+            Check(db.Balance.RecitalBonusLevelsPerCycle > 0,
+                  "recitalBonusLevelsPerCycle is positive, so a completed cycle adds something on top of the per-floor climb ("
+                  + db.Balance.RecitalBonusLevelsPerCycle + ")");
+
+            // Written as >= from the start this time - both the relic and events sections above
+            // shipped as == and had to be fixed to >= the next time CurrentVersion moved, twice now.
+            Check(SaveSerializer.CurrentVersion >= 7, "save version is at least 7, where Deep Recital bumped it (" + SaveSerializer.CurrentVersion + ")");
+        }
+
+        /// <summary>
+        /// Climbs 24 floors - four full six-floor cycles - through REAL CombatSimulation.Run calls,
+        /// not by reading RecitalGenerator's output off the StageDef alone, and reads the Aspect
+        /// each spawned enemy actually resolved to in the returned UnitSnapshot. Proves the cycle
+        /// both rotates (every floor's enemies match that floor's expected Aspect) and repeats (floor
+        /// 7 rolls back to Ember, the same Aspect floor 1 had).
+        /// </summary>
+        private static void CheckRecitalAspectCycling(ContentDatabase db)
+        {
+            const int floorsToClimb = 24;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1699963200L);
+            GameSession session = new GameSession(db, profile);
+            List<HeroInstance> team = profile.TeamHeroes();
+
+            Aspect[] expectedCycle = { Aspect.Ember, Aspect.Tide, Aspect.Verdant, Aspect.Gale, Aspect.Umbra, Aspect.Lumen };
+            HashSet<Aspect> seen = new HashSet<Aspect>();
+            bool rotationOk = true;
+            List<string> mismatches = new List<string>();
+
+            for (int floor = 1; floor <= floorsToClimb; floor++)
+            {
+                Aspect expected = expectedCycle[(floor - 1) % 6];
+                Check(RecitalGenerator.AspectForFloor(floor) == expected,
+                      "floor " + floor + " generates as " + expected + " (got " + RecitalGenerator.AspectForFloor(floor) + ")");
+
+                StageDef stage = session.BuildRecitalStage(floor);
+                BattleResult result = RunWith(db, stage, 5000 + floor, team);
+                bool floorOk = result.Units.Count > team.Count; // at least one enemy actually spawned
+                for (int i = 0; i < result.Units.Count; i++)
+                {
+                    UnitSnapshot u = result.Units[i];
+                    if (u.IsPlayer) continue;
+                    seen.Add(u.Aspect);
+                    if (u.Aspect != expected) floorOk = false;
+                }
+                if (!floorOk) { rotationOk = false; mismatches.Add("floor " + floor); }
+            }
+
+            Check(rotationOk,
+                  "across a real " + floorsToClimb + "-floor CombatSimulation climb, every spawned enemy's Aspect matches"
+                  + " its floor's expected place in the Ember/Tide/Verdant/Gale/Umbra/Lumen cycle"
+                  + (rotationOk ? "" : " (mismatches: " + string.Join(", ", mismatches.ToArray()) + ")"));
+            Check(seen.Count == 6, "all six Aspects actually appeared as real spawned enemies somewhere across the climb (got " + seen.Count + ")");
+            Check(RecitalGenerator.AspectForFloor(6) == Aspect.Lumen && RecitalGenerator.AspectForFloor(7) == Aspect.Ember,
+                  "the cycle actually repeats rather than running out - floor 6 is Lumen, floor 7 rolls back to Ember");
+        }
+
+        /// <summary>
+        /// Proves escalation two ways: the enemy level climbs on every single floor (not merely at
+        /// cycle boundaries), and the step AT a cycle boundary (floor 6 to 7) is strictly bigger than
+        /// an ordinary within-cycle step (floor 1 to 2) - the "escalating each full cycle" half of the
+        /// spec, distinct from the continuous per-floor climb. Also checked against real enemy
+        /// PowerScore, not just the level number that feeds it, so the proof reaches combat stats.
+        /// </summary>
+        private static void CheckRecitalDifficultyEscalates(ContentDatabase db)
+        {
+            bool strictlyIncreasing = true;
+            int previousLevel = 0;
+            for (int floor = 1; floor <= 13; floor++)
+            {
+                int level = RecitalGenerator.LevelForFloor(db.Balance, floor);
+                if (floor > 1 && level <= previousLevel) strictlyIncreasing = false;
+                previousLevel = level;
+            }
+            Check(strictlyIncreasing, "enemy level climbs every single floor sampled (1-13), not just at cycle boundaries - never flat");
+
+            int levelFloor1 = RecitalGenerator.LevelForFloor(db.Balance, 1);
+            int levelFloor2 = RecitalGenerator.LevelForFloor(db.Balance, 2);
+            int levelFloor6 = RecitalGenerator.LevelForFloor(db.Balance, 6);
+            int levelFloor7 = RecitalGenerator.LevelForFloor(db.Balance, 7);
+            int withinCycleStep = levelFloor2 - levelFloor1;
+            int cycleBoundaryStep = levelFloor7 - levelFloor6;
+            Check(cycleBoundaryStep > withinCycleStep,
+                  "the floor 6 -> 7 step (a cycle boundary, +" + cycleBoundaryStep + " levels) is bigger than an ordinary"
+                  + " floor-to-floor step (+" + withinCycleStep + ") - difficulty escalates per floor AND again per"
+                  + " cycle, not at one flat rate throughout");
+
+            int power1 = TotalEnemyPower(db, RecitalGenerator.BuildFloor(db, 1));
+            int power13 = TotalEnemyPower(db, RecitalGenerator.BuildFloor(db, 13));
+            Check(power13 > power1,
+                  "real StatMath.ForEnemy PowerScore is higher two cycles later than at floor 1 (" + power1 + " -> " + power13 + ")");
+        }
+
+        private static int TotalEnemyPower(ContentDatabase db, StageDef stage)
+        {
+            int total = 0;
+            for (int i = 0; i < stage.Enemies.Count; i++)
+            {
+                EnemyDef def = db.GetEnemy(stage.Enemies[i].EnemyId);
+                if (def == null) continue;
+                total += StatMath.ForEnemy(def, stage.Enemies[i].Level).Power;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The double-charge-proof, in reverse: proves an Echo is spent BEFORE the fight resolves
+        /// and is never refunded on a loss, nor charged again on a win. TryStartRecitalAttempt and
+        /// GrantRecitalResult are two independent calls in the real UI flow (BattleScreen.OnShow and
+        /// ShowResult) - this exercises them the same way, not as one combined helper.
+        /// </summary>
+        private static void CheckRecitalEchoesSpendOnLossAndWin(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+            int starting = profile.RecitalEchoesBanked;
+            Check(starting == db.Balance.RecitalEchoesMax, "a fresh profile starts with a full Echo bank (" + starting + ")");
+
+            Check(session.TryStartRecitalAttempt(Now), "the first attempt is affordable and spends an Echo");
+            Check(profile.RecitalEchoesBanked == starting - 1, "one Echo left the bank starting the attempt (" + profile.RecitalEchoesBanked + ")");
+            RecitalRewards lossResult = session.GrantRecitalResult(1, false, Now);
+            Check(!lossResult.Victory && !lossResult.AdvancedFloor, "a loss reports no victory and no floor advance");
+            Check(profile.RecitalEchoesBanked == starting - 1,
+                  "the Echo already spent before the fight is NOT refunded on a loss (" + profile.RecitalEchoesBanked + ")");
+            Check(profile.RecitalHighestFloor == 0 && profile.RecitalCurrentFloor == 1, "a loss does not move the floor ladder at all");
+
+            Check(session.TryStartRecitalAttempt(Now), "reattempting the same floor after a loss is affordable and spends another Echo");
+            Check(profile.RecitalEchoesBanked == starting - 2, "a second Echo left the bank for the reattempt (" + profile.RecitalEchoesBanked + ")");
+            RecitalRewards winResult = session.GrantRecitalResult(1, true, Now);
+            Check(winResult.Victory && winResult.AdvancedFloor, "the win on reattempt reports victory and a floor advance");
+            Check(profile.RecitalEchoesBanked == starting - 2,
+                  "the win neither refunds the spent Echo nor charges a third one - GrantRecitalResult never touches"
+                  + " the bank at all (" + profile.RecitalEchoesBanked + ")");
+            Check(profile.RecitalHighestFloor == 1 && profile.RecitalCurrentFloor == 2, "the win moved the permanent record forward exactly one floor");
+        }
+
+        private static void CheckRecitalEchoesEmptyBlocksAttempt(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+            profile.RecitalEchoesBanked = 0;
+            profile.RecitalEchoesClockUnix = Now; // no time elapsed - nothing to regenerate yet
+
+            Check(!session.TryStartRecitalAttempt(Now), "an empty Echo balance refuses to start an attempt");
+            Check(profile.RecitalEchoesBanked == 0, "and the balance does not go negative (" + profile.RecitalEchoesBanked + ")");
+
+            RecitalEchoesStatus status = session.PeekRecitalEchoes(Now);
+            Check(status.Banked == 0, "PeekRecitalEchoes agrees the bank reads zero right now");
+            Check(status.SecondsToNext > 0, "and reports a real countdown to the next Echo rather than claiming FULL (" + status.SecondsToNext + "s)");
+        }
+
+        /// <summary>
+        /// Same shape as GameSession.RollDailyReset's own backwards-clock tests: partial progress
+        /// toward the next Echo is preserved across a settle, a device clock wound into the past
+        /// manufactures no regen, and the stored clock itself never moves backward no matter what
+        /// nowUnix it is handed.
+        /// </summary>
+        private static void CheckRecitalEchoesBackwardsClockImmune(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+            profile.RecitalEchoesBanked = 0;
+            profile.RecitalEchoesClockUnix = Now;
+            long rechargeSeconds = (long)(db.Balance.RecitalEchoesRechargeHours * 3600f);
+
+            long halfway = Now + rechargeSeconds / 2;
+            RecitalEchoesStatus midway = session.PeekRecitalEchoes(halfway);
+            Check(midway.Banked == 0, "halfway through one recharge interval, still zero banked - partial progress is not a whole Echo yet");
+            Check(midway.SecondsToNext > 0 && midway.SecondsToNext <= rechargeSeconds / 2 + 1,
+                  "and the countdown has counted down from the full interval, not reset (" + midway.SecondsToNext + "s left)");
+
+            long full = Now + rechargeSeconds + 10L;
+            Check(session.TryStartRecitalAttempt(full), "a full interval later, an attempt is affordable again");
+            long clockAfterSpend = profile.RecitalEchoesClockUnix;
+
+            long backwards = Now - 999999L;
+            RecitalEchoesStatus wound = session.PeekRecitalEchoes(backwards);
+            Check(wound.Banked == profile.RecitalEchoesBanked,
+                  "a device clock wound far into the past reports no additional regen on top of what is already banked (" + wound.Banked + ")");
+
+            session.TryStartRecitalAttempt(backwards); // outcome doesn't matter here - only the clock's direction does
+            Check(profile.RecitalEchoesClockUnix >= clockAfterSpend,
+                  "the regen clock only ever moves forward, even when handed a nowUnix from the past ("
+                  + profile.RecitalEchoesClockUnix + " vs " + clockAfterSpend + " before)");
+        }
+
+        /// <summary>
+        /// The save half: a normal round trip with real ladder and Echo state, then the
+        /// upgrade-from-nothing case that matters most operationally - a save that predates the
+        /// Deep Recital entirely, not merely predates one attempt - and the downgrade guard every
+        /// version bump before this one relies on.
+        /// </summary>
+        private static void CheckRecitalSaveRoundTrip(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            session.TryStartRecitalAttempt(Now);
+            session.GrantRecitalResult(1, true, Now);
+            session.TryStartRecitalAttempt(Now);
+            session.GrantRecitalResult(2, true, Now);
+
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && error == null,
+                  "a save carrying Recital progress deserialises without error" + (error != null ? " (" + error + ")" : ""));
+            if (loaded == null) { Line(""); return; }
+
+            Check(loaded.RecitalHighestFloor == profile.RecitalHighestFloor, "highest floor survives the round trip (" + loaded.RecitalHighestFloor + ")");
+            Check(loaded.RecitalCurrentFloor == profile.RecitalCurrentFloor, "current floor survives the round trip (" + loaded.RecitalCurrentFloor + ")");
+            Check(loaded.RecitalEchoesBanked == profile.RecitalEchoesBanked, "the Echo bank survives the round trip (" + loaded.RecitalEchoesBanked + ")");
+            Check(loaded.RecitalEchoesClockUnix == profile.RecitalEchoesClockUnix, "the regen clock survives the round trip (" + loaded.RecitalEchoesClockUnix + ")");
+
+            // ---- upgrade from a save that predates the Deep Recital entirely, not merely one attempt
+            PlayerProfile bare = GameSession.CreateNewProfile(db, Now);
+            JsonValue bareCurrent;
+            string bareParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(bare), out bareCurrent, out bareParseError);
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in bareCurrent.Keys)
+            {
+                if (key == "recitalCurrentFloor" || key == "recitalHighestFloor"
+                    || key == "recitalEchoesBanked" || key == "recitalEchoesClockUnix") continue;
+                legacy.Set(key, key == "version" ? new JsonValue((double)6) : bareCurrent[key]);
+            }
+            string legacyJson = legacy.ToJson(true);
+            Check(legacyJson.IndexOf("recitalCurrentFloor", StringComparison.Ordinal) < 0,
+                  "the hand-built version 6 save really has no Recital keys of any kind");
+
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacyJson, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null,
+                  "a version 6 save - an existing player who predates the Deep Recital entirely - loads under version 7 code"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            Check(upgraded != null && upgraded.RecitalCurrentFloor == 1 && upgraded.RecitalHighestFloor == 0,
+                  "and reads as floor 1, nothing cleared yet - the sane empty state, not a phantom floor or a crash");
+            Check(upgraded != null && upgraded.RecitalEchoesBanked == db.Balance.RecitalEchoesMax,
+                  "and a FULL Echo bank rather than zero - an upgrading player can attempt a floor immediately ("
+                  + (upgraded == null ? "-" : upgraded.RecitalEchoesBanked.ToString()) + ")");
+
+            // ---- the downgrade guard, same "current + 1" pattern the relic and event bumps use
+            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
+            string future = SaveSerializer.Serialize(profile).Replace(currentTag, futureTag);
+            string futureError;
+            PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
+            Check(fromFuture == null && futureError != null,
+                  "a save one version newer than this build is refused rather than silently stripped of its Recital progress");
             Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
                   "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
 

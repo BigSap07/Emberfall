@@ -62,8 +62,18 @@ namespace Emberfall.Core.Save
         /// Downgrade is guarded the same way every bump above is: version 5 code reads no
         /// eventProgress key at all, so it would silently drop every claimed milestone and currency
         /// balance a player earned under version 6, and the version check below refuses that instead.
+        ///
+        /// 7: The Deep Recital's ladder position (RecitalCurrentFloor, RecitalHighestFloor) and
+        /// Echo bank (RecitalEchoesBanked, RecitalEchoesClockUnix). Same shape as the version 5 to 6
+        /// bump, and for the same reason: a version 6 save simply has none of these four keys, which
+        /// read as PlayerProfile's own field defaults (floor 1, highest 0) rather than a synthesised
+        /// value - except the Echo bank, which the read below deliberately defaults to
+        /// content.Balance.RecitalEchoesMax rather than to PlayerProfile's bare-field default of 0,
+        /// so an upgrading player starts able to attempt a floor immediately rather than waiting out
+        /// a full recharge for a resource their save never had an opinion on. Downgrade is guarded
+        /// the same way every bump above is.
         /// </summary>
-        public const int CurrentVersion = 6;
+        public const int CurrentVersion = 7;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -89,6 +99,10 @@ namespace Emberfall.Core.Save
             root.Set("nextHeroUid", profile.NextHeroUid);
             root.Set("totalSummons", profile.TotalSummons);
             root.Set("totalBattlesWon", profile.TotalBattlesWon);
+            root.Set("recitalCurrentFloor", profile.RecitalCurrentFloor);
+            root.Set("recitalHighestFloor", profile.RecitalHighestFloor);
+            root.Set("recitalEchoesBanked", profile.RecitalEchoesBanked);
+            root.Set("recitalEchoesClockUnix", profile.RecitalEchoesClockUnix);
 
             JsonValue cleared = JsonValue.NewArray();
             for (int i = 0; i < profile.ClearedStageIds.Count; i++) cleared.Add(profile.ClearedStageIds[i]);
@@ -196,6 +210,18 @@ namespace Emberfall.Core.Save
             profile.TotalSummons = root.GetInt("totalSummons", 0);
             profile.TotalBattlesWon = root.GetInt("totalBattlesWon", 0);
 
+            // Absent on any save before version 7 (or simply never touched) reads as PlayerProfile's
+            // own field defaults for the floor position - floor 1, highest 0 - which is exactly a
+            // player who has never attempted the Recital. The Echo bank is the one field here that
+            // deliberately does NOT default to PlayerProfile's bare 0: an upgrading player should be
+            // able to attempt a floor immediately, not stare at a multi-hour recharge for a resource
+            // their save format never had an opinion on, so it defaults to a full bank instead.
+            int defaultEchoes = content != null ? content.Balance.RecitalEchoesMax : 5;
+            profile.RecitalCurrentFloor = Math.Max(1, root.GetInt("recitalCurrentFloor", 1));
+            profile.RecitalHighestFloor = Math.Max(0, root.GetInt("recitalHighestFloor", 0));
+            profile.RecitalEchoesBanked = Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes));
+            profile.RecitalEchoesClockUnix = root.GetLong("recitalEchoesClockUnix", 0);
+
             List<JsonValue> cleared = root.GetList("clearedStages");
             for (int i = 0; i < cleared.Count; i++)
             {
@@ -293,6 +319,7 @@ namespace Emberfall.Core.Save
 
             profile.NormaliseTeam();
             profile.NormaliseRelics();
+            profile.NormaliseRecital();
             return profile;
         }
     }

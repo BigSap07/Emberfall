@@ -126,6 +126,29 @@ namespace Emberfall.Core.Model
         /// with no migration needed (see SaveSerializer.CurrentVersion).</summary>
         public readonly List<EventProgressEntry> EventProgress = new List<EventProgressEntry>();
 
+        /// <summary>
+        /// The Deep Recital: a persistent one-way floor ladder, not a run that resets. The floor
+        /// currently being attempted - always RecitalHighestFloor + 1 in practice, since there is no
+        /// mechanic that lets a player attempt any floor but the next unbeaten one. Stored explicitly
+        /// anyway rather than derived, so the save format has a real field to migrate forward if a
+        /// future mechanic ever breaks that invariant; NormaliseRecital re-derives it from
+        /// RecitalHighestFloor if the two are ever found out of step (a hand-edited or migrated save).
+        /// </summary>
+        public int RecitalCurrentFloor = 1;
+
+        /// <summary>The permanent record: the highest floor ever completed. 0 means no floor has
+        /// been cleared yet. This is the number that never goes down.</summary>
+        public int RecitalHighestFloor = 0;
+
+        /// <summary>Whole Echoes currently banked, as of RecitalEchoesClockUnix - see
+        /// GameSession.PeekRecitalEchoes for the regen math this is read against.</summary>
+        public int RecitalEchoesBanked;
+
+        /// <summary>UTC Unix seconds Echo regeneration is computed forward from. Only ever moves
+        /// forward - the same backwards-clock immunity GameSession.RollDailyReset already proves for
+        /// the repeat cap applies here: a clock wound back must not grant regen.</summary>
+        public long RecitalEchoesClockUnix;
+
         public readonly string[] Team = new string[TeamSize]; // hero uids, null = empty slot
 
         public long LastIdleClaimUnix;
@@ -320,6 +343,21 @@ namespace Emberfall.Core.Model
             if (string.IsNullOrEmpty(eventId)) return null;
             for (int i = 0; i < EventProgress.Count; i++) if (EventProgress[i].EventId == eventId) return EventProgress[i];
             return null;
+        }
+
+        // ---------- Deep Recital helpers ----------
+
+        /// <summary>
+        /// Re-derives RecitalCurrentFloor from RecitalHighestFloor - the invariant every path
+        /// through GameSession already maintains, restated here the same way NormaliseRelics
+        /// restates the relic model's invariant, for a hand-edited or migrated save that arrived
+        /// out of step.
+        /// </summary>
+        public void NormaliseRecital()
+        {
+            if (RecitalHighestFloor < 0) RecitalHighestFloor = 0;
+            int expected = RecitalHighestFloor + 1;
+            if (RecitalCurrentFloor != expected) RecitalCurrentFloor = expected;
         }
 
         public string AllocateUid()

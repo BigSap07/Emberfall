@@ -203,6 +203,24 @@
         "description": "Every hit the Tideturned receives is partially redirected onto a random attacker ally.",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.30 } ]
       }
+    },
+
+    {
+      // The Deep Recital's only Lumen template - no chapter fields Lumen before this, and the
+      // mode's whole point is a roster that answers every Aspect, so a Lumen-band floor with
+      // nothing to spawn would defeat that outright. See DESIGN-DEEP-RECITAL.md's "echoes":
+      // a degraded, hostile pattern, not a person - kept simple on purpose, matching Hollow Husk's
+      // basic-attack-only shape rather than authoring a full kit for a template built to be seen
+      // in a five-wide swarm, not admired individually.
+      "id": "fractured_chorister", "name": "Fractured Chorister", "kind": "minion", "aspect": "Lumen",
+      "hp": 860, "attack": 118, "defense": 50, "speed": 98,
+      "critChance": 0.08, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.10,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "none", "scale": 0.98, "sigil": 16 },
+      "basic": {
+        "id": "chorister_basic", "name": "Errant Verse", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      }
     }
   ]
 }
