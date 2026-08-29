@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -56,8 +57,22 @@ namespace Emberfall.EditorTools
         /// </summary>
         private const string TriggerPath = "Tools/Screenshots/.trigger";
 
+        /// <summary>
+        /// Bump this string on every real edit to this file and log it unconditionally on load
+        /// (below) - the only reliable way found to confirm a fix actually finished compiling and
+        /// domain-reloading into an already-open live session BEFORE trusting a trigger file drop
+        /// to use it. A trigger file sitting on disk while a background compile is still running
+        /// gets consumed by the OLD assembly, which keeps ticking Pump/PollTriggerFile for the
+        /// entire multi-second compile window - Unity does not pause the Update loop just because
+        /// a recompile is in flight, it swaps assemblies only once the domain reload after it
+        /// completes. Placing a trigger without first confirming this marker is exactly what
+        /// produced two more wasted runs against stale code on this feature's own verification pass.
+        /// </summary>
+        private const string BuildMarker = "FIXV4-force-gameview-repaint";
+
         static PlayModeScreenshot()
         {
+            Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
         }
@@ -69,7 +84,7 @@ namespace Emberfall.EditorTools
             if (!File.Exists(path)) return;
             string requestedTarget = File.ReadAllText(path).Trim();
             File.Delete(path);
-            Debug.Log("PlayModeScreenshot: trigger file found, starting target '" + requestedTarget + "'.");
+            Debug.Log("PlayModeScreenshot: trigger file found (build marker FIXV2), starting target '" + requestedTarget + "'.");
             Begin(string.IsNullOrEmpty(requestedTarget) ? "Events" : requestedTarget);
         }
 
@@ -95,10 +110,33 @@ namespace Emberfall.EditorTools
             EditorApplication.isPlaying = true;
         }
 
+        /// <summary>
+        /// Focuses and repaints the GameView pane via EditorWindow's own API - an in-process,
+        /// pure-C# operation that does not need OS-level window focus at all, unlike everything
+        /// this tool tried externally (SetForegroundWindow, the Alt-key bypass, AttachThreadInput,
+        /// WScript.Shell.AppActivate - all unreliable from a non-interactive shell). Found to
+        /// matter after three straight runs all produced screenExists=False/battleExists=False:
+        /// ScreenCapture.CaptureScreenshot captures whatever the Game view last actually rendered,
+        /// and a Game view pane that never repaints (because nothing is asking it to, with the OS
+        /// window unfocused) has nothing to hand back. GameView is an internal UnityEditor type,
+        /// hence reflection rather than a direct reference.
+        /// </summary>
+        private static void ForceGameViewRepaint()
+        {
+            Type gameViewType = Type.GetType("UnityEditor.GameView,UnityEditor");
+            if (gameViewType == null) return;
+            EditorWindow window = EditorWindow.GetWindow(gameViewType, false, null, false);
+            if (window == null) return;
+            window.Focus();
+            window.Repaint();
+        }
+
         private static void Pump()
         {
             if (!SessionState.GetBool(ActiveKey, false)) return;
             if (!EditorApplication.isPlaying) return; // still transitioning in, or already stopped
+
+            ForceGameViewRepaint();
 
             int frame = SessionState.GetInt(FrameKey, 0) + 1;
             SessionState.SetInt(FrameKey, frame);
@@ -211,19 +249,28 @@ namespace Emberfall.EditorTools
                 stage = 1;
             }
 
-            if (stage == 1 && frame == 40) Canvas.ForceUpdateCanvases();
+            if (stage == 1 && frame == 60) Canvas.ForceUpdateCanvases();
 
-            if (stage == 1 && frame == 45)
+            string screenPath = OutputPath("recital_screen.png");
+            if (stage == 1 && frame == 70)
             {
-                ScreenCapture.CaptureScreenshot(OutputPath("recital_screen.png"), 1);
-                Debug.Log("PlayModeScreenshot: captured recital_screen.png");
+                ScreenCapture.CaptureScreenshot(screenPath, 1);
+                Debug.Log("PlayModeScreenshot: requested recital_screen.png");
                 SessionState.SetInt(StageKey, 2);
             }
 
-            if (stage == 2 && frame == 55)
+            if (stage == 2 && frame == 90)
             {
                 int floor = app.Session.Profile.RecitalCurrentFloor;
-                if (app.Session.TryStartRecitalAttempt(TimeUtil.NowUnix()))
+                // Peek only, exactly like RecitalScreen.OnFight - BattleScreen.OnShow is the one
+                // and only place an Echo is actually spent (it runs next, from Show(Battle) below).
+                // The first version of this method called TryStartRecitalAttempt here directly,
+                // which spent an Echo BEFORE BattleScreen.OnShow spent a second one for the same
+                // attempt - the exact double-spend RecitalScreen's real code avoids, reproduced by
+                // this test script instead. That is what actually happened on the first live run:
+                // it emptied the bank one call early, so BattleScreen's own gate then correctly
+                // refused and bounced back to the Recital screen instead of ever fighting.
+                if (app.Session.PeekRecitalEchoes(TimeUtil.NowUnix()).Banked > 0)
                 {
                     app.Router.Battle.SetRecitalFloor(floor);
                     app.Router.Show(ScreenId.Battle);
@@ -236,27 +283,56 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(StageKey, 3);
             }
 
-            // Mid-playback, well after RunSimulation has built the world and bars but before the
-            // fight can plausibly be over - this is what makes the Aspect-band enemies visible
-            // rather than just a result panel.
-            if (stage == 3 && frame == 75)
+            // Mid-playback, well after RunSimulation has built the world and bars - the first live
+            // run of this capture landed here too early (frame 75, ~20 frames after the battle
+            // launched) and caught a solid black frame, because BuildWorld/RunSimulation and the
+            // first real render of a freshly constructed 3D scene do not complete in the same frame
+            // Show(Battle) is called on. Pushed much later to give the scene time to actually paint.
+            string battlePath = OutputPath("recital_battle.png");
+            if (stage == 3 && frame == 200)
             {
-                ScreenCapture.CaptureScreenshot(OutputPath("recital_battle.png"), 1);
-                Debug.Log("PlayModeScreenshot: captured recital_battle.png");
+                ScreenCapture.CaptureScreenshot(battlePath, 1);
+                Debug.Log("PlayModeScreenshot: requested recital_battle.png");
                 SessionState.SetInt(StageKey, 4);
             }
 
-            if (stage == 4 && frame == 100) { Debug.Log("PlayModeScreenshot: done."); Stop(); }
+            // Stop is gated on both files actually existing on disk, not a fixed frame count -
+            // ScreenCapture.CaptureScreenshot writes asynchronously, and the first live run of this
+            // tool lost recital_screen.png entirely because Stop (which exits Play Mode, which
+            // triggers a domain reload) fired before that write had finished landing on disk. A
+            // generous frame ceiling (400) still exists as a safety net against hanging forever if
+            // a write genuinely never completes.
+            if (stage == 4)
+            {
+                bool bothExist = File.Exists(screenPath) && File.Exists(battlePath);
+                if (bothExist || frame >= 400)
+                {
+                    Debug.Log("PlayModeScreenshot: done. screenExists=" + File.Exists(screenPath) + " battleExists=" + File.Exists(battlePath));
+                    Stop();
+                }
+            }
         }
 
         /// <summary>Climbs several real floors via TryStartRecitalAttempt/GrantRecitalResult - the
         /// same two calls the real UI makes - so RecitalHighestFloor, the Echo bank and the cycle
-        /// position all reflect genuine session state rather than being poked directly.</summary>
+        /// position all reflect genuine session state rather than being poked directly.
+        ///
+        /// Touches ONLY Recital fields (Echoes, floor) - never Gold/Shards/RelicDust or anything
+        /// else pre-existing on the profile. Those are real, earned currency on whatever save this
+        /// runs against (this automation is explicitly meant to run against an already-open live
+        /// session, not an isolated copy), and exiting Play Mode persists whatever is in memory via
+        /// OnApplicationQuit -> SaveNow. The first version of this method set Profile.Gold directly
+        /// for convenience and it went straight to disk, overwriting a real balance - do not repeat
+        /// that. Echoes are topped up directly here for the same reason Gold must NOT be: Recital
+        /// fields did not exist on this save before this feature shipped, so there is no prior real
+        /// value here to protect - only floor position and Echo count, both created by this feature.
+        /// </summary>
         private static void PopulateRecitalLadder(GameApp app)
         {
             GameSession session = app.Session;
             long now = TimeUtil.NowUnix();
-            session.Profile.Gold = 50000;
+            session.Profile.RecitalEchoesBanked = session.Balance.RecitalEchoesMax;
+            session.Profile.RecitalEchoesClockUnix = now;
 
             for (int i = 0; i < 4; i++)
             {
@@ -264,6 +340,13 @@ namespace Emberfall.EditorTools
                 if (!session.TryStartRecitalAttempt(now)) break;
                 session.GrantRecitalResult(floor, true, now);
             }
+
+            // Leave a full bank behind for the battle stage that follows, rather than whatever
+            // remainder the climb above left - RecitalScreen.OnFight only peeks affordability and
+            // BattleScreen.OnShow is the sole real spend point (see PumpRecital below), so this
+            // must NOT itself call TryStartRecitalAttempt - that would be the exact double-spend
+            // bug this comment exists to not repeat a second way.
+            session.Profile.RecitalEchoesBanked = session.Balance.RecitalEchoesMax;
 
             app.RefreshHud();
         }
