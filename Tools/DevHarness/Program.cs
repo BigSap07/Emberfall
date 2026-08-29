@@ -5260,7 +5260,7 @@ namespace Emberfall.DevHarness
         /// The armor system (DESIGN-ARMOR), end to end. Ten checks under one heading, in the order
         /// a piece actually travels: content loads, the roller obeys its guarantees, every stat it
         /// can grant reaches the field it names, the stats reach a real battle, attunement resolves,
-        /// the Anvil charges correctly, the save survives a round trip and an upgrade, and none of
+        /// the Forge charges correctly, the save survives a round trip and an upgrade, and none of
         /// it disturbs relics.
         ///
         /// The determinism half is load bearing rather than decorative. Armor can move an existing
@@ -5284,7 +5284,7 @@ namespace Emberfall.DevHarness
             CheckArmorIsAbsentByDefault(db);
             CheckArmorReachesTheSimulation(db);
             CheckArmorAttunement(db);
-            CheckArmorAnvil(db);
+            CheckArmorForge(db);
             CheckArmorForgeTiers(db);
             CheckArmorSaveRoundTrip(db);
             CheckArmorDoesNotTouchRelics(db);
@@ -5339,11 +5339,11 @@ namespace Emberfall.DevHarness
 
             Check(c.Tempers.Count == 4, "all four temper rungs are authored (" + c.Tempers.Count + ")");
 
-            // Salvage under reroll at every rung, or the Anvil prints Slag instead of consuming it.
+            // Salvage under reroll at every rung, or the Forge prints Slag instead of consuming it.
             bool sinkIsASink = true;
             for (int i = 0; i < c.Tempers.Count; i++)
                 if (c.Tempers[i].RerollSlag > 0 && c.Tempers[i].SalvageSlag >= c.Tempers[i].RerollSlag) sinkIsASink = false;
-            Check(sinkIsASink, "salvage pays less than a reroll costs at every rung, so the Anvil consumes pieces rather than printing Slag");
+            Check(sinkIsASink, "salvage pays less than a reroll costs at every rung, so the Forge consumes pieces rather than printing Slag");
 
             // Every aspect needs both thresholds, or an aspect's heroes have no set to chase.
             Array aspects = Enum.GetValues(typeof(Aspect));
@@ -5484,7 +5484,7 @@ namespace Emberfall.DevHarness
                   "and a different seed rolls a different one");
 
             // A reroll must move the substats and leave everything else exactly where it was -
-            // that is the whole contract the Anvil's price is charged against.
+            // that is the whole contract the Forge's price is charged against.
             ArmorPiece rerolled = ArmorRoller.Roll(db.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant, Aspect.Ember, 4242);
             string primaryBefore = rerolled.Primary.Stat + ":" + rerolled.Primary.Value.ToString("F4", CultureInfo.InvariantCulture);
             string subsBefore = SubStatFingerprint(rerolled);
@@ -5714,12 +5714,12 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// The Anvil: salvage pays and destroys, reroll charges and rerolls, and both refuse
+        /// The Forge: salvage pays and destroys, reroll charges and rerolls, and both refuse
         /// cleanly rather than half-completing. The refusal cases are the ones worth having - a
         /// salvage that stripped an equipped hero, or a reroll that charged for nothing, are both
         /// silent losses a player would not notice until much later.
         /// </summary>
-        private static void CheckArmorAnvil(ContentDatabase db)
+        private static void CheckArmorForge(ContentDatabase db)
         {
             const long Noon = 1699963200L;
             PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
@@ -5736,7 +5736,7 @@ namespace Emberfall.DevHarness
 
             // Reroll with an empty purse: refused, and nothing moves.
             string subsBefore = SubStatFingerprint(piece);
-            Check(!session.RerollArmor(piece.Uid, Noon), "the Anvil refuses a reroll the player cannot afford");
+            Check(!session.RerollArmor(piece.Uid, Noon), "the Forge refuses a reroll the player cannot afford");
             Check(profile.Slag == 0 && SubStatFingerprint(piece) == subsBefore,
                   "and charges nothing and changes nothing on the refusal");
 
@@ -5991,7 +5991,7 @@ namespace Emberfall.DevHarness
 
         /// <summary>
         /// The Forge Tiers revision: a hard drop ceiling at ArmorInfo.MaxDropTemper, and the
-        /// Anvil's third operation, Combine, as the only way past it. Four things asked of this
+        /// Forge's third operation, Combine, as the only way past it. Four things asked of this
         /// pass, each its own check below: the drop table can never yield Gilded or Radiant;
         /// Combine always consumes exactly three same-slot, same-temper inputs; Combine cannot
         /// skip a tier; and its Slag cost follows the same per-temper pricing pattern SalvageValue
@@ -6234,7 +6234,7 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// The Slag cost follows the exact pattern DESIGN-ARMOR's Anvil already established for
+        /// The Slag cost follows the exact pattern DESIGN-ARMOR's Forge already established for
         /// Salvage and Reroll: one number per temper in armor.json, read through a single
         /// GameSession method that is also what actually charges it, so a shown price and a paid
         /// one cannot drift. Checked: CombineCost reads exactly what ArmorTemperDef.CombineSlag

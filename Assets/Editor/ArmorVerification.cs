@@ -428,7 +428,7 @@ namespace Emberfall.EditorTools
             // real Honed Weapon drops for a screenshot is not a reasonable ask of this script. Three
             // Combines turn those nine into three Gilded Weapons; a fourth turns those three into
             // one Radiant Weapon - walking the whole ladder through the exact GameSession call the
-            // Anvil's COMBINE button makes, same as a player's tap would.
+            // Forge's COMBINE button makes, same as a player's tap would.
             List<string> honedUids = new List<string>();
             for (int i = 0; i < 9; i++)
             {
