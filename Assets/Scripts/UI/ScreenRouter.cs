@@ -17,7 +17,8 @@ namespace Emberfall.UI
         RelicShop,
         Inventory,
         Events,
-        Recital
+        Recital,
+        Forge
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -70,6 +71,7 @@ namespace Emberfall.UI
         public Screens.InventoryScreen Inventory;
         public Screens.EventsScreen Events;
         public Screens.RecitalScreen Recital;
+        public Screens.ForgeScreen Forge;
 
         public UIScreen Current { get; private set; }
 
@@ -89,6 +91,7 @@ namespace Emberfall.UI
             Inventory = Create<Screens.InventoryScreen>();
             Events = Create<Screens.EventsScreen>();
             Recital = Create<Screens.RecitalScreen>();
+            Forge = Create<Screens.ForgeScreen>();
         }
 
         /// <summary>

@@ -239,6 +239,11 @@ namespace Emberfall.UI.Screens
             AddNavButton(nav, "INVENTORY", 7, UITheme.TextMuted, OpenInventory);
             AddNavButton(nav, "EVENTS", 8, UITheme.Success, OpenEvents);
             AddNavButton(nav, "RECITAL", 9, UITheme.Mythic, OpenRecital);
+            // Sigil 10 ("block / golem") reads as a solid, blocky shape - the closest fit in the
+            // fixed 14-sigil set to an anvil/workbench silhouette. Tinted with the Gilded rung's
+            // colour, the same one InventoryScreen's Slag row already uses, so the Forge's icon and
+            // the currency it spends read as the same idea at a glance.
+            AddNavButton(nav, "FORGE", 10, UITheme.ArmorTemperColor(ArmorTemper.Gilded), OpenForge);
         }
 
         private void BuildOptions()
@@ -424,6 +429,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Recital);
+        }
+
+        private void OpenForge()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Forge);
         }
 
         private void ShowOptions()
