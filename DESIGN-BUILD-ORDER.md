@@ -5,10 +5,18 @@ and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled agai
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
 new design here, sequencing only.
 
-**Status, as of tonight's audit (2026-08-29).** Tasks **1 through 12 are all done on `main`**,
-verified against the actual code and content and against a live `Tools/build-check.ps1` run
-tonight (compiles clean, `RESULT: all checks passed`), not against this document's own prior
-claims — several of those were found stale and are corrected in place below.
+**Status, as of tonight's audit (2026-08-29).** Tasks **1 through 12, and now 14, are done on
+`main`; 13 is not** — verified against the actual code and content and against a live
+`Tools/build-check.ps1` run tonight (compiles clean, `RESULT: all checks passed`, re-run again
+just now after task 14 landed, still all-clear), not against this document's own prior claims —
+several of those were found stale and are corrected in place below. Task 14, new since the last
+pass through this document, is the events engine and its two starter events — content-driven,
+not a special case, and folded into the numbered list below rather than tracked separately the
+way Chapter 2 and the art pipeline are, per instruction. See task 14 for the full account,
+including one thing worth flagging up front: `events.json`'s two windows are real calendar dates
+already sitting in the file, not sentinel placeholders, but the file's own comment still calls
+them first-pass and un-tuned — they are not a confirmed announcement schedule, and nobody should
+treat them as one without a deliberate decision to do so.
 `build-order-7-effect-hit-resist` and `sprite-path-orrin` were merged and green;
 `build-order-8-team-size-5` and `build-order-9-landscape` merged together with task 10's
 `campaign.json` refill riding on `build-order-9-landscape` rather than its own branch, exactly as
@@ -151,6 +159,13 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
     `CombatSimulation.cs:652`. Picks a second living unit on the same side as the resolved target
     and swaps their `Slot`. Reshuffles who `FrontEnemy` resolves to; turn order is speed-sorted,
     not slot-sorted, so initiative is unaffected. Emits `BattleEventType.PositionSwapped`.
+- **Events engine, and two starter events (The Recollection Rite, The Ledger's Week).** Task 14,
+  below - a generic, content-driven engine (`events.json`, an `EventActivityKind` enum
+  `GameSession.RecordEventActivity` dispatches on rather than switches over), not two hardcoded
+  special cases. Save version 5 to 6 for `PlayerProfile.EventProgress`. See task 14 for the full
+  evidentiary account, including the two starter events' actual `events.json` windows and the
+  DevHarness EVENTS section (46 checks) that proves the activity hooks, the isolation between
+  events, and the milestone-versus-currency claim semantics.
 
 ## `build-order-1-3` landed. This section is history, not status
 
@@ -462,6 +477,20 @@ Effect Resist half of that document shipped and is accurate.
 5. **Kalyx's Kindling is resolved.** Cut in the Ember implementation pass; both docs updated.
    Splitting Prism's stated downside is now about Burn spread lost, not a passive left hungry.
    See "One conflict to resolve" above for the full account.
+6. **Content is `Resources.Load`, baked in at build time - there is no remote/live-ops channel.**
+   Came up while building task 14 (events) and is written down here so the next person planning an
+   event finds out going in, not by discovering it mid-plan. Confirmed tonight: `ContentService.cs`
+   reads every content file - `heroes.json`, `enemies.json`, `campaign.json`, `balance.json`,
+   `relics.json`, `events.json` - through `Resources.Load<TextAsset>` (`ReadText`/`ReadTextOptional`,
+   `ContentService.cs:36/42`), and nothing under `Assets/Scripts` calls `UnityWebRequest` or any
+   remote-config API - grepped for both, zero matches. A `Resources` folder is compiled straight
+   into the build; scheduling or changing a live event therefore means shipping a new app build and
+   getting it through platform review, not pushing a JSON update to players already on an older
+   build. `events.json`'s own two windows (see task 14) already assume this: they are set weeks out
+   from tonight, not tomorrow, which only makes sense if whoever set them already knew a build has
+   to ship and reach players before the window opens. Nothing about this is a defect - it is simply
+   how far a `Resources`-only content pipeline reaches, and it bounds what "schedule an event" can
+   mean until a remote-config or CDN-fetched content path exists, which nothing today provides.
 
 ## Audit: what build-order-8-team-size-5 actually contains
 
@@ -817,8 +846,12 @@ confirmed green on CI on `main` after the merge.
     pass, still last — now over twice the stage count it was scoped against.
     Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b — all done, 12b included: it landed before this
     task rather than after, so the retune this task describes covers all ten shipped relics (8
-    Legendary, 2 Mythic — see task 12b's naming correction), not four. Blocks: nothing, this is the
-    last task.
+    Legendary, 2 Mythic — see task 12b's naming correction), not four. Blocks: nothing hard. ⚠️ No
+    longer literally "the last task" — task 14 (events engine) landed after this was written and
+    sits below it, but the two are independent: task 14 does not touch the campaign economy this
+    task retunes, and this task does not gate task 14. "Last" here still means what it always meant
+    - the final pass over the win-rate table task 1 through 12a build toward - task 14 is simply
+    outside that chain, the same way Chapter 2 and the art pipeline are.
 
     ⚠️ **The code itself still calls this task 14, not 13.** `Tools/DevHarness/Program.cs`'s own
     output ("Authored values are UNTUNED... task 14 is the retune", "this is the instrument task 14
@@ -842,6 +875,95 @@ stages (task 14 pass 1)") that raises the Tideturned boss's kit and levels on th
 stages, moving that boss stage's five-body pinned win rate from 100% to 79.2% by its own commit
 message. It does not change task 13's status here because it is not merged, but it is live evidence
 someone has already started.
+
+14. **Events engine, and two starter events on top of it.** Not part of the original numbered plan
+    - new system work that arrived after task 13 was written, on the same footing Chapter 2 and the
+    art pipeline landed on outside the numbered order, but folded into the list here per instruction
+    rather than tracked separately. `[H]` for the engine, the save format and both starter events'
+    content; `[U]` for the Events screen's rendering, which is Play-mode verified per its own commit
+    but not re-verified by tonight's pass.
+
+    ⚠️ **Do not confuse this with the stale "task 14" already on record elsewhere in this document**
+    (task 13's own entry above, and the code comments and commit messages it quotes). Those all
+    predate this task's existence and mean the campaign retune - today's task 13 - under an old
+    numbering from before Opening Gambit was cut. This task 14 is unrelated content: the events
+    engine, numbered here for the first time.
+
+    **Done. Merged to `main`.** Landed on `feat/events-engine`, fast-forwarded into `main`
+    (`b66a952`, "feat(events): generic events engine, two starter events, and an Events screen") -
+    confirmed by `git merge-base --is-ancestor feat/events-engine main` tonight, not assumed from
+    the branch name.
+
+    **The engine.** `Enums.EventActivityKind` (`SummonPerformed`, `RelicDustSpent` today) is the
+    only enum in the loop, and nothing switches on it: `GameSession.RecordEventActivity`
+    (`GameSession.cs:533`) walks every event in `ContentDatabase.Events` and compares each one's own
+    `Activity` field against the kind passed in, so a third activity kind is one new enum member
+    plus one call to `RecordEventActivity` at that activity's own call site, not a new case
+    anywhere. Confirmed today's two call sites are exactly that: `GameSession.Summon` calls it
+    directly (`:702`), and `GameSession.BuyRelic` (`:460`) routes through a new
+    `SpendRelicDust` (`:480`) which calls it (`:483`) - `SpendRelicDust` is documented as the one
+    choke point any future relic-upgrade spend must also route through, since no upgrade spend path
+    exists yet (`RelicMaxTier` is still pinned to 1). Content types - `EventDef`, `EventMilestone`,
+    `EventCurrencyTier`, `EventReward` - live in `Definitions.cs` (`:559`, `:594`, `:604`, `:620`),
+    same file and shape as `RelicDef`. `ContentDatabase.ParseEvents` (`:111`) loads `events.json`
+    exactly like `ParseRelics` loads `relics.json` - optional content, a build with none loads with
+    zero events rather than erroring - and `ContentService.cs` reads it through
+    `Resources.Load<TextAsset>` via `ReadTextOptional("events")` (`:21`), the same path every other
+    content file takes. `GameSession.ClaimEventMilestone` (`:562`) and `RedeemEventCurrency` (`:584`)
+    are the two player-facing actions; neither re-checks the event's window, only earning is
+    window-gated, so a milestone or currency balance already earned stays claimable after the event
+    closes.
+
+    **Save version 5 to 6, additive.** `SaveSerializer.CurrentVersion` is `6`
+    (`SaveSerializer.cs:66`). `PlayerProfile.EventProgress` (points, claimed-milestone thresholds, a
+    currency balance, per event id) is serialised at `:134-149` and read back at `:264-273`.
+    Confirmed tonight, harness-covered, not asserted from the diff alone: a hand-built version 5
+    document with no `eventProgress` key at all loads under version 6 code and reads as zero events
+    touched - "a version 5 save - an existing player who has never seen an event - loads under
+    version 6 code" and "reads as zero events touched, not a phantom entry or a crash (0)", both
+    `[ok]` in tonight's run. The newer-build guard is the same one every bump since version 2 relies
+    on: a hand-bumped version 7 document is refused with "save is from a newer build (version 7,
+    this build reads up to 6)", also `[ok]` tonight. No migration was needed for the upgrade
+    direction, unlike the version 4 to 5 relic bump - there is no prior format for event progress to
+    translate out of.
+
+    **The two starter events, as content.** The Recollection Rite: `SummonPerformed`, no currency,
+    a pure point ladder ("Recollection Rite has no event currency - a pure point ladder, per spec",
+    `[ok]`). The Ledger's Week: `RelicDustSpent`, plus its own currency, Ledger Marks, with a small
+    redeemable ladder ("Ledger's Week has its own event currency (Ledger Marks)", `[ok]`). Both
+    verified structurally sound by the harness (well-formed windows, non-empty ladders) and both
+    read from `Assets/Resources/Content/events.json` on `main` tonight, not from memory of an
+    earlier pass:
+
+    | Event | `startUnix` | `endUnix` | As a date (UTC) |
+    |---|---|---|---|
+    | `recollection_rite` | 1788220800 | 1788825600 | 2026-09-01 00:00 to 2026-09-08 00:00 |
+    | `ledgers_week` | 1789430400 | 1790035200 | 2026-09-15 00:00 to 2026-09-22 00:00 |
+
+    Both are real calendar dates, not placeholder sentinels like `0` or a far-future year - but
+    `events.json`'s own `_comment` field states plainly that "every number in this file - both
+    windows, every threshold, every reward, both conversion rates - is a first-pass placeholder, not
+    tuned content." Read those two facts together rather than one without the other: the dates are
+    concrete enough to load and test against, but nothing has decided they are the real launch
+    dates. Do not announce them as such without that decision being made explicitly first.
+
+    **DevHarness EVENTS section**, 46 checks tonight, all `[ok]`. Beyond structural content checks,
+    it proves: both activity hooks fire through the real `GameSession.Summon` /
+    `GameSession.BuyRelic` call sites, not through calling `RecordEventActivity` directly ("SummonPerformed
+    fires through the real GameSession.Summon call site"; "RelicDustSpent fires through the real
+    GameSession.BuyRelic call site"); activity-kind isolation both directions ("Ledger's Week,
+    listening for a different activity, earned nothing from those summons"; "the earlier
+    Recollection Rite points are untouched by spending Dust"); the window gates earning but not
+    claiming ("a summon one hour before the window opens earns no Recollection Rite points at all");
+    a milestone cannot be claimed twice ("claiming the same milestone a second time is refused", "the
+    second attempt paid nothing - this is the double-pay guard the milestone ladder depends on");
+    and a currency tier is deliberately different - redeemable again once the balance allows it,
+    because redeeming spends the balance rather than setting a claimed flag ("redeeming the SAME
+    tier again succeeds - unlike a milestone, this is a purchase, not a one-time claim").
+
+    Blocked by: nothing remaining - summoning (task 3) and the relic shop (task 12a/12b) already
+    exist for the two starter events to hook. Blocks: nothing, including task 13: the two systems
+    are independent, and Events does not need the retune to have happened first.
 
 ## Task 13's instrument was broken, and what was done about it
 
