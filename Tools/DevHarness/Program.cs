@@ -5807,6 +5807,180 @@ namespace Emberfall.DevHarness
                 if (p.SubStats.Count != ArmorInfo.SubStatCount(p.Temper)) everyDropIsWellFormed = false;
             }
             Check(everyDropIsWellFormed, "and every dropped piece has a uid, its slot's primary and its temper's substat count");
+
+            CheckArmorDropDiversity(db);
+        }
+
+        /// <summary>
+        /// Drops are actually spread across slots and aspects, rather than clustering.
+        ///
+        /// This check exists because the first Editor verification run produced a pool where three
+        /// of four pieces were the same aspect, which is unlikely enough at one-in-six to be worth
+        /// measuring rather than shrugging at. The risk is structural, not cosmetic: every drop
+        /// builds a FRESH DeterministicRng from a derived seed and reads its FIRST output, and
+        /// xorshift32's first output is a linear function of its seed - so correlated seeds produce
+        /// correlated draws, and a biased aspect roll would make attunement either trivial or
+        /// impossible depending on which way it leaned. Attunement is the one place armor asks the
+        /// player to make a decision, so a bias there is a bias in the only decision.
+        ///
+        /// Bounds are deliberately loose. This is a smoke test for structural bias, not a
+        /// chi-squared test - it should fail on "the roller always returns Lumen", not on an
+        /// ordinary unlucky sample.
+        /// </summary>
+        private static void CheckArmorDropDiversity(ContentDatabase db)
+        {
+            const long Noon = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Noon);
+            GameSession session = new GameSession(db, profile);
+
+            Dictionary<Aspect, int> byAspect = new Dictionary<Aspect, int>();
+            Dictionary<ArmorSlot, int> bySlot = new Dictionary<ArmorSlot, int>();
+            Dictionary<ArmorTemper, int> byTemper = new Dictionary<ArmorTemper, int>();
+
+            int total = 0;
+            for (int i = 0; i < 4000; i++)
+            {
+                StageDef stage = db.AllStages[i % db.AllStages.Count];
+                ArmorPiece p = session.RollArmorDrop(stage, Noon + i * 91);
+                if (p == null) continue;
+                total++;
+                byAspect[p.Aspect] = (byAspect.ContainsKey(p.Aspect) ? byAspect[p.Aspect] : 0) + 1;
+                bySlot[p.Slot] = (bySlot.ContainsKey(p.Slot) ? bySlot[p.Slot] : 0) + 1;
+                byTemper[p.Temper] = (byTemper.ContainsKey(p.Temper) ? byTemper[p.Temper] : 0) + 1;
+            }
+
+            Check(total > 500, "the drop sweep produced a usable sample (" + total + " pieces)");
+            if (total == 0) return;
+
+            Array aspects = Enum.GetValues(typeof(Aspect));
+            int aspectMin = int.MaxValue, aspectMax = 0;
+            string aspectSpread = "";
+            for (int i = 0; i < aspects.Length; i++)
+            {
+                Aspect a = (Aspect)aspects.GetValue(i);
+                int n = byAspect.ContainsKey(a) ? byAspect[a] : 0;
+                if (n < aspectMin) aspectMin = n;
+                if (n > aspectMax) aspectMax = n;
+                aspectSpread += (aspectSpread.Length > 0 ? " " : "") + a + ":" + (100 * n / total) + "%";
+            }
+            // Every aspect must appear, and none may take more than a third of all drops - an
+            // unbiased roll over six sits near 17%, and a genuinely broken one lands at 100%.
+            Check(aspectMin > 0 && aspectMax * 3 <= total * 1,
+                  "drops spread across all six aspects with none dominating - " + aspectSpread);
+
+            int slotMin = int.MaxValue, slotMax = 0;
+            string slotSpread = "";
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+            {
+                ArmorSlot s = ArmorInfo.AllSlots[i];
+                int n = bySlot.ContainsKey(s) ? bySlot[s] : 0;
+                if (n < slotMin) slotMin = n;
+                if (n > slotMax) slotMax = n;
+                slotSpread += (slotSpread.Length > 0 ? " " : "") + s + ":" + (100 * n / total) + "%";
+            }
+            Check(slotMin > 0 && slotMax * 3 <= total * 1,
+                  "and across all six slots with none dominating - " + slotSpread);
+
+            // Temper is SUPPOSED to be lopsided - Rough is common and Radiant is rare, and the
+            // stage-depth slope tilts it further. All this asserts is that every rung is reachable
+            // and that the ladder still runs the right way round at the population level.
+            int rough = byTemper.ContainsKey(ArmorTemper.Rough) ? byTemper[ArmorTemper.Rough] : 0;
+            int radiant = byTemper.ContainsKey(ArmorTemper.Radiant) ? byTemper[ArmorTemper.Radiant] : 0;
+            string temperSpread = "";
+            Array tempers = Enum.GetValues(typeof(ArmorTemper));
+            bool everyRungReachable = true;
+            for (int i = 0; i < tempers.Length; i++)
+            {
+                ArmorTemper t = (ArmorTemper)tempers.GetValue(i);
+                int n = byTemper.ContainsKey(t) ? byTemper[t] : 0;
+                if (n == 0) everyRungReachable = false;
+                temperSpread += (temperSpread.Length > 0 ? " " : "") + t + ":" + (100 * n / total) + "%";
+            }
+            Check(everyRungReachable, "every temper rung is reachable from real drops - " + temperSpread);
+            Check(rough > radiant, "and Rough outnumbers Radiant, so the ladder is a ladder (" + rough + " vs " + radiant + ")");
+
+            CheckArmorDropsDoNotCluster(db);
+        }
+
+        /// <summary>
+        /// Consecutive drops within ONE session are not all the same aspect.
+        ///
+        /// The sweep above proves the long-run distribution is uniform, and it is - roughly a sixth
+        /// each across two thousand drops. That is not the same claim as this one, and the
+        /// difference is what a player actually experiences: the first Editor verification run of
+        /// this feature produced nine drops of which EIGHT were Lumen, which a uniform long-run
+        /// distribution does not explain and which no player would read as random.
+        ///
+        /// The mechanism it is guarding against: every drop builds a fresh DeterministicRng from a
+        /// derived seed and reads its FIRST output. Within one session those seeds advance by a
+        /// near-constant delta, and a constant increment pushed through xorshift32's first output -
+        /// a GF(2)-linear map - produces short-period structure in the low bits even while the
+        /// full-period distribution stays flat. Long-run uniformity and short-run structure are
+        /// exactly what a weak seed derivation looks like.
+        ///
+        /// Measured the way a player would meet it: many independent sessions, the first nine drops
+        /// of each, counting how often one aspect takes seven or more of the nine.
+        /// </summary>
+        private static void CheckArmorDropsDoNotCluster(ContentDatabase db)
+        {
+            const int Sessions = 400;
+            const int DropsPerSession = 9;
+            const int ClusterThreshold = 7;
+
+            int clustered = 0;
+            int measured = 0;
+            string firstExample = "";
+
+            for (int s = 0; s < Sessions; s++)
+            {
+                // A different base per session, sweeping a WIDE span of wall-clock time rather than
+                // a few months around one date. That span is load bearing: the first version of
+                // this check walked forward one day per session from late 2023, covered only
+                // ~1.70e9 to ~1.73e9, reported zero clustering, and still did not explain the 8-of-9
+                // Lumen run the Editor produced at a 2026 clock (~1.79e9). A seed derivation can be
+                // well behaved in one region of the input space and structured in another, so a
+                // check that samples one region proves nothing about the region players are in.
+                long sessionStart = 1600000000L + s * 750000L;
+                PlayerProfile profile = GameSession.CreateNewProfile(db, sessionStart);
+                GameSession session = new GameSession(db, profile);
+
+                List<Aspect> drops = new List<Aspect>();
+                for (int i = 0; i < 400 && drops.Count < DropsPerSession; i++)
+                {
+                    StageDef stage = db.AllStages[i % db.AllStages.Count];
+                    ArmorPiece p = session.RollArmorDrop(stage, sessionStart + i * 91);
+                    if (p != null) drops.Add(p.Aspect);
+                }
+                if (drops.Count < DropsPerSession) continue;
+                measured++;
+
+                int worst = 0;
+                Aspect worstAspect = Aspect.Ember;
+                Array aspects = Enum.GetValues(typeof(Aspect));
+                for (int a = 0; a < aspects.Length; a++)
+                {
+                    Aspect asp = (Aspect)aspects.GetValue(a);
+                    int n = 0;
+                    for (int d = 0; d < drops.Count; d++) if (drops[d] == asp) n++;
+                    if (n > worst) { worst = n; worstAspect = asp; }
+                }
+                if (worst >= ClusterThreshold)
+                {
+                    clustered++;
+                    if (firstExample.Length == 0)
+                        firstExample = worst + "/" + DropsPerSession + " " + worstAspect + " in session " + s;
+                }
+            }
+
+            // With a genuinely uniform roll, 7-of-9 sharing an aspect is about a 1-in-10000 event,
+            // so a handful across 400 sessions is noise and a large fraction is structure. 2% is a
+            // deliberately loose ceiling: it fails on a broken derivation, not on bad luck.
+            Check(measured > Sessions / 2, "measured " + measured + " independent sessions of " + DropsPerSession + " drops each");
+            Check(clustered * 50 <= measured,
+                  "consecutive drops within a session do not cluster on one aspect - "
+                  + clustered + " of " + measured + " sessions had " + ClusterThreshold + "+ of "
+                  + DropsPerSession + " share an aspect"
+                  + (firstExample.Length > 0 ? " (e.g. " + firstExample + ")" : ""));
         }
 
         /// <summary>
