@@ -517,6 +517,33 @@ namespace Emberfall.Core.Model
         }
 
         /// <summary>
+        /// Up to two OTHER unequipped pieces sharing a piece's slot and temper - what a one-tap
+        /// Combine on that piece would consume alongside it. Short (fewer than 2) or empty is
+        /// exactly when Combine has nothing to offer, which the UI reads to grey the button out
+        /// rather than let a tap fail after the fact.
+        ///
+        /// Walks OwnedArmor in list order, which is acquisition order (uids are allocated
+        /// sequentially), rather than sorting - a piece's uid is a string ("g1".."g10"...) and a
+        /// lexicographic sort of those would put "g10" before "g2", which is not acquisition order.
+        /// List order already is, with no parsing needed.
+        /// </summary>
+        public List<ArmorPiece> ArmorCombineCandidates(ArmorPiece piece)
+        {
+            List<ArmorPiece> result = new List<ArmorPiece>();
+            if (piece == null) return result;
+            for (int i = 0; i < OwnedArmor.Count; i++)
+            {
+                ArmorPiece other = OwnedArmor[i];
+                if (other == piece) continue;
+                if (other.Slot != piece.Slot || other.Temper != piece.Temper) continue;
+                if (HeroWearingArmor(other.Uid) != null) continue;
+                result.Add(other);
+                if (result.Count == 2) break;
+            }
+            return result;
+        }
+
+        /// <summary>
         /// The piece in one of a hero's slots, or null. Resolves the uid through OwnedArmor, so a
         /// slot naming a piece the player no longer owns reads as empty rather than throwing -
         /// the same tolerance the relic slot has for an unresolvable relic id.

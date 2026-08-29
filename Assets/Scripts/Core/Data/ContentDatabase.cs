@@ -301,6 +301,42 @@ namespace Emberfall.Core.Data
                 if (t.PrimaryScale <= 0f)
                     Warnings.Add("armor.json: " + t.Temper + " has a primaryScale of " + t.PrimaryScale
                                + ", so its pieces grant nothing from their guaranteed primary");
+
+                // ArmorRoller.RollTemper never selects anything above ArmorInfo.MaxDropTemper
+                // regardless of what is authored here - see that method - so a nonzero drop weight
+                // on a rung above the ceiling is dead configuration, not a live lever, and would
+                // mislead whoever next edits this file into thinking it controls something.
+                bool aboveCeiling = (int)t.Temper > (int)ArmorInfo.MaxDropTemper;
+                if (aboveCeiling && (t.DropWeight != 0 || t.DropWeightPerStageIndex != 0f))
+                    Warnings.Add("armor.json: " + t.Temper + " is above ArmorInfo.MaxDropTemper ("
+                               + ArmorInfo.MaxDropTemper + ") so its dropWeight/dropWeightPerStageIndex are"
+                               + " never read by RollTemper - zero them or they read as a live drop chance that isn't");
+
+                // The mirror image: every rung ABOVE Rough is a valid Combine OUTPUT (DESIGN-ARMOR
+                // section 7), and GameSession.CombineCost reads combineSlag off exactly that rung.
+                // An unauthored one silently prices a Combine at zero Slag, which is not a
+                // placeholder value the way an unauthored drop weight can be - it is free currency.
+                bool hasRungBelow = t.Temper != ArmorTemper.Rough;
+                if (hasRungBelow && t.CombineSlag <= 0)
+                    Warnings.Add("armor.json: " + t.Temper + " has no combineSlag, so combining into it costs nothing");
+            }
+
+            // Combine cost should climb with the rung it produces, the same shape reroll and
+            // salvage already climb by - not asserted as strictly as the salvage-under-reroll rule
+            // above (a flat curve is not broken the way a reversed one is), so this warns rather
+            // than being folded into the loop above.
+            {
+                ArmorTemperDef honed = Armor.GetTemper(ArmorTemper.Honed);
+                ArmorTemperDef gilded = Armor.GetTemper(ArmorTemper.Gilded);
+                ArmorTemperDef radiant = Armor.GetTemper(ArmorTemper.Radiant);
+                if (honed != null && gilded != null && honed.CombineSlag > 0 && gilded.CombineSlag > 0
+                    && honed.CombineSlag >= gilded.CombineSlag)
+                    Warnings.Add("armor.json: combining into Gilded (" + gilded.CombineSlag
+                               + ") should cost more Slag than combining into Honed (" + honed.CombineSlag + ")");
+                if (gilded != null && radiant != null && gilded.CombineSlag > 0 && radiant.CombineSlag > 0
+                    && gilded.CombineSlag >= radiant.CombineSlag)
+                    Warnings.Add("armor.json: combining into Radiant (" + radiant.CombineSlag
+                               + ") should cost more Slag than combining into Gilded (" + gilded.CombineSlag + ")");
             }
 
             // An attunement threshold with no bonuses is a set bonus that does nothing, and a

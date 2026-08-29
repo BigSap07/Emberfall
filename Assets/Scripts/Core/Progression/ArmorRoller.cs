@@ -86,9 +86,16 @@ namespace Emberfall.Core.Progression
         /// <summary>
         /// A temper for a drop at a stage depth. Each rung's weight is its base plus its
         /// per-stage-index slope, floored at 1 rather than at 0 - so a deep stage skews toward
-        /// Gilded and Radiant without ever making Rough impossible, and stage 1-1 can still, rarely,
-        /// produce a Radiant piece. A rung that content deliberately disabled (dropWeight 0 and no
-        /// slope) stays disabled: the floor applies to the computed weight, not to an authored zero.
+        /// Honed without ever making Rough impossible. A rung that content deliberately disabled
+        /// (dropWeight 0 and no slope) stays disabled: the floor applies to the computed weight,
+        /// not to an authored zero.
+        ///
+        /// Never returns anything above ArmorInfo.MaxDropTemper, REGARDLESS of what armor.json
+        /// authors for a rung above it. That filter runs before weights are even computed, so it is
+        /// a hard ceiling rather than a side effect of the shipped content happening to zero out
+        /// Gilded and Radiant's drop weight - a future content edit that gave Radiant a huge
+        /// dropWeight would still never see it selected here. Gilded and Radiant exist only through
+        /// GameSession.CombineArmor; see DESIGN-ARMOR section 8.
         /// </summary>
         public static ArmorTemper RollTemper(ArmorConfig config, int stageGlobalIndex, int seed)
         {
@@ -100,6 +107,7 @@ namespace Emberfall.Core.Progression
             for (int i = 0; i < config.Tempers.Count; i++)
             {
                 ArmorTemperDef t = config.Tempers[i];
+                if ((int)t.Temper > (int)ArmorInfo.MaxDropTemper) { weights[i] = 0; continue; }
                 if (t.DropWeight <= 0 && t.DropWeightPerStageIndex == 0f) { weights[i] = 0; continue; }
                 float w = t.DropWeight + t.DropWeightPerStageIndex * Math.Max(0, stageGlobalIndex);
                 weights[i] = w < 1f ? 1 : (int)Math.Round(w, MidpointRounding.AwayFromZero);
@@ -113,7 +121,13 @@ namespace Emberfall.Core.Progression
                 pick -= weights[i];
                 if (pick < 0) return config.Tempers[i].Temper;
             }
-            return config.Tempers[config.Tempers.Count - 1].Temper;
+            // Unreachable given how `pick` and `total` are constructed above - kept as a safe
+            // fallback rather than trusted to be dead code, and it too respects the ceiling by
+            // walking backward for the last rung with nonzero weight instead of returning the
+            // list's literal last entry (which could be Radiant).
+            for (int i = weights.Length - 1; i >= 0; i--)
+                if (weights[i] > 0) return config.Tempers[i].Temper;
+            return config.Tempers[0].Temper;
         }
 
         /// <summary>A uniform slot. Every slot is equally likely; depth tilts temper, not slot.</summary>

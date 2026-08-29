@@ -598,6 +598,18 @@ namespace Emberfall.Core.Data
         public int SalvageSlag;
         public int RerollSlag;
 
+        /// <summary>
+        /// Slag one Combine into THIS temper costs - i.e. combining three pieces one rung below
+        /// costs the OUTPUT rung's CombineSlag, read via GameSession.CombineCost(outputTemper).
+        /// Same per-temper field pattern SalvageSlag and RerollSlag already use, not a new pricing
+        /// curve: DESIGN-ARMOR's Anvil scales every one of its actions by temper this same way.
+        ///
+        /// Meaningless on Rough - nothing combines INTO the bottom rung, since there is no rung
+        /// below it to combine FROM. Left at its zero default there; content validation does not
+        /// require it to be authored on that one entry, only on Honed/Gilded/Radiant.
+        /// </summary>
+        public int CombineSlag;
+
         /// <summary>Relative draw weight for a drop at stage index 0. See ArmorDropWeightPerStageIndex
         /// for how deep stages tilt away from this.</summary>
         public int DropWeight = 10;
@@ -619,6 +631,7 @@ namespace Emberfall.Core.Data
             t.PrimaryScale = j.GetFloat("primaryScale", 1f);
             t.SalvageSlag = Math.Max(0, j.GetInt("salvageSlag", 0));
             t.RerollSlag = Math.Max(0, j.GetInt("rerollSlag", 0));
+            t.CombineSlag = Math.Max(0, j.GetInt("combineSlag", 0));
             t.DropWeight = Math.Max(0, j.GetInt("dropWeight", 10));
             t.DropWeightPerStageIndex = j.GetFloat("dropWeightPerStageIndex", 0f);
             return t;

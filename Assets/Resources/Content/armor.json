@@ -58,11 +58,23 @@
   //
   // salvageSlag must stay below rerollSlag at every rung or the loop prints currency; content
   // validation enforces it.
+  //
+  // Gilded and Radiant carry dropWeight/dropWeightPerStageIndex 0 - not omitted, ZEROED, so the
+  // intent reads directly off this file rather than off ArmorRoller's defaults. That alone would
+  // already stop them dropping (RollTemper's existing full-disable branch), and ArmorInfo.
+  // MaxDropTemper backs it with a hard code-level ceiling on top, so even setting either nonzero
+  // here would not make it reachable by RNG - see ArmorRoller.RollTemper. Gilded and Radiant exist
+  // only through the Anvil's Combine action (combineSlag below), never through a stage clear.
+  //
+  // combineSlag is the price to COMBINE INTO that rung - three same-slot Rough pieces cost Honed's
+  // combineSlag, three Honed cost Gilded's, three Gilded cost Radiant's. Unauthored (left at 0) on
+  // Rough on purpose: nothing ever combines into the bottom rung. Climbs by rung the same way
+  // rerollSlag already does, and content validation checks that climb.
   "tempers": [
     { "temper": "Rough",   "primaryScale": 0.55, "salvageSlag": 4,  "rerollSlag": 12, "dropWeight": 55, "dropWeightPerStageIndex": -1.6 },
-    { "temper": "Honed",   "primaryScale": 0.75, "salvageSlag": 9,  "rerollSlag": 24, "dropWeight": 30, "dropWeightPerStageIndex": -0.2 },
-    { "temper": "Gilded",  "primaryScale": 1.00, "salvageSlag": 20, "rerollSlag": 48, "dropWeight": 12, "dropWeightPerStageIndex": 0.9 },
-    { "temper": "Radiant", "primaryScale": 1.30, "salvageSlag": 45, "rerollSlag": 96, "dropWeight": 3,  "dropWeightPerStageIndex": 0.9 }
+    { "temper": "Honed",   "primaryScale": 0.75, "salvageSlag": 9,  "rerollSlag": 24, "dropWeight": 30, "dropWeightPerStageIndex": -0.2, "combineSlag": 30 },
+    { "temper": "Gilded",  "primaryScale": 1.00, "salvageSlag": 20, "rerollSlag": 48, "dropWeight": 0,  "dropWeightPerStageIndex": 0,    "combineSlag": 90 },
+    { "temper": "Radiant", "primaryScale": 1.30, "salvageSlag": 45, "rerollSlag": 96, "dropWeight": 0,  "dropWeightPerStageIndex": 0,    "combineSlag": 260 }
   ],
 
   // Attunement - pieces whose own aspect matches the WEARER's aspect. Thresholds are cumulative:

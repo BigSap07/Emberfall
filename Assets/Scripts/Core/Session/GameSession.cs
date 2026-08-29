@@ -436,6 +436,20 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
+        /// Slag one Combine costs, keyed by the temper it PRODUCES rather than the temper of any
+        /// input. SalvageValue and RerollCost key off a piece's own temper because neither action
+        /// changes it; Combine keys off the output because that is the one number a player is
+        /// actually deciding whether to pay for. Same single-source reasoning as both: this is what
+        /// CombineArmor itself reads to charge, so a shown price and a paid one cannot drift.
+        /// </summary>
+        public int CombineCost(ArmorTemper outputTemper)
+        {
+            if (Content == null) return 0;
+            ArmorTemperDef def = Content.Armor.GetTemper(outputTemper);
+            return def != null ? def.CombineSlag : 0;
+        }
+
+        /// <summary>
         /// Puts a piece in its own slot on a hero, displacing whatever was there and taking it off
         /// whoever else was wearing it. Modelled on AssignRelic, with the one extra rule a
         /// six-slot system needs: a piece only ever goes in the slot it is FOR, so the slot is read
@@ -522,6 +536,78 @@ namespace Emberfall.Core.Session
             int seed = ArmorSeed(nowUnix, PlayerProfile.SlotIndex(piece.Slot), Profile.OwnedArmor.Count + piece.SubStats.Count);
             if (!ArmorRoller.Reroll(config, piece, seed)) return false;
 
+            Profile.Slag -= cost;
+            return true;
+        }
+
+        /// <summary>
+        /// Combines three same-slot, same-temper pieces into one freshly rolled piece exactly one
+        /// temper higher. The only way Gilded or Radiant come to exist - RollArmorDrop's temper
+        /// roll is capped at ArmorInfo.MaxDropTemper, so those two rungs are reachable through
+        /// nothing else. See DESIGN-ARMOR section 7.
+        ///
+        /// The output is a brand new ArmorRoller.Roll result, not a stat graft off the strongest
+        /// input and not a mutation of any of the three - "freshly rolled substats" was the
+        /// explicit requirement, and a fresh roll is also the only answer that does not need a rule
+        /// for what happens when the three inputs disagree on aspect, which nothing about "same
+        /// slot, same tier" requires them to share. The new piece's aspect is drawn the same way a
+        /// drop's is: uniformly, independent of the inputs.
+        ///
+        /// Refuses an equipped input rather than silently unequipping it, the same rule
+        /// SalvageArmor enforces and for the same reason: Combine is destructive (three real pieces
+        /// stop existing), and an accidental one that also stripped a hero's slot would be two
+        /// mistakes deep before the player noticed. Reroll allows an equipped piece because reroll
+        /// is not destructive; Combine is, so it follows Salvage's rule instead.
+        ///
+        /// Order matters and is deliberate, the same as RerollArmor above: the new piece is rolled
+        /// and validated FIRST, and only once that succeeds are the three inputs removed and Slag
+        /// deducted. A refusal at any earlier check - mismatched slot, mismatched temper, already
+        /// at Radiant, insufficient Slag, an unrollable config - leaves all three inputs, every
+        /// other owned piece, and the Slag purse completely untouched.
+        /// </summary>
+        public bool CombineArmor(string armorUidA, string armorUidB, string armorUidC, long nowUnix)
+        {
+            if (string.IsNullOrEmpty(armorUidA) || string.IsNullOrEmpty(armorUidB) || string.IsNullOrEmpty(armorUidC))
+                return false;
+            if (armorUidA == armorUidB || armorUidA == armorUidC || armorUidB == armorUidC)
+                return false;   // three DISTINCT pieces - the same uid twice is not three inputs
+
+            ArmorPiece a = Profile.FindArmor(armorUidA);
+            ArmorPiece b = Profile.FindArmor(armorUidB);
+            ArmorPiece c = Profile.FindArmor(armorUidC);
+            if (a == null || b == null || c == null) return false;
+            if (a.Slot != b.Slot || a.Slot != c.Slot) return false;
+            if (a.Temper != b.Temper || a.Temper != c.Temper) return false;
+
+            if (Profile.HeroWearingArmor(armorUidA) != null
+                || Profile.HeroWearingArmor(armorUidB) != null
+                || Profile.HeroWearingArmor(armorUidC) != null)
+                return false;
+
+            // "Cannot skip a tier" is enforced by construction, not by a separate check: the output
+            // temper is ALWAYS ArmorInfo.NextTemper of the shared input temper, so there is no
+            // parameter anywhere on this method through which a caller could ask for anything else.
+            // At the top of the ladder there is no next rung, and combining stops being possible.
+            ArmorTemper? outputTemper = ArmorInfo.NextTemper(a.Temper);
+            if (outputTemper == null) return false;
+
+            ArmorConfig config = Content != null ? Content.Armor : null;
+            if (config == null || !config.IsUsable) return false;
+
+            int cost = CombineCost(outputTemper.Value);
+            if (Profile.Slag < cost) return false;
+
+            int baseSeed = ArmorSeed(nowUnix, PlayerProfile.SlotIndex(a.Slot), Profile.OwnedArmor.Count);
+            Aspect aspect = ArmorRoller.RollAspect(baseSeed + 1);
+            ArmorPiece produced = ArmorRoller.Roll(config, a.Slot, outputTemper.Value, aspect, baseSeed + 2);
+            if (produced == null) return false;   // content cannot roll this slot/temper - refuse, charge nothing
+
+            // Only now, after the new piece exists, does anything about the profile change.
+            Profile.OwnedArmor.Remove(a);
+            Profile.OwnedArmor.Remove(b);
+            Profile.OwnedArmor.Remove(c);
+            produced.Uid = Profile.AllocateArmorUid();
+            Profile.OwnedArmor.Add(produced);
             Profile.Slag -= cost;
             return true;
         }

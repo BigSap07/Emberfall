@@ -463,6 +463,34 @@ namespace Emberfall.Core.Data
         {
             return temper.ToString().ToUpperInvariant();
         }
+
+        /// <summary>
+        /// The highest temper a stage-clear drop may ever produce. A CODE invariant, not a content
+        /// default: ArmorRoller.RollTemper filters candidates against this constant before it even
+        /// looks at armor.json's drop weights, so a content edit that gives Gilded or Radiant a
+        /// nonzero dropWeight cannot make either reachable by RNG. DESIGN-ARMOR section 8 - Gilded
+        /// and Radiant exist only through GameSession.CombineArmor.
+        ///
+        /// Declared as the rung itself (Honed), not as a count or an index, so the comparison at
+        /// the call site reads as what it means: "this temper is no higher than the ceiling."
+        /// </summary>
+        public static readonly ArmorTemper MaxDropTemper = ArmorTemper.Honed;
+
+        /// <summary>
+        /// The rung directly above this one, or null at the top of the ladder (Radiant) - the one
+        /// place "one tier higher" needs an answer outside a drop. GameSession.CombineArmor is the
+        /// only caller: a Combine's output temper IS this, by DESIGN-ARMOR's "cannot skip a tier"
+        /// rule, so there is nowhere else in the game that needs to ask "what comes next."
+        ///
+        /// Safe to express as a bare +1 on the underlying int because the four rungs are declared
+        /// above in ascending, contiguous order - Radiant is excluded first specifically so that
+        /// invariant only has to hold for the three casts this method can actually reach.
+        /// </summary>
+        public static ArmorTemper? NextTemper(ArmorTemper temper)
+        {
+            if (temper == ArmorTemper.Radiant) return null;
+            return (ArmorTemper)((int)temper + 1);
+        }
     }
 
     public static class AspectChart
