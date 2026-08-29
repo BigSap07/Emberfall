@@ -229,7 +229,11 @@ namespace Emberfall.UI.Screens
             UIButton combineBtn = UIBuilder.MakeButton("Combine", card, combineLabel, UITheme.FontTiny,
                                                        UITheme.PanelRaised, combineEdge, UITheme.TextPrimary);
             UIBuilder.Box(combineBtn.Root, -18f, topMargin, 160f, btnH, new Vector2(1f, 1f));
-            combineBtn.Interactable = nextTemper.HasValue && combinePartners.Count == 2
+            // !equipped is required here, not just on the two partners ArmorCombineCandidates
+            // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of
+            // them is worn, including this piece itself, and without this check a worn piece with
+            // two free-standing matching partners would show an enabled button that always fails.
+            combineBtn.Interactable = !equipped && nextTemper.HasValue && combinePartners.Count == 2
                                     && App.Session.Profile.Slag >= combineCost;
             string combineUidA = piece.Uid;
             string combineUidB = combinePartners.Count > 0 ? combinePartners[0].Uid : "";
