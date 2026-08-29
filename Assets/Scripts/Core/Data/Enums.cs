@@ -276,7 +276,7 @@ namespace Emberfall.Core.Data
     /// OwnedRelic.Tier, and hero rarity is HeroDef.Stars (an int, which is why hero rarity has no
     /// enum member to collide with - see RelicGrade's own note on that check). "Common" is
     /// technically free but is the pre-rename label of RelicGrade.Legendary, so reusing it would
-    /// point a reader at a word that moved. Temper is new to the project and pairs with the Anvil.
+    /// point a reader at a word that moved. Temper is new to the project and pairs with the Forge.
     ///
     /// Fixed at the moment a piece drops. There is no upgrade path in this pass - a better piece is
     /// a better drop, not a fed one.

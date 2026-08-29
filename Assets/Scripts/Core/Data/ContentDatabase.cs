@@ -297,7 +297,7 @@ namespace Emberfall.Core.Data
                 ArmorTemperDef t = Armor.Tempers[i];
                 if (t.RerollSlag > 0 && t.SalvageSlag >= t.RerollSlag)
                     Warnings.Add("armor.json: " + t.Temper + " salvages for " + t.SalvageSlag + " Slag but rerolls for "
-                               + t.RerollSlag + " - salvage must pay less than reroll costs or the Anvil prints currency");
+                               + t.RerollSlag + " - salvage must pay less than reroll costs or the Forge prints currency");
                 if (t.PrimaryScale <= 0f)
                     Warnings.Add("armor.json: " + t.Temper + " has a primaryScale of " + t.PrimaryScale
                                + ", so its pieces grant nothing from their guaranteed primary");

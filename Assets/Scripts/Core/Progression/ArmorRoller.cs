@@ -63,7 +63,7 @@ namespace Emberfall.Core.Progression
 
         /// <summary>
         /// Rerolls every substat on an existing piece in place, keeping its uid, name, slot,
-        /// primary, aspect and temper. The Anvil's whole operation.
+        /// primary, aspect and temper. The Forge's whole Reroll operation.
         ///
         /// All-or-nothing by construction: there is no parameter for which lines to keep, because
         /// DESIGN-ARMOR section 7 rules out per-line locking - a lock turns the sink into a ratchet,

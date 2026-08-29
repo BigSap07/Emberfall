@@ -513,8 +513,8 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
-        /// The Anvil. Spends Slag and rerolls every substat on a piece, keeping its slot, primary,
-        /// aspect and temper.
+        /// Reroll, one of the Forge's three actions. Spends Slag and rerolls every substat on a
+        /// piece, keeping its slot, primary, aspect and temper.
         ///
         /// Order matters and is deliberate: the reroll is attempted FIRST and the Slag is deducted
         /// only once it actually happened. ArmorRoller.Reroll returns false without touching the

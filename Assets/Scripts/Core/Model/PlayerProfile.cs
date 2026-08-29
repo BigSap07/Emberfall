@@ -222,7 +222,7 @@ namespace Emberfall.Core.Model
         public long RelicDust;
 
         /// <summary>
-        /// The Anvil's currency (DESIGN-ARMOR section 7). Paid by salvaging armor, spent rerolling
+        /// The Forge's currency (DESIGN-ARMOR section 7). Paid by salvaging armor, spent rerolling
         /// an armor piece's substats, and used for nothing else.
         ///
         /// A separate purse from RelicDust on purpose, and not merely for flavour: RelicDust has one

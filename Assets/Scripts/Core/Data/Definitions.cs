@@ -587,7 +587,7 @@ namespace Emberfall.Core.Data
     /// the primary table rolled, which is what makes a Radiant Weapon strictly better than a Rough
     /// one without needing a second primary table per rung.
     ///
-    /// SalvageSlag and RerollSlag are the Anvil's two prices. DESIGN-ARMOR section 7 requires
+    /// SalvageSlag and RerollSlag are the Forge's two prices. DESIGN-ARMOR section 7 requires
     /// salvage to pay less than reroll costs at every rung so the loop consumes pieces instead of
     /// printing Slag; ContentDatabase.Validate enforces it rather than trusting the author.
     /// </summary>
@@ -602,7 +602,7 @@ namespace Emberfall.Core.Data
         /// Slag one Combine into THIS temper costs - i.e. combining three pieces one rung below
         /// costs the OUTPUT rung's CombineSlag, read via GameSession.CombineCost(outputTemper).
         /// Same per-temper field pattern SalvageSlag and RerollSlag already use, not a new pricing
-        /// curve: DESIGN-ARMOR's Anvil scales every one of its actions by temper this same way.
+        /// curve: DESIGN-ARMOR's Forge scales every one of its actions by temper this same way.
         ///
         /// Meaningless on Rough - nothing combines INTO the bottom rung, since there is no rung
         /// below it to combine FROM. Left at its zero default there; content validation does not
