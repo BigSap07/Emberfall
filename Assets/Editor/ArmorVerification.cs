@@ -64,7 +64,7 @@ namespace Emberfall.EditorTools
         /// <summary>Bumped on every real edit and logged unconditionally on load, so a trigger file
         /// is never dropped against a stale assembly - see PlayModeScreenshot's note on the two
         /// wasted runs that lesson cost.</summary>
-        private const string BuildMarker = "ARMORV3-scroll-to-armor";
+        private const string BuildMarker = "ARMORV5-clear-scratch-save";
 
         static ArmorVerification()
         {
@@ -100,6 +100,7 @@ namespace Emberfall.EditorTools
                     + "/" + SessionState.GetString(OrigProductKey, "?") + "' to '"
                     + ScratchCompany + "/" + ScratchProduct + "' before entering Play Mode.");
 
+            ClearScratchSave();
             ClearOutputs();
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
@@ -161,6 +162,60 @@ namespace Emberfall.EditorTools
             string path = Path.Combine(Application.dataPath, "../Tools/Screenshots/" + fileName);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             return path;
+        }
+
+        /// <summary>
+        /// Deletes any save file left behind under the SCRATCH identity by a previous run of this
+        /// tool, before Play Mode ever starts. Found necessary the hard way: GameApp.Awake() calls
+        /// SaveService.Load() unconditionally, so a scratch save from an earlier run of this same
+        /// tool - written before this revision existed, when Gilded/Radiant still dropped normally
+        /// - gets loaded right back in and silently contaminates PopulateArmor's own bookkeeping.
+        /// That is exactly what happened on the first Forge Tiers verification run: it logged a
+        /// "real stage drop produced Gilded/Radiant" alarm that traced back not to this run's
+        /// RollArmorDrop calls at all, but to four leftover pieces (on the Helm slot, which this
+        /// run's forge chain never even touches) from a save this tool itself wrote weeks earlier.
+        ///
+        /// Guarded the same way the Pump() runtime check is guarded, belt-and-suspenders: the path
+        /// deleted must contain ScratchProduct, so a future edit to this method cannot be turned
+        /// into something that deletes a real save by a copy-paste mistake.
+        /// </summary>
+        private static void ClearScratchSave()
+        {
+            // Application.persistentDataPath already reflects the scratch companyName/productName
+            // set just above this call - Unity recomputes it from current PlayerSettings even
+            // outside Play Mode, so this reads the same authority Pump()'s runtime guard trusts,
+            // rather than hand-reconstructing the LocalLow path a second, possibly-divergent way.
+            string dataPath = Application.persistentDataPath;
+
+            if (dataPath.IndexOf(ScratchProduct, System.StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Debug.LogError("ArmorVerification: refusing to clear a scratch save - persistentDataPath is '"
+                    + dataPath + "', which is not the scratch path.");
+                return;
+            }
+
+            string savePath = Path.Combine(dataPath, "emberfall_save.json");
+            if (File.Exists(savePath))
+            {
+                File.Delete(savePath);
+                Debug.Log("ArmorVerification: deleted a leftover scratch save from a previous run at " + savePath);
+            }
+            else
+            {
+                Debug.Log("ArmorVerification: no leftover scratch save file at " + savePath + ".");
+            }
+
+            // SaveService also mirrors every save into PlayerPrefs (registry-backed, scoped by
+            // companyName/productName the same way persistentDataPath is) and falls back to that
+            // mirror if the file read ever fails. Deleting the file alone would still leave a
+            // stale profile reachable through that fallback, so both have to go - the guard above
+            // already confirmed the identity is the scratch one before either delete runs.
+            if (PlayerPrefs.HasKey(SaveService.PrefsKey))
+            {
+                PlayerPrefs.DeleteKey(SaveService.PrefsKey);
+                PlayerPrefs.Save();
+                Debug.Log("ArmorVerification: deleted a leftover scratch save mirrored in PlayerPrefs.");
+            }
         }
 
         /// <summary>Clears last run's captures, once, so the completion gate cannot pass on a stale
@@ -328,9 +383,9 @@ namespace Emberfall.EditorTools
 
         /// <summary>
         /// Builds a real armor state through the same GameSession calls a player's taps reach -
-        /// RollArmorDrop for the drops, EquipArmor for the equips - rather than poking ArmorPiece
-        /// objects into the profile directly, so the screenshots are evidence the whole pipeline
-        /// works and not just that the screens can render arbitrary data.
+        /// RollArmorDrop for the drops, EquipArmor for the equips, CombineArmor for the forge -
+        /// rather than poking ArmorPiece objects into the profile directly, so the screenshots are
+        /// evidence the whole pipeline works and not just that the screens can render arbitrary data.
         ///
         /// Safe to write to this profile at all only because the guard above already proved the
         /// save path is the scratch one.
@@ -343,7 +398,7 @@ namespace Emberfall.EditorTools
             ContentDatabase content = session.Content;
             long now = TimeUtil.NowUnix();
 
-            profile.Slag = 500;
+            profile.Slag = 5000;
 
             // Real drops off real stages, walked over many seconds so the drop chance actually
             // fires - a drop is a roll, not a certainty.
@@ -351,6 +406,86 @@ namespace Emberfall.EditorTools
             {
                 StageDef stage = content.AllStages[i % content.AllStages.Count];
                 session.RollArmorDrop(stage, now + i * 91);
+            }
+
+            // The Forge Tiers invariant, checked here too rather than trusted from the harness
+            // alone: nothing RollArmorDrop produced may be Gilded or Radiant. A loud error rather
+            // than a quiet one, since this is exactly the kind of thing a screenshot review would
+            // otherwise have to notice by eye.
+            bool anyDropAboveCeiling = false;
+            for (int i = 0; i < profile.OwnedArmor.Count; i++)
+                if ((int)profile.OwnedArmor[i].Temper > (int)ArmorInfo.MaxDropTemper) anyDropAboveCeiling = true;
+            if (anyDropAboveCeiling)
+                Debug.LogError("ArmorVerification: a REAL STAGE DROP produced a piece above "
+                    + ArmorInfo.MaxDropTemper + " - the drop ceiling is broken.");
+            else
+                Debug.Log("ArmorVerification: confirmed - none of the " + profile.OwnedArmor.Count
+                    + " stage-clear drops are above " + ArmorInfo.MaxDropTemper + ".");
+
+            // The Combine chain: nine Honed Weapons, forged deterministically (bypassing the drop
+            // CHANCE gate the way RollArmorDrop itself would after a roll succeeded, using the same
+            // ArmorRoller.Roll call it makes internally) rather than farmed, because waiting on nine
+            // real Honed Weapon drops for a screenshot is not a reasonable ask of this script. Three
+            // Combines turn those nine into three Gilded Weapons; a fourth turns those three into
+            // one Radiant Weapon - walking the whole ladder through the exact GameSession call the
+            // Anvil's COMBINE button makes, same as a player's tap would.
+            List<string> honedUids = new List<string>();
+            for (int i = 0; i < 9; i++)
+            {
+                ArmorPiece p = ArmorRoller.Roll(content.Armor, ArmorSlot.Weapon, ArmorTemper.Honed, Aspect.Ember, 9000 + i);
+                if (p == null) { Debug.LogError("ArmorVerification: could not roll a Honed Weapon for the forge demo."); break; }
+                p.Uid = profile.AllocateArmorUid();
+                profile.OwnedArmor.Add(p);
+                honedUids.Add(p.Uid);
+            }
+
+            List<string> gildedUids = new List<string>();
+            for (int g = 0; g < 3 && honedUids.Count >= (g + 1) * 3; g++)
+            {
+                long slagBefore = profile.Slag;
+                bool ok = session.CombineArmor(honedUids[g * 3], honedUids[g * 3 + 1], honedUids[g * 3 + 2], now + g);
+                if (!ok) { Debug.LogError("ArmorVerification: Honed -> Gilded combine #" + g + " was refused."); continue; }
+
+                ArmorPiece forged = null;
+                for (int i = 0; i < profile.OwnedArmor.Count; i++)
+                    if (profile.OwnedArmor[i].Slot == ArmorSlot.Weapon && profile.OwnedArmor[i].Temper == ArmorTemper.Gilded
+                        && !gildedUids.Contains(profile.OwnedArmor[i].Uid))
+                        forged = profile.OwnedArmor[i];
+                if (forged != null) gildedUids.Add(forged.Uid);
+                Debug.Log("ArmorVerification: combined 3 Honed Weapons into 1 Gilded Weapon, cost "
+                        + (slagBefore - profile.Slag) + " Slag (Slag now " + profile.Slag + ")");
+            }
+
+            string radiantUid = null;
+            if (gildedUids.Count == 3)
+            {
+                long slagBefore = profile.Slag;
+                bool ok = session.CombineArmor(gildedUids[0], gildedUids[1], gildedUids[2], now + 100);
+                if (!ok) { Debug.LogError("ArmorVerification: Gilded -> Radiant combine was refused."); }
+                else
+                {
+                    for (int i = 0; i < profile.OwnedArmor.Count; i++)
+                        if (profile.OwnedArmor[i].Slot == ArmorSlot.Weapon && profile.OwnedArmor[i].Temper == ArmorTemper.Radiant)
+                            radiantUid = profile.OwnedArmor[i].Uid;
+                    Debug.Log("ArmorVerification: combined 3 Gilded Weapons into 1 RADIANT Weapon, cost "
+                            + (slagBefore - profile.Slag) + " Slag (Slag now " + profile.Slag + ") - the top of the ladder, "
+                            + "reachable only through Combine.");
+                }
+            }
+            else
+            {
+                Debug.LogError("ArmorVerification: only reached " + gildedUids.Count + "/3 Gilded Weapons - cannot demo the Radiant combine.");
+            }
+
+            // One deliberately UNCONSUMED matching trio, left in the pool so the inventory
+            // screenshot shows a live, tappable COMBINE button (temper-tinted border, priced
+            // label) rather than only ever showing the aftermath of one that already fired.
+            for (int i = 0; i < 3; i++)
+            {
+                ArmorPiece p = ArmorRoller.Roll(content.Armor, ArmorSlot.Helm, ArmorTemper.Rough, Aspect.Verdant, 9500 + i);
+                if (p == null) break;
+                p.Uid = profile.AllocateArmorUid();
+                profile.OwnedArmor.Add(p);
             }
 
             HeroInstance wearer = profile.Heroes[0];
@@ -361,10 +496,20 @@ namespace Emberfall.EditorTools
             // visible on the hero screen. Re-tagging is the one thing here that is not a player
             // action - a player would farm for matching pieces, and waiting for nine random drops
             // to include four of one aspect is not something a verification run can rely on.
+            //
+            // Runs AFTER the forge chain above, so the freshly forged Radiant Weapon is what ends
+            // up equipped in the Weapon slot rather than being displaced by an earlier drop -
+            // UnequippedArmor() is read fresh on every iteration, and the Radiant piece is still in
+            // it at this point since nothing has equipped it yet.
             int retagged = 0;
             for (int s = 0; s < ArmorInfo.AllSlots.Length; s++)
             {
                 ArmorSlot slot = ArmorInfo.AllSlots[s];
+                if (slot == ArmorSlot.Weapon && radiantUid != null)
+                {
+                    session.EquipArmor(wearer, radiantUid);
+                    continue;
+                }
                 List<ArmorPiece> pool = profile.UnequippedArmor();
                 for (int p = 0; p < pool.Count; p++)
                 {
@@ -378,7 +523,8 @@ namespace Emberfall.EditorTools
             Debug.Log("ArmorVerification: " + profile.OwnedArmor.Count + " pieces owned, "
                     + profile.EquippedArmorOf(wearer).Count + " equipped on " + wearer.Def.Name
                     + ", attunement " + profile.AttunementCount(wearer) + "/" + ArmorInfo.AllSlots.Length
-                    + " " + wearerAspect + ", Slag " + profile.Slag);
+                    + " " + wearerAspect + ", Slag " + profile.Slag
+                    + ", forged Radiant " + (radiantUid != null ? "yes" : "NO"));
 
             app.RefreshHud();
             app.Router.Show(ScreenId.Inventory);
