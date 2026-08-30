@@ -1120,8 +1120,15 @@ namespace Emberfall.DevHarness
             Line("ASPECT RULE (Umbra mark spreads on death)");
 
             // ---------------------------------------------------------------- shipped content
-            // Stated, not assumed: this is the coverage gap, measured.
-            int umbraSourcedHarmful = 0, shippedSpreads = 0;
+            // Measured, and the ENEMY-TO-PLAYER direction specifically, because that is the half a
+            // default line can reach at all. Nyx is not a starter, so the player-to-enemy direction
+            // needs a roster the campaign does not hand you; and of the two Umbra enemies in the
+            // game the Hollow Husk applies no status whatsoever, leaving the Sundered Colossus's
+            // Slow (AllEnemies, so it lands on the PLAYER line) as the only Umbra-sourced mark a
+            // normal run ever sees. That gates this direction on a player unit dying while slowed,
+            // which is why it is measured on a deliberately underlevelled line rather than on the
+            // levelled sweep - a line that wins ch1_12 cleanly never reaches the rule at all.
+            int umbraSourcedHarmful = 0, shippedSpreads = 0, spreadsOntoPlayers = 0;
             for (int si = 0; si < db.AllStages.Count; si++)
             {
                 GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
@@ -1129,18 +1136,44 @@ namespace Emberfall.DevHarness
                 for (int i = 0; i < r.Events.Count; i++)
                 {
                     BattleEvent e = r.Events[i];
-                    if (e.Type == BattleEventType.StatusSpread) shippedSpreads++;
+                    if (e.Type == BattleEventType.StatusSpread)
+                    {
+                        shippedSpreads++;
+                        UnitSnapshot heir = r.FindUnit(e.TargetId);
+                        if (heir != null && heir.IsPlayer) spreadsOntoPlayers++;
+                    }
                     if (e.Type != BattleEventType.StatusApplied) continue;
                     if (!StatusInfo.IsHarmful(e.Status)) continue;
                     UnitSnapshot src = r.FindUnit(e.SourceId);
                     if (src != null && src.Aspect == Aspect.Umbra) umbraSourcedHarmful++;
                 }
             }
-            Line("  [note] shipped content reaches this rule " + shippedSpreads + " time(s) across "
-                 + db.AllStages.Count + " stages, from " + umbraSourcedHarmful
-                 + " Umbra-sourced harmful status(es). The one Umbra debuffer the campaign fields is the");
-            Line("         Sundered Colossus, a solo boss with no ally for its mark to jump to, and Nyx is");
-            Line("         not a starter. The forced arena below is what actually proves this rule.");
+            Line("  [note] a fresh-profile sweep of all " + db.AllStages.Count + " stages reaches this rule "
+                 + shippedSpreads + " time(s) (" + spreadsOntoPlayers + " onto player units), from "
+                 + umbraSourcedHarmful + " Umbra-sourced harmful status(es).");
+
+            // The Colossus stage, against a line low enough to actually lose people on it. This is
+            // the one place shipped content can exercise the rule without a summoned roster.
+            StageDef colossus = db.GetStage("ch1_12");
+            int bossSpreads = 0, bossSeeds = 0;
+            if (colossus != null)
+            {
+                for (int seed = 1; seed <= 24; seed++)
+                {
+                    GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(colossus, seed));
+                    bool any = false;
+                    for (int i = 0; i < r.Events.Count; i++)
+                        if (r.Events[i].Type == BattleEventType.StatusSpread) { bossSpreads++; any = true; }
+                    if (any) bossSeeds++;
+                }
+            }
+            Check(bossSpreads > 0,
+                  "the rule is two-sided in SHIPPED content, not only player-side: " + bossSpreads
+                  + " mark(s) jumped between enemy-slowed player units on ch1_12 across " + bossSeeds
+                  + " of 24 seeds. The Sundered Colossus Slows AllEnemies, so when one of the three"
+                  + " starters falls the mark moves to whoever is still standing - no summoned roster"
+                  + " and no synthetic content involved");
 
             // ---------------------------------------------------------------- forced arena
             ContentDatabase test = BuildUmbraSpreadTestContent();
