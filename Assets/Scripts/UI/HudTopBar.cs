@@ -63,7 +63,7 @@ namespace Emberfall.UI
 
         private void BuildCurrencies()
         {
-            _dustText  = BuildCurrencyChip("Dust",   -UITheme.ScreenPadding - 440f, UITheme.Ember, "D");
+            _dustText  = BuildCurrencyChip("Dust",   -UITheme.ScreenPadding - 440f, UITheme.Dust, "D");
             _goldText  = BuildCurrencyChip("Gold",   -UITheme.ScreenPadding - 220f, UITheme.Gold,  "G");
             _shardText = BuildCurrencyChip("Shards", -UITheme.ScreenPadding,        UITheme.Shard, "S");
         }

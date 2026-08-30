@@ -37,6 +37,14 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
+            // Drawn first, so every card and label above it in this method covers it wherever they
+            // overlap - the Hub's own base material, not the shared purple vignette every other
+            // screen sits on (GameApp's canvas background). The Keeper's fiction is explicit that
+            // this office "takes no side among the six" (DESIGN-WORLD, "The Cinder and the Keeper"),
+            // so the Hub gets its own neutral floor rather than inheriting a stray accent colour that
+            // happens to bleed through every screen's empty space.
+            BuildBackdrop();
+
             float left = ColumnTop;
             left = BuildTitle(left);
             left += UITheme.Space24;
@@ -51,7 +59,25 @@ namespace Emberfall.UI.Screens
 
             BuildNav();
             BuildSecondNav();
+            BuildCinderMark();
             BuildOptions();
+        }
+
+        /// <summary>
+        /// The Hub's own neutral floor plus its one quiet ambient cue: a soft, colourless glow
+        /// behind the wordmark. Nothing here is tinted by aspect and nothing here moves - the Cinder
+        /// "never grows a face, speaks through a mouth, sprouts mascot features, or becomes a cute
+        /// companion" (DESIGN-ART-BIBLE section 5), and the same discipline extends to its glow: an
+        /// idle shimmer would be the mascot behaviour the source text explicitly forbids, just spread
+        /// across a bigger area instead of a corner icon.
+        /// </summary>
+        private void BuildBackdrop()
+        {
+            Image baseFill = UIBuilder.Img("Backdrop", Root, TextureLab.White, UITheme.Backdrop);
+            UIBuilder.FillParent(baseFill.rectTransform, 0f);
+
+            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f), UITheme.WithAlpha(UITheme.CinderGlass, 0.05f));
+            UIBuilder.Box(glow.rectTransform, 0f, -260f, 1400f, 1400f, new Vector2(0.5f, 1f));
         }
 
         /// <returns>Distance from the top of the screen to the bottom of the block just built.</returns>
@@ -62,13 +88,16 @@ namespace Emberfall.UI.Screens
             const float logoHeight = 80f;
             Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay, UITheme.Gold, TextAnchor.UpperCenter);
             UIBuilder.Box(logo.rectTransform, LeftColumnX, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
-            UIBuilder.Outlined(logo, new Color(0.35f, 0.12f, 0.02f, 0.9f), 3f);
+            // Was a warm ember-brown rim - an aspect colour on the one screen the Keeper's fiction
+            // says takes no side among the six. InkPanel is the same neutral rim every other label
+            // in the project uses; the wordmark no longer gets a bespoke aspect-flavoured exception.
+            UIBuilder.Outlined(logo, UITheme.InkPanel, 3f);
             UIBuilder.Shadowed(logo, UITheme.InkPanel, 5f);
             top += logoHeight;
 
             top += UITheme.Space16;
             const float ruleHeight = 3f;
-            Image underline = UIBuilder.Img("Rule", Root, TextureLab.White, UITheme.WithAlpha(UITheme.Ember, 0.75f));
+            Image underline = UIBuilder.Img("Rule", Root, TextureLab.White, UITheme.WithAlpha(UITheme.CinderGlass, 0.6f));
             UIBuilder.Box(underline.rectTransform, LeftColumnX, -top, 340f, ruleHeight, new Vector2(0.5f, 1f));
             top += ruleHeight;
 
@@ -169,10 +198,14 @@ namespace Emberfall.UI.Screens
             _chapterLabel = UIBuilder.Label("Chapter", card, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperLeft);
             UIBuilder.Box(_chapterLabel.rectTransform, 26f, -20f, 640f, 34f, new Vector2(0f, 1f));
 
-            _chapterCount = UIBuilder.Label("Count", card, "", UITheme.FontSmall, UITheme.Ember, TextAnchor.UpperRight);
+            _chapterCount = UIBuilder.Label("Count", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperRight);
             UIBuilder.Box(_chapterCount.rectTransform, -26f, -20f, 300f, 34f, new Vector2(1f, 1f));
 
-            _chapterFill = UIBuilder.Bar("Bar", card, UITheme.PanelSunken, UITheme.Ember);
+            // Gold, not Ember: this bar counts cleared stages, a fact about the player's own
+            // progress rather than a claim about which of the six beliefs the Hub favours. Matches
+            // the Claim button and the idle cache's own accent, so "advancement" reads as one colour
+            // across the screen instead of picking up whichever aspect happened to be nearby.
+            _chapterFill = UIBuilder.Bar("Bar", card, UITheme.PanelSunken, UITheme.Gold);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
             barRoot.anchorMin = new Vector2(0f, 0f);
             barRoot.anchorMax = new Vector2(1f, 0f);
@@ -186,7 +219,11 @@ namespace Emberfall.UI.Screens
         private float BuildContinue(float top)
         {
             const float buttonHeight = 168f;
-            _continueButton = UIBuilder.PrimaryButton("Continue", Root, "CONTINUE CAMPAIGN", UITheme.FontHeading);
+            // GoldButton, not PrimaryButton: PrimaryButton fills Ember, which made the single
+            // biggest coloured surface on the Hub the Ember aspect's own accent. Gold is this
+            // project's established "important action" colour everywhere else on this screen (the
+            // idle cache's Claim button, the chapter bar) and carries no aspect meaning at all.
+            _continueButton = UIBuilder.GoldButton("Continue", Root, "CONTINUE CAMPAIGN", UITheme.FontHeading);
             UIBuilder.Box(_continueButton.Root, LeftColumnX, -top, CardWidth, buttonHeight, new Vector2(0.5f, 1f));
             _continueButton.OnClick(OpenCampaign);
             top += buttonHeight + UITheme.Space16;
@@ -208,7 +245,9 @@ namespace Emberfall.UI.Screens
             UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
             AddNavButton(nav, "HEROES", 0, UITheme.Shard, OpenHeroes);
-            AddNavButton(nav, "CAMPAIGN", 4, UITheme.Ember, OpenCampaign);
+            // CinderGlass, not Ember: the campaign spans all six regions (DESIGN-WORLD, "The six
+            // regions"), so its nav icon should not read as one of them.
+            AddNavButton(nav, "CAMPAIGN", 4, UITheme.CinderGlass, OpenCampaign);
             AddNavButton(nav, "SUMMON", 13, UITheme.StarColor(5), OpenSummon);
         }
 
@@ -235,7 +274,10 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(nav, RightColumnX, 246f, CardWidth, 170f, new Vector2(0.5f, 0f));
             UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            AddNavButton(nav, "RELICS", 6, UITheme.Ember, OpenRelicShop);
+            // The legendary relic grade's own colour, not Ember: DESIGN-WORLD is explicit that
+            // relics "carry a fragment of an alternative behaviour of reality" unrelated to the
+            // First Light the six aspects came from, so this icon should never borrow one of them.
+            AddNavButton(nav, "RELICS", 6, UITheme.RelicGradeColor(RelicGrade.Legendary), OpenRelicShop);
             AddNavButton(nav, "INVENTORY", 7, UITheme.TextMuted, OpenInventory);
             AddNavButton(nav, "EVENTS", 8, UITheme.Success, OpenEvents);
             AddNavButton(nav, "RECITAL", 9, UITheme.Mythic, OpenRecital);
@@ -244,6 +286,28 @@ namespace Emberfall.UI.Screens
             // colour, the same one InventoryScreen's Slag row already uses, so the Forge's icon and
             // the currency it spends read as the same idea at a glance.
             AddNavButton(nav, "FORGE", 10, UITheme.ArmorTemperColor(ArmorTemper.Gilded), OpenForge);
+        }
+
+        /// <summary>
+        /// The Hub's one corner watermark: a small, static, colourless outline of the Cinder itself,
+        /// sitting in the same open gap BuildOptions already uses (idle cache card ends 514, second
+        /// nav starts 664 - see that method's own comment). Placed here rather than invented as new
+        /// empty space, and sized to clear both the card above and the nav below by roughly 15px so
+        /// it reads as a deliberate mark rather than a stray shape wedged into whatever was left, the
+        /// caution DESIGN-ART-BIBLE's own engine notes raise about absence-based choices on a dark
+        /// panel reading as a rendering fault rather than a design one.
+        ///
+        /// Static by construction - no Update, no coroutine, nothing driving it frame to frame.
+        /// DESIGN-ART-BIBLE section 5 is explicit that the Cinder "never grows a face, speaks
+        /// through a mouth, sprouts mascot features, or becomes a cute companion"; an idle bounce or
+        /// pulse here would be exactly that, just abstracted from a face onto a shape.
+        /// </summary>
+        private void BuildCinderMark()
+        {
+            const float size = 120f;
+            Image mark = UIBuilder.Img("CinderMark", Root, TextureLab.CinderFragment(256),
+                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.22f));
+            UIBuilder.Box(mark.rectTransform, RightColumnX, -529f, size, size, new Vector2(0.5f, 1f));
         }
 
         private void BuildOptions()
