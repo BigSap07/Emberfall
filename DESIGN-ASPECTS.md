@@ -544,7 +544,7 @@ would fire once, at the moment Umbra's carrier is lost, which is a consolation p
 scaling rule. The marked-unit reading is what is built, because it is what this section specifies and
 what the dilution problem actually needs.
 
- Its rule is inherently single-target:
+The original assessment, which the rule above answers rather than replaces. Its rule is inherently single-target:
 permanently subtract the enemy that matters. At 3 that is a third of the enemy's offence removed and
 decisive. At 5 it is a fifth, while every other identity on this list holds steady or improves.
 Umbra is the one identity that gets *quietly worse* as the game grows, which is the harder failure
