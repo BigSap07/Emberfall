@@ -42,6 +42,8 @@ namespace UnityEngine
         public float scaleFactor { get { return 1f; } }
         public Canvas rootCanvas { get { return this; } }
         public AdditionalCanvasShaderChannels additionalShaderChannels { get; set; }
+
+        public static void ForceUpdateCanvases() { }
     }
 
     [Flags]

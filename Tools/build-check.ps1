@@ -17,11 +17,13 @@ New-Item -ItemType Directory -Force $out | Out-Null
 
 if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1 }
 
-function Compile($label, $sources, $target, $outputPath) {
+function Compile($label, $sources, $target, $outputPath, $defines) {
     $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
     ($sources | ForEach-Object { '"' + $_ + '"' }) | Set-Content -Path $rsp -Encoding UTF8
     Write-Host ("[" + $label + "] " + $sources.Count + " files")
-    $output = & $csc -nologo "-target:$target" "-out:$outputPath" "@$rsp" 2>&1
+    $defineArgs = @()
+    if ($defines) { $defineArgs = @("-define:$defines") }
+    $output = & $csc -nologo "-target:$target" "-out:$outputPath" @defineArgs "@$rsp" 2>&1
     $ok = ($LASTEXITCODE -eq 0)
     $output | Where-Object { $_ -match "error|warning CS" } | ForEach-Object { Write-Host "  $_" }
     if (-not $ok) { Write-Host ("[" + $label + "] FAILED") -ForegroundColor Red }
@@ -43,7 +45,14 @@ $harness = @($core + (Join-Path $root "Tools\DevHarness\Program.cs"))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 
 $engineSources = @($core + $shim + $runtime + $editor)
-$okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll")
+# UNITY_EDITOR is required here, not optional: every file under Assets/Editor is wrapped in
+# #if UNITY_EDITOR (or, for the two that aren't, still only reachable from the editor). Without the
+# define the preprocessor strips their bodies to nothing before csc ever sees them, so this whole
+# folder was compiling as empty files and reporting "ok" regardless of what was actually in them.
+# Proven the hard way during the Aspects build: a deliberately broken Editor script (bad method
+# name, wrong argument types) still passed this exact step, and only the real Unity compiler, with
+# UNITY_EDITOR defined by the editor itself, caught it.
+$okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll") "UNITY_EDITOR"
 
 if (-not ($okHarness -and $okEngine)) { exit 1 }
 

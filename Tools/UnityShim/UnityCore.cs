@@ -12,6 +12,10 @@ namespace UnityEngine
 {
     public enum FindObjectsSortMode { None, InstanceID }
 
+    /// <summary>Real UnityEngine enum (Object.FindObjectsByType's other axis) - not editor-only,
+    /// which is why it lives here with FindObjectsSortMode rather than in UnityEditorShim.cs.</summary>
+    public enum FindObjectsInactive { Exclude, Include }
+
     public class Object
     {
         public string name = "";
@@ -27,6 +31,7 @@ namespace UnityEngine
         public static T FindFirstObjectByType<T>() where T : Object { return null; }
         public static T FindAnyObjectByType<T>() where T : Object { return null; }
         public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object { return new T[0]; }
+        public static T[] FindObjectsByType<T>(FindObjectsInactive findObjectsInactive, FindObjectsSortMode sortMode) where T : Object { return new T[0]; }
 
         public static implicit operator bool(Object exists) { return !ReferenceEquals(exists, null); }
         public static bool operator ==(Object a, Object b) { return ReferenceEquals(a, b); }
@@ -247,6 +252,7 @@ namespace UnityEngine
         public T GetComponent<T>() where T : class { return null; }
         public Component GetComponent(Type t) { return null; }
         public T GetComponentInChildren<T>() where T : class { return null; }
+        public T GetComponentInChildren<T>(bool includeInactive) where T : class { return null; }
         public T[] GetComponentsInChildren<T>() where T : class { return new T[0]; }
         public T[] GetComponentsInChildren<T>(bool includeInactive) where T : class { return new T[0]; }
         public T GetComponentInParent<T>() where T : class { return null; }
@@ -605,6 +611,14 @@ namespace UnityEngine
     }
 
     public sealed class AudioListener : Behaviour { public static float volume { get; set; } }
+
+    /// <summary>Real UnityEngine API (not editor-only) - the verification tools under Assets/Editor
+    /// call this to capture the Game view during a driven Play Mode session.</summary>
+    public static class ScreenCapture
+    {
+        public static void CaptureScreenshot(string filename) { }
+        public static void CaptureScreenshot(string filename, int superSize) { }
+    }
 }
 
 namespace UnityEngine.Rendering

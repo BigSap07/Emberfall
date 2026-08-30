@@ -40,7 +40,11 @@ namespace UnityEditor
     {
         public static CallbackFunction delayCall { get; set; }
         public static CallbackFunction update { get; set; }
-        public static bool isPlaying { get { return false; } }
+        // Real Unity: settable, and driving it is exactly what the Play-Mode automation under
+        // Assets/Editor does (EditorApplication.isPlaying = true/false). A getter-only stub compiles
+        // fine for code that only reads it, but throws CS0200 on every assignment - which is most of
+        // what these tools do with it.
+        public static bool isPlaying { get; set; }
         public static bool isPlayingOrWillChangePlaymode { get { return false; } }
         public static bool isCompiling { get { return false; } }
         public static bool isUpdating { get { return false; } }
@@ -77,6 +81,33 @@ namespace UnityEditor
         public static void DisplayProgressBar(string title, string info, float progress) { }
         public static void ClearProgressBar() { }
         public static void SetDirty(UnityEngine.Object target) { }
+    }
+
+    /// <summary>Real API: persists per-session (survives domain reload, not the process), which is
+    /// exactly why the Play-Mode automation under Assets/Editor uses it to carry state across the
+    /// reload that entering/exiting Play Mode triggers.</summary>
+    public static class SessionState
+    {
+        public static bool GetBool(string key, bool defaultValue) { return defaultValue; }
+        public static void SetBool(string key, bool value) { }
+        public static int GetInt(string key, int defaultValue) { return defaultValue; }
+        public static void SetInt(string key, int value) { }
+        public static float GetFloat(string key, float defaultValue) { return defaultValue; }
+        public static void SetFloat(string key, float value) { }
+        public static string GetString(string key, string defaultValue) { return defaultValue; }
+        public static void SetString(string key, string value) { }
+    }
+
+    /// <summary>Enough of the real type for the verification tools' GameView-focus helper:
+    /// EditorWindow.GetWindow(gameViewType, false, null, false).Focus()/.Repaint().</summary>
+    public class EditorWindow
+    {
+        public static EditorWindow GetWindow(Type t) { return null; }
+        public static EditorWindow GetWindow(Type t, bool utility) { return null; }
+        public static EditorWindow GetWindow(Type t, bool utility, string title) { return null; }
+        public static EditorWindow GetWindow(Type t, bool utility, string title, bool focus) { return null; }
+        public void Focus() { }
+        public void Repaint() { }
     }
 
     public static class EditorPrefs
