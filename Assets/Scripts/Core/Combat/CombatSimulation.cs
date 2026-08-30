@@ -628,6 +628,19 @@ namespace Emberfall.Core.Combat
                         e.Status = effect.Status;
                         e.Duration = duration;
 
+                        // Ember (DESIGN-ASPECTS section 6): how deep the stack is now. The status
+                        // row is the one place in this project where the information is genuinely
+                        // absent from the display rather than merely unread - three Burn entries and
+                        // one Burn entry both render as a single BRN - and the doc's own method does
+                        // not close that on its own. It is still not a new event: StatusApplied
+                        // already fires per application, it just never said how many there were.
+                        //
+                        // Counted here rather than on the screen because the screen cannot recount
+                        // it. AddOrRefresh folds an ordinary re-application into the existing entry
+                        // and fires this event anyway, so a screen tallying events would show a
+                        // five-deep Guard Down that the simulation never created.
+                        e.Value = target.CountOf(effect.Status);
+
                         // Gale (DESIGN-ASPECTS section 1): a Slow from a Gale source takes effect in
                         // the round it lands in, not only in the next one's sort. Emitted after
                         // StatusApplied so the record reads in causal order: the Slow landed, then
@@ -861,9 +874,20 @@ namespace Emberfall.Core.Combat
                 {
                     target.Hp = 0f;
                     target.Alive = false;
+
+                    // Umbra's spread rule reads the dying unit's own list, so the marks have to be
+                    // taken before the clear below empties it - the clear is precisely what they
+                    // are escaping. Null when this unit carried none, which is the common case.
+                    List<StatusInstance> marks = CollectUmbraMarks(target);
+
                     target.Statuses.Clear();
                     target.Shield = 0f;
                     Emit(BattleEventType.Death, sourceId, target.Id);
+
+                    // Before OnKill and Gale re-entry, so the record reads in causal order: the unit
+                    // died, its mark moved, and only then does anything act on the new state. A Gale
+                    // killer that re-enters immediately finds the jumped debuff already standing.
+                    TryUmbraSpread(target, marks);
 
                     CombatUnit killer = FindUnit(sourceId);
                     if (killer != null && killer.Alive) TriggerPassive(killer, PassiveTrigger.OnKill, 0);
@@ -927,6 +951,10 @@ namespace Emberfall.Core.Combat
                 BattleEvent banked = Emit(BattleEventType.StatusApplied, sourceId, target.Id);
                 banked.Status = StatusKind.Regen;
                 banked.Duration = VerdantBankRounds;
+                // Carried here too, so every StatusApplied in the list answers the same question.
+                // Always 1 - the bank uses AddOrRefresh and never stacks - but a screen that has to
+                // ask which emit site produced an event is a screen that recomputes.
+                banked.Value = target.CountOf(StatusKind.Regen);
             }
 
             /// <summary>
@@ -1376,6 +1404,108 @@ namespace Emberfall.Core.Combat
                     if (u.HasTaunt && (taunter == null || u.Slot < taunter.Slot)) taunter = u;
                 }
                 return lumen != null ? lumen : taunter;
+            }
+
+            /// <summary>
+            /// Umbra, the team-size-5 half (DESIGN-ASPECTS section 8): the mark jumps on the marked
+            /// unit's death, so Umbra's single-target subtraction keeps covering a line that got
+            /// wider instead of being diluted by it.
+            ///
+            /// Section 8 leaves this as one of two open options - build a spread rule, or accept
+            /// Umbra as a boss-stage specialist - and the spread rule is the one that is built. The
+            /// dilution it answers is real and runs one way only: at team size 3 a permanent debuff
+            /// on the enemy that matters removes a third of the opposing offence, at 5 it removes a
+            /// fifth, and Umbra is the only one of the six identities that gets quietly worse as the
+            /// game grows. Every other identity in section 8 holds steady or improves at 5.
+            ///
+            /// Harmful and Umbra-sourced, using exactly the predicate the Cleanse branch uses. The
+            /// jump and the uncleansable rule are two halves of one belief - what Umbra marks stays
+            /// marked - and they must not disagree about what counts as a mark.
+            ///
+            /// No aliveness test on the applier, for the same reason IsUmbraSourced has none: the
+            /// persistence half of the original rule was cut (DESIGN-WORLD section 1), so a mark is
+            /// bounded by its own duration whether its author still stands or not.
+            ///
+            /// **Creates no value.** RoundsLeft and Magnitude cross unchanged and the entry is added
+            /// with AddOrRefresh, so a jump moves a subtraction that already existed onto a unit
+            /// that is still standing - it never deepens one. A chain across a five-enemy line is
+            /// the intended behaviour and is what answers the dilution, and it needs no cap the way
+            /// Gale's re-entry does: every hop costs a death, there are only ever as many deaths as
+            /// units, and unlike an extra turn a hop hands out nothing that was not already on the
+            /// board. AddOrRefresh rather than AddStack is also deliberate - Ember's stacking keys
+            /// on an Ember source, and an Umbra-sourced Burn is not an Ember Burn.
+            /// </summary>
+            private List<StatusInstance> CollectUmbraMarks(CombatUnit dying)
+            {
+                List<StatusInstance> marks = null;
+                for (int i = 0; i < dying.Statuses.Count; i++)
+                {
+                    StatusInstance s = dying.Statuses[i];
+                    if (!StatusInfo.IsHarmful(s.Kind)) continue;
+                    if (!IsUmbraSourced(s)) continue;
+                    if (marks == null) marks = new List<StatusInstance>();
+                    marks.Add(s);
+                }
+                return marks;
+            }
+
+            private void TryUmbraSpread(CombatUnit dying, List<StatusInstance> marks)
+            {
+                if (marks == null || marks.Count == 0) return;
+
+                CombatUnit heir = FindMarkHeir(dying);
+                if (heir == null) return;
+
+                for (int i = 0; i < marks.Count; i++)
+                {
+                    StatusInstance s = marks[i];
+                    heir.AddOrRefresh(s.Kind, s.RoundsLeft, s.Magnitude, s.SourceId);
+
+                    BattleEvent e = Emit(BattleEventType.StatusSpread, dying.Id, heir.Id);
+                    e.Status = s.Kind;
+                    e.Duration = s.RoundsLeft;
+                    e.Value = s.SourceId;
+                }
+            }
+
+            /// <summary>
+            /// Which unit a mark jumps to: the living enemy that matters most, by attack. That is
+            /// Umbra's own targeting verb rather than a fresh rule invented for the jump - Nyx aims
+            /// HighestAttackEnemy with every ability she has, and section 1's identity is "pick the
+            /// enemy that matters and subtract it", so the mark lands where she would have aimed it
+            /// next.
+            ///
+            /// The heir is drawn from the dying unit's own side, which is the side the mark was
+            /// always pointed at: a harmful status reached its carrier by being aimed across the
+            /// line, so "another living enemy" is another unit standing where that one stood. It is
+            /// deliberately not keyed on the applier's side - the applier may be dead, and reading
+            /// its side would make the rule silently depend on a unit no longer in the fight.
+            ///
+            /// Deterministic without touching _rng: EffectiveAttack, then the lower Slot, then the
+            /// lower Id. Slot and Id cannot both tie between two distinct units, so the ordering is
+            /// total and the answer does not depend on _units' iteration order. Drawing here would
+            /// consume from the stream and desync every seeded replay whose fight contains an Umbra
+            /// death - the same reason Gale's re-entry does not re-roll the round's jitter.
+            /// </summary>
+            private CombatUnit FindMarkHeir(CombatUnit dying)
+            {
+                CombatUnit best = null;
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u == dying) continue;
+                    if (u.IsPlayer != dying.IsPlayer) continue;
+                    if (best == null) { best = u; continue; }
+
+                    float mine = u.EffectiveAttack;
+                    float theirs = best.EffectiveAttack;
+                    if (mine > theirs) { best = u; continue; }
+                    if (mine < theirs) continue;
+                    if (u.Slot < best.Slot) { best = u; continue; }
+                    if (u.Slot > best.Slot) continue;
+                    if (u.Id < best.Id) best = u;
+                }
+                return best;
             }
 
             /// <summary>

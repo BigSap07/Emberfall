@@ -38,6 +38,7 @@ namespace Emberfall.DevHarness
             CheckAspectDirection(content);
             CheckAspectEmberVerdant(content);
             CheckAspectTideUmbra(content);
+            CheckUmbraSpreadOnDeath(content);
             CheckAspectGale(content);
             CheckAspectLumen(content);
             CheckLumenDifficultyDelta(content);
@@ -273,6 +274,7 @@ namespace Emberfall.DevHarness
         private static void CheckAspectEmberVerdant(ContentDatabase db)
         {
             Line("ASPECT RULES (Ember stacking, Verdant banking)");
+            int maxBurnDepthOnEvent = 0, maxRefreshDepthOnEvent = 0, minStatusDepthOnEvent = int.MaxValue;
             int cap = db.Balance.EmberBurnStackCap;
 
             // ---- Ember, the primitive itself ----
@@ -343,7 +345,20 @@ namespace Emberfall.DevHarness
                                 && r.Events[i + 1].TargetId == e.TargetId)
                                 sawStackedBurnDeath = true;
                         }
-                        else if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Regen)
+                        else if (e.Type == BattleEventType.StatusApplied)
+                        {
+                            if (e.Value < minStatusDepthOnEvent) minStatusDepthOnEvent = e.Value;
+                            if (e.Status == StatusKind.Burn)
+                            {
+                                if (e.Value > maxBurnDepthOnEvent) maxBurnDepthOnEvent = e.Value;
+                            }
+                            else if (e.Value > maxRefreshDepthOnEvent)
+                            {
+                                maxRefreshDepthOnEvent = e.Value;
+                            }
+                        }
+
+                        if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Regen)
                         {
                             regenApplications++;
                             UnitSnapshot src = r.FindUnit(e.SourceId);
@@ -364,6 +379,23 @@ namespace Emberfall.DevHarness
                   "no unit ever carried more than emberBurnStackCap Burns (peak " + maxBurnTicksInARound + ", cap " + cap + ")");
             Check(sawStackedBurnDeath,
                   "the sample reached the hazard case: a unit carrying stacked Burns died to a Burn tick mid-walk");
+
+            // DESIGN-ASPECTS section 6: the status row could not show a stack, so StatusApplied now
+            // carries the depth. Asserted against the tick count above, which is derived a
+            // completely different way - one counts Damage events tagged Burn inside a round, the
+            // other reads a field the ApplyStatus branch wrote. If the field were wrong or stale,
+            // the two would not agree at the peak.
+            Check(maxBurnDepthOnEvent == maxBurnTicksInARound,
+                  "StatusApplied carries the stack depth the simulation actually holds - peak "
+                  + maxBurnDepthOnEvent + " on the event against " + maxBurnTicksInARound
+                  + " Burn ticks in a round, counted independently");
+            Check(minStatusDepthOnEvent >= 1,
+                  "every StatusApplied carries a depth of at least 1 (lowest seen " + minStatusDepthOnEvent
+                  + ") - a 0 would flatten a stack to a single tag on the bar");
+            Check(maxRefreshDepthOnEvent == 1,
+                  "a refreshing (non-Ember-Burn) status never reports a depth above 1 (peak "
+                  + maxRefreshDepthOnEvent + ") - AddOrRefresh folds into one entry and the event says so,"
+                  + " which is what stops the bar counting Nyx's Guard Down one deeper every basic attack");
 
             Check(regenApplications > 0,
                   "Verdant banking actually fires - " + regenApplications
@@ -1059,6 +1091,220 @@ namespace Emberfall.DevHarness
             return db;
         }
 
+
+        /// <summary>
+        /// Umbra, the team-size-5 half (DESIGN-ASPECTS section 8): the mark jumps on the marked
+        /// unit's death rather than dying with it, which is what stops Umbra's single-target
+        /// subtraction being diluted as the line grows from 3 to 5.
+        ///
+        /// Forced rather than sampled, and it has to be. Nyx is not in the starting three, the only
+        /// Umbra-sourced harmful status the shipped campaign produces is the Sundered Colossus's
+        /// Slow, and the Colossus is a solo boss - so there is no second enemy for its mark to jump
+        /// to, and shipped content cannot reach this rule at all. That gap is asserted below rather
+        /// than left implied, on the same standard CheckGaleSlowShift is held to.
+        ///
+        /// The arena isolates the rule from every other way a Slow could arrive: the marker casts
+        /// exactly once, in round 1, because its active costs its whole energy bar and the arena
+        /// grants no energy from attacking or being hit. One StatusApplied(Slow) in the entire
+        /// fight, therefore, and every later appearance of that Slow is necessarily a jump.
+        ///
+        /// Enemy attack and HP are ordered against each other on purpose. The finisher kills by
+        /// LowestHpEnemy and the heir is picked by highest attack, so the unit that dies is never
+        /// the unit that inherits, and the heir is never simply the next one in the list - a rule
+        /// that picked the first living unit, the lowest slot, or the lowest Id would pick the
+        /// wrong one here and fail. A non-Umbra AttackDown rides on the same dying unit throughout
+        /// as the control: it is subject to every other condition the Slow is, and must not spread.
+        /// </summary>
+        private static void CheckUmbraSpreadOnDeath(ContentDatabase db)
+        {
+            Line("ASPECT RULE (Umbra mark spreads on death)");
+
+            // ---------------------------------------------------------------- shipped content
+            // Stated, not assumed: this is the coverage gap, measured.
+            int umbraSourcedHarmful = 0, shippedSpreads = 0;
+            for (int si = 0; si < db.AllStages.Count; si++)
+            {
+                GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[si], 4000 + si));
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.StatusSpread) shippedSpreads++;
+                    if (e.Type != BattleEventType.StatusApplied) continue;
+                    if (!StatusInfo.IsHarmful(e.Status)) continue;
+                    UnitSnapshot src = r.FindUnit(e.SourceId);
+                    if (src != null && src.Aspect == Aspect.Umbra) umbraSourcedHarmful++;
+                }
+            }
+            Line("  [note] shipped content reaches this rule " + shippedSpreads + " time(s) across "
+                 + db.AllStages.Count + " stages, from " + umbraSourcedHarmful
+                 + " Umbra-sourced harmful status(es). The one Umbra debuffer the campaign fields is the");
+            Line("         Sundered Colossus, a solo boss with no ally for its mark to jump to, and Nyx is");
+            Line("         not a starter. The forced arena below is what actually proves this rule.");
+
+            // ---------------------------------------------------------------- forced arena
+            ContentDatabase test = BuildUmbraSpreadTestContent();
+            if (test == null) return;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(test.GetHero("test_marker"), 1));
+            team.Add(MakeInstance(test.GetHero("test_finisher"), 1));
+            BattleResult res = RunWith(test, test.GetStage("test_spread_arena"), 7, team);
+
+            int frail = -1, mid = -1, low = -1;
+            for (int i = 0; i < res.Units.Count; i++)
+            {
+                UnitSnapshot u = res.Units[i];
+                if (u.Name == "Test Frail") frail = u.Id;
+                else if (u.Name == "Test Mid") mid = u.Id;
+                else if (u.Name == "Test Low") low = u.Id;
+            }
+
+            int slowApplied = 0, downApplied = 0;
+            List<BattleEvent> spreads = new List<BattleEvent>();
+            int downSpreads = 0;
+            List<int> slowExpiredOn = new List<int>();
+            for (int i = 0; i < res.Events.Count; i++)
+            {
+                BattleEvent e = res.Events[i];
+                if (e.Type == BattleEventType.StatusApplied)
+                {
+                    if (e.Status == StatusKind.Slow) slowApplied++;
+                    if (e.Status == StatusKind.AttackDown) downApplied++;
+                }
+                else if (e.Type == BattleEventType.StatusSpread)
+                {
+                    if (e.Status == StatusKind.Slow) spreads.Add(e);
+                    if (e.Status == StatusKind.AttackDown) downSpreads++;
+                }
+                else if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Slow)
+                {
+                    slowExpiredOn.Add(e.TargetId);
+                }
+            }
+
+            Check(slowApplied == 1 && downApplied >= 1,
+                  "forced setup: the Umbra marker cast exactly once (" + slowApplied
+                  + " Slow applied), so every later Slow is a jump and not a second cast");
+
+            Check(spreads.Count >= 1, "the mark jumps when its carrier dies (" + spreads.Count + " jump(s) observed)");
+
+            if (spreads.Count >= 1)
+            {
+                BattleEvent first = spreads[0];
+                Check(first.SourceId == frail,
+                      "the jump is recorded as leaving the unit that died, not the unit that applied it");
+                Check(first.TargetId == mid,
+                      "it lands on the highest-attack living enemy (Test Mid), which is Umbra's own"
+                      + " targeting verb - Test Low was alive, in a lower slot and a lower Id, and was"
+                      + " correctly passed over");
+                Check(first.TargetId != low,
+                      "specifically not the first-living / lowest-slot pick, which is what makes this"
+                      + " a test of the heir rule rather than of iteration order");
+                Check(first.Duration > 0,
+                      "the mark arrives on the heir with a live duration (" + first.Duration + "r)");
+            }
+
+            // Membership, proved from the chain rather than from an expiry. A jump reads the dying
+            // unit's own status list, so a second jump leaving the unit the first one landed on is
+            // that list being read back - the entry was really there, not merely announced. Test Mid
+            // never survives to expire anything, because the finisher kills it the very next round,
+            // which is exactly the case the chain exists for.
+            bool handToHand = spreads.Count >= 2 && spreads[1].SourceId == spreads[0].TargetId;
+            Check(handToHand,
+                  "the jumped mark is really in the heir's status list - the next jump collected it"
+                  + " off that same unit when it died, and a jump can only collect what the list holds");
+
+            // A jump that refreshed the duration would hand Umbra a permanent debuff on a five-enemy
+            // line for the price of one cast, which is value the rule is explicitly not supposed to
+            // create. Equal durations are the expected reading here rather than a weaker result:
+            // RoundsLeft only decrements in ExpireStatuses at the end of the carrier's own turn, and
+            // a carrier killed before it acts never gets one. The bound is what matters - it must
+            // never go UP.
+            Check(spreads.Count < 2 || spreads[1].Duration <= spreads[0].Duration,
+                  "the mark never refreshes as it travels ("
+                  + (spreads.Count >= 2 ? spreads[0].Duration + "r then " + spreads[1].Duration + "r" : "n/a")
+                  + ") - a jump moves a subtraction, it never refreshes one");
+
+            Check(slowExpiredOn.Count > 0,
+                  "the travelling mark still runs out on schedule (" + slowExpiredOn.Count
+                  + " expiry) - the persistence half of the original Umbra rule stays cut, so a jump"
+                  + " extends the mark's reach and never its lifetime");
+
+            Check(downSpreads == 0,
+                  "the non-Umbra AttackDown riding the same dying unit did not spread (" + downSpreads
+                  + " jump(s)) - the rule is keyed on the applier's aspect, not on death");
+
+            // Chaining is the whole point at team size 5: one mark has to keep covering a line that
+            // keeps shrinking, or the dilution section 8 describes is only half answered.
+            Check(spreads.Count >= 2,
+                  "the mark chains across successive deaths (" + spreads.Count
+                  + " jumps from a single cast), which is what answers the dilution at team size 5");
+            if (spreads.Count >= 2)
+            {
+                Check(spreads[1].TargetId == low,
+                      "the second jump lands on the last enemy standing, so the subtraction is still"
+                      + " on the board after two deaths rather than having fallen off with the first");
+            }
+            Line("");
+        }
+
+        /// <summary>
+        /// Two heroes against three enemies whose attack order and HP order are deliberately
+        /// opposed. Test Frail has the highest attack and the lowest HP, so it is both the marker's
+        /// target and the finisher's; Test Mid outranks Test Low on attack while sitting in a higher
+        /// slot with a higher Id, so only the attack-ranked heir rule picks it.
+        ///
+        /// Zero variance, chance 1, and no energy income of any kind, so the marker's single cast is
+        /// structural rather than lucky and the whole sequence is arithmetic.
+        /// </summary>
+        private static ContentDatabase BuildUmbraSpreadTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_marker"", ""name"": ""Test Marker"", ""aspect"": ""Umbra"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 5000, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""basic"": { ""id"": ""marker_basic"", ""name"": ""Nick"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""HighestAttackEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""marker_active"", ""name"": ""Unmake"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""HighestAttackEnemy"", ""status"": ""Slow"", ""magnitude"": 0.1, ""duration"": 4, ""chance"": 1 } ] } },
+    { ""id"": ""test_finisher"", ""name"": ""Test Finisher"", ""aspect"": ""Gale"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100000, ""defense"": 5000, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""finisher_basic"", ""name"": ""End"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            // The plain debuffer is Verdant on purpose: it is the control, and it must differ from
+            // the marker in exactly one respect - the aspect of whoever applied the status.
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_frail"", ""name"": ""Test Frail"", ""aspect"": ""Verdant"",
+      ""hp"": 10, ""attack"": 100, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_mid"", ""name"": ""Test Mid"", ""aspect"": ""Verdant"",
+      ""hp"": 40, ""attack"": 50, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_low"", ""name"": ""Test Low"", ""aspect"": ""Verdant"",
+      ""hp"": 90, ""attack"": 10, ""defense"": 0, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.5 },
+    { ""id"": ""test_plain_marker"", ""name"": ""Test Plain Marker"", ""aspect"": ""Verdant"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 250, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 100,
+      ""active"": { ""id"": ""plain_mark"", ""name"": ""Sap"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""AttackDown"", ""magnitude"": 0.1, ""duration"": 9, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_spread_ch"", ""name"": ""Test Spread"", ""stages"": [
+        { ""id"": ""test_spread_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""test_low"", ""level"": 1 }, { ""id"": ""test_mid"", ""level"": 1 },
+            { ""id"": ""test_frail"", ""level"": 1 }, { ""id"": ""test_plain_marker"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Umbra spread on death");
+        }
 
         /// <summary>
         /// What the shipped-content sample above used to assert by coincidence, forced instead.
@@ -4773,6 +5019,7 @@ namespace Emberfall.DevHarness
                 case BattleEventType.ShieldGain: return "   " + target + " wards " + e.Value;
                 case BattleEventType.ShieldAbsorb: return "   " + target + "'s ward absorbs " + e.Value;
                 case BattleEventType.StatusApplied: return "   " + target + " gains " + StatusInfo.DisplayName(e.Status) + " (" + e.Duration + ")";
+                case BattleEventType.StatusSpread: return "   " + StatusInfo.DisplayName(e.Status) + " spreads to " + target + " (" + e.Duration + ")";
                 case BattleEventType.Death: return "   " + target + " falls";
                 case BattleEventType.BattleEnd: return "== " + (e.Victory ? "victory" : "defeat") + " ==";
             }

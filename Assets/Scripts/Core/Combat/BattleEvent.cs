@@ -85,6 +85,24 @@ namespace Emberfall.Core.Combat
         /// </summary>
         PositionSwapped,
 
+        /// <summary>
+        /// Umbra, the team-size-5 half (DESIGN-ASPECTS section 8): the unit named by SourceId died
+        /// carrying a harmful status from an Umbra source, and that status has jumped to TargetId
+        /// rather than dying with its carrier. Status and Duration are the mark as it landed;
+        /// Value carries the Id of the Umbra unit that originally applied it, which is otherwise
+        /// unrecoverable from the event alone once the dead unit's list has been cleared.
+        ///
+        /// Genuinely absent from the record rather than unread, on the same standard ExtraTurn and
+        /// TargetAnchored are held to. A debuff appearing on a fresh unit during someone else's
+        /// death, with no attack and no cast anywhere near it, is indistinguishable from a screen
+        /// bug unless something in the list says it was deliberate and says where it came from.
+        ///
+        /// Distinct from StatusApplied on purpose: nobody applied this. Reporting a jump as an
+        /// application would make Debrief's status clause count it as an Umbra unit landing a
+        /// second debuff it never cast, and would put a cause in the record that did not happen.
+        /// </summary>
+        StatusSpread,
+
         BattleEnd
     }
 

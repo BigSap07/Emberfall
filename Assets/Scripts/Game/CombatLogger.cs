@@ -140,6 +140,14 @@ namespace Emberfall.Game
                     sb.AppendLine("  Expire  " + StatusInfo.DisplayName(e.Status) + " on " + N(r, e.TargetId));
                     break;
 
+                // Umbra (DESIGN-ASPECTS section 8). SourceId is who died, TargetId is who inherited,
+                // Value is the Umbra unit that applied it in the first place.
+                case BattleEventType.StatusSpread:
+                    sb.AppendLine("  Spread  " + StatusInfo.DisplayName(e.Status) + " jumps from "
+                                  + N(r, e.SourceId) + " to " + N(r, e.TargetId)
+                                  + " (" + e.Duration + "r, from " + N(r, e.Value) + ")");
+                    break;
+
                 case BattleEventType.EnergyChanged:
                 {
                     // Value = unit's current energy (absolute). SourceId != TargetId on a Tide redirect.

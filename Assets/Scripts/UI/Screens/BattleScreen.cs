@@ -29,6 +29,13 @@ namespace Emberfall.UI.Screens
             public Text Status;
             public Image TurnPip;
             public CanvasGroup Group;
+            /// <summary>
+            /// One entry per entry the simulation holds, duplicates included, in the order they
+            /// first landed. It used to be a set, which is what made Ember's stacking invisible:
+            /// three Burn entries collapsed into one BRN tag on the way in and no later code could
+            /// tell them apart. Kept in sync from the count StatusApplied carries, never tallied
+            /// from how many times the event was seen - see SyncStatusCount.
+            /// </summary>
             public readonly List<StatusKind> Statuses = new List<StatusKind>();
 
             /// <summary>Added to the bar's tracked screen position by LateUpdate while the turn cue plays.</summary>
@@ -820,11 +827,7 @@ namespace Emberfall.UI.Screens
                 {
                     UnitBar bar = BarOf(e.TargetId);
                     UnitActor target = ActorOf(e.TargetId);
-                    if (bar != null && !bar.Statuses.Contains(e.Status))
-                    {
-                        bar.Statuses.Add(e.Status);
-                        RefreshStatusText(bar);
-                    }
+                    if (bar != null) SyncStatusCount(bar, e.Status, e.Value);
                     if (target != null)
                     {
                         Color tint = StatusInfo.IsHarmful(e.Status) ? UITheme.Danger : UITheme.Success;
@@ -857,6 +860,26 @@ namespace Emberfall.UI.Screens
                 {
                     UnitBar bar = BarOf(e.TargetId);
                     if (bar != null && bar.Statuses.Remove(e.Status)) RefreshStatusText(bar);
+                    break;
+                }
+
+                case BattleEventType.StatusSpread:
+                {
+                    // Umbra (DESIGN-ASPECTS section 8). Named in the float text rather than shown as
+                    // a bare tag appearing: a debuff arriving on a unit nobody attacked, during
+                    // someone else's death animation, is exactly the kind of thing the player reads
+                    // as a bug unless the screen says out loud that it moved.
+                    UnitBar bar = BarOf(e.TargetId);
+                    UnitActor heir = ActorOf(e.TargetId);
+                    if (bar != null) SyncStatusCount(bar, e.Status, 0);
+                    if (heir != null)
+                    {
+                        SpawnFloatingText(heir.HeadPosition,
+                                          StatusInfo.DisplayName(e.Status) + " spreads",
+                                          UITheme.Danger, 0.8f);
+                        _world.Vfx.Aura(heir.transform.position, UITheme.Danger, 1.8f);
+                    }
+                    yield return Wait(0.12f);
                     break;
                 }
 
@@ -1138,15 +1161,70 @@ namespace Emberfall.UI.Screens
             UIBuilder.SetBar(bar.HpGhost, target);
         }
 
+        /// <summary>
+        /// Ember (DESIGN-ASPECTS section 6): the bar states how deep a stack is. Four distinct
+        /// kinds is still the cap on what the row shows, but the cap now counts kinds rather than
+        /// entries - with stacking, four entries could be one affliction, and a row that spent its
+        /// whole width saying BRN four times would be less readable than the one this replaces.
+        ///
+        /// The suffix is only written for a real stack. A lone status reads BRN exactly as it
+        /// always did, so the count is a mark of the thing Ember does rather than noise on every
+        /// tag in the game.
+        /// </summary>
         private static void RefreshStatusText(UnitBar bar)
         {
             string text = "";
-            for (int i = 0; i < bar.Statuses.Count && i < 4; i++)
+            int shown = 0;
+            for (int i = 0; i < bar.Statuses.Count && shown < 4; i++)
             {
+                StatusKind kind = bar.Statuses[i];
+
+                bool alreadyShown = false;
+                for (int j = 0; j < i; j++) if (bar.Statuses[j] == kind) { alreadyShown = true; break; }
+                if (alreadyShown) continue;
+
+                int depth = 0;
+                for (int j = i; j < bar.Statuses.Count; j++) if (bar.Statuses[j] == kind) depth++;
+
                 if (text.Length > 0) text += " ";
-                text += StatusInfo.ShortTag(bar.Statuses[i]);
+                text += StatusInfo.ShortTag(kind);
+                if (depth > 1) text += "x" + depth;
+                shown++;
             }
             bar.Status.text = text;
+        }
+
+        /// <summary>
+        /// Set the bar's entry count for one status to what the simulation says it is.
+        /// DESIGN-BATTLE-READABILITY's rule, applied to a number rather than to a cause: the depth
+        /// is read off the event, never derived here. Deriving it is the trap - AddOrRefresh folds
+        /// an ordinary re-application into its existing entry and emits StatusApplied regardless, so
+        /// a bar counting events would show Nyx's Guard Down growing one deeper every basic attack
+        /// while the simulation held exactly one entry the whole fight.
+        ///
+        /// A count of zero means an emit site that carries no depth - StatusSpread, which uses
+        /// AddOrRefresh and so can never produce a stack. Treated as "at least one present", which
+        /// leaves an existing stack alone rather than flattening it to a single tag.
+        /// </summary>
+        private static void SyncStatusCount(UnitBar bar, StatusKind kind, int count)
+        {
+            if (kind == StatusKind.None) return;
+
+            int have = 0;
+            for (int i = 0; i < bar.Statuses.Count; i++) if (bar.Statuses[i] == kind) have++;
+
+            int want = count > 0 ? count : Mathf.Max(1, have);
+            if (want == have) return;
+
+            while (have < want) { bar.Statuses.Add(kind); have++; }
+            for (int i = bar.Statuses.Count - 1; i >= 0 && have > want; i--)
+            {
+                if (bar.Statuses[i] != kind) continue;
+                bar.Statuses.RemoveAt(i);
+                have--;
+            }
+
+            RefreshStatusText(bar);
         }
 
         private void ShowBanner(string title, string subtitle)
