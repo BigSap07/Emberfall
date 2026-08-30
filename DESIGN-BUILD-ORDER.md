@@ -98,7 +98,13 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
   - **Umbra**: harmful statuses whose `sourceId` traces to an Umbra unit are skipped by
     `EffectKind.Cleanse` without consuming a Hits count. The persistence half — not ticking down
     while the applier lives — is explicitly not built (that belief belongs to Verdant in
-    DESIGN-ASPECTS, not Umbra).
+    DESIGN-ASPECTS, not Umbra). The team-size-5 half — the mark spreading on the
+    marked unit's death — was left open here and is **now built on `feat/aspect-identities`**
+    (unmerged): the dying unit's Umbra-sourced harmful statuses jump to the highest-attack living
+    unit on its own side, carrying duration and magnitude unchanged, and chain on each further
+    death. Uncapped on purpose — a hop costs a death and grants nothing new, unlike Gale's
+    re-entry. Emits a distinct `StatusSpread` event rather than a second `StatusApplied`, so
+    Debrief's status clause does not count a jump as an Umbra unit landing a debuff it never cast.
   - **Lumen**: a living Lumen unit unconditionally answers every single-target question aimed at
     its side (`FindTargetAnchor`). Taunt is a secondary tier inside the same method, not the
     primary rule. Emits `TargetAnchored` when Lumen (not Taunt) produced the redirect, so the

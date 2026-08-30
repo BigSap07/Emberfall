@@ -409,6 +409,15 @@ readability gap the doc's method does not close on its own, because the informat
 from the display, not merely unread. It is still not a new event type — `StatusApplied` fires per
 application already — but the bar needs a count.
 
+**Closed on `feat/aspect-identities`, and the doc was right that it is not a new event.**
+`StatusApplied` now carries the simulation's own `CountOf` for that kind in `Value`, and the bar
+renders a stack as `BRNx3`. The count is read off the event and never derived on the screen, which
+is the part that is easy to get wrong: `AddOrRefresh` folds an ordinary re-application into its
+existing entry and emits `StatusApplied` anyway, so a bar tallying events would have shown Nyx's
+Guard Down growing one deeper on every basic attack while the simulation held exactly one entry all
+fight. The four-tag cap on the row now counts *kinds* rather than entries, since four entries can be
+one affliction.
+
 ---
 
 ## 7. Cost
@@ -509,7 +518,33 @@ guard. Every re-entry costs a kill and there are only ever as many kills as unit
 terminates even with the constant misconfigured upward. That is why it could be raised to 9 to
 measure it.
 
-**Umbra — flagged in the opposite direction. Weakens at 5.** Its rule is inherently single-target:
+**Umbra — flagged in the opposite direction. Weakens at 5.** **Decided and built on `feat/aspect-identities`:
+the spread rule, not the boss-stage acceptance.** When a marked unit dies, every harmful status on it
+whose applier was Umbra jumps to the highest-attack living unit on that same side, carrying its
+remaining `RoundsLeft` and `Magnitude` unchanged. It chains: each subsequent death moves the mark
+again, which is what keeps a single cast covering a five-enemy line as that line shrinks.
+
+Three things worth stating, because none of them are in the paragraph below.
+
+**It creates no value, and that is the design constraint the rule is built to.** A jump uses
+`AddOrRefresh`, so the mark never deepens and never refreshes - it only relocates. This is why it
+needs no cap where Gale's re-entry did: every hop costs a death, there are only ever as many deaths
+as units, and a hop hands out nothing that was not already on the board. Gale's cap bounds a rule
+that *grants* something; there is nothing here to bound.
+
+**The heir is picked by attack, not by slot or proximity.** That is Umbra's own targeting verb - Nyx
+aims `HighestAttackEnemy` with every ability she has - so the mark lands where she would have aimed
+it next rather than wherever the iteration order happened to stop. Ties break on the lower Slot then
+the lower Id, so the choice is total and consumes nothing from `_rng`.
+
+**The section's own wording and the sentence that authorised this build disagree, and the difference
+matters.** This document says "the mark jumps on the *marked unit's* death". A spread keyed on the
+*Umbra unit's* own death would be a different mechanic and would not answer the dilution at all - it
+would fire once, at the moment Umbra's carrier is lost, which is a consolation prize rather than a
+scaling rule. The marked-unit reading is what is built, because it is what this section specifies and
+what the dilution problem actually needs.
+
+ Its rule is inherently single-target:
 permanently subtract the enemy that matters. At 3 that is a third of the enemy's offence removed and
 decisive. At 5 it is a fifth, while every other identity on this list holds steady or improves.
 Umbra is the one identity that gets *quietly worse* as the game grows, which is the harder failure
