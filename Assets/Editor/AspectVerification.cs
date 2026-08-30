@@ -202,11 +202,11 @@ namespace Emberfall.EditorTools
                 HeroInstance owned = profile.FindHeroByDefId(wanted[i]);
                 if (owned == null)
                 {
-                    owned = app.Session.GrantHeroDirect(def, GameSession.NowUnix());
+                    owned = app.Session.GrantHeroDirect(def, TimeUtil.NowUnix());
                     if (owned == null) { Debug.LogWarning("AspectVerification: could not grant " + wanted[i]); continue; }
                 }
                 owned.Level = 30;
-                if (i < profile.Team.Length) profile.AssignToTeam(owned, i);
+                if (i < profile.Team.Length) profile.AssignToTeam(i, owned.Uid);
             }
             Debug.Log("AspectVerification: line set to " + string.Join(", ", wanted));
         }
@@ -221,7 +221,7 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static string FindTextContaining(string needle)
         {
-            Text[] texts = Object.FindObjectsByType<Text>(FindObjectsSortMode.None);
+            Text[] texts = Object.FindObjectsByType<Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             for (int i = 0; i < texts.Length; i++)
             {
                 Text label = texts[i];
