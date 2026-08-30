@@ -50,6 +50,7 @@ namespace Emberfall.EditorTools
         private const string SawStackKey = "AspectVerification.SawStack";
         private const string SawSpreadKey = "AspectVerification.SawSpread";
         private const string StackTextKey = "AspectVerification.StackText";
+        private const string PendingKey = "AspectVerification.Pending";
 
         private const string TriggerPath = "Tools/Screenshots/.aspect-trigger";
 
@@ -59,11 +60,11 @@ namespace Emberfall.EditorTools
         private const string ScratchCompany = "Emberfall Scratch";
         private const string ScratchProduct = "Emberfall Aspect Verify";
 
-        private const string BuildMarker = "ASPECTV1-ember-stack-umbra-spread";
+        private const string BuildMarker = "ASPECTV7-ch1-8-lvl6";
 
         /// <summary>How long to let the battle play before giving up. A stage this lopsided resolves
         /// well inside it; the cap exists so a hang reports a failure instead of idling forever.</summary>
-        private const int TimeoutFrames = 1400;
+        private const int TimeoutFrames = 40000;
 
         static AspectVerification()
         {
@@ -71,6 +72,7 @@ namespace Emberfall.EditorTools
             EditorApplication.update += Pump;
             EditorApplication.update += PumpRestore;
             EditorApplication.update += PollTriggerFile;
+            EditorApplication.update += PumpPending;
         }
 
         private static void PollTriggerFile()
@@ -83,9 +85,35 @@ namespace Emberfall.EditorTools
             Begin();
         }
 
+        /// <summary>
+        /// Refuses to start while the editor is already in Play Mode, and this is not a nicety.
+        ///
+        /// EditorSceneManager.OpenScene throws InvalidOperationException during Play Mode. The first
+        /// live run of this tool hit exactly that: the editor happened to already be playing, Begin
+        /// threw at the OpenScene line, and because the throw landed AFTER the identity switch but
+        /// BEFORE ActiveKey was set, the run left the editor pointed at the scratch identity with
+        /// nothing armed to put it back - Stop() is the only thing that sets RestoreKey, and Stop()
+        /// was never reached. An abort path that leaves the project half-switched is worse than no
+        /// abort path, because the next person to press Play writes their session somewhere else.
+        ///
+        /// Two changes rather than one. The identity switch is now wrapped so that ANY failure
+        /// between it and a successful arm restores it on the way out, and the whole body refuses to
+        /// run in Play Mode in the first place by requesting a stop and rescheduling itself. Either
+        /// alone would have prevented this; both, because the first is a general guarantee and the
+        /// second removes the specific known cause.
+        /// </summary>
         [MenuItem("Emberfall/Debug/Verify Aspect Identities", false, 23)]
         public static void Begin()
         {
+            if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.Log("AspectVerification: editor is already in Play Mode - stopping it first and"
+                        + " retrying once it has exited. OpenScene cannot run during play.");
+                SessionState.SetBool(PendingKey, true);
+                EditorApplication.isPlaying = false;
+                return;
+            }
+
             SessionState.SetString(OrigCompanyKey, PlayerSettings.companyName);
             SessionState.SetString(OrigProductKey, PlayerSettings.productName);
 
@@ -97,11 +125,26 @@ namespace Emberfall.EditorTools
                     + "/" + SessionState.GetString(OrigProductKey, "?") + "' to '"
                     + ScratchCompany + "/" + ScratchProduct + "' before entering Play Mode.");
 
-            ClearScratchSave();
-            string shot = PathFor("aspect_ember_stack.png");
-            if (File.Exists(shot)) File.Delete(shot);
+            try
+            {
+                ClearScratchSave();
+                string shot = PathFor("aspect_ember_stack.png");
+                if (File.Exists(shot)) File.Delete(shot);
 
-            EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
+                EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
+            }
+            catch (System.Exception ex)
+            {
+                // Put the identity back before rethrowing, so a failure here can never leave the
+                // project pointed at the scratch save the way the first live run did.
+                PlayerSettings.companyName = SessionState.GetString(OrigCompanyKey, "");
+                PlayerSettings.productName = SessionState.GetString(OrigProductKey, "");
+                AssetDatabase.SaveAssets();
+                Debug.LogError("AspectVerification: aborted during setup and restored the original identity. "
+                             + ex.Message);
+                return;
+            }
+
             SessionState.SetBool(ActiveKey, true);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
@@ -109,6 +152,16 @@ namespace Emberfall.EditorTools
             SessionState.SetBool(SawSpreadKey, false);
             SessionState.SetString(StackTextKey, "");
             EditorApplication.isPlaying = true;
+        }
+
+        /// <summary>Restarts a run that had to stop Play Mode first, once it has actually exited.</summary>
+        private static void PumpPending()
+        {
+            if (!SessionState.GetBool(PendingKey, false)) return;
+            if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            SessionState.SetBool(PendingKey, false);
+            Debug.Log("AspectVerification: Play Mode has exited, starting the run now.");
+            Begin();
         }
 
         private static void Stop()
@@ -191,24 +244,15 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void PopulateLine(GameApp app)
         {
-            string[] wanted = { "kalyx_emberwright", "kael_the_ashbound", "nyx_serrow", "ryn_solvarr", "orrin_kaal" };
+            // The default three starters at level 6, which is not a guess - it is the configuration
+            // a separate sweep of every stage, seven levels and eight seeds identified as the one a
+            // real player actually reaches an Ember stack in. Deliberately NOT a summoned five-hero
+            // line: adding heroes changes the damage race that produces the stack in the first place,
+            // and the whole point of this run is to catch the tag on a line the game hands out.
             PlayerProfile profile = app.Session.Profile;
-
-            for (int i = 0; i < wanted.Length; i++)
-            {
-                HeroDef def = app.Session.Content.GetHero(wanted[i]);
-                if (def == null) { Debug.LogWarning("AspectVerification: no hero '" + wanted[i] + "'"); continue; }
-
-                HeroInstance owned = profile.FindHeroByDefId(wanted[i]);
-                if (owned == null)
-                {
-                    owned = app.Session.GrantHeroDirect(def, TimeUtil.NowUnix());
-                    if (owned == null) { Debug.LogWarning("AspectVerification: could not grant " + wanted[i]); continue; }
-                }
-                owned.Level = 30;
-                if (i < profile.Team.Length) profile.AssignToTeam(i, owned.Uid);
-            }
-            Debug.Log("AspectVerification: line set to " + string.Join(", ", wanted));
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++) team[i].Level = 6;
+            Debug.Log("AspectVerification: line is the " + team.Count + " default starters at level 6.");
         }
 
         /// <summary>
@@ -263,20 +307,59 @@ namespace Emberfall.EditorTools
 
                 PopulateLine(app);
 
-                // A late chapter-1 stage: five enemies, so there is somebody for a mark to jump to
-                // when one of them dies. A three-enemy stage would run the spread's own guard rather
-                // than the spread.
-                StageDef stage10 = app.Session.Content.GetStage("ch1_10");
-                if (stage10 == null) { Debug.LogError("AspectVerification: stage ch1_10 not found."); Stop(); return; }
+                // ch1_8 at level 6, and both halves of that are measured rather than picked.
+                // Three earlier runs of this tool failed on the arena alone, and what they turned up
+                // is a content fact worth recording rather than a tooling one.
+                //
+                // AN EMBER STACK IS UNREACHABLE FROM THE PLAYER SIDE. Kalyx is the only hero in the
+                // game who applies Burn at all - Orrin was relabelled to Lumen and Kael's Breaking
+                // Point carries no status - so a stack cannot come from two Ember heroes the way
+                // DESIGN-ASPECTS section 1 pictures it. It would need Kalyx to land Cinder Bloom
+                // twice over, and its Burn runs 3 rounds against a 100-energy cast he can afford
+                // about every fourth, so the first entry expires before the second can join it.
+                //
+                // Stacking is an ENEMY-side event: cinder_imp and ashen_revenant are both Ember and
+                // both throw an AllEnemies Burn, so a hero standing in front of the pair carries two
+                // independent entries at once - which is the case the status row could not draw
+                // before this pass, and it happens on the PLAYER's own bar. A sweep of every stage
+                // at seven levels and eight seeds put the cleanest instance of that on ch1_8 at
+                // level 6: depth 2 on a player unit in seven seeds out of eight, and still a win, so
+                // the battle does not end in a defeat wipe before the tag can be caught.
+                StageDef arena = app.Session.Content.GetStage("ch1_8");
+                if (arena == null) { Debug.LogError("AspectVerification: stage ch1_8 not found."); Stop(); return; }
 
-                app.Router.Battle.SetStage(stage10);
+                app.Router.Battle.SetStage(arena);
                 app.Router.Show(ScreenId.Battle);
-                Debug.Log("AspectVerification: launched ch1_10 through the real CampaignScreen path.");
+                Debug.Log("AspectVerification: launched ch1_8 through the real CampaignScreen path.");
                 SessionState.SetInt(StageKey, 1);
                 return;
             }
 
             if (stage != 1) return;
+
+            // Drive the battle to 4x through its own Speed button. The first three runs of this tool
+            // all timed out mid-round-one: playback is animated in real time and an editor update
+            // tick is not a game frame, so 6000 ticks bought about one round. A Burn stack needs
+            // Kalyx to cast Cinder Bloom twice, which is several rounds away at 1x.
+            //
+            // Clicked rather than set. _speed and CycleSpeed are private, and the rule this file
+            // works to is that production code does not grow an API so a verification script can
+            // reach into it - invoking the button's own onClick is the same path a player takes.
+            if (frame == 120 || frame == 150)
+            {
+                Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                for (int i = 0; i < buttons.Length; i++)
+                {
+                    Button b = buttons[i];
+                    if (b == null || !b.gameObject.activeInHierarchy) continue;
+                    Text label = b.GetComponentInChildren<Text>(true);
+                    if (label == null) continue;
+                    if (label.text != "1x" && label.text != "2x") continue;
+                    b.onClick.Invoke();
+                    Debug.Log("AspectVerification: clicked the Speed button (was " + label.text + ").");
+                    break;
+                }
+            }
 
             // ---- polled every frame, latched. Both of these are a few frames wide.
             if (!SessionState.GetBool(SawStackKey, false))
@@ -301,6 +384,27 @@ namespace Emberfall.EditorTools
                     Debug.Log("AspectVerification: UMBRA SPREAD visible in a real battle - \"" + spread
                             + "\" (frame " + frame + ").");
                 }
+            }
+
+            // Diagnostic, not decoration. Two runs found neither rule and there is no way to tell
+            // "the battle played and never stacked" from "the battle never started" without looking
+            // at what is actually on screen. Short labels only - the status row, the tags, the
+            // floats - so this stays readable rather than dumping every string in the UI.
+            if (frame % 2000 == 0)
+            {
+                Text[] all = Object.FindObjectsByType<Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                string sample = "";
+                int shown = 0;
+                for (int i = 0; i < all.Length && shown < 14; i++)
+                {
+                    Text label = all[i];
+                    if (label == null || !label.gameObject.activeInHierarchy) continue;
+                    string t = label.text;
+                    if (string.IsNullOrEmpty(t) || t.Length > 24) continue;
+                    sample += "[" + t + "] ";
+                    shown++;
+                }
+                Debug.Log("AspectVerification: frame " + frame + " texts=" + all.Length + " onscreen: " + sample);
             }
 
             bool sawStack = SessionState.GetBool(SawStackKey, false);
