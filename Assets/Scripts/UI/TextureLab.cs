@@ -407,5 +407,83 @@ namespace Emberfall.UI
             float fade = Mathf.Clamp01((limit - r) * 6f);
             return Mathf.Clamp01((wave - 0.55f) * 4f) * fade;
         }
+
+        // ------------------------------------------------------------------ the Cinder
+
+        /// <summary>
+        /// The Keeper's own motif (DESIGN-ART-BIBLE section 5): "a small floating fragment... an
+        /// irregular piece of translucent, almost colorless material containing six razor-thin
+        /// internal fractures [that] nearly meet in the center but never connect." An outline only,
+        /// not a filled gem - the material is translucent, and a filled shape reads as a solid icon
+        /// rather than a fragment of something you can see through. Colourless by construction: this
+        /// method draws white-on-transparent like every other TextureLab shape, and it is on the
+        /// caller to tint it with a neutral tone. Nothing about the Cinder is aspect-tinted at rest,
+        /// so no call site anywhere in this project may pass it an AspectColor.
+        ///
+        /// The outer silhouette is a hexagon perturbed by two fixed sine harmonics rather than a
+        /// regular one, so it reads as "irregular" rather than as a gem-icon cliché - deliberately
+        /// asymmetric, not randomised, so the sprite is identical on every call the way every other
+        /// TextureLab shape is. The six fractures are spaced 60 degrees apart with a small per-line
+        /// jitter for the same reason, each stopping short of both the centre and the outer edge.
+        /// </summary>
+        public static Sprite CinderFragment(int size)
+        {
+            string key = "cinder_" + size;
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = NewTexture(size, size);
+            Color32[] pixels = new Color32[size * size];
+            float half = size * 0.5f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x + 0.5f - half) / half;
+                    float ny = (y + 0.5f - half) / half;
+                    float a = CinderAlpha(nx, ny);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Cache[key] = sprite;
+            return sprite;
+        }
+
+        private static float CinderAlpha(float nx, float ny)
+        {
+            float r = Mathf.Sqrt(nx * nx + ny * ny);
+            float ang = Mathf.Atan2(ny, nx);
+
+            // Outline: a hexagonal radius perturbed per-angle by two harmonics, so no two facets
+            // match - "an irregular piece", not a regular gem icon.
+            float wobble = 0.09f * Mathf.Sin(ang * 3f + 0.6f) + 0.05f * Mathf.Sin(ang * 5f - 1.1f);
+            float outerRadius = 0.80f + wobble;
+            float outline = Mathf.Clamp01((0.045f - Mathf.Abs(r - outerRadius)) * 30f);
+
+            // Six fractures, evenly spaced with a small per-line jitter, each a thin band along its
+            // own ray. Stops short of the centre (proj > 0.14) and short of the outer edge
+            // (proj < outerRadius * 0.72) so they "nearly meet... but never connect" at either end.
+            float fractures = 0f;
+            for (int i = 0; i < 6; i++)
+            {
+                float baseAngle = i * (Mathf.PI * 2f / 6f);
+                float jitter = 0.06f * Mathf.Sin(i * 2.1f + 0.4f);
+                float a2 = baseAngle + jitter;
+                float dx = Mathf.Cos(a2);
+                float dy = Mathf.Sin(a2);
+                float proj = nx * dx + ny * dy;
+                float perp = Mathf.Abs(-nx * dy + ny * dx);
+                float inSegment = (proj > 0.14f && proj < outerRadius * 0.72f) ? 1f : 0f;
+                float line = inSegment * Mathf.Clamp01((0.022f - perp) * 46f);
+                fractures = Mathf.Max(fractures, line);
+            }
+
+            return Mathf.Max(outline, fractures);
+        }
     }
 }
