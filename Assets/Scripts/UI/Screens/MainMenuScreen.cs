@@ -124,6 +124,13 @@ namespace Emberfall.UI.Screens
         private const float CampaignX = 0.663f, CampaignY = 0.452f; // the fire portal
         private const float RecitalX = 0.763f, RecitalY = 0.448f;   // the purple cave mouth
 
+        /// <summary>
+        /// Height reserved along the bottom edge for the badge dock and the squad strip. Anything
+        /// stacked above them measures from this one number rather than carrying its own copy, so
+        /// the two rows and the card above them cannot drift apart.
+        /// </summary>
+        private const float BottomRowHeight = 152f;
+
         private RectTransform _map;
 
         /// <summary>
@@ -139,7 +146,7 @@ namespace Emberfall.UI.Screens
         {
             BuildMap();
             BuildMapNodes();
-            BuildCampaignWaypoint();
+            BuildCampaignCard();
             BuildIdlePanel();
             BuildBadgeDock();
             BuildSquadStrip();
@@ -234,6 +241,9 @@ namespace Emberfall.UI.Screens
             AddMapNode("SUMMON", SummonX, SummonY, OpenSummon);
             AddMapNode("FORGE", ForgeX, ForgeY, OpenForge);
             AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital);
+            // The portal is a place you can walk to, like the others. Its live state and its
+            // primary action live in the corner card instead, so the map keeps only the tap target.
+            AddMapNode("CAMPAIGN", CampaignX, CampaignY, OpenCampaign);
 
             // Painted into the map for a future that does not exist yet, exactly as the mockup
             // treats it. Same treatment as the dock's two unbuilt entries: it looks like a place,
@@ -309,43 +319,54 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// The campaign waypoint: where the player is in the story, and the one button this screen
-        /// exists to get them to press. Sits on the monolith like any other node, but is built
-        /// apart from them because it is the only one carrying live state and the only one allowed
-        /// to be Gold.
+        /// Campaign status and the one button this screen exists to get pressed, as a compact card
+        /// pinned to the bottom-right edge above the squad strip.
+        ///
+        /// It used to be a 520x214 plate anchored to the middle of the map, which put the largest
+        /// opaque rectangle on the screen directly over the courtyard, the portal and the Deep
+        /// Recital node - it covered the art the reskin exists to show. Screen-anchored, at roughly
+        /// the idle panel's footprint, it reads as chrome about the account rather than a place on
+        /// the map, which is what it always was.
+        ///
+        /// Bottom-right specifically, checked against the node anchors rather than picked by eye.
+        /// The right edge below the idle panel collides with DEEP RECITAL at every aspect, and the
+        /// top-left collides with HEROES; above the squad strip is the one edge slot that clears
+        /// every node at 16:9, 19.5:9 and the wider editor window alike, by 100 units at worst.
         /// </summary>
-        private void BuildCampaignWaypoint()
+        private void BuildCampaignCard()
         {
-            RectTransform post = UIBuilder.Node("Campaign", _map);
-            AnchorOnMap(post, CampaignX, CampaignY, 520f, 214f);
+            const float cardWidth = 600f;
+            const float cardHeight = 168f;
+            const float inner = 18f;
 
-            Image plate = post.gameObject.AddComponent<Image>();
+            RectTransform card = UIBuilder.Node("Campaign", Root);
+            UIBuilder.Box(card, -UITheme.ScreenPadding, BottomRowHeight + UITheme.Space16,
+                          cardWidth, cardHeight, new Vector2(1f, 0f));
+
+            Image plate = card.gameObject.AddComponent<Image>();
             plate.sprite = TextureLab.RoundedRect(18);
             plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubBackdrop, 0.86f);
-            UIBuilder.Frame("Edge", post, UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f), 18, 2);
+            plate.color = UITheme.WithAlpha(HubPanel, 0.9f);
+            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 18, 2);
 
-            // Both drop to FontTiny-2 and are given hard widths that add up to less than the plate.
-            // At FontTiny on a 470-wide plate, "CHAPTER 1 - THE ASHEN ROAD" ran straight through
-            // "0 / 12 CLEARED" and the two read as one broken string.
-            _chapterLabel = UIBuilder.Label("Chapter", post, "", UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_chapterLabel.rectTransform, 18f, -14f, 320f, 24f, new Vector2(0f, 1f));
+            _chapterLabel = UIBuilder.Label("Chapter", card, "", UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            UIBuilder.Box(_chapterLabel.rectTransform, inner, -12f, 340f, 24f, new Vector2(0f, 1f));
 
-            _chapterCount = UIBuilder.Label("Count", post, "", UITheme.FontTiny - 2, UITheme.Gold, TextAnchor.UpperRight);
-            UIBuilder.Box(_chapterCount.rectTransform, -18f, -14f, 158f, 24f, new Vector2(1f, 1f));
+            _chapterCount = UIBuilder.Label("Count", card, "", UITheme.FontTiny - 2, UITheme.Gold, TextAnchor.UpperRight);
+            UIBuilder.Box(_chapterCount.rectTransform, -inner, -12f, 200f, 24f, new Vector2(1f, 1f));
 
-            _chapterFill = UIBuilder.Bar("Bar", post, HubPanelSunken, UITheme.Gold);
+            _chapterFill = UIBuilder.Bar("Bar", card, HubPanelSunken, UITheme.Gold);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
-            UIBuilder.Box(barRoot, 0f, -46f, 484f, 8f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(barRoot, 0f, -44f, cardWidth - inner * 2f, 8f, new Vector2(0.5f, 1f));
+
+            _continueSub = UIBuilder.Label("Sub", card, "", UITheme.FontTiny - 4, UITheme.ChromeBrass, TextAnchor.UpperCenter);
+            UIBuilder.Box(_continueSub.rectTransform, 0f, -58f, cardWidth - inner * 2f, 22f, new Vector2(0.5f, 1f));
 
             // GoldButton: the primary action, the same colour the de-aspect pass gave it and the
-            // same colour the Claim button uses. Nothing else on this map is allowed to be Gold.
-            _continueButton = UIBuilder.GoldButton("Continue", post, "CONTINUE CAMPAIGN", UITheme.FontSmall);
-            UIBuilder.Box(_continueButton.Root, 0f, 58f, 484f, 72f, new Vector2(0.5f, 0f));
+            // same colour Claim uses. Nothing else on this screen is allowed to be Gold.
+            _continueButton = UIBuilder.GoldButton("Continue", card, "CONTINUE CAMPAIGN", UITheme.FontSmall);
+            UIBuilder.Box(_continueButton.Root, 0f, 14f, cardWidth - inner * 2f, 62f, new Vector2(0.5f, 0f));
             _continueButton.OnClick(OpenCampaign);
-
-            _continueSub = UIBuilder.Label("Sub", post, "", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.LowerCenter);
-            UIBuilder.Box(_continueSub.rectTransform, 0f, 20f, 484f, 28f, new Vector2(0.5f, 0f));
         }
 
         /// <summary>
