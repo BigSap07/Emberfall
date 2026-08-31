@@ -69,7 +69,31 @@ namespace Emberfall.EditorTools
             if (!File.Exists(path)) return;
             string requested = File.ReadAllText(path).Trim().ToLowerInvariant();
             File.Delete(path);
-            string outputName = requested == "before" ? "hub_before" : "hub_after";
+
+            // "<name>" or "<name>@<width>x<height>". The optional size pins the Game view before the
+            // run, so a capture is taken at a chosen aspect instead of whatever the editor window
+            // was last dragged to. Without it the logical canvas size silently follows the window -
+            // see GameViewSize for why that quietly invalidates a layout check.
+            int at = requested.IndexOf('@');
+            if (at > 0)
+            {
+                string size = requested.Substring(at + 1);
+                requested = requested.Substring(0, at);
+                int by = size.IndexOf('x');
+                int w, h;
+                if (by > 0 && int.TryParse(size.Substring(0, by), out w) && int.TryParse(size.Substring(by + 1), out h))
+                {
+                    if (!GameViewSize.Apply(w, h))
+                    {
+                        Debug.LogError("HubVerification: refusing to capture - the Game view could not be set to "
+                                     + w + "x" + h + ", so the result would not be at the requested aspect.");
+                        return;
+                    }
+                }
+            }
+
+            string outputName = requested == "before" ? "hub_before" : requested;
+            if (outputName != "hub_before" && !outputName.StartsWith("hub_")) outputName = "hub_after";
             Debug.Log("HubVerification: trigger found (build marker " + BuildMarker + "), capturing " + outputName + ".png");
             Begin(outputName);
         }

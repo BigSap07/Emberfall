@@ -110,6 +110,23 @@ namespace UnityEditor
         public void Repaint() { }
     }
 
+    /// <summary>
+    /// Signature-only, like the rest of this shim. GameViewSize reflects against internal editor
+    /// types and needs typeof(Editor).Assembly as its handle on the UnityEditor assembly, plus
+    /// ScriptableSingleton&lt;T&gt; to reach GameViewSizes.instance. Neither is ever called here -
+    /// they exist so build-check type-checks the file instead of skipping it.
+    /// </summary>
+    public class Editor : ScriptableObject
+    {
+        public UnityEngine.Object target { get; set; }
+        public virtual void OnInspectorGUI() { }
+    }
+
+    public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObject
+    {
+        public static T instance { get { return null; } }
+    }
+
     public static class EditorPrefs
     {
         public static bool GetBool(string key, bool defaultValue) { return defaultValue; }
