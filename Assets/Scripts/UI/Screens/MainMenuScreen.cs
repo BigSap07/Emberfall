@@ -56,13 +56,6 @@ namespace Emberfall.UI.Screens
         private static readonly Color HubPanelSunken = UITheme.Hex("14100B");
 
         /// <summary>
-        /// Multiplied over the painted map. The Hub is a warm dark screen and a full-brightness
-        /// painting behind dark chrome flattens every plate on top of it; the wash pulls the art
-        /// into the same family as HubPanel without repainting anything.
-        /// </summary>
-        private static readonly Color MapWash = UITheme.Hex("B29E7E");
-
-        /// <summary>
         /// The authored dimensions of hub.png, declared rather than read back off the texture.
         ///
         /// The importer does not hand back the file: a non-power-of-two texture is rescaled per
@@ -194,7 +187,12 @@ namespace Emberfall.UI.Screens
 
             if (_mapSprite != null)
             {
-                Image art = UIBuilder.Img("Art", _map, _mapSprite, MapWash);
+                // Color.white: no tint at all. This carried a B29E7E multiply wash, which was
+                // correct for the pale blue-grey plateau the Hub used to sit on and is wrong for a
+                // painting that already arrives warm and saturated. It cost 37% of the image's
+                // luminance and crushed blue to 49% of source, which is why the sky, the banner,
+                // the obelisk runes and the purple cave all read flat and dull.
+                Image art = UIBuilder.Img("Art", _map, _mapSprite, Color.white);
                 UIBuilder.FillParent(art.rectTransform, 0f);
 
                 AspectRatioFitter fitter = _map.gameObject.AddComponent<AspectRatioFitter>();
@@ -213,20 +211,18 @@ namespace Emberfall.UI.Screens
                 UIBuilder.FillParent(_map, 0f);
             }
 
-            // 0.32, not the 0.5 this started at. A multiply wash preserves the painting's contrast
-            // because it scales every value by the same factor; a flat scrim does not - it lifts the
-            // blacks toward itself and flattens the whole image. At 0.5 the plateau, the sky and the
-            // structures had collapsed into one brown field with the silhouettes barely separable,
-            // which is a worse outcome than the cool palette this was correcting.
-            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, UITheme.WithAlpha(HubBackdrop, 0.32f));
+            // 0.10. This was 0.5, then 0.32, both tuned against a pale plateau that genuinely
+            // needed pulling down. A flat scrim does not preserve contrast the way a multiply does:
+            // it lifts the blacks toward itself and flattens everything. Stacked on the wash above
+            // it, a mid-tone was reaching the screen at about 43% of the source file's brightness.
+            // What is left is the little that the chrome needs to seat against, nothing more.
+            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, UITheme.WithAlpha(HubBackdrop, 0.10f));
             UIBuilder.FillParent(scrim.rectTransform, 0f);
 
-            // One soft, colourless ambient lift, the same cue the Cinder theme pass introduced -
-            // kept because it is the Hub's own light, not the map's. Static, per DESIGN-ART-BIBLE
-            // section 5: nothing about the Cinder animates at rest.
-            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f),
-                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.10f));
-            UIBuilder.Box(glow.rectTransform, 0f, -180f, 1500f, 1100f, new Vector2(0.5f, 1f));
+            // The ambient glow that used to sit here is gone. It was a colourless CinderGlass
+            // lift for a screen whose floor was a flat dark fill and needed one; this painting has
+            // a sunset in it and supplies its own. Over vivid art a cool grey veil at 10% alpha is
+            // just one more thing desaturating the top half of the image.
         }
 
         /// <summary>
