@@ -277,6 +277,18 @@ namespace Emberfall.UI
             return TextMuted;
         }
 
+        /// <summary>
+        /// The six aspect accents. DESIGN-ART-BIBLE section 1 is the specification for these.
+        ///
+        /// Only Lumen currently matches it. The other five still carry the values this switch was
+        /// first written with, and all five differ from the bible - Ember F0743A vs E84532, Tide
+        /// 4A9BD8 vs 28C7D9, Verdant 55B96A vs 62A77A, Gale 7FD8E8 vs C6E34A, Umbra 9264E8 vs
+        /// E7E0D0. Four of those are shade drift within the same hue family, but Gale's is a hue
+        /// change (cyan here, chartreuse in the bible) and Umbra's is a whole family change (purple
+        /// here, bone-white there). Reconciling them is a real visual pass with real consequences
+        /// for every hero card, armour disc and aspect chip in the game, and it was not this
+        /// change's job. Do not read the five unfixed entries as verified against anything.
+        /// </summary>
         public static Color AspectColor(Aspect aspect)
         {
             switch (aspect)
@@ -286,7 +298,12 @@ namespace Emberfall.UI
                 case Aspect.Verdant: return Hex("55B96A");
                 case Aspect.Gale: return Hex("7FD8E8");
                 case Aspect.Umbra: return Hex("9264E8");
-                case Aspect.Lumen: return Hex("F5E08A");
+                // Hard cobalt blue, per DESIGN-ART-BIBLE section 1. Was F5E08A, a pale gold that
+                // sat close enough to UITheme.Gold (F2C14E) that a Lumen hero's aspect chip and a
+                // gold currency figure read as the same colour at a glance - the collision this
+                // fix exists to remove, since Gold is a load-bearing semantic colour (currency,
+                // progress, primary action) and an aspect accent must never be mistaken for it.
+                case Aspect.Lumen: return Hex("3568E8");
             }
             return TextMuted;
         }
