@@ -76,7 +76,10 @@ namespace Emberfall.UI.Screens
             Image baseFill = UIBuilder.Img("Backdrop", Root, TextureLab.White, UITheme.Backdrop);
             UIBuilder.FillParent(baseFill.rectTransform, 0f);
 
-            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f), UITheme.WithAlpha(UITheme.CinderGlass, 0.05f));
+            // 0.10, was 0.05. The original was tuned against this screen's near-black violet floor,
+            // where 5% of a cool grey was already a visible lift. The warmed floor is lighter and
+            // warmer, and at 0.05 the glow simply stopped registering against it.
+            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f), UITheme.WithAlpha(UITheme.CinderGlass, 0.10f));
             UIBuilder.Box(glow.rectTransform, 0f, -260f, 1400f, 1400f, new Vector2(0.5f, 1f));
         }
 
@@ -301,12 +304,32 @@ namespace Emberfall.UI.Screens
         /// DESIGN-ART-BIBLE section 5 is explicit that the Cinder "never grows a face, speaks
         /// through a mouth, sprouts mascot features, or becomes a cute companion"; an idle bounce or
         /// pulse here would be exactly that, just abstracted from a face onto a shape.
+        ///
+        /// KNOWN BUG, measured in Play Mode, not yet fixed here: the 15px clearance described above
+        /// only exists when the logical canvas is exactly 1080 tall. This mark is anchored to the
+        /// TOP edge while the nav row it must clear is anchored to the BOTTOM, so the gap between
+        /// them is not a constant - it shrinks by one unit for every unit of logical height lost.
+        /// GameApp's scaler is MatchWidthOrHeight at 0.5 against a 1920x1080 reference, so a
+        /// 20:9 Android landscape device - the shape this game actually ships to - yields roughly
+        /// 959 logical units of height, leaving about 29 units of gap for a 120-unit mark. The
+        /// mark then lands on top of the second nav row (it is built after BuildSecondNav, so it
+        /// paints over it) and reads as a smudge across the EVENTS/INVENTORY/RECITAL buttons -
+        /// precisely the "reads as a rendering fault rather than a design one" outcome the caution
+        /// above was written to avoid. Confirmed on a real capture at 1161x515.
+        ///
+        /// Not fixed in this commit because there is no correct hard-coded y: at realistic device
+        /// aspects the gap this mark was placed into does not exist at all, so the fix is a
+        /// composition decision, not a number. It belongs to the layout pass that rebuilds this
+        /// screen against DesignReference/Main.dc.html.
         /// </summary>
         private void BuildCinderMark()
         {
             const float size = 120f;
+            // 0.32, was 0.22. Same reason as the ambient glow: a warmer, lighter floor eats a
+            // low-alpha cool grey. The mark is an outline shape with no fill, so it loses legibility
+            // faster than a solid would - there is no mass to survive the wash-out, only thin lines.
             Image mark = UIBuilder.Img("CinderMark", Root, TextureLab.CinderFragment(256),
-                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.22f));
+                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.32f));
             UIBuilder.Box(mark.rectTransform, RightColumnX, -529f, size, size, new Vector2(0.5f, 1f));
         }
 

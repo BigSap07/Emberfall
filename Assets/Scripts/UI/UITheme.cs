@@ -51,13 +51,41 @@ namespace Emberfall.UI
         /// <summary>
         /// The Cinder's own tone (DESIGN-ART-BIBLE section 5): "translucent, almost colorless
         /// material." A cool, heavily desaturated glass-grey, chosen to sit clearly apart from all
-        /// six aspect accents (nearest neighbours are Umbra's warm ivory E7E0D0 and Lumen's cobalt
-        /// 3568E8; this is neither warm nor saturated) and from Gold, so the Hub's one recurring
-        /// motif never reads as a seventh palette entry competing with the six. Used only for the
-        /// Hub's own quiet watermark and rule lines - the Cinder never carries an aspect colour at
-        /// rest, and no call site anywhere in this project may tint it with one.
+        /// six aspect accents and from Gold, so the Hub's one recurring motif never reads as a
+        /// seventh palette entry competing with the six. Used only for the Hub's own quiet
+        /// watermark and rule lines - the Cinder never carries an aspect colour at rest, and no
+        /// call site anywhere in this project may tint it with one.
+        ///
+        /// Hue is unchanged from the pass that introduced it. What changed with the Hub's warmed
+        /// floor is only how much of it is let through: cool grey at 0.05 and 0.22 alpha was
+        /// tuned against a near-black violet backdrop, and on a warmer, lighter floor those same
+        /// alphas read as dirt on the panel rather than as a mark. The two Hub call sites now sit
+        /// at 0.10 (ambient glow) and 0.32 (watermark). Raising alpha, not saturation, is the
+        /// deliberate choice - the Cinder stays colourless.
         /// </summary>
         public static readonly Color CinderGlass = Hex("BFC3CE");
+
+        /// <summary>
+        /// Structural chrome only. The duller, cooler, desaturated brass that carries the
+        /// gold-accent feel of DesignReference/*.dc.html without taking any of Gold's meaning.
+        ///
+        /// Allowed: panel borders, tab and section dividers, icon-button outlines, secondary label
+        /// text, frame edges - surfaces that delineate the layout and are not themselves the point.
+        ///
+        /// Forbidden: anything a player acts on or reads as a value. Buttons, currency figures,
+        /// progress fills, counts, badges and hover/pressed states are Gold's, and Gold's alone.
+        /// The split exists because Gold is doing three jobs at once already (currency, progress,
+        /// primary action); a chrome accent close enough to be confused with it would erase all
+        /// three at once. If a highlight or hover tint is needed, reuse Gold rather than adding a
+        /// third warm constant - an unnecessary fourth warm entry sitting next to Gold is exactly
+        /// how Lumen's F5E08A came to collide with the currency colour in the first place.
+        ///
+        /// Contrast, measured rather than assumed, against the Hub's warmed floor: 4.7:1 on
+        /// Backdrop, 4.3:1 on Panel, 3.7:1 on PanelRaised. Comfortable for borders, dividers and
+        /// headings at any size, and for secondary label text down to about FontSmall. It is NOT
+        /// a safe colour for small body copy on a raised panel - that is what TextMuted is for.
+        /// </summary>
+        public static readonly Color ChromeBrass = Hex("8A7A52");
 
         // ---------- ink: text edge treatment ----------
         // The near-black a label is outlined or shadowed with to hold it apart from whatever sits
