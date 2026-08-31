@@ -277,8 +277,39 @@ namespace Emberfall.UI.Screens
             AnchorOnMap(node.Root, mx, my, NodeWidthFor(label), 62f);
             node.OnClick(NotSoonEnough(label));
 
-            RectTransform tag = UIBuilder.Chip("Soon", node.Root, "SOON", UITheme.ChromeBrass, UITheme.FontTiny - 4);
-            UIBuilder.Box(tag, 0f, -24f, 92f, 26f, new Vector2(0.5f, 0f));
+            AddSoonTag(node.Root, 0f, -24f, new Vector2(0.5f, 0f));
+        }
+
+        /// <summary>
+        /// The "not built yet" tag.
+        ///
+        /// Deliberately NOT UIBuilder.Chip. Chip paints its background, its border and its text
+        /// from one tint - a 22% wash, a 75% edge and 100% text, all the same hue. On a dark panel
+        /// that reads fine. Over a sunlit painting it does not: ChromeBrass text on a ChromeBrass
+        /// wash has almost no contrast against itself, and the result renders as an empty pale
+        /// rounded rectangle with no legible word in it. That was the stray artifact under
+        /// MARKETPLACE - not a broken sprite or a failed load, just a widget camouflaging its own
+        /// label.
+        ///
+        /// A dark opaque plate carries the text instead, so the tag reads at ChromeBrass's measured
+        /// 4.7:1 against HubBackdrop rather than against a wash of itself. Chip is left alone;
+        /// other screens use it over panels where its single-tint assumption holds.
+        /// </summary>
+        private static RectTransform AddSoonTag(RectTransform parent, float x, float y, Vector2 anchor)
+        {
+            RectTransform tag = UIBuilder.Node("Soon", parent);
+            UIBuilder.Box(tag, x, y, 96f, 28f, anchor);
+
+            Image plate = tag.gameObject.AddComponent<Image>();
+            plate.sprite = TextureLab.RoundedRect(10);
+            plate.type = Image.Type.Sliced;
+            plate.color = UITheme.WithAlpha(HubBackdrop, 0.92f);
+            plate.raycastTarget = false;
+            UIBuilder.Frame("Edge", tag, UITheme.WithAlpha(UITheme.ChromeBrass, 0.8f), 10, 2);
+
+            Text label = UIBuilder.Label("Text", tag, "SOON", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(label.rectTransform, 0f);
+            return tag;
         }
 
         /// <summary>
@@ -457,11 +488,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(caption.rectTransform, 0f, -100f, 132f, 24f, new Vector2(0.5f, 1f));
             UIBuilder.Shadowed(caption, UITheme.InkArt, 1.4f);
 
-            if (locked)
-            {
-                RectTransform tag = UIBuilder.Chip("Soon", cell, "SOON", UITheme.ChromeBrass, UITheme.FontTiny - 6);
-                UIBuilder.Box(tag, 0f, -126f, 84f, 22f, new Vector2(0.5f, 1f));
-            }
+            if (locked) AddSoonTag(cell, 0f, -126f, new Vector2(0.5f, 1f));
         }
 
         /// <summary>
