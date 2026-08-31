@@ -35,6 +35,46 @@ namespace Emberfall.UI.Screens
         private const float RightColumnX = 462f;
         private const float ColumnTop = UITheme.TopBarHeight + UITheme.Space24;
 
+        // ---------- the Hub's own surfaces ----------
+        // A Hub-scoped override of the shared surface ramp, and nothing more. UITheme.Backdrop,
+        // Panel, PanelRaised and Border are NOT touched: every other screen keeps the violet-toned
+        // chrome and the Ember-orange accents it has today, and this screen stops matching them.
+        //
+        // That seam is intended, not an oversight. The Hub is the only screen with a fiction that
+        // demands its own material (DESIGN-WORLD, "The Cinder and the Keeper" - the office "takes
+        // no side among the six"), and it is the only screen the reskin covers. Warming the shared
+        // constants instead would drag Campaign, Inventory, RelicShop and every PrimaryButton in
+        // the game along with it, which is a far larger visual change than this one and would land
+        // with none of those screens actually reviewed.
+        //
+        // BuildBackdrop already established the mechanism: the Hub opaque-fills its own floor
+        // rather than inheriting GameApp's shared canvas background. This extends the same idea
+        // from the floor up through the cards that sit on it - a floor warmed on its own would
+        // just make the unchanged violet cards look wrong against it.
+        //
+        // The first four are specified values. HubPanelSunken and HubBorderSoft are derived, not
+        // chosen: each sits at the same ratio to its parent that UITheme.PanelSunken and
+        // UITheme.BorderSoft sit at to UITheme.Panel and UITheme.Border (about 0.72), so the
+        // Hub's internal depth relationships read exactly like every other screen's. They are
+        // needed because this screen uses six surface tones and only four were specified.
+        //
+        // The two card frames take HubBorder where they previously took the softer UITheme
+        // .BorderSoft. The specified border tone is a card edge tone - that is what it is for -
+        // and on a warm floor the softer variant is nearly indistinguishable from the card it is
+        // supposed to be outlining. HubBorderSoft is kept for the empty-team-slot ring, which is
+        // deliberately quieter than a card edge and should stay that way.
+        //
+        // None of these is ChromeBrass. ChromeBrass is an accent that sits ON these surfaces
+        // (dividers, outlines, secondary labels); these six are the surfaces themselves. Keeping
+        // that distinction is why the reskin can add brass detail in the next commit without
+        // having to re-derive the panel ramp.
+        private static readonly Color HubBackdrop = UITheme.Hex("14121A");
+        private static readonly Color HubPanel = UITheme.Hex("1C1710");
+        private static readonly Color HubPanelRaised = UITheme.Hex("2B2318");
+        private static readonly Color HubBorder = UITheme.Hex("3A3120");
+        private static readonly Color HubPanelSunken = UITheme.Hex("14100B");
+        private static readonly Color HubBorderSoft = UITheme.Hex("2A2317");
+
         protected override void Build()
         {
             // Drawn first, so every card and label above it in this method covers it wherever they
@@ -73,7 +113,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildBackdrop()
         {
-            Image baseFill = UIBuilder.Img("Backdrop", Root, TextureLab.White, UITheme.Backdrop);
+            Image baseFill = UIBuilder.Img("Backdrop", Root, TextureLab.White, HubBackdrop);
             UIBuilder.FillParent(baseFill.rectTransform, 0f);
 
             // 0.10, was 0.05. The original was tuned against this screen's near-black violet floor,
@@ -122,8 +162,8 @@ namespace Emberfall.UI.Screens
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
             background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.Panel, 0.92f);
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 24, 2);
+            background.color = UITheme.WithAlpha(HubPanel, 0.92f);
+            UIBuilder.Frame("Edge", card, HubBorder, 24, 2);
 
             float inner = UITheme.Space24;
             const float headingHeight = 26f;
@@ -148,7 +188,7 @@ namespace Emberfall.UI.Screens
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(24);
             background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
+            background.color = UITheme.WithAlpha(HubPanelSunken, 0.95f);
             UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.Gold, 0.4f), 24, 2);
 
             Image glow = UIBuilder.Img("Glow", card, TextureLab.Glow(128, 2f), UITheme.WithAlpha(UITheme.Gold, 0.10f));
@@ -195,8 +235,8 @@ namespace Emberfall.UI.Screens
             Image background = card.gameObject.AddComponent<Image>();
             background.sprite = TextureLab.RoundedRect(20);
             background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.Panel, 0.9f);
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 20, 2);
+            background.color = UITheme.WithAlpha(HubPanel, 0.9f);
+            UIBuilder.Frame("Edge", card, HubBorder, 20, 2);
 
             _chapterLabel = UIBuilder.Label("Chapter", card, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperLeft);
             UIBuilder.Box(_chapterLabel.rectTransform, 26f, -20f, 640f, 34f, new Vector2(0f, 1f));
@@ -208,7 +248,7 @@ namespace Emberfall.UI.Screens
             // progress rather than a claim about which of the six beliefs the Hub favours. Matches
             // the Claim button and the idle cache's own accent, so "advancement" reads as one colour
             // across the screen instead of picking up whichever aspect happened to be nearby.
-            _chapterFill = UIBuilder.Bar("Bar", card, UITheme.PanelSunken, UITheme.Gold);
+            _chapterFill = UIBuilder.Bar("Bar", card, HubPanelSunken, UITheme.Gold);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
             barRoot.anchorMin = new Vector2(0f, 0f);
             barRoot.anchorMax = new Vector2(1f, 0f);
@@ -257,7 +297,7 @@ namespace Emberfall.UI.Screens
         private void AddNavButton(RectTransform parent, string label, int sigil, Color tint, System.Action action)
         {
             UIButton button = UIBuilder.MakeButton("Nav" + label, parent, "", UITheme.FontSmall,
-                                                   UITheme.PanelRaised, UITheme.WithAlpha(tint, 0.6f), UITheme.TextPrimary);
+                                                   HubPanelRaised, UITheme.WithAlpha(tint, 0.6f), UITheme.TextPrimary);
             UIBuilder.Flexible(button.Root, 1f, 0f);
             button.OnClick(action);
 
@@ -336,7 +376,7 @@ namespace Emberfall.UI.Screens
         private void BuildOptions()
         {
             // right screen edge, in the gap between the cache card (ends 514) and the nav (starts 850)
-            UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f, UITheme.WithAlpha(UITheme.PanelRaised, 0.9f), UITheme.TextMuted);
+            UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f, UITheme.WithAlpha(HubPanelRaised, 0.9f), UITheme.TextMuted);
             UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -538f, 62f, 62f, new Vector2(1f, 1f));
             options.OnClick(ShowOptions);
         }
@@ -401,7 +441,7 @@ namespace Emberfall.UI.Screens
                     // an open slot is room to grow, not a hole: a ring where the portrait will
                     // stand (same convention as the campaign banner strip) and the slot's number,
                     // so the cell promises a fourth and fifth ally rather than apologising
-                    Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5), UITheme.BorderSoft);
+                    Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5), HubBorderSoft);
                     UIBuilder.Box(ring.rectTransform, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
                     Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
                     UIBuilder.Box(hint.rectTransform, 0f, -132f, 154f, 26f, new Vector2(0.5f, 1f));
