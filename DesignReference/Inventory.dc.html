@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    /*
+      Inventory / "Bag" screen - what the Bag icon in the hub's badge-dock opens (Guild / Bag /
+      Splinters / Relics, see Main.dc.html). Three tabs share one screen: Armor, Relics, Materials.
+      Only Gold and Shards are real, documented currencies (DESIGN-BUILD-ORDER "Numbers already
+      decided": startingGold 400, startingShards 40, summonCost 120 shards). Splinters was this
+      session's own addition to the hub dock as the likely home for "duplicate conversion" (a real
+      mechanic named in DESIGN-BUILD-ORDER but never spec'd - what a duplicate hero pull turns
+      into is not decided anywhere) - kept here as a wallet entry for consistency with that dock,
+      not as confirmed design.
+
+      Armor tab: the same 6-piece system (Weapon/Helmet/Armor/Boots/2 Accessories) introduced in
+      HeroDetailEquipment.dc.html, same rarity ramp (Common new here, Uncommon/Rare/Epic reused
+      verbatim, Legendary new here as the top tier). First cut, not a committed spec - same caveat
+      as that file.
+
+      Relics tab: DESIGN-RELICS.md is not in this project's accessible doc set, so only fragments
+      known from DESIGN-ASPECTS/DESIGN-WORLD quotes are used: 6 relics total, one per named wearer,
+      never a percentage. Four named wearers are known (Maeve, Wren, Kalyx/Kael, Orrin); the other
+      two relics are shown locked/unknown rather than invented.
+
+      Materials tab: zero documented backing anywhere in project knowledge - no economy doc names
+      upgrade/ascension materials. Built as a plausible placeholder set only, flagged provisional,
+      not to be read as decided content.
+    */
+
+    .icon-btn { width:38px; height:38px; border-radius:8px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.45); display:flex; align-items:center; justify-content:center; position:relative; flex:none; }
+    .icon-btn svg { width:18px; height:18px; }
+    .chip { display:flex; align-items:center; gap:9px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.55); border-radius:8px; padding:8px 14px; }
+    .chip span { font-family:'Cinzel',serif; font-weight:600; font-size:14px; }
+
+    .tab { font-family:'Cinzel',serif; font-weight:600; font-size:13px; padding:9px 18px; border-radius:8px; border:1px solid transparent; color:#a89e8e; }
+    .tab .n { opacity:0.65; font-weight:500; font-size:11px; margin-left:4px; }
+    .tab.active { color:#f3e2b8; background:rgba(203,162,74,0.14); border-color:rgba(203,162,74,0.55); }
+
+    .rarity-tag { font-family:'Cinzel',serif; font-weight:600; font-size:8.5px; text-transform:uppercase; letter-spacing:0.04em; padding:1px 6px; border-radius:4px; }
+    .stat-pill { font-size:9.5px; color:#c9bfae; background:rgba(0,0,0,0.25); border:1px solid rgba(203,162,74,0.2); border-radius:4px; padding:1px 6px; }
+
+    /* ---- item card: same footprint as Heroes.dc.html's .hcard so Bag and Heroes read as one
+       family of grid, but bordered by RARITY instead of aspect. --a is the rarity accent. ---- */
+    .icard { width:150px; display:flex; flex-direction:column; align-items:center; gap:7px; }
+    .icard .tile { width:150px; height:150px; border-radius:12px; border:2px solid var(--a, #9a9aa8); background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.07), rgba(10,9,13,0.6)); overflow:hidden; position:relative; box-shadow:0 3px 10px rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; }
+    .icard .tile svg { width:52px; height:52px; }
+    .icard .rarity-pill { position:absolute; top:6px; left:6px; }
+    .icard .equip-tag { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(0deg, rgba(8,7,10,0.94), rgba(8,7,10,0)); padding:13px 8px 5px; text-align:center; }
+    .icard .equip-tag span { font-family:'Cinzel',serif; font-size:9px; font-weight:700; color:#f3e2b8; }
+    .icard .plus-badge { position:absolute; bottom:6px; right:6px; min-width:18px; height:16px; padding:0 4px; border-radius:5px; background:#191722; border:1px solid var(--a, #9a9aa8); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:9.5px; font-weight:700; color:#e8dfcd; }
+    .icard .iname { font-family:'Cinzel',serif; font-size:11px; font-weight:600; color:#e8dfcd; text-align:center; line-height:1.25; }
+    .icard .islot { font-size:9px; color:#8a8496; text-transform:uppercase; letter-spacing:0.04em; }
+
+    /* ---- relic card: bigger, one per wearer, no rarity ramp (DESIGN-WORLD: a relic is not more
+       of anything, so it gets no rarity tag either) ---- */
+    .rcard { width:296px; display:flex; gap:12px; background:rgba(20,18,26,0.55); border:1px solid rgba(203,162,74,0.28); border-radius:12px; padding:14px; }
+    .rcard .plate { width:56px; height:56px; border-radius:14px; flex:none; border:2px solid var(--a, #cba24a); display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.08), rgba(0,0,0,0.4)); }
+    .rcard .plate svg { width:26px; height:26px; }
+    .rcard .rname { font-family:'Cinzel',serif; font-weight:700; font-size:13px; color:#f3e2b8; }
+    .rcard .rwearer { font-size:9.5px; color:#a89e8e; margin:2px 0 5px; }
+    .rcard .reffect { font-size:9.5px; color:#c9bfae; line-height:1.4; }
+    .rcard.locked { opacity:0.5; }
+    .rcard.locked .plate { border:2px dashed rgba(168,158,142,0.4); }
+
+    /* ---- material tile: simplest of the three, a count on a plain resource icon ---- */
+    .mcard { width:150px; display:flex; flex-direction:column; align-items:center; gap:7px; }
+    .mcard .tile { width:150px; height:120px; border-radius:12px; border:1.5px solid rgba(203,162,74,0.3); background:rgba(20,18,26,0.5); display:flex; align-items:center; justify-content:center; }
+    .mcard .tile svg { width:44px; height:44px; }
+    .mcard .mcount { font-family:'Cinzel',serif; font-weight:700; font-size:13px; color:#f3e2b8; }
+    .mcard .mname { font-size:9.5px; color:#a89e8e; text-align:center; }
+  </style>
+</helmet>
+
+<div style="width:1600px; height:720px; position:relative; overflow:hidden; background:#0c0b10; font-family:'Manrope', sans-serif; color:#efe7d8; display:flex; flex-direction:column;">
+
+  <img src="ash_marches_bg7.jpg" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 30%; opacity:0.14; filter:blur(1px);">
+  <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(40,34,54,0.35), rgba(10,9,14,0.92) 65%);"></div>
+
+  <!-- ============ TOP BAR ============ -->
+  <div style="position:relative; z-index:6; flex:0 0 74px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; border-bottom:1px solid rgba(203,162,74,0.22);">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div class="icon-btn" style="width:40px; height:40px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div>
+        <div style="font-family:'Cinzel',serif; font-weight:700; font-size:19px; letter-spacing:0.02em; color:#f3e2b8;">Inventory</div>
+        <div style="font-size:10.5px; color:#a89e8e; margin-top:1px;">14 Armor &middot; 4 Relics &middot; 6 Materials</div>
+      </div>
+    </div>
+
+    <!-- wallet: Gold + Shards are the two documented currencies; Splinters per the file header note -->
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="chip">
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <defs><radialGradient id="invGoldCoin" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="#f3d98a"/><stop offset="55%" stop-color="#dcac3f"/><stop offset="100%" stop-color="#a67a22"/></radialGradient></defs>
+          <circle cx="12" cy="12" r="8.6" fill="url(#invGoldCoin)" stroke="#7a5a1c" stroke-width="1"/>
+          <circle cx="12" cy="12" r="5.2" fill="none" stroke="#8a651f" stroke-width="1"/>
+        </svg>
+        <span>12,480</span>
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24">
+          <defs><linearGradient id="invShardGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7ea4f0"/><stop offset="100%" stop-color="#3568E8"/></linearGradient></defs>
+          <path d="M12 2 L20 9 L12 22 L4 9 Z" fill="url(#invShardGrad)" stroke="#1f3f9c" stroke-width="1"/>
+          <path d="M12 2 L20 9 L12 13 L4 9 Z" fill="#bcd0f8" opacity="0.75"/>
+        </svg>
+        <span>340</span>
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24">
+          <defs><linearGradient id="invSplinterGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f2f0f8"/><stop offset="55%" stop-color="#c7c2d8"/><stop offset="100%" stop-color="#8f8aa8"/></linearGradient></defs>
+          <path d="M12 2.8 L16.6 8 L14.6 15.2 L12 21.2 L9.4 15.2 L7.4 8 Z" fill="url(#invSplinterGrad)" stroke="#6d688a" stroke-width="0.9"/>
+        </svg>
+        <span>86</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB ROW ============ -->
+  <div style="position:relative; z-index:6; flex:0 0 54px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; border-bottom:1px solid rgba(203,162,74,0.14);">
+    <div style="display:flex; gap:8px;">
+      <div class="tab active">Armor<span class="n">14</span></div>
+      <div class="tab">Relics<span class="n">4 / 6</span></div>
+      <div class="tab">Materials<span class="n">6</span></div>
+    </div>
+    <div class="chip" style="cursor:default; padding:7px 13px;"><span style="font-size:12px;">Sort: Rarity &#9662;</span></div>
+  </div>
+
+  <!-- ============ ARMOR TAB ============ -->
+  <div id="tab-armor" style="position:relative; z-index:5; flex:1 1 auto; padding:20px 30px; overflow:hidden;">
+    <div style="background:rgba(16,14,20,0.5); border:1px solid rgba(203,162,74,0.25); border-radius:14px; padding:22px; height:100%; display:grid; grid-template-columns:repeat(8, 150px); grid-auto-rows:186px; gap:16px 20px; justify-content:center; align-content:start;">
+
+      <div class="icard">
+        <div class="tile" style="--a:#c9a6f0;">
+          <div class="rarity-pill rarity-tag" style="color:#c9a6f0; background:rgba(155,110,224,0.2); border:1px solid rgba(155,110,224,0.5);">Epic</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#dcdce4" stroke-width="1.6"><path d="M12 2 L12 15 M8.5 15 H15.5 M12 15 L12 19 M12 2 L9.8 5.2 M12 2 L14.2 5.2"/></svg>
+          <div class="equip-tag"><span>Equipped &middot; Kael</span></div>
+        </div>
+        <div class="iname">Ashwood Cleaver</div>
+        <div class="islot">Weapon</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#7fc4e0;">
+          <div class="rarity-pill rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.2); border:1px solid rgba(94,178,214,0.5);">Rare</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.6"><path d="M12 2 L12 15 M8.5 15 H15.5 M12 15 L12 19 M12 2 L9.8 5.2 M12 2 L14.2 5.2"/></svg>
+        </div>
+        <div class="iname">Cinder Fang</div>
+        <div class="islot">Weapon</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8a296;">
+          <div class="rarity-pill rarity-tag" style="color:#c9c4b6; background:rgba(150,145,130,0.2); border:1px solid rgba(150,145,130,0.5);">Common</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#d6d2c6" stroke-width="1.6"><path d="M12 2 L12 15 M8.5 15 H15.5 M12 15 L12 19 M12 2 L9.8 5.2 M12 2 L14.2 5.2"/></svg>
+        </div>
+        <div class="iname">Hollow Fang</div>
+        <div class="islot">Weapon</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#7fc4e0;">
+          <div class="rarity-pill rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.2); border:1px solid rgba(94,178,214,0.5);">Rare</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.6"><path d="M4 11 12 4l8 7v3c0 4.5-3.2 7.4-8 9-4.8-1.6-8-4.5-8-9Z"/><path d="M12 4v6M8 9h8"/></svg>
+          <div class="equip-tag"><span>Equipped &middot; Kael</span></div>
+        </div>
+        <div class="iname">Ashen Circlet</div>
+        <div class="islot">Helmet</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#c9a6f0;">
+          <div class="rarity-pill rarity-tag" style="color:#c9a6f0; background:rgba(155,110,224,0.2); border:1px solid rgba(155,110,224,0.5);">Epic</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#dcdce4" stroke-width="1.6"><path d="M4 11 12 4l8 7v3c0 4.5-3.2 7.4-8 9-4.8-1.6-8-4.5-8-9Z"/><path d="M12 4v6M8 9h8"/></svg>
+          <div class="plus-badge" style="--a:#c9a6f0;">+2</div>
+        </div>
+        <div class="iname">Warden's Crown</div>
+        <div class="islot">Helmet</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#7fc4e0;">
+          <div class="rarity-pill rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.2); border:1px solid rgba(94,178,214,0.5);">Rare</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.6"><path d="M12 2.6 18.6 5.4V10.8C18.6 15.6 15.4 18.6 12 20.4 8.6 18.6 5.4 15.6 5.4 10.8V5.4Z"/></svg>
+          <div class="equip-tag"><span>Equipped &middot; Kael</span></div>
+        </div>
+        <div class="iname">Cinderplate Vambrace</div>
+        <div class="islot">Armor</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8c98f;">
+          <div class="rarity-pill rarity-tag" style="color:#a8c98f; background:rgba(143,174,122,0.2); border:1px solid rgba(143,174,122,0.5);">Uncommon</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#cfe6bf" stroke-width="1.6"><path d="M12 2.6 18.6 5.4V10.8C18.6 15.6 15.4 18.6 12 20.4 8.6 18.6 5.4 15.6 5.4 10.8V5.4Z"/></svg>
+        </div>
+        <div class="iname">Bramble Husk</div>
+        <div class="islot">Armor</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#f0c85a;">
+          <div class="rarity-pill rarity-tag" style="color:#f0c85a; background:rgba(224,180,74,0.22); border:1px solid rgba(224,180,74,0.55);">Legendary</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fbe7ae" stroke-width="1.6"><path d="M12 2.6 18.6 5.4V10.8C18.6 15.6 15.4 18.6 12 20.4 8.6 18.6 5.4 15.6 5.4 10.8V5.4Z"/></svg>
+        </div>
+        <div class="iname">Gravebound Plate</div>
+        <div class="islot">Armor</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8c98f;">
+          <div class="rarity-pill rarity-tag" style="color:#a8c98f; background:rgba(143,174,122,0.2); border:1px solid rgba(143,174,122,0.5);">Uncommon</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#cfe6bf" stroke-width="1.6"><path d="M8 21 6 13h12l-2 8Z"/><path d="M6 13 8 4h8l2 9"/></svg>
+          <div class="equip-tag"><span>Equipped &middot; Kael</span></div>
+        </div>
+        <div class="iname">Swiftmarch Greaves</div>
+        <div class="islot">Boots</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8a296;">
+          <div class="rarity-pill rarity-tag" style="color:#c9c4b6; background:rgba(150,145,130,0.2); border:1px solid rgba(150,145,130,0.5);">Common</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#d6d2c6" stroke-width="1.6"><path d="M8 21 6 13h12l-2 8Z"/><path d="M6 13 8 4h8l2 9"/></svg>
+        </div>
+        <div class="iname">Ashwalker Treads</div>
+        <div class="islot">Boots</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#c9a6f0;">
+          <div class="rarity-pill rarity-tag" style="color:#c9a6f0; background:rgba(155,110,224,0.2); border:1px solid rgba(155,110,224,0.5);">Epic</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#dcdce4" stroke-width="1.6"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg>
+          <div class="equip-tag"><span>Equipped &middot; Kael</span></div>
+        </div>
+        <div class="iname">Ember Signet</div>
+        <div class="islot">Accessory</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#7fc4e0;">
+          <div class="rarity-pill rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.2); border:1px solid rgba(94,178,214,0.5);">Rare</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.6"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg>
+        </div>
+        <div class="iname">Widow's Locket</div>
+        <div class="islot">Accessory</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8c98f;">
+          <div class="rarity-pill rarity-tag" style="color:#a8c98f; background:rgba(143,174,122,0.2); border:1px solid rgba(143,174,122,0.5);">Uncommon</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#cfe6bf" stroke-width="1.6"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg>
+          <div class="plus-badge" style="--a:#a8c98f;">+1</div>
+        </div>
+        <div class="iname">Sundial Band</div>
+        <div class="islot">Accessory</div>
+      </div>
+
+      <div class="icard">
+        <div class="tile" style="--a:#a8a296;">
+          <div class="rarity-pill rarity-tag" style="color:#c9c4b6; background:rgba(150,145,130,0.2); border:1px solid rgba(150,145,130,0.5);">Common</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#d6d2c6" stroke-width="1.6"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg>
+        </div>
+        <div class="iname">Cracked Hourglass</div>
+        <div class="islot">Accessory</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RELICS TAB (hidden for the Armor screenshot) ============ -->
+  <div id="tab-relics" style="display:none; position:relative; z-index:5; flex:1 1 auto; padding:20px 30px; overflow:hidden;">
+    <div style="background:rgba(16,14,20,0.5); border:1px solid rgba(203,162,74,0.25); border-radius:14px; padding:26px; height:100%; display:flex; flex-wrap:wrap; gap:18px; align-content:start; justify-content:center;">
+
+      <div class="rcard" style="--a:#3568E8;">
+        <div class="plate" style="--a:#3568E8;"><svg viewBox="0 0 24 24" fill="none" stroke="#a9c0f5" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/><path d="M4 9h16M12 2v20"/></svg></div>
+        <div>
+          <div class="rname">Tidewrought Metronome</div>
+          <div class="rwearer">Wearer &middot; Maeve</div>
+          <div class="reffect">Not owned by anyone in the current roster - shown for the collection, not equippable yet.</div>
+        </div>
+      </div>
+
+      <div class="rcard" style="--a:#62A77A;">
+        <div class="plate" style="--a:#62A77A;"><svg viewBox="0 0 24 24" fill="none" stroke="#cfe6bf" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/><path d="M4 9h16M12 2v20"/></svg></div>
+        <div>
+          <div class="rname">Green Hour Vessel</div>
+          <div class="rwearer">Wearer &middot; Wren</div>
+          <div class="reffect">Not owned by anyone in the current roster - shown for the collection, not equippable yet.</div>
+        </div>
+      </div>
+
+      <div class="rcard" style="--a:#E84532;">
+        <div class="plate" style="--a:#E84532;"><svg viewBox="0 0 24 24" fill="none" stroke="#f3b08a" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/><path d="M4 9h16M12 2v20M8 9l4-7M16 9l-4-7"/></svg></div>
+        <div>
+          <div class="rname">Splitting Prism</div>
+          <div class="rwearer">Wearer &middot; Kael</div>
+          <div class="reffect">Effect text pending final resolution - DESIGN-RELICS and DESIGN-ASPECTS both claim this hook today.</div>
+        </div>
+      </div>
+
+      <div class="rcard" style="--a:#cba24a;">
+        <div class="plate" style="--a:#cba24a;"><svg viewBox="0 0 24 24" fill="none" stroke="#f3e2b8" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/><path d="M4 9h16M12 2v20"/></svg></div>
+        <div>
+          <div class="rname">Warden's Debt</div>
+          <div class="rwearer">Wearer &middot; Orrin</div>
+          <div class="reffect">Not owned by anyone in the current roster - shown for the collection, not equippable yet.</div>
+        </div>
+      </div>
+
+      <div class="rcard locked">
+        <div class="plate"><svg viewBox="0 0 24 24" fill="none" stroke="#6a6478" stroke-width="1.6"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+        <div>
+          <div class="rname" style="color:#8a8496;">???</div>
+          <div class="rwearer">Wearer unknown</div>
+          <div class="reffect">Undiscovered. DESIGN-WORLD confirms 6 relics exist, one per wearer - the last two are not named in any accessible doc.</div>
+        </div>
+      </div>
+
+      <div class="rcard locked">
+        <div class="plate"><svg viewBox="0 0 24 24" fill="none" stroke="#6a6478" stroke-width="1.6"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+        <div>
+          <div class="rname" style="color:#8a8496;">???</div>
+          <div class="rwearer">Wearer unknown</div>
+          <div class="reffect">Undiscovered. DESIGN-WORLD confirms 6 relics exist, one per wearer - the last two are not named in any accessible doc.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MATERIALS TAB (hidden for the Armor screenshot) - no doc backing, provisional ============ -->
+  <div id="tab-materials" style="display:none; position:relative; z-index:5; flex:1 1 auto; padding:20px 30px; overflow:hidden;">
+    <div style="background:rgba(16,14,20,0.5); border:1px solid rgba(203,162,74,0.25); border-radius:14px; padding:26px; height:100%; display:flex; gap:20px; align-content:start; justify-content:center; flex-wrap:wrap;">
+
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#cba24a" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="mcount">128</div>
+        <div class="mname">Whetstone (Common upgrade)</div>
+      </div>
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#7fc4e0" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="mcount">54</div>
+        <div class="mname">Tempered Whetstone (Rare upgrade)</div>
+      </div>
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#c9a6f0" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="mcount">11</div>
+        <div class="mname">Reforged Core (Epic upgrade)</div>
+      </div>
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#f0a05a" stroke-width="1.6"><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/></svg></div>
+        <div class="mcount">37</div>
+        <div class="mname">Ascension Fragment</div>
+      </div>
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#8fae7a" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/></svg></div>
+        <div class="mcount">6</div>
+        <div class="mname">Cinder Gate Seal</div>
+      </div>
+      <div class="mcard">
+        <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="#a89e8e" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/></svg></div>
+        <div class="mcount">220</div>
+        <div class="mname">Guild Mark</div>
+      </div>
+    </div>
+    <div style="position:absolute; left:44px; bottom:14px; font-size:9.5px; color:#6a6478; max-width:900px;">Materials tab is a placeholder set - no economy doc names upgrade or ascension materials yet. Not a committed spec.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

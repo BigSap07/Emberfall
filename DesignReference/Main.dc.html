@@ -1,0 +1,262 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    a { color: #e0b84a; } a:hover { color: #f0cd6e; }
+
+    /* ---- shared hub-node pattern: every clickable map structure uses these two classes.
+       New structure checklist: pick x%/y% on the bg, set --b (border) and --c (text) to an
+       accent color, and decide baked-in (label only) vs cutout (label + .node-img + .node-shadow). ---- */
+    .node-label { background:rgba(16,14,20,0.78); border:1px solid var(--b, rgba(203,162,74,0.6)); border-radius:7px; padding:5px 14px; }
+    .node-label span { font-family:'Cinzel',serif; font-size:13px; font-weight:600; color:var(--c, #f3e2b8); }
+    .node-img { width:auto; filter:drop-shadow(0 10px 12px rgba(0,0,0,0.55)); }
+    .node-shadow { width:var(--w,90px); height:16px; border-radius:50%; background:radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0) 72%); filter:blur(1px); margin-top:-10px; }
+    .node-locked .node-label { opacity:0.85; }
+    .node-badge { background:#4a3d22; color:#e0b84a; font-size:8.5px; font-weight:700; letter-spacing:0.05em; padding:2px 5px; border-radius:4px; }
+
+    /* ---- shared icon-button pattern for the settings bar and any future icon rail.
+       New icon checklist: copy an .icon-btn, swap the svg, add .icon-btn-dot only if it needs
+       a notification badge. Wrap in .rail-btn (icon + label stacked) for a labelled rail entry. ---- */
+    .icon-btn { width:38px; height:38px; border-radius:8px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.45); display:flex; align-items:center; justify-content:center; position:relative; flex:none; }
+    .icon-btn svg { width:18px; height:18px; }
+    .icon-btn-dot { position:absolute; top:5px; right:5px; width:7px; height:7px; border-radius:50%; background:#c0472a; border:1.5px solid #14121a; }
+    .rail-btn { display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .rail-btn .icon-btn { width:46px; height:46px; }
+    .rail-btn .icon-btn svg { width:21px; height:21px; }
+    .rail-btn span { font-family:'Cinzel',serif; font-size:10px; font-weight:600; color:#e8dfcd; text-shadow:0 1px 4px rgba(0,0,0,0.85); }
+
+    /* ---- portrait-badge: same circular-emblem language as the hero busts (colored ring,
+       gradient-filled disc, no flat line-icon). Use for any menu that deserves hero-icon weight
+       (Guild / Bag / Splinters today). New entry: copy a .badge-icon, swap the ring color and
+       the inner <svg> gradient/shape, keep the 58px circle so it sits flush with the party row. ---- */
+    .badge-icon { width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.55); flex:none; }
+    .badge-icon svg { width:30px; height:30px; }
+    .badge-dock { display:flex; align-items:flex-end; gap:10px; }
+    .badge-dock .rail-btn span { font-size:9.5px; }
+  </style>
+</helmet>
+
+<div style="width:1600px; height:720px; position:relative; overflow:hidden; background:#0c0b10; font-family:'Manrope', sans-serif; color:#efe7d8; display:flex; flex-direction:column;">
+
+  <!-- painted hub map, full bleed -->
+  <img src="ash_marches_bg7.jpg" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 38%;">
+  <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(10,9,14,0.6) 0%, rgba(10,9,14,0) 18%, rgba(10,9,14,0) 82%, rgba(10,9,14,0.4) 100%);"></div>
+
+  <!-- ============ TOP BAR ============ -->
+  <div style="position:relative; z-index:6; flex:0 0 84px; display:flex; align-items:center; justify-content:space-between; padding:0 26px;">
+
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="position:relative; width:54px; height:54px;">
+        <div style="width:54px; height:54px; border-radius:50%; overflow:hidden; border:2px solid #cba24a; box-shadow:0 0 0 1px #2a2013, 0 2px 8px rgba(0,0,0,0.6);">
+          <img src="angel_bust.png" style="width:100%; height:100%; object-fit:cover; object-position:50% 32%; display:block;">
+        </div>
+        <div style="position:absolute; bottom:-5px; right:-5px; min-width:23px; height:19px; padding:0 4px; border-radius:6px; background:#191722; border:1.5px solid #cba24a; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:11px; font-weight:600; color:#e0b84a;">24</div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:9px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.55); border-radius:8px; padding:8px 14px; backdrop-filter:blur(2px);">
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <defs><radialGradient id="goldCoin" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="#f3d98a"/><stop offset="55%" stop-color="#dcac3f"/><stop offset="100%" stop-color="#a67a22"/></radialGradient></defs>
+          <circle cx="12" cy="12" r="8.6" fill="url(#goldCoin)" stroke="#7a5a1c" stroke-width="1"/>
+          <circle cx="12" cy="12" r="5.2" fill="none" stroke="#8a651f" stroke-width="1"/>
+        </svg>
+        <span style="font-family:'Cinzel',serif; font-weight:600; font-size:14px;">12,480</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:9px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.55); border-radius:8px; padding:8px 14px; backdrop-filter:blur(2px);">
+        <svg width="16" height="16" viewBox="0 0 24 24">
+          <defs><linearGradient id="shardGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7ea4f0"/><stop offset="100%" stop-color="#3568E8"/></linearGradient></defs>
+          <path d="M12 2 L20 9 L12 22 L4 9 Z" fill="url(#shardGrad)" stroke="#1f3f9c" stroke-width="1"/>
+          <path d="M12 2 L20 9 L12 13 L4 9 Z" fill="#bcd0f8" opacity="0.75"/>
+        </svg>
+        <span style="font-family:'Cinzel',serif; font-weight:600; font-size:14px;">340</span>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px;">
+      <!-- Quests -->
+      <div class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="4" width="12" height="17" rx="2"/>
+          <rect x="9" y="2.5" width="6" height="3.5" rx="1"/>
+          <path d="M9 12l2 2 4-4.5"/>
+        </svg>
+      </div>
+      <!-- Achievements / Challenges -->
+      <div class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3.5h8v4.2a4 4 0 0 1-8 0V3.5Z"/>
+          <path d="M8 4.5H5.2a2.8 2.8 0 0 0 2.8 3.7"/>
+          <path d="M16 4.5h2.8a2.8 2.8 0 0 1-2.8 3.7"/>
+          <path d="M12 11.7v2.6"/>
+          <path d="M9.3 20.5h5.4"/>
+          <path d="M10.1 17.3h3.8v3.2h-3.8z"/>
+        </svg>
+      </div>
+      <!-- Settings -->
+      <div class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+      <!-- Mail -->
+      <div class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2"/>
+          <path d="M3 7l9 6 9-6"/>
+        </svg>
+        <div class="icon-btn-dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STAGE / MAP (structures are the nav) ============ -->
+  <div style="position:relative; z-index:4; flex:1 1 auto;">
+
+    <!-- idle rewards -->
+    <div style="position:absolute; top:14px; right:24px; display:flex; align-items:center; gap:11px; background:rgba(20,18,26,0.78); border:1px solid rgba(203,162,74,0.5); border-radius:10px; padding:9px 12px 9px 13px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="9" width="18" height="11" rx="1.5" fill="#3d3348" stroke="#14121a" stroke-width="1.2"/>
+        <rect x="3" y="9" width="18" height="4" fill="#544a63" stroke="#14121a" stroke-width="1.2"/>
+        <rect x="10.5" y="9" width="3" height="11" fill="#e0b84a"/>
+      </svg>
+      <div style="display:flex; flex-direction:column; gap:1px;">
+        <span style="font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; color:#b3a99a;">Idle Rewards</span>
+        <span style="font-family:'Cinzel',serif; font-weight:600; font-size:13px;">1,240 Gold</span>
+      </div>
+      <div style="margin-left:4px; color:#e0b84a; border:1px solid #cba24a; font-family:'Cinzel',serif; font-weight:600; font-size:11px; padding:6px 13px; border-radius:6px;">Claim</div>
+    </div>
+
+
+    <!-- All hub structures are baked directly into ash_marches_bg7.jpg - every node below is
+         just a label anchored over its painted structure. New structure checklist: generate it
+         into the master background (same ChatGPT thread/prompt pattern), find its x%/y% here,
+         then add a one-line .node-label block - no cutout image, no shadow needed.
+         bg7 is the friend-polished version of the locked-in painterly-illustrated style, adopted
+         as the new master background (image-conditioned off real Idle Heroes reference screenshots,
+         then hand-finished) - repositioned below to match its own layout. -->
+
+    <!-- village cluster (left): barracks, forge and marketplace (future), painted as one
+         connected village -->
+
+    <!-- HEROES: training barracks, tall building with the blue banner -->
+    <div style="position:absolute; left:16.28%; top:14.18%; transform:translate(-50%,0);">
+      <div class="node-label" style="--b:rgba(203,162,74,0.6); --c:#f3e2b8;"><span>Heroes</span></div>
+    </div>
+
+    <!-- FORGE: blacksmith's forge, right of the barracks -->
+    <div style="position:absolute; left:35.16%; top:34.43%; transform:translate(-50%,0);">
+      <div class="node-label" style="--b:rgba(224,140,80,0.6); --c:#f3d0a8;"><span>Forge</span></div>
+    </div>
+
+    <!-- MARKETPLACE: painted into the village now for the future, not a real menu yet -->
+    <div class="node-locked" style="position:absolute; left:45.57%; top:48.9%; transform:translate(-50%,0); text-align:center;">
+      <div class="node-label" style="--b:rgba(150,130,90,0.55); --c:#e8dcc0;"><span>Marketplace</span></div>
+      <div style="margin-top:4px;"><span class="node-badge">SOON</span></div>
+    </div>
+
+    <!-- SUMMON: rune obelisk -->
+    <div style="position:absolute; left:56.96%; top:19.97%; transform:translate(-50%,0);">
+      <div class="node-label" style="--b:rgba(126,164,240,0.65); --c:#dbe6fb;"><span>Summon</span></div>
+    </div>
+
+    <!-- CAMPAIGN waypoint: rune portal, centered on the path, facing front -->
+    <div style="position:absolute; left:68.36%; top:35.88%; transform:translate(-50%,0);">
+      <div style="background:rgba(16,14,20,0.8); border:1px solid rgba(203,162,74,0.6); border-radius:7px; padding:5px 13px; text-align:center;">
+        <div style="font-family:'Cinzel',serif; font-size:12px; font-weight:600; letter-spacing:0.02em; color:#f3e2b8;">Chapter 1 &middot; Stage 4</div>
+      </div>
+    </div>
+    <div style="position:absolute; left:68.36%; top:61.9%; transform:translate(-50%,0); font-family:'Cinzel',serif; font-size:13px; font-weight:700; color:#f8ecd4; text-shadow:0 2px 6px rgba(0,0,0,0.8);">Continue</div>
+
+    <!-- DEEP RECITAL: the small purple-lit cave opening, not the big gate -->
+    <div style="position:absolute; left:78.78%; top:35.16%; transform:translate(-50%,0);">
+      <div class="node-label" style="--b:rgba(150,110,200,0.55); --c:#ddc9f0;"><span>Deep Recital</span></div>
+    </div>
+
+    <!-- The big chained vault gate stays unlabeled scenery for now - no node, no "SOON" badge.
+         It's not committed content, just a locked-door tease for something that might come later.
+         Relics itself moved off the map entirely, see the badge-dock below. -->
+
+    <!-- player menu dock: Guild / Bag / Splinters / Relics, portrait-badge style to match the hero
+         busts below. New entry checklist: copy one .rail-btn, give the .badge-icon a ring color, and
+         give the inner <svg> its own gradient id (avoid reusing badgeGuildGrad/badgeBagGrad/
+         badgeSplinterGrad/badgeRelicGrad). -->
+    <div class="badge-dock" style="position:absolute; left:24px; bottom:20px;">
+      <div class="rail-btn">
+        <div class="badge-icon" style="border:2px solid #cba24a; background:radial-gradient(circle at 35% 30%, #2f2946, #171420);">
+          <svg viewBox="0 0 24 24">
+            <defs><linearGradient id="badgeGuildGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f3d98a"/><stop offset="55%" stop-color="#dcac3f"/><stop offset="100%" stop-color="#8a651f"/></linearGradient></defs>
+            <path d="M12 2.6 L18.6 5.4 V10.8 C18.6 15.6 15.4 18.6 12 20.4 C8.6 18.6 5.4 15.6 5.4 10.8 V5.4 Z" fill="url(#badgeGuildGrad)" stroke="#4a3410" stroke-width="0.9"/>
+            <path d="M12 7.2 L14.1 11.8 L12 16.6 L9.9 11.8 Z" fill="#241a09" opacity="0.55"/>
+          </svg>
+        </div>
+        <span>Guild</span>
+      </div>
+      <div class="rail-btn">
+        <div class="badge-icon" style="border:2px solid #b98a4a; background:radial-gradient(circle at 35% 30%, #4a3319, #241809);">
+          <svg viewBox="0 0 24 24">
+            <defs><linearGradient id="badgeBagGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a9763f"/><stop offset="100%" stop-color="#6b4623"/></linearGradient>
+            <radialGradient id="badgeBuckleGrad" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="#f3d98a"/><stop offset="100%" stop-color="#a67a22"/></radialGradient></defs>
+            <path d="M6.6 9.4 H17.4 L18.4 20.2 H5.6 Z" fill="url(#badgeBagGrad)" stroke="#2b1c0e" stroke-width="0.9"/>
+            <path d="M9 9.4 V7.3 A3 3 0 0 1 15 7.3 V9.4" fill="none" stroke="#2b1c0e" stroke-width="1.3"/>
+            <circle cx="12" cy="14.4" r="1.7" fill="url(#badgeBuckleGrad)" stroke="#7a5a1c" stroke-width="0.5"/>
+          </svg>
+        </div>
+        <span>Bag</span>
+      </div>
+      <div class="rail-btn">
+        <div class="badge-icon" style="border:2px solid #c7c2d8; background:radial-gradient(circle at 35% 30%, #2c2a3a, #15141d);">
+          <svg viewBox="0 0 24 24">
+            <defs><linearGradient id="badgeSplinterGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f2f0f8"/><stop offset="55%" stop-color="#c7c2d8"/><stop offset="100%" stop-color="#8f8aa8"/></linearGradient></defs>
+            <path d="M12 2.8 L16.6 8 L14.6 15.2 L12 21.2 L9.4 15.2 L7.4 8 Z" fill="url(#badgeSplinterGrad)" stroke="#6d688a" stroke-width="0.7"/>
+            <path d="M12 10.2 L9.4 8.4 M12 10.2 L14.6 8.4 M12 10.2 L13.5 13.4 M12 10.2 L10.5 13.4 M12 10.2 L12 6.6" stroke="#6d688a" stroke-width="0.55" opacity="0.65"/>
+          </svg>
+        </div>
+        <span>Splinters</span>
+      </div>
+      <div class="rail-btn">
+        <div class="badge-icon" style="border:2px solid #8fae8a; background:radial-gradient(circle at 35% 30%, #2c3428, #14180f);">
+          <svg viewBox="0 0 24 24">
+            <defs><linearGradient id="badgeRelicGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d8c9a0"/><stop offset="55%" stop-color="#a89468"/><stop offset="100%" stop-color="#6b5c3c"/></linearGradient></defs>
+            <path d="M8.4 4 H15.6 L16.6 8 V19 A1 1 0 0 1 15.6 20 H8.4 A1 1 0 0 1 7.4 19 V8 Z" fill="url(#badgeRelicGrad)" stroke="#3a3120" stroke-width="0.9"/>
+            <path d="M9.6 4 L9 20 M14.4 4 L15 20" stroke="#3a3120" stroke-width="0.5" opacity="0.5"/>
+            <path d="M12 9.4 L13.5 12.4 L12 15.4 L10.5 12.4 Z" fill="#3a3120" opacity="0.6"/>
+          </svg>
+        </div>
+        <span>Relics</span>
+      </div>
+    </div>
+
+    <!-- squad strip, centered over the open path -->
+    <div style="position:absolute; left:0; right:0; bottom:20px; display:flex; justify-content:center; gap:13px;">
+      <div style="width:58px; height:58px; border-radius:50%; overflow:hidden; border:2px solid #62A77A; box-shadow:0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.55);">
+        <img src="golem_bust.png" style="width:100%; height:100%; object-fit:cover; object-position:50% 30%;">
+      </div>
+      <div style="width:58px; height:58px; border-radius:50%; overflow:hidden; border:2px solid #E84532; box-shadow:0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.55);">
+        <img src="demon_bust.png" style="width:100%; height:100%; object-fit:cover; object-position:50% 30%;">
+      </div>
+      <div style="width:58px; height:58px; border-radius:50%; overflow:hidden; border:2px solid #28C7D9; box-shadow:0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.55);">
+        <img src="snowman_bust.png" style="width:100%; height:100%; object-fit:cover; object-position:50% 30%;">
+      </div>
+      <div style="width:58px; height:58px; border-radius:50%; background:rgba(16,14,20,0.7); border:2px dashed rgba(224,184,74,0.55); display:flex; align-items:center; justify-content:center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#e0d8c8" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+      <div style="width:58px; height:58px; border-radius:50%; background:rgba(16,14,20,0.7); border:2px dashed rgba(224,184,74,0.55); display:flex; align-items:center; justify-content:center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#e0d8c8" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
