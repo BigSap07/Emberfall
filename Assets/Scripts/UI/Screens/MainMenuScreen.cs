@@ -63,66 +63,47 @@ namespace Emberfall.UI.Screens
         private static readonly Color MapWash = UITheme.Hex("B29E7E");
 
         /// <summary>
-        /// Height of the actual artwork inside hub.png, in source pixels.
+        /// The authored dimensions of hub.png, declared rather than read back off the texture.
         ///
-        /// The current file is 1650x780 but only the top 1650x720 is painted - rows 720-779 are a
-        /// band of pure white, an export artifact rather than content. It is not off-screen: once
-        /// the map is envelope-fitted the band lands inside the visible area and renders as a pale
-        /// strip along the bottom edge, behind the dock and the squad. The sprite is therefore cut
-        /// from the art region only.
+        /// The importer does not hand back the file: a non-power-of-two texture is rescaled per
+        /// axis, so 1536x828 arrives as a 2048x1024 Texture2D and its 1.855:1 becomes 2.0:1.
+        /// Feeding the sprite's own rect to the fitter would render that distortion instead of
+        /// correcting it. Driving the fitter from these two numbers renders the squashed texture
+        /// back at the shape it was painted at.
         ///
-        /// Trimming also fixes the fit. The whole file is 2.115:1, the artwork alone is 2.292:1,
-        /// and the screen is about 2.254:1. Fitting the untrimmed image reserved screen height for
-        /// the white band and cropped real painting off the top and bottom to pay for it. The
-        /// trimmed sprite is fractionally wider than the screen instead, so the full height of the
-        /// painting is visible and roughly 0.8% is lost off each side.
+        /// npotScale: 0 does not avoid this - it was tried on the previous art and reverted,
+        /// because the width is not a multiple of four and the compressed format cannot hold it.
         ///
-        /// Expressed as a FRACTION of the texture, never as a pixel count. The importer does not
-        /// hand back the file: hub.png is 1650x780 on disk and arrived as a 2048x1024 Texture2D,
-        /// because a non-power-of-two texture is rescaled per axis by default. A literal 720-pixel
-        /// trim against that texture kept the top 70% of the image and threw away the bottom third
-        /// of the village, which is what put every node above its own structure on the first
-        /// attempt. A ratio survives any rescale, any maxTextureSize, and any future re-export.
-        ///
-        /// The importer also DISTORTS: 1650x780 (2.115:1) arrives as 2048x1024 (2.0:1), scaled by a
-        /// different factor per axis. Setting npotScale: 0 on the asset does not stop it, because
-        /// 1650 is not a multiple of four and the compressed format cannot represent it - that was
-        /// tried and reverted rather than left in as a setting that changes nothing. So the true
-        /// shape of the artwork is declared here instead of being read back off the texture, and
-        /// the fitter is driven from these numbers. Rendering the squashed texture at its authored
-        /// aspect undoes the importer's stretch.
-        ///
-        /// These three are the only place in this screen that knows the source file's dimensions.
-        /// When new art ships, update them together and everything else follows.
+        /// These two are the only place in this screen that knows the source file's size. The
+        /// previous art also needed a trim, because it was a flattened mockup screenshot with a
+        /// 60px band of white below the painting; this one is a real background plate with no band,
+        /// so the sprite is simply the whole texture and the trim is gone.
         /// </summary>
-        private const float SourceFileWidth = 1650f;
-        private const float SourceFileHeight = 780f;
-        private const float SourceArtHeight = 720f;
+        private const float SourceFileWidth = 1536f;
+        private const float SourceFileHeight = 828f;
 
         // ---------- map node anchors ----------
-        // Fractions of the ARTWORK, x then y, measured from its top-left - not fractions of the
-        // screen, and not of the source file (the white band above is excluded before these are
-        // applied). Every node is parented to the map image and anchored by these, so a node stays
-        // on its structure at any aspect ratio. The map is envelope-fitted, so the screen crops it
-        // rather than stretching it.
+        // Fractions of the PAINTING, x then y from its top-left - not of the screen. Every node is
+        // parented to the map image and anchored by these, so a node stays on its structure at any
+        // aspect ratio. The map is envelope-fitted and centred, so the screen crops it rather than
+        // stretching it, and the crop is symmetric on both axes.
         //
-        // MEASURED AGAINST THE CURRENT hub.png, which is a village, not the stone plateau the
-        // previous set was measured against. Not one of the old six values survived: the art was
-        // replaced wholesale, and a coordinate measured against a different painting is not an
-        // approximation of the right answer, it is an unrelated number. The old CampaignY of 0.585
-        // landed on a market stall; the old SummonX of 0.645 landed on the campaign portal.
+        // RE-MEASURED against the clean plate. The previous set was measured against a flattened
+        // mockup screenshot whose art region was 2.292:1; this file is 1.855:1 and uncropped, so
+        // the visible window is a different shape and not one of the six old values transferred.
+        // This is the second wholesale re-measure on this branch, for the same underlying reason
+        // both times: an anchor is only as current as the image it was measured against.
         //
-        // How these were measured, so the next person can repeat it rather than guess: a coordinate
-        // grid was rendered over the art region (Tools/Screenshots/hub_grid_newart.png), then every
-        // candidate was re-cropped at 2x with a crosshair on the proposed point and checked one by
-        // one. Both passes are cheap and the first one alone is not enough - the pass that produced
-        // the previous set skipped the crosshair check and put HEROES on top of the forge.
-        private const float HeroesX = 0.157f, HeroesY = 0.262f;     // the barracks, blue banner
-        private const float ForgeX = 0.341f, ForgeY = 0.442f;       // the smithy's lit arch
-        private const float SummonX = 0.551f, SummonY = 0.314f;     // the rune obelisk
-        private const float MarketX = 0.441f, MarketY = 0.569f;     // the market stall canopy
-        private const float CampaignX = 0.663f, CampaignY = 0.452f; // the fire portal
-        private const float RecitalX = 0.763f, RecitalY = 0.448f;   // the purple cave mouth
+        // Measured by rendering a coordinate grid over the file, proposing a point per structure,
+        // then re-cropping each at 2x with a crosshair on it and checking one by one. The grid
+        // alone is not enough: this pass's first proposal put SUMMON in the sky beside the obelisk
+        // and DEEP RECITAL on the brazier next to the cave, and only the crosshair pass caught it.
+        private const float HeroesX = 0.175f, HeroesY = 0.300f;     // the barracks, above its banner
+        private const float ForgeX = 0.332f, ForgeY = 0.430f;       // the smithy roof, over the arch
+        private const float MarketX = 0.485f, MarketY = 0.520f;     // the market stall canopy
+        private const float SummonX = 0.578f, SummonY = 0.330f;     // the rune obelisk
+        private const float CampaignX = 0.680f, CampaignY = 0.440f; // the fire portal's arch
+        private const float RecitalX = 0.800f, RecitalY = 0.450f;   // the purple cave mouth
 
         // ---------- the bottom row ----------
         // One size and one spacing rule for every circular cell along the bottom, dock and squad
@@ -206,13 +187,7 @@ namespace Emberfall.UI.Screens
                 Texture2D painting = Resources.Load<Texture2D>("Backgrounds/hub");
                 if (painting != null)
                 {
-                    // Cut from the artwork only, never the whole file - see ArtHeight. Unity texture
-                    // space has its origin at the bottom-left while the white band sits at the
-                    // bottom of the image as viewed, so the region to keep starts at
-                    // (height - artHeight), not at zero.
-                    float artHeight = painting.height * (SourceArtHeight / SourceFileHeight);
-                    _mapSprite = Sprite.Create(painting,
-                                               new Rect(0f, painting.height - artHeight, painting.width, artHeight),
+                    _mapSprite = Sprite.Create(painting, new Rect(0f, 0f, painting.width, painting.height),
                                                new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect);
                 }
             }
@@ -228,7 +203,7 @@ namespace Emberfall.UI.Screens
                 // imported-texture space, which the importer has already stretched by a different
                 // factor per axis; feeding that back in would render the distortion instead of
                 // correcting it.
-                fitter.aspectRatio = SourceFileWidth / SourceArtHeight;
+                fitter.aspectRatio = SourceFileWidth / SourceFileHeight;
             }
             else
             {
