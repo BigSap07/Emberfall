@@ -253,33 +253,79 @@ namespace Emberfall.UI.Screens
             AddLockedNode("MARKETPLACE", MarketX, MarketY);
         }
 
+        // ---------- node label metrics ----------
+        // DesignReference/Main.dc.html's .node-label: rgba(16,14,20,0.78) behind a 1px border, a
+        // 13px face and 5px/14px padding, on a 720-tall canvas. Scaled to this project's 1080-unit
+        // reference that is roughly a 20pt face in a 38-unit-tall plate with a 10-unit radius.
+        // Height is taken up to 48 rather than 38 so the plate stays a comfortable tap target on a
+        // phone; nothing else about it is inflated.
+        private const float NodeHeight = 48f;
+        private const int NodeCornerRadius = 10;
+
+        /// <summary>
+        /// A map node's plate. Built here rather than through UIBuilder.MakeButton, because
+        /// MakeButton builds a BUTTON - a 3-unit border, a 22-unit corner radius and a white sheen
+        /// overlay across the top half - and three pieces of raised-button chrome are exactly what
+        /// made these tags sit on top of the painting instead of on the buildings. The mockup asks
+        /// for a soft label overlay: one hairline border, a small radius, no sheen.
+        ///
+        /// Fill and edge alphas are arguments because the locked variant needs to sit back further
+        /// still, and because these two numbers are the whole of how loud a node reads.
+        /// </summary>
+        private UIButton BuildNodePlate(string label, float mx, float my,
+                                        float fillAlpha, float edgeAlpha, Color textColor)
+        {
+            UIButton handle = new UIButton();
+            handle.Root = UIBuilder.Node("Node" + label, _map);
+            AnchorOnMap(handle.Root, mx, my, NodeWidthFor(label), NodeHeight);
+            handle.Group = handle.Root.gameObject.AddComponent<CanvasGroup>();
+
+            handle.Background = handle.Root.gameObject.AddComponent<Image>();
+            handle.Background.sprite = TextureLab.RoundedRect(NodeCornerRadius);
+            handle.Background.type = Image.Type.Sliced;
+            handle.Background.color = UITheme.WithAlpha(HubBackdrop, fillAlpha);
+
+            handle.Frame = UIBuilder.Frame("Edge", handle.Root,
+                                           UITheme.WithAlpha(UITheme.ChromeBrass, edgeAlpha),
+                                           NodeCornerRadius, 1);
+
+            handle.Button = handle.Root.gameObject.AddComponent<Button>();
+            handle.Button.targetGraphic = handle.Background;
+            handle.Button.transition = Selectable.Transition.ColorTint;
+            ColorBlock colors = ColorBlock.defaultColorBlock;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = UITheme.ButtonHighlight;
+            colors.pressedColor = UITheme.ButtonPressed;
+            colors.disabledColor = UITheme.ButtonDisabled;
+            colors.fadeDuration = UITheme.ButtonFadeDuration;
+            colors.colorMultiplier = 1f;
+            handle.Button.colors = colors;
+            handle.Root.gameObject.AddComponent<ButtonPress>();
+
+            handle.Label = UIBuilder.Label("Text", handle.Root, label, UITheme.FontTiny, textColor,
+                                           TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(handle.Label.rectTransform, 6f);
+            // The shadow, not a heavier plate, is what holds the word off the painting behind it.
+            UIBuilder.Shadowed(handle.Label, UITheme.InkArt, 1.6f);
+            return handle;
+        }
+
         private UIButton AddMapNode(string label, float mx, float my, System.Action action)
         {
-            UIButton node = UIBuilder.MakeButton("Node" + label, _map, label, UITheme.FontSmall,
-                                                 UITheme.WithAlpha(HubBackdrop, 0.82f),
-                                                 UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f),
-                                                 UITheme.TextPrimary);
-            AnchorOnMap(node.Root, mx, my, NodeWidthFor(label), 62f);
+            UIButton node = BuildNodePlate(label, mx, my, 0.62f, 0.34f, UITheme.TextPrimary);
             node.OnClick(action);
-            UIBuilder.Shadowed(node.Label, UITheme.InkArt, 2f);
             return node;
         }
 
         /// <summary>
-        /// A structure with no screen behind it. Dimmer plate, dimmer text, a SOON tag under it, and
-        /// a tap that says so out loud. The tag is ChromeBrass, not Gold: "not built yet" is a
-        /// status, not a reward, and Gold is spoken for.
+        /// A structure with no screen behind it. Same plate, sitting back further still, plus a
+        /// SOON tag and a tap that says so out loud.
         /// </summary>
         private void AddLockedNode(string label, float mx, float my)
         {
-            UIButton node = UIBuilder.MakeButton("Node" + label, _map, label, UITheme.FontSmall,
-                                                 UITheme.WithAlpha(HubBackdrop, 0.7f),
-                                                 UITheme.WithAlpha(UITheme.ChromeBrass, 0.4f),
-                                                 UITheme.TextMuted);
-            AnchorOnMap(node.Root, mx, my, NodeWidthFor(label), 62f);
+            UIButton node = BuildNodePlate(label, mx, my, 0.5f, 0.2f, UITheme.TextMuted);
             node.OnClick(NotSoonEnough(label));
-
-            AddSoonTag(node.Root, 0f, -24f, new Vector2(0.5f, 0f));
+            AddSoonTag(node.Root, 0f, -20f, new Vector2(0.5f, 0f));
         }
 
         /// <summary>
@@ -287,11 +333,10 @@ namespace Emberfall.UI.Screens
         ///
         /// Deliberately NOT UIBuilder.Chip. Chip paints its background, its border and its text
         /// from one tint - a 22% wash, a 75% edge and 100% text, all the same hue. On a dark panel
-        /// that reads fine. Over a sunlit painting it does not: ChromeBrass text on a ChromeBrass
-        /// wash has almost no contrast against itself, and the result renders as an empty pale
-        /// rounded rectangle with no legible word in it. That was the stray artifact under
-        /// MARKETPLACE - not a broken sprite or a failed load, just a widget camouflaging its own
-        /// label.
+        /// that is fine, which is why it works everywhere else it is used. Over a sunlit painting
+        /// it fails completely: ChromeBrass text on a ChromeBrass wash has almost no contrast
+        /// against its own background, so the plate reads and the word does not, and what is left
+        /// looks like an empty artifact.
         ///
         /// A dark opaque plate carries the text instead, so the tag reads at ChromeBrass's measured
         /// 4.7:1 against HubBackdrop rather than against a wash of itself. Chip is left alone;
@@ -329,9 +374,15 @@ namespace Emberfall.UI.Screens
             };
         }
 
+        /// <summary>
+        /// Plate width: the mockup's 14px side padding scaled to this reference, plus the word.
+        /// The floor keeps a short label like FORGE a comfortable tap target rather than shrinking
+        /// to fit five characters. Narrower plates than the old 190-unit minimum are also why
+        /// CAMPAIGN and DEEP RECITAL stopped crowding each other on the right of the map.
+        /// </summary>
         private static float NodeWidthFor(string label)
         {
-            return Mathf.Max(190f, 34f + label.Length * 19f);
+            return Mathf.Max(150f, 44f + label.Length * 12f);
         }
 
         /// <summary>
