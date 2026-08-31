@@ -25,16 +25,6 @@ namespace Emberfall.UI.Screens
         private Image _chapterFill;
         private Text _chapterCount;
 
-        // Landscape splits the old single portrait stack into two top-down cursors, one per
-        // column, keeping the same rule: each block's position derives from the one above it
-        // plus a spacing-scale gap, never an independent hand-tuned literal. Left column is
-        // identity and the way forward (title, banner, chapter, continue); right column is
-        // income and navigation (cache, nav). Both start below the shared top bar.
-        private const float CardWidth = 900f;
-        private const float LeftColumnX = -462f;   // half the 24f column gap plus half a card
-        private const float RightColumnX = 462f;
-        private const float ColumnTop = UITheme.TopBarHeight + UITheme.Space24;
-
         // ---------- the Hub's own surfaces ----------
         // A Hub-scoped override of the shared surface ramp, and nothing more. UITheme.Backdrop,
         // Panel, PanelRaised and Border are NOT touched: every other screen keeps the violet-toned
@@ -47,337 +37,404 @@ namespace Emberfall.UI.Screens
         // the game along with it, which is a far larger visual change than this one and would land
         // with none of those screens actually reviewed.
         //
-        // BuildBackdrop already established the mechanism: the Hub opaque-fills its own floor
-        // rather than inheriting GameApp's shared canvas background. This extends the same idea
-        // from the floor up through the cards that sit on it - a floor warmed on its own would
-        // just make the unchanged violet cards look wrong against it.
+        // HubPanelSunken is derived rather than chosen: it sits at the same ratio to HubPanel
+        // (about 0.72) that UITheme.PanelSunken sits at to UITheme.Panel, so the Hub's internal
+        // depth relationship reads like every other screen's.
         //
-        // The first four are specified values. HubPanelSunken and HubBorderSoft are derived, not
-        // chosen: each sits at the same ratio to its parent that UITheme.PanelSunken and
-        // UITheme.BorderSoft sit at to UITheme.Panel and UITheme.Border (about 0.72), so the
-        // Hub's internal depth relationships read exactly like every other screen's. They are
-        // needed because this screen uses six surface tones and only four were specified.
-        //
-        // The two card frames take HubBorder where they previously took the softer UITheme
-        // .BorderSoft. The specified border tone is a card edge tone - that is what it is for -
-        // and on a warm floor the softer variant is nearly indistinguishable from the card it is
-        // supposed to be outlining. HubBorderSoft is kept for the empty-team-slot ring, which is
-        // deliberately quieter than a card edge and should stay that way.
+        // Two of the six tones this set was introduced with are gone: the border pair, HubBorder
+        // 3A3120 and its derived HubBorderSoft 2A2317. They existed to outline the two full-width
+        // cards this screen used to be built from, and the map layout has no cards - every plate on
+        // it is a node outlined in ChromeBrass, which is what ChromeBrass is for. Keeping two
+        // surface-border constants with no call site would have been dead palette. If a bordered
+        // card ever returns to this screen, 3A3120 is the value it wants.
         //
         // None of these is ChromeBrass. ChromeBrass is an accent that sits ON these surfaces
-        // (dividers, outlines, secondary labels); these six are the surfaces themselves. Keeping
-        // that distinction is why the reskin can add brass detail in the next commit without
-        // having to re-derive the panel ramp.
+        // (outlines, rings, dividers); these four are the surfaces themselves.
         private static readonly Color HubBackdrop = UITheme.Hex("14121A");
         private static readonly Color HubPanel = UITheme.Hex("1C1710");
         private static readonly Color HubPanelRaised = UITheme.Hex("2B2318");
-        private static readonly Color HubBorder = UITheme.Hex("3A3120");
         private static readonly Color HubPanelSunken = UITheme.Hex("14100B");
-        private static readonly Color HubBorderSoft = UITheme.Hex("2A2317");
+
+        /// <summary>
+        /// Multiplied over the painted map. hub.png is a pale, cool, blue-grey plateau and the Hub
+        /// is a warm dark screen; dropping the painting in untouched would put the one bright cool
+        /// surface in the game directly on top of the floor that was just warmed. A multiply wash
+        /// pulls it into the same family as HubPanel without repainting anything.
+        /// </summary>
+        private static readonly Color MapWash = UITheme.Hex("B29E7E");
+
+        // ---------- map node anchors ----------
+        // Fractions of the PAINTED MAP, x then y, measured from its top-left - not fractions of the
+        // screen. Every node is parented to the map image and anchored by these, so a node stays on
+        // its structure at any aspect ratio instead of drifting off it the way the Cinder watermark
+        // did. The map itself is envelope-fitted, so the screen crops it rather than stretching it.
+        //
+        // These are measured against Assets/Resources/Backgrounds/hub.png, NOT against the
+        // ash_marches_bg7.jpg that DesignReference/Main.dc.html anchors its own percentages to.
+        // That painting is not in this repository - the mockup is the only place it exists, along
+        // with four bust PNGs it also references - so its coordinates would have put "Heroes" on
+        // empty sky here. hub.png was already committed, was referenced by no code at all, and
+        // carries structures close enough to the mockup's intent to stand in: an arch, a monolith,
+        // a standing-stone circle with a dais, a lit brazier and an altar slab. Each node below sits
+        // on the structure whose meaning actually matches it, which is what the mockup was doing
+        // with its own painting.
+        //
+        // If the real painting lands later, only these twelve numbers change. Nothing else here
+        // knows which image it is drawing.
+        // Inside the arch's opening, not below it. The arch and the brazier occupy the same band of
+        // x on this painting (arch opening y 0.22-0.42, brazier y 0.50-0.62), so a label placed
+        // under the arch lands on the forge instead - which is exactly what the first pass did.
+        private const float HeroesX = 0.225f, HeroesY = 0.335f;     // in the arch's opening
+        private const float CampaignX = 0.445f, CampaignY = 0.585f; // the plaza below the monolith
+        private const float SummonX = 0.645f, SummonY = 0.495f;     // the dais inside the stone circle
+        private const float ForgeX = 0.210f, ForgeY = 0.665f;       // under the lit brazier
+        private const float RecitalX = 0.825f, RecitalY = 0.690f;   // on the altar slab, lower right
+        private const float MarketX = 0.680f, MarketY = 0.660f;     // open stone, no structure yet
+
+        private RectTransform _map;
+        private static Sprite _mapSprite;
 
         protected override void Build()
         {
-            // Drawn first, so every card and label above it in this method covers it wherever they
-            // overlap - the Hub's own base material, not the shared purple vignette every other
-            // screen sits on (GameApp's canvas background). The Keeper's fiction is explicit that
-            // this office "takes no side among the six" (DESIGN-WORLD, "The Cinder and the Keeper"),
-            // so the Hub gets its own neutral floor rather than inheriting a stray accent colour that
-            // happens to bleed through every screen's empty space.
-            BuildBackdrop();
-
-            float left = ColumnTop;
-            left = BuildTitle(left);
-            left += UITheme.Space24;
-            left = BuildTeamShowcase(left);
-            left += UITheme.Space24;
-            left = BuildChapterProgress(left);
-            left += UITheme.Space24;
-            left = BuildContinue(left);
-
-            float right = ColumnTop;
-            right = BuildIdleCache(right);
-
-            BuildNav();
-            BuildSecondNav();
+            BuildMap();
+            BuildMapNodes();
+            BuildCampaignWaypoint();
+            BuildIdlePanel();
+            BuildBadgeDock();
+            BuildSquadStrip();
             BuildCinderMark();
             BuildOptions();
         }
 
         /// <summary>
-        /// The Hub's own neutral floor plus its one quiet ambient cue: a soft, colourless glow
-        /// behind the wordmark. Nothing here is tinted by aspect and nothing here moves - the Cinder
-        /// "never grows a face, speaks through a mouth, sprouts mascot features, or becomes a cute
-        /// companion" (DESIGN-ART-BIBLE section 5), and the same discipline extends to its glow: an
-        /// idle shimmer would be the mascot behaviour the source text explicitly forbids, just spread
-        /// across a bigger area instead of a corner icon.
+        /// The painted map, plus the two layers that make it belong to this game: a warm multiply
+        /// wash on the painting itself and a dark scrim over it. Drawn first, so every node and
+        /// panel built after it sits on top.
+        ///
+        /// Envelope-fitted rather than stretched. An AspectRatioFitter in EnvelopeParent mode keeps
+        /// the painting's own proportions and lets the screen crop it, which is the only way node
+        /// anchors expressed as fractions of the painting can stay on their structures - a stretched
+        /// map would slide every structure sideways as the aspect changed.
         /// </summary>
-        private void BuildBackdrop()
+        private void BuildMap()
         {
-            Image baseFill = UIBuilder.Img("Backdrop", Root, TextureLab.White, HubBackdrop);
-            UIBuilder.FillParent(baseFill.rectTransform, 0f);
+            Image floor = UIBuilder.Img("Backdrop", Root, TextureLab.White, HubBackdrop);
+            UIBuilder.FillParent(floor.rectTransform, 0f);
 
-            // 0.10, was 0.05. The original was tuned against this screen's near-black violet floor,
-            // where 5% of a cool grey was already a visible lift. The warmed floor is lighter and
-            // warmer, and at 0.05 the glow simply stopped registering against it.
-            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f), UITheme.WithAlpha(UITheme.CinderGlass, 0.10f));
-            UIBuilder.Box(glow.rectTransform, 0f, -260f, 1400f, 1400f, new Vector2(0.5f, 1f));
-        }
+            _map = UIBuilder.Node("Map", Root);
+            _map.anchorMin = new Vector2(0.5f, 0.5f);
+            _map.anchorMax = new Vector2(0.5f, 0.5f);
+            _map.pivot = new Vector2(0.5f, 0.5f);
+            _map.anchoredPosition = Vector2.zero;
 
-        /// <returns>Distance from the top of the screen to the bottom of the block just built.</returns>
-        private float BuildTitle(float top)
-        {
-            // one type-scale step smaller than the portrait logo - the landscape left column has
-            // 1080 of height for four blocks where portrait had 1920 for five
-            const float logoHeight = 80f;
-            Text logo = UIBuilder.Label("Logo", Root, "EMBERFALL", UITheme.FontDisplay, UITheme.Gold, TextAnchor.UpperCenter);
-            UIBuilder.Box(logo.rectTransform, LeftColumnX, -top, 900f, logoHeight, new Vector2(0.5f, 1f));
-            // Was a warm ember-brown rim - an aspect colour on the one screen the Keeper's fiction
-            // says takes no side among the six. InkPanel is the same neutral rim every other label
-            // in the project uses; the wordmark no longer gets a bespoke aspect-flavoured exception.
-            UIBuilder.Outlined(logo, UITheme.InkPanel, 3f);
-            UIBuilder.Shadowed(logo, UITheme.InkPanel, 5f);
-            top += logoHeight;
+            if (_mapSprite == null)
+            {
+                Texture2D painting = Resources.Load<Texture2D>("Backgrounds/hub");
+                if (painting != null)
+                {
+                    _mapSprite = Sprite.Create(painting, new Rect(0f, 0f, painting.width, painting.height),
+                                               new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect);
+                }
+            }
 
-            top += UITheme.Space16;
-            const float ruleHeight = 3f;
-            Image underline = UIBuilder.Img("Rule", Root, TextureLab.White, UITheme.WithAlpha(UITheme.CinderGlass, 0.6f));
-            UIBuilder.Box(underline.rectTransform, LeftColumnX, -top, 340f, ruleHeight, new Vector2(0.5f, 1f));
-            top += ruleHeight;
+            if (_mapSprite != null)
+            {
+                Image art = UIBuilder.Img("Art", _map, _mapSprite, MapWash);
+                UIBuilder.FillParent(art.rectTransform, 0f);
 
-            top += UITheme.Space16;
-            const float subHeight = 32f;
-            Text sub = UIBuilder.Label("Sub", Root, "THE ASHEN ROAD", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(sub.rectTransform, LeftColumnX, -top, 700f, subHeight, new Vector2(0.5f, 1f));
-            top += subHeight;
+                AspectRatioFitter fitter = _map.gameObject.AddComponent<AspectRatioFitter>();
+                fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+                fitter.aspectRatio = _mapSprite.rect.width / _mapSprite.rect.height;
+            }
+            else
+            {
+                // No painting on disk. The nodes still need a rect to anchor into, so the map
+                // becomes an invisible full-screen surface and the Hub degrades to labels on the
+                // warm floor rather than throwing or silently building nothing.
+                UIBuilder.FillParent(_map, 0f);
+            }
 
-            return top;
-        }
+            // 0.32, not the 0.5 this started at. A multiply wash preserves the painting's contrast
+            // because it scales every value by the same factor; a flat scrim does not - it lifts the
+            // blacks toward itself and flattens the whole image. At 0.5 the plateau, the sky and the
+            // structures had collapsed into one brown field with the silhouettes barely separable,
+            // which is a worse outcome than the cool palette this was correcting.
+            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, UITheme.WithAlpha(HubBackdrop, 0.32f));
+            UIBuilder.FillParent(scrim.rectTransform, 0f);
 
-        private float BuildTeamShowcase(float top)
-        {
-            const float cardHeight = 316f;
-            RectTransform card = UIBuilder.Node("Squad", Root);
-            UIBuilder.Box(card, LeftColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
-
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(24);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(HubPanel, 0.92f);
-            UIBuilder.Frame("Edge", card, HubBorder, 24, 2);
-
-            float inner = UITheme.Space24;
-            const float headingHeight = 26f;
-            Text heading = UIBuilder.Label("Heading", card, "ACTIVE BANNER", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -inner, 400f, headingHeight, new Vector2(0.5f, 1f));
-            inner += headingHeight + UITheme.Space8;
-
-            const float rowHeight = 232f;
-            _teamRow = UIBuilder.Node("Row", card);
-            UIBuilder.Box(_teamRow, 0f, -inner, 880f, rowHeight, new Vector2(0.5f, 1f));
-            UIBuilder.HStack(_teamRow, 22f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
-
-            return top + cardHeight;
-        }
-
-        private float BuildIdleCache(float top)
-        {
-            const float cardHeight = 358f;
-            RectTransform card = UIBuilder.Node("IdleCache", Root);
-            UIBuilder.Box(card, RightColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
-
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(24);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(HubPanelSunken, 0.95f);
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.Gold, 0.4f), 24, 2);
-
-            Image glow = UIBuilder.Img("Glow", card, TextureLab.Glow(128, 2f), UITheme.WithAlpha(UITheme.Gold, 0.10f));
-            UIBuilder.FillParent(glow.rectTransform, 0f);
-
-            // text stack, top-left, each row separated by the same tight inline gap
-            float inner = UITheme.Space24;
-            const float headingHeight = 42f;
-            Text heading = UIBuilder.Label("Heading", card, "EMBER CACHE", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, 30f, -inner, 500f, headingHeight, new Vector2(0f, 1f));
-            inner += headingHeight + UITheme.Space8;
-
-            const float rateHeight = 26f;
-            _idleRate = UIBuilder.Label("Rate", card, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleRate.rectTransform, 30f, -inner, 620f, rateHeight, new Vector2(0f, 1f));
-            inner += rateHeight + UITheme.Space8;
-
-            const float amountsHeight = 46f;
-            _idleAmounts = UIBuilder.Label("Amounts", card, "", UITheme.FontHeading, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleAmounts.rectTransform, 30f, -inner, 620f, amountsHeight, new Vector2(0f, 1f));
-            inner += amountsHeight + UITheme.Space8;
-
-            const float timerHeight = 32f;
-            _idleTimer = UIBuilder.Label("Timer", card, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleTimer.rectTransform, 30f, -inner, 620f, timerHeight, new Vector2(0f, 1f));
-            inner += timerHeight;
-
-            // COLLECT sits below the whole text stack (plus a section gap) instead of floating in
-            // the bottom-right corner, where it used to overlap the timer label by 20px.
-            inner += UITheme.Space24;
-            _claimButton = UIBuilder.GoldButton("Claim", card, "COLLECT", UITheme.FontBody);
-            UIBuilder.Box(_claimButton.Root, -30f, cardHeight - inner - 116f, 300f, 116f, new Vector2(1f, 0f));
-            _claimButton.OnClick(ClaimIdle);
-
-            return top + cardHeight;
-        }
-
-        private float BuildChapterProgress(float top)
-        {
-            const float cardHeight = 150f;
-            RectTransform card = UIBuilder.Node("Progress", Root);
-            UIBuilder.Box(card, LeftColumnX, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
-
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(20);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(HubPanel, 0.9f);
-            UIBuilder.Frame("Edge", card, HubBorder, 20, 2);
-
-            _chapterLabel = UIBuilder.Label("Chapter", card, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_chapterLabel.rectTransform, 26f, -20f, 640f, 34f, new Vector2(0f, 1f));
-
-            _chapterCount = UIBuilder.Label("Count", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperRight);
-            UIBuilder.Box(_chapterCount.rectTransform, -26f, -20f, 300f, 34f, new Vector2(1f, 1f));
-
-            // Gold, not Ember: this bar counts cleared stages, a fact about the player's own
-            // progress rather than a claim about which of the six beliefs the Hub favours. Matches
-            // the Claim button and the idle cache's own accent, so "advancement" reads as one colour
-            // across the screen instead of picking up whichever aspect happened to be nearby.
-            _chapterFill = UIBuilder.Bar("Bar", card, HubPanelSunken, UITheme.Gold);
-            RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
-            barRoot.anchorMin = new Vector2(0f, 0f);
-            barRoot.anchorMax = new Vector2(1f, 0f);
-            barRoot.pivot = new Vector2(0.5f, 0f);
-            barRoot.offsetMin = new Vector2(26f, 34f);
-            barRoot.offsetMax = new Vector2(-26f, 54f);
-
-            return top + cardHeight;
-        }
-
-        private float BuildContinue(float top)
-        {
-            const float buttonHeight = 168f;
-            // GoldButton, not PrimaryButton: PrimaryButton fills Ember, which made the single
-            // biggest coloured surface on the Hub the Ember aspect's own accent. Gold is this
-            // project's established "important action" colour everywhere else on this screen (the
-            // idle cache's Claim button, the chapter bar) and carries no aspect meaning at all.
-            _continueButton = UIBuilder.GoldButton("Continue", Root, "CONTINUE CAMPAIGN", UITheme.FontHeading);
-            UIBuilder.Box(_continueButton.Root, LeftColumnX, -top, CardWidth, buttonHeight, new Vector2(0.5f, 1f));
-            _continueButton.OnClick(OpenCampaign);
-            top += buttonHeight + UITheme.Space16;
-
-            const float subHeight = 34f;
-            _continueSub = UIBuilder.Label("ContinueSub", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(_continueSub.rectTransform, LeftColumnX, -top, 900f, subHeight, new Vector2(0.5f, 1f));
-            top += subHeight;
-
-            return top;
-        }
-
-        private void BuildNav()
-        {
-            // bottom of the right column, mirroring the portrait bottom-nav muscle memory on the
-            // half of the screen the thumb rests on in landscape
-            RectTransform nav = UIBuilder.Node("Nav", Root);
-            UIBuilder.Box(nav, RightColumnX, 30f, CardWidth, 200f, new Vector2(0.5f, 0f));
-            UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-
-            AddNavButton(nav, "HEROES", 0, UITheme.Shard, OpenHeroes);
-            // CinderGlass, not Ember: the campaign spans all six regions (DESIGN-WORLD, "The six
-            // regions"), so its nav icon should not read as one of them.
-            AddNavButton(nav, "CAMPAIGN", 4, UITheme.CinderGlass, OpenCampaign);
-            AddNavButton(nav, "SUMMON", 13, UITheme.StarColor(5), OpenSummon);
-        }
-
-        private void AddNavButton(RectTransform parent, string label, int sigil, Color tint, System.Action action)
-        {
-            UIButton button = UIBuilder.MakeButton("Nav" + label, parent, "", UITheme.FontSmall,
-                                                   HubPanelRaised, UITheme.WithAlpha(tint, 0.6f), UITheme.TextPrimary);
-            UIBuilder.Flexible(button.Root, 1f, 0f);
-            button.OnClick(action);
-
-            Image glyph = UIBuilder.Img("Glyph", button.Root, TextureLab.Sigil(sigil, 64), tint);
-            UIBuilder.Box(glyph.rectTransform, 0f, -18f, 62f, 62f, new Vector2(0.5f, 1f));
-
-            button.Label.text = label;
-            button.Label.alignment = TextAnchor.LowerCenter;
-            UIBuilder.Box(button.Label.rectTransform, 0f, 16f, 260f, 32f, new Vector2(0.5f, 0f));
-            button.Label.fontSize = UITheme.FontTiny;
-        }
-
-        private void BuildSecondNav()
-        {
-            // second row of destination buttons, stacked above the primary nav
-            RectTransform nav = UIBuilder.Node("Nav2", Root);
-            UIBuilder.Box(nav, RightColumnX, 246f, CardWidth, 170f, new Vector2(0.5f, 0f));
-            UIBuilder.HStack(nav, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-
-            // The legendary relic grade's own colour, not Ember: DESIGN-WORLD is explicit that
-            // relics "carry a fragment of an alternative behaviour of reality" unrelated to the
-            // First Light the six aspects came from, so this icon should never borrow one of them.
-            AddNavButton(nav, "RELICS", 6, UITheme.RelicGradeColor(RelicGrade.Legendary), OpenRelicShop);
-            AddNavButton(nav, "INVENTORY", 7, UITheme.TextMuted, OpenInventory);
-            AddNavButton(nav, "EVENTS", 8, UITheme.Success, OpenEvents);
-            AddNavButton(nav, "RECITAL", 9, UITheme.Mythic, OpenRecital);
-            // Sigil 10 ("block / golem") reads as a solid, blocky shape - the closest fit in the
-            // fixed 14-sigil set to an anvil/workbench silhouette. Tinted with the Gilded rung's
-            // colour, the same one InventoryScreen's Slag row already uses, so the Forge's icon and
-            // the currency it spends read as the same idea at a glance.
-            AddNavButton(nav, "FORGE", 10, UITheme.ArmorTemperColor(ArmorTemper.Gilded), OpenForge);
+            // One soft, colourless ambient lift, the same cue the Cinder theme pass introduced -
+            // kept because it is the Hub's own light, not the map's. Static, per DESIGN-ART-BIBLE
+            // section 5: nothing about the Cinder animates at rest.
+            Image glow = UIBuilder.Img("AmbientGlow", Root, TextureLab.Glow(512, 1.6f),
+                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.10f));
+            UIBuilder.Box(glow.rectTransform, 0f, -180f, 1500f, 1100f, new Vector2(0.5f, 1f));
         }
 
         /// <summary>
-        /// The Hub's one corner watermark: a small, static, colourless outline of the Cinder itself,
-        /// sitting in the same open gap BuildOptions already uses (idle cache card ends 514, second
-        /// nav starts 664 - see that method's own comment). Placed here rather than invented as new
-        /// empty space, and sized to clear both the card above and the nav below by roughly 15px so
-        /// it reads as a deliberate mark rather than a stray shape wedged into whatever was left, the
-        /// caution DESIGN-ART-BIBLE's own engine notes raise about absence-based choices on a dark
-        /// panel reading as a rendering fault rather than a design one.
+        /// Every structure on the map that leads somewhere. Each is a real button over its painted
+        /// structure, coloured from this branch's palette rather than from the mockup's raw hexes:
+        /// ChromeBrass borders on a dark translucent plate, warm off-white text. No node carries
+        /// Gold - Gold means currency, progress or the primary action, and a place you can walk to
+        /// is none of those. The one Gold thing on this map is the Continue action, which is the
+        /// primary action and already owned that colour.
+        /// </summary>
+        private void BuildMapNodes()
+        {
+            AddMapNode("HEROES", HeroesX, HeroesY, OpenHeroes);
+            AddMapNode("SUMMON", SummonX, SummonY, OpenSummon);
+            AddMapNode("FORGE", ForgeX, ForgeY, OpenForge);
+            AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital);
+
+            // Painted into the map for a future that does not exist yet, exactly as the mockup
+            // treats it. Same treatment as the dock's two unbuilt entries: it looks like a place,
+            // it says SOON, and tapping it explains itself rather than doing nothing.
+            AddLockedNode("MARKETPLACE", MarketX, MarketY);
+        }
+
+        private UIButton AddMapNode(string label, float mx, float my, System.Action action)
+        {
+            UIButton node = UIBuilder.MakeButton("Node" + label, _map, label, UITheme.FontSmall,
+                                                 UITheme.WithAlpha(HubBackdrop, 0.82f),
+                                                 UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f),
+                                                 UITheme.TextPrimary);
+            AnchorOnMap(node.Root, mx, my, NodeWidthFor(label), 62f);
+            node.OnClick(action);
+            UIBuilder.Shadowed(node.Label, UITheme.InkArt, 2f);
+            return node;
+        }
+
+        /// <summary>
+        /// A structure with no screen behind it. Dimmer plate, dimmer text, a SOON tag under it, and
+        /// a tap that says so out loud. The tag is ChromeBrass, not Gold: "not built yet" is a
+        /// status, not a reward, and Gold is spoken for.
+        /// </summary>
+        private void AddLockedNode(string label, float mx, float my)
+        {
+            UIButton node = UIBuilder.MakeButton("Node" + label, _map, label, UITheme.FontSmall,
+                                                 UITheme.WithAlpha(HubBackdrop, 0.7f),
+                                                 UITheme.WithAlpha(UITheme.ChromeBrass, 0.4f),
+                                                 UITheme.TextMuted);
+            AnchorOnMap(node.Root, mx, my, NodeWidthFor(label), 62f);
+            node.OnClick(NotSoonEnough(label));
+
+            RectTransform tag = UIBuilder.Chip("Soon", node.Root, "SOON", UITheme.ChromeBrass, UITheme.FontTiny - 4);
+            UIBuilder.Box(tag, 0f, -24f, 92f, 26f, new Vector2(0.5f, 0f));
+        }
+
+        /// <summary>
+        /// The shared "there is no screen behind this yet" response, used by the Marketplace node
+        /// and by the dock's Guild and Splinters badges. One sentence, one place, so all three say
+        /// the same thing and none of them silently swallows the tap.
+        /// </summary>
+        private System.Action NotSoonEnough(string label)
+        {
+            string title = label.Substring(0, 1) + label.Substring(1).ToLowerInvariant();
+            return delegate
+            {
+                App.Audio.Tap();
+                App.Notify(title + " is not open yet.");
+            };
+        }
+
+        private static float NodeWidthFor(string label)
+        {
+            return Mathf.Max(190f, 34f + label.Length * 19f);
+        }
+
+        /// <summary>
+        /// Places a rect by fraction of the map rather than by pixel offset from a screen edge.
+        /// This is the fix for the class of bug the old BuildCinderMark documented: anything
+        /// positioned by a fixed offset from one edge drifts relative to anything positioned from
+        /// the opposite edge as soon as the logical canvas is not exactly 1080 tall, which on this
+        /// project's real target aspect it never is.
+        /// </summary>
+        private static RectTransform AnchorOnMap(RectTransform rt, float mx, float my, float w, float h)
+        {
+            rt.anchorMin = new Vector2(mx, 1f - my);
+            rt.anchorMax = new Vector2(mx, 1f - my);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(w, h);
+            return rt;
+        }
+
+        /// <summary>
+        /// The campaign waypoint: where the player is in the story, and the one button this screen
+        /// exists to get them to press. Sits on the monolith like any other node, but is built
+        /// apart from them because it is the only one carrying live state and the only one allowed
+        /// to be Gold.
+        /// </summary>
+        private void BuildCampaignWaypoint()
+        {
+            RectTransform post = UIBuilder.Node("Campaign", _map);
+            AnchorOnMap(post, CampaignX, CampaignY, 520f, 214f);
+
+            Image plate = post.gameObject.AddComponent<Image>();
+            plate.sprite = TextureLab.RoundedRect(18);
+            plate.type = Image.Type.Sliced;
+            plate.color = UITheme.WithAlpha(HubBackdrop, 0.86f);
+            UIBuilder.Frame("Edge", post, UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f), 18, 2);
+
+            // Both drop to FontTiny-2 and are given hard widths that add up to less than the plate.
+            // At FontTiny on a 470-wide plate, "CHAPTER 1 - THE ASHEN ROAD" ran straight through
+            // "0 / 12 CLEARED" and the two read as one broken string.
+            _chapterLabel = UIBuilder.Label("Chapter", post, "", UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            UIBuilder.Box(_chapterLabel.rectTransform, 18f, -14f, 320f, 24f, new Vector2(0f, 1f));
+
+            _chapterCount = UIBuilder.Label("Count", post, "", UITheme.FontTiny - 2, UITheme.Gold, TextAnchor.UpperRight);
+            UIBuilder.Box(_chapterCount.rectTransform, -18f, -14f, 158f, 24f, new Vector2(1f, 1f));
+
+            _chapterFill = UIBuilder.Bar("Bar", post, HubPanelSunken, UITheme.Gold);
+            RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
+            UIBuilder.Box(barRoot, 0f, -46f, 484f, 8f, new Vector2(0.5f, 1f));
+
+            // GoldButton: the primary action, the same colour the de-aspect pass gave it and the
+            // same colour the Claim button uses. Nothing else on this map is allowed to be Gold.
+            _continueButton = UIBuilder.GoldButton("Continue", post, "CONTINUE CAMPAIGN", UITheme.FontSmall);
+            UIBuilder.Box(_continueButton.Root, 0f, 58f, 484f, 72f, new Vector2(0.5f, 0f));
+            _continueButton.OnClick(OpenCampaign);
+
+            _continueSub = UIBuilder.Label("Sub", post, "", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.LowerCenter);
+            UIBuilder.Box(_continueSub.rectTransform, 0f, 20f, 484f, 28f, new Vector2(0.5f, 0f));
+        }
+
+        /// <summary>
+        /// Idle income, top right, screen-anchored rather than map-anchored - it is chrome about the
+        /// account, not a place on the island. Replaces the old full-height EMBER CACHE card, which
+        /// took a whole column to say what four lines say here.
+        /// </summary>
+        private void BuildIdlePanel()
+        {
+            RectTransform card = UIBuilder.Node("IdleCache", Root);
+            UIBuilder.Box(card, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16), 640f, 200f, new Vector2(1f, 1f));
+
+            Image background = card.gameObject.AddComponent<Image>();
+            background.sprite = TextureLab.RoundedRect(18);
+            background.type = Image.Type.Sliced;
+            background.color = UITheme.WithAlpha(HubPanel, 0.9f);
+            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 18, 2);
+
+            Text heading = UIBuilder.Label("Heading", card, "IDLE REWARDS", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.UpperLeft);
+            UIBuilder.Box(heading.rectTransform, 22f, -16f, 400f, 24f, new Vector2(0f, 1f));
+
+            _idleAmounts = UIBuilder.Label("Amounts", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleAmounts.rectTransform, 22f, -44f, 420f, 34f, new Vector2(0f, 1f));
+
+            _idleTimer = UIBuilder.Label("Timer", card, "", UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleTimer.rectTransform, 22f, -86f, 400f, 24f, new Vector2(0f, 1f));
+
+            _idleRate = UIBuilder.Label("Rate", card, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleRate.rectTransform, 22f, -114f, 400f, 22f, new Vector2(0f, 1f));
+
+            _claimButton = UIBuilder.GoldButton("Claim", card, "CLAIM", UITheme.FontTiny);
+            UIBuilder.Box(_claimButton.Root, -20f, 22f, 168f, 64f, new Vector2(1f, 0f));
+            _claimButton.OnClick(ClaimIdle);
+        }
+
+        /// <summary>
+        /// The player's own menus, bottom left, in the mockup's badge-dock language: a circular
+        /// emblem per entry with its label beneath, sized to sit flush with the squad portraits
+        /// across the bottom of the screen.
         ///
-        /// Static by construction - no Update, no coroutine, nothing driving it frame to frame.
-        /// DESIGN-ART-BIBLE section 5 is explicit that the Cinder "never grows a face, speaks
-        /// through a mouth, sprouts mascot features, or becomes a cute companion"; an idle bounce or
-        /// pulse here would be exactly that, just abstracted from a face onto a shape.
+        /// Guild and Splinters have no screen in this build and are marked SOON. Events DOES have a
+        /// real screen (ScreenId.Events) and is not in the mockup's dock - it is added here anyway,
+        /// because the layout this replaces was that screen's only entry point and dropping it
+        /// would have quietly made a working feature unreachable. Flagged rather than done silently.
+        /// </summary>
+        private void BuildBadgeDock()
+        {
+            RectTransform dock = UIBuilder.Node("Dock", Root);
+            UIBuilder.Box(dock, UITheme.ScreenPadding, UITheme.ScreenPadding, 900f, 150f, new Vector2(0f, 0f));
+            UIBuilder.HStack(dock, 18f, new RectOffset(0, 0, 0, 0), TextAnchor.LowerLeft);
+
+            AddBadge(dock, "GUILD", 2, UITheme.ChromeBrass, null);
+            AddBadge(dock, "BAG", 7, UITheme.ChromeBrass, OpenInventory);
+            AddBadge(dock, "SPLINTERS", 12, UITheme.CinderGlass, null);
+            AddBadge(dock, "RELICS", 6, UITheme.RelicGradeColor(RelicGrade.Legendary), OpenRelicShop);
+            AddBadge(dock, "EVENTS", 8, UITheme.Success, OpenEvents);
+        }
+
+        /// <summary>A dock entry: emblem disc, ring, sigil, label. A null action means "not built
+        /// yet" and gets the SOON tag and the shared explanation tap.</summary>
+        private void AddBadge(RectTransform dock, string label, int sigil, Color ring, System.Action action)
+        {
+            bool locked = action == null;
+
+            RectTransform cell = UIBuilder.Node("Badge" + label, dock);
+            UIBuilder.Sized(cell, 132f, 148f);
+
+            UIButton emblem = UIBuilder.IconButton("Button", cell, "", 96f,
+                                                   UITheme.WithAlpha(HubPanelRaised, locked ? 0.7f : 0.95f),
+                                                   UITheme.TextPrimary);
+            UIBuilder.Box(emblem.Root, 0f, 0f, 96f, 96f, new Vector2(0.5f, 1f));
+            emblem.OnClick(locked ? NotSoonEnough(label) : action);
+
+            Image rim = UIBuilder.Img("Ring", emblem.Root, TextureLab.Ring(128, 5),
+                                      UITheme.WithAlpha(ring, locked ? 0.45f : 0.9f));
+            UIBuilder.FillParent(rim.rectTransform, 0f);
+
+            Image glyph = UIBuilder.Img("Glyph", emblem.Root, TextureLab.Sigil(sigil, 64),
+                                        UITheme.WithAlpha(ring, locked ? 0.5f : 1f));
+            UIBuilder.FillParent(glyph.rectTransform, 26f);
+
+            // TextPrimary, not ChromeBrass. ChromeBrass earns its place on this dock as the ring and
+            // outline colour; a dock caption is the button's own name, not secondary chrome, and at
+            // FontTiny-4 over a painted plateau the brass sat too close to the stone behind it to
+            // read. The shadow does the separating, not a brighter accent.
+            Text caption = UIBuilder.Label("Label", cell, label, UITheme.FontTiny - 4,
+                                           locked ? UITheme.TextDim : UITheme.TextPrimary, TextAnchor.UpperCenter);
+            UIBuilder.Box(caption.rectTransform, 0f, -100f, 132f, 24f, new Vector2(0.5f, 1f));
+            UIBuilder.Shadowed(caption, UITheme.InkArt, 1.4f);
+
+            if (locked)
+            {
+                RectTransform tag = UIBuilder.Chip("Soon", cell, "SOON", UITheme.ChromeBrass, UITheme.FontTiny - 6);
+                UIBuilder.Box(tag, 0f, -126f, 84f, 22f, new Vector2(0.5f, 1f));
+            }
+        }
+
+        /// <summary>
+        /// The squad, along the bottom right. The mockup centres this strip because its dock is a
+        /// four-badge cluster tucked in the corner; this dock carries five and is wider, and a
+        /// centred strip put the two side by side with no gap - ten circles in one unbroken row
+        /// reading as a single meaningless rail. Anchoring the squad to the opposite edge restores
+        /// the separation the mockup gets from its own proportions: menus left, party right.
+        /// RefreshTeam fills it.
+        /// </summary>
+        private void BuildSquadStrip()
+        {
+            _teamRow = UIBuilder.Node("Squad", Root);
+            UIBuilder.Box(_teamRow, -(UITheme.ScreenPadding + 12f), UITheme.ScreenPadding, 880f, 152f, new Vector2(1f, 0f));
+            UIBuilder.HStack(_teamRow, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.LowerRight);
+        }
+
+        /// <summary>
+        /// The Hub's one corner watermark: a small, static, colourless outline of the Cinder.
+        /// DESIGN-ART-BIBLE section 5 - it never grows a face, never animates, never carries an
+        /// aspect colour.
         ///
-        /// KNOWN BUG, measured in Play Mode, not yet fixed here: the 15px clearance described above
-        /// only exists when the logical canvas is exactly 1080 tall. This mark is anchored to the
-        /// TOP edge while the nav row it must clear is anchored to the BOTTOM, so the gap between
-        /// them is not a constant - it shrinks by one unit for every unit of logical height lost.
-        /// GameApp's scaler is MatchWidthOrHeight at 0.5 against a 1920x1080 reference, so a
-        /// 20:9 Android landscape device - the shape this game actually ships to - yields roughly
-        /// 959 logical units of height, leaving about 29 units of gap for a 120-unit mark. The
-        /// mark then lands on top of the second nav row (it is built after BuildSecondNav, so it
-        /// paints over it) and reads as a smudge across the EVENTS/INVENTORY/RECITAL buttons -
-        /// precisely the "reads as a rendering fault rather than a design one" outcome the caution
-        /// above was written to avoid. Confirmed on a real capture at 1161x515.
-        ///
-        /// Not fixed in this commit because there is no correct hard-coded y: at realistic device
-        /// aspects the gap this mark was placed into does not exist at all, so the fix is a
-        /// composition decision, not a number. It belongs to the layout pass that rebuilds this
-        /// screen against DesignReference/Main.dc.html.
+        /// Anchored to the TOP-LEFT, the one region of this layout nothing else claims: the idle
+        /// panel is top-right, the dock is bottom-left, the squad strip is bottom-centre. The
+        /// previous placement was a fixed offset from the top edge trying to clear a nav row
+        /// anchored to the bottom edge, which held only at exactly 1080 logical units of height and
+        /// collided with three buttons at this project's real target aspect. Anchoring a mark to an
+        /// edge that nothing else measures from is what actually fixes that, not a better number.
         /// </summary>
         private void BuildCinderMark()
         {
-            const float size = 120f;
-            // 0.32, was 0.22. Same reason as the ambient glow: a warmer, lighter floor eats a
-            // low-alpha cool grey. The mark is an outline shape with no fill, so it loses legibility
-            // faster than a solid would - there is no mass to survive the wash-out, only thin lines.
+            const float size = 112f;
             Image mark = UIBuilder.Img("CinderMark", Root, TextureLab.CinderFragment(256),
                                        UITheme.WithAlpha(UITheme.CinderGlass, 0.32f));
-            UIBuilder.Box(mark.rectTransform, RightColumnX, -529f, size, size, new Vector2(0.5f, 1f));
+            UIBuilder.Box(mark.rectTransform, UITheme.ScreenPadding + 20f,
+                          -(UITheme.TopBarHeight + UITheme.Space24), size, size, new Vector2(0f, 1f));
         }
 
         private void BuildOptions()
         {
-            // right screen edge, in the gap between the cache card (ends 514) and the nav (starts 850)
-            UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f, UITheme.WithAlpha(HubPanelRaised, 0.9f), UITheme.TextMuted);
-            UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -538f, 62f, 62f, new Vector2(1f, 1f));
+            UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f,
+                                                    UITheme.WithAlpha(HubPanelRaised, 0.9f), UITheme.TextMuted);
+            UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16 + 210f),
+                          62f, 62f, new Vector2(1f, 1f));
             options.OnClick(ShowOptions);
         }
 
@@ -427,37 +484,41 @@ namespace Emberfall.UI.Screens
         {
             for (int i = _teamRow.childCount - 1; i >= 0; i--) Destroy(_teamRow.GetChild(i).gameObject);
 
-            // Five cells across the 880f row: 5 * 158 + 4 * 22 spacing = 878. The old three-across
-            // cells were 270f; the portrait still fits, the name labels got narrower with them.
-            const float cellWidth = 158f;
+            // Five cells across the 880f strip: 5 * 160 + 4 * 16 spacing = 864. The strip sits over
+            // the painted map now rather than inside a panel, so each cell is a portrait and a name
+            // and nothing else - the level/power line the old card carried moved out. It was the
+            // only Gold on this row, and Gold on five portraits at once, over a map that also
+            // carries a Gold Continue button and a Gold Claim button, spent the colour on the least
+            // important thing on the screen. Heroes shows the same numbers with room to read them.
+            const float cellWidth = 160f;
+            const float portraitSize = 104f;
             List<HeroInstance> team = App.Session.Profile.TeamHeroes();
             for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
             {
                 RectTransform cell = UIBuilder.Node("Slot" + slot, _teamRow);
-                UIBuilder.Sized(cell, cellWidth, 196f);
+                UIBuilder.Sized(cell, cellWidth, 148f);
 
                 if (slot >= team.Count)
                 {
                     // an open slot is room to grow, not a hole: a ring where the portrait will
                     // stand (same convention as the campaign banner strip) and the slot's number,
                     // so the cell promises a fourth and fifth ally rather than apologising
-                    Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5), HubBorderSoft);
-                    UIBuilder.Box(ring.rectTransform, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
-                    Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-                    UIBuilder.Box(hint.rectTransform, 0f, -132f, 154f, 26f, new Vector2(0.5f, 1f));
+                    Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5),
+                                               UITheme.WithAlpha(UITheme.ChromeBrass, 0.55f));
+                    UIBuilder.Box(ring.rectTransform, 0f, -4f, portraitSize, portraitSize, new Vector2(0.5f, 1f));
+                    Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.UpperCenter);
+                    UIBuilder.Box(hint.rectTransform, 0f, -114f, cellWidth, 24f, new Vector2(0.5f, 1f));
+                    UIBuilder.Shadowed(hint, UITheme.InkArt, 1.4f);
                     continue;
                 }
 
                 HeroInstance hero = team[slot];
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, 122f, true);
-                UIBuilder.Box(portrait, 0f, -4f, 122f, 122f, new Vector2(0.5f, 1f));
+                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, portraitSize, true);
+                UIBuilder.Box(portrait, 0f, -4f, portraitSize, portraitSize, new Vector2(0.5f, 1f));
 
-                Text name = UIBuilder.Label("Name", cell, hero.Def.Name, UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -132f, 154f, 26f, new Vector2(0.5f, 1f));
-
-                Text meta = UIBuilder.Label("Meta", cell, "Lv " + hero.Level + "  -  " + hero.Power,
-                                            UITheme.FontTiny, UITheme.Gold, TextAnchor.UpperCenter);
-                UIBuilder.Box(meta.rectTransform, 0f, -160f, 154f, 26f, new Vector2(0.5f, 1f));
+                Text name = UIBuilder.Label("Name", cell, hero.Def.Name, UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
+                UIBuilder.Box(name.rectTransform, 0f, -114f, cellWidth, 24f, new Vector2(0.5f, 1f));
+                UIBuilder.Shadowed(name, UITheme.InkArt, 1.4f);
             }
         }
 
