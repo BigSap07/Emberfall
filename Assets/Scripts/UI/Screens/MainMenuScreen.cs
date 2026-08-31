@@ -151,7 +151,6 @@ namespace Emberfall.UI.Screens
             BuildIdlePanel();
             BuildBadgeDock();
             BuildSquadStrip();
-            BuildCinderMark();
             BuildOptions();
         }
 
@@ -555,26 +554,19 @@ namespace Emberfall.UI.Screens
             UIBuilder.HStack(_teamRow, BadgeGap, new RectOffset(0, 0, 0, 0), TextAnchor.LowerRight);
         }
 
-        /// <summary>
-        /// The Hub's one corner watermark: a small, static, colourless outline of the Cinder.
-        /// DESIGN-ART-BIBLE section 5 - it never grows a face, never animates, never carries an
-        /// aspect colour.
-        ///
-        /// Anchored to the TOP-LEFT, the one region of this layout nothing else claims: the idle
-        /// panel is top-right, the dock is bottom-left, the squad strip is bottom-centre. The
-        /// previous placement was a fixed offset from the top edge trying to clear a nav row
-        /// anchored to the bottom edge, which held only at exactly 1080 logical units of height and
-        /// collided with three buttons at this project's real target aspect. Anchoring a mark to an
-        /// edge that nothing else measures from is what actually fixes that, not a better number.
-        /// </summary>
-        private void BuildCinderMark()
-        {
-            const float size = 112f;
-            Image mark = UIBuilder.Img("CinderMark", Root, TextureLab.CinderFragment(256),
-                                       UITheme.WithAlpha(UITheme.CinderGlass, 0.32f));
-            UIBuilder.Box(mark.rectTransform, UITheme.ScreenPadding + 20f,
-                          -(UITheme.TopBarHeight + UITheme.Space24), size, size, new Vector2(0f, 1f));
-        }
+        // The Cinder watermark that used to be built here is gone. It was BuildCinderMark, a
+        // procedural CinderFragment tinted CinderGlass at 0.32 alpha and anchored to the top-left,
+        // introduced by 81bfb95 when this screen's whole background was a flat dark fill.
+        //
+        // Its reasoning was sound then and does not survive the reskin. DESIGN-ART-BIBLE section 5
+        // wants the Cinder as a quiet mark on the Keeper's own neutral floor, and that floor no
+        // longer exists - the Hub is a painted village now, edge to edge, with no empty surface for
+        // a watermark to be quiet on. Anchored where it was it sat across the barracks roofline and
+        // read as an unexplained symbol over the art rather than as a motif behind it.
+        //
+        // TextureLab.CinderFragment and UITheme.CinderGlass both stay. The tone is still carrying
+        // the Splinters badge, and the shape is still the documented Cinder per the art bible, so
+        // restoring the motif is a placement decision rather than a rebuild if it is wanted back.
 
         private void BuildOptions()
         {
