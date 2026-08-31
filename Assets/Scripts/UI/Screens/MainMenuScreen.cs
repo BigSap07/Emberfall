@@ -124,12 +124,39 @@ namespace Emberfall.UI.Screens
         private const float CampaignX = 0.663f, CampaignY = 0.452f; // the fire portal
         private const float RecitalX = 0.763f, RecitalY = 0.448f;   // the purple cave mouth
 
+        // ---------- the bottom row ----------
+        // One size and one spacing rule for every circular cell along the bottom, dock and squad
+        // alike. They used to disagree in four separate ways at once - 96 vs 104 icons, 18 vs 16
+        // spacing, 132 vs 160 cells, 150 vs 152 row heights - which is what made the left of the
+        // row look smaller and tighter than the right. None of those differences was a decision;
+        // they were four literals written at different times.
+        //
+        // BadgeCellHeight reserves room for the tallest cell there is - icon, caption AND a SOON
+        // tag - so every cell is the same height whether or not it carries one. Sizing the cell to
+        // its contents instead let the locked badges' tag hang below the row and eat into the
+        // bottom margin, which is the clipping.
+        private const float BadgeSize = 104f;    // icon diameter
+        private const float BadgeGap = 20f;      // gap between cells
+        private const float BadgeCell = 132f;    // cell width
+        private const float BadgeCellHeight = 172f;
+
         /// <summary>
-        /// Height reserved along the bottom edge for the badge dock and the squad strip. Anything
-        /// stacked above them measures from this one number rather than carrying its own copy, so
-        /// the two rows and the card above them cannot drift apart.
+        /// Distance from the bottom of the screen to the bottom of the badge row. Deliberately
+        /// larger than ScreenPadding: this edge is where phones put gesture bars and rounded
+        /// corners, and the row underneath everything else is the one that pays for a margin that
+        /// is merely "the usual padding".
         /// </summary>
-        private const float BottomRowHeight = 152f;
+        private const float BottomSafeMargin = 48f;
+
+        /// <summary>
+        /// Total height the bottom row occupies, margin included. Anything stacked above it
+        /// measures from this one number rather than carrying its own copy, so the rows and the
+        /// card above them cannot drift apart.
+        /// </summary>
+        private const float BottomRowHeight = BottomSafeMargin + BadgeCellHeight;
+
+        /// <summary>Width of a five-cell row at the shared metrics.</summary>
+        private const float BadgeRowWidth = BadgeCell * 5f + BadgeGap * 4f;
 
         private RectTransform _map;
 
@@ -446,8 +473,8 @@ namespace Emberfall.UI.Screens
         private void BuildBadgeDock()
         {
             RectTransform dock = UIBuilder.Node("Dock", Root);
-            UIBuilder.Box(dock, UITheme.ScreenPadding, UITheme.ScreenPadding, 900f, 150f, new Vector2(0f, 0f));
-            UIBuilder.HStack(dock, 18f, new RectOffset(0, 0, 0, 0), TextAnchor.LowerLeft);
+            UIBuilder.Box(dock, UITheme.ScreenPadding, BottomSafeMargin, BadgeRowWidth, BadgeCellHeight, new Vector2(0f, 0f));
+            UIBuilder.HStack(dock, BadgeGap, new RectOffset(0, 0, 0, 0), TextAnchor.LowerLeft);
 
             AddBadge(dock, "GUILD", 2, UITheme.ChromeBrass, null);
             AddBadge(dock, "BAG", 7, UITheme.ChromeBrass, OpenInventory);
@@ -463,12 +490,12 @@ namespace Emberfall.UI.Screens
             bool locked = action == null;
 
             RectTransform cell = UIBuilder.Node("Badge" + label, dock);
-            UIBuilder.Sized(cell, 132f, 148f);
+            UIBuilder.Sized(cell, BadgeCell, BadgeCellHeight);
 
-            UIButton emblem = UIBuilder.IconButton("Button", cell, "", 96f,
+            UIButton emblem = UIBuilder.IconButton("Button", cell, "", BadgeSize,
                                                    UITheme.WithAlpha(HubPanelRaised, locked ? 0.7f : 0.95f),
                                                    UITheme.TextPrimary);
-            UIBuilder.Box(emblem.Root, 0f, 0f, 96f, 96f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(emblem.Root, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
             emblem.OnClick(locked ? NotSoonEnough(label) : action);
 
             Image rim = UIBuilder.Img("Ring", emblem.Root, TextureLab.Ring(128, 5),
@@ -485,10 +512,10 @@ namespace Emberfall.UI.Screens
             // read. The shadow does the separating, not a brighter accent.
             Text caption = UIBuilder.Label("Label", cell, label, UITheme.FontTiny - 4,
                                            locked ? UITheme.TextDim : UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(caption.rectTransform, 0f, -100f, 132f, 24f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(caption.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
             UIBuilder.Shadowed(caption, UITheme.InkArt, 1.4f);
 
-            if (locked) AddSoonTag(cell, 0f, -126f, new Vector2(0.5f, 1f));
+            if (locked) AddSoonTag(cell, 0f, -(BadgeSize + 36f), new Vector2(0.5f, 1f));
         }
 
         /// <summary>
@@ -502,8 +529,8 @@ namespace Emberfall.UI.Screens
         private void BuildSquadStrip()
         {
             _teamRow = UIBuilder.Node("Squad", Root);
-            UIBuilder.Box(_teamRow, -(UITheme.ScreenPadding + 12f), UITheme.ScreenPadding, 880f, 152f, new Vector2(1f, 0f));
-            UIBuilder.HStack(_teamRow, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.LowerRight);
+            UIBuilder.Box(_teamRow, -UITheme.ScreenPadding, BottomSafeMargin, BadgeRowWidth, BadgeCellHeight, new Vector2(1f, 0f));
+            UIBuilder.HStack(_teamRow, BadgeGap, new RectOffset(0, 0, 0, 0), TextAnchor.LowerRight);
         }
 
         /// <summary>
@@ -588,13 +615,11 @@ namespace Emberfall.UI.Screens
             // only Gold on this row, and Gold on five portraits at once, over a map that also
             // carries a Gold Continue button and a Gold Claim button, spent the colour on the least
             // important thing on the screen. Heroes shows the same numbers with room to read them.
-            const float cellWidth = 160f;
-            const float portraitSize = 104f;
             List<HeroInstance> team = App.Session.Profile.TeamHeroes();
             for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
             {
                 RectTransform cell = UIBuilder.Node("Slot" + slot, _teamRow);
-                UIBuilder.Sized(cell, cellWidth, 148f);
+                UIBuilder.Sized(cell, BadgeCell, BadgeCellHeight);
 
                 if (slot >= team.Count)
                 {
@@ -603,19 +628,27 @@ namespace Emberfall.UI.Screens
                     // so the cell promises a fourth and fifth ally rather than apologising
                     Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5),
                                                UITheme.WithAlpha(UITheme.ChromeBrass, 0.55f));
-                    UIBuilder.Box(ring.rectTransform, 0f, -4f, portraitSize, portraitSize, new Vector2(0.5f, 1f));
+                    UIBuilder.Box(ring.rectTransform, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
                     Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.UpperCenter);
-                    UIBuilder.Box(hint.rectTransform, 0f, -114f, cellWidth, 24f, new Vector2(0.5f, 1f));
+                    UIBuilder.Box(hint.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
                     UIBuilder.Shadowed(hint, UITheme.InkArt, 1.4f);
                     continue;
                 }
 
                 HeroInstance hero = team[slot];
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, portraitSize, true);
-                UIBuilder.Box(portrait, 0f, -4f, portraitSize, portraitSize, new Vector2(0.5f, 1f));
+                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, BadgeSize, true);
+                UIBuilder.Box(portrait, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
 
-                Text name = UIBuilder.Label("Name", cell, hero.Def.Name, UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -114f, cellWidth, 24f, new Vector2(0.5f, 1f));
+                // First word only. A cell is BadgeCell wide because that is what the dock's captions
+                // need, and "Kalyx Emberwright" at full length is wider than that - it overflowed
+                // into its neighbours and was the other half of why this row read as two different
+                // rows. Heroes shows full names where there is room for them.
+                string shortName = hero.Def.Name;
+                int space = shortName.IndexOf(' ');
+                if (space > 0) shortName = shortName.Substring(0, space);
+
+                Text name = UIBuilder.Label("Name", cell, shortName, UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
+                UIBuilder.Box(name.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
                 UIBuilder.Shadowed(name, UITheme.InkArt, 1.4f);
             }
         }
