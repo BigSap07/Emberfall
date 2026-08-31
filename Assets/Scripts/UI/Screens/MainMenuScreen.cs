@@ -56,43 +56,84 @@ namespace Emberfall.UI.Screens
         private static readonly Color HubPanelSunken = UITheme.Hex("14100B");
 
         /// <summary>
-        /// Multiplied over the painted map. hub.png is a pale, cool, blue-grey plateau and the Hub
-        /// is a warm dark screen; dropping the painting in untouched would put the one bright cool
-        /// surface in the game directly on top of the floor that was just warmed. A multiply wash
-        /// pulls it into the same family as HubPanel without repainting anything.
+        /// Multiplied over the painted map. The Hub is a warm dark screen and a full-brightness
+        /// painting behind dark chrome flattens every plate on top of it; the wash pulls the art
+        /// into the same family as HubPanel without repainting anything.
         /// </summary>
         private static readonly Color MapWash = UITheme.Hex("B29E7E");
 
+        /// <summary>
+        /// Height of the actual artwork inside hub.png, in source pixels.
+        ///
+        /// The current file is 1650x780 but only the top 1650x720 is painted - rows 720-779 are a
+        /// band of pure white, an export artifact rather than content. It is not off-screen: once
+        /// the map is envelope-fitted the band lands inside the visible area and renders as a pale
+        /// strip along the bottom edge, behind the dock and the squad. The sprite is therefore cut
+        /// from the art region only.
+        ///
+        /// Trimming also fixes the fit. The whole file is 2.115:1, the artwork alone is 2.292:1,
+        /// and the screen is about 2.254:1. Fitting the untrimmed image reserved screen height for
+        /// the white band and cropped real painting off the top and bottom to pay for it. The
+        /// trimmed sprite is fractionally wider than the screen instead, so the full height of the
+        /// painting is visible and roughly 0.8% is lost off each side.
+        ///
+        /// Expressed as a FRACTION of the texture, never as a pixel count. The importer does not
+        /// hand back the file: hub.png is 1650x780 on disk and arrived as a 2048x1024 Texture2D,
+        /// because a non-power-of-two texture is rescaled per axis by default. A literal 720-pixel
+        /// trim against that texture kept the top 70% of the image and threw away the bottom third
+        /// of the village, which is what put every node above its own structure on the first
+        /// attempt. A ratio survives any rescale, any maxTextureSize, and any future re-export.
+        ///
+        /// The importer also DISTORTS: 1650x780 (2.115:1) arrives as 2048x1024 (2.0:1), scaled by a
+        /// different factor per axis. Setting npotScale: 0 on the asset does not stop it, because
+        /// 1650 is not a multiple of four and the compressed format cannot represent it - that was
+        /// tried and reverted rather than left in as a setting that changes nothing. So the true
+        /// shape of the artwork is declared here instead of being read back off the texture, and
+        /// the fitter is driven from these numbers. Rendering the squashed texture at its authored
+        /// aspect undoes the importer's stretch.
+        ///
+        /// These three are the only place in this screen that knows the source file's dimensions.
+        /// When new art ships, update them together and everything else follows.
+        /// </summary>
+        private const float SourceFileWidth = 1650f;
+        private const float SourceFileHeight = 780f;
+        private const float SourceArtHeight = 720f;
+
         // ---------- map node anchors ----------
-        // Fractions of the PAINTED MAP, x then y, measured from its top-left - not fractions of the
-        // screen. Every node is parented to the map image and anchored by these, so a node stays on
-        // its structure at any aspect ratio instead of drifting off it the way the Cinder watermark
-        // did. The map itself is envelope-fitted, so the screen crops it rather than stretching it.
+        // Fractions of the ARTWORK, x then y, measured from its top-left - not fractions of the
+        // screen, and not of the source file (the white band above is excluded before these are
+        // applied). Every node is parented to the map image and anchored by these, so a node stays
+        // on its structure at any aspect ratio. The map is envelope-fitted, so the screen crops it
+        // rather than stretching it.
         //
-        // These are measured against Assets/Resources/Backgrounds/hub.png, NOT against the
-        // ash_marches_bg7.jpg that DesignReference/Main.dc.html anchors its own percentages to.
-        // That painting is not in this repository - the mockup is the only place it exists, along
-        // with four bust PNGs it also references - so its coordinates would have put "Heroes" on
-        // empty sky here. hub.png was already committed, was referenced by no code at all, and
-        // carries structures close enough to the mockup's intent to stand in: an arch, a monolith,
-        // a standing-stone circle with a dais, a lit brazier and an altar slab. Each node below sits
-        // on the structure whose meaning actually matches it, which is what the mockup was doing
-        // with its own painting.
+        // MEASURED AGAINST THE CURRENT hub.png, which is a village, not the stone plateau the
+        // previous set was measured against. Not one of the old six values survived: the art was
+        // replaced wholesale, and a coordinate measured against a different painting is not an
+        // approximation of the right answer, it is an unrelated number. The old CampaignY of 0.585
+        // landed on a market stall; the old SummonX of 0.645 landed on the campaign portal.
         //
-        // If the real painting lands later, only these twelve numbers change. Nothing else here
-        // knows which image it is drawing.
-        // Inside the arch's opening, not below it. The arch and the brazier occupy the same band of
-        // x on this painting (arch opening y 0.22-0.42, brazier y 0.50-0.62), so a label placed
-        // under the arch lands on the forge instead - which is exactly what the first pass did.
-        private const float HeroesX = 0.225f, HeroesY = 0.335f;     // in the arch's opening
-        private const float CampaignX = 0.445f, CampaignY = 0.585f; // the plaza below the monolith
-        private const float SummonX = 0.645f, SummonY = 0.495f;     // the dais inside the stone circle
-        private const float ForgeX = 0.210f, ForgeY = 0.665f;       // under the lit brazier
-        private const float RecitalX = 0.825f, RecitalY = 0.690f;   // on the altar slab, lower right
-        private const float MarketX = 0.680f, MarketY = 0.660f;     // open stone, no structure yet
+        // How these were measured, so the next person can repeat it rather than guess: a coordinate
+        // grid was rendered over the art region (Tools/Screenshots/hub_grid_newart.png), then every
+        // candidate was re-cropped at 2x with a crosshair on the proposed point and checked one by
+        // one. Both passes are cheap and the first one alone is not enough - the pass that produced
+        // the previous set skipped the crosshair check and put HEROES on top of the forge.
+        private const float HeroesX = 0.157f, HeroesY = 0.262f;     // the barracks, blue banner
+        private const float ForgeX = 0.341f, ForgeY = 0.442f;       // the smithy's lit arch
+        private const float SummonX = 0.551f, SummonY = 0.314f;     // the rune obelisk
+        private const float MarketX = 0.441f, MarketY = 0.569f;     // the market stall canopy
+        private const float CampaignX = 0.663f, CampaignY = 0.452f; // the fire portal
+        private const float RecitalX = 0.763f, RecitalY = 0.448f;   // the purple cave mouth
 
         private RectTransform _map;
-        private static Sprite _mapSprite;
+
+        /// <summary>
+        /// Deliberately NOT static, and deliberately not cached between builds. It was a static
+        /// cache, and that quietly defeated an art swap: a Sprite built from an earlier import
+        /// survived in the static field, so replacing hub.png and reimporting it changed nothing on
+        /// screen and every measurement taken against the new file disagreed with what was actually
+        /// being drawn. Build() runs once per screen, so there is nothing to save by caching it.
+        /// </summary>
+        private Sprite _mapSprite;
 
         protected override void Build()
         {
@@ -127,12 +168,17 @@ namespace Emberfall.UI.Screens
             _map.pivot = new Vector2(0.5f, 0.5f);
             _map.anchoredPosition = Vector2.zero;
 
-            if (_mapSprite == null)
             {
                 Texture2D painting = Resources.Load<Texture2D>("Backgrounds/hub");
                 if (painting != null)
                 {
-                    _mapSprite = Sprite.Create(painting, new Rect(0f, 0f, painting.width, painting.height),
+                    // Cut from the artwork only, never the whole file - see ArtHeight. Unity texture
+                    // space has its origin at the bottom-left while the white band sits at the
+                    // bottom of the image as viewed, so the region to keep starts at
+                    // (height - artHeight), not at zero.
+                    float artHeight = painting.height * (SourceArtHeight / SourceFileHeight);
+                    _mapSprite = Sprite.Create(painting,
+                                               new Rect(0f, painting.height - artHeight, painting.width, artHeight),
                                                new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect);
                 }
             }
@@ -144,7 +190,11 @@ namespace Emberfall.UI.Screens
 
                 AspectRatioFitter fitter = _map.gameObject.AddComponent<AspectRatioFitter>();
                 fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-                fitter.aspectRatio = _mapSprite.rect.width / _mapSprite.rect.height;
+                // From the AUTHORED dimensions, not from _mapSprite.rect. The sprite's rect is in
+                // imported-texture space, which the importer has already stretched by a different
+                // factor per axis; feeding that back in would render the distortion instead of
+                // correcting it.
+                fitter.aspectRatio = SourceFileWidth / SourceArtHeight;
             }
             else
             {
