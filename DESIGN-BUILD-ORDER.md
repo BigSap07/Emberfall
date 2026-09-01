@@ -29,9 +29,9 @@ reconciled with the code: the two grades were renamed **Legendary/Mythic** (`781
 and the two Mythic (formerly Legendary) relics were promoted to also carry a stat block on top of
 their hook. See task 12b below for the full account; DESIGN-RELICS.md still describes the
 superseded Common/Legendary naming and has not been re-reconciled against this rename — that is a
-separate, smaller doc debt this pass does not fix. Task 13, the retune, is still not done: content
-is unchanged since the last audit, and a live harness run tonight still reports "Authored values are
-UNTUNED" and "Nothing here is tuned." A small, unmerged first pass exists on branch
+separate, smaller doc debt this pass does not fix. Task 13, the retune, **has since been done** (2026-09-01,
+`retune/task-13-campaign-balance`; the sentence that stood here said it was not, and was true when
+written). A small, unmerged first pass exists on branch
 `retune/ch2-late-stages` (one commit, `a91a2f6`, touching only the Tideturned boss and three late
 chapter-2 stages) — not on `main`, so it does not change task 13's status, but it is active work
 worth knowing about. Chapter 2 shipped (12 more stages, `f1f5b71`), entirely outside this document's
@@ -57,8 +57,9 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
 
 **Audit stamp, 2026-09-01.** All seventeen numbered tasks and the four systems below were checked
 against code rather than against this document's own prior claims. The result was that this
-section was already accurate: fifteen of seventeen tasks are done as claimed, task 6 is correctly
-recorded as superseded-and-never-built, and task 13 is correctly recorded as outstanding. Two
+section was already accurate: fifteen of seventeen tasks were done as claimed, task 6 is correctly
+recorded as superseded-and-never-built, and task 13 was correctly recorded as outstanding at the
+time (it has since been done - see task 13). Two
 things were corrected, both below — the Umbra death-spread was described as living on an unmerged
 branch when it is on `main`, and task 13 had no explicit status marker of its own. Nothing else
 needed changing.
@@ -875,51 +876,96 @@ confirmed green on CI on `main` after the merge.
     don't need to land before 13, but landing after 13 (which it already has) means the retune
     covers all ten shipped relics, not the four task 12a alone would have left.
 
-13. **Full campaign retune. Once, last.** **Not done — the only unbuilt task in the numbered
-    order besides 6, which is superseded.** Re-confirmed by the 2026-09-01 audit: `campaign.json`'s
-    own header still reads "a structural first pass and are NOT balanced", and a live
-    `build-check.ps1` run still prints "Nothing here is tuned." The instrument works now (both
-    blockers below landed); the pass itself has not been run. ⚠️ No longer twelve stages: chapter 2 shipped (`f1f5b71`,
-    see "Already done" above), so `campaign.json` now holds **24 stages across two chapters**, and
-    both need this pass — chapter 2's numbers are provisional by its own commit message, exactly
-    like chapter 1's pre-retune numbers were. `[H]`, `RunCampaignBalancePass` is exactly the tool; a
-    handful of spot-check battles in `[U]` are still worth watching.
-    ⚠️ **`RunCampaignBalancePass` alone is no longer "exactly the tool".** See "Task 13's
-    instrument was broken" below: it reported 100% on all twelve stages for reasons that had
-    nothing to do with the content, and two prerequisites had to land before it could be tuned
-    against at all. Both have now landed; the line above is kept because the retune is still one
-    pass, still last — now over twice the stage count it was scoped against.
-    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b — all done, 12b included: it landed before this
-    task rather than after, so the retune this task describes covers all ten shipped relics (8
-    Legendary, 2 Mythic — see task 12b's naming correction), not four. Blocks: nothing hard. ⚠️ No
-    longer literally "the last task" — task 14 (events engine) landed after this was written and
-    sits below it, but the two are independent: task 14 does not touch the campaign economy this
-    task retunes, and this task does not gate task 14. "Last" here still means what it always meant
-    - the final pass over the win-rate table task 1 through 12a build toward - task 14 is simply
-    outside that chain, the same way Chapter 2 and the art pipeline are.
+13. **Full campaign retune. Once, last.** **Done.** Ran over all 24 stages, both chapters, on
+    `retune/task-13-campaign-balance`. Twelve `build-check.ps1` runs against a real compiler, each
+    one read before the next change; the final run is green with zero failures. `campaign.json`'s
+    header comment no longer says "NOT balanced" because it no longer is.
 
-    ⚠️ **The code itself still calls this task 14, not 13.** `Tools/DevHarness/Program.cs`'s own
-    output ("Authored values are UNTUNED... task 14 is the retune", "this is the instrument task 14
-    tunes against") uses the older numbering, and so does `6bd559c` ("docs: record task 14's two new
-    blockers..." — this one is on `main`, verified an ancestor of `HEAD`) and the unmerged
-    `a91a2f6` ("...task 14 pass 1"). All predate Opening Gambit being cut out of the numbered list
-    and this task moving down from 14 to 13. Nobody has gone back to update those comments and
-    commit messages for the renumbering; they are not wrong about the content, only about which
-    number it answers to. Same shape as Known trap 3's `galeExtraTurnsPerRound` comment below, which
-    has the identical mismatch for the identical reason.
+    **What the baseline actually was.** Every stage read 100% on all three instruments except
+    1-12, which read 66.7% on the five-body pin. Not a curve, a wall with one notch in it. The
+    enemy line measured 0.50x to 0.94x its stage's `recommendedPower` - chapter 2 sat at 0.55x to
+    0.65x for most of its length - which is the arithmetic left over from blocker A multiplying
+    every `recommendedPower` by 1.52019 while enemy levels stayed where task 8 put them.
 
-Task 13 is the only step that produces a valid win-rate table. Nothing tuned before it should be
-read as final. **Run tonight**, not merely inferred: `Tools/build-check.ps1` compiles and executes
-`Tools/DevHarness` against a real C# compiler in this environment (`csc.exe`, found and used), and
-its live output confirms "not done" directly rather than by absence of a commit —
-`campaign.json`'s numbers are unchanged, and the harness prints "Authored values are UNTUNED" and,
-in its final instrument-comparison table, "Nothing here is tuned. Task 14 is the retune; this table
-is its input." One first, partial pass exists but is not on `main`: branch `retune/ch2-late-stages`
-carries a single unmerged commit (`a91a2f6`, "balance(ch2): retune Tideturned boss + late ch2
-stages (task 14 pass 1)") that raises the Tideturned boss's kit and levels on three late chapter-2
-stages, moving that boss stage's five-body pinned win rate from 100% to 79.2% by its own commit
-message. It does not change task 13's status here because it is not merged, but it is live evidence
-someone has already started.
+    **Enemy level alone does not work, and this pass proved it rather than assuming it.** The
+    first attempt raised every enemy until each stage's line power equalled its own
+    `recommendedPower` - chapter 2 reaching level 60. Twenty-one of twenty-four stages still read
+    100%. The three that moved did not move gently: 1-12 went 66.7% to 0% and took
+    `CheckStageWinnability` down with it, and 2-12 went 100% to 54.2%. That is the whole finding.
+    The document's standing line - "enemy levels are task 13's first lever, not its last" - is
+    correct about the first half and understated the second: level is not a weak lever, it is an
+    inert one until something else is true first.
+
+    **What is actually true first: Lumen eats single-target damage.** Orrin is Lumen, and
+    `FindTargetAnchor` gives a living Lumen unit every single-target question aimed at its side.
+    Audited against `enemies.json`: `hollow_husk`, `tidecaller_wretch` and `riptide_channeler` all
+    open on `FrontEnemy`, `grave_moth` on `LowestHpEnemy`, `cinder_imp` on `RandomEnemy`. Every
+    one of those is single-target, so every one of them lands on the tank and gets healed off -
+    the harness prints "healer changed outcome: 0 of 24" on stage after stage of the baseline. The
+    only damage in the entire enemy roster that Lumen does not absorb is `AllEnemies`, and the
+    only enemy carrying it on a BASIC - fires every turn rather than on a 100-energy active - was
+    `sundered_colossus`. That is the whole reason 1-12 was the single stage in the game that
+    discriminated at all. `a91a2f6` reached the same conclusion independently for the chapter 2
+    boss; see below.
+
+    **So difficulty is authored as AoE presence, and level scales it once present.** Chapter 1
+    grades on Ember AoE actives, phased in by power: `cinder_imp`'s Sputter (0.70) from 1-2, then
+    `ashen_revenant`'s Ash Nova (1.05) from 1-8. Measured sensitivity, one revenant at a time:
+    zero revenants reads 100%, one reads 79.2% at level 19 and 58.3% at level 20, two read 62.5%
+    at levels 24/22 and 0% at 26/24. A single level on one enemy is worth twenty points of win
+    rate at that end of the curve, which is why every number below is a measured point and not an
+    extrapolation.
+
+    **Chapter 2 needed a kit change, and this is the explicit call-out that it is one.**
+    `riptide_channeler`'s basic was `FrontEnemy` 0.90 with an AttackDown; it is now `AllEnemies`
+    0.45 with the same debuff at a lower chance (0.60 to 0.35, since it now lands on five targets
+    instead of one). Level alone was tried and failed here twice - channelers at level 60 against
+    a line power equal to `recommendedPower` still read 100% - because the whole chapter 2 roster
+    is single-target and Lumen was absorbing all of it. The channeler appears in chapter 2 only
+    (verified by parsing every stage's roster), so this touches no chapter 1 content. With an
+    `AllEnemies` basic, chapter 2 grades on channeler count, one through three, which is a lever
+    with enough resolution to author against.
+
+    `tidecaller_wretch` is the other composition finding. Its active heals its whole line and adds
+    DefenseUp, which lengthens the fight, which multiplies how many AoE volleys land - so a wretch
+    stage tuned to its neighbours' channeler level reads far harder than them. Measured: 2-3 with
+    a wretch and a level-38 channeler read 12.5% while 2-4 with a level-42 channeler and no wretch
+    read 100%. Both stages that field a wretch (2-3, 2-5) hold the channeler beside it four to six
+    levels lower to pay for it.
+
+    **`a91a2f6` was built on, not superseded.** Its Tideturned change is adopted verbatim - HP
+    2650 to 4200, attack 248 to 480, basic `FrontEnemy` 1.10 to `AllEnemies` 0.80 - because it is
+    the same Lumen-bypass fix this pass arrived at independently, and it was right. Its stage
+    levels on 2-9/2-10/2-11 are superseded, since this pass re-derives all 24 stages against a
+    curve rather than three stages against a boss. Its own conclusion, that "level tuning alone
+    cannot move the economy instrument; this is a kit-design debt for a future content pass", is
+    exactly what the channeler change above pays off. The branch stays unmerged; nothing is lost
+    by that now.
+
+    **Enemy counts were not touched.** Task 10's 3/3/3/3, 4/4/4/4, 5/5/5/5 ramp is intact on both
+    chapters, asserted by the tool that wrote these rosters. `recommendedPower`, the relic set,
+    hero kits and team size were not touched either.
+
+    **One thing this pass could not fix, and it is not enemy content.** Late chapter 2's
+    `recommendedPower` is not reachable by a real progressing player. The economy instrument's
+    simulated account plateaus at roughly 17,900 power by 2-11 against a `recommendedPower` of
+    23,500, and 23,600 at 2-12 against 26,000 - hero level cap Lv44 at rank 9 is the binding
+    constraint, not content. Two consequences, both visible in the final table. The economy column
+    falls to 12.5% and 16.7% on the last two stages while the five-body column reads 62.5% and
+    83.3%, because the five-body pin fields a team the campaign's own economy never produces. And
+    2-12 reads easier on the pinned instrument than 2-11 does, which is not a tuning error - it is
+    `recommendedPower` climbing 23,500 to 26,000 across a stage where the content cannot follow it
+    without enemy levels in the seventies. An earlier iteration solved the levels needed to match
+    that curve exactly and got level 101 on 2-11. That is a `recommendedPower` problem for whoever
+    picks it up, deliberately left alone here per this task's own scope.
+
+    Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b - all done. Blocks: nothing.
+
+Task 13 is the only step that produces a valid win-rate table, and it has now been run. The
+five-body column below is that table. The instrument-comparison block `build-check.ps1` prints is
+still the place to read it; its closing line ("Nothing here is tuned. Task 14 is the retune") is
+now stale in the same way the code comments below are - it predates this pass and predates the
+renumbering, and nobody has gone back to update the harness's own prose.
 
 14. **Events engine, and two starter events on top of it.** Not part of the original numbered plan
     - new system work that arrived after task 13 was written, on the same footing Chapter 2 and the
