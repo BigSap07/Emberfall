@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
             CheckStatusExpiry(content);
             CheckStatusAndStatBehavior(content);
             CheckHolyBlockControlImmunity(content);
+            CheckResolveCounter(content);
             CheckDebrief();
             CheckRelics(content);
             CheckEvents(content);
@@ -133,7 +134,7 @@ namespace Emberfall.DevHarness
             Line("CONTENT");
             for (int i = 0; i < db.Warnings.Count; i++) Line("  warning: " + db.Warnings[i]);
             Check(db.Warnings.Count == 0, "content parses with no warnings");
-            Check(db.Heroes.Count == 7, "7 heroes loaded (got " + db.Heroes.Count + ")");
+            Check(db.Heroes.Count == 11, "11 heroes loaded (got " + db.Heroes.Count + ")");
             Check(db.Enemies.Count >= 6, "enemies loaded (got " + db.Enemies.Count + ")");
             Check(db.AllStages.Count >= 10, "campaign stages loaded (got " + db.AllStages.Count + ")");
             Check(db.StartingHeroes.Count == 3, "3 starting heroes (got " + db.StartingHeroes.Count + ")");
@@ -3154,6 +3155,146 @@ namespace Emberfall.DevHarness
         // The flat Holy Damage value authored on test_holy_on below - kept as a named constant so
         // the check's expected delta and the JSON's authored value can't drift apart silently.
         private const int HolyBonusExpected = 300;
+
+        // ------------------------------------------------------------------ RESOLVE
+
+        /// <summary>
+        /// Resolve, the generic stacking counter four heroes' passives are built on. Proven the
+        /// same way every other mechanic in this harness is: on synthetic content built to isolate
+        /// it, plus a control run that differs by exactly the field under test.
+        ///
+        /// A mechanic that four shipped passives depend on cannot rest on "the build is green" -
+        /// green only says nothing else broke. Three things have to be true and none of them are
+        /// implied by the other two: stacks accumulate and stop at the cap, an effect's Power
+        /// actually scales by them, and the counter is spent when an effect says it is.
+        /// </summary>
+        private static void CheckResolveCounter(ContentDatabase live)
+        {
+            Line("RESOLVE (generic stacking counter)");
+
+            {
+                int carriers = 0;
+                for (int i = 0; i < live.Heroes.Count; i++)
+                {
+                    HeroDef h = live.Heroes[i];
+                    if (h.Passive == null) continue;
+                    for (int e = 0; e < h.Passive.Effects.Count; e++)
+                        if (h.Passive.Effects[e].Kind == EffectKind.GainResolve) { carriers++; break; }
+                }
+                Check(carriers == 4,
+                      "four shipped heroes carry a GainResolve passive (got " + carriers + ")");
+            }
+
+            ContentDatabase db = BuildResolveTestContent(1.0f);
+            ContentDatabase control = BuildResolveTestContent(0f);
+            if (db == null || control == null) { Line(""); return; }
+
+            BattleResult scaled = RunResolveArena(db);
+            BattleResult flat = RunResolveArena(control);
+            if (scaled == null || flat == null) { Line(""); return; }
+
+            int peak = 0, gains = 0, spends = 0;
+            for (int i = 0; i < scaled.Events.Count; i++)
+            {
+                BattleEvent e = scaled.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve)
+                {
+                    gains++;
+                    if (e.Value > peak) peak = e.Value;
+                }
+                if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Resolve) spends++;
+            }
+
+            Check(gains > 0, "GainResolve actually banks stacks in a running battle (got " + gains + " application(s))");
+            Check(peak == 3, "the counter reaches its authored maxStacks of 3 (peak " + peak + ")");
+            Check(peak <= 3, "the counter never exceeds maxStacks - the cap is a cap, not a target (peak " + peak + ")");
+            Check(spends > 0, "consumesResolve actually clears the counter (got " + spends + " spend(s))");
+
+            // The scaling itself, measured against a control identical in every way except
+            // perStack. Both runs use the same seed and the same synthetic content, so any
+            // difference in the active's damage is the multiplier and nothing else.
+            int scaledHit = LargestActiveHit(scaled);
+            int flatHit = LargestActiveHit(flat);
+            Check(flatHit > 0, "the control run landed the active at all (got " + flatHit + ")");
+            if (flatHit > 0)
+            {
+                float ratio = scaledHit / (float)flatHit;
+                // perStack 1.0 at 3 stacks is (1 + 1.0*3) = 4x. Damage carries mitigation and a
+                // rounding step, so this asserts the band rather than the exact figure.
+                Check(ratio > 3.5f && ratio < 4.5f,
+                      "perStack scales the active by (1 + perStack * stacks) - 3 stacks at 1.0 gave x"
+                      + ratio.ToString("0.00") + " (" + flatHit + " -> " + scaledHit + ", expected ~x4)");
+            }
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Biggest single Damage event in the run, which on this arena is always the stacker's
+        /// active. AbilityId is set on the AbilityCast/BasicAttack event rather than on the Damage
+        /// events that follow it, so the ability cannot be read off the damage directly - the
+        /// synthetic content is instead built so the answer is unambiguous by magnitude: the active
+        /// is power 1.0, the stacker's basic is 0.01, and the anvil's poke is 0.001.
+        /// </summary>
+        private static int LargestActiveHit(BattleResult r)
+        {
+            int best = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                if (e.Value > best) best = e.Value;
+            }
+            return best;
+        }
+
+        private static BattleResult RunResolveArena(ContentDatabase db)
+        {
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            return CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 77));
+        }
+
+        /// <summary>
+        /// One stacker whose basic banks a stack and whose active spends them, against a target
+        /// with enough health to survive long enough for the counter to fill. perStack is the one
+        /// value that differs between the measured run and its control.
+        /// </summary>
+        private static ContentDatabase BuildResolveTestContent(float perStack)
+        {
+            string ps = perStack.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_stacker"", ""name"": ""Test Stacker"", ""aspect"": ""Tide"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""stacker_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""active"": { ""id"": ""stacker_active"", ""name"": ""Spend"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""perStack"": " + ps + @", ""consumesResolve"": true } ] },
+      ""passive"": { ""id"": ""stacker_passive"", ""name"": ""Bank"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 3, ""duration"": 99 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_anvil"", ""name"": ""Test Anvil"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""anvil_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_resolve_ch"", ""name"": ""Test Resolve"", ""stages"": [
+        { ""id"": ""test_resolve_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_anvil"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Resolve");
+        }
 
         /// <summary>
         /// Holy Damage, Block and Control Immunity - a second, independent synthetic ContentDatabase

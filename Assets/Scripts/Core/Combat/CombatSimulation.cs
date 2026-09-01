@@ -519,6 +519,21 @@ namespace Emberfall.Core.Combat
                     // SplitWideDamage, WidenPassiveTrigger) went with the four relics that were
                     // their only users; git has them if a future legendary relic wants one back.
                     EffectDef effect = ability.Effects[i];
+
+                    // Resolve scaling, snapshotted once per effect rather than once per target, so
+                    // every enemy in an AoE is struck by the same stack count no matter what dies
+                    // partway through. Cloned, never mutated in place: the EffectDef here belongs to
+                    // the ContentDatabase and is shared by every unit in every battle for the life
+                    // of the process, which is the same trap EffectDef.Clone's own comment records
+                    // for relics.
+                    int resolveStacks = caster.CountOf(StatusKind.Resolve);
+                    if (effect.PerStack != 0f && resolveStacks > 0)
+                    {
+                        EffectDef scaled = effect.Clone();
+                        scaled.Power = effect.Power * (1f + effect.PerStack * resolveStacks);
+                        effect = scaled;
+                    }
+
                     List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null);
                     for (int t = 0; t < targets.Count; t++)
                     {
@@ -526,6 +541,16 @@ namespace Emberfall.Core.Combat
                         if (target == null) continue;
                         ApplyEffect(caster, target, effect, ability, depth);
                         if (IsBattleOver()) return;
+                    }
+
+                    // Spent after the effect has finished with every target, so an AoE pays the
+                    // stack once. Emitted as StatusExpired for the same reason Cleanse does: the
+                    // status row has to stop showing a counter the unit no longer holds.
+                    if (effect.ConsumesResolve && caster.CountOf(StatusKind.Resolve) > 0)
+                    {
+                        caster.Remove(StatusKind.Resolve);
+                        BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
+                        spent.Status = StatusKind.Resolve;
                     }
                 }
             }
@@ -694,6 +719,31 @@ namespace Emberfall.Core.Combat
                         if (amount == 0) break;
                         // The one granting site: source handed this out, so Tide's redirect applies.
                         AddEnergy(target, amount, source.Id);
+                        break;
+                    }
+                    case EffectKind.GainResolve:
+                    {
+                        // Resolve is a personal counter and nothing else. Nothing in the damage,
+                        // heal, defence or targeting path reads StatusKind.Resolve - it is inert
+                        // until an effect asks for it with PerStack, which is what makes it safe to
+                        // hand to any hero without touching the simulation again. It stacks through
+                        // the same AddStack/CountOf pair Ember's Burn already uses rather than a
+                        // second counting mechanism living beside that one.
+                        if (!target.Alive) break;
+                        int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
+                        for (int g = 0; g < effect.Hits; g++)
+                        {
+                            if (!target.AddStack(StatusKind.Resolve, Math.Max(1, effect.Duration),
+                                                 effect.Magnitude, source.Id, cap))
+                                break;   // already at cap; do not emit a second event for a no-op
+                            BattleEvent re = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
+                            re.Status = StatusKind.Resolve;
+                            re.Duration = Math.Max(1, effect.Duration);
+                            // Value carries stack depth here for the same reason Ember's Burn
+                            // stacking uses it: StatusApplied already fires per application, it
+                            // just never said how many there were.
+                            re.Value = target.CountOf(StatusKind.Resolve);
+                        }
                         break;
                     }
                     case EffectKind.SwapPositions:

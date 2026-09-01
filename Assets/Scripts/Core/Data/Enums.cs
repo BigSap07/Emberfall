@@ -21,7 +21,8 @@ namespace Emberfall.Core.Data
         Breaker, // area damage
         Mender,  // healer
         Warden,  // support
-        Stalker  // assassin
+        Stalker, // assassin
+        Ranger   // ranged / mixed single-target and line damage
     }
 
     public enum AbilityKind
@@ -56,7 +57,8 @@ namespace Emberfall.Core.Data
         Cleanse,
         EnergyGain,
         Dispel,
-        SwapPositions
+        SwapPositions,
+        GainResolve
     }
 
     public enum StatusKind
@@ -74,7 +76,8 @@ namespace Emberfall.Core.Data
         Slow,    // reduced speed
         Silence, // blocks the Active on the holder's next turn; a Basic Attack resolves instead
         Stun,    // skips the holder's entire next turn - no Basic Attack, no Active
-        Stealth  // inert placeholder — no targeting-visibility logic yet
+        Stealth, // inert placeholder — no targeting-visibility logic yet
+        Resolve  // generic personal stacking counter - see EffectKind.GainResolve
     }
 
     public enum PassiveTrigger
@@ -561,6 +564,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Silence: return "Silence";
                 case StatusKind.Stun: return "Stun";
                 case StatusKind.Stealth: return "Stealth";
+                case StatusKind.Resolve: return "Resolve";
             }
             return kind.ToString();
         }
@@ -583,6 +587,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Silence: return "SIL";
                 case StatusKind.Stun: return "STN";
                 case StatusKind.Stealth: return "STH";
+                case StatusKind.Resolve: return "RSV";
             }
             return "?";
         }

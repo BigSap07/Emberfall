@@ -237,6 +237,155 @@
         ]
       },
       "passive": null
+    },
+    {
+      "id": "seraphine_the_last_ember",
+      "name": "Seraphine",
+      "title": "The Last Ember",
+      "role": "Breaker",
+      "aspect": "Ember",
+      "stars": 5,
+      "fusable": true,
+      "startingHero": false,
+      "lore": "Seraphine was a scholar who spent decades documenting civilizations that collapsed under their own contradictions. She eventually abandoned the belief that preservation was always virtuous. She joined the Ember philosophy because she learned to see endings as the beginning of transformation.",
+      "hp": 1350, "attack": 210, "defense": 58, "speed": 112,
+      "critChance": 0.12, "critDamage": 1.60, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
+      "visual": { "primary": "6B3430", "secondary": "29282D", "accent": "D39A62", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.02, "sigil": null, "sprite": "seraphine_the_last_ember", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "basic": {
+        "id": "seraphine_ember_script", "name": "Ember Script", "vfx": "bolt",
+        "description": "A line of fire written straight into the nearest foe.",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.10 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.25, "duration": 2, "chance": 0.85 }
+        ]
+      },
+      "active": {
+        "id": "seraphine_final_chapter", "name": "Final Chapter", "energyCost": 100, "vfx": "burst",
+        "description": "Every page burns at once.",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.85, "perStack": 0.18, "consumesResolve": true },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.25, "duration": 2, "chance": 0.75 }
+        ]
+      },
+      "passive": {
+        "id": "seraphine_kindling_script", "name": "Kindling Script", "trigger": "AfterBasicAttack",
+        "oncePerBattle": false, "vfx": "buff",
+        "description": "Every line she writes feeds the next: each basic attack banks one Ember, to a maximum of five. Final Chapter burns the whole page at once and spends them.",
+        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 5, "duration": 99 } ]
+      }
+    },
+    {
+      "id": "marrow_the_burning_vow",
+      "name": "Marrow",
+      "title": "The Burning Vow",
+      "role": "Mender",
+      "aspect": "Ember",
+      "stars": 5,
+      "fusable": true,
+      "startingHero": false,
+      "lore": "Marrow served as a battlefield priest who refused to let the wounded cling forever to battles already lost. To him, sacrifice was not suffering for its own sake, but the deliberate destruction of what must be given up so something else can endure.",
+      "hp": 1700, "attack": 120, "defense": 75, "speed": 95,
+      "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.15,
+      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
+      "visual": { "primary": "583B36", "secondary": "25272A", "accent": "C99A6B", "silhouette": "humanoid", "weapon": "warhammer", "scale": 1.05, "sigil": null, "sprite": "marrow_the_burning_vow", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "basic": {
+        "id": "marrow_burning_prayer", "name": "Burning Prayer", "vfx": "slash",
+        "description": "A blow that costs him as much as it costs his enemy.",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.00 },
+          { "kind": "Heal", "target": "AllAllies", "power": 0.30 }
+        ]
+      },
+      "active": {
+        "id": "marrow_final_offering", "name": "Final Offering", "energyCost": 100, "vfx": "heal",
+        "description": "Gives everything he has left to the line still standing.",
+        "effects": [
+          { "kind": "Heal", "target": "AllAllies", "power": 0.90, "selfHpRatio": 0.06, "perStack": 0.22, "consumesResolve": true },
+          { "kind": "Cleanse", "target": "AllAllies", "hits": 1 }
+        ]
+      },
+      "passive": {
+        "id": "marrow_burning_vow", "name": "The Burning Vow", "trigger": "OnDamaged",
+        "oncePerBattle": false, "vfx": "buff",
+        "description": "Every wound he takes is kept as a promise, to a maximum of four. Final Offering pays all of them out at once.",
+        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 } ]
+      }
+    },
+    {
+      "id": "veska_the_broken_oath",
+      "name": "Veska",
+      "title": "The Broken Oath",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stars": 5,
+      "fusable": true,
+      "startingHero": false,
+      "lore": "Veska was once sworn to protect a ruler she discovered was sacrificing entire villages to preserve his reign. She broke her oath and accepted the ruin that followed. Some promises deserve to be broken before they destroy everyone bound by them.",
+      "hp": 1300, "attack": 220, "defense": 55, "speed": 122,
+      "critChance": 0.22, "critDamage": 1.75, "growth": 0.115, "startEnergy": 0,
+      "effectHit": 0.08, "effectResist": 0.02,
+      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
+      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "basic": {
+        "id": "veska_broken_edge", "name": "Broken Edge", "vfx": "slash",
+        "description": "Aims for whoever is closest to falling.",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.20 } ]
+      },
+      "active": {
+        "id": "veska_cut_the_ties", "name": "Cut the Ties", "energyCost": 100, "vfx": "slash",
+        "description": "One cut meant to end things.",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.50, "perStack": 0.35, "consumesResolve": true },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "DefenseDown", "magnitude": 0.25, "duration": 2, "chance": 0.85 }
+        ]
+      },
+      "passive": {
+        "id": "veska_oathbreaker", "name": "Oathbreaker", "trigger": "OnKill",
+        "oncePerBattle": false, "vfx": "buff",
+        "description": "Every ending sharpens the next: each kill banks one cut, to a maximum of three. Cut the Ties spends them all on one blow.",
+        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 3, "duration": 99 } ]
+      }
+    },
+    {
+      "id": "orren_the_cinder_hunter",
+      "name": "Orren",
+      "title": "The Cinder Hunter",
+      "role": "Ranger",
+      "aspect": "Ember",
+      "stars": 5,
+      "fusable": true,
+      "startingHero": false,
+      "lore": "Orren spent years hunting creatures that threatened isolated settlements, until he realized the greatest threats were often what people refused to abandon. Destruction is sometimes an act of mercy: remove the source, and everything around it gets a chance to survive.",
+      "hp": 1400, "attack": 195, "defense": 60, "speed": 115,
+      "critChance": 0.15, "critDamage": 1.65, "growth": 0.115, "startEnergy": 5,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
+      "visual": { "primary": "49322E", "secondary": "25282A", "accent": "B8895E", "silhouette": "humanoid", "weapon": "bow", "scale": 1.01, "sigil": null, "sprite": "orren_the_cinder_hunter", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "basic": {
+        "id": "orren_marked_shot", "name": "Marked Shot", "vfx": "bolt",
+        "description": "A shot aimed to open the wound wider.",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.15 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "DefenseDown", "magnitude": 0.15, "duration": 2, "chance": 0.6 }
+        ]
+      },
+      "active": {
+        "id": "orren_final_quarry", "name": "Final Quarry", "energyCost": 100, "vfx": "burst",
+        "description": "One shot for the kill, one volley for the rest.",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.20, "perStack": 0.25, "consumesResolve": true },
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.60 }
+        ]
+      },
+      "passive": {
+        "id": "orren_marked_quarry", "name": "Marked Quarry", "trigger": "AfterBasicAttack",
+        "oncePerBattle": false, "vfx": "buff",
+        "description": "Every marked shot is remembered, to a maximum of four. Final Quarry collects on the mark before the volley goes wide.",
+        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 } ]
+      }
     }
   ]
 }

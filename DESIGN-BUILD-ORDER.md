@@ -1119,6 +1119,83 @@ someone has already started.
     Inventory screen's per-row buttons into their own hub, reclaiming the word "Forge" - see task 6
     above) is a separate pass, not tracked as its own numbered task here.
 
+18. **Four Ember heroes, and Resolve - one generic stacking counter under all four passives.** Not
+    part of the original numbered plan - roster work that arrived with an external hero import, on
+    the same footing tasks 14 to 17 landed on. `[H]` for the mechanic, the content and the harness;
+    the four heroes have no art, so there is no `[U]` half to run.
+
+    **Done. On `feat/ember-heroes-import`**, `build-check.ps1` green with zero failures.
+
+    **The import, and the two things it broke on arrival.** Four heroes - Seraphine (Breaker),
+    Marrow (Mender), Veska (Striker), Orren (Ranger) - appended to `heroes.json`, taking the roster
+    from 7 to 11. `HeroRole` gained `Ranger` after `Stalker` for Orren; nothing was reordered or
+    renamed, and `CheckContent`'s "every combat role has a hero" passed on the first run because
+    Orren covers the new value. Two checks did fail, both content invariants rather than anything
+    about Ranger: the hero count is asserted as an exact literal (7, now 11), and Veska and Orren
+    shipped `armorBreak` 0.05 and 0.06, which trips the guard that keeps Kael the only unit
+    authoring a phase-B stat - a non-zero value there adds an RNG draw and can move a seeded
+    `BattleFingerprint`. Both zeroed.
+
+    **The real problem was six passive-less heroes against a cap of two.** All four imports shipped
+    `"passive": null`, joining Kalyx and Kael. That cap is not arbitrary bookkeeping - `Program.cs`
+    documents it as "a third one cannot appear unnoticed", written when Kael became the second. Six
+    is not a near miss on that, it is the check doing exactly its job. Kalyx and Kael keep the
+    bucket: Kalyx's identity is the Ember Burn-stacking aspect rule (`CombatSimulation.cs:622`,
+    confirmed live this pass - `AddStack` with `EmberBurnStackCap`, keyed on `source.Aspect ==
+    Aspect.Ember`), and Kael's passives are still blocked on a Ruin resource that does not exist.
+
+    **Resolve, and why it is one mechanism rather than four.** Nothing in `EffectKind`, `StatusKind`
+    or `PassiveTrigger` supported a personal counter. The obvious cheap answer - four bespoke
+    passives, four bits of simulation code - is the exact trade DESIGN-RELICS and DESIGN-ASPECTS
+    both already refused: a shared hook that content configures, owned once, beats per-owner code,
+    and whoever owns the hook owns it for everybody. So one mechanism, and no hero gets simulation
+    code of its own out of it:
+
+      - `StatusKind.Resolve` - a personal counter, stacking through the same `AddStack`/`CountOf`
+        pair Ember's Burn already uses rather than a second counting mechanism beside it. Nothing
+        in the damage, heal, defence or targeting path reads it. It is inert until an effect asks.
+      - `EffectKind.GainResolve` - banks stacks, capped by a new `maxStacks` field.
+      - `perStack` on any effect - scales that effect's Power by `(1 + perStack * n)` off the
+        CASTER's count, snapshotted once per effect so an AoE strikes every target with the same
+        number no matter what dies partway through, and cloned rather than mutated because the
+        `EffectDef` is the ContentDatabase's own and shared by every unit in every battle - the
+        same trap `EffectDef.Clone`'s comment already records for relics.
+      - `consumesResolve` on any effect - clears the caster's counter after that effect has
+        finished with every target, so an AoE spends the stack once rather than once per enemy.
+
+    No new `PassiveTrigger` was needed. `AfterBasicAttack`, `OnDamaged` and `OnKill` already
+    existed and carry all four heroes between them.
+
+    **The four passives, each against the mechanism rather than around it.** Seraphine's *Kindling
+    Script* banks on `AfterBasicAttack` to 5 and Final Chapter spends them at `perStack` 0.18
+    (her burn-ramp). Marrow's *The Burning Vow* banks on `OnDamaged` to 4 and Final Offering pays
+    out at 0.22 (sacrifice into healing). Veska's *Oathbreaker* banks on `OnKill` to 3 and Cut the
+    Ties spends at 0.35. Orren's *Marked Quarry* banks on `AfterBasicAttack` to 4 and Final
+    Quarry's single-target half collects at 0.25 before the volley goes wide.
+
+    One honest deviation worth naming rather than leaving to be discovered: Veska's brief was
+    "execute-scaling", which normally means damage rising as the target's health falls. A counter
+    cannot express that - it counts events, not target state. What shipped is execution
+    *chaining*: each kill sharpens the next cut. Her basic already targets `LowestHpEnemy`, so the
+    fantasy survives the substitution, but it is a different rule from the one the brief described.
+
+    **Proven, not assumed.** A green build only says nothing else broke, and three of the four
+    heroes sit on the bench in the economy sim where their passives would never fire. So the
+    mechanic gets its own harness section, `RESOLVE`, on synthetic content plus a control run
+    differing by exactly `perStack`: stacks bank (8 applications), the cap holds (peak 3 of a
+    maximum 3, never 4), `consumesResolve` actually clears it (2 spends), and the scaling is
+    measured rather than asserted - the same active at the same seed landed **134 in the control
+    and 536 with three stacks at `perStack` 1.0, x4.00 against an expected (1 + 1.0*3)**. The live
+    roster is checked too: four shipped heroes carry a `GainResolve` passive. Veska also appears in
+    the economy sim's deployed line at 33-49% of team damage, and the harness now reports
+    `OnKill is authored in shipped content for the first time: ryn_solvarr/Follow-Through,
+    veska_the_broken_oath/Oathbreaker`.
+
+    Blocked by: nothing. Blocks: nothing hard. Two follow-ups this pass deliberately did not do -
+    the four heroes have no sprite art and fall back to the procedural rig, and `Resolve` is
+    strippable by `EffectKind.Dispel` like any other non-harmful status, which is defensible for a
+    resource buff but nothing in shipped content exercises it either way.
+
 ## Task 13's instrument was broken, and what was done about it
 
 Found while checking why the wheel narrowing did not move any win rate: `RunCampaignBalancePass`

@@ -98,6 +98,21 @@ namespace Emberfall.Core.Data
         public float Chance = 1f;     // application chance, 0..1
         public float SelfHpRatio;     // for Shield/Heal scaling off the caster's max HP instead of attack
 
+        // ---------- Resolve: one generic stacking counter, not four bespoke mechanics ----------
+        // DESIGN-RELICS and DESIGN-ASPECTS both settled the same argument the same way: a shared
+        // hook that content configures beats one-off code per owner, and whoever owns the hook owns
+        // it for everybody. These three fields are that hook for "a counter that builds on a
+        // trigger and is spent by a later effect", and they are the whole of it - no hero, relic or
+        // aspect gets simulation code of its own out of this.
+        //
+        // MaxStacks caps a GainResolve. PerStack scales an effect's Power by (1 + PerStack * n)
+        // where n is the CASTER's current Resolve count. ConsumesResolve clears the caster's
+        // counter once that effect has finished resolving against every one of its targets, so an
+        // AoE spends the stack once rather than once per enemy.
+        public int MaxStacks;         // cap for GainResolve; 0 means 1
+        public float PerStack;        // Power multiplier per stack of the caster's Resolve
+        public bool ConsumesResolve;  // clear the caster's Resolve after this effect resolves
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -111,6 +126,9 @@ namespace Emberfall.Core.Data
             e.Magnitude = j.GetFloat("magnitude", 0.2f);
             e.Chance = j.GetFloat("chance", 1f);
             e.SelfHpRatio = j.GetFloat("selfHpRatio", 0f);
+            e.MaxStacks = Math.Max(0, j.GetInt("maxStacks", 0));
+            e.PerStack = j.GetFloat("perStack", 0f);
+            e.ConsumesResolve = j.GetBool("consumesResolve", false);
             return e;
         }
 
@@ -134,6 +152,9 @@ namespace Emberfall.Core.Data
             c.Magnitude = Magnitude;
             c.Chance = Chance;
             c.SelfHpRatio = SelfHpRatio;
+            c.MaxStacks = MaxStacks;
+            c.PerStack = PerStack;
+            c.ConsumesResolve = ConsumesResolve;
             return c;
         }
     }
