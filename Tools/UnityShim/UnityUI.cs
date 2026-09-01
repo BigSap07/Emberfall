@@ -252,6 +252,19 @@ namespace UnityEngine.UI
         public FitMode verticalFit { get; set; }
     }
 
+    /// <summary>
+    /// Signature-only, like the rest of this shim: the enum names and member names match real
+    /// uGUI so a compile here proves the call sites type-check, and nothing here does any
+    /// fitting. EnvelopeParent is the mode the Hub's map uses to cover the screen without
+    /// distorting the painting.
+    /// </summary>
+    public sealed class AspectRatioFitter : Behaviour
+    {
+        public enum AspectMode { None, WidthControlsHeight, HeightControlsWidth, FitInParent, EnvelopeParent }
+        public AspectMode aspectMode { get; set; }
+        public float aspectRatio { get; set; }
+    }
+
     public sealed class LayoutElement : Behaviour
     {
         public float minWidth { get; set; }

@@ -1,0 +1,224 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    .icon-btn { width:38px; height:38px; border-radius:8px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.45); display:flex; align-items:center; justify-content:center; position:relative; flex:none; }
+    .icon-btn svg { width:18px; height:18px; }
+    .chip { display:flex; align-items:center; gap:9px; background:rgba(20,18,26,0.72); border:1px solid rgba(203,162,74,0.55); border-radius:8px; padding:8px 14px; }
+    .chip span { font-family:'Cinzel',serif; font-weight:600; font-size:14px; }
+    .btn-gold { color:#e0b84a; border:1px solid #cba24a; font-family:'Cinzel',serif; font-weight:600; font-size:12px; padding:9px 20px; border-radius:6px; text-align:center; background:rgba(203,162,74,0.08); }
+    .btn-ghost { color:#a89e8e; border:1px solid rgba(168,158,142,0.4); font-family:'Cinzel',serif; font-weight:600; font-size:12px; padding:9px 20px; border-radius:6px; text-align:center; }
+
+    .tab { font-family:'Cinzel',serif; font-size:13px; font-weight:600; padding:9px 4px; border-bottom:2px solid transparent; color:#8a8496; }
+    .tab.active { color:#f3e2b8; border-color:#cba24a; }
+
+    .tierpips2 { display:flex; gap:4px; }
+    .tierpips2 i { width:9px; height:9px; border-radius:50%; background:rgba(203,162,74,0.2); border:1px solid rgba(203,162,74,0.4); display:block; }
+    .tierpips2 i.lit { background:#e0b84a; box-shadow:0 0 5px #e0b84a; border-color:#e0b84a; }
+
+    /* ---- equip row: one per gear slot on this shared Equipment page. --a is the accent for a
+       real, ownable item (aspect colour for the Relic, gold for anything else once it exists);
+       .empty rows have no accent, just a dashed plate, since Weapon/Armor/Accessory have no
+       design behind them yet - see the callout under the slot list. ---- */
+    .equip-row { display:flex; align-items:center; gap:16px; background:rgba(20,18,26,0.5); border:1px solid rgba(203,162,74,0.22); border-radius:10px; padding:13px 18px; }
+    .equip-plate { width:56px; height:56px; border-radius:13px; flex:none; border:2px solid var(--a, #cba24a); background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.10), rgba(0,0,0,0.4)); display:flex; align-items:center; justify-content:center; box-shadow:0 0 12px -2px var(--a, #cba24a), 0 2px 6px rgba(0,0,0,0.5); }
+    .equip-plate svg { width:26px; height:26px; }
+    .equip-row.empty .equip-plate { border:2px dashed rgba(168,158,142,0.4); box-shadow:none; background:none; }
+    .equip-row.empty .equip-plate svg { opacity:0.5; }
+    .slot-label { font-size:9.5px; color:#a89e8e; text-transform:uppercase; letter-spacing:0.06em; }
+    .item-name { font-family:'Cinzel',serif; font-weight:700; font-size:14.5px; color:#f3e2b8; }
+    .item-name.empty { color:#6a6478; font-weight:600; }
+    .rarity-tag { font-family:'Cinzel',serif; font-weight:600; font-size:8.5px; text-transform:uppercase; letter-spacing:0.04em; padding:1px 6px; border-radius:4px; }
+    .stat-pill { font-size:9.5px; color:#c9bfae; background:rgba(0,0,0,0.25); border:1px solid rgba(203,162,74,0.2); border-radius:4px; padding:1px 6px; }
+
+    /* ---- 6-piece gear grid: Weapon, Helmet, Armor, Boots, 2x Accessory. Compact card, not the
+       full-width row the Relic keeps - six of these plus a Relic row have to share one panel
+       height, and Relic is the one that earns the roomier treatment since it's the system with
+       real design behind it (DESIGN-RELICS) rather than this pass's stat-stick placeholders. ---- */
+    .gcard { display:flex; align-items:center; gap:10px; background:rgba(20,18,26,0.5); border:1px solid rgba(203,162,74,0.22); border-radius:9px; padding:9px 11px; }
+    .gcard .plate { width:42px; height:42px; border-radius:10px; flex:none; border:2px solid var(--a, #9a9aa8); display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.08), rgba(0,0,0,0.35)); }
+    .gcard .plate svg { width:19px; height:19px; }
+    .gcard.empty .plate { border:2px dashed rgba(168,158,142,0.4); background:none; }
+    .gcard .glabel { font-size:8.5px; color:#8a8496; text-transform:uppercase; letter-spacing:0.05em; }
+    .gcard .gname { font-family:'Cinzel',serif; font-weight:700; font-size:11.5px; color:#f3e2b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .gcard .gname.empty { color:#6a6478; font-weight:600; }
+  </style>
+</helmet>
+
+<div style="width:1600px; height:720px; position:relative; overflow:hidden; background:#0c0b10; font-family:'Manrope', sans-serif; color:#efe7d8; display:flex; flex-direction:column;">
+
+  <img src="ash_marches_bg7.jpg" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 30%; opacity:0.14; filter:blur(1px);">
+  <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(40,34,54,0.35), rgba(10,9,14,0.92) 65%);"></div>
+
+  <!-- ============ TOP BAR ============ -->
+  <div style="position:relative; z-index:6; flex:0 0 74px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; border-bottom:1px solid rgba(203,162,74,0.22);">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div class="icon-btn" style="width:40px; height:40px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dcd2c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div style="font-family:'Cinzel',serif; font-weight:700; font-size:19px; letter-spacing:0.02em; color:#f3e2b8;">Kael the Ashbound</div>
+      <div style="font-family:'Cinzel',serif; font-weight:600; font-size:12px; color:#f3b08a; border:1px solid rgba(232,69,50,0.55); background:rgba(232,69,50,0.14); padding:3px 10px; border-radius:5px;">Ember</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="chip">
+        <svg width="18" height="18" viewBox="0 0 24 24"><defs><radialGradient id="goldCoin" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="#f3d98a"/><stop offset="55%" stop-color="#dcac3f"/><stop offset="100%" stop-color="#a67a22"/></radialGradient></defs><circle cx="12" cy="12" r="8.6" fill="url(#goldCoin)" stroke="#7a5a1c" stroke-width="1"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#8a651f" stroke-width="1"/></svg>
+        <span>12,480</span>
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24"><defs><linearGradient id="shardGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7ea4f0"/><stop offset="100%" stop-color="#3568E8"/></linearGradient></defs><path d="M12 2 L20 9 L12 22 L4 9 Z" fill="url(#shardGrad)" stroke="#1f3f9c" stroke-width="1"/><path d="M12 2 L20 9 L12 13 L4 9 Z" fill="#bcd0f8" opacity="0.75"/></svg>
+        <span>340</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BODY ============ -->
+  <div style="position:relative; z-index:5; flex:1 1 auto; display:flex; padding:20px 30px; gap:26px; min-height:0;">
+
+    <!-- stage - identical to the Info tab, the hero doesn't re-pose when you switch tabs -->
+    <div style="flex:0 0 340px; border-radius:12px; border:1px solid rgba(203,162,74,0.25); background:radial-gradient(ellipse at 50% 30%, rgba(232,69,50,0.14), rgba(16,14,20,0.65) 72%); display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; position:relative; padding:26px;">
+      <img src="demon_full.png" style="height:62%; width:auto; filter:drop-shadow(0 12px 14px rgba(0,0,0,0.6));">
+      <div style="width:150px; height:26px; border-radius:50%; background:radial-gradient(ellipse at center, rgba(203,162,74,0.35), rgba(0,0,0,0) 72%); margin-top:-6px;"></div>
+      <div style="width:190px; height:3px; border-radius:50%; background:linear-gradient(90deg, rgba(203,162,74,0), rgba(203,162,74,0.7), rgba(203,162,74,0)); margin-top:2px;"></div>
+      <div style="position:absolute; top:14px; left:14px; font-size:9px; letter-spacing:0.05em; text-transform:uppercase; color:#6a6478;">Idle pose &middot; placeholder art</div>
+    </div>
+
+    <!-- ---- PANEL: Equipment tab. Weapon/Armor/Accessory are now real, first-pass content, not
+         placeholders - flat stat bonuses through the same stat fields DESIGN-COMBAT-STATS already
+         authors (Attack/Defence/HP/Speed/Crit), rarity-tiered, upgraded at the Forge hub building
+         (which finally gives that building a mechanical job, not just art). This is a first cut,
+         not a committed spec - no doc has signed off on slot count, rarity names or roll ranges, so
+         treat these three items the way the Info tab's stat numbers were always treated: real
+         enough to design the screen against, not real enough to balance a campaign against. Relic
+         stays conceptually different - one per hero, no percentages, a rule-bend not a stat roll -
+         and its content (Splitting Prism) is unchanged from the previous pass. ---- -->
+    <div style="flex:1 1 auto; display:flex; flex-direction:column; gap:14px; min-width:0;">
+
+      <div style="display:flex; gap:26px; border-bottom:1px solid rgba(203,162,74,0.2);">
+        <div class="tab">Info</div>
+        <div class="tab">Ascension</div>
+        <div class="tab active">Equipment</div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:22px;">
+        <div>
+          <div style="font-size:10px; color:#a89e8e; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:5px;">Tier</div>
+          <div class="tierpips2"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i></i><i></i></div>
+        </div>
+        <div style="flex:1 1 auto; max-width:420px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-family:'Cinzel',serif; font-size:12px; color:#e8dfcd;">Level 42</span>
+            <div style="flex:1 1 auto; height:7px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden;">
+              <div style="width:64%; height:100%; background:linear-gradient(90deg, #e0b84a, #f3d98a);"></div>
+            </div>
+            <span style="font-size:10.5px; color:#a89e8e; white-space:nowrap;">31,400 / 49,000 XP</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6-piece gear grid: Weapon, Helmet, Armor, Boots, Accessory x2 -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+
+        <div class="gcard" style="--a:#9a9aa8;">
+          <div class="plate" style="--a:#9a9aa8;"><svg viewBox="0 0 24 24" fill="none" stroke="#dcdce4" stroke-width="1.8"><path d="M14.5 3.5 20.5 9.5M4 20l6.5-6.5M9 15l-2-2 7.5-7.5a2.5 2.5 0 0 1 3.5 3.5L10.5 16.5Z"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Weapon</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div class="gname">Ashwood Cleaver</div><div class="rarity-tag" style="color:#c9a6f0; background:rgba(155,110,224,0.16); border:1px solid rgba(155,110,224,0.4);">Epic</div></div>
+            <div style="display:flex; gap:5px; margin-top:4px;"><span class="stat-pill">+85 ATK</span><span class="stat-pill">+4% Crit</span></div>
+          </div>
+          <div class="btn-ghost" style="padding:5px 11px; font-size:9.5px; flex:none;">Upgrade</div>
+        </div>
+
+        <div class="gcard" style="--a:#7fc4e0;">
+          <div class="plate" style="--a:#7fc4e0;"><svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.8"><path d="M4 11 12 4l8 7v3c0 4.5-3.2 7.4-8 9-4.8-1.6-8-4.5-8-9Z"/><path d="M12 4v6M8 9h8"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Helmet</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div class="gname">Ashen Circlet</div><div class="rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.16); border:1px solid rgba(94,178,214,0.4);">Rare</div></div>
+            <div style="display:flex; gap:5px; margin-top:4px;"><span class="stat-pill">+90 DEF</span><span class="stat-pill">+5% Eff. Resist</span></div>
+          </div>
+          <div class="btn-ghost" style="padding:5px 11px; font-size:9.5px; flex:none;">Upgrade</div>
+        </div>
+
+        <div class="gcard" style="--a:#7fc4e0;">
+          <div class="plate" style="--a:#7fc4e0;"><svg viewBox="0 0 24 24" fill="none" stroke="#bfe6f5" stroke-width="1.8"><path d="M12 2.6 18.6 5.4V10.8C18.6 15.6 15.4 18.6 12 20.4 8.6 18.6 5.4 15.6 5.4 10.8V5.4Z"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Armor</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div class="gname">Cinderplate Vambrace</div><div class="rarity-tag" style="color:#7fc4e0; background:rgba(94,178,214,0.16); border:1px solid rgba(94,178,214,0.4);">Rare</div></div>
+            <div style="display:flex; gap:5px; margin-top:4px;"><span class="stat-pill">+140 DEF</span><span class="stat-pill">+600 HP</span></div>
+          </div>
+          <div class="btn-ghost" style="padding:5px 11px; font-size:9.5px; flex:none;">Upgrade</div>
+        </div>
+
+        <div class="gcard" style="--a:#8fae7a;">
+          <div class="plate" style="--a:#8fae7a;"><svg viewBox="0 0 24 24" fill="none" stroke="#cfe6bf" stroke-width="1.8"><path d="M8 21 6 13h12l-2 8Z"/><path d="M6 13 8 4h8l2 9"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Boots</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div class="gname">Swiftmarch Greaves</div><div class="rarity-tag" style="color:#a8c98f; background:rgba(143,174,122,0.16); border:1px solid rgba(143,174,122,0.4);">Uncommon</div></div>
+            <div style="display:flex; gap:5px; margin-top:4px;"><span class="stat-pill">+18 SPD</span><span class="stat-pill">+3% Eff. Hit</span></div>
+          </div>
+          <div class="btn-ghost" style="padding:5px 11px; font-size:9.5px; flex:none;">Upgrade</div>
+        </div>
+
+        <div class="gcard" style="--a:#9a9aa8;">
+          <div class="plate" style="--a:#9a9aa8;"><svg viewBox="0 0 24 24" fill="none" stroke="#dcdce4" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Accessory</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div class="gname">Ember Signet</div><div class="rarity-tag" style="color:#c9a6f0; background:rgba(155,110,224,0.16); border:1px solid rgba(155,110,224,0.4);">Epic</div></div>
+            <div style="display:flex; gap:5px; margin-top:4px;"><span class="stat-pill">+90 ATK</span><span class="stat-pill">+8% Crit DMG</span></div>
+          </div>
+          <div class="btn-ghost" style="padding:5px 11px; font-size:9.5px; flex:none;">Upgrade</div>
+        </div>
+
+        <div class="gcard empty">
+          <div class="plate"><svg viewBox="0 0 24 24" fill="none" stroke="#a89e8e" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/></svg></div>
+          <div style="flex:1 1 auto; min-width:0;">
+            <div class="glabel">Accessory</div>
+            <div class="gname empty">Empty</div>
+          </div>
+          <div class="btn-gold" style="padding:5px 11px; font-size:9.5px; flex:none;">Equip</div>
+        </div>
+      </div>
+
+      <!-- Relic: separate system, deliberately not one of the 6 gear pieces above -->
+      <div class="equip-row" style="--a:#E84532;">
+        <div class="equip-plate" style="--a:#E84532;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f3b08a" stroke-width="1.6"><path d="M12 2 20 9 12 22 4 9Z"/><path d="M4 9h16M12 2v20M8 9l4-7M16 9l-4-7"/></svg>
+        </div>
+        <div style="flex:1 1 auto; min-width:0;">
+          <div class="slot-label">Relic &middot; separate from Equipment</div>
+          <div class="item-name">Splitting Prism</div>
+          <div style="font-size:10.5px; color:#c9bfae; margin-top:2px; max-width:560px; line-height:1.4;">
+            Kael's Burn no longer spreads to nearby enemies on its own &mdash; a rule change, not a bigger number.
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; flex:none;">
+          <div class="btn-gold" style="padding:6px 14px; font-size:10.5px;">Change</div>
+          <div class="btn-ghost" style="padding:6px 14px; font-size:10.5px;">Unequip</div>
+        </div>
+      </div>
+
+      <div style="font-size:10px; color:#6a6478; max-width:660px; line-height:1.4;">
+        6 gear pieces (Weapon, Helmet, Armor, Boots, 2 Accessories): flat stat bonuses, rarity-tiered,
+        upgraded at the Forge &mdash; first pass, not a committed spec. Relic sits below as its own
+        system on purpose: one per hero, no percentages, a rule change instead of a stat roll.
+      </div>
+
+      <div style="margin-top:auto; display:flex; gap:12px;">
+        <div class="btn-gold" style="flex:1 1 auto;">Level Up</div>
+        <div class="btn-gold" style="flex:1 1 auto; opacity:0.5;">Ascend (Locked)</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

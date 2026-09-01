@@ -34,6 +34,11 @@ namespace Emberfall.UI
         public static readonly Color Mythic = Hex("E84FD1");
         public static readonly Color Shard = Hex("7FA8FF");
         public static readonly Color ShardDeep = Hex("3B5BB8");
+        // Relic Dust's own tone - a warm, desaturated ash, distinct from every aspect accent and
+        // from Gold/Shard. Replaces a stray UITheme.Ember tint on the HudTopBar chip: Dust is
+        // salvage from broken relics (DESIGN-WORLD, "Relics"), which are explicitly unrelated to the
+        // First Light the six aspects came from, so its own currency colour should not borrow one.
+        public static readonly Color Dust = Hex("A8967A");
 
         public static readonly Color Success = Hex("5BC98C");
         public static readonly Color Danger = Hex("E0574C");
@@ -42,6 +47,45 @@ namespace Emberfall.UI
         public static readonly Color HealthAlly = Hex("62C96E");
         public static readonly Color HealthEnemy = Hex("D9504A");
         public static readonly Color Shield = Hex("8FD8FF");
+
+        /// <summary>
+        /// The Cinder's own tone (DESIGN-ART-BIBLE section 5): "translucent, almost colorless
+        /// material." A cool, heavily desaturated glass-grey, chosen to sit clearly apart from all
+        /// six aspect accents and from Gold, so the Hub's one recurring motif never reads as a
+        /// seventh palette entry competing with the six. Used only for the Hub's own quiet
+        /// watermark and rule lines - the Cinder never carries an aspect colour at rest, and no
+        /// call site anywhere in this project may tint it with one.
+        ///
+        /// Hue is unchanged from the pass that introduced it. What changed with the Hub's warmed
+        /// floor is only how much of it is let through: cool grey at 0.05 and 0.22 alpha was
+        /// tuned against a near-black violet backdrop, and on a warmer, lighter floor those same
+        /// alphas read as dirt on the panel rather than as a mark. The two Hub call sites now sit
+        /// at 0.10 (ambient glow) and 0.32 (watermark). Raising alpha, not saturation, is the
+        /// deliberate choice - the Cinder stays colourless.
+        /// </summary>
+        public static readonly Color CinderGlass = Hex("BFC3CE");
+
+        /// <summary>
+        /// Structural chrome only. The duller, cooler, desaturated brass that carries the
+        /// gold-accent feel of DesignReference/*.dc.html without taking any of Gold's meaning.
+        ///
+        /// Allowed: panel borders, tab and section dividers, icon-button outlines, secondary label
+        /// text, frame edges - surfaces that delineate the layout and are not themselves the point.
+        ///
+        /// Forbidden: anything a player acts on or reads as a value. Buttons, currency figures,
+        /// progress fills, counts, badges and hover/pressed states are Gold's, and Gold's alone.
+        /// The split exists because Gold is doing three jobs at once already (currency, progress,
+        /// primary action); a chrome accent close enough to be confused with it would erase all
+        /// three at once. If a highlight or hover tint is needed, reuse Gold rather than adding a
+        /// third warm constant - an unnecessary fourth warm entry sitting next to Gold is exactly
+        /// how Lumen's F5E08A came to collide with the currency colour in the first place.
+        ///
+        /// Contrast, measured rather than assumed, against the Hub's warmed floor: 4.7:1 on
+        /// Backdrop, 4.3:1 on Panel, 3.7:1 on PanelRaised. Comfortable for borders, dividers and
+        /// headings at any size, and for secondary label text down to about FontSmall. It is NOT
+        /// a safe colour for small body copy on a raised panel - that is what TextMuted is for.
+        /// </summary>
+        public static readonly Color ChromeBrass = Hex("8A7A52");
 
         // ---------- ink: text edge treatment ----------
         // The near-black a label is outlined or shadowed with to hold it apart from whatever sits
@@ -53,9 +97,11 @@ namespace Emberfall.UI
         // purpose: it scales with the label's font size, so a shared constant would be wrong at
         // both ends of the type scale. A 20pt status tag wants 1.2 and a 62pt logo wants 5.
         //
-        // Two coloured (non-black) edges are deliberately NOT here and stay per-screen: the main
-        // menu logo's warm ember rim and the battle result title's. Those are accents belonging to
-        // one moment each, not a shared treatment.
+        // One coloured (non-black) edge is deliberately NOT here and stays per-screen: the battle
+        // result title's. That is an accent belonging to one moment, not a shared treatment. The
+        // main menu logo used to have a second one - a warm ember-brown rim, an aspect colour
+        // painted onto the one screen the Keeper's fiction says takes no side among the six - and
+        // it was removed in the Hub's Cinder theme pass rather than kept here as a second exception.
 
         /// <summary>Text sitting on a solid UI panel. Quiet, just enough to stop it dissolving.</summary>
         public static readonly Color InkPanel = new Color(0f, 0f, 0f, 0.55f);
@@ -259,6 +305,18 @@ namespace Emberfall.UI
             return TextMuted;
         }
 
+        /// <summary>
+        /// The six aspect accents. DESIGN-ART-BIBLE section 1 is the specification for these.
+        ///
+        /// Only Lumen currently matches it. The other five still carry the values this switch was
+        /// first written with, and all five differ from the bible - Ember F0743A vs E84532, Tide
+        /// 4A9BD8 vs 28C7D9, Verdant 55B96A vs 62A77A, Gale 7FD8E8 vs C6E34A, Umbra 9264E8 vs
+        /// E7E0D0. Four of those are shade drift within the same hue family, but Gale's is a hue
+        /// change (cyan here, chartreuse in the bible) and Umbra's is a whole family change (purple
+        /// here, bone-white there). Reconciling them is a real visual pass with real consequences
+        /// for every hero card, armour disc and aspect chip in the game, and it was not this
+        /// change's job. Do not read the five unfixed entries as verified against anything.
+        /// </summary>
         public static Color AspectColor(Aspect aspect)
         {
             switch (aspect)
@@ -268,7 +326,12 @@ namespace Emberfall.UI
                 case Aspect.Verdant: return Hex("55B96A");
                 case Aspect.Gale: return Hex("7FD8E8");
                 case Aspect.Umbra: return Hex("9264E8");
-                case Aspect.Lumen: return Hex("F5E08A");
+                // Hard cobalt blue, per DESIGN-ART-BIBLE section 1. Was F5E08A, a pale gold that
+                // sat close enough to UITheme.Gold (F2C14E) that a Lumen hero's aspect chip and a
+                // gold currency figure read as the same colour at a glance - the collision this
+                // fix exists to remove, since Gold is a load-bearing semantic colour (currency,
+                // progress, primary action) and an aspect accent must never be mistaken for it.
+                case Aspect.Lumen: return Hex("3568E8");
             }
             return TextMuted;
         }
