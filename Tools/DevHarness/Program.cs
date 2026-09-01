@@ -53,6 +53,7 @@ namespace Emberfall.DevHarness
             CheckStatusAndStatBehavior(content);
             CheckHolyBlockControlImmunity(content);
             CheckResolveCounter(content);
+            CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
             CheckEvents(content);
@@ -3157,6 +3158,177 @@ namespace Emberfall.DevHarness
         private const int HolyBonusExpected = 300;
 
         // ------------------------------------------------------------------ RESOLVE
+
+        // ------------------------------------------------------------------ EMBER HERO KITS
+
+        /// <summary>
+        /// Every Ember hero's passive AND active, each proven to fire in a real battle against the
+        /// SHIPPED hero definitions - not synthetic stand-ins, and not an aggregate counter.
+        ///
+        /// The RESOLVE section above proves GainResolve/perStack/consumesResolve work as a
+        /// mechanism. It does not prove that any particular hero's authored kit reaches them: a
+        /// passive whose trigger never fires, an active nobody can afford, or an effects array that
+        /// silently resolves to nothing would all leave that section green. Three of these five sit
+        /// on the bench in the economy sim and never cast anything there, so without this they are
+        /// shipped untested.
+        ///
+        /// Real hero JSON, synthetic arena. The heroes.json text is read off disk and handed to
+        /// ContentDatabase unmodified; only the enemies, the stage and the balance constants are
+        /// built for the test. The arena has to satisfy every trigger these five use at once:
+        /// BattleStart (Kael), AfterBasicAttack (Seraphine, Orren), OnDamaged (Marrow - so the
+        /// enemies must actually attack back) and OnKill (Veska - so at least one enemy must be
+        /// killable). That is why the line is five modest enemies rather than one anvil.
+        /// </summary>
+        private static void CheckEmberHeroKits()
+        {
+            Line("EMBER HERO KITS (five shipped kits, each firing in a real battle)");
+
+            string[] ember = { "kael_the_ashbound", "seraphine_the_last_ember",
+                               "marrow_the_burning_vow", "veska_the_broken_oath",
+                               "orren_the_cinder_hunter" };
+
+            ContentDatabase db = BuildEmberArenaContent();
+            if (db == null) { Line(""); return; }
+
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            profile.PlayerLevel = 60;
+            profile.Gold = 500000000L;
+            GameSession session = new GameSession(db, profile);
+            for (int h = 0; h < db.Heroes.Count; h++)
+                if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
+
+            for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
+            int deployed = 0;
+            for (int i = 0; i < ember.Length; i++)
+                for (int j = 0; j < profile.Heroes.Count; j++)
+                    if (profile.Heroes[j].Def.Id == ember[i])
+                    { profile.AssignToTeam(deployed, profile.Heroes[j].Uid); deployed++; break; }
+            Check(deployed == ember.Length,
+                  "all five Ember heroes deploy together (got " + deployed + " of " + ember.Length + ")");
+            if (deployed != ember.Length) { Line(""); return; }
+
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++) session.LevelUpHero(team[i], 24);
+
+            // Several seeds: OnKill and OnDamaged are outcome-dependent, and one unlucky seed
+            // proving nothing is not the same as a kit being broken.
+            Dictionary<string, bool> passiveFired = new Dictionary<string, bool>();
+            Dictionary<string, bool> activeFired = new Dictionary<string, bool>();
+            Dictionary<int, int> firstResolveValue = new Dictionary<int, int>();
+            Dictionary<int, int> peakResolve = new Dictionary<int, int>();
+            int damageEvents = 0;
+
+            for (int seed = 0; seed < 24; seed++)
+            {
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 9100 + seed));
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId != null)
+                        passiveFired[e.AbilityId] = true;
+                    if (e.Type == BattleEventType.AbilityCast && e.AbilityId != null)
+                        activeFired[e.AbilityId] = true;
+                    if (e.Type == BattleEventType.Damage) damageEvents++;
+
+                    // Per-unit Resolve bookkeeping. Each unit's FIRST gain must read 1: if the
+                    // counter were shared or clobbered between two Ember heroes on one line, a
+                    // second carrier's first application would already read 2 or more.
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve)
+                    {
+                        if (!firstResolveValue.ContainsKey(e.TargetId)) firstResolveValue[e.TargetId] = e.Value;
+                        int prev;
+                        if (!peakResolve.TryGetValue(e.TargetId, out prev) || e.Value > prev)
+                            peakResolve[e.TargetId] = e.Value;
+                    }
+                }
+            }
+
+            Check(damageEvents > 0, "the arena actually resolves battles (got " + damageEvents + " damage events)");
+
+            // Each kit, named, so a failure says which hero rather than that something is wrong.
+            for (int i = 0; i < ember.Length; i++)
+            {
+                HeroDef def = null;
+                for (int j = 0; j < db.Heroes.Count; j++)
+                    if (db.Heroes[j].Id == ember[i]) { def = db.Heroes[j]; break; }
+                if (def == null) { Check(false, ember[i] + " is missing from shipped content"); continue; }
+
+                bool hasPassive = def.Passive != null;
+                Check(hasPassive, ember[i] + " ships a passive at all");
+                if (hasPassive)
+                    Check(passiveFired.ContainsKey(def.Passive.Id),
+                          ember[i] + " fires its passive in a real battle (" + def.Passive.Id
+                          + ", trigger " + def.Passive.Trigger + ")");
+
+                Check(def.Active != null, ember[i] + " ships an active at all");
+                if (def.Active != null)
+                    Check(activeFired.ContainsKey(def.Active.Id),
+                          ember[i] + " casts its active in a real battle (" + def.Active.Id + ")");
+            }
+
+            // Independence. Not "Resolve was gained somewhere" - that the counters belong to their
+            // own units and neither shares nor overwrites the other's.
+            int carriers = firstResolveValue.Count;
+            Check(carriers >= 2,
+                  "at least two units hold Resolve in the same battles (got " + carriers
+                  + ") - one carrier cannot demonstrate independence");
+
+            bool everyFirstIsOne = true;
+            foreach (KeyValuePair<int, int> kv in firstResolveValue)
+                if (kv.Value != 1) everyFirstIsOne = false;
+            Check(everyFirstIsOne,
+                  "every Resolve carrier's first stack reads 1 - a shared or clobbered counter would"
+                  + " make a second carrier's first application read 2 or more");
+
+            bool capsHeld = true;
+            foreach (KeyValuePair<int, int> kv in peakResolve)
+                if (kv.Value > 5) capsHeld = false;   // the largest maxStacks any Ember hero authors
+            Check(capsHeld, "no carrier exceeds the largest authored maxStacks (5)");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The shipped heroes.json, verbatim off disk, against an arena built to satisfy every
+        /// trigger the five Ember kits use. Enemies attack (Marrow's OnDamaged) and are killable
+        /// (Veska's OnKill); energy is generous so every active is reached inside the round cap.
+        /// </summary>
+        private static ContentDatabase BuildEmberArenaContent()
+        {
+            string heroesJson;
+            try { heroesJson = File.ReadAllText(Path.Combine(FindContentDir(), "heroes.json")); }
+            catch (Exception ex)
+            {
+                Check(false, "could not read shipped heroes.json for the Ember arena: " + ex.Message);
+                return null;
+            }
+
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""ember_arena_mook"", ""name"": ""Arena Mook"", ""aspect"": ""Tide"",
+      ""hp"": 4000, ""attack"": 60, ""defense"": 10, ""speed"": 90, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.12,
+      ""basic"": { ""id"": ""mook_basic"", ""name"": ""Swipe"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.9 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""ember_arena_ch"", ""name"": ""Ember Arena"", ""stages"": [
+        { ""id"": ""ember_arena"", ""index"": 1, ""recommendedPower"": 1,
+          ""enemies"": [ { ""id"": ""ember_arena_mook"", ""level"": 1 }, { ""id"": ""ember_arena_mook"", ""level"": 1 },
+                        { ""id"": ""ember_arena_mook"", ""level"": 1 }, { ""id"": ""ember_arena_mook"", ""level"": 1 },
+                        { ""id"": ""ember_arena_mook"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 400, ""defensePerLevel"": 24, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 20, ""energyMax"": 100, ""energyPerBasicAttack"": 50,
+  ""energyOnDamaged"": 9, ""maxTeamSize"": 5, ""emberBurnStackCap"": 3
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Ember arena");
+        }
 
         /// <summary>
         /// Resolve, the generic stacking counter four heroes' passives are built on. Proven the

@@ -1362,6 +1362,95 @@ renumbering, and nobody has gone back to update the harness's own prose.
 
     Blocked by: nothing. Blocks: nothing.
 
+21. **Kael's real kit, and per-hero proof for all five Ember kits.** Content plus harness; no engine
+    surface added. `[H]`
+
+    **Done. On `feat/kael-ruin-kit`**, `build-check.ps1` green with zero failures.
+
+    Kael shipped basic-and-active-only with `passive: null` since the animation-pipeline pass that
+    added him, on the standing note that his Ruin resource "does not exist yet". Task 18 built
+    Resolve, which is a Ruin in everything but name, so this is the follow-up that entry was waiting
+    for. The source design is schema-incompatible and was translated, not imported - the same way
+    task 18 handled the other four.
+
+    **Two audits ran before anything was written, and both changed the design.**
+
+    *Is there a persistent per-stack stat buff?* Half of one. `EffectiveAttack` reads
+    `SumMagnitude(StatusKind.AttackUp)`, and `SumMagnitude` totals across stacked entries, so the
+    READ side would handle "+5% Attack per stack" correctly. The WRITE side cannot produce it:
+    `AddStack` has exactly two call sites in the whole engine - Ember-sourced `Burn`, and
+    `GainResolve`, which always writes `StatusKind.Resolve`. Every other `ApplyStatus` goes through
+    `AddOrRefresh`, which folds re-application into one entry keeping the stronger magnitude. So
+    stacked `AttackUp` is unauthorable, and a persistent per-stack stat buff cannot be expressed
+    without new engine surface. Folded into `perStack` power scaling instead, per instruction.
+
+    *Does `OnDamaged` fire for self-inflicted HP loss?* It would - the trigger sits in the shared
+    damage funnel and fires on whatever the damage lands on, so `Damage` at `TargetMode.Self` would
+    reach it. It is still the wrong hook, for two reasons found in the same read. First, the trigger
+    cannot tell self-inflicted loss from an enemy's hit, so hanging Ruin on it would bank a stack
+    every time anything hurt him. Second, there is no primitive that costs a unit a fraction of its
+    own HP at all: `Damage` computes `EffectiveAttack * Power + Flat` and never reads `SelfHpRatio`
+    (only `Heal` and `Shield` do, `CombatSimulation.cs:574/581`). Routing a cost through
+    `Damage`/`Self` would put it through a Block roll, a crit roll, the aspect multiplier and his own
+    Defence mitigation - a number that is dodgeable, occasionally doubled, and never 8% of anything.
+    So the Ruin gain went inline into Breaking Point's own effects array, where the ability that
+    causes the cost grants its own stack deterministically and no trigger is involved.
+
+    **What shipped.** Breaking Point banks its stack first so the cast that earns it also benefits,
+    then scales, then finishes:
+
+        GainResolve  Self         maxStacks 4
+        Damage       AllEnemies   power 2.20, perStack 0.17
+        Damage       LowestHpEnemy power 0.55
+
+    `perStack` 0.17 is the two payoffs folded into one number: the design's +12% per-Ruin skill
+    scaling plus the +5% per-Ruin Attack buff that has no persistent expression. Ruin is kept, not
+    spent - no `consumesResolve` anywhere in his kit - which matches the source design, where only
+    an unbuilt talent made Breaking Point consume. Blood for Power is a `BattleStart`,
+    `oncePerBattle` passive applying `DefenseUp` 0.12 for the battle.
+
+    **Three pieces were deliberately not carried over.** The 8%-of-current-HP self cost, because no
+    primitive expresses a proportion of current HP and faking it via `Damage`/`Self` produces a
+    mitigated, blockable number that is not a percentage - so Breaking Point ships without its
+    downside, and its numbers are held modest to pay for that. The `+8% Block` half of the passive,
+    because Block is a phase-B STAT and has no `StatusKind`; it is instead already authored in his
+    base stats as `"block": 0.08`, where the harness's phase-B guard has always named him as the one
+    permitted carrier - the buff exists, it is just baked rather than granted. And the execute's
+    `below 25% HP` condition, because no primitive reads a target's HP fraction: `threshold` belongs
+    to `OnHpBelowThreshold` and tests the HOLDER's health, not a target's. The finisher instead hits
+    `LowestHpEnemy` unconditionally at 0.55 rather than 0.80, the same substitution and the same
+    reasoning as Veska's "execution chaining" in task 18. No new `EffectKind`, `StatusKind` or
+    `PassiveTrigger` value was added for any of this.
+
+    **Per-hero proof, because the aggregate was not proof.** The RESOLVE section from task 18 shows
+    the mechanism works; it cannot show that any particular authored kit reaches it, and three of
+    these five sit on the bench in the economy sim and cast nothing there. New `EMBER HERO KITS`
+    section: the shipped `heroes.json` read verbatim off disk into a synthetic arena built to
+    satisfy every trigger the five use at once - `BattleStart` (Kael), `AfterBasicAttack`
+    (Seraphine, Orren), `OnDamaged` (Marrow, so the enemies must hit back) and `OnKill` (Veska, so
+    an enemy must be killable), which is why the line is five modest mooks rather than one anvil.
+    Across 24 seeds all five fire BOTH halves by name - `kael_blood_for_power` /
+    `kael_breaking_point`, `seraphine_kindling_script` / `seraphine_final_chapter`,
+    `marrow_burning_vow` / `marrow_final_offering`, `veska_oathbreaker` / `veska_cut_the_ties`,
+    `orren_marked_quarry` / `orren_final_quarry` - with 584 damage events and no null refs.
+
+    The arena needed one correction worth recording: at the first attempt every passive fired and
+    every active failed, because five levelled heroes cleared five mooks before anyone banked 100
+    energy. That is the check working - a kit that never casts is exactly what it exists to catch.
+    Enemy health and energy gain were raised until the fight lasts long enough to reach the actives.
+
+    Independence is asserted rather than assumed: five separate units hold Resolve in the same
+    battles, and **every carrier's first stack reads 1**, which a shared or clobbered counter could
+    not produce - a second carrier's first application would already read 2 or more.
+
+    The pinned five-body curve is unchanged digit for digit, confirmed explicitly rather than
+    predicted: Kael is not on that pinned line, and task 19's pin is what makes that a non-event.
+
+    Blocked by: nothing. Blocks: nothing. Not touched, deliberately: animation, sprites and the art
+    pipeline. Still open from the source design and needing engine surface that does not exist -
+    the HP cost, a persistent per-stack stat buff, target-HP-conditional effects, and all three of
+    Kael's talents.
+
 ## Task 13's instrument was broken, and what was done about it
 
 Found while checking why the wheel narrowing did not move any win rate: `RunCampaignBalancePass`

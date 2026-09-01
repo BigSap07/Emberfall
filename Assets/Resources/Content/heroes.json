@@ -231,12 +231,19 @@
       },
       "active": {
         "id": "kael_breaking_point", "name": "Breaking Point", "energyCost": 100, "vfx": "burst",
-        "description": "Kael brings his axe down in a shockwave that tears through the whole enemy line.",
+        "description": "Kael brings his axe down in a shockwave that tears through the whole enemy line, banking one Ruin as he goes and striking hardest at whoever is already closest to falling. Ruin is kept, not spent - the line gets heavier every time he swings.",
         "effects": [
-          { "kind": "Damage", "target": "AllEnemies", "power": 2.20 }
+          { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 },
+          { "kind": "Damage", "target": "AllEnemies", "power": 2.20, "perStack": 0.17 },
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.55 }
         ]
       },
-      "passive": null
+      "passive": {
+        "id": "kael_blood_for_power", "name": "Blood for Power", "trigger": "BattleStart",
+        "oncePerBattle": true, "vfx": "buff",
+        "description": "Kael sets his guard before the first blow lands: +12% Guard for the rest of the battle. His Block is authored into his base stats rather than granted here.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.12, "duration": 99 } ]
+      }
     },
     {
       "id": "seraphine_the_last_ember",
