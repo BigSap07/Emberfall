@@ -55,6 +55,31 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
 
 ## Already done, do not rebuild
 
+**Audit stamp, 2026-09-01.** All seventeen numbered tasks and the four systems below were checked
+against code rather than against this document's own prior claims. The result was that this
+section was already accurate: fifteen of seventeen tasks are done as claimed, task 6 is correctly
+recorded as superseded-and-never-built, and task 13 is correctly recorded as outstanding. Two
+things were corrected, both below — the Umbra death-spread was described as living on an unmerged
+branch when it is on `main`, and task 13 had no explicit status marker of its own. Nothing else
+needed changing.
+
+The audit also confirmed, directly rather than by inference, that four systems this document
+describes as built do have working screens wired into `ScreenRouter` (`ScreenRouter.cs:84-94`
+creates all eleven), because "the engine exists" and "a player can reach it" have drifted apart on
+this project before:
+
+- **Relic shop** — `RelicShopScreen.cs` (197 lines). Reads `Session.RelicPrice`, calls
+  `Session.BuyRelic`. Both grades purchasable.
+- **Deep Recital** — `RecitalScreen.cs` (210 lines). Shows current and highest floor, the
+  floor's generated Aspect and level, and Echo affordability via `PeekRecitalEchoes`; the fight
+  button routes through `Battle.SetRecitalFloor` into a real battle, and `GameSession.
+  GrantRecitalResult` pays it out. A complete loop, not a placeholder.
+- **Inventory** — `InventoryScreen.cs` (541 lines). `AssignRelic`/`UnassignRelic` and
+  `EquipArmor`/`UnequipArmor`. Carries both the relic and the armor halves.
+- **Forge** — `ForgeScreen.cs` (344 lines). `SalvageArmor`, `RerollArmor` and `CombineArmor`
+  with their three cost queries. This is task 16/17's armor Forge, not task 6's dead
+  idle-income mechanic — see task 6 for why the word moved.
+
 - The full playable loop: collection, leveling, banner, campaign, summon, save, idle cache.
 - Combat pipeline: speed-jitter turn order, the Provoke/LastAttacker bypass fix.
 - DevHarness checks: content validation, determinism, stage winnability, ability potency, status
@@ -99,10 +124,13 @@ verify, because it fails silently rather than with a compile error. `[D]` a deci
     `EffectKind.Cleanse` without consuming a Hits count. The persistence half — not ticking down
     while the applier lives — is explicitly not built (that belief belongs to Verdant in
     DESIGN-ASPECTS, not Umbra). The team-size-5 half — the mark spreading on the
-    marked unit's death — was left open here and is **now built on `feat/aspect-identities`**
-    (unmerged): the dying unit's Umbra-sourced harmful statuses jump to the highest-attack living
-    unit on its own side, carrying duration and magnitude unchanged, and chain on each further
-    death. Uncapped on purpose — a hop costs a death and grants nothing new, unlike Gale's
+    marked unit's death — was left open here and is **now built and merged to `main`** (a prior
+    revision of this document called it "built on `feat/aspect-identities` (unmerged)"; corrected
+    by the 2026-09-01 audit, which found `BattleEventType.StatusSpread` at `BattleEvent.cs:104`
+    and its emit at `CombatSimulation.cs:1464` on `main`, and no `feat/aspect-identities` branch
+    left anywhere in the repo): the dying unit's Umbra-sourced harmful statuses jump to the
+    highest-attack living unit on its own side, carrying duration and magnitude unchanged, and
+    chain on each further death. Uncapped on purpose — a hop costs a death and grants nothing new, unlike Gale's
     re-entry. Emits a distinct `StatusSpread` event rather than a second `StatusApplied`, so
     Debrief's status clause does not count a jump as an Umbra unit landing a debuff it never cast.
   - **Lumen**: a living Lumen unit unconditionally answers every single-target question aimed at
@@ -847,7 +875,11 @@ confirmed green on CI on `main` after the merge.
     don't need to land before 13, but landing after 13 (which it already has) means the retune
     covers all ten shipped relics, not the four task 12a alone would have left.
 
-13. **Full campaign retune. Once, last.** ⚠️ No longer twelve stages: chapter 2 shipped (`f1f5b71`,
+13. **Full campaign retune. Once, last.** **Not done — the only unbuilt task in the numbered
+    order besides 6, which is superseded.** Re-confirmed by the 2026-09-01 audit: `campaign.json`'s
+    own header still reads "a structural first pass and are NOT balanced", and a live
+    `build-check.ps1` run still prints "Nothing here is tuned." The instrument works now (both
+    blockers below landed); the pass itself has not been run. ⚠️ No longer twelve stages: chapter 2 shipped (`f1f5b71`,
     see "Already done" above), so `campaign.json` now holds **24 stages across two chapters**, and
     both need this pass — chapter 2's numbers are provisional by its own commit message, exactly
     like chapter 1's pre-retune numbers were. `[H]`, `RunCampaignBalancePass` is exactly the tool; a
