@@ -1242,6 +1242,87 @@ renumbering, and nobody has gone back to update the harness's own prose.
     strippable by `EffectKind.Dispel` like any other non-harmful status, which is defensible for a
     resource buff but nothing in shipped content exercises it either way.
 
+19. **`CheckPinnedFiveBodyCurve` was picking its own team, and task 18 changed who won.** A fix to
+    the instrument, not to content - no campaign number moved. `[H]`
+
+    **Done. On `fix/pinned-curve-roster-drift`**, `build-check.ps1` green with zero failures.
+
+    **The symptom.** After task 18 merged, the five-body curve went from the 41-83% band task 13
+    left it at to 0% on seventeen of twenty-four stages - 100% through 1-6, 83.3% at 1-7, then a
+    cliff to zero from 1-8 that never recovered. Task 13's whole retune reads as broken content.
+
+    **The check stayed GREEN through all of it, and that is the more serious half.** Its only
+    assertion is that the curve is not perfectly flat, and a cliff is not flat. An instrument that
+    silently changes what it measures and still reports success is worse than one that fails: the
+    two chapters of content calibrated against it were quietly invalidated with nothing to say so.
+
+    **What it was actually doing.** The check grants every hero in the ContentDatabase at Lv1,
+    sorts the entire roster by `PowerScore` descending, and deploys the top five - then levels the
+    cheapest of those five until team power reaches the stage's `recommendedPower`. The sort is a
+    function of how many heroes exist, so the team is re-picked whenever content is added. It had
+    been correct by luck on a 7-hero roster and stopped being correct on an 11-hero one.
+
+    Lv1 `PowerScore`, the order that sort uses, after task 18:
+
+    | | hero | role | Lv1 power | |
+    |---|---|---|---|---|
+    | 1 | nyx_serrow | Stalker | 1458 | deployed |
+    | 2 | veska_the_broken_oath | Striker | 1379 | deployed |
+    | 3 | ryn_solvarr | Striker | 1360 | deployed |
+    | 4 | seraphine_the_last_ember | Breaker | 1295 | deployed |
+    | 5 | orren_the_cinder_hunter | Ranger | 1276 | deployed |
+    | 6 | kalyx_emberwright | Breaker | 1217 | benched |
+    | 7 | **orrin_kaal** | **Bulwark** | **1205** | **benched** |
+    | 8 | maeve_corrin | Warden | 1171 | benched |
+    | 9 | wren_ilyra | Mender | 1094 | benched |
+    | 10 | marrow_the_burning_vow | Mender | 1025 | benched |
+    | 11 | kael_the_ashbound | Breaker | 600 | benched |
+
+    Four imported heroes all landed between 1025 and 1379 and pushed Orrin from 4th to 7th. The
+    instrument was fielding five damage dealers, no tank and no healer. Confirmed against the
+    harness rather than by arithmetic alone: the printed floor moved from 6411 to **6768**, which
+    is exactly the sum of that new top five, and is back to 6411 with the fix in.
+
+    **Why that specific absence is the whole collapse.** Orrin is the Lumen anchor - a living Lumen
+    unit answers every single-target question aimed at its side (`FindTargetAnchor`) - and task 13's
+    retune was authored on top of that interception, in its own words "difficulty is authored as AoE
+    presence, because that is the only damage Lumen does not absorb". Remove Orrin and every
+    single-target attack in the game stops being absorbed by a 2600-HP tank and spreads across five
+    squishy bodies with no healer behind them. The content did not get harder; the yardstick lost
+    the mechanism it was calibrated against.
+
+    **Kael is not the cause, and fixing him first would have made it worse.** His stat scale is
+    genuinely wrong - hp 480, attack 33, defense 24 against a roster authoring 1300-2600 hp and
+    105-220 attack, giving him 600 Lv1 power against 1025-1458 for every other five-star. It is a
+    real bug and it is filed here as one. But he ranks 11th of 11 and is never selected, so he
+    contributes nothing to this. Scaling him to roster norms was modelled before deciding: a
+    corrected Kael lands about 1235, which puts him 6th and pushes Orrin from 7th to **8th**. The
+    obvious suspect is innocent, and treating him first would have deepened the fault.
+
+    **The fix, and the argument for it over the alternative.** The five are now pinned by name -
+    `nyx_serrow`, `ryn_solvarr`, `kalyx_emberwright`, `orrin_kaal`, `maeve_corrin` - with a check
+    that fails loudly if any of them is missing from content, because a silently incomplete line is
+    the exact failure this replaced. Those are not a fresh design choice: they are precisely the old
+    sort's top five on the 7-hero roster, floor 6411, which is the line task 13's 24-stage table was
+    measured against. Any other five would be defensible in the abstract and would still invalidate
+    that table, which is the same damage the drift did. A yardstick's first duty is to stop moving.
+
+    The alternative - keep the sort, fix Kael, hope a fair pin with correct numbers resolves it - is
+    refuted above by the modelled reordering, and would leave the underlying defect in place
+    regardless: the team would still be a function of roster size, and hero number twelve would
+    break it again. Kael's scale still wants fixing on its own merits; it is not this.
+
+    **Verified by exact restoration, not by "looks better".** With the pin in, all 24 rows return to
+    the values task 13 recorded, digit for digit: floor 6411 on 1-1 to 1-5, then 1-8 79.2%, 1-9
+    70.8%, 1-10 54.2%, 1-11 62.5%, 1-12 41.7%, 2-2 91.7% descending to 2-7 58.3%, and 2-12 83.3%.
+    A curve that climbs, not a flat line and not a cliff. No file under `Assets/Resources/Content`
+    was touched by this task.
+
+    Blocked by: nothing. Blocks: nothing. Two things deliberately left: Kael's stat scale, and the
+    fact that this check's pass condition is still only "not perfectly flat" - it would not have
+    caught this on its own, and a curve-shape assertion (monotonic-ish, bounded) is the check that
+    would have. Both are their own tasks.
+
 ## Task 13's instrument was broken, and what was done about it
 
 Found while checking why the wheel narrowing did not move any win rate: `RunCampaignBalancePass`

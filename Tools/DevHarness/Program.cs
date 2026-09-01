@@ -6961,17 +6961,46 @@ namespace Emberfall.DevHarness
                 for (int h = 0; h < db.Heroes.Count; h++)
                     if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
 
-                // Then deploy the best five by power, explicitly. NormaliseTeam is not enough and
-                // using it here was a real bug while this check was being written: it only fills
-                // EMPTY slots and never displaces a deployed hero, so the three starters kept slots
-                // 0 to 2 and grant order decided the rest - which left Nyx, the roster's only
-                // 5-star and its highest-power unit, on the bench and the floor reading 5112
-                // instead of 5684. A player choosing their own line would field her.
+                // Deploy the PINNED five, by name. This used to sort the whole roster by Lv1
+                // PowerScore and take the top five, which is how the instrument broke: that sort is
+                // a function of how many heroes exist, so it silently re-picks the team every time
+                // content is added. The four-hero Ember import (task 18) landed between 1025 and
+                // 1379 Lv1 power and displaced Orrin from 4th to 7th, fielding five damage dealers
+                // with no tank and no healer. The curve went from 41-83% across chapter 2 to 0% on
+                // seventeen of twenty-four stages, and this check stayed GREEN through it, because
+                // it only fails on a perfectly flat curve and a cliff is not flat.
+                //
+                // Orrin's absence is the whole collapse, not a contributing factor. He is the Lumen
+                // anchor - a living Lumen unit answers every single-target question aimed at its
+                // side (FindTargetAnchor) - and task 13's entire retune was authored against that
+                // interception. Without him every single-target attack spreads across five squishy
+                // bodies instead of landing on the tank, and the line has no healer to absorb it.
+                //
+                // These five are exactly the line task 13's 24-stage table was measured against:
+                // the old sort's top five on the 7-hero roster, floor 6411, the figure this
+                // document and DESIGN-BUILD-ORDER both record. Pinning them by name keeps the
+                // yardstick continuous with the content calibrated against it, and means the next
+                // roster import cannot move it. Changing this list invalidates that table as surely
+                // as the drift did - so change it deliberately and retune, or not at all.
+                string[] pinned = { "nyx_serrow", "ryn_solvarr", "kalyx_emberwright", "orrin_kaal", "maeve_corrin" };
+
                 for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
-                List<HeroInstance> byPower = new List<HeroInstance>(profile.Heroes);
-                byPower.Sort(delegate (HeroInstance a, HeroInstance b) { return b.Power.CompareTo(a.Power); });
-                for (int i = 0; i < profile.Team.Length && i < byPower.Count; i++)
-                    profile.AssignToTeam(i, byPower[i].Uid);
+                int assigned = 0;
+                for (int i = 0; i < pinned.Length; i++)
+                {
+                    HeroInstance found = null;
+                    for (int j = 0; j < profile.Heroes.Count; j++)
+                        if (profile.Heroes[j].Def.Id == pinned[i]) { found = profile.Heroes[j]; break; }
+                    if (found == null) continue;
+                    profile.AssignToTeam(assigned, found.Uid);
+                    assigned++;
+                }
+                // Loud, not silent. A missing pin is the exact failure mode this replaced: an
+                // instrument quietly measuring a different team than the one it reports.
+                if (s == 0)
+                    Check(assigned == pinned.Length,
+                          "the pinned five-body line is fully deployed by name (got " + assigned
+                          + " of " + pinned.Length + ") - a missing hero here silently re-tunes the yardstick");
 
                 List<HeroInstance> team = profile.TeamHeroes();
                 int floorPower = profile.TeamPower();
