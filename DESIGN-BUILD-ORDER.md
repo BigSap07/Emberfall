@@ -1318,10 +1318,49 @@ renumbering, and nobody has gone back to update the harness's own prose.
     A curve that climbs, not a flat line and not a cliff. No file under `Assets/Resources/Content`
     was touched by this task.
 
-    Blocked by: nothing. Blocks: nothing. Two things deliberately left: Kael's stat scale, and the
-    fact that this check's pass condition is still only "not perfectly flat" - it would not have
-    caught this on its own, and a curve-shape assertion (monotonic-ish, bounded) is the check that
-    would have. Both are their own tasks.
+    Blocked by: nothing. Blocks: nothing. Two things deliberately left: Kael's stat scale (since
+    done, see task 20), and the fact that this check's pass condition is still only "not perfectly
+    flat" - it would not have caught this on its own, and a curve-shape assertion (monotonic-ish,
+    bounded) is the check that would have. That one is still open.
+
+20. **Kael's stat scale: he was never converted off the generator's numbers.** Content only, four
+    numbers. `[H]`
+
+    **Done. On `fix/kael-stat-scale`**, `build-check.ps1` green with zero failures.
+
+    Kael shipped at hp 480, attack 33, defense 24, speed 162, giving him 600 Lv1 power against
+    1025-1458 for every other five-star - flagged as a real bug by task 19 and left there.
+
+    `heroes_ember.json`, the generator-format source, turns out to carry those exact numbers, so it
+    is not the fix; it is the evidence. The whole file is on a low scale (hp 325-480, attack 32-39),
+    and the four heroes imported from it in task 18 were rescaled on the way in - roughly x3.9 hp,
+    x5 attack, x3.1 defense, x0.5 speed, per-hero by role. Kael predates that import and was
+    authored straight from generator output, so he never got the conversion. Not a typo, a missing
+    step.
+
+    Fixed by applying the same conversion the cohort received, at the mean per-axis ratio rather
+    than by inventing numbers: **hp 1850, attack 165, defense 75, speed 82**, giving 1167 Lv1 power.
+    That lands him between Maeve (1171) and Wren (1094) and below Orrin (1205), so no
+    power-ordering assumption anywhere moves. The pinned five-body curve is unchanged digit for
+    digit, which is the point of task 19's pin - Kael's numbers can move without the yardstick
+    moving.
+
+    His role stays `Breaker`. The generator file calls him `Vanguard`, which is not in `HeroRole`
+    and would parse to the `Striker` fallback silently; adding it is a separate decision, and his
+    `passive: null` bucket entry is unchanged. Also unchanged and worth naming: that file authors a
+    Ruin stacking resource for him across two passives and three talents, which `EffectKind.
+    GainResolve` from task 18 could now actually express - the first time that has been true.
+
+    **Three incompatible stat scales exist in this project and only one is load-bearing.** Shipped
+    heroes run hp 1300-2600 / attack 105-227; shipped enemies run hp 720-4200 / attack 105-480; the
+    generator's JSON output runs hp 325-480; and DESIGN-HERO-GENERATOR's own documented ranges run
+    hp 13000-30000 / attack 950-2300, about ten times ABOVE shipped rather than below. Heroes and
+    enemies are the pair that has to agree, because that is what combat resolves between and what
+    `defenseConstant` 400 is calibrated for, and they do. The other two scales are proposals nothing
+    reads. Moving to either is a whole-game rescale - every hero, every enemy, `defenseConstant`,
+    the level curve, and all 24 stages task 13 just tuned - not a hero fix, and not done here.
+
+    Blocked by: nothing. Blocks: nothing.
 
 ## Task 13's instrument was broken, and what was done about it
 
