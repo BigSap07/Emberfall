@@ -5,54 +5,24 @@
 
 Writes Assets/Resources/Sprites/Units/portrait_<heroid>.png, 256x256 RGBA.
 
-THE TWO COMMANDS THAT PRODUCED THE COMMITTED PORTRAITS, both needed, exactly as written:
+THE COMMANDS THAT PRODUCED THE COMMITTED PORTRAITS. Run all four, exactly as written:
 
     python Tools/make_portraits.py --from-originals
-    python Tools/make_portraits.py --only kalyx_emberwright --include-singles \
-        --center-x 0.42 --crop-frac 0.60 --top 0.075
+    python Tools/make_portraits.py --only marrow_the_burning_vow  --from-originals --center-x 0.60
+    python Tools/make_portraits.py --only orren_the_cinder_hunter --from-originals --center-x 0.54
+    # kalyx_emberwright deliberately has NO portrait - see below
 
-Portraits are an Ember-hero thing, and the six Ember heroes are NOT the same set as "has an idle
-sheet": kalyx_emberwright is Ember but is still a single-image placeholder, and the automatic
-framing cannot read his art (his warhammer is carried above his head and is larger than it, so it
-captures both the horizontal centroid and the topmost opaque row - see --center-x and --top).
-Running the first command alone leaves his portrait stale; running it with --include-singles
-regenerates his WRONG, centred on the hammer. Hence the second command and its three constants.
+The per-hero --center-x values are not decoration. The automatic centre is the centroid of opaque
+pixels in the top band, which tracks MASS rather than a face, so anything carried high and wide
+wins: Marrow's warhammer pulled his crop left off his face, and Orren's bow and quiver pulled his
+right onto the bow. The default framing is correct for Kael, Seraphine and Veska and wrong for
+those two, so a plain re-run silently regresses exactly those two portraits.
 
-Committed rather than left as a throwaway for one specific reason: the script that imported
-Kael's sheets was a one-off too, was never committed, and no longer exists anywhere - every quirk
-it knew had to be rediscovered from its output. A one-off that produces committed assets is worth
-the few lines it takes to keep.
-
---------------------------------------------------------------------------------------------
-Resources loading pattern (BattleAssets.cs)
---------------------------------------------------------------------------------------------
-Unity loads anything under an Assets/**/Resources/ folder by an EXTENSIONLESS path relative to
-that folder. BattleAssets.UnitSprite does Resources.Load<Texture2D>("Sprites/Units/" + spriteId),
-and the animated path does the same for "<spriteId>_<clip>" plus a TextAsset sidecar of the same
-name. So these files land beside the sheets in Assets/Resources/Sprites/Units/ and would be read
-as Resources.Load<Texture2D>("Sprites/Units/portrait_<heroid>").
-
-Note the id used is the HERO id from heroes.json, as asked. That happens to equal visual.sprite
-for all eleven heroes today, but they are different fields and only the hero id is guaranteed to
-be the thing heroes.json keys on - so the sprite id is what gets read off disk, and the hero id is
-what gets written.
-
---------------------------------------------------------------------------------------------
-Crop geometry
---------------------------------------------------------------------------------------------
-Per the spec: square, side = 45% of the alpha bounding box WIDTH, centred horizontally on the
-centroid of opaque pixels in the top 20% of the bbox (the head, rather than the bbox centre -
-these poses are asymmetric, with cloaks and weapons pulling the bbox sideways), top edge slightly
-above the topmost opaque row.
-
-Two judgement calls the spec left open, both flagged in the report rather than buried:
-  - "slightly above" is HEADROOM_FRAC of the crop side (default 6%).
-  - A crop running past the frame edge is PADDED with transparency, not clamped inward. Clamping
-    would silently slide the head off-centre, which is the one thing the centroid step exists to
-    prevent. Any padding is reported per hero.
-
-Alpha threshold matches Tools/import-sprite-sheets.ps1 (>8) so both tools agree on what "opaque"
-means and a bbox measured here matches the contentBox already in each sidecar.
+Portraits are an Ember-hero thing. Ember is six heroes, but kalyx_emberwright is deliberately NOT
+given one: he is a single-image placeholder, and the automatic framing cannot read his art at all
+(his warhammer is carried above his head and is larger than it, so it captures both the horizontal
+centroid AND the topmost opaque row). Hand-framing a placeholder that is going to be redrawn is
+not worth the three constants it takes, so he falls back to his sigil.
 """
 
 import argparse

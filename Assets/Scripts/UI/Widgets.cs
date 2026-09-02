@@ -47,8 +47,25 @@ namespace Emberfall.UI
             return sprite;
         }
 
-        /// <summary>Circular unit portrait: aspect-tinted disc, emblem, star-tier ring.</summary>
+        /// <summary>Circular unit portrait: aspect-tinted disc, emblem, aspect ring.</summary>
         public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing)
+        {
+            return Portrait(name, parent, def, stars, size, showRing, true);
+        }
+
+        /// <summary>
+        /// showPlate false drops the disc and both glows so a painted portrait sits on nothing but
+        /// the page, ringed but otherwise unbacked. The Hub's badge dock asks for this; the
+        /// card-based screens do not, because there the badge is the card's own focal object and
+        /// needs its own ground.
+        ///
+        /// It only ever suppresses the plate behind a unit that HAS a portrait. A sigil is a flat
+        /// emblem drawn in the accent colour and it needs the disc underneath to read at all -
+        /// dropping that would leave the non-Ember heroes in the same dock as loose glyphs floating
+        /// on the map art. So the dock shows unbacked portraits and full badges side by side, which
+        /// is the intended asymmetry rather than an oversight.
+        /// </summary>
+        public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing, bool showPlate)
         {
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Size(root, size, size);
@@ -57,20 +74,24 @@ namespace Emberfall.UI
             Color secondary = UITheme.Hex(def.Visual.Secondary);
             Color accent = UITheme.Hex(def.Visual.Accent);
 
-            Image glow = UIBuilder.Img("Glow", root, TextureLab.Glow(128, 1.9f), UITheme.WithAlpha(primary, 0.55f));
-            UIBuilder.FillParent(glow.rectTransform, -size * 0.16f);
-
-            Image disc = UIBuilder.Img("Disc", root, TextureLab.Circle(160), secondary);
-            UIBuilder.FillParent(disc.rectTransform, 0f);
-
-            Image inner = UIBuilder.Img("Inner", root, TextureLab.Glow(128, 1.1f), UITheme.WithAlpha(primary, 0.85f));
-            UIBuilder.FillParent(inner.rectTransform, size * 0.11f);
-
             // A unit with a painted portrait shows it in place of its sigil; everyone else is
-            // untouched. The disc, both glows and the ring stay either way, so the badge keeps its
-            // aspect tint and its star-tier read whichever branch it takes, and a mixed roster
-            // still looks like one set of badges rather than two kinds of thing.
+            // untouched. The ring stays either way, so the badge keeps its aspect read whichever
+            // branch it takes, and a mixed roster still looks like one set of badges.
             Sprite art = PortraitArt(def.Id);
+            bool plate = showPlate || art == null;
+
+            if (plate)
+            {
+                Image glow = UIBuilder.Img("Glow", root, TextureLab.Glow(128, 1.9f), UITheme.WithAlpha(primary, 0.55f));
+                UIBuilder.FillParent(glow.rectTransform, -size * 0.16f);
+
+                Image disc = UIBuilder.Img("Disc", root, TextureLab.Circle(160), secondary);
+                UIBuilder.FillParent(disc.rectTransform, 0f);
+
+                Image inner = UIBuilder.Img("Inner", root, TextureLab.Glow(128, 1.1f), UITheme.WithAlpha(primary, 0.85f));
+                UIBuilder.FillParent(inner.rectTransform, size * 0.11f);
+            }
+
             if (art != null)
             {
                 // Inset so the SQUARE portrait is inscribed in the ROUND disc. A square fits a
@@ -90,9 +111,20 @@ namespace Emberfall.UI
                 UIBuilder.FillParent(sigil.rectTransform, size * 0.19f);
             }
 
+            // The ring carries the unit's ASPECT, not its star tier. Each unit matches its own
+            // aspect, so an Ember hero rings in Ember orange and a Tide hero in Tide blue, rather
+            // than five heroes of different aspects all ringing the same amber because they happen
+            // to share a star tier.
+            //
+            // This does drop a rarity read that used to live here: StarColor(stars) tinted the ring
+            // by tier, and that is the only thing this change costs. Star tier is still shown
+            // outright by StarRow wherever a screen has room for it, which is a count rather than a
+            // colour anyone has to learn - and `stars` stays on the signature because the two
+            // callers that pass a non-obvious value should not have to change to say the same thing
+            // again if the ring ever wants both.
             if (showRing)
             {
-                Image ring = UIBuilder.Img("Ring", root, TextureLab.Ring(160, 8), UITheme.StarColor(stars));
+                Image ring = UIBuilder.Img("Ring", root, TextureLab.Ring(160, 8), UITheme.AspectColor(def.Aspect));
                 UIBuilder.FillParent(ring.rectTransform, 0f);
             }
 

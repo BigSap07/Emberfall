@@ -650,7 +650,11 @@ namespace Emberfall.UI.Screens
                 }
 
                 HeroInstance hero = team[slot];
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, BadgeSize, true);
+                // showPlate false: on the Hub the badge sits on the painted map, so a hero with a
+                // portrait shows the portrait and its ring against that art with nothing behind it.
+                // Only affects heroes that HAVE a portrait - a sigil hero keeps its disc, because a
+                // flat emblem with no ground under it would not read against the map at all.
+                RectTransform portrait = Widgets.Portrait("Portrait", cell, hero.Def, hero.Def.Stars, BadgeSize, true, false);
                 UIBuilder.Box(portrait, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
 
                 // First word only. A cell is BadgeCell wide because that is what the dock's captions
