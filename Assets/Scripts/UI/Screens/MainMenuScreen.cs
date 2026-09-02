@@ -26,34 +26,21 @@ namespace Emberfall.UI.Screens
         private Text _chapterCount;
 
         // ---------- the Hub's own surfaces ----------
-        // A Hub-scoped override of the shared surface ramp, and nothing more. UITheme.Backdrop,
-        // Panel, PanelRaised and Border are NOT touched: every other screen keeps the violet-toned
-        // chrome and the Ember-orange accents it has today, and this screen stops matching them.
+        // The four Hub-scoped surface tones that used to be declared here - HubBackdrop, HubPanel,
+        // HubPanelRaised and HubPanelSunken - now live in HubStyle with the rest of the Hub's
+        // chrome vocabulary. They were already a Hub-only override of the shared ramp, so they were
+        // exactly the thing "one shared style definition" is for; keeping four of them here and the
+        // radii, alphas and font sizes somewhere else was the split this pass removes.
         //
-        // That seam is intended, not an oversight. The Hub is the only screen with a fiction that
-        // demands its own material (DESIGN-WORLD, "The Cinder and the Keeper" - the office "takes
-        // no side among the six"), and it is the only screen the reskin covers. Warming the shared
+        // The reasoning that put them here still holds and still applies, so it moves with them:
+        // UITheme.Backdrop, Panel, PanelRaised and Border are NOT touched, because every other
+        // screen keeps the violet-toned chrome and Ember accents it has today. Warming the shared
         // constants instead would drag Campaign, Inventory, RelicShop and every PrimaryButton in
-        // the game along with it, which is a far larger visual change than this one and would land
-        // with none of those screens actually reviewed.
+        // the game along with it, which is a far larger change than this one and would land with
+        // none of those screens reviewed.
         //
-        // HubPanelSunken is derived rather than chosen: it sits at the same ratio to HubPanel
-        // (about 0.72) that UITheme.PanelSunken sits at to UITheme.Panel, so the Hub's internal
-        // depth relationship reads like every other screen's.
-        //
-        // Two of the six tones this set was introduced with are gone: the border pair, HubBorder
-        // 3A3120 and its derived HubBorderSoft 2A2317. They existed to outline the two full-width
-        // cards this screen used to be built from, and the map layout has no cards - every plate on
-        // it is a node outlined in ChromeBrass, which is what ChromeBrass is for. Keeping two
-        // surface-border constants with no call site would have been dead palette. If a bordered
-        // card ever returns to this screen, 3A3120 is the value it wants.
-        //
-        // None of these is ChromeBrass. ChromeBrass is an accent that sits ON these surfaces
-        // (outlines, rings, dividers); these four are the surfaces themselves.
-        private static readonly Color HubBackdrop = UITheme.Hex("14121A");
-        private static readonly Color HubPanel = UITheme.Hex("1C1710");
-        private static readonly Color HubPanelRaised = UITheme.Hex("2B2318");
-        private static readonly Color HubPanelSunken = UITheme.Hex("14100B");
+        // None of them is ChromeBrass. ChromeBrass is an accent that sits ON these surfaces
+        // (outlines, rings, dividers), which is what HubStyle.BorderWarm resolves to.
 
         /// <summary>
         /// The authored dimensions of hub.png, declared rather than read back off the texture.
@@ -166,7 +153,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildMap()
         {
-            Image floor = UIBuilder.Img("Backdrop", Root, TextureLab.White, HubBackdrop);
+            Image floor = UIBuilder.Img("Backdrop", Root, TextureLab.White, HubStyle.Plate);
             UIBuilder.FillParent(floor.rectTransform, 0f);
 
             _map = UIBuilder.Node("Map", Root);
@@ -215,7 +202,7 @@ namespace Emberfall.UI.Screens
             // it lifts the blacks toward itself and flattens everything. Stacked on the wash above
             // it, a mid-tone was reaching the screen at about 43% of the source file's brightness.
             // What is left is the little that the chrome needs to seat against, nothing more.
-            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, UITheme.WithAlpha(HubBackdrop, 0.10f));
+            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, UITheme.WithAlpha(HubStyle.Plate, HubStyle.ScrimAlpha));
             UIBuilder.FillParent(scrim.rectTransform, 0f);
 
             // The ambient glow that used to sit here is gone. It was a colourless CinderGlass
@@ -248,41 +235,43 @@ namespace Emberfall.UI.Screens
             AddLockedNode("MARKETPLACE", MarketX, MarketY);
         }
 
-        // ---------- node label metrics ----------
-        // DesignReference/Main.dc.html's .node-label: rgba(16,14,20,0.78) behind a 1px border, a
-        // 13px face and 5px/14px padding, on a 720-tall canvas. Scaled to this project's 1080-unit
-        // reference that is roughly a 20pt face in a 38-unit-tall plate with a 10-unit radius.
-        // Height is taken up to 48 rather than 38 so the plate stays a comfortable tap target on a
-        // phone; nothing else about it is inflated.
-        private const float NodeHeight = 48f;
-        private const int NodeCornerRadius = 10;
-
         /// <summary>
-        /// A map node's plate. Built here rather than through UIBuilder.MakeButton, because
-        /// MakeButton builds a BUTTON - a 3-unit border, a 22-unit corner radius and a white sheen
-        /// overlay across the top half - and three pieces of raised-button chrome are exactly what
-        /// made these tags sit on top of the painting instead of on the buildings. The mockup asks
-        /// for a soft label overlay: one hairline border, a small radius, no sheen.
+        /// THE building marker. Every structure on the map is this and only this, so the six of
+        /// them form one visual system instead of six separately-styled tags: one height, one
+        /// radius, one surface, one border, one lift above the target, one tail pointing back down
+        /// at it. Every number comes from HubStyle - there is no style literal in this method.
         ///
-        /// Fill and edge alphas are arguments because the locked variant needs to sit back further
-        /// still, and because these two numbers are the whole of how loud a node reads.
+        /// Built here rather than through UIBuilder.MakeButton, because MakeButton builds a BUTTON -
+        /// a 3-unit border, a 22-unit corner radius and a white sheen across the top half - and
+        /// three pieces of raised-button chrome are exactly what made these tags sit on top of the
+        /// painting instead of on the buildings.
+        ///
+        /// The lift is the part that changed: the plate used to be centred ON its anchor and so
+        /// covered the structure it named. It now sits HubStyle.LabelLift above it with a tail
+        /// reaching back down, so the anchor still points at the building, the building stays
+        /// visible, and the label reads as a caption for it rather than a sticker over it. The
+        /// anchor fractions themselves are untouched.
+        ///
+        /// fill and edge alphas stay arguments because the locked variant sits back further, and
+        /// those two numbers are the whole of how loud a marker reads.
         /// </summary>
         private UIButton BuildNodePlate(string label, float mx, float my,
                                         float fillAlpha, float edgeAlpha, Color textColor)
         {
             UIButton handle = new UIButton();
             handle.Root = UIBuilder.Node("Node" + label, _map);
-            AnchorOnMap(handle.Root, mx, my, NodeWidthFor(label), NodeHeight);
+            AnchorOnMap(handle.Root, mx, my, HubStyle.LabelWidthFor(label), HubStyle.LabelHeight);
+            // Lift off the anchor. Same rule for every marker, which is what makes them a system.
+            handle.Root.anchoredPosition = new Vector2(0f, HubStyle.LabelLift);
             handle.Group = handle.Root.gameObject.AddComponent<CanvasGroup>();
 
-            handle.Background = handle.Root.gameObject.AddComponent<Image>();
-            handle.Background.sprite = TextureLab.RoundedRect(NodeCornerRadius);
-            handle.Background.type = Image.Type.Sliced;
-            handle.Background.color = UITheme.WithAlpha(HubBackdrop, fillAlpha);
-
-            handle.Frame = UIBuilder.Frame("Edge", handle.Root,
-                                           UITheme.WithAlpha(UITheme.ChromeBrass, edgeAlpha),
-                                           NodeCornerRadius, 1);
+            // Tail first, plate second. Unity draws a parent's own graphic before its children, so
+            // the plate has to be a CHILD created after the tail for it to bury the tail's top half
+            // and leave a triangle pointing down at the building. On the root it would draw first
+            // and the tail would sit on top of it as a doubled-alpha diamond.
+            HubStyle.Tail(handle.Root, fillAlpha);
+            handle.Background = HubStyle.SurfaceChild("Plate", handle.Root, HubStyle.RadiusLabel,
+                                                      fillAlpha, edgeAlpha, HubStyle.BorderWeight);
 
             handle.Button = handle.Root.gameObject.AddComponent<Button>();
             handle.Button.targetGraphic = handle.Background;
@@ -297,7 +286,7 @@ namespace Emberfall.UI.Screens
             handle.Button.colors = colors;
             handle.Root.gameObject.AddComponent<ButtonPress>();
 
-            handle.Label = UIBuilder.Label("Text", handle.Root, label, UITheme.FontTiny, textColor,
+            handle.Label = UIBuilder.Label("Text", handle.Root, label, HubStyle.FontLabel, textColor,
                                            TextAnchor.MiddleCenter);
             UIBuilder.FillParent(handle.Label.rectTransform, 6f);
             // The shadow, not a heavier plate, is what holds the word off the painting behind it.
@@ -307,7 +296,8 @@ namespace Emberfall.UI.Screens
 
         private UIButton AddMapNode(string label, float mx, float my, System.Action action)
         {
-            UIButton node = BuildNodePlate(label, mx, my, 0.62f, 0.34f, UITheme.TextPrimary);
+            UIButton node = BuildNodePlate(label, mx, my, HubStyle.PlateAlphaSoft,
+                                           HubStyle.BorderAlpha, HubStyle.LabelText);
             node.OnClick(action);
             return node;
         }
@@ -318,41 +308,19 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void AddLockedNode(string label, float mx, float my)
         {
-            UIButton node = BuildNodePlate(label, mx, my, 0.5f, 0.2f, UITheme.TextMuted);
+            UIButton node = BuildNodePlate(label, mx, my, HubStyle.PlateAlphaSoft * 0.8f,
+                                           HubStyle.BorderAlphaMuted, UITheme.TextMuted);
             node.OnClick(NotSoonEnough(label));
-            AddSoonTag(node.Root, 0f, -20f, new Vector2(0.5f, 0f));
+            // Below the tail, not on top of it, so the marker still points at its building.
+            HubStyle.SoonBadge(node.Root, 0f, -(HubStyle.TailSize + HubStyle.SoonDrop),
+                               new Vector2(0.5f, 0f));
         }
 
-        /// <summary>
-        /// The "not built yet" tag.
-        ///
-        /// Deliberately NOT UIBuilder.Chip. Chip paints its background, its border and its text
-        /// from one tint - a 22% wash, a 75% edge and 100% text, all the same hue. On a dark panel
-        /// that is fine, which is why it works everywhere else it is used. Over a sunlit painting
-        /// it fails completely: ChromeBrass text on a ChromeBrass wash has almost no contrast
-        /// against its own background, so the plate reads and the word does not, and what is left
-        /// looks like an empty artifact.
-        ///
-        /// A dark opaque plate carries the text instead, so the tag reads at ChromeBrass's measured
-        /// 4.7:1 against HubBackdrop rather than against a wash of itself. Chip is left alone;
-        /// other screens use it over panels where its single-tint assumption holds.
-        /// </summary>
-        private static RectTransform AddSoonTag(RectTransform parent, float x, float y, Vector2 anchor)
-        {
-            RectTransform tag = UIBuilder.Node("Soon", parent);
-            UIBuilder.Box(tag, x, y, 96f, 28f, anchor);
-
-            Image plate = tag.gameObject.AddComponent<Image>();
-            plate.sprite = TextureLab.RoundedRect(10);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubBackdrop, 0.92f);
-            plate.raycastTarget = false;
-            UIBuilder.Frame("Edge", tag, UITheme.WithAlpha(UITheme.ChromeBrass, 0.8f), 10, 2);
-
-            Text label = UIBuilder.Label("Text", tag, "SOON", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(label.rectTransform, 0f);
-            return tag;
-        }
+        // The old AddSoonTag lived here. It is now HubStyle.SoonBadge, because the dock and the
+        // map both need it and "one shared component" cannot mean one per screen. Its hard-won
+        // reasoning survives in that method: the badge paints a dark opaque plate under its text
+        // rather than using UIBuilder.Chip, whose single-tint fill/border/text collapses to almost
+        // no contrast when it is laid over a sunlit painting instead of over a dark panel.
 
         /// <summary>
         /// The shared "there is no screen behind this yet" response, used by the Marketplace node
@@ -369,16 +337,8 @@ namespace Emberfall.UI.Screens
             };
         }
 
-        /// <summary>
-        /// Plate width: the mockup's 14px side padding scaled to this reference, plus the word.
-        /// The floor keeps a short label like FORGE a comfortable tap target rather than shrinking
-        /// to fit five characters. Narrower plates than the old 190-unit minimum are also why
-        /// CAMPAIGN and DEEP RECITAL stopped crowding each other on the right of the map.
-        /// </summary>
-        private static float NodeWidthFor(string label)
-        {
-            return Mathf.Max(150f, 44f + label.Length * 12f);
-        }
+        // NodeWidthFor moved to HubStyle.LabelWidthFor with the rest of the marker's metrics, so
+        // a label's width retunes from the same file as its height, radius and lift.
 
         /// <summary>
         /// Places a rect by fraction of the map rather than by pixel offset from a screen edge.
@@ -422,28 +382,27 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(card, -UITheme.ScreenPadding, BottomRowHeight + UITheme.Space16,
                           cardWidth, cardHeight, new Vector2(1f, 0f));
 
-            Image plate = card.gameObject.AddComponent<Image>();
-            plate.sprite = TextureLab.RoundedRect(18);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubPanel, 0.9f);
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 18, 2);
+            // Same panel surface as the idle card, from the same tokens: the two chrome panels on
+            // this screen are one object with two sets of contents, not two designs.
+            HubStyle.Surface(card, HubStyle.RadiusPanel, HubStyle.PlateAlpha,
+                             HubStyle.BorderAlphaStrong, HubStyle.BorderWeightHeavy);
 
-            _chapterLabel = UIBuilder.Label("Chapter", card, "", UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            _chapterLabel = UIBuilder.Label("Chapter", card, "", HubStyle.FontSecondary, HubStyle.LabelText, TextAnchor.UpperLeft);
             UIBuilder.Box(_chapterLabel.rectTransform, inner, -12f, 340f, 24f, new Vector2(0f, 1f));
 
-            _chapterCount = UIBuilder.Label("Count", card, "", UITheme.FontTiny - 2, UITheme.Gold, TextAnchor.UpperRight);
+            _chapterCount = UIBuilder.Label("Count", card, "", HubStyle.FontSecondary, HubStyle.ValueGold, TextAnchor.UpperRight);
             UIBuilder.Box(_chapterCount.rectTransform, -inner, -12f, 200f, 24f, new Vector2(1f, 1f));
 
-            _chapterFill = UIBuilder.Bar("Bar", card, HubPanelSunken, UITheme.Gold);
+            _chapterFill = UIBuilder.Bar("Bar", card, UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid), HubStyle.ValueGold);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
             UIBuilder.Box(barRoot, 0f, -44f, cardWidth - inner * 2f, 8f, new Vector2(0.5f, 1f));
 
-            _continueSub = UIBuilder.Label("Sub", card, "", UITheme.FontTiny - 4, UITheme.ChromeBrass, TextAnchor.UpperCenter);
+            _continueSub = UIBuilder.Label("Sub", card, "", HubStyle.FontCaption, HubStyle.TextSecondary, TextAnchor.UpperCenter);
             UIBuilder.Box(_continueSub.rectTransform, 0f, -58f, cardWidth - inner * 2f, 22f, new Vector2(0.5f, 1f));
 
             // GoldButton: the primary action, the same colour the de-aspect pass gave it and the
             // same colour Claim uses. Nothing else on this screen is allowed to be Gold.
-            _continueButton = UIBuilder.GoldButton("Continue", card, "CONTINUE CAMPAIGN", UITheme.FontSmall);
+            _continueButton = UIBuilder.GoldButton("Continue", card, "CONTINUE CAMPAIGN", HubStyle.FontButton);
             UIBuilder.Box(_continueButton.Root, 0f, 14f, cardWidth - inner * 2f, 62f, new Vector2(0.5f, 0f));
             _continueButton.OnClick(OpenCampaign);
         }
@@ -457,26 +416,33 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = UIBuilder.Node("IdleCache", Root);
             UIBuilder.Box(card, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16), 640f, 200f, new Vector2(1f, 1f));
+            HubStyle.Surface(card, HubStyle.RadiusPanel, HubStyle.PlateAlpha,
+                             HubStyle.BorderAlphaStrong, HubStyle.BorderWeightHeavy);
 
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(18);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(HubPanel, 0.9f);
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 18, 2);
+            Text heading = UIBuilder.Label("Heading", card, "IDLE REWARDS", HubStyle.FontSecondary,
+                                           HubStyle.SoonText, TextAnchor.UpperLeft);
+            UIBuilder.Box(heading.rectTransform, HubStyle.PanelPadX, -HubStyle.PanelPadY, 400f, 24f, new Vector2(0f, 1f));
 
-            Text heading = UIBuilder.Label("Heading", card, "IDLE REWARDS", UITheme.FontTiny - 2, UITheme.ChromeBrass, TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, 22f, -16f, 400f, 24f, new Vector2(0f, 1f));
+            // Gold and shards earned: the panel's headline number, in the Hub's one value tone.
+            _idleAmounts = UIBuilder.Label("Amounts", card, "", HubStyle.FontValue,
+                                           HubStyle.ValueGold, TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleAmounts.rectTransform, HubStyle.PanelPadX, -44f, 420f, 34f, new Vector2(0f, 1f));
 
-            _idleAmounts = UIBuilder.Label("Amounts", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleAmounts.rectTransform, 22f, -44f, 420f, 34f, new Vector2(0f, 1f));
+            // Elapsed time and cache state - secondary, but not the rate line's weight.
+            _idleTimer = UIBuilder.Label("Timer", card, "", HubStyle.FontSecondary,
+                                         HubStyle.TextSecondary, TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleTimer.rectTransform, HubStyle.PanelPadX, -86f, 400f, 24f, new Vector2(0f, 1f));
 
-            _idleTimer = UIBuilder.Label("Timer", card, "", UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleTimer.rectTransform, 22f, -86f, 400f, 24f, new Vector2(0f, 1f));
+            // The per-hour rate: the quietest line on the panel, muted below the timer.
+            _idleRate = UIBuilder.Label("Rate", card, "", HubStyle.FontSoon,
+                                        UITheme.WithAlpha(HubStyle.TextSecondary, HubStyle.SoonAlpha),
+                                        TextAnchor.UpperLeft);
+            UIBuilder.Box(_idleRate.rectTransform, HubStyle.PanelPadX, -114f, 400f, 22f, new Vector2(0f, 1f));
 
-            _idleRate = UIBuilder.Label("Rate", card, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(_idleRate.rectTransform, 22f, -114f, 400f, 22f, new Vector2(0f, 1f));
-
-            _claimButton = UIBuilder.GoldButton("Claim", card, "CLAIM", UITheme.FontTiny);
+            // Solid warm gold on dark text: the single strongest call to action on the screen.
+            // GoldButton is already exactly that, and is what Continue uses - nothing else on this
+            // screen is allowed to be Gold, so the two of them are the only things wearing it.
+            _claimButton = UIBuilder.GoldButton("Claim", card, "CLAIM", HubStyle.FontLabel);
             UIBuilder.Box(_claimButton.Root, -20f, 22f, 168f, 64f, new Vector2(1f, 0f));
             _claimButton.OnClick(ClaimIdle);
         }
@@ -504,39 +470,59 @@ namespace Emberfall.UI.Screens
             AddBadge(dock, "EVENTS", 8, UITheme.Success, OpenEvents);
         }
 
-        /// <summary>A dock entry: emblem disc, ring, sigil, label. A null action means "not built
-        /// yet" and gets the SOON tag and the shared explanation tap.</summary>
-        private void AddBadge(RectTransform dock, string label, int sigil, Color ring, System.Action action)
+        /// <summary>
+        /// A dock entry: a circular button with a dark fill and a thin warm border, the entry's
+        /// sigil centred in it, and its caption below in a small light warm tone. Every colour,
+        /// weight, inset and font here comes from HubStyle.
+        ///
+        /// The ring is the shared warm border on every entry rather than a per-entry colour, which
+        /// is what makes the row read as one control strip. The entry's own tint moves to the sigil,
+        /// so Relics still reads legendary and Splinters still reads Cinder - the distinction is
+        /// kept, it just stops being the thing that frames the button.
+        ///
+        /// A null action means "not built yet": the whole cell is dimmed through one CanvasGroup and
+        /// takes the same SOON badge the map's locked marker does. Dimming the cell rather than each
+        /// child is what keeps the badge subordinate to the caption at both brightnesses - they
+        /// scale together, so the relative step HubStyle.SoonAlpha sets is preserved.
+        /// </summary>
+        private void AddBadge(RectTransform dock, string label, int sigil, Color tint, System.Action action)
         {
             bool locked = action == null;
 
             RectTransform cell = UIBuilder.Node("Badge" + label, dock);
             UIBuilder.Sized(cell, BadgeCell, BadgeCellHeight);
 
+            if (locked)
+            {
+                CanvasGroup dim = cell.gameObject.AddComponent<CanvasGroup>();
+                dim.alpha = HubStyle.DimAlpha;
+            }
+
             UIButton emblem = UIBuilder.IconButton("Button", cell, "", BadgeSize,
-                                                   UITheme.WithAlpha(HubPanelRaised, locked ? 0.7f : 0.95f),
-                                                   UITheme.TextPrimary);
+                                                   UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha),
+                                                   HubStyle.LabelText);
             UIBuilder.Box(emblem.Root, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
             emblem.OnClick(locked ? NotSoonEnough(label) : action);
 
-            Image rim = UIBuilder.Img("Ring", emblem.Root, TextureLab.Ring(128, 5),
-                                      UITheme.WithAlpha(ring, locked ? 0.45f : 0.9f));
+            Image rim = UIBuilder.Img("Ring", emblem.Root, TextureLab.Ring(128, HubStyle.NavRingThickness),
+                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
             UIBuilder.FillParent(rim.rectTransform, 0f);
 
-            Image glyph = UIBuilder.Img("Glyph", emblem.Root, TextureLab.Sigil(sigil, 64),
-                                        UITheme.WithAlpha(ring, locked ? 0.5f : 1f));
-            UIBuilder.FillParent(glyph.rectTransform, 26f);
+            Image glyph = UIBuilder.Img("Glyph", emblem.Root, TextureLab.Sigil(sigil, 64), tint);
+            UIBuilder.FillParent(glyph.rectTransform, HubStyle.NavGlyphInset);
 
-            // TextPrimary, not ChromeBrass. ChromeBrass earns its place on this dock as the ring and
-            // outline colour; a dock caption is the button's own name, not secondary chrome, and at
-            // FontTiny-4 over a painted plateau the brass sat too close to the stone behind it to
-            // read. The shadow does the separating, not a brighter accent.
-            Text caption = UIBuilder.Label("Label", cell, label, UITheme.FontTiny - 4,
-                                           locked ? UITheme.TextDim : UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(caption.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
+            Text caption = UIBuilder.Label("Label", cell, label, HubStyle.FontCaption,
+                                           HubStyle.LabelText, TextAnchor.UpperCenter);
+            UIBuilder.Box(caption.rectTransform, 0f, -(BadgeSize + HubStyle.NavIconGap), BadgeCell,
+                          HubStyle.NavCaptionHeight, new Vector2(0.5f, 1f));
             UIBuilder.Shadowed(caption, UITheme.InkArt, 1.4f);
 
-            if (locked) AddSoonTag(cell, 0f, -(BadgeSize + 36f), new Vector2(0.5f, 1f));
+            if (locked)
+            {
+                HubStyle.SoonBadge(cell, 0f,
+                                   -(BadgeSize + HubStyle.NavIconGap + HubStyle.NavCaptionHeight + HubStyle.SoonDrop),
+                                   new Vector2(0.5f, 1f));
+            }
         }
 
         /// <summary>
@@ -568,12 +554,20 @@ namespace Emberfall.UI.Screens
         // the Splinters badge, and the shape is still the documented Cinder per the art bible, so
         // restoring the motif is a placement decision rather than a rebuild if it is wanted back.
 
+        /// <summary>
+        /// The options entry, in the same circular language as the dock: dark fill, thin warm
+        /// border, glyph centred. It used to be the one control on the Hub wearing its own tone.
+        /// </summary>
         private void BuildOptions()
         {
             UIButton options = UIBuilder.IconButton("Options", Root, "...", 62f,
-                                                    UITheme.WithAlpha(HubPanelRaised, 0.9f), UITheme.TextMuted);
+                                                    UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha),
+                                                    HubStyle.LabelText);
             UIBuilder.Box(options.Root, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16 + 210f),
                           62f, 62f, new Vector2(1f, 1f));
+            Image rim = UIBuilder.Img("Ring", options.Root, TextureLab.Ring(128, HubStyle.NavRingThickness),
+                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
+            UIBuilder.FillParent(rim.rectTransform, 0f);
             options.OnClick(ShowOptions);
         }
 
@@ -641,9 +635,10 @@ namespace Emberfall.UI.Screens
                     // stand (same convention as the campaign banner strip) and the slot's number,
                     // so the cell promises a fourth and fifth ally rather than apologising
                     Image ring = UIBuilder.Img("Ring", cell, TextureLab.Ring(96, 5),
-                                               UITheme.WithAlpha(UITheme.ChromeBrass, 0.55f));
+                                               UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
                     UIBuilder.Box(ring.rectTransform, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
-                    Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.UpperCenter);
+                    Text hint = UIBuilder.Label("Hint", cell, "SLOT " + (slot + 1), HubStyle.FontCaption,
+                                                HubStyle.TextTertiary, TextAnchor.UpperCenter);
                     UIBuilder.Box(hint.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
                     UIBuilder.Shadowed(hint, UITheme.InkArt, 1.4f);
                     continue;
@@ -665,7 +660,8 @@ namespace Emberfall.UI.Screens
                 int space = shortName.IndexOf(' ');
                 if (space > 0) shortName = shortName.Substring(0, space);
 
-                Text name = UIBuilder.Label("Name", cell, shortName, UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
+                Text name = UIBuilder.Label("Name", cell, shortName, HubStyle.FontCaption,
+                                                    HubStyle.LabelText, TextAnchor.UpperCenter);
                 UIBuilder.Box(name.rectTransform, 0f, -(BadgeSize + 6f), BadgeCell, 24f, new Vector2(0.5f, 1f));
                 UIBuilder.Shadowed(name, UITheme.InkArt, 1.4f);
             }
