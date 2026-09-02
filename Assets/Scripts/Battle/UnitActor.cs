@@ -81,9 +81,23 @@ namespace Emberfall.Battle
 
         // ------------------------------------------------------------------ playback
 
-        public void PlayAttackLunge(Vector3 towards, float speed)
+        /// <summary>
+        /// How far a melee unit travels toward its target and back over one basic attack. Named
+        /// rather than left as a literal inside LungeRoutine because it is now a choice - a ranged
+        /// unit is given 0 instead (see UnitRig.AttacksAtRange), and a magic number that means
+        /// "melee" is worth being able to point at.
+        /// </summary>
+        public const float ApproachDistance = 0.85f;
+
+        /// <summary>
+        /// The fixed-timing lunge, for a unit with no "basic" clip to sync against. Takes distance
+        /// for the same reason the clip-driven overload does - a staff-carrying enemy is ranged
+        /// whether or not anyone has drawn it an attack animation yet - while keeping the 0.10/0.20
+        /// out/back timing here rather than spilling those two literals into BattleScreen.
+        /// </summary>
+        public void PlayAttackLunge(Vector3 towards, float speed, float distance)
         {
-            PlayAttackLunge(towards, 0.10f, 0.20f, speed);
+            PlayAttackLunge(towards, 0.10f, 0.20f, speed, distance);
         }
 
         /// <summary>
@@ -94,21 +108,27 @@ namespace Emberfall.Battle
         /// ImpactFraction - out to reach the target when the strike actually connects, back over
         /// the clip's remaining follow-through - instead of the fixed snap/return every unit
         /// without a SpriteAnimator still gets from the overload above.
+        ///
+        /// distance is how far to travel; ApproachDistance for a melee unit, 0 for one that
+        /// attacks where it stands. Zero is deliberately routed through the SAME routine rather
+        /// than short-circuited past it: the clip playback, the out/back timing and the final
+        /// localPosition reset all still have to happen on the same clock, and the only difference
+        /// worth having between a ranged attack and a melee one is how much ground it covers.
         /// </summary>
-        public void PlayAttackLunge(Vector3 towards, float outSeconds, float backSeconds, float speed)
+        public void PlayAttackLunge(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
         {
             if (!Alive) return;
             if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("basic", false);
-            Restart(LungeRoutine(towards, outSeconds, backSeconds, speed));
+            Restart(LungeRoutine(towards, outSeconds, backSeconds, speed, distance));
         }
 
-        private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed)
+        private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
         {
             Vector3 home = Vector3.zero;
             Vector3 direction = towards - transform.position;
             direction.y = 0f;
             if (direction.sqrMagnitude > 0.001f) direction = direction.normalized;
-            Vector3 forward = direction * 0.85f;
+            Vector3 forward = direction * distance;
 
             yield return Move(home, forward, outSeconds / speed, true);
             yield return Move(forward, home, backSeconds / speed, false);
