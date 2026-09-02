@@ -328,7 +328,7 @@
       "critChance": 0.22, "critDamage": 1.75, "growth": 0.115, "startEnergy": 0,
       "effectHit": 0.08, "effectResist": 0.02,
       "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": 0.508, "spriteFootFraction": 0.24, "spriteMirror": true },
       "basic": {
         "id": "veska_broken_edge", "name": "Broken Edge", "vfx": "slash",
         "description": "Aims for whoever is closest to falling.",
