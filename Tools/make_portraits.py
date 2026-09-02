@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 """Generate head-and-shoulders portraits from the hero idle sheets.
 
-    python Tools/make_portraits.py                  # the 5 heroes with animated sheets
-    python Tools/make_portraits.py --include-singles # + the 6 placeholder single-image heroes
     python Tools/make_portraits.py --dry-run        # measure and report, write nothing
 
 Writes Assets/Resources/Sprites/Units/portrait_<heroid>.png, 256x256 RGBA.
+
+THE TWO COMMANDS THAT PRODUCED THE COMMITTED PORTRAITS, both needed, exactly as written:
+
+    python Tools/make_portraits.py --from-originals
+    python Tools/make_portraits.py --only kalyx_emberwright --include-singles \
+        --center-x 0.42 --crop-frac 0.60 --top 0.075
+
+Portraits are an Ember-hero thing, and the six Ember heroes are NOT the same set as "has an idle
+sheet": kalyx_emberwright is Ember but is still a single-image placeholder, and the automatic
+framing cannot read his art (his warhammer is carried above his head and is larger than it, so it
+captures both the horizontal centroid and the topmost opaque row - see --center-x and --top).
+Running the first command alone leaves his portrait stale; running it with --include-singles
+regenerates his WRONG, centred on the hammer. Hence the second command and its three constants.
 
 Committed rather than left as a throwaway for one specific reason: the script that imported
 Kael's sheets was a one-off too, was never committed, and no longer exists anywhere - every quirk
@@ -153,15 +164,17 @@ def head_centroid_x(mask, bbox):
     return left + weighted / float(total), total
 
 
-def make_portrait(img, bbox, mask):
+def make_portrait(img, bbox, mask, center_x_frac=None, crop_frac=None, top_frac=None):
     left, top, right, bottom = bbox
     bbox_w = right - left
-    side = int(round(bbox_w * CROP_FRAC))
+    side = int(round(bbox_w * (crop_frac if crop_frac is not None else CROP_FRAC)))
     cx, band_px = head_centroid_x(mask, bbox)
+    if center_x_frac is not None:
+        cx = center_x_frac * img.width
     headroom = int(round(side * HEADROOM_FRAC))
 
     crop_left = int(round(cx - side / 2.0))
-    crop_top = top - headroom
+    crop_top = int(round(top_frac * img.height)) if top_frac is not None else top - headroom
     box = (crop_left, crop_top, crop_left + side, crop_top + side)
 
     # Pad rather than clamp: keep the head where the centroid put it.
@@ -182,7 +195,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--include-singles", action="store_true",
                     help="also do the placeholder heroes that have a single image and no sheet")
+    ap.add_argument("--only", action="append", metavar="HERO_ID",
+                    help="restrict to these hero ids (repeatable). Portraits are an Ember-hero "
+                         "thing, and Ember is not the same set as 'has an idle sheet' - "
+                         "kalyx_emberwright is Ember but is still a single-image placeholder.")
     ap.add_argument("--dry-run", action="store_true", help="measure and report, write nothing")
+    ap.add_argument("--crop-frac", type=float, metavar="FRAC",
+                    help="override the crop side, as a fraction of bbox width (default %.2f). The "
+                         "default suits a figure drawn small in a tall frame, as the sheet heroes "
+                         "are; a placeholder that fills its canvas needs more." % CROP_FRAC)
+    ap.add_argument("--top", type=float, metavar="FRAC",
+                    help="override the crop top, as a fraction of frame height, when the topmost "
+                         "opaque row is a prop rather than the head.")
+    ap.add_argument("--center-x", type=float, metavar="FRAC",
+                    help="override the horizontal centre, as a fraction of frame width, when the "
+                         "top-band centroid finds the wrong thing. It tracks opaque MASS, not a "
+                         "face, so a prop carried above shoulder height and larger than the head "
+                         "wins: kalyx_emberwright's warhammer put his crop on the hammer. Use with "
+                         "--only, since the right value is per-hero.")
     ap.add_argument("--from-originals", action="store_true",
                     help="crop from the 720x1280 exports in Assets/_Incoming where they still "
                          "exist (everyone but Kael), for a sharp portrait instead of a 2.2x upscale")
@@ -202,6 +232,8 @@ def main():
 
     written = 0
     for hero_id, sprite_id in hero_sprites():
+        if args.only and hero_id not in args.only:
+            continue
         img = None
         if args.from_originals:
             img, sheet_size, frame_size = original_idle_frame(hero_id)
@@ -221,7 +253,7 @@ def main():
             print("%-26s %s" % (hero_id, "frame 0 is fully transparent"))
             continue
 
-        portrait, side, cx, band_px, pad, box = make_portrait(img, bbox, mask)
+        portrait, side, cx, band_px, pad, box = make_portrait(img, bbox, mask, args.center_x, args.crop_frac, args.top)
         scale = OUT_SIZE / float(side)
         note = ""
         if any(pad):
