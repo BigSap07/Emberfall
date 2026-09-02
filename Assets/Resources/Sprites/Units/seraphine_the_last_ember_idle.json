@@ -1,0 +1,29 @@
+{
+    "generatedBy":  "Sorceress Sprite Analyzer",
+    "importedBy":  "Tools/import-sprite-sheets.ps1",
+    "sprite":  "seraphine_the_last_ember_idle",
+    "image":  "seraphine_the_last_ember_idle.png",
+    "frameWidth":  288,
+    "frameHeight":  512,
+    "sheet":  {
+                  "cols":  8,
+                  "rows":  8,
+                  "frames":  59,
+                  "imageWidth":  2304,
+                  "imageHeight":  4096
+              },
+    "defaultAnimation":  {
+                             "start":  0,
+                             "end":  58,
+                             "fps":  30,
+                             "loop":  true
+                         },
+    "sourceSheet":  "seraphine_idle_mp4_sheet.png",
+    "downscaleNote":  "Frames resampled 720x1280 -\u003e 288x512, one frame at a time. The source sheet was 5760x10240, past the 8192 maxTextureSize Kael\u0027s sheets import at; Unity would have rescaled it non-uniformly and sheared the frame grid.",
+    "contentBox":  {
+                       "topPx":  120,
+                       "bottomPx":  391,
+                       "footFraction":  0.2344,
+                       "bodyFraction":  0.5293
+                   }
+}

@@ -52,9 +52,11 @@
 #    existing .meta is never overwritten: its guid is the asset's identity and clobbering it breaks
 #    every reference to the sprite.
 #
-# 6. MARROW HAS A 721x1280 SHEET. One sheet in one export is 1px wider per frame than the other
-#    six. Frame rects therefore come from each sheet's own manifest frameWidth/frameHeight rather
-#    than from a shared constant; the destination is always exactly 288x512.
+# 6. MARROW HAS A 721x1280 SHEET - on marrow_controlled, which is one of the clips note 1 drops,
+#    so it never actually reaches the resampler. Frame rects are still taken from each sheet's own
+#    manifest frameWidth/frameHeight rather than from a shared constant, because the export
+#    demonstrably does emit off-by-one frame widths and the next one may land on a clip that ships.
+#    The destination is always exactly 288x512 regardless.
 #
 # 7. TRAILING TRANSPARENT FRAMES ARE REAL AND MUST BE TRIMMED. Kael's basic exported 150 frames of
 #    which 145-149 were fully transparent; playing the exported range flashed him invisible for the
