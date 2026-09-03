@@ -663,6 +663,15 @@ namespace Emberfall.UI.Screens
                     UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
                     Vector3 towards = focus != null ? focus.transform.position : (source != null ? source.transform.position : Vector3.zero);
 
+                    // How far this unit travels to make the attack. Melee closes on its target;
+                    // a bow, spellbook, orb or staff attacks from where it stands, which is the
+                    // whole point of carrying one. Applies to both timing branches below and to
+                    // enemies as much as heroes - a staff-carrying caster should not walk its
+                    // spell over either. See UnitRig.AttacksAtRange for why this reads the weapon
+                    // rather than the role.
+                    float approach = source != null && UnitRig.AttacksAtRange(source.Snapshot.Visual.Weapon)
+                        ? 0f : UnitActor.ApproachDistance;
+
                     // A unit with a "basic" clip syncs the lunge and the following Damage event to
                     // ImpactFraction instead of the fixed 0.16s snap below: out to reach the target
                     // when the clip says the strike connects, landing the hit VFX and (by returning
@@ -678,7 +687,7 @@ namespace Emberfall.UI.Screens
                         float impact = clipDuration * source.Rig.Animation.ImpactFraction("basic");
                         float outSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
                         float backSeconds = clipDuration - outSeconds;
-                        source.PlayAttackLunge(towards, outSeconds, backSeconds, _speed);
+                        source.PlayAttackLunge(towards, outSeconds, backSeconds, _speed, approach);
                         yield return Wait(outSeconds);
                         for (int t = 0; t < targetIds.Count; t++)
                         {
@@ -689,7 +698,7 @@ namespace Emberfall.UI.Screens
                     }
                     else
                     {
-                        if (source != null) source.PlayAttackLunge(towards, _speed);
+                        if (source != null) source.PlayAttackLunge(towards, _speed, approach);
                         yield return Wait(0.16f);
                         if (source != null)
                         {

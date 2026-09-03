@@ -91,6 +91,41 @@ namespace Emberfall.Battle
             }
         }
 
+        /// <summary>
+        /// Whether a unit strikes from where it stands instead of closing on its target. Read by
+        /// BattleScreen's BasicAttack choreography, which otherwise slides EVERY unit
+        /// UnitActor.ApproachDistance toward whoever it is hitting - written when every attack in
+        /// the game was a melee one, and wrong the moment a bow or a spellbook turned up: Orren
+        /// walked his arrow most of the way to the target before firing it.
+        ///
+        /// Keyed off the weapon rather than HeroRole because the role does not carry this.
+        /// Seraphine is a Breaker and so is Kael; she reads from a spellbook at range and he
+        /// swings a greatsword. The weapon is the thing that actually says where the attack
+        /// happens, which is also why BuildWeapon switches on the same field.
+        ///
+        /// Only the approach is removed, never the attack. The clip still plays, the impact still
+        /// lands on ImpactFraction, and the follow-through still defers to _pendingAnimationTail -
+        /// a ranged unit just covers zero distance while doing it, so its choreography stays on
+        /// exactly the same clock as a melee unit's rather than becoming a second timing path.
+        ///
+        /// The default is melee on purpose, matching BuildWeapon's own default arm: an unknown or
+        /// absent weapon keeps the behaviour every unit had before this existed, so a new weapon
+        /// string can only fail toward the old look rather than silently rooting a unit in place.
+        /// </summary>
+        public static bool AttacksAtRange(string weapon)
+        {
+            switch (weapon)
+            {
+                case "bow":
+                case "spellbook":
+                case "orb":
+                case "staff":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         public Material Primary;
         public Material Secondary;
         public Material Accent;

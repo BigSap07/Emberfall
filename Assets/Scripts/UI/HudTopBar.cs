@@ -24,9 +24,10 @@ namespace Emberfall.UI
 
             Image backing = Root.gameObject.AddComponent<Image>();
             backing.sprite = TextureLab.White;
-            backing.color = UITheme.WithAlpha(UITheme.BackdropDeep, 0.92f);
+            backing.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.BarBackingAlpha);
 
-            Image underline = UIBuilder.Img("Underline", Root, TextureLab.White, UITheme.WithAlpha(UITheme.Border, 0.85f));
+            Image underline = UIBuilder.Img("Underline", Root, TextureLab.White,
+                                            UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlpha));
             UIBuilder.Box(underline.rectTransform, 0f, 0f, 0f, 2f, new Vector2(0.5f, 0f));
             underline.rectTransform.anchorMin = new Vector2(0f, 0f);
             underline.rectTransform.anchorMax = new Vector2(1f, 0f);
@@ -36,61 +37,61 @@ namespace Emberfall.UI
             BuildCurrencies();
         }
 
+        /// <summary>
+        /// Rank, name and XP in the same pill language as the currencies rather than as bare text
+        /// beside a raw bar. Same height, same radius, same surface; the level disc mirrors a
+        /// currency pill's icon so the whole bar reads as one row of the same object.
+        ///
+        /// Nothing is dropped: the level number, the "NAME - RANK n" line and the XP fill are all
+        /// still here, just seated on a plate and measured from HubStyle instead of from literals.
+        /// </summary>
         private void BuildRankBlock()
         {
             RectTransform block = UIBuilder.Node("Rank", Root);
-            UIBuilder.Box(block, UITheme.ScreenPadding, -20f, 420f, 92f, new Vector2(0f, 1f));
+            UIBuilder.Box(block, UITheme.ScreenPadding, -(UITheme.TopBarHeight - HubStyle.PillHeight) * 0.5f,
+                          HubStyle.PillRankWidth, HubStyle.PillHeight, new Vector2(0f, 1f));
+            HubStyle.Surface(block, HubStyle.RadiusPill, HubStyle.PlateAlpha,
+                             HubStyle.BorderAlpha, HubStyle.BorderWeight);
 
             RectTransform badge = UIBuilder.Node("Badge", block);
-            UIBuilder.Box(badge, 0f, 0f, 84f, 84f, new Vector2(0f, 0.5f));
-            badge.anchoredPosition = new Vector2(0f, 0f);
+            UIBuilder.Box(badge, HubStyle.PillPadX, 0f, HubStyle.PillIcon, HubStyle.PillIcon, new Vector2(0f, 0.5f));
             Image badgeFill = badge.gameObject.AddComponent<Image>();
             badgeFill.sprite = TextureLab.Circle(128);
-            badgeFill.color = UITheme.PanelRaised;
-            Image badgeRing = UIBuilder.Img("Ring", badge, TextureLab.Ring(128, 8), UITheme.Gold);
-            UIBuilder.FillParent(badgeRing.rectTransform, 0f);
+            badgeFill.color = HubStyle.ValueGold;
+            badgeFill.raycastTarget = false;
 
-            _rankText = UIBuilder.Label("Level", badge, "1", 38, UITheme.Gold, TextAnchor.MiddleCenter);
+            _rankText = UIBuilder.Label("Level", badge, "1", HubStyle.FontRankValue,
+                                        UITheme.TextOnAccent, TextAnchor.MiddleCenter);
             UIBuilder.FillParent(_rankText.rectTransform, 0f);
 
-            _nameText = UIBuilder.Label("Name", block, "WAYFARER", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.LowerLeft);
-            UIBuilder.Box(_nameText.rectTransform, 100f, -12f, 300f, 30f, new Vector2(0f, 1f));
+            float textLeft = HubStyle.PillPadX + HubStyle.PillIcon + HubStyle.PillGapIconToValue;
+            float textWidth = HubStyle.PillRankWidth - textLeft - HubStyle.PillPadX;
 
-            _xpFill = UIBuilder.Bar("XpBar", block, UITheme.PanelSunken, UITheme.Shard);
+            _nameText = UIBuilder.Label("Name", block, "WAYFARER", HubStyle.FontCaption,
+                                        HubStyle.TextSecondary, TextAnchor.LowerLeft);
+            UIBuilder.Box(_nameText.rectTransform, textLeft, -HubStyle.PillPadY, textWidth, 24f, new Vector2(0f, 1f));
+
+            _xpFill = UIBuilder.Bar("XpBar", block, UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid),
+                                    HubStyle.ValueGold);
             RectTransform xpRoot = _xpFill.rectTransform.parent as RectTransform;
-            UIBuilder.Box(xpRoot, 100f, 16f, 260f, 16f, new Vector2(0f, 0f));
+            UIBuilder.Box(xpRoot, textLeft, HubStyle.PillPadY, textWidth, 10f, new Vector2(0f, 0f));
         }
 
+        /// <summary>
+        /// The three currencies, each a HubStyle pill. Same height, same horizontal padding, same
+        /// surface and the same gold value tone; only the icon tint tells them apart. Spacing is
+        /// derived from the shared pill width rather than from three hand-placed offsets, which is
+        /// what the -440/-220/0 literals here used to be.
+        /// </summary>
         private void BuildCurrencies()
         {
-            _dustText  = BuildCurrencyChip("Dust",   -UITheme.ScreenPadding - 440f, UITheme.Dust, "D");
-            _goldText  = BuildCurrencyChip("Gold",   -UITheme.ScreenPadding - 220f, UITheme.Gold,  "G");
-            _shardText = BuildCurrencyChip("Shards", -UITheme.ScreenPadding,        UITheme.Shard, "S");
-        }
-
-        private Text BuildCurrencyChip(string name, float x, Color tint, string glyph)
-        {
-            RectTransform chip = UIBuilder.Node(name, Root);
-            UIBuilder.Box(chip, x, -24f, 210f, 62f, new Vector2(1f, 1f));
-
-            Image background = chip.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(18);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
-            UIBuilder.Frame("Edge", chip, UITheme.WithAlpha(tint, 0.45f), 18, 2);
-
-            RectTransform icon = UIBuilder.Node("Icon", chip);
-            UIBuilder.Box(icon, 8f, 0f, 44f, 44f, new Vector2(0f, 0.5f));
-            Image iconFill = icon.gameObject.AddComponent<Image>();
-            iconFill.sprite = TextureLab.Circle(96);
-            iconFill.color = UITheme.WithAlpha(tint, 0.9f);
-            iconFill.raycastTarget = false;
-            Text iconGlyph = UIBuilder.Label("Glyph", icon, glyph, 26, UITheme.BackdropDeep, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(iconGlyph.rectTransform, 0f);
-
-            Text value = UIBuilder.Label("Value", chip, "0", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleRight);
-            UIBuilder.Box(value.rectTransform, -14f, 0f, 140f, 44f, new Vector2(1f, 0.5f));
-            return value;
+            float step = HubStyle.PillCurrencyWidth + UITheme.Space12;
+            _dustText  = HubStyle.Pill("Dust",   Root, -UITheme.ScreenPadding - step * 2f,
+                                       HubStyle.PillCurrencyWidth, UITheme.Dust,  "D");
+            _goldText  = HubStyle.Pill("Gold",   Root, -UITheme.ScreenPadding - step,
+                                       HubStyle.PillCurrencyWidth, UITheme.Gold,  "G");
+            _shardText = HubStyle.Pill("Shards", Root, -UITheme.ScreenPadding,
+                                       HubStyle.PillCurrencyWidth, UITheme.Shard, "S");
         }
 
         public void Refresh(GameSession session)

@@ -259,7 +259,7 @@
       "critChance": 0.12, "critDamage": 1.60, "growth": 0.115, "startEnergy": 0,
       "effectHit": 0.15, "effectResist": 0.05,
       "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "6B3430", "secondary": "29282D", "accent": "D39A62", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.02, "sigil": null, "sprite": "seraphine_the_last_ember", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "visual": { "primary": "6B3430", "secondary": "29282D", "accent": "D39A62", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.02, "sigil": null, "sprite": "seraphine_the_last_ember", "spriteBodyFraction": 0.529, "spriteFootFraction": 0.234, "spriteMirror": true },
       "basic": {
         "id": "seraphine_ember_script", "name": "Ember Script", "vfx": "bolt",
         "description": "A line of fire written straight into the nearest foe.",
@@ -297,7 +297,7 @@
       "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 15,
       "effectHit": 0.05, "effectResist": 0.15,
       "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "583B36", "secondary": "25272A", "accent": "C99A6B", "silhouette": "humanoid", "weapon": "warhammer", "scale": 1.05, "sigil": null, "sprite": "marrow_the_burning_vow", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "visual": { "primary": "583B36", "secondary": "25272A", "accent": "C99A6B", "silhouette": "humanoid", "weapon": "warhammer", "scale": 1.05, "sigil": null, "sprite": "marrow_the_burning_vow", "spriteBodyFraction": 0.535, "spriteFootFraction": 0.23, "spriteMirror": true },
       "basic": {
         "id": "marrow_burning_prayer", "name": "Burning Prayer", "vfx": "slash",
         "description": "A blow that costs him as much as it costs his enemy.",
@@ -335,7 +335,7 @@
       "critChance": 0.22, "critDamage": 1.75, "growth": 0.115, "startEnergy": 0,
       "effectHit": 0.08, "effectResist": 0.02,
       "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": 0.508, "spriteFootFraction": 0.24, "spriteMirror": true },
       "basic": {
         "id": "veska_broken_edge", "name": "Broken Edge", "vfx": "slash",
         "description": "Aims for whoever is closest to falling.",
@@ -370,7 +370,7 @@
       "critChance": 0.15, "critDamage": 1.65, "growth": 0.115, "startEnergy": 5,
       "effectHit": 0.10, "effectResist": 0.05,
       "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "49322E", "secondary": "25282A", "accent": "B8895E", "silhouette": "humanoid", "weapon": "bow", "scale": 1.01, "sigil": null, "sprite": "orren_the_cinder_hunter", "spriteBodyFraction": null, "spriteFootFraction": null, "spriteMirror": true },
+      "visual": { "primary": "49322E", "secondary": "25282A", "accent": "B8895E", "silhouette": "humanoid", "weapon": "bow", "scale": 1.01, "sigil": null, "sprite": "orren_the_cinder_hunter", "spriteBodyFraction": 0.553, "spriteFootFraction": 0.221, "spriteMirror": true },
       "basic": {
         "id": "orren_marked_shot", "name": "Marked Shot", "vfx": "bolt",
         "description": "A shot aimed to open the wound wider.",
