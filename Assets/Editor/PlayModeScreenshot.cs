@@ -68,7 +68,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV4-force-gameview-repaint";
+        private const string BuildMarker = "FIXV6-generic-screen-targets";
 
         static PlayModeScreenshot()
         {
@@ -99,6 +99,43 @@ namespace Emberfall.EditorTools
         {
             Begin("Recital");
         }
+
+        // ------------------------------------------------------------------ generic screen targets
+        // Seven screens, one code path. Each of these is a plain "show this screen and photograph
+        // it" capture, which is all six of them need - unlike Events and Recital above, which have
+        // to seed state first, and unlike Battle, which has to be handed a stage before it will
+        // build a world.
+        //
+        // Added as menu items rather than only as trigger-file targets because the trigger route
+        // depends on this process winning OS focus for Unity, which it has repeatedly failed to do
+        // from a non-interactive shell. A menu item needs no focus fight: a human clicks it.
+
+        [MenuItem("Emberfall/Capture/Hub (MainMenu)", false, 60)]
+        public static void CaptureHubScreen() { Begin("Screen:MainMenu"); }
+
+        [MenuItem("Emberfall/Capture/Heroes", false, 61)]
+        public static void CaptureHeroes() { Begin("Screen:Heroes"); }
+
+        [MenuItem("Emberfall/Capture/Summon", false, 62)]
+        public static void CaptureSummon() { Begin("Screen:Summon"); }
+
+        [MenuItem("Emberfall/Capture/Inventory", false, 63)]
+        public static void CaptureInventory() { Begin("Screen:Inventory"); }
+
+        [MenuItem("Emberfall/Capture/Relic Shop", false, 64)]
+        public static void CaptureRelicShop() { Begin("Screen:RelicShop"); }
+
+        [MenuItem("Emberfall/Capture/Events screen", false, 65)]
+        public static void CaptureEventsScreen() { Begin("Screen:Events"); }
+
+        [MenuItem("Emberfall/Capture/Recital screen", false, 66)]
+        public static void CaptureRecitalScreen() { Begin("Screen:Recital"); }
+
+        [MenuItem("Emberfall/Capture/Battle (live combat)", false, 67)]
+        public static void CaptureBattleScreen() { Begin("Screen:Battle"); }
+
+        [MenuItem("Emberfall/Capture/ALL of the above, in sequence", false, 80)]
+        public static void CaptureAllScreens() { Begin("Screen:ALL"); }
 
         private static void Begin(string target)
         {
@@ -143,6 +180,7 @@ namespace Emberfall.EditorTools
             string target = SessionState.GetString(TargetKey, "Events");
 
             if (target == "Recital") PumpRecital(frame);
+            else if (target.StartsWith("Screen:")) PumpScreen(frame, target.Substring(7));
             else PumpEvents(frame);
         }
 
@@ -234,6 +272,85 @@ namespace Emberfall.EditorTools
         /// BattleScreen.OnShow use (TryStartRecitalAttempt, SetRecitalFloor, Show(Battle)), so this
         /// is the real pipeline, not a shortcut around it.
         /// </summary>
+        /// <summary>
+        /// Every screen this project has, captured through one path: show it, let the canvas settle,
+        /// photograph it, move on. "ALL" walks the whole list in one Play Mode session, which is the
+        /// only way to get a comparable before/after set - eight separate sessions means eight
+        /// separate domain reloads and eight chances for something to differ between shots.
+        ///
+        /// Battle is the one screen that needs more than Show(): BattleScreen.OnShow builds a 3D
+        /// world and runs a simulation, so it is handed the player's next stage first and given the
+        /// same long settle PumpRecital documents - BuildWorld and RunSimulation do not finish
+        /// painting in the frame Show is called on, and an early capture catches solid black.
+        ///
+        /// Writes Tools/Screenshots/screen_{name}.png, one per screen.
+        /// </summary>
+        private static void PumpScreen(int frame, string which)
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null)
+            {
+                if (frame > 300) { Debug.LogError("PlayModeScreenshot: GameApp.Instance never appeared."); Stop(); }
+                return;
+            }
+
+            string[] all = { "MainMenu", "Heroes", "Summon", "Inventory", "RelicShop", "Events", "Recital", "Battle" };
+            string[] list = which == "ALL" ? all : new string[] { which };
+
+            // Per screen: show at (index * Step), capture at (index * Step + Settle). Battle gets a
+            // longer settle for the reason above, so the schedule is walked rather than computed.
+            const int Step = 130;
+            const int Settle = 90;
+
+            int slot = SessionState.GetInt(StageKey, 0);
+            if (slot >= list.Length)
+            {
+                if (frame > slot * Step + Settle + 40) { Debug.Log("PlayModeScreenshot: screen captures done."); Stop(); }
+                return;
+            }
+
+            string name = list[slot];
+            int showAt = 10 + slot * Step;
+            int shotAt = showAt + Settle;
+
+            if (frame == showAt)
+            {
+                ScreenId id = ScreenId.MainMenu;
+                switch (name)
+                {
+                    case "Heroes": id = ScreenId.Heroes; break;
+                    case "Summon": id = ScreenId.Summon; break;
+                    case "Inventory": id = ScreenId.Inventory; break;
+                    case "RelicShop": id = ScreenId.RelicShop; break;
+                    case "Events": id = ScreenId.Events; break;
+                    case "Recital": id = ScreenId.Recital; break;
+                    case "Battle": id = ScreenId.Battle; break;
+                }
+                if (name == "Battle")
+                {
+                    StageDef next = app.Session.NextStage;
+                    if (next == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: no campaign stage to fight, skipping Battle.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.Battle.SetStage(next);
+                }
+                app.Router.Show(id);
+                Debug.Log("PlayModeScreenshot: showing " + name);
+            }
+
+            if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
+
+            if (frame == shotAt)
+            {
+                ScreenCapture.CaptureScreenshot(OutputPath("screen_" + name + ".png"), 1);
+                Debug.Log("PlayModeScreenshot: requested screen_" + name + ".png");
+                SessionState.SetInt(StageKey, slot + 1);
+            }
+        }
+
         private static void PumpRecital(int frame)
         {
             int stage = SessionState.GetInt(StageKey, 0);
