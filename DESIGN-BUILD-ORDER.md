@@ -959,6 +959,48 @@ confirmed green on CI on `main` after the merge.
     that curve exactly and got level 101 on 2-11. That is a `recommendedPower` problem for whoever
     picks it up, deliberately left alone here per this task's own scope.
 
+    **A second thing this pass could not have known, found 2026-09-04.** Every number in the table
+    above was computed by a line wearing NO ARMOR, and nobody noticed for the same reason task 13's
+    instrument was broken before it: armor shipped after these instruments were written and nothing
+    connected the two. `CheckStageWinnability` and `CheckPinnedFiveBodyCurve` build profiles through
+    `CreateNewProfile`, which grants none. `RunCampaignBalancePass` actually EARNS pieces -
+    `GrantBattleResult` rolls a drop and `RollArmorDrop` adds it to `OwnedArmor` - but never equipped
+    any, and `StatMath.ApplyArmor` reads a hero's EQUIPPED uids, so it was an exact no-op there too.
+
+    The `ARMOR DELTA` section now printed beside the five-body curve is the size of it: **sixteen of
+    twenty-four stages go from losable to a flat 100%** once the same line wears median drops. Worst
+    are 1-12 (41.7% to 100%), 1-10 and 2-9 (54.2% to 100%) and 2-7 (58.3% to 100%).
+
+    **A retune against that was attempted, six measured passes, and abandoned deliberately.** The
+    finding is that no setting of enemy level or composition satisfies both columns:
+
+    - **+1 enemy level** costs the unarmored line **8 to 42 points** of win rate and costs the
+      armored line **zero**, on every stage tested. That is the whole problem in one number.
+    - **+3 levels** puts chapter 1's unarmored column at 0% while the armored column is still 100%.
+      The two never overlap.
+    - **+8 levels with AoE swaps** finally moves the armored column (1-12 to 20.8%), but the
+      unarmored line has been unwinnable for five levels by then and three checks fail, including
+      "a normal player can clear the whole campaign".
+
+    The unarmored line's entire range, 100% to 0%, spans about three enemy levels - and all three
+    fit inside the armored line's margin without moving it once. This is consistent with the
+    twenty-points-per-level sensitivity measured above; armor simply buys more than the whole band.
+
+    **The root cause is `recommendedPower`, and it is the same problem this entry already flags one
+    paragraph up.** `HeroInstance.Stats` is `StatMath.ForHero(Def, Level)` - no relic, no armor - so
+    `TeamPower()` is BARE power and `recommendedPower` is a bare-power target. A line pinned to it
+    *and* geared is over-geared for its own stage by construction, which is why it reads 100%
+    everywhere. Nothing in content can separate the two lines, because gear is a straight power
+    increase and no enemy lever hits a geared team harder than an ungeared one.
+
+    Two defects were found on the way and are recorded rather than fixed:
+    - **`ch1_12`'s composition is load-bearing for two other checks** - `db.GetStage("ch1_12")` feeds
+      the Umbra two-sided rule and `MeasureStageDelta` feeds the Lumen relabel check. Its level is
+      adjustable; its enemy list is not.
+    - **`ch2_12`'s boss is authored below its own minions** - `tideturned` at level 32 against adds
+      at 41 to 47, which is why the throne reads easier than 2-11. Raising it alone to 48 drove the
+      stage to 0% on both the unarmored and the economy columns.
+
     Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b - all done. Blocks: nothing.
 
 Task 13 is the only step that produces a valid win-rate table, and it has now been run. The
