@@ -142,6 +142,15 @@ namespace Emberfall.UI.Screens
         /// a hero has not filled is information rather than absence, and a list that only showed
         /// what was worn would hide the six-slot shape from a player who owns two pieces.
         /// </summary>
+        /// <summary>Routes to the Inventory, which owns every equip action in the game. Shows the
+        /// screen and nothing else - no state is set and no piece is chosen here, because choosing
+        /// is what the screen being opened is for.</summary>
+        private void OpenInventory()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Inventory);
+        }
+
         private void BuildArmorCard(RectTransform parent)
         {
             int slots = ArmorInfo.AllSlots.Length;
@@ -157,6 +166,32 @@ namespace Emberfall.UI.Screens
             Text heading = UIBuilder.Label("Heading", _armorCard, "ARMOR",
                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             UIBuilder.Box(heading.rectTransform, 26f, -20f, 300f, 26f, new Vector2(0f, 1f));
+
+            // The one way to ACT on the six rows below, and deliberately only a route to it.
+            //
+            // This card shows a hero's armor including the slots they have not filled, which is
+            // information a player wants to do something about - and until this button there was
+            // nothing to do it with. Equipping lives in InventoryScreen and is item-first: tap a
+            // piece, EQUIP, pick a hero. Reachable only from the Hub's BAG badge, which meant a
+            // player looking at an empty Helm here had to know to leave, open a different screen,
+            // and find the piece from the other end.
+            //
+            // A NAVIGATION button, not an equip control, and that distinction is the whole reason
+            // this card stays read-only: equipping in two places means two screens that can
+            // disagree about what is worn. This adds a door, not a second workshop.
+            //
+            // Labelled for the destination rather than the verb alone. "BAG" is what the Hub's own
+            // dock calls Inventory, so the button names the place the player is going, and "EQUIP"
+            // says why - a button reading only EQUIP on a read-only card would promise exactly the
+            // thing this card refuses to do.
+            //
+            // Top-right of this card rather than with the level-up controls at the bottom of the
+            // screen, so it groups with the rows it concerns instead of joining the pile of actions
+            // that act on the hero itself. Always enabled: with empty slots it is the obvious next
+            // step, and with full ones it is still how a piece gets swapped.
+            UIButton openBag = UIBuilder.SecondaryButton("OpenBag", _armorCard, "EQUIP IN BAG", UITheme.FontTiny);
+            UIBuilder.Box(openBag.Root, -26f, -14f, 230f, 38f, new Vector2(1f, 1f));
+            openBag.OnClick(OpenInventory);
 
             _armorSlotLabels = new Text[slots];
             _armorSlotValues = new Text[slots];
