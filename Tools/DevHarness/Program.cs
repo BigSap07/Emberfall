@@ -67,6 +67,7 @@ namespace Emberfall.DevHarness
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckPinnedFiveBodyCurve(content);
+            CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
             PrintInstrumentComparison();
@@ -3676,6 +3677,128 @@ namespace Emberfall.DevHarness
             return ok ? db : null;
         }
 
+        /// <summary>
+        /// WHAT "REASONABLE ARMOR" MEANS FOR A BALANCE INSTRUMENT, and why this answer.
+        ///
+        /// Every balance instrument in this file ran with no armor at all until this existed, so
+        /// every win rate task 13 produced - and every number in its tables - was computed against
+        /// a line wearing nothing. That was not a decision anyone made; armor shipped after those
+        /// instruments were written and nothing connected the two. StatMath.ApplyArmor reads a
+        /// hero's EQUIPPED uids, so a profile that owns pieces but wears none is still an exact
+        /// no-op, which is why this had to be fixed by equipping rather than by granting.
+        ///
+        /// The choice of WHICH armor changes what the resulting win rates mean, so it is stated
+        /// here rather than left in the numbers:
+        ///
+        ///   full RADIANT would measure the CEILING. Radiant exists only through the Forge, at
+        ///     three Gilded per Radiant and three Honed per Gilded - nine Honed drops for one
+        ///     Radiant piece, fifty-four for a full set on one hero. That is a dedicated player's
+        ///     grind, not a campaign player's kit, and an instrument built on it would report the
+        ///     campaign as easier than almost anyone experiences it.
+        ///
+        ///   an AVERAGE roll would need an average of what. Temper weight varies by stage index,
+        ///     substat count varies by temper, and the roll itself is random - "average" would be
+        ///     a number nobody could point at afterwards and a curve that moved when armor.json did.
+        ///
+        ///   full HONED was tried first and is WRONG, and the harness said so rather than a review
+        ///     catching it. Honed is the best temper a drop can produce, so a full Honed set is a
+        ///     best case, not a median - and it took the pinned five-body curve to 100% on all
+        ///     twenty-four stages, tripping the "curve still discriminates" check. An instrument
+        ///     that reports every stage as identical measures nothing. That result is kept in the
+        ///     report below because it is a real finding about the content, not just a rejected
+        ///     option: a full Honed set at recommendedPower trivialises the entire campaign.
+        ///
+        ///   DROP-WEIGHTED temper is what this uses. Every slot is filled, and each piece's temper
+        ///     is drawn from ArmorRoller.RollTemper against the stage's own GlobalIndex - the exact
+        ///     function and the exact weights a real drop uses (Rough 55, Honed 30, deepening with
+        ///     stage index). So the set is "six slots filled with what this stage actually drops",
+        ///     which is the median player rather than the lucky one or the Forge grinder.
+        ///
+        ///     Six filled slots is still generous: at a 0.45 drop chance across six slots a real
+        ///     player has gaps. It is deliberately the optimistic end of typical, so the instrument
+        ///     errs toward reporting the game as EASIER than a median player finds it - a curve
+        ///     that overstates difficulty is the more dangerous error for a tuning instrument.
+        ///
+        /// Deterministic and fixed, not rolled per run. These two instruments are CONTROLLED
+        /// yardsticks - CheckStageWinnability levels a team to each stage's recommendedPower and
+        /// CheckPinnedFiveBodyCurve pins five bodies to it - and the whole point of a controlled
+        /// yardstick is that exactly one thing varies, the stage. Random armor would add a second
+        /// source of movement to instruments whose value is that they have none.
+        ///
+        /// RunCampaignBalancePass deliberately does NOT use this. It is the one instrument that
+        /// simulates a real progressing player, it already earns real pieces through
+        /// GrantBattleResult's own drop roll, and the honest fix there is to equip what it earned
+        /// rather than to hand it a synthetic set. See EquipBestOwnedArmor.
+        /// </summary>
+        private static void EquipInstrumentArmor(ContentDatabase db, GameSession session, StageDef stage)
+        {
+            if (db.Armor == null || !db.Armor.IsUsable) return;
+            PlayerProfile profile = session.Profile;
+            int stageIndex = stage != null ? stage.GlobalIndex : 0;
+            int seed = 990000 + stageIndex * 7919;
+            for (int h = 0; h < profile.Heroes.Count; h++)
+            {
+                HeroInstance hero = profile.Heroes[h];
+                HeroDef def = db.GetHero(hero.DefId);
+                for (int s2 = 0; s2 < ArmorInfo.AllSlots.Length; s2++)
+                {
+                    ArmorSlot slot = ArmorInfo.AllSlots[s2];
+                    // Aspect matched to the wearer, so attunement (DESIGN-ARMOR section 6) is
+                    // actually exercised rather than silently sitting at zero matching pieces. A
+                    // mismatched set would understate geared power by skipping a whole subsystem.
+                    Aspect aspect = def != null ? def.Aspect : Aspect.Ember;
+                    // The real drop distribution at this stage's depth, through the real function -
+                    // not a temper this method picked. If armor.json's weights move, the instrument
+                    // moves with them instead of quietly measuring a distribution nobody authors.
+                    ArmorTemper temper = ArmorRoller.RollTemper(db.Armor, stageIndex, seed + 51);
+                    ArmorPiece piece = ArmorRoller.Roll(db.Armor, slot, temper, aspect, seed++);
+                    if (piece == null) continue;
+                    piece.Uid = profile.AllocateArmorUid();
+                    profile.OwnedArmor.Add(piece);
+                    session.EquipArmor(hero, piece.Uid);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Equips the best piece the profile actually OWNS in each slot, for every hero on the
+        /// team. Used only by RunCampaignBalancePass, which earns its armor the real way -
+        /// GrantBattleResult rolls a drop on every uncapped clear and RollArmorDrop adds it to
+        /// OwnedArmor - and then, before this, never wore any of it.
+        ///
+        /// Best is by temper, then by the piece's own primary magnitude. Deliberately simple: this
+        /// models a player who equips upgrades as they find them, not one who solves an optimisation
+        /// problem across substats. A smarter chooser would report a stronger player than the median
+        /// and would make the instrument's numbers depend on the chooser rather than on the content.
+        /// </summary>
+        private static void EquipBestOwnedArmor(ContentDatabase db, GameSession session)
+        {
+            PlayerProfile profile = session.Profile;
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++)
+            {
+                HeroInstance hero = team[i];
+                for (int s2 = 0; s2 < ArmorInfo.AllSlots.Length; s2++)
+                {
+                    ArmorSlot slot = ArmorInfo.AllSlots[s2];
+                    ArmorPiece best = null;
+                    for (int a = 0; a < profile.OwnedArmor.Count; a++)
+                    {
+                        ArmorPiece piece = profile.OwnedArmor[a];
+                        if (piece.Slot != slot) continue;
+                        // Skip anything another hero is already wearing.
+                        HeroInstance wearer = profile.HeroWearingArmor(piece.Uid);
+                        if (wearer != null && wearer != hero) continue;
+                        if (best == null) { best = piece; continue; }
+                        if ((int)piece.Temper > (int)best.Temper) best = piece;
+                        else if (piece.Temper == best.Temper && piece.Primary != null && best.Primary != null
+                                 && piece.Primary.Value > best.Primary.Value) best = piece;
+                    }
+                    if (best != null) session.EquipArmor(hero, best.Uid);
+                }
+            }
+        }
+
         private static string BattleFingerprint(GameSession session, StageDef stage, int seed)
         {
             return FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(stage, seed)));
@@ -7050,6 +7173,14 @@ namespace Emberfall.DevHarness
                     guard++;
                 }
 
+                // Armor AFTER levelling, never before. The loop above targets TeamPower(), which is
+                // HeroInstance.Stats -> StatMath.ForHero(Def, Level) - bare level power, with no
+                // relic and no armor in it. Equipping first would not change how far it levels
+                // (TeamPower cannot see armor), so the only thing placement changes is clarity:
+                // this way the team is levelled to exactly the same number it always was, and the
+                // armor is visibly the one new variable.
+                EquipInstrumentArmor(db, session, stage);
+
                 int wins = 0;
                 float bestEnemyHpRatio = 1f;
                 const int Samples = 20;
@@ -7193,6 +7324,20 @@ namespace Emberfall.DevHarness
                     guard++;
                 }
 
+                // DELIBERATELY UNARMORED, and here that is a decision rather than an oversight.
+                // See CheckArmoredCurveDelta below, which runs this exact line WITH armor and
+                // reports the difference.
+                //
+                // Arming it directly was tried and it destroys the instrument: six filled slots
+                // takes all twenty-four stages to 100%, tripping this method's own "curve still
+                // discriminates" check, because a flat curve measures nothing. That is not a bad
+                // armor choice - drop-weighted Rough/Honed does it as surely as full Honed - it is
+                // what the content does when a line pinned to recommendedPower wears anything.
+                //
+                // So this stays the unarmored yardstick: continuous with task 13's own 24-stage
+                // table, still able to discriminate, still the thing a retune is measured against.
+                // The armored numbers are reported beside it rather than replacing it, so the gap
+                // is visible without the yardstick being thrown away to show it.
                 bool atFloor = stage.RecommendedPower <= floorPower;
                 if (atFloor) floorRows++;
 
@@ -7299,8 +7444,119 @@ namespace Emberfall.DevHarness
 
         // ---------------------------------------------------------------- balance pass
 
+        /// <summary>
+        /// THE ARMOR GAP, measured. The same pinned five-body line CheckPinnedFiveBodyCurve
+        /// measures, at the same levels against the same stages, but wearing armor - and the
+        /// difference between the two columns is how blind every balance number in this project
+        /// was to a system that shipped after these instruments were written.
+        ///
+        /// Reported rather than asserted, on purpose. There is no threshold here anyone could
+        /// defend yet: whether a geared line SHOULD clear a stage its unarmored twin loses is a
+        /// content decision, not a correctness one. What this does is make the number exist, so
+        /// that decision gets made against evidence instead of against an argument.
+        ///
+        /// Armor model: every slot filled, temper drawn from ArmorRoller.RollTemper against the
+        /// stage's own GlobalIndex - the real function at the real weights - and aspect matched to
+        /// the wearer so attunement is exercised rather than sitting at zero matching pieces.
+        /// That is the median player, not the Forge grinder: Gilded and Radiant cannot drop at all
+        /// (ArmorInfo.MaxDropTemper) and are deliberately not modelled.
+        /// </summary>
+        private static void CheckArmoredCurveDelta(ContentDatabase db)
+        {
+            Line("");
+            Line("ARMOR DELTA (the pinned five-body line, unarmored vs wearing typical drops)");
+            if (db.Armor == null || !db.Armor.IsUsable)
+            {
+                Line("  armor.json is not loaded or not usable - nothing to compare.");
+                Line("");
+                return;
+            }
+
+            const int Samples = 24;
+            Line("  stage  name                          recPwr  unarmored    armored      delta");
+            int flattened = 0;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                float bare = PinnedLineWinRate(db, stage, Samples, false);
+                float armored = PinnedLineWinRate(db, stage, Samples, true);
+                if (bare < 0.999f && armored > 0.999f) flattened++;
+                Line("  " + stage.DisplayCode.PadRight(6)
+                     + " " + Trim(stage.Name, 26).PadRight(28)
+                     + stage.RecommendedPower.ToString().PadLeft(6)
+                     + Pct(bare).PadLeft(11)
+                     + Pct(armored).PadLeft(11)
+                     + ("+" + Pct(armored - bare)).PadLeft(11));
+            }
+            Line("");
+            Line("  " + flattened + " of " + db.AllStages.Count + " stages go from losable to a clean 100% once the line wears typical drops.");
+            Line("  Reported, not asserted. Every win rate task 13 produced was computed unarmored, so this");
+            Line("  column is the size of the gap between what the instruments measured and what a geared");
+            Line("  player meets. Whether the content should be retuned against it is a decision, not a bug.");
+            Line("");
+        }
+
+        /// <summary>
+        /// The pinned line at one stage, optionally geared. Duplicates CheckPinnedFiveBodyCurve's
+        /// setup deliberately rather than sharing it: that method is the yardstick task 13's table
+        /// is continuous with, and refactoring it to serve two callers is exactly how a yardstick
+        /// starts drifting. The two differ in one thing only, and it is the argument named here.
+        /// </summary>
+        private static float PinnedLineWinRate(ContentDatabase db, StageDef stage, int samples, bool armored)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            profile.PlayerLevel = 60;
+            profile.Gold = 500000000L;
+            GameSession session = new GameSession(db, profile);
+            for (int h = 0; h < db.Heroes.Count; h++)
+                if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
+
+            string[] pinned = { "nyx_serrow", "ryn_solvarr", "kalyx_emberwright", "orrin_kaal", "maeve_corrin" };
+            for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
+            int assigned = 0;
+            for (int i = 0; i < pinned.Length; i++)
+            {
+                for (int j = 0; j < profile.Heroes.Count; j++)
+                {
+                    if (profile.Heroes[j].Def.Id != pinned[i]) continue;
+                    profile.AssignToTeam(assigned, profile.Heroes[j].Uid);
+                    assigned++;
+                    break;
+                }
+            }
+
+            List<HeroInstance> team = profile.TeamHeroes();
+            int guard = 0;
+            while (profile.TeamPower() < stage.RecommendedPower && guard < 20000)
+            {
+                HeroInstance cheapest = null;
+                int cheapestCost = int.MaxValue;
+                for (int i = 0; i < team.Count; i++)
+                {
+                    if (team[i].Level >= session.HeroLevelCap) continue;
+                    int cost = session.LevelUpCost(team[i]);
+                    if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
+                }
+                if (cheapest == null) break;
+                session.LevelUpHero(cheapest, 1);
+                guard++;
+            }
+
+            if (armored) EquipInstrumentArmor(db, session, stage);
+
+            int wins = 0;
+            for (int i = 0; i < samples; i++)
+                if (CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + stage.GlobalIndex * 97 + i)).Victory) wins++;
+            return wins / (float)samples;
+        }
+
         private static void RunCampaignBalancePass(ContentDatabase db)
         {
+            // Gold-sink instrumentation (DESIGN-SHOP section 1). These three turn "does idle income
+            // outrun the spendable sink" from a structural argument into a measured number.
+            int capBlockedSessions = 0;
+            int spendableSessions = 0;
+            long peakGold = 0;
             Line("CAMPAIGN BALANCE (simulated player, 1 hour idle between sessions)");
             Line("  stage  name                      teamPwr  recPwr   winRate  avgRounds  attempts");
 
@@ -7326,9 +7582,18 @@ namespace Emberfall.DevHarness
                     // a session: collect idle income, spend gold on the team, then fight
                     now += 3600;
                     session.ClaimIdle(now);
-                    SpendGold(session);
+                    if (SpendGold(session)) capBlockedSessions++;
+                    else spendableSessions++;
+                    if (session.Profile.Gold > peakGold) peakGold = session.Profile.Gold;
                     while (session.CanSummon) session.Summon(seedCounter++, now);
                     session.Profile.NormaliseTeam();
+                    // Wear what has actually been earned. GrantBattleResult already rolls a real
+                    // drop on every uncapped clear and RollArmorDrop already adds it to
+                    // OwnedArmor - so this instrument has been ACCUMULATING armor all along and
+                    // simply never equipping any of it, which is why ApplyArmor stayed a no-op.
+                    // Nothing synthetic is granted here; the drops are the real ones, at the real
+                    // 0.45 drop chance, at the real Rough/Honed ceiling.
+                    EquipBestOwnedArmor(db, session);
 
                     BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seedCounter++));
                     attemptsForStage++;
@@ -7415,6 +7680,15 @@ namespace Emberfall.DevHarness
                  + ", shards " + profile.Shards
                  + ", hero cap Lv" + session.HeroLevelCap
                  + ", total battles " + totalAttempts);
+
+            int totalSessions = capBlockedSessions + spendableSessions;
+            float blockedShare = totalSessions > 0 ? capBlockedSessions / (float)totalSessions : 0f;
+            Line("  gold sink: " + capBlockedSessions + " of " + totalSessions + " sessions ("
+                 + Pct(blockedShare) + ") ended CAP-BLOCKED - every deployed hero at HeroLevelCap"
+                 + " with Gold still in hand. Peak balance " + peakGold + ", ending " + profile.Gold + ".");
+            Line("           A high share is the Gold surplus DESIGN-SHOP argues for, measured rather than"
+                 + " reasoned: it is time spent earning Gold that has nowhere to go. A low share means the"
+                 + " level sink was keeping up and the shop's premise is weaker than the doc claims.");
 
             for (int i = 0; i < profile.Heroes.Count; i++)
             {
@@ -7554,7 +7828,20 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>Simple bot: always pour gold into the cheapest upgrade on the deployed team.</summary>
-        private static void SpendGold(GameSession session)
+        /// <summary>
+        /// Spends Gold into levels, greedily and cheapest-first, and reports WHY it stopped.
+        ///
+        /// True means it stopped because every deployed hero is at HeroLevelCap while Gold
+        /// remained - the player is CAP-BLOCKED, holding Gold they are structurally unable to
+        /// spend. False means it stopped because Gold ran out, which is a player with a working
+        /// sink.
+        ///
+        /// That distinction is the whole measurement DESIGN-SHOP section 1 asks for, and an ending
+        /// Gold balance alone cannot make it: a large balance could equally mean "earned a lot" or
+        /// "could not spend any". The pass already printed ending Gold before this; what it could
+        /// not say was whether the sink was open at the time.
+        /// </summary>
+        private static bool SpendGold(GameSession session)
         {
             for (int guard = 0; guard < 500; guard++)
             {
@@ -7568,9 +7855,11 @@ namespace Emberfall.DevHarness
                     int cost = session.LevelUpCost(h);
                     if (cost < cheapestCost) { cheapestCost = cost; cheapest = h; }
                 }
-                if (cheapest == null || session.Profile.Gold < cheapestCost) return;
+                if (cheapest == null) return true;                        // cap-blocked
+                if (session.Profile.Gold < cheapestCost) return false;    // out of gold
                 session.LevelUpHero(cheapest, 1);
             }
+            return false;
         }
     }
 }
