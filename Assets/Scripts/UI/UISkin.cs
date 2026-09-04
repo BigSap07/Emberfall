@@ -85,6 +85,13 @@ namespace Emberfall.UI
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
 
         /// <summary>
+        /// Surfaces already reported on. Keyed by SURFACE rather than by variant key on purpose:
+        /// "panel.png did not load" is a fact about the file, and the project asks for at least
+        /// three panel radii, so keying by variant would say the same thing three times.
+        /// </summary>
+        private static readonly HashSet<string> Reported = new HashSet<string>();
+
+        /// <summary>
         /// Painted sprite for this surface if one exists, otherwise whatever the generator returns.
         ///
         /// The generator is a delegate rather than an already-built Sprite so that TextureLab does
@@ -101,10 +108,67 @@ namespace Emberfall.UI
             // One load attempt per key, not per call: a miss is cached as the generated sprite, so
             // a project with no painted art does not hit Resources.Load on every panel it builds.
             Sprite painted = Resources.Load<Sprite>(ResourceFolder + surface);
+            if (!Reported.Contains(surface))
+            {
+                Reported.Add(surface);
+                ReportLoad(surface, painted);
+            }
+
             Sprite result = painted != null ? painted : generate();
 
             Cache[key] = result;
             return result;
+        }
+
+        /// <summary>
+        /// Says out loud, once per surface, which of the two paths a load actually took.
+        ///
+        /// This class was built to fall through SILENTLY, on the reasoning that with nothing painted
+        /// a miss is the ordinary case and must never be loud. That reasoning expired the moment art
+        /// landed: a silent fallback and a successful load now look identical from outside, so
+        /// "nothing changed visually" cannot be told apart from "nothing was wired up".
+        ///
+        /// The HIT is logged as well as the miss, and that is the point rather than noise. Absence
+        /// of a warning would otherwise be ambiguous between "the sprite loaded" and "this code
+        /// never ran at all" - which is a real possibility whenever a screen builds its Images by
+        /// hand instead of going through UIBuilder, as five screens in this project did until
+        /// recently. One log line per surface, four surfaces, once per session.
+        ///
+        /// On a miss it asks for the TEXTURE at the same path, because that single extra question
+        /// separates the two failures, and they have nothing to do with each other:
+        ///
+        ///   texture found, sprite null -> the file is there and the path is right; the IMPORTER is
+        ///     not producing a sprite (Texture Type left at Default rather than Sprite (2D and UI)).
+        ///   both null -> nothing is at that Resources path at all; the filename, the folder, or the
+        ///     fact that it must sit under a folder literally named "Resources" is wrong.
+        /// </summary>
+        private static void ReportLoad(string surface, Sprite painted)
+        {
+            string path = ResourceFolder + surface;
+
+            if (painted != null)
+            {
+                Debug.Log("UISkin: '" + path + "' -> PAINTED sprite loaded ("
+                          + painted.rect.width + "x" + painted.rect.height
+                          + ", nine-slice border " + painted.border
+                          + "). The generated fallback is NOT being used for this surface.");
+                return;
+            }
+
+            if (Resources.Load<Texture2D>(path) != null)
+            {
+                Debug.LogWarning("UISkin: '" + path + "' -> sprite is NULL, drawing the generated "
+                    + "fallback instead. The file IS found at this path as a texture, so the path is "
+                    + "correct and the problem is the import setting: set Texture Type to "
+                    + "'Sprite (2D and UI)' and Sprite Mode to Single on "
+                    + "Assets/Resources/" + path + ".png, then reimport.");
+                return;
+            }
+
+            Debug.LogWarning("UISkin: '" + path + "' -> sprite is NULL and no texture exists there "
+                + "either, drawing the generated fallback instead. Nothing is loadable at this "
+                + "Resources path. Expected Assets/Resources/" + path + ".png - check the filename "
+                + "spelling and that every folder above it is spelled exactly 'Resources'.");
         }
 
         // ------------------------------------------------------------------ named surfaces
@@ -149,6 +213,11 @@ namespace Emberfall.UI
         public static void ClearCache()
         {
             Cache.Clear();
+
+            // The report gate goes with it. ClearCache exists for the case where art is added or
+            // replaced while the game runs, which is exactly the case where the load result is
+            // worth hearing about a second time.
+            Reported.Clear();
         }
     }
 }
