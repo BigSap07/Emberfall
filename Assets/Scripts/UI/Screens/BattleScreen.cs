@@ -253,7 +253,7 @@ namespace Emberfall.UI.Screens
             // mixed centre-anchored and bottom-anchored elements, which collide at 1080 of height.
             _resultTitle = UIBuilder.Label("Title", _resultPanel, "", UITheme.FontDisplay + 16, UITheme.Gold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_resultTitle.rectTransform, -460f, 310f, 900f, 110f, new Vector2(0.5f, 0.5f));
-            UIBuilder.Outlined(_resultTitle, new Color(0.2f, 0.05f, 0f, 0.95f), 4f);
+            UIBuilder.Outlined(_resultTitle, UITheme.InkTitle, 4f);
 
             _resultSub = UIBuilder.Label("Sub", _resultPanel, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
             UIBuilder.Box(_resultSub.rectTransform, -460f, 232f, 860f, 40f, new Vector2(0.5f, 0.5f));
@@ -460,10 +460,10 @@ namespace Emberfall.UI.Screens
             // says and no constant had to be fudged to get there.
             //
             // 200 x 18 -> 120 x 7, and the label fonts drop with it.
-            bar.HpGhost = UIBuilder.Bar("HpGhost", bar.Root, new Color(0f, 0f, 0f, 0.8f), new Color(1f, 1f, 1f, 0.5f));
+            bar.HpGhost = UIBuilder.Bar("HpGhost", bar.Root, UITheme.BarTrackDeep, UITheme.BarGhostFill);
             UIBuilder.Box(bar.HpGhost.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
 
-            bar.HpFill = UIBuilder.Bar("Hp", bar.Root, new Color(0f, 0f, 0f, 0f), tint);
+            bar.HpFill = UIBuilder.Bar("Hp", bar.Root, UITheme.BarTrackNone, tint);
             UIBuilder.Box(bar.HpFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
 
             // Ward is no longer its own strip. It occupies the SAME rectangle as health and draws
@@ -471,7 +471,7 @@ namespace Emberfall.UI.Screens
             // warded. Kept rather than cut because a ward changes whether an incoming number
             // matters at all, which is the one thing on this tag the player cannot infer from the
             // health fill alone.
-            bar.ShieldFill = UIBuilder.Bar("Shield", bar.Root, new Color(0f, 0f, 0f, 0f), UITheme.WithAlpha(UITheme.Shield, 0.95f));
+            bar.ShieldFill = UIBuilder.Bar("Shield", bar.Root, UITheme.BarTrackNone, UITheme.WithAlpha(UITheme.Shield, 0.95f));
             UIBuilder.Box(bar.ShieldFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
             UIBuilder.SetBar(bar.ShieldFill, 0f);
 
@@ -479,7 +479,7 @@ namespace Emberfall.UI.Screens
             // reads as one object. Above rather than below because below would put it between the
             // head and the health bar, spending the deliberately small BarWorldRise gap on the
             // subordinate readout.
-            bar.EnergyFill = UIBuilder.Bar("Energy", bar.Root, new Color(0f, 0f, 0f, 0.7f), UITheme.Energy);
+            bar.EnergyFill = UIBuilder.Bar("Energy", bar.Root, UITheme.InkDisplay, UITheme.Energy);
             UIBuilder.Box(bar.EnergyFill.rectTransform.parent as RectTransform,
                           0f, BarHeight + 1f, BarWidth, EnergyHeight, new Vector2(0.5f, 0f));
             SetEnergy(bar, snapshot.EnergyMax > 0 ? snapshot.StartEnergy / (float)snapshot.EnergyMax : 0f);
@@ -501,7 +501,7 @@ namespace Emberfall.UI.Screens
 
             // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
             // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
-            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, new Color(1f, 1f, 1f, 0f), 5);
+            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, Color.clear, 5);
             UIBuilder.Box(bar.TurnPip.rectTransform, -(BarWidth * 0.5f + 9f), -1f, 10f, 10f, new Vector2(0.5f, 0f));
 
             return bar;
@@ -1357,8 +1357,21 @@ namespace Emberfall.UI.Screens
 
             // one plain sentence naming the single biggest reason this fight went the way it did -
             // win or lose, per DESIGN-FIRST-TEN-MINUTES: "a one-line cause... win or lose"
+            // The Debrief already writes a real sentence rather than a number dump - that part was
+            // never missing. What it did not do was let a player SEE the cause without reading the
+            // whole line, so the clause it already computed is surfaced as a short lead-in tag.
+            //
+            // Built from DebriefResult.Clause rather than by string-matching the sentence, which is
+            // exactly why that enum exists ("lets a caller (or a test) check the cause without
+            // string-matching"). A clause with no obvious short name falls through to no tag at all
+            // rather than to a vague one - "OUTCOME" in front of a sentence explains nothing and
+            // costs a line of width.
             DebriefResult debrief = Debrief.Summarize(_result);
-            _debriefText.text = debrief.Text;
+            string cause = CauseTag(debrief.Clause);
+            _debriefText.text = string.IsNullOrEmpty(cause)
+                ? debrief.Text
+                : "<color=#" + ColorUtility.ToHtmlStringRGB(CauseTint(debrief.Clause)) + ">"
+                  + cause + "</color>   " + debrief.Text;
 
             ComputeStats();
             SelectStatTab(0);
@@ -1435,6 +1448,45 @@ namespace Emberfall.UI.Screens
                 AddRewardRow("NOTHING RECOVERED", "-", UITheme.TextDim);
                 AddRewardRow("THE LADDER HOLDS", "FLOOR " + App.Session.Profile.RecitalCurrentFloor + " STILL AHEAD", UITheme.TextMuted);
                 App.Audio.Defeat();
+            }
+        }
+
+        /// <summary>
+        /// A two-or-three word name for why the fight went this way, from the clause the Debrief
+        /// already resolved. Deliberately not a sentence - the sentence is already there, and this
+        /// exists so the cause survives being glanced at rather than read.
+        ///
+        /// Fallback returns empty on purpose. It is the clause that fires when nothing else did,
+        /// so there is no cause to name, and labelling it anyway would be inventing a reason.
+        /// </summary>
+        private static string CauseTag(DebriefClause clause)
+        {
+            switch (clause)
+            {
+                case DebriefClause.Timeout: return "RAN LONG";
+                case DebriefClause.AbilityDominant: return "ONE ABILITY";
+                case DebriefClause.Aspect: return "ASPECT";
+                case DebriefClause.Resisted: return "RESISTED";
+                case DebriefClause.Speed: return "SPEED";
+                case DebriefClause.UnspentActive: return "UNSPENT";
+                default: return "";
+            }
+        }
+
+        /// <summary>
+        /// Colour for the cause tag, reusing tones this screen and UITheme already carry rather
+        /// than introducing a palette for one label. Warning for the two clauses that name
+        /// something the player could have done differently, Energy for the aspect wheel because
+        /// that is the colour the aspect chips already use, TextMuted for the rest.
+        /// </summary>
+        private static Color CauseTint(DebriefClause clause)
+        {
+            switch (clause)
+            {
+                case DebriefClause.Timeout:
+                case DebriefClause.UnspentActive: return UITheme.Warning;
+                case DebriefClause.Aspect: return UITheme.Energy;
+                default: return UITheme.TextMuted;
             }
         }
 

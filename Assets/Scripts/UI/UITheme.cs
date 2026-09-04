@@ -149,6 +149,30 @@ namespace Emberfall.UI
         // method. Same values, stated as theme.
 
         /// <summary>Multiplied over a button's fill on hover. Above 1 to lift it.</summary>
+        // ---------------------------------------------------------------- unit-tag readouts
+        // The four values the battle unit tag was drawing at raw literals. Named at their EXACT
+        // current values, deliberately: this file's own migration rule is to move numbers, not
+        // change them, and the same rule is why CampaignScreen's locked hatch is still a literal.
+        // Nothing here is a restyle; it is the same pixels with a name a reader can follow.
+
+        /// <summary>Track behind the health bar's ghost (the drain afterimage). Darker than
+        /// InkPanel because it sits over the battlefield, lighter than InkArt because a bar is a
+        /// solid shape rather than text needing to survive a moving backdrop.</summary>
+        public static readonly Color BarTrackDeep = new Color(0f, 0f, 0f, 0.8f);
+
+        /// <summary>The drain afterimage itself: white, half strength, so it reads as the health
+        /// that WAS there rather than as a second health bar.</summary>
+        public static readonly Color BarGhostFill = new Color(1f, 1f, 1f, 0.5f);
+
+        /// <summary>A bar with no track of its own, layered over one that has its own backing.
+        /// Color.clear by another name, and named so "no track" reads as a decision.</summary>
+        public static readonly Color BarTrackNone = new Color(0f, 0f, 0f, 0f);
+
+        /// <summary>Warm-dark outline for the result title. Not pure black - it carries a little
+        /// of the Ember red so a VICTORY or DEFEAT title sits in the game's own palette rather
+        /// than being knocked out in neutral ink.</summary>
+        public static readonly Color InkTitle = new Color(0.2f, 0.05f, 0f, 0.95f);
+
         public static readonly Color ButtonHighlight = new Color(1.08f, 1.08f, 1.08f, 1f);
 
         /// <summary>Multiplied over a button's fill while held.</summary>
