@@ -237,10 +237,49 @@ namespace Emberfall.Game
             _saveTimer = 0.6f;
         }
 
+        /// <summary>
+        /// Writes the profile to disk now and disarms the queued save.
+        ///
+        /// The disarm happens FIRST and stays first, because Update() calls this the instant the
+        /// timer runs out and re-arming on failure would turn one broken save into a once-per-frame
+        /// write storm against a disk that is already refusing.
+        ///
+        /// But ordering it first is exactly what made the original failure so quiet, and that part
+        /// is fixed here. Previously the throw escaped into Update(), and because the timer had
+        /// already been set to -1 the guard at the top of Update() returned early on every
+        /// subsequent frame - so a single failed save silently ended AUTOSAVE FOR THE WHOLE
+        /// SESSION. Nothing said so. Every later RequestSave() looked like it worked, no further
+        /// exception was ever logged because the path was never entered again, and progress simply
+        /// stopped reaching disk until the process ended.
+        ///
+        /// That is a data-loss bug in its own right and it does not need a null Session to fire: any
+        /// IO exception - a locked file, a full disk, a permissions change - did the same thing.
+        /// So the throw is caught and named rather than left to escape, and the message says
+        /// plainly that progress is not on disk. RequestSave() re-arms as usual, so a transient
+        /// failure now recovers on the next change instead of being permanent.
+        /// </summary>
         public void SaveNow()
         {
             _saveTimer = -1f;
-            SaveService.Save(Session.Profile);
+
+            if (Session == null)
+            {
+                Debug.LogError("GameApp.SaveNow: Session is null, so there is nothing to save and "
+                    + "PROGRESS IS NOT BEING WRITTEN. Session is assigned in Awake before anything "
+                    + "else is built, so reaching here means Awake did not complete - look for an "
+                    + "earlier exception from ContentService.Load or SaveService.Load.");
+                return;
+            }
+
+            try
+            {
+                SaveService.Save(Session.Profile);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("GameApp.SaveNow: the save FAILED and PROGRESS IS NOT ON DISK. "
+                    + "Autosave is idle until the next RequestSave re-arms it. " + ex);
+            }
         }
 
         private void Update()

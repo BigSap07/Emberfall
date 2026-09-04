@@ -21,6 +21,13 @@ namespace Emberfall.UI.Screens
         private Text _continueSub;
         private float _tick;
 
+        /// <summary>
+        /// One-shot latch for the session-missing report. This screen ticks once a SECOND, so an
+        /// unlatched log here is 3600 identical lines an hour, which buries the one line that
+        /// matters and is how the original fault presented.
+        /// </summary>
+        private bool _sessionWarned;
+
         private Text _chapterLabel;
         private Image _chapterFill;
         private Text _chapterCount;
@@ -667,8 +674,45 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>
+        /// True when this screen can safely read the world. Reports the first failure LOUDLY and
+        /// exactly once, then stays quiet.
+        ///
+        /// This is a guard, but deliberately not a silent one, because the state it checks for is
+        /// state that genuinely SHOULD exist: GameApp assigns Session in Awake before it builds the
+        /// canvas, the router, or any screen, so by the time a MainMenuScreen exists at all its
+        /// App.Session has been non-null for several statements. There is no legitimate ordering in
+        /// which this returns false. Swallowing that quietly would trade a visible crash for an
+        /// invisible one - a Hub that silently stops updating its idle numbers - which is strictly
+        /// worse to diagnose.
+        ///
+        /// What it does buy is the difference between one actionable error and a once-per-second
+        /// exception storm, and it names WHICH of the two references is missing, because they mean
+        /// different things: a null App means this screen was never bound (Initialise did not run),
+        /// while a null App.Session means it was bound to a GameApp whose Awake did not complete.
+        /// </summary>
+        private bool SessionReady(string caller)
+        {
+            if (App != null && App.Session != null) return true;
+
+            if (!_sessionWarned)
+            {
+                _sessionWarned = true;
+                Debug.LogError("MainMenuScreen." + caller + ": "
+                    + (App == null ? "App" : "App.Session")
+                    + " is null while the Hub is live and ticking, so idle rewards have stopped "
+                    + "updating. GameApp assigns Session in Awake before building any screen, so "
+                    + "this means that Awake did not finish - look for an earlier exception from "
+                    + "ContentService.Load, SaveService.Load, or a 'failed to build' error from "
+                    + "ScreenRouter. Reported once; the per-second retry is suppressed from here.");
+            }
+            return false;
+        }
+
         private void RefreshIdle()
         {
+            if (!SessionReady("RefreshIdle")) return;
+
             GameSession session = App.Session;
             IdleReport report = session.PeekIdle(TimeUtil.NowUnix());
 
