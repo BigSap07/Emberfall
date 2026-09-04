@@ -7241,7 +7241,9 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckPinnedFiveBodyCurve(ContentDatabase db)
         {
-            Line("PINNED FIVE-BODY CURVE (full banner levelled to each stage's own recommended power)");
+            Line("PINNED FIVE-BODY CURVE - UNDER-GEARED FLOOR (bare power, no relics, no armor)");
+            Line("  Not the standard. See GEARED CURVE below for the column content is tuned against;");
+            Line("  this one is kept because it is continuous with task 13's own 24-stage table.");
             Line("  stage  name                       bodies  teamPwr  recPwr  winRate");
 
             const int Samples = 24;
@@ -7464,7 +7466,7 @@ namespace Emberfall.DevHarness
         private static void CheckArmoredCurveDelta(ContentDatabase db)
         {
             Line("");
-            Line("ARMOR DELTA (the pinned five-body line, unarmored vs wearing typical drops)");
+            Line("GEARED CURVE (primary) - the pinned five-body line at its stage's recommended power");
             if (db.Armor == null || !db.Armor.IsUsable)
             {
                 Line("  armor.json is not loaded or not usable - nothing to compare.");
@@ -7473,26 +7475,48 @@ namespace Emberfall.DevHarness
             }
 
             const int Samples = 24;
-            Line("  stage  name                          recPwr  unarmored    armored      delta");
+            float[] geared = new float[db.AllStages.Count];
+            Line("  stage  name                          recPwr    GEARED  ungeared      delta");
             int flattened = 0;
             for (int s = 0; s < db.AllStages.Count; s++)
             {
                 StageDef stage = db.AllStages[s];
                 float bare = PinnedLineWinRate(db, stage, Samples, false);
                 float armored = PinnedLineWinRate(db, stage, Samples, true);
+                geared[s] = armored;
                 if (bare < 0.999f && armored > 0.999f) flattened++;
                 Line("  " + stage.DisplayCode.PadRight(6)
                      + " " + Trim(stage.Name, 26).PadRight(28)
                      + stage.RecommendedPower.ToString().PadLeft(6)
-                     + Pct(bare).PadLeft(11)
-                     + Pct(armored).PadLeft(11)
+                     + Pct(armored).PadLeft(10)
+                     + Pct(bare).PadLeft(10)
                      + ("+" + Pct(armored - bare)).PadLeft(11));
             }
             Line("");
-            Line("  " + flattened + " of " + db.AllStages.Count + " stages go from losable to a clean 100% once the line wears typical drops.");
-            Line("  Reported, not asserted. Every win rate task 13 produced was computed unarmored, so this");
-            Line("  column is the size of the gap between what the instruments measured and what a geared");
-            Line("  player meets. Whether the content should be retuned against it is a decision, not a bug.");
+            Line("  GEARED is the primary column: five bodies wearing median drops, levelled until their");
+            Line("  EFFECTIVE power (relics and armor folded in, same StatMath overload the fight uses)");
+            Line("  reaches the stage's recommendedPower. That is a line AT its stage, and it is the");
+            Line("  number content should be tuned against.");
+            Line("");
+            Line("  ungeared is an UNDER-GEARED FLOOR, not the standard: the same five bodies wearing");
+            Line("  nothing, levelled until BARE power reaches the same target - a player who has to");
+            Line("  out-level what they cannot wear. It is expected to read lower, and a stage being hard");
+            Line("  for it is not by itself a balance problem.");
+            Line("");
+
+            // The discrimination assertion lives HERE now, on the geared column, because that is the
+            // column content is tuned against. CheckPinnedFiveBodyCurve keeps its own on the bare
+            // line, which still discriminates and is still continuous with task 13's table.
+            float lo = 2f, hi = -1f;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                float r = geared[s];
+                if (r < lo) lo = r;
+                if (r > hi) hi = r;
+            }
+            Check(hi - lo > 0.001f,
+                  "the geared curve discriminates between stages (spread " + Pct(lo) + " to " + Pct(hi)
+                  + ") - a flat curve here means content is tuned against nothing a real player is");
             Line("");
         }
 
@@ -7525,10 +7549,25 @@ namespace Emberfall.DevHarness
                 }
             }
 
+            // GEAR FIRST, then level - and this ordering is the whole fix.
+            //
+            // The armored line levels until its EFFECTIVE power reaches recommendedPower, so the
+            // gear it wears counts toward the target instead of sitting on top of it. That is what
+            // makes it a line AT its stage rather than one over-geared for it. Before this, both
+            // columns levelled against bare TeamPower and the armored one then added gear on top,
+            // which is why it read 100% on sixteen of twenty-four stages: it was not measuring a
+            // geared player at their frontier, it was measuring an over-geared one.
+            //
+            // The unarmored line levels against bare power against the same target, which is the
+            // honest meaning of an UNDER-GEARED FLOOR: it has to out-level what it cannot wear.
+            if (armored) EquipInstrumentArmor(db, session, stage);
+
             List<HeroInstance> team = profile.TeamHeroes();
             int guard = 0;
-            while (profile.TeamPower() < stage.RecommendedPower && guard < 20000)
+            while (guard < 20000)
             {
+                int power = armored ? profile.EffectiveTeamPower(db) : profile.TeamPower();
+                if (power >= stage.RecommendedPower) break;
                 HeroInstance cheapest = null;
                 int cheapestCost = int.MaxValue;
                 for (int i = 0; i < team.Count; i++)
@@ -7541,8 +7580,6 @@ namespace Emberfall.DevHarness
                 session.LevelUpHero(cheapest, 1);
                 guard++;
             }
-
-            if (armored) EquipInstrumentArmor(db, session, stage);
 
             int wins = 0;
             for (int i = 0; i < samples; i++)
