@@ -179,7 +179,7 @@
     {
       // Chapter 2 boss. No art; visual block only. See DESIGN-CHAPTER-2.md.
       "id": "tideturned", "name": "The Tideturned", "kind": "boss", "aspect": "Tide",
-      "hp": 4200, "attack": 480, "defense": 110, "speed": 90,
+      "hp": 3300, "attack": 300, "defense": 110, "speed": 90,
       "critChance": 0.15, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
       "effectHit": 0.15, "effectResist": 0.20,
       "visual": { "primary": "1B5E72", "secondary": "0A1C24", "accent": "4FC3E0", "silhouette": "golem", "weapon": "none", "scale": 1.20, "sigil": 15 },

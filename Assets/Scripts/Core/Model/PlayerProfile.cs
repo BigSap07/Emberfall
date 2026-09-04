@@ -402,11 +402,54 @@ namespace Emberfall.Core.Model
             return result;
         }
 
+        /// <summary>
+        /// BARE team power: level and stars only. HeroInstance.Stats is StatMath.ForHero(Def,
+        /// Level) with no relic and no armor, so this deliberately sees neither.
+        ///
+        /// Kept as-is and kept named this, because it is the right number for "how far has this
+        /// player levelled" and it is what the under-geared floor instrument pins against. What it
+        /// is NOT is the number a stage's difficulty should be compared to - see
+        /// EffectiveTeamPower, and DESIGN-BUILD-ORDER's task 13 entry for what assuming otherwise
+        /// cost.
+        /// </summary>
         public int TeamPower()
         {
             int total = 0;
             List<HeroInstance> team = TeamHeroes();
             for (int i = 0; i < team.Count; i++) total += team[i].Power;
+            return total;
+        }
+
+        /// <summary>
+        /// EFFECTIVE team power: what the line actually fights at, with equipped relics and armor
+        /// folded in through the same StatMath.ForHero overload CombatSimulation itself uses. The
+        /// number a stage's recommendedPower is meant to be compared against.
+        ///
+        /// This exists because the absence of it was a real, measured bug rather than an
+        /// abstraction anyone wanted. recommendedPower was a bare-power target, so a line pinned to
+        /// it AND wearing armor was over-geared for its own stage by construction and read 100% on
+        /// sixteen of twenty-four stages. Six measured retune passes failed to separate the geared
+        /// and ungeared columns by any setting of enemy level or composition, because gear is a
+        /// straight power increase and no content lever hits a geared team harder.
+        ///
+        /// Resolved exactly the way the simulation resolves it - same overload, same order, relic
+        /// then armor - so the number this reports and the number the fight uses cannot drift. A
+        /// hero with no relic and no armor contributes exactly what TeamPower would have counted.
+        /// </summary>
+        public int EffectiveTeamPower(ContentDatabase content)
+        {
+            int total = 0;
+            List<HeroInstance> team = TeamHeroes();
+            ArmorConfig armorConfig = content != null ? content.Armor : null;
+            for (int i = 0; i < team.Count; i++)
+            {
+                HeroInstance hero = team[i];
+                if (hero.Def == null) continue;
+                RelicDef relic = content != null && !string.IsNullOrEmpty(hero.EquippedRelicId)
+                    ? content.GetRelic(hero.EquippedRelicId) : null;
+                total += StatMath.PowerScore(StatMath.ForHero(hero.Def, hero.Level, relic,
+                                                              EquippedArmorOf(hero), armorConfig));
+            }
             return total;
         }
 
