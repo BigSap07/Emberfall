@@ -90,7 +90,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Sized(card, 0f, cardHeight);
 
             Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(20);
+            bg.sprite = UISkin.Panel(20);
             bg.type = Image.Type.Sliced;
             bg.color = evt.IsActive(now) ? UITheme.WithAlpha(UITheme.PanelRaised, 0.92f) : UITheme.Panel;
             UIBuilder.Frame("Edge", card, UITheme.WithAlpha(evt.IsActive(now) ? UITheme.Success : UITheme.BorderSoft, 0.6f), 20, 2);
@@ -160,7 +160,7 @@ namespace Emberfall.UI.Screens
             StretchTop(row, top, RowHeight - 8f, 24f, 24f);
 
             Image rowBg = row.gameObject.AddComponent<Image>();
-            rowBg.sprite = TextureLab.RoundedRect(12);
+            rowBg.sprite = UISkin.Panel(12);
             rowBg.type = Image.Type.Sliced;
             rowBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.7f);
 
@@ -199,7 +199,7 @@ namespace Emberfall.UI.Screens
             StretchTop(row, top, RowHeight - 8f, 24f, 24f);
 
             Image rowBg = row.gameObject.AddComponent<Image>();
-            rowBg.sprite = TextureLab.RoundedRect(12);
+            rowBg.sprite = UISkin.Panel(12);
             rowBg.type = Image.Type.Sliced;
             rowBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.7f);
 

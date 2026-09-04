@@ -75,7 +75,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(card, 470f, 150f, 880f, 170f, new Vector2(0.5f, 0.5f));
 
             Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(20);
+            background.sprite = UISkin.Panel(20);
             background.type = Image.Type.Sliced;
             background.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.94f);
             UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 20, 2);

@@ -51,7 +51,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(banner, 0f, -top, 900f, 56f, new Vector2(0.5f, 1f));
 
             Image bg = banner.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(14);
+            bg.sprite = UISkin.Panel(14);
             bg.type = Image.Type.Sliced;
             bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
             UIBuilder.Frame("Edge", banner, UITheme.WithAlpha(UITheme.Ember, 0.45f), 14, 2);
@@ -103,7 +103,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Sized(card, 0f, 160f);
 
             Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(20);
+            bg.sprite = UISkin.Panel(20);
             bg.type = Image.Type.Sliced;
             bg.color = owned ? UITheme.WithAlpha(UITheme.PanelRaised, 0.7f) : UITheme.Panel;
             UIBuilder.Frame("Edge", card, UITheme.WithAlpha(owned ? UITheme.Ember : UITheme.BorderSoft, 0.6f), 20, 2);
