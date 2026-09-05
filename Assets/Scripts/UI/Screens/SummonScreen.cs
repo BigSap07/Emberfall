@@ -18,17 +18,9 @@ namespace Emberfall.UI.Screens
         private Image _portalRingOuter;
         private Image _portalRingInner;
         private Image _portalCore;
-        private Text _costLabel;
-        private UIButton _summonButton;
-
-        /// <summary>
-        /// How many pulls one tap buys. Only ever 1 or 10 - this is a toggle, not a spinner, so it
-        /// is an int rather than an enum because every use of it is arithmetic (cost, loop count,
-        /// the summary line) and none of it is a branch on which mode is selected.
-        /// </summary>
-        private int _pullCount = 1;
-        private UIButton _toggleOne;
-        private UIButton _toggleTen;
+        private Text _purseLabel;
+        private UIButton _pullOne;
+        private UIButton _pullTen;
 
         private RectTransform _results;
         private CanvasGroup _resultsGroup;
@@ -143,68 +135,54 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(value.rectTransform, 0f, 6f, 260f, 34f, new Vector2(0.5f, 0f));
         }
 
+        /// <summary>
+        /// Two buttons, two actions. PULL X1 pulls once, PULL X10 pulls ten times, and each one
+        /// carries its own price and its own enabled state.
+        ///
+        /// This replaces a segmented x1/x10 toggle plus a separate OPEN THE RIFT button, which was
+        /// wrong in two ways at once. The design fault: three controls for what is one decision,
+        /// where two of them looked like actions and were not, so the obvious thing to press did
+        /// nothing on purpose. The actual BUG that made it feel broken is written up on
+        /// SetPullCount's grave in the commit - the short version is that selecting the count that
+        /// was ALREADY selected returned before it played a sound or changed a pixel, and x1 was
+        /// the default, so the very first control a player could reach was dead on arrival.
+        ///
+        /// Neither button is subordinate to the other. There is no shared mode to get wrong, no
+        /// state to read back, and no ordering: whichever one is affordable can be pressed, on its
+        /// own terms, at any time.
+        /// </summary>
         private void BuildActions()
         {
-            _costLabel = UIBuilder.Label("Cost", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_costLabel.rectTransform, 470f, 20f, 860f, 36f, new Vector2(0.5f, 0.5f));
+            _purseLabel = UIBuilder.Label("Purse", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_purseLabel.rectTransform, 470f, 20f, 860f, 36f, new Vector2(0.5f, 0.5f));
 
-            // The pull button gives up its right-hand end to the count toggle rather than the
-            // toggle being stacked somewhere else on the screen: the two controls are one decision
-            // ("open the rift, this many times") and reading them left-to-right as a single row is
-            // what makes the cost label above them unambiguous.
-            _summonButton = UIBuilder.PrimaryButton("Summon", Root, "OPEN THE RIFT", UITheme.FontHeading);
-            UIBuilder.Box(_summonButton.Root, 380f, -110f, 580f, 160f, new Vector2(0.5f, 0.5f));
-            _summonButton.OnClick(DoSummon);
-
-            _toggleOne = BuildCountToggle("PullOne", "x1", 1, -72f);
-            _toggleTen = BuildCountToggle("PullTen", "x10", 10, -148f);
-            ApplyToggleStyle();
+            _pullOne = BuildPullButton("PullOne", "PULL X1", 250f, 1);
+            _pullTen = BuildPullButton("PullTen", "PULL X10", 690f, 10);
         }
 
         /// <summary>
-        /// One segment of the x1 / x10 control. Kept as two plain buttons rather than a Unity
-        /// Toggle group because everything else on these screens is a UIButton and the selected
-        /// look is just a colour swap - a ToggleGroup would add a second interaction model for one
-        /// control.
+        /// A pull button and the cost line under its own title. The cost is a SECOND label parented
+        /// to the button rather than baked into the title string, so the price can be repainted on
+        /// every Refresh without rewriting the action, and so a shortfall can replace it in place.
+        /// It is inside the button, which keeps the whole card one tap target - the label does not
+        /// take raycasts, and a tap anywhere on it bubbles to the Button as usual.
         /// </summary>
-        private UIButton BuildCountToggle(string name, string label, int count, float y)
+        private UIButton BuildPullButton(string name, string title, float x, int count)
         {
-            UIButton button = UIBuilder.MakeButton(name, Root, label, UITheme.FontBody,
-                                                   UITheme.PanelRaised, UITheme.Border, UITheme.TextPrimary);
-            UIBuilder.Box(button.Root, 790f, y, 190f, 74f, new Vector2(0.5f, 0.5f));
+            UIButton button = UIBuilder.PrimaryButton(name, Root, title, UITheme.FontHeading);
+            UIBuilder.Box(button.Root, x, -110f, 420f, 160f, new Vector2(0.5f, 0.5f));
+
+            // PrimaryButton fills the whole face with its label; lift it so the cost has room.
+            UIBuilder.Box(button.Label.rectTransform, 0f, 24f, 380f, 58f, new Vector2(0.5f, 0.5f));
+
+            button.SubLabel = UIBuilder.Label("Cost", button.Root, "", UITheme.FontSmall,
+                                              UITheme.TextOnAccent, TextAnchor.MiddleCenter);
+            UIBuilder.Box(button.SubLabel.rectTransform, 0f, -36f, 380f, 40f, new Vector2(0.5f, 0.5f));
+            button.SubLabel.raycastTarget = false;
+
             int captured = count;
-            button.OnClick(delegate { SetPullCount(captured); });
+            button.OnClick(delegate { DoSummon(captured); });
             return button;
-        }
-
-        private void SetPullCount(int count)
-        {
-            if (_busy || _pullCount == count) return;
-            App.Audio.Tap();
-            _pullCount = count;
-            ApplyToggleStyle();
-            Refresh();
-        }
-
-        /// <summary>
-        /// Paints the selected segment. Ember fill for the active count, the standard raised panel
-        /// for the other, so which one a tap will buy is readable without reading the cost line.
-        /// </summary>
-        private void ApplyToggleStyle()
-        {
-            Style(_toggleOne, _pullCount == 1);
-            Style(_toggleTen, _pullCount == 10);
-        }
-
-        private static void Style(UIButton button, bool selected)
-        {
-            if (button == null) return;
-            if (button.Background != null)
-                button.Background.color = selected ? UITheme.Ember : UITheme.PanelRaised;
-            if (button.Frame != null)
-                button.Frame.color = selected ? UITheme.EmberDeep : UITheme.Border;
-            if (button.Label != null)
-                button.Label.color = selected ? UITheme.TextOnAccent : UITheme.TextMuted;
         }
 
         private void BuildReveal()
@@ -411,30 +389,45 @@ namespace Emberfall.UI.Screens
 
         private void Refresh()
         {
-            // Affordability is computed for the WHOLE batch here rather than deferring to
-            // Session.CanSummon, which only ever answers for a single pull. Ten pulls are only
-            // started when all ten are already paid for - see DoSummon for why a part-funded batch
-            // is refused rather than run until the shards stop.
             long unit = App.Session.Balance.SummonCost;
-            long cost = unit * _pullCount;
-            bool affordable = App.Session.Profile.Shards >= cost;
+            long shards = App.Session.Profile.Shards;
 
-            _costLabel.text = cost + " EMBER SHARDS  -  YOU HOLD " + App.Session.Profile.Shards;
-            _summonButton.Interactable = affordable && !_busy;
-            _summonButton.SetText(affordable
-                ? "OPEN THE RIFT   " + cost + "S"
-                : "NOT ENOUGH SHARDS");
+            _purseLabel.text = "YOU HOLD " + shards + " EMBER SHARDS";
+
+            // Each button is priced and gated on ITS OWN size. Deliberately not chained: being
+            // unable to afford ten says nothing about whether one is affordable, and the old
+            // single-button-plus-mode arrangement could only ever describe one of those at a time.
+            RefreshPullButton(_pullOne, unit, shards);
+            RefreshPullButton(_pullTen, unit * 10L, shards);
         }
 
-        private void DoSummon()
+        /// <summary>
+        /// Prices one pull button and enables it on that price alone. When it cannot be afforded
+        /// the cost line becomes the SHORTFALL rather than the price, which is the number a player
+        /// needs and the one they would otherwise have to work out - the same rule the Forge's
+        /// disabled actions follow.
+        /// </summary>
+        private void RefreshPullButton(UIButton button, long cost, long shards)
+        {
+            bool affordable = shards >= cost;
+            button.Interactable = affordable && !_busy;
+            if (button.SubLabel != null)
+                button.SubLabel.text = affordable
+                    ? cost + " SHARDS"
+                    : "NEED " + (cost - shards) + " MORE";
+        }
+
+        /// <summary>Runs a batch of <paramref name="count"/> pulls. Wired directly to each
+        /// button, so a tap is the action rather than a mode change that a later tap acts on.</summary>
+        private void DoSummon(int count)
         {
             if (_busy) return;
 
             long unit = App.Session.Balance.SummonCost;
-            long cost = unit * _pullCount;
+            long cost = unit * count;
             if (App.Session.Profile.Shards < cost)
             {
-                App.Notify("You need " + cost + " Ember Shards for " + _pullCount + ".");
+                App.Notify("You need " + cost + " Ember Shards for " + count + " pulls.");
                 return;
             }
 
@@ -451,7 +444,7 @@ namespace Emberfall.UI.Screens
             // pulls 1-3 left behind, which is what the pity rule expects.
             long now = TimeUtil.NowUnix();
             List<SummonOutcome> outcomes = new List<SummonOutcome>();
-            for (int i = 0; i < _pullCount; i++)
+            for (int i = 0; i < count; i++)
             {
                 // Same seed formula as the single pull, plus the index. TotalSummons and Shards
                 // both move between iterations so the seed would vary anyway; i is there so two
