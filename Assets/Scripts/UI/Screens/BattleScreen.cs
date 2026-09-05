@@ -106,10 +106,16 @@ namespace Emberfall.UI.Screens
         private UIButton _resultTertiary;
 
         /// <summary>
-        /// True when the gold button means "into the stage this win just unlocked" rather than
-        /// "fight that again". Set once per result in ShowResult, read by OnPrimary.
+        /// What the gold button means for THIS result. Was a bool ("continues, or replays"), which
+        /// only had room for the two answers a win needs; a loss needs a third.
         /// </summary>
-        private bool _primaryContinues;
+        private enum PrimaryAction { Replay, Continue, Exit }
+
+        private PrimaryAction _primaryAction = PrimaryAction.Replay;
+
+        /// <summary>Where Exit goes: the screen this fight was launched from. Resolved per result
+        /// so the button leads back where the player actually came from.</summary>
+        private ScreenId _exitScreen = ScreenId.Campaign;
         private Text _resultSub;
         private RectTransform _rewardList;
         private Text _debriefText;
@@ -1496,26 +1502,44 @@ namespace Emberfall.UI.Screens
                 ? App.Session.NextStage : null;
             bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
 
-            _primaryContinues = canContinue;
-            _resultPrimary.SetText(canContinue ? "CONTINUE" : "REMATCH");
-            _resultPrimary.Root.name = canContinue ? "Continue" : "Rematch";
-            _resultTertiary.Root.gameObject.SetActive(canContinue);
-
+            // WHEN THERE IS NOWHERE TO CONTINUE TO, THE GOLD BUTTON LEAVES.
+            //
+            // A loss used to offer ADJUST LINE and REMATCH and nothing else, so the only ways off
+            // the screen were to refight the thing that just beat you or to walk to the banner -
+            // and neither is "I have read the Debrief, take me back to the map". The Debrief's own
+            // cause line ("OUTSPED", "WRONG ASPECTS") is an instruction to go and change
+            // something, which means leaving, and there was no button for it.
+            //
+            // The rule is deliberately not "on defeat" but "whenever CONTINUE is not offered",
+            // because the identical dead end existed on every result that has no next stage: a win
+            // that finished the campaign, a Recital floor, a Proving match. One rule closes all of
+            // them, and a special case for defeat would have left the other three exactly as they
+            // were. It leads back to the screen the fight was STARTED from rather than to Campaign
+            // unconditionally - a Proving loss belongs back at the Proving, not on a stage list.
+            //
+            // REMATCH keeps existing, demoted to the middle slot. It is still the right answer
+            // sometimes; it is no longer the only one.
             if (canContinue)
             {
-                // Two replay-shaped options above, CONTINUE below them and taller, so prominence
-                // matches how often each is the right answer.
-                UIBuilder.Box(_resultSecondary.Root, -460f, -170f, 620f, 96f, new Vector2(0.5f, 0.5f));
-                UIBuilder.Box(_resultTertiary.Root, -460f, -276f, 620f, 96f, new Vector2(0.5f, 0.5f));
-                UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
+                _primaryAction = PrimaryAction.Continue;
+                _resultPrimary.SetText("CONTINUE");
+                _resultPrimary.Root.name = "Continue";
             }
             else
             {
-                // Defeat, campaign finished, or a Recital run: REMATCH genuinely is the next
-                // action, and this is exactly the layout that shipped before this change.
-                UIBuilder.Box(_resultSecondary.Root, -460f, -220f, 620f, 112f, new Vector2(0.5f, 0.5f));
-                UIBuilder.Box(_resultPrimary.Root, -460f, -370f, 620f, 126f, new Vector2(0.5f, 0.5f));
+                _primaryAction = PrimaryAction.Exit;
+                _exitScreen = OriginScreen();
+                _resultPrimary.SetText(ExitLabel());
+                _resultPrimary.Root.name = "Exit";
             }
+
+            // Three buttons on every result now, in one layout: the two replay-shaped options
+            // above, the forward action gold and taller below them. The win branch already read
+            // this way and there is no longer a reason for a loss to read differently.
+            _resultTertiary.Root.gameObject.SetActive(true);
+            UIBuilder.Box(_resultSecondary.Root, -460f, -170f, 620f, 96f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_resultTertiary.Root, -460f, -276f, 620f, 96f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
 
             _resultPanel.gameObject.SetActive(true);
             _resultPanel.SetAsLastSibling();
@@ -1811,8 +1835,42 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void OnPrimary()
         {
-            if (_primaryContinues) ContinueToNextStage();
-            else Replay();
+            switch (_primaryAction)
+            {
+                case PrimaryAction.Continue: ContinueToNextStage(); break;
+                case PrimaryAction.Exit: ExitToOrigin(); break;
+                default: Replay(); break;
+            }
+        }
+
+        /// <summary>
+        /// The screen this fight was launched from. The same three-way discriminator ShowResult
+        /// already branches its spoils on, so the exit cannot disagree with the result panel about
+        /// which mode the player is in.
+        /// </summary>
+        private ScreenId OriginScreen()
+        {
+            if (_provingOpponent != null) return ScreenId.Proving;
+            if (_recitalFloor >= 0) return ScreenId.Recital;
+            return ScreenId.Campaign;
+        }
+
+        private string ExitLabel()
+        {
+            if (_provingOpponent != null) return "BACK TO THE PROVING";
+            if (_recitalFloor >= 0) return "BACK TO THE RECITAL";
+            return "BACK TO CAMPAIGN";
+        }
+
+        /// <summary>
+        /// Leaves the fight for wherever it started. Router.Show rather than Back() on purpose:
+        /// the history stack behind a battle can hold the screen that launched it OR a rematch
+        /// chain several fights deep, and "back" through that is not what the button says.
+        /// </summary>
+        private void ExitToOrigin()
+        {
+            App.Audio.Tap();
+            Router.Show(_exitScreen, false);
         }
 
         /// <summary>
