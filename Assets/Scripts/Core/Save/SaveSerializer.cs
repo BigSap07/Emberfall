@@ -118,7 +118,15 @@ namespace Emberfall.Core.Save
         /// these keys, so it would silently drop a player's standing, their Brand bank and the
         /// opponent they were part-way through, and the version check below refuses that instead.
         /// </summary>
-        public const int CurrentVersion = 9;
+        /// 10: the player's chosen avatar (PlayerProfile.AvatarHeroId). Upgrade needs no
+        /// migration and no synthesised value: a version 9 save has no avatarHeroId key, which
+        /// reads as empty, which is precisely true of a player who was never offered the choice.
+        /// PlayerName needed no bump of its own - it has been written and read since before this
+        /// guard existed; what was missing was any way for a player to change it, which is UI, not
+        /// save shape. Downgrade is guarded the way every bump above is: version 9 code reads no
+        /// avatarHeroId key, so it would silently drop a chosen avatar, and the check below
+        /// refuses that instead.
+        public const int CurrentVersion = 10;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -280,6 +288,7 @@ namespace Emberfall.Core.Save
             JsonValue root = JsonValue.NewObject();
             root.Set("version", CurrentVersion);
             root.Set("playerName", profile.PlayerName);
+            root.Set("avatarHeroId", profile.AvatarHeroId);
             root.Set("playerLevel", profile.PlayerLevel);
             root.Set("playerXp", profile.PlayerXp);
             root.Set("gold", profile.Gold);
@@ -428,6 +437,12 @@ namespace Emberfall.Core.Save
 
             PlayerProfile profile = new PlayerProfile();
             profile.PlayerName = root.GetString("playerName", "Wayfarer");
+
+            // Empty is the correct upgrade value, not a synthesised one. A version 9 save has no
+            // avatarHeroId key and its player never chose a face, so "no avatar yet" is exactly
+            // true of them - unlike the version 7 Echo bank, which had to default to full rather
+            // than to zero because zero would have locked a mode the player already owned.
+            profile.AvatarHeroId = root.GetString("avatarHeroId", "");
             profile.PlayerLevel = Math.Max(1, root.GetInt("playerLevel", 1));
             profile.PlayerXp = Math.Max(0, root.GetInt("playerXp", 0));
             profile.Gold = Math.Max(0, root.GetLong("gold", 0));

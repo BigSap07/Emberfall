@@ -53,6 +53,25 @@ namespace Emberfall.UI
             HubStyle.Surface(block, HubStyle.RadiusPill, HubStyle.PlateAlpha,
                              HubStyle.BorderAlpha, HubStyle.BorderWeight);
 
+            // The pill already IS the player - it carries their name, their rank and their XP - so
+            // it is the thing to press to see and change that, rather than a separate Hub node
+            // competing with the buildings for a slot on the map. Nothing about the pill changes
+            // visually: it gains a Button and keeps every pixel, because a top bar that suddenly
+            // looked pressable would read as a new feature rather than as the same object.
+            //
+            // Wired through GameApp.Instance rather than a Router field because this bar is built
+            // once, before the router exists - the same reason ScreenChrome reaches for Instance
+            // for its tap sound.
+            Button open = block.gameObject.AddComponent<Button>();
+            open.transition = Selectable.Transition.None;
+            open.onClick.AddListener(delegate
+            {
+                Game.GameApp app = Game.GameApp.Instance;
+                if (app == null || app.Router == null) return;
+                app.Audio.Tap();
+                app.Router.Show(ScreenId.Profile);
+            });
+
             RectTransform badge = UIBuilder.Node("Badge", block);
             UIBuilder.Box(badge, HubStyle.PillPadX, 0f, HubStyle.PillIcon, HubStyle.PillIcon, new Vector2(0f, 0.5f));
             Image badgeFill = badge.gameObject.AddComponent<Image>();

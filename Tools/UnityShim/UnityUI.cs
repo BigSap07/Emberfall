@@ -170,6 +170,28 @@ namespace UnityEngine.UI
         public ButtonClickedEvent onClick { get { return null; } }
     }
 
+    /// <summary>
+    /// Compile-only stand-in for uGUI's InputField, added when ProfileScreen became the first
+    /// screen in this project to need a text field. Only the members that screen touches are
+    /// here - the shim exists to typecheck UI code the harness never instantiates, not to model
+    /// uGUI.
+    /// </summary>
+    public sealed class InputField : Selectable
+    {
+        public enum LineType { SingleLine, MultiLineSubmit, MultiLineNewline }
+
+        public class SubmitEvent : UnityEvent<string> { }
+        public class OnChangeEvent : UnityEvent<string> { }
+
+        public string text { get; set; }
+        public Text textComponent { get; set; }
+        public Graphic placeholder { get; set; }
+        public int characterLimit { get; set; }
+        public LineType lineType { get; set; }
+        public SubmitEvent onEndEdit { get { return null; } }
+        public OnChangeEvent onValueChanged { get { return null; } }
+    }
+
     public sealed class Toggle : Selectable
     {
         public class ToggleEvent : UnityEvent<bool> { }
