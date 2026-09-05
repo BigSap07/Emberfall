@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Progression;
 
@@ -290,6 +291,78 @@ namespace Emberfall.Core.Model
         /// forward - the same backwards-clock immunity GameSession.RollDailyReset already proves for
         /// the repeat cap applies here: a clock wound back must not grant regen.</summary>
         public long RecitalEchoesClockUnix;
+
+        // ---------------------------------------------------------------- The Proving (PvP)
+        // Four fields plus a pending opponent, mirroring the Recital block above field for field.
+        // Deliberately the same shape rather than a new one: DESIGN-PVP section 5 chose the Echo
+        // bank as the gating pattern precisely so there is one attempt-resource idiom in the
+        // project, not two that have to be reasoned about separately.
+
+        /// <summary>
+        /// Valor: The Proving's own currency, and the ONLY thing the mode pays.
+        ///
+        /// This reverses DESIGN-PVP section 6, which chose to pay Gold and Relic Dust and to add no
+        /// new currency. That call was flagged for sign-off and was overruled deliberately, so the
+        /// document has been corrected rather than left saying the opposite of the code.
+        ///
+        /// What the original reasoning was protecting still stands and is now protected a different
+        /// way: the worry was that a new currency needs a sink, a sink means a shop, and a shop that
+        /// sells power is a second progression track beside armor and relics - exactly the surface
+        /// task 13 stabilised. Valor is safe from that only for as long as it buys nothing that
+        /// affects combat. It currently has NO sink at all, which is a deliberate holding position,
+        /// not an oversight: see DESIGN-PVP section 6 for what has to be decided before it gets one.
+        /// </summary>
+        public long Valor;
+
+        /// <summary>Whole Brands currently banked, as of ProvingBrandsClockUnix - see
+        /// GameSession.PeekProvingBrands for the regen math this is read against.</summary>
+        public int ProvingBrandsBanked;
+
+        /// <summary>UTC Unix seconds Brand regeneration is computed forward from. Only ever moves
+        /// forward, with the same wound-back-clock immunity SettleRecitalEchoes documents.</summary>
+        public long ProvingBrandsClockUnix;
+
+        /// <summary>
+        /// The player's standing. A PERSONAL-PROGRESS NUMBER, not a rank (DESIGN-PVP section 7):
+        /// every opponent in this mode is generated locally, so there is no population to be ranked
+        /// against and nothing that reads this may present it as a competitive position. It earns
+        /// its meaning by being the difficulty dial - ProvingGenerator scales opponent power off
+        /// it - which is a real feedback loop that needs no other players at all.
+        /// </summary>
+        public int ProvingStanding;
+
+        /// <summary>The permanent record: highest standing ever reached. Never goes down.</summary>
+        public int ProvingHighestStanding;
+
+        /// <summary>
+        /// Total Proving attempts ever resolved. Monotonic - it counts losses as well as wins, and
+        /// never decreases.
+        ///
+        /// It exists because the two numbers above CANNOT drive opponent generation on their own,
+        /// and a full-session harness run proved it rather than a review catching it. The seed was
+        /// (standing, highestStanding); once standing floors at 0 and highest stops moving, both
+        /// inputs are stationary, so every further attempt regenerated the IDENTICAL opponent. A
+        /// player who had stalled would have refought one line forever - the exact failure the
+        /// generator's determinism is supposed to be a feature against, turned into a trap by
+        /// keying it on values that stop changing.
+        ///
+        /// It also fixes the ghost bootstrap, which used highest standing as a stand-in for "how
+        /// many attempts has this player had". One win takes highest from 0 to 3, so a player who
+        /// won their first fight left the bootstrap after ONE opponent rather than three. Attempts
+        /// is the quantity that question was always actually asking about.
+        /// </summary>
+        public int ProvingAttempts;
+
+        /// <summary>
+        /// The opponent currently on offer, persisted so it survives closing the app, or null when
+        /// none has been generated yet. Stored as the resolved snapshot rather than as a generator
+        /// seed for the reason DESIGN-ARMOR section 10 gives about armor rolls: a seed is smaller,
+        /// but heroes.json, armor.json and balance.json are all tuning data expected to move, and a
+        /// seed would mean every retune silently rerolled the opponent every player was mid-way
+        /// through facing. This is also the field that becomes a cached server response later,
+        /// unchanged in shape.
+        /// </summary>
+        public BattleLoadout ProvingOpponent;
 
         public readonly string[] Team = new string[TeamSize]; // hero uids, null = empty slot
 

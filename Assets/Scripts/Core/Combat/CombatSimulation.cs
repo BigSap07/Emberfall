@@ -23,6 +23,18 @@ namespace Emberfall.Core.Combat
         /// this because a relic id resolves against content; an armor uid resolves against the save.
         /// </summary>
         public PlayerProfile Profile;
+
+        /// <summary>
+        /// The enemy side as a plain snapshot instead of an authored line (DESIGN-PVP section 3).
+        /// Null for every caller that existed before The Proving - campaign stages, Recital floors,
+        /// every synthetic harness request - and when it is null nothing about this request behaves
+        /// differently, so no existing seeded fingerprint moves.
+        ///
+        /// Takes precedence over Stage.Enemies when both are set. Stage stays readable either way
+        /// because the fight still needs its environment, its rewards and its display code; only
+        /// who stands on the far side changes.
+        /// </summary>
+        public BattleLoadout Opponent;
     }
 
     /// <summary>
@@ -228,7 +240,39 @@ namespace Emberfall.Core.Combat
                     _units.Add(unit);
                 }
 
-                if (_request.Stage != null && _request.Content != null)
+                // The far side, from ONE of two sources. Both end at the same CombatUnit.FromDef
+                // call with isPlayer false, which is what makes this a branch on where the data
+                // came from rather than two different kinds of fight: FromDef takes the abstract
+                // UnitDef base, so a HeroDef and an EnemyDef are equally at home there, and
+                // StatMath.Build is shared underneath ForHero, ForEnemy and ForOpponent alike.
+                // That pre-existing symmetry is why supporting a snapshot opponent is this small.
+                if (_request.Opponent != null && _request.Content != null)
+                {
+                    List<LoadoutUnit> line = _request.Opponent.Units;
+                    for (int i = 0; i < line.Count && i < _cfg.MaxTeamSize; i++)
+                    {
+                        LoadoutUnit entry = line[i];
+                        if (entry == null) continue;
+                        HeroDef def = _request.Content.GetHero(entry.DefId);
+                        // A snapshot naming a hero this build does not have is skipped, not fatal.
+                        // A loadout can outlive the content it was taken against - that is the
+                        // whole premise of it being a snapshot - and a missing hero must cost the
+                        // player one body on the far side rather than the whole fight.
+                        if (def == null) continue;
+                        RelicDef relic = string.IsNullOrEmpty(entry.RelicId)
+                            ? null : _request.Content.GetRelic(entry.RelicId);
+                        UnitStats stats = StatMath.ForOpponent(def, entry.Level, entry.Stars, relic,
+                                                               entry.Armor, _request.Content.Armor);
+                        CombatUnit unit = CombatUnit.FromDef(def, stats, entry.Level, false, i, id++, _cfg.EnergyMax);
+                        // Same rule the player side applies one loop up: only a Mythic relic's hook
+                        // reaches the simulation, a Legendary's whole contribution is already in
+                        // the stats above. Kept identical so an opponent's relic behaves exactly as
+                        // the player's would.
+                        if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
+                        _units.Add(unit);
+                    }
+                }
+                else if (_request.Stage != null && _request.Content != null)
                 {
                     List<EnemySpawn> spawns = _request.Stage.Enemies;
                     for (int i = 0; i < spawns.Count && i < _cfg.MaxTeamSize; i++)

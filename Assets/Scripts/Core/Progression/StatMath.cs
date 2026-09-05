@@ -156,6 +156,38 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
+        /// A hero standing on the OPPONENT side, from a BattleLoadout snapshot (DESIGN-PVP section
+        /// 3). ForHero's sibling, and deliberately a sibling rather than a fourth ForHero overload,
+        /// because it differs in exactly two ways and both are properties of being a snapshot:
+        ///
+        /// 1. Stars come from the snapshot, not from def.Stars. A def's rarity is content and
+        ///    content moves; a snapshot records what was actually fought, so it carries its own
+        ///    rarity the same way it carries its own level.
+        /// 2. The armor list arrives already in hand rather than being resolved out of a profile's
+        ///    OwnedArmor, because an opponent's uids do not exist in the local player's collection.
+        ///    See BattleLoadout for the full reasoning.
+        ///
+        /// Everything else is identical ON PURPOSE. It calls the same ApplyRelic and ApplyArmor, in
+        /// the same fixed relic-then-armor order, with the same "null is an exact no-op" contract -
+        /// so an opponent's gear goes through exactly the arithmetic the player's does. That
+        /// equivalence is the whole reason a fight against one means anything; the moment the two
+        /// sides compute stats differently, the mode is measuring two different games.
+        ///
+        /// This is also what the enemy path cannot do: ForEnemy passes a rarity multiplier of 1f
+        /// and takes neither a relic nor armor, so an EnemyDef line has no way to express gear at
+        /// all. That gap is why this exists rather than the opponent reusing ForEnemy.
+        /// </summary>
+        public static UnitStats ForOpponent(HeroDef def, int level, int stars, RelicDef relic,
+                                            List<ArmorPiece> armor, ArmorConfig config)
+        {
+            if (def == null) return new UnitStats();
+            UnitStats s = Build(def, level, StarMultiplier(stars));
+            ApplyRelic(s, relic);
+            ApplyArmor(s, armor, def.Aspect, config);
+            return s;
+        }
+
+        /// <summary>
         /// Folds every equipped armor piece's rolls, plus whatever attunement thresholds the wearer
         /// has met, into an already-built UnitStats, in place. ApplyRelic's sibling: same in-place
         /// signature, same rounding rule, same "absent argument is an exact no-op" contract.

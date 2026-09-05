@@ -241,6 +241,28 @@ namespace Emberfall.Battle
                     env.GroundFar = UITheme.Hex("0A0714");
                     env.Accent = UITheme.Hex("A483FF");
                     break;
+                case "proving":
+                    // The Proving's gatehouse yard at dusk. Warm on purpose, and distinct from both
+                    // of the other named palettes: ember is a hot vermilion fire-lit red, ashen is a
+                    // cool grey-mauve, and this sits between them as a low gold-amber sunset - the
+                    // same warm-dusk register the Hub painting and DESIGN-ART-BIBLE section 5's
+                    // Cinder imagery already establish, so the mode reads as part of this world
+                    // rather than as a fourth unrelated mood.
+                    //
+                    // Accent is UITheme.Gold's value (F2C14E) rather than a new hex: gold is already
+                    // this mode's own colour - Valor is paid in it and the Proving screen's purse
+                    // shows it - so the light pooling above the horizon is the colour the player
+                    // associates with the mode.
+                    //
+                    // NOT VERIFIED VISUALLY. These are chosen tones, not a rendered result; nothing
+                    // outside Play mode can say how this actually looks, exactly as ashen, ember and
+                    // hollow's own values could not be checked by the loader that reads them.
+                    env.SkyTop = UITheme.Hex("221726");
+                    env.SkyBottom = UITheme.Hex("9A5A3C");
+                    env.GroundNear = UITheme.Hex("3B3026");
+                    env.GroundFar = UITheme.Hex("17110D");
+                    env.Accent = UITheme.Hex("F2C14E");
+                    break;
                 default: // ashen
                     env.SkyTop = UITheme.Hex("14101F");
                     env.SkyBottom = UITheme.Hex("6A4A55");
@@ -258,7 +280,23 @@ namespace Emberfall.Battle
         /// The painted backdrop for one environment, from Resources/Backgrounds/{environmentId}.png.
         /// Cached exactly like UnitSprite above, and keyed on the same environmentId campaign.json
         /// already authors per stage, so adding a painting for a new environment is a file drop
-        /// rather than a code change. Today: "ashen", "ember", "hollow", four stages each.
+        /// rather than a code change.
+        ///
+        /// PAINTED TODAY: "ashen", "ember", "hollow" - four campaign stages each.
+        ///
+        /// NAMED BUT UNPAINTED, falling through to GeneratedBackdrop below: "coast", "deep",
+        /// "tidal" (twelve chapter 2 stages) and "proving" (The Proving). Each becomes a real
+        /// painting by dropping a file at Assets/Resources/Backgrounds/{id}.png - specifically
+        /// Backgrounds/proving.png for The Proving - with NO code change of any kind. That is the
+        /// whole point of keying this on the id campaign.json already authors.
+        ///
+        /// A TRAP WORTH KNOWING, because it makes the fallback quieter than it sounds. The
+        /// generated backdrop is built from GetEnvironment(id), and GetEnvironment only has cases
+        /// for "ember", "hollow" and now "proving" - everything else, INCLUDING "coast", "deep" and
+        /// "tidal", hits its default arm and is drawn in ashen's palette. So those twelve stages do
+        /// not currently generate "their own" colours; they generate ashen's. That is a real gap
+        /// and it is not fixed here, because a palette is an art-direction decision rather than a
+        /// mechanical one. "proving" was given a case precisely so it would not join them.
         ///
         /// The fallback deliberately differs from UnitSprite's. There, a non-empty sprite id that
         /// fails to resolve is a content bug and gets the unmissable magenta square. Here a

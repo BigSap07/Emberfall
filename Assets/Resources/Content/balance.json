@@ -100,7 +100,19 @@
   "recitalBonusLevelsPerCycle": 3,
   "recitalEchoesMax": 5,
   "recitalEchoesRechargeHours": 4,
-  "recitalRewardGoldBase": 200,
+
+  // ---- The Proving (PvP). Every value here is ILLUSTRATIVE, per DESIGN-PVP sections 5, 6 and 9 -
+  // starting points chosen so the mode runs, not tuning. The balance pass that firms them up needs
+  // the mode playable to have anything to measure. Nothing here touches campaign.json or any key
+  // task 13 retuned.
+  "provingBrandsMax": 5,
+  "provingBrandsRechargeHours": 3,
+  "provingRewardValorBase": 30,
+  "provingRewardValorPerStanding": 2,
+  "provingLossRewardFraction": 0.25,
+  "provingStandingPerWin": 3,
+  "provingStandingPerLoss": 2,
+  "provingGhostBootstrapCount": 3,  "recitalRewardGoldBase": 200,
   "recitalRewardGoldPerFloor": 20,
   "recitalRewardShardsBase": 10,
   "recitalRewardShardsPerFloor": 1,

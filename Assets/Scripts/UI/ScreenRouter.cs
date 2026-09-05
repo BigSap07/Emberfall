@@ -19,6 +19,7 @@ namespace Emberfall.UI
         Inventory,
         Events,
         Recital,
+        Proving,
         Forge
     }
 
@@ -73,6 +74,7 @@ namespace Emberfall.UI
         public Screens.InventoryScreen Inventory;
         public Screens.EventsScreen Events;
         public Screens.RecitalScreen Recital;
+        public Screens.ProvingScreen Proving;
         public Screens.ForgeScreen Forge;
 
         public UIScreen Current { get; private set; }
@@ -94,6 +96,7 @@ namespace Emberfall.UI
             Inventory = Create<Screens.InventoryScreen>();
             Events = Create<Screens.EventsScreen>();
             Recital = Create<Screens.RecitalScreen>();
+            Proving = Create<Screens.ProvingScreen>();
             Forge = Create<Screens.ForgeScreen>();
         }
 

@@ -162,6 +162,83 @@ namespace Emberfall.EditorTools
         }
 
         /// <summary>
+        /// Refills the Brand bank so The Proving can be played without waiting out the recharge.
+        /// A testing affordance, nothing more: it grants attempts, never outcomes. Standing, Valor
+        /// and the pending opponent are all left exactly as they are, so what a session actually
+        /// proves is still earned rather than seeded.
+        ///
+        /// Follows Run()'s guards without loosening any of them - refuses the Scratch identity,
+        /// refuses to create a save that does not exist, backs up before writing, and only ever
+        /// RAISES the bank toward its configured max rather than setting it, so running this twice
+        /// cannot bank more than a full refill.
+        ///
+        /// The clock is stamped to now alongside the bank, which matters more than it looks: a
+        /// bank raised without moving ProvingBrandsClockUnix would keep accruing regen measured
+        /// from the old clock, so the very next settle would push it straight back over the cap and
+        /// this would read as having granted nothing.
+        /// </summary>
+        [MenuItem("Emberfall/Debug/Refill Proving Brands (writes the real save)", false, 32)]
+        public static void RefillProvingBrands()
+        {
+            string dataPath = Application.persistentDataPath;
+            Debug.Log("LiveSaveSeeder: persistentDataPath is " + dataPath);
+
+            if (dataPath.IndexOf("Scratch", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Debug.LogError("LiveSaveSeeder: ABORTING - persistentDataPath contains 'Scratch', "
+                    + "which means the project identity was not restored to the real one. Refusing to run.");
+                return;
+            }
+
+            string savePath = Path.Combine(dataPath, "emberfall_save.json");
+            if (!File.Exists(savePath))
+            {
+                Debug.LogError("LiveSaveSeeder: ABORTING - no save file at " + savePath
+                    + ". This tool only ever adds to an existing save; it will not create one from nothing.");
+                return;
+            }
+
+            string backupPath = savePath + ".before-brands-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".bak";
+            File.Copy(savePath, backupPath, false);
+            Debug.Log("LiveSaveSeeder: backed up the current save to " + backupPath + " before touching it.");
+
+            ContentDatabase content = ContentService.Load();
+            if (content == null || content.Heroes.Count == 0)
+            {
+                Debug.LogError("LiveSaveSeeder: ABORTING - content failed to load.");
+                return;
+            }
+
+            string loadError;
+            PlayerProfile profile = SaveSerializer.Deserialize(File.ReadAllText(savePath), content, out loadError);
+            if (profile == null)
+            {
+                Debug.LogError("LiveSaveSeeder: ABORTING - could not read the existing save: " + loadError);
+                return;
+            }
+
+            int before = profile.ProvingBrandsBanked;
+            int max = Math.Max(0, content.Balance.ProvingBrandsMax);
+            long now = TimeUtil.NowUnix();
+
+            if (profile.ProvingBrandsBanked >= max)
+            {
+                Debug.Log("LiveSaveSeeder: Brand bank is already full (" + before + " of " + max
+                        + "). Nothing written, and the save is untouched.");
+                return;
+            }
+
+            profile.ProvingBrandsBanked = max;
+            profile.ProvingBrandsClockUnix = now;
+            profile.LastSaveUnix = now;
+            File.WriteAllText(savePath, SaveSerializer.Serialize(profile));
+
+            Debug.Log("LiveSaveSeeder: DONE. Brands " + before + " -> " + profile.ProvingBrandsBanked
+                    + " of " + max + ". Standing (" + profile.ProvingStanding + "), Valor ("
+                    + profile.Valor + ") and the pending opponent were NOT touched. Saved to " + savePath);
+        }
+
+        /// <summary>
         /// A ONE-TIME corrective pass, not part of the normal flow. Run() left a real live save
         /// partway through on its first run: the CombineTrio bug documented on CombineTrio's own
         /// doc comment fed a repeated uid into the Weapon chain's final Gilded-to-Radiant combine,

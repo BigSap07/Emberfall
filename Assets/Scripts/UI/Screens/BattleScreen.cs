@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using Emberfall.Battle;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -139,10 +140,18 @@ namespace Emberfall.UI.Screens
         /// that sharing one result path would mean one of them lying about what happened.</summary>
         private int _recitalFloor = -1;
 
+        /// <summary>
+        /// The snapshot being fought when this battle is a Proving attempt, or null for every other
+        /// mode. Set by SetProvingOpponent and cleared by SetStage/SetRecitalFloor, so the three
+        /// modes are mutually exclusive by construction rather than by remembering to reset.
+        /// </summary>
+        private BattleLoadout _provingOpponent;
+
         public void SetStage(StageDef stage)
         {
             _stage = stage;
             _recitalFloor = -1;
+            _provingOpponent = null;
         }
 
         /// <summary>
@@ -155,7 +164,25 @@ namespace Emberfall.UI.Screens
         public void SetRecitalFloor(int floor)
         {
             _recitalFloor = floor;
+            _provingOpponent = null;
             _stage = App.Session.BuildRecitalStage(floor);
+        }
+
+        /// <summary>
+        /// Launches this screen as a Proving attempt. Spends nothing itself, for exactly the reason
+        /// SetRecitalFloor does not: OnShow is the one spend point, because it runs for both this
+        /// entry AND every Rematch, and an attempt costs a Brand either way.
+        ///
+        /// The stage is the mode's own (ProvingGenerator.BuildStage), not a borrowed campaign one.
+        /// It used to borrow Chapters[0].Stages[0], which meant every Proving match rendered against
+        /// ch1_1's painted "ashen" backdrop - not a fallback, just chapter 1's art in a mode it has
+        /// nothing to do with. Its own stage carries its own environment id instead.
+        /// </summary>
+        public void SetProvingOpponent(BattleLoadout opponent)
+        {
+            _recitalFloor = -1;
+            _provingOpponent = opponent;
+            _stage = ProvingGenerator.BuildStage();
         }
 
         // ------------------------------------------------------------------ construction
@@ -359,7 +386,20 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            if (_recitalFloor >= 0)
+            if (_provingOpponent != null)
+            {
+                // The one and only spend point for a Proving attempt, mirroring the Recital branch
+                // below: RecitalScreen and ProvingScreen both only PEEK affordability, and a
+                // Rematch re-enters here with no gate of its own.
+                if (!App.Session.TryStartProvingAttempt(TimeUtil.NowUnix()))
+                {
+                    App.Notify("Out of Brands.");
+                    Router.Show(ScreenId.Proving, false);
+                    return;
+                }
+                _stageLabel.text = "THE PROVING   " + _provingOpponent.Label.ToUpperInvariant();
+            }
+            else if (_recitalFloor >= 0)
             {
                 // The one and only spend point for a Recital attempt - covers both the first entry
                 // (RecitalScreen's FIGHT button only peeked affordability, it did not spend) and
@@ -432,7 +472,9 @@ namespace Emberfall.UI.Screens
                                  + Mathf.RoundToInt(Time.unscaledTime * 997f));
             if (seed == 0) seed = 1;
 
-            BattleRequest request = App.Session.BuildBattleRequest(_stage, seed);
+            BattleRequest request = _provingOpponent != null
+                ? App.Session.BuildProvingRequest(_stage, _provingOpponent, seed)
+                : App.Session.BuildBattleRequest(_stage, seed);
             _result = CombatSimulation.Run(request);
             _world.Populate(_result);
             BuildBars();
@@ -1398,7 +1440,8 @@ namespace Emberfall.UI.Screens
 
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
 
-            if (_recitalFloor >= 0) ShowRecitalResult();
+            if (_provingOpponent != null) ShowProvingResult();
+            else if (_recitalFloor >= 0) ShowRecitalResult();
             else ShowCampaignResult();
 
             // ---------------------------------------------------------------- what to do next
@@ -1424,7 +1467,12 @@ namespace Emberfall.UI.Screens
             // NextStage returns the LAST stage rather than null in that case, so a bare null check
             // would offer CONTINUE back into the fight just completed. A Recital run is excluded
             // outright - it has floors, not campaign stages, and NextStage means nothing there.
-            StageDef nextStage = (_result.Victory && _recitalFloor < 0) ? App.Session.NextStage : null;
+            // So is a Proving attempt, for the same reason and one the merge surfaced: it
+            // clears _recitalFloor, so the Recital check alone stopped being exhaustive the
+            // moment a third battle mode existed, and a Proving win would have offered
+            // CONTINUE into a campaign stage that had nothing to do with it.
+            StageDef nextStage = (_result.Victory && _recitalFloor < 0 && _provingOpponent == null)
+                ? App.Session.NextStage : null;
             bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
 
             _primaryContinues = canContinue;
@@ -1514,6 +1562,33 @@ namespace Emberfall.UI.Screens
             {
                 AddRewardRow("NOTHING RECOVERED", "-", UITheme.TextDim);
                 AddRewardRow("THE LADDER HOLDS", "FLOOR " + App.Session.Profile.RecitalCurrentFloor + " STILL AHEAD", UITheme.TextMuted);
+                App.Audio.Defeat();
+            }
+        }
+
+        /// <summary>
+        /// The Proving's result. Pays Valor and nothing else - see ProvingRewards for why the mode
+        /// deliberately touches no existing economy.
+        ///
+        /// A loss still shows a Valor row rather than "nothing recovered": the Brand was spent on
+        /// entry either way, and a result screen that reported zero after charging for the attempt
+        /// would read as a bug. The standing line is shown on both branches because standing moving
+        /// down is as much a result as it moving up.
+        /// </summary>
+        private void ShowProvingResult()
+        {
+            ProvingRewards rewards = App.Session.GrantProvingResult(_result.Victory, TimeUtil.NowUnix());
+
+            AddRewardRow("VALOR", "+" + rewards.Valor, UITheme.Gold);
+            if (_result.Victory)
+            {
+                if (rewards.NewBest) AddRewardRow("NEW BEST STANDING", rewards.NewStanding.ToString(), UITheme.Success);
+                else AddRewardRow("STANDING", rewards.Standing + "  ->  " + rewards.NewStanding, UITheme.Success);
+                App.Audio.Victory();
+            }
+            else
+            {
+                AddRewardRow("STANDING", rewards.Standing + "  ->  " + rewards.NewStanding, UITheme.TextMuted);
                 App.Audio.Defeat();
             }
         }

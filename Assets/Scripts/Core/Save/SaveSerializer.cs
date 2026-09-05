@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Model;
@@ -92,8 +93,32 @@ namespace Emberfall.Core.Save
         /// Downgrade is guarded the same way every bump above is: version 7 code reads neither key,
         /// so it would silently drop a player's whole armor collection and Slag purse, and the
         /// version check below refuses that instead.
+        /// 9: The Proving (DESIGN-PVP section 8). The profile grows a `valor` purse, a Brand bank
+        /// (`provingBrandsBanked`, `provingBrandsClockUnix`), a standing pair (`provingStanding`,
+        /// `provingHighestStanding`) and a pending opponent snapshot (`provingOpponent`).
+        ///
+        /// Upgrade needs no migration: a version 8 save simply has none of these keys, which read
+        /// as PlayerProfile's own field defaults - standing 0, highest 0, no opponent - exactly a
+        /// player who has never seen the mode. There is no prior format for arena progress to
+        /// translate out of, the way a hero-level relicId had to become an owned-relics entry.
+        ///
+        /// ONE DELIBERATE EXCEPTION, copied from the version 7 Echo bank and for the same reason:
+        /// `provingBrandsBanked` defaults to content.Balance.ProvingBrandsMax rather than to the
+        /// bare field default of 0, so an upgrading player can attempt immediately instead of
+        /// waiting out a full recharge for a resource their save never had an opinion on.
+        ///
+        /// `provingOpponent` is written as a RESOLVED snapshot - hero ids, levels, stars, relic ids
+        /// and whole armor pieces - never as a generator seed. Same instinct as the version 8 armor
+        /// bump: heroes.json, armor.json and balance.json are all tuning data expected to move, and
+        /// a seed would mean every retune silently rerolled the opponent every player was mid-way
+        /// through facing. It reuses the armor writer this file already had, because a snapshot
+        /// piece and an owned piece are the same record.
+        ///
+        /// Downgrade is guarded the same way every bump above is: version 8 code reads none of
+        /// these keys, so it would silently drop a player's standing, their Brand bank and the
+        /// opponent they were part-way through, and the version check below refuses that instead.
         /// </summary>
-        public const int CurrentVersion = 8;
+        public const int CurrentVersion = 9;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -116,6 +141,117 @@ namespace Emberfall.Core.Save
         /// the arithmetic it was rolled with even if ArmorInfo.ModeFor is ever changed under it,
         /// which is the same reason a piece stores resolved values instead of a seed.
         /// </summary>
+        /// <summary>
+        /// One armor piece as JSON. Extracted from the owned-armor loop when version 9 needed the
+        /// identical shape for a Proving opponent's gear: a snapshot piece and an owned piece are
+        /// the same record, and writing them through one method is what keeps them that way.
+        /// </summary>
+        private static JsonValue WriteArmorPiece(ArmorPiece piece)
+        {
+            JsonValue aj = JsonValue.NewObject();
+            aj.Set("uid", piece.Uid);
+            aj.Set("name", piece.Name);
+            aj.Set("slot", piece.Slot.ToString());
+            aj.Set("aspect", piece.Aspect.ToString());
+            aj.Set("temper", piece.Temper.ToString());
+            if (piece.Primary != null) aj.Set("primary", WriteRoll(piece.Primary));
+            JsonValue subs = JsonValue.NewArray();
+            for (int i = 0; i < piece.SubStats.Count; i++)
+            {
+                if (piece.SubStats[i] == null) continue;
+                subs.Add(WriteRoll(piece.SubStats[i]));
+            }
+            aj.Set("subStats", subs);
+            return aj;
+        }
+
+        /// <summary>WriteArmorPiece's inverse. Never returns null: a piece with no readable primary
+        /// keeps its slot's guaranteed stat at zero rather than a null Primary, so AllRolls and
+        /// every UI path stay total. Inert, not absent.</summary>
+        private static ArmorPiece ReadArmorPiece(JsonValue aj)
+        {
+            ArmorPiece piece = new ArmorPiece();
+            piece.Uid = aj.GetString("uid", "");
+            piece.Name = aj.GetString("name", "Armor");
+            piece.Slot = EnumUtil.Parse(aj.GetString("slot", "Weapon"), ArmorSlot.Weapon);
+            piece.Aspect = EnumUtil.Parse(aj.GetString("aspect", "Ember"), Aspect.Ember);
+            piece.Temper = EnumUtil.Parse(aj.GetString("temper", "Rough"), ArmorTemper.Rough);
+
+            ArmorStatRoll primary = ReadRoll(aj["primary"]);
+            if (primary == null)
+                primary = new ArmorStatRoll(ArmorInfo.PrimaryStat(piece.Slot), ArmorInfo.ModeFor(ArmorInfo.PrimaryStat(piece.Slot)), 0f);
+            piece.Primary = primary;
+
+            List<JsonValue> subs = aj.GetList("subStats");
+            for (int i = 0; i < subs.Count; i++)
+            {
+                ArmorStatRoll roll = ReadRoll(subs[i]);
+                if (roll != null) piece.SubStats.Add(roll);
+            }
+            return piece;
+        }
+
+        /// <summary>
+        /// A BattleLoadout as JSON - the opponent snapshot (DESIGN-PVP section 8). Deliberately a
+        /// flat document of ids, ints and armor records with no object graph: this is the same
+        /// shape a server response would carry, so the format is the wire format already.
+        /// </summary>
+        private static JsonValue WriteLoadout(BattleLoadout loadout)
+        {
+            JsonValue lj = JsonValue.NewObject();
+            lj.Set("label", loadout.Label);
+            lj.Set("powerScore", loadout.PowerScore);
+            lj.Set("isGhost", loadout.IsGhost);
+            JsonValue units = JsonValue.NewArray();
+            for (int i = 0; i < loadout.Units.Count; i++)
+            {
+                LoadoutUnit u = loadout.Units[i];
+                if (u == null || string.IsNullOrEmpty(u.DefId)) continue;
+                JsonValue uj = JsonValue.NewObject();
+                uj.Set("defId", u.DefId);
+                uj.Set("level", u.Level);
+                uj.Set("stars", u.Stars);
+                uj.Set("relicId", u.RelicId);
+                JsonValue armor = JsonValue.NewArray();
+                for (int a = 0; a < u.Armor.Count; a++)
+                {
+                    if (u.Armor[a] == null) continue;
+                    armor.Add(WriteArmorPiece(u.Armor[a]));
+                }
+                uj.Set("armor", armor);
+                units.Add(uj);
+            }
+            lj.Set("units", units);
+            return lj;
+        }
+
+        /// <summary>WriteLoadout's inverse. Returns null for an absent or unit-less snapshot, which
+        /// reads as "no opponent on offer" and makes the next entry generate a fresh one.</summary>
+        private static BattleLoadout ReadLoadout(JsonValue lj)
+        {
+            if (lj == null || !lj.IsObject) return null;
+            BattleLoadout loadout = new BattleLoadout();
+            loadout.Label = lj.GetString("label", "");
+            loadout.PowerScore = lj.GetInt("powerScore", 0);
+            loadout.IsGhost = lj.GetBool("isGhost", false);
+            List<JsonValue> units = lj.GetList("units");
+            for (int i = 0; i < units.Count; i++)
+            {
+                JsonValue uj = units[i];
+                string defId = uj.GetString("defId", "");
+                if (string.IsNullOrEmpty(defId)) continue;
+                LoadoutUnit u = new LoadoutUnit();
+                u.DefId = defId;
+                u.Level = Math.Max(1, uj.GetInt("level", 1));
+                u.Stars = Math.Max(1, uj.GetInt("stars", 1));
+                u.RelicId = uj.GetString("relicId", "");
+                List<JsonValue> armor = uj.GetList("armor");
+                for (int a = 0; a < armor.Count; a++) u.Armor.Add(ReadArmorPiece(armor[a]));
+                loadout.Units.Add(u);
+            }
+            return loadout.Units.Count > 0 ? loadout : null;
+        }
+
         private static JsonValue WriteRoll(ArmorStatRoll roll)
         {
             JsonValue rj = JsonValue.NewObject();
@@ -162,6 +298,16 @@ namespace Emberfall.Core.Save
             root.Set("recitalHighestFloor", profile.RecitalHighestFloor);
             root.Set("recitalEchoesBanked", profile.RecitalEchoesBanked);
             root.Set("recitalEchoesClockUnix", profile.RecitalEchoesClockUnix);
+            root.Set("valor", profile.Valor);
+            root.Set("provingBrandsBanked", profile.ProvingBrandsBanked);
+            root.Set("provingBrandsClockUnix", profile.ProvingBrandsClockUnix);
+            root.Set("provingStanding", profile.ProvingStanding);
+            root.Set("provingHighestStanding", profile.ProvingHighestStanding);
+            root.Set("provingAttempts", profile.ProvingAttempts);
+            // Written only when one is actually on offer. Absent and "no opponent" are the same
+            // state here, unlike ownedArmor above where empty and absent had to be distinguished.
+            if (profile.ProvingOpponent != null)
+                root.Set("provingOpponent", WriteLoadout(profile.ProvingOpponent));
 
             JsonValue cleared = JsonValue.NewArray();
             for (int i = 0; i < profile.ClearedStageIds.Count; i++) cleared.Add(profile.ClearedStageIds[i]);
@@ -207,21 +353,7 @@ namespace Emberfall.Core.Save
             {
                 ArmorPiece piece = profile.OwnedArmor[i];
                 if (piece == null || string.IsNullOrEmpty(piece.Uid)) continue;
-                JsonValue aj = JsonValue.NewObject();
-                aj.Set("uid", piece.Uid);
-                aj.Set("name", piece.Name);
-                aj.Set("slot", piece.Slot.ToString());
-                aj.Set("aspect", piece.Aspect.ToString());
-                aj.Set("temper", piece.Temper.ToString());
-                if (piece.Primary != null) aj.Set("primary", WriteRoll(piece.Primary));
-                JsonValue subs = JsonValue.NewArray();
-                for (int s = 0; s < piece.SubStats.Count; s++)
-                {
-                    if (piece.SubStats[s] == null) continue;
-                    subs.Add(WriteRoll(piece.SubStats[s]));
-                }
-                aj.Set("subStats", subs);
-                ownedArmor.Add(aj);
+                ownedArmor.Add(WriteArmorPiece(piece));
             }
             root.Set("ownedArmor", ownedArmor);
 
@@ -323,6 +455,18 @@ namespace Emberfall.Core.Save
             profile.RecitalEchoesBanked = Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes));
             profile.RecitalEchoesClockUnix = root.GetLong("recitalEchoesClockUnix", 0);
 
+            // The version 7 Echo exception, repeated for Brands: an upgrading player starts able to
+            // attempt immediately rather than waiting out a full recharge for a resource their save
+            // never had an opinion on. Every other new key takes its bare field default.
+            int defaultBrands = content != null && content.Balance != null ? content.Balance.ProvingBrandsMax : 0;
+            profile.ProvingBrandsBanked = Math.Max(0, root.GetInt("provingBrandsBanked", defaultBrands));
+            profile.Valor = Math.Max(0, root.GetLong("valor", 0));
+            profile.ProvingBrandsClockUnix = root.GetLong("provingBrandsClockUnix", 0);
+            profile.ProvingStanding = Math.Max(0, root.GetInt("provingStanding", 0));
+            profile.ProvingHighestStanding = Math.Max(0, root.GetInt("provingHighestStanding", 0));
+            profile.ProvingAttempts = Math.Max(0, root.GetInt("provingAttempts", 0));
+            profile.ProvingOpponent = ReadLoadout(root["provingOpponent"]);
+
             List<JsonValue> cleared = root.GetList("clearedStages");
             for (int i = 0; i < cleared.Count; i++)
             {
@@ -377,26 +521,7 @@ namespace Emberfall.Core.Save
                 string uid = aj.GetString("uid", "");
                 if (string.IsNullOrEmpty(uid) || profile.FindArmor(uid) != null) continue;
 
-                ArmorPiece piece = new ArmorPiece();
-                piece.Uid = uid;
-                piece.Name = aj.GetString("name", "Armor");
-                piece.Slot = EnumUtil.Parse(aj.GetString("slot", "Weapon"), ArmorSlot.Weapon);
-                piece.Aspect = EnumUtil.Parse(aj.GetString("aspect", "Ember"), Aspect.Ember);
-                piece.Temper = EnumUtil.Parse(aj.GetString("temper", "Rough"), ArmorTemper.Rough);
-
-                ArmorStatRoll primary = ReadRoll(aj["primary"]);
-                // A piece with no readable primary keeps its slot's guaranteed stat at zero rather
-                // than a null Primary, so AllRolls and every UI path stay total. Inert, not absent.
-                if (primary == null)
-                    primary = new ArmorStatRoll(ArmorInfo.PrimaryStat(piece.Slot), ArmorInfo.ModeFor(ArmorInfo.PrimaryStat(piece.Slot)), 0f);
-                piece.Primary = primary;
-
-                List<JsonValue> subs = aj.GetList("subStats");
-                for (int s = 0; s < subs.Count; s++)
-                {
-                    ArmorStatRoll roll = ReadRoll(subs[s]);
-                    if (roll != null) piece.SubStats.Add(roll);
-                }
+                ArmorPiece piece = ReadArmorPiece(aj);
 
                 profile.OwnedArmor.Add(piece);
             }

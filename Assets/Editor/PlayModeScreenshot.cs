@@ -6,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using Emberfall.Game;
 using Emberfall.UI;
+using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Session;
 
@@ -68,7 +69,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV6-generic-screen-targets";
+        private const string BuildMarker = "FIXV7-proving-plus-screen-targets";
 
         static PlayModeScreenshot()
         {
@@ -100,6 +101,11 @@ namespace Emberfall.EditorTools
             Begin("Recital");
         }
 
+        [MenuItem("Emberfall/Debug/Capture Proving Screenshot %#p")]
+        public static void CaptureProving()
+        {
+            Begin("Proving");
+        }
         // ------------------------------------------------------------------ generic screen targets
         // Seven screens, one code path. Each of these is a plain "show this screen and photograph
         // it" capture, which is all six of them need - unlike Events and Recital above, which have
@@ -180,6 +186,7 @@ namespace Emberfall.EditorTools
             string target = SessionState.GetString(TargetKey, "Events");
 
             if (target == "Recital") PumpRecital(frame);
+            else if (target == "Proving") PumpProving(frame);
             else if (target.StartsWith("Screen:")) PumpScreen(frame, target.Substring(7));
             else PumpEvents(frame);
         }
@@ -272,6 +279,93 @@ namespace Emberfall.EditorTools
         /// BattleScreen.OnShow use (TryStartRecitalAttempt, SetRecitalFloor, Show(Battle)), so this
         /// is the real pipeline, not a shortcut around it.
         /// </summary>
+        /// <summary>
+        /// The Proving: its own screen, then a real match against the generated opponent.
+        ///
+        /// Mirrors PumpRecital deliberately, including the one thing that method's comment says it
+        /// got wrong first: this PEEKS Brands and never spends them. BattleScreen.OnShow is the
+        /// single spend point, and calling TryStartProvingAttempt here would spend one before
+        /// OnShow spent a second for the same attempt - the double-spend that made the Recital
+        /// capture bounce straight back to its own screen instead of ever fighting.
+        ///
+        /// Brands are topped up directly for exactly the reason PopulateRecitalLadder tops up
+        /// Echoes and refuses to touch Gold: Proving fields did not exist on any save before this
+        /// feature, so there is no prior real value here to protect. Standing, Valor and the
+        /// pending opponent are left alone.
+        /// </summary>
+        private static void PumpProving(int frame)
+        {
+            int stage = SessionState.GetInt(StageKey, 0);
+            GameApp app = GameApp.Instance;
+
+            if (stage == 0 && frame >= 10)
+            {
+                if (app == null) { Debug.LogError("PlayModeScreenshot: GameApp.Instance never appeared."); Stop(); return; }
+                int max = app.Session.Balance.ProvingBrandsMax;
+                if (app.Session.Profile.ProvingBrandsBanked < max)
+                {
+                    app.Session.Profile.ProvingBrandsBanked = max;
+                    app.Session.Profile.ProvingBrandsClockUnix = TimeUtil.NowUnix();
+                }
+                app.Router.Show(ScreenId.Proving);
+                Debug.Log("PlayModeScreenshot: opened the Proving screen with " + max + " Brands.");
+                SessionState.SetInt(StageKey, 1);
+                stage = 1;
+            }
+
+            if (stage == 1 && frame == 60) Canvas.ForceUpdateCanvases();
+
+            string screenPath = OutputPath("proving_screen.png");
+            if (stage == 1 && frame == 70)
+            {
+                ScreenCapture.CaptureScreenshot(screenPath, 1);
+                Debug.Log("PlayModeScreenshot: requested proving_screen.png");
+                SessionState.SetInt(StageKey, 2);
+            }
+
+            if (stage == 2 && frame == 90)
+            {
+                long now = TimeUtil.NowUnix();
+                if (app.Session.PeekProvingBrands(now).Banked > 0)
+                {
+                    BattleLoadout opponent = app.Session.CurrentProvingOpponent(now);
+                    if (opponent != null && opponent.Units.Count > 0)
+                    {
+                        app.Router.Battle.SetProvingOpponent(opponent);
+                        app.Router.Show(ScreenId.Battle);
+                        Debug.Log("PlayModeScreenshot: launched a real Proving match against '"
+                                + opponent.Label + "' (power " + opponent.PowerScore
+                                + ", ghost=" + opponent.IsGhost + ").");
+                    }
+                    else Debug.LogWarning("PlayModeScreenshot: no opponent could be assembled.");
+                }
+                else Debug.LogWarning("PlayModeScreenshot: out of Brands, could not launch a match.");
+                SessionState.SetInt(StageKey, 3);
+            }
+
+            // Frame 200, the same late landing PumpRecital had to move to: BuildWorld and
+            // RunSimulation do not finish painting a freshly built 3D scene in the frame
+            // Show(Battle) is called on, and an earlier capture catches solid black.
+            string battlePath = OutputPath("proving_battle.png");
+            if (stage == 3 && frame == 200)
+            {
+                ScreenCapture.CaptureScreenshot(battlePath, 1);
+                Debug.Log("PlayModeScreenshot: requested proving_battle.png");
+                SessionState.SetInt(StageKey, 4);
+            }
+
+            if (stage == 4)
+            {
+                bool bothExist = File.Exists(screenPath) && File.Exists(battlePath);
+                if (bothExist || frame >= 400)
+                {
+                    Debug.Log("PlayModeScreenshot: done. screenExists=" + File.Exists(screenPath)
+                            + " battleExists=" + File.Exists(battlePath));
+                    Stop();
+                }
+            }
+        }
+
         /// <summary>
         /// Every screen this project has, captured through one path: show it, let the canvas settle,
         /// photograph it, move on. "ALL" walks the whole list in one Play Mode session, which is the

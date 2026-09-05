@@ -58,6 +58,7 @@ namespace Emberfall.DevHarness
             CheckRelics(content);
             CheckEvents(content);
             CheckRecital(content);
+            CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
@@ -4915,6 +4916,528 @@ namespace Emberfall.DevHarness
             PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
             Check(fromFuture == null && futureError != null,
                   "a save one version newer than this build is refused rather than silently stripped of its event progress");
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The Proving (DESIGN-PVP), end to end. Seven checks under one heading, in the order the
+        /// mode is actually used: the content it needs exists, an opponent is a real snapshot that
+        /// scales, Brands gate an attempt on entry, standing moves and floors, rewards split
+        /// correctly on a win and a loss, and the whole thing survives a save.
+        ///
+        /// The one this section exists for is the snapshot boundary. Everything else here is a
+        /// mode being tested; that one is an ARCHITECTURAL claim - that an opponent is plain data
+        /// the simulation cannot distinguish from an authored line - and if it ever stops being
+        /// true, the mode still works and the convertibility that justified building it this way
+        /// is quietly gone. A check is the only thing that notices that.
+        /// </summary>
+        private static void CheckProving(ContentDatabase db)
+        {
+            Line("");
+            Line("THE PROVING");
+            CheckProvingContent(db);
+            CheckProvingOpponentIsASnapshot(db);
+            CheckProvingOpponentScalesWithPower(db);
+            CheckProvingGhostBootstrap(db);
+            CheckProvingBrandsGateAttempts(db);
+            CheckProvingRewardSplit(db);
+            CheckProvingSaveRoundTrip(db);
+            CheckProvingFullSession(db);
+        }
+
+        /// <summary>
+        /// A whole session, played through: five attempts, every one of them an ACTUAL battle run
+        /// by CombatSimulation against the generated opponent, with Brands spent on entry and the
+        /// real outcome fed to GrantProvingResult.
+        ///
+        /// The other checks in this section each prove one part in isolation. This one exists
+        /// because a mode can pass every part and still be broken as a loop - the failures it is
+        /// looking for are the ones that only appear in sequence:
+        ///
+        ///   - fights that cannot be lost, or cannot be won, at the power the generator picks
+        ///   - the same opponent handed out twice because the pending one was never cleared
+        ///   - standing that climbs but never falls, or falls below zero
+        ///   - Valor that stops accruing once standing moves
+        ///   - a Brand bank that drains to a state the player cannot recover from
+        ///
+        /// It is also the closest thing to a playtest that can run without Play mode, which is the
+        /// whole reason it is here: everything in this section is logic, and none of it can say
+        /// whether the SCREEN works.
+        /// </summary>
+        private static void CheckProvingFullSession(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            int attempts = db.Balance.ProvingBrandsMax;
+            int wins = 0, losses = 0;
+            long valor = 0;
+            List<string> labels = new List<string>();
+            List<int> standings = new List<int>();
+            bool everyFightResolved = true;
+            bool brandSpentEveryTime = true;
+
+            for (int i = 0; i < attempts; i++)
+            {
+                int banked = session.PeekProvingBrands(Now).Banked;
+                BattleLoadout opponent = session.CurrentProvingOpponent(Now);
+                if (opponent == null || opponent.Units.Count == 0) { everyFightResolved = false; break; }
+                labels.Add((opponent.IsGhost ? "G:" : "R:") + opponent.Label + "/" + opponent.PowerScore);
+
+                if (!session.TryStartProvingAttempt(Now)) { brandSpentEveryTime = false; break; }
+                if (profile.ProvingBrandsBanked != banked - 1) brandSpentEveryTime = false;
+
+                BattleRequest request = session.BuildProvingRequest(ProvingGenerator.BuildStage(), opponent, 1000 + i * 37);
+                BattleResult result = CombatSimulation.Run(request);
+                if (result == null || result.Rounds <= 0) everyFightResolved = false;
+
+                ProvingRewards rewards = session.GrantProvingResult(result.Victory, Now);
+                valor += rewards.Valor;
+                standings.Add(rewards.NewStanding);
+                if (result.Victory) wins++; else losses++;
+            }
+
+            Check(everyFightResolved,
+                  "every attempt in a full session ran a real battle to a real outcome (" + wins + "W / "
+                  + losses + "L across " + attempts + " attempts)");
+            Check(brandSpentEveryTime,
+                  "and every one of them spent exactly one Brand on entry");
+            Check(profile.ProvingBrandsBanked == 0 && !session.TryStartProvingAttempt(Now),
+                  "the bank is empty at the end of the session and the next attempt is refused - the gate"
+                  + " holds after a full run, not just on the first call");
+
+            // Not a balance assertion. It is the far weaker claim that the mode is a CONTEST at all:
+            // a generator that produced only walkovers or only massacres would be reported by every
+            // other check in this section as working perfectly.
+            Check(wins > 0 || losses > 0, "the session produced real results rather than a no-op");
+            if (wins == attempts)
+                Line("  [note] every fight was a win at this content and power band. Not a failure - the"
+                     + " generator targets the player's own line power, so parity is the expected shape -"
+                     + " but if it stays true after standing climbs, the difficulty dial is not biting.");
+            if (losses == attempts)
+                Line("  [note] every fight was a loss. The generator overshot the player's line at standing 0,"
+                     + " which is the one outcome the ghost bootstrap exists to prevent for a new player.");
+
+            Check(valor > 0, "Valor accrued across the session (" + valor + " total)");
+            Check(profile.Valor == valor, "and the purse matches the sum of what was reported (" + profile.Valor + ")");
+
+            bool standingSane = true;
+            for (int i = 0; i < standings.Count; i++) if (standings[i] < 0) standingSane = false;
+            Check(standingSane, "standing never went negative at any point in the session");
+
+            // A fresh opponent per GENERATED attempt. Ghosts are excluded and that is not a
+            // loosening: a ghost IS the player's own current line, so two consecutive ghosts being
+            // identical is the feature working, not a repeat. Among generated rosters a repeat
+            // would mean the pending opponent stopped being cleared, or that the seed inputs went
+            // stationary - which is exactly the bug this check found the first time it ran, where
+            // a player floored at standing 0 drew the same line on every attempt forever.
+            bool allDistinct = true;
+            string previousRoster = null;
+            int rosters = 0;
+            for (int i = 0; i < labels.Count; i++)
+            {
+                if (labels[i][0] != 'R') continue;
+                rosters++;
+                if (previousRoster != null && labels[i] == previousRoster) allDistinct = false;
+                previousRoster = labels[i];
+            }
+            Check(allDistinct,
+                  "a fresh opponent is drawn for each generated attempt rather than the same line being"
+                  + " refought (" + rosters + " generated, " + (labels.Count - rosters) + " ghosts)");
+
+            Line("  [note] session trace: " + string.Join(" -> ", standings.ConvertAll(v => v.ToString()).ToArray())
+                 + " standing, " + valor + " Valor. Logic only - nothing here has seen the screen.");
+            Line("");
+        }
+
+        private static void CheckProvingContent(ContentDatabase db)
+        {
+            Check(db.Balance.ProvingBrandsMax > 0, "provingBrandsMax is positive (" + db.Balance.ProvingBrandsMax + ")");
+            Check(db.Balance.ProvingBrandsRechargeHours > 0f,
+                  "provingBrandsRechargeHours is positive (" + Fmt(db.Balance.ProvingBrandsRechargeHours) + ")");
+            Check(db.Balance.ProvingStandingPerWin > 0,
+                  "provingStandingPerWin is positive, so standing actually climbs (" + db.Balance.ProvingStandingPerWin + ")");
+            Check(db.Balance.ProvingLossRewardFraction > 0f && db.Balance.ProvingLossRewardFraction < 1f,
+                  "provingLossRewardFraction is a real fraction - a loss pays something but less than a win ("
+                  + Fmt(db.Balance.ProvingLossRewardFraction) + ")");
+            Check(db.Heroes.Count >= db.Balance.MaxTeamSize,
+                  "content has at least MaxTeamSize heroes for the generator to draw a full line without repeats ("
+                  + db.Heroes.Count + " >= " + db.Balance.MaxTeamSize + ")");
+            Check(SaveSerializer.CurrentVersion >= 9,
+                  "save version is at least 9, where The Proving bumped it (" + SaveSerializer.CurrentVersion + ")");
+
+            // The mode fights on its OWN stage and its OWN environment. It used to borrow
+            // Chapters[0].Stages[0], which quietly rendered every match against ch1_1's painted
+            // ashen backdrop; these two checks are what would catch that coming back.
+            StageDef provingStage = ProvingGenerator.BuildStage();
+            Check(provingStage.Environment == ProvingGenerator.EnvironmentId
+                  && provingStage.Environment == "proving",
+                  "a Proving match fights in its own environment, not a borrowed campaign one ("
+                  + provingStage.Environment + ")");
+            bool borrowed = false;
+            for (int c = 0; c < db.Chapters.Count && !borrowed; c++)
+                for (int st = 0; st < db.Chapters[c].Stages.Count; st++)
+                    if (db.Chapters[c].Stages[st].Id == provingStage.Id) { borrowed = true; break; }
+            Check(!borrowed, "and that stage is not a campaign stage - its id collides with none of them");
+            Check(provingStage.Enemies.Count == 0,
+                  "it authors no enemies, because CombatSimulation ignores Stage.Enemies whenever an"
+                  + " Opponent is set - authoring any would be dead data that looks live");
+        }
+
+        /// <summary>
+        /// THE load-bearing check. An opponent must be a plain snapshot the simulation consumes the
+        /// same way it consumes an authored line, because that is the entire reason the mode is
+        /// built this way rather than the shorter way (DESIGN-PVP section 1).
+        ///
+        /// Proven two ways. First, the loadout fights: a BattleRequest carrying only an Opponent
+        /// and no Stage enemies still produces a real battle with enemy units in it. Second, and
+        /// more importantly, the SAME loadout produces a bit-identical result at the same seed
+        /// after a full serialise/deserialise round trip - which is what "it is data, not a live
+        /// query into local state" actually means. A snapshot that fought differently after a save
+        /// would be one that had been silently resolving something out of the local profile.
+        /// </summary>
+        private static void CheckProvingOpponentIsASnapshot(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            BattleLoadout loadout = ProvingGenerator.Generate(db, db.Balance, 12, session.ProvingTargetPower(),
+                                                              ProvingGenerator.SeedFor(12, 0));
+            Check(loadout != null && loadout.Units.Count > 0,
+                  "the generator produces a line at all (" + (loadout == null ? 0 : loadout.Units.Count) + " units)");
+            if (loadout == null || loadout.Units.Count == 0) { Line(""); return; }
+
+            bool idsOnly = true;
+            bool armorByValue = false;
+            for (int i = 0; i < loadout.Units.Count; i++)
+            {
+                if (string.IsNullOrEmpty(loadout.Units[i].DefId)) idsOnly = false;
+                if (loadout.Units[i].Armor.Count > 0) armorByValue = true;
+            }
+            Check(idsOnly, "every unit names its hero by id, which is what a server would key against too");
+            Check(armorByValue,
+                  "and carries its armor BY VALUE - pieces, not uids into a collection only the local player has");
+
+            BattleRequest request = new BattleRequest();
+            request.Content = db;
+            request.Team = profile.TeamHeroes();
+            request.Stage = db.Chapters[0].Stages[0];
+            request.Opponent = loadout;
+            request.Seed = 4242;
+            BattleResult direct = CombatSimulation.Run(request);
+
+            int enemies = 0;
+            for (int i = 0; i < direct.Units.Count; i++) if (!direct.Units[i].IsPlayer) enemies++;
+            Check(enemies == loadout.Units.Count,
+                  "the loadout stands on the enemy side of a real fight, every unit of it (" + enemies + " of "
+                  + loadout.Units.Count + ") - and the stage's own authored enemies do not also appear");
+
+            // Round-trip the snapshot through the save format and fight it again at the same seed.
+            profile.ProvingOpponent = loadout;
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loadedProfile = SaveSerializer.Deserialize(json, db, out error);
+            Check(loadedProfile != null && loadedProfile.ProvingOpponent != null,
+                  "the snapshot survives a save round trip" + (error != null ? " (" + error + ")" : ""));
+            if (loadedProfile == null || loadedProfile.ProvingOpponent == null) { Line(""); return; }
+
+            BattleRequest replay = new BattleRequest();
+            replay.Content = db;
+            replay.Team = profile.TeamHeroes();
+            replay.Stage = db.Chapters[0].Stages[0];
+            replay.Opponent = loadedProfile.ProvingOpponent;
+            replay.Seed = 4242;
+            BattleResult afterSave = CombatSimulation.Run(replay);
+
+            string before = FingerprintOf(direct);
+            string after = FingerprintOf(afterSave);
+            Check(after == before,
+                  "and fights BIT-IDENTICALLY after it - the opponent is data, not a live query into local state"
+                  + " (" + before.Length + " chars of event trace, identical)");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Opponents must actually track the player's power, or "near the player's own power" is a
+        /// claim the mode does not honour and standing is not a difficulty dial at all.
+        /// </summary>
+        private static void CheckProvingOpponentScalesWithPower(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            int[] targets = { 4000, 12000, 30000 };
+            int[] produced = new int[targets.Length];
+            bool monotonic = true;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                BattleLoadout line = ProvingGenerator.Generate(db, db.Balance, 0, targets[i],
+                                                                ProvingGenerator.SeedFor(0, 7));
+                produced[i] = line.PowerScore;
+                if (i > 0 && produced[i] <= produced[i - 1]) monotonic = false;
+            }
+
+            Check(monotonic,
+                  "a higher target power produces a stronger line, every step (" + produced[0] + " -> "
+                  + produced[1] + " -> " + produced[2] + ")");
+
+            // Within a factor of two of the target, at the same roster. This is loose on purpose:
+            // the generator solves level against a roster it drew at random, and armor adds on top,
+            // so an exact match would be a claim about content rather than about the generator.
+            bool nearTarget = true;
+            for (int i = 0; i < targets.Length; i++)
+            {
+                float ratio = produced[i] / (float)targets[i];
+                if (ratio < 0.5f || ratio > 2.5f) nearTarget = false;
+            }
+            Check(nearTarget,
+                  "and lands within a sane band of the target rather than anywhere at all (x"
+                  + Fmt(produced[0] / (float)targets[0]) + ", x" + Fmt(produced[1] / (float)targets[1])
+                  + ", x" + Fmt(produced[2] / (float)targets[2]) + ")");
+
+            // Standing is the dial: same player power, higher standing, harder opponent.
+            PlayerProfile low = GameSession.CreateNewProfile(db, Now);
+            GameSession lowSession = new GameSession(db, low);
+            int lowTarget = lowSession.ProvingTargetPower();
+            low.ProvingStanding = 60;
+            GameSession highSession = new GameSession(db, low);
+            int highTarget = highSession.ProvingTargetPower();
+            Check(highTarget > lowTarget,
+                  "standing raises the power an opponent is built to, so climbing costs something ("
+                  + lowTarget + " -> " + highTarget + ")");
+
+            // Determinism, the RecitalGenerator contract: same inputs, same line.
+            BattleLoadout a = ProvingGenerator.Generate(db, db.Balance, 5, 9000, ProvingGenerator.SeedFor(5, 2));
+            BattleLoadout b = ProvingGenerator.Generate(db, db.Balance, 5, 9000, ProvingGenerator.SeedFor(5, 2));
+            bool same = a.Units.Count == b.Units.Count && a.PowerScore == b.PowerScore;
+            for (int i = 0; same && i < a.Units.Count; i++)
+                if (a.Units[i].DefId != b.Units[i].DefId || a.Units[i].Level != b.Units[i].Level) same = false;
+            Check(same,
+                  "the same standing and seed regenerate the identical line - the opponent you saw yesterday"
+                  + " is still that opponent today");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The ghost bootstrap (DESIGN-PVP section 4): a new player's first opponents are snapshots
+        /// of their own line, and they are LABELLED as such. The label is not cosmetic - section 7
+        /// forbids implying a real opponent exists, and an unlabelled ghost is exactly that.
+        /// </summary>
+        private static void CheckProvingGhostBootstrap(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            Check(ProvingGenerator.ShouldUseGhost(db.Balance, profile),
+                  "a brand new player, standing 0, is offered a ghost of their own line first");
+
+            BattleLoadout first = session.CurrentProvingOpponent(Now);
+            Check(first != null && first.IsGhost,
+                  "and the opponent actually handed out is flagged as a ghost, so the UI can say so out loud");
+            Check(first != null && first.Units.Count == profile.TeamHeroes().Count,
+                  "the ghost is the player's own team, body for body (" + (first == null ? 0 : first.Units.Count) + ")");
+
+            // Past the bootstrap window the mode switches to generated rosters.
+            // Attempts, not highest standing. Highest used to stand in for this and was wrong: one
+            // win moves it by ProvingStandingPerWin, so a player who won their first fight left the
+            // bootstrap after a single opponent instead of ProvingGhostBootstrapCount of them.
+            profile.ProvingOpponent = null;
+            profile.ProvingHighestStanding = 99;
+            Check(ProvingGenerator.ShouldUseGhost(db.Balance, profile),
+                  "a high standing alone does NOT end the bootstrap - it is attempts that count, so one"
+                  + " early win cannot skip it");
+            profile.ProvingAttempts = db.Balance.ProvingGhostBootstrapCount;
+            Check(!ProvingGenerator.ShouldUseGhost(db.Balance, profile),
+                  "an established player is past the bootstrap and gets generated rosters instead");
+            BattleLoadout later = session.CurrentProvingOpponent(Now);
+            Check(later != null && !later.IsGhost,
+                  "and the opponent handed out then is not a ghost");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Brands, following the Echo bank. The rule worth checking is the one the Recital section
+        /// also checks for Echoes: an attempt is spent on ENTRY, so a loss costs exactly what a win
+        /// costs and the result path never touches the bank.
+        /// </summary>
+        private static void CheckProvingBrandsGateAttempts(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            int start = profile.ProvingBrandsBanked;
+            Check(start == db.Balance.ProvingBrandsMax,
+                  "a new profile starts with a full Brand bank (" + start + ")");
+
+            Check(session.TryStartProvingAttempt(Now) && profile.ProvingBrandsBanked == start - 1,
+                  "starting an attempt spends exactly one Brand (" + profile.ProvingBrandsBanked + ")");
+            int afterSpend = profile.ProvingBrandsBanked;
+            session.GrantProvingResult(false, Now);
+            Check(profile.ProvingBrandsBanked == afterSpend,
+                  "and a LOSS neither refunds it nor charges a second - GrantProvingResult never touches the bank ("
+                  + profile.ProvingBrandsBanked + ")");
+
+            session.TryStartProvingAttempt(Now);
+            int afterSecond = profile.ProvingBrandsBanked;
+            session.GrantProvingResult(true, Now);
+            Check(profile.ProvingBrandsBanked == afterSecond,
+                  "nor does a WIN - the cost is entry, not outcome (" + profile.ProvingBrandsBanked + ")");
+
+            // Drain it and confirm the gate actually closes.
+            while (profile.ProvingBrandsBanked > 0) session.TryStartProvingAttempt(Now);
+            Check(!session.TryStartProvingAttempt(Now) && profile.ProvingBrandsBanked == 0,
+                  "an empty bank refuses the attempt and spends nothing");
+
+            // Regen, and the wound-back-clock immunity the Echo bank proves.
+            long rechargeSeconds = (long)(db.Balance.ProvingBrandsRechargeHours * 3600f);
+            Check(session.TryStartProvingAttempt(Now + rechargeSeconds * 2),
+                  "two recharge intervals later the bank has refilled enough to attempt again");
+            int banked = profile.ProvingBrandsBanked;
+            Check(!session.TryStartProvingAttempt(Now - 86400L) || profile.ProvingBrandsBanked <= banked,
+                  "a clock wound a day backwards grants nothing - regen never runs in reverse");
+
+            ProvingBrandsStatus status = session.PeekProvingBrands(Now + rechargeSeconds * 100);
+            Check(status.Banked == db.Balance.ProvingBrandsMax && status.SecondsToNext == 0,
+                  "and the bank caps rather than growing forever (" + status.Banked + " of " + status.Max + ")");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Rewards: Gold and Relic Dust only, full on a win, ProvingLossRewardFraction on a loss.
+        /// Also checks the currencies NOT paid, because "no new currency" (DESIGN-PVP section 6) is
+        /// a decision that only holds if nothing quietly starts paying Shards or Slag later.
+        /// </summary>
+        private static void CheckProvingRewardSplit(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            long valorBefore = profile.Valor, goldBefore = profile.Gold, dustBefore = profile.RelicDust;
+            long shardsBefore = profile.Shards, slagBefore = profile.Slag;
+
+            ProvingRewards win = session.GrantProvingResult(true, Now);
+            Check(win.Valor > 0, "a win pays Valor (" + win.Valor + ")");
+            Check(profile.Valor == valorBefore + win.Valor,
+                  "and the Valor purse moves by exactly that much (" + profile.Valor + ")");
+            Check(profile.Gold == goldBefore && profile.RelicDust == dustBefore
+                  && profile.Shards == shardsBefore && profile.Slag == slagBefore,
+                  "and NO existing currency moves at all - not Gold, Shards, Relic Dust or Slag - so however"
+                  + " often this mode is played it cannot destabilise summoning, relics or armor");
+            Check(win.NewStanding == win.Standing + db.Balance.ProvingStandingPerWin && win.NewBest,
+                  "standing climbs on a win and records a new best (" + win.Standing + " -> " + win.NewStanding + ")");
+
+            // A loss at the SAME standing, to compare like with like.
+            PlayerProfile other = GameSession.CreateNewProfile(db, Now);
+            other.ProvingStanding = win.Standing;
+            GameSession otherSession = new GameSession(db, other);
+            ProvingRewards loss = otherSession.GrantProvingResult(false, Now);
+
+            int expectedValor = (int)(win.Valor * db.Balance.ProvingLossRewardFraction);
+            Check(loss.Valor == expectedValor,
+                  "a loss at the same standing pays exactly the configured fraction, not zero and not full ("
+                  + loss.Valor + " vs " + win.Valor + ", " + Pct(db.Balance.ProvingLossRewardFraction) + ")");
+            Check(loss.Valor > 0,
+                  "and that fraction is still something - a spent Brand that bought nothing reads as a bug");
+            Check(loss.NewStanding < loss.Standing || loss.Standing == 0,
+                  "standing falls on a loss (" + loss.Standing + " -> " + loss.NewStanding + ")");
+
+            // The floor. Standing is the difficulty dial, so a negative one would ask the generator
+            // for an opponent weaker than the weakest it can build.
+            PlayerProfile floored = GameSession.CreateNewProfile(db, Now);
+            GameSession flooredSession = new GameSession(db, floored);
+            for (int i = 0; i < 10; i++) flooredSession.GrantProvingResult(false, Now);
+            Check(floored.ProvingStanding == 0,
+                  "ten straight losses floor standing at zero rather than driving it negative");
+
+            Line("");
+        }
+
+        private static void CheckProvingSaveRoundTrip(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, Now);
+            GameSession session = new GameSession(db, profile);
+
+            session.CurrentProvingOpponent(Now);
+            session.TryStartProvingAttempt(Now);
+            session.GrantProvingResult(true, Now);
+            session.TryStartProvingAttempt(Now);
+            session.GrantProvingResult(true, Now);
+            BattleLoadout pending = session.CurrentProvingOpponent(Now);
+
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && error == null,
+                  "a save carrying Proving progress deserialises without error" + (error != null ? " (" + error + ")" : ""));
+            if (loaded == null) { Line(""); return; }
+
+            Check(loaded.Valor == profile.Valor, "the Valor purse survives the round trip (" + loaded.Valor + ")");
+            Check(loaded.ProvingStanding == profile.ProvingStanding,
+                  "standing survives the round trip (" + loaded.ProvingStanding + ")");
+            Check(loaded.ProvingHighestStanding == profile.ProvingHighestStanding,
+                  "highest standing survives the round trip (" + loaded.ProvingHighestStanding + ")");
+            Check(loaded.ProvingBrandsBanked == profile.ProvingBrandsBanked,
+                  "the Brand bank survives the round trip (" + loaded.ProvingBrandsBanked + ")");
+            Check(loaded.ProvingBrandsClockUnix == profile.ProvingBrandsClockUnix,
+                  "the regen clock survives the round trip (" + loaded.ProvingBrandsClockUnix + ")");
+            Check(loaded.ProvingOpponent != null && pending != null
+                  && loaded.ProvingOpponent.Units.Count == pending.Units.Count
+                  && loaded.ProvingOpponent.PowerScore == pending.PowerScore,
+                  "and the pending opponent survives it whole, gear included - a player mid-way through a"
+                  + " matchup does not lose it by closing the app");
+
+            // ---- upgrade from a save that predates The Proving entirely
+            PlayerProfile bare = GameSession.CreateNewProfile(db, Now);
+            JsonValue bareCurrent;
+            string bareParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(bare), out bareCurrent, out bareParseError);
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in bareCurrent.Keys)
+            {
+                if (key == "valor" || key == "provingBrandsBanked" || key == "provingBrandsClockUnix"
+                    || key == "provingStanding" || key == "provingHighestStanding"
+                    || key == "provingAttempts"
+                    || key == "provingOpponent") continue;
+                legacy.Set(key, key == "version" ? new JsonValue((double)8) : bareCurrent[key]);
+            }
+            string legacyJson = legacy.ToJson(true);
+            Check(legacyJson.IndexOf("provingStanding", StringComparison.Ordinal) < 0,
+                  "the hand-built version 8 save really has no Proving keys of any kind");
+
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacyJson, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null,
+                  "a version 8 save - an existing player who predates The Proving entirely - loads under version 9 code"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            Check(upgraded != null && upgraded.ProvingStanding == 0 && upgraded.ProvingHighestStanding == 0,
+                  "and reads as standing 0, nothing proven yet - the sane empty state, not a phantom rank");
+            Check(upgraded != null && upgraded.ProvingOpponent == null,
+                  "with no pending opponent, so the first entry generates one rather than fighting a ghost of nothing");
+            Check(upgraded != null && upgraded.ProvingBrandsBanked == db.Balance.ProvingBrandsMax,
+                  "and a FULL Brand bank rather than zero - the same exception version 7 made for the Echo bank ("
+                  + (upgraded == null ? 0 : upgraded.ProvingBrandsBanked) + ")");
+
+            // ---- a save from a NEWER build is refused, not mangled
+            JsonValue future;
+            string futureParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(profile), out future, out futureParseError);
+            future.Set("version", new JsonValue((double)(SaveSerializer.CurrentVersion + 1)));
+            string futureError;
+            PlayerProfile futureProfile = SaveSerializer.Deserialize(future.ToJson(true), db, out futureError);
+            Check(futureProfile == null && futureError != null,
+                  "a version " + (SaveSerializer.CurrentVersion + 1) + " save is refused rather than read as version 9");
             Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
                   "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
 

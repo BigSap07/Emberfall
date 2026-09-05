@@ -92,6 +92,37 @@ namespace Emberfall.UI.Screens
         private const float CampaignX = 0.680f, CampaignY = 0.440f; // the fire portal's arch
         private const float RecitalX = 0.800f, RecitalY = 0.450f;   // the purple cave mouth
 
+        /// <summary>
+        /// The Proving, on the walled gatehouse at the far right of the painting - the one built
+        /// structure the map had that nothing led to. Measured against the art rather than picked:
+        /// the gate spans roughly x 0.86 to 0.95, and 0.915 sits on its door.
+        ///
+        /// Placed here rather than as a sixth badge in the dock on purpose. A sixth badge widens
+        /// BadgeRowWidth from 740 to 892 per side, and with both rows anchored to opposite edges
+        /// that leaves 72 logical units of gap at 16:9 - survivable but tight, and it would have
+        /// put a layout risk into the row this branch is not otherwise touching. A map node costs
+        /// the dock nothing.
+        ///
+        /// The gap to DEEP RECITAL at 0.800 was checked, not assumed: the two labels are 150 and
+        /// 188 units wide, needing 169 units of clearance between centres, and 0.115 of map width
+        /// is about 221 at 16:9. It also stays inside the horizontal crop - at 16:9 the map shows
+        /// x 0.021 to 0.979, and this label's right edge lands at 0.954.
+        /// </summary>
+        private const float ProvingX = 0.915f, ProvingY = 0.500f;   // the walled gatehouse door
+        //
+        // y was 0.330 and that put the label INVISIBLE, entirely behind the idle rewards panel, at
+        // both 16:9 and 19.5:9. The clearance check that missed it only compared this node against
+        // the other MAP nodes and against the horizontal crop - both map-space questions - and the
+        // idle panel is screen-anchored, built after the nodes, and therefore drawn over them.
+        //
+        // Two different coordinate systems share one screen here, so a map node has to clear both:
+        //   map-space   the other five nodes, and the crop at the narrowest supported aspect
+        //   screen-space the idle panel (top right, 640x200 under the top bar) and the campaign
+        //                card (bottom right, 600x168 above the badge row)
+        // At 0.500 the label lands 470..518 from the top at 16:9 and 419..467 at 19.5:9, against an
+        // idle panel occupying 148..348 and a campaign card starting at 676 and 574 respectively -
+        // clear of both at both aspects, with DEEP RECITAL still 61 units away horizontally.
+
         // ---------- the bottom row ----------
         // One size and one spacing rule for every circular cell along the bottom, dock and squad
         // alike. They used to disagree in four separate ways at once - 96 vs 104 icons, 18 vs 16
@@ -232,6 +263,7 @@ namespace Emberfall.UI.Screens
             AddMapNode("SUMMON", SummonX, SummonY, OpenSummon);
             AddMapNode("FORGE", ForgeX, ForgeY, OpenForge);
             AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital);
+            AddMapNode("PROVING", ProvingX, ProvingY, OpenProving);
             // The portal is a place you can walk to, like the others. Its live state and its
             // primary action live in the corner card instead, so the map keeps only the tap target.
             AddMapNode("CAMPAIGN", CampaignX, CampaignY, OpenCampaign);
@@ -805,6 +837,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Events);
+        }
+
+        private void OpenProving()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Proving);
         }
 
         private void OpenRecital()

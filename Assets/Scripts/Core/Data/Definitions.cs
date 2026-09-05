@@ -1166,6 +1166,46 @@ namespace Emberfall.Core.Data
         /// per-attempt shape changed.</summary>
         public float RecitalEchoesRechargeHours = 4f;
 
+        // ---------------------------------------------------------------- The Proving (PvP)
+        // Every value here is ILLUSTRATIVE and DESIGN-PVP says so in section 5 and section 9. They
+        // are starting points chosen so the mode runs, not tuning - the balance pass that firms
+        // them up needs the mode playable to have anything to measure. Kept out of task 13's
+        // retuned surface entirely: nothing below touches campaign.json or any existing key.
+
+        /// <summary>Maximum Brands stored. DESIGN-PVP section 5's illustrative 5.</summary>
+        public int ProvingBrandsMax = 5;
+
+        /// <summary>Hours to regenerate one Brand. DESIGN-PVP section 5's illustrative 3.</summary>
+        public float ProvingBrandsRechargeHours = 3f;
+
+        /// <summary>Base Valor for a Proving win, before the per-standing scaling below.</summary>
+        public int ProvingRewardValorBase = 30;
+
+        /// <summary>Extra Valor per point of standing on top of ProvingRewardValorBase.</summary>
+        public int ProvingRewardValorPerStanding = 2;
+
+        /// <summary>
+        /// Fraction of the win reward a LOSS still pays (DESIGN-PVP section 6). Recital pays
+        /// nothing on a loss, which is right for a ladder where losing means not advancing; The
+        /// Proving is a repeatable sink for a regenerating resource, and paying zero would make a
+        /// spent Brand read as a bug rather than a result. Illustrative 0.25.
+        /// </summary>
+        public float ProvingLossRewardFraction = 0.25f;
+
+        /// <summary>Standing gained on a win.</summary>
+        public int ProvingStandingPerWin = 3;
+
+        /// <summary>Standing lost on a loss. Standing floors at zero and never goes negative.</summary>
+        public int ProvingStandingPerLoss = 2;
+
+        /// <summary>
+        /// How many opponents at the start of a player's history are ghosts of their own past team
+        /// rather than generated rosters (DESIGN-PVP section 4's bootstrap). Small on purpose: the
+        /// ghost exists to cover the cold start, where standing is still 0 and the generator's
+        /// power band has nothing meaningful to scale against.
+        /// </summary>
+        public int ProvingGhostBootstrapCount = 3;
+
         /// <summary>Base gold on any floor clear, before the per-floor scaling below.</summary>
         public int RecitalRewardGoldBase = 200;
 
@@ -1248,6 +1288,14 @@ namespace Emberfall.Core.Data
             b.RecitalBonusLevelsPerCycle = j.GetInt("recitalBonusLevelsPerCycle", b.RecitalBonusLevelsPerCycle);
             b.RecitalEchoesMax = j.GetInt("recitalEchoesMax", b.RecitalEchoesMax);
             b.RecitalEchoesRechargeHours = j.GetFloat("recitalEchoesRechargeHours", b.RecitalEchoesRechargeHours);
+            b.ProvingBrandsMax = j.GetInt("provingBrandsMax", b.ProvingBrandsMax);
+            b.ProvingBrandsRechargeHours = j.GetFloat("provingBrandsRechargeHours", b.ProvingBrandsRechargeHours);
+            b.ProvingRewardValorBase = j.GetInt("provingRewardValorBase", b.ProvingRewardValorBase);
+            b.ProvingRewardValorPerStanding = j.GetInt("provingRewardValorPerStanding", b.ProvingRewardValorPerStanding);
+            b.ProvingLossRewardFraction = j.GetFloat("provingLossRewardFraction", b.ProvingLossRewardFraction);
+            b.ProvingStandingPerWin = j.GetInt("provingStandingPerWin", b.ProvingStandingPerWin);
+            b.ProvingStandingPerLoss = j.GetInt("provingStandingPerLoss", b.ProvingStandingPerLoss);
+            b.ProvingGhostBootstrapCount = j.GetInt("provingGhostBootstrapCount", b.ProvingGhostBootstrapCount);
             b.RecitalRewardGoldBase = j.GetInt("recitalRewardGoldBase", b.RecitalRewardGoldBase);
             b.RecitalRewardGoldPerFloor = j.GetInt("recitalRewardGoldPerFloor", b.RecitalRewardGoldPerFloor);
             b.RecitalRewardShardsBase = j.GetInt("recitalRewardShardsBase", b.RecitalRewardShardsBase);

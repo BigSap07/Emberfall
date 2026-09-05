@@ -98,6 +98,44 @@ namespace Emberfall.Core.Session
         public long SecondsToNext;
     }
 
+    /// <summary>Brands available right now, as GameSession.PeekProvingBrands reports it - the
+    /// same snapshot-not-mutation split RecitalEchoesStatus is for Echoes.</summary>
+    public sealed class ProvingBrandsStatus
+    {
+        public int Banked;
+        public int Max;
+
+        /// <summary>Seconds until the next Brand, or 0 if the bank is already at Max.</summary>
+        public long SecondsToNext;
+    }
+
+    /// <summary>
+    /// One Proving attempt's outcome, from GameSession.GrantProvingResult.
+    ///
+    /// Valor only - The Proving's own currency, and nothing else. It pays no Gold, no Shards, no
+    /// Relic Dust and no Slag, which keeps the mode out of every existing economy: nothing a player
+    /// earns here can accelerate summoning, armor or relics, so none of those can be destabilised
+    /// by however often this mode turns out to be played.
+    ///
+    /// This is a reversal of DESIGN-PVP section 6 (which specified Gold and Relic Dust and no new
+    /// currency), made deliberately after sign-off. The doc has been corrected to match.
+    /// </summary>
+    public sealed class ProvingRewards
+    {
+        public bool Victory;
+
+        /// <summary>Standing BEFORE this attempt resolved - what the rewards were scaled off.</summary>
+        public int Standing;
+
+        /// <summary>Standing after. Floors at zero; never negative.</summary>
+        public int NewStanding;
+
+        /// <summary>True when this win set a new ProvingHighestStanding.</summary>
+        public bool NewBest;
+
+        public int Valor;
+    }
+
     /// <summary>One floor attempt's outcome, from GameSession.GrantRecitalResult.</summary>
     public sealed class RecitalRewards
     {
@@ -170,6 +208,16 @@ namespace Emberfall.Core.Session
             profile.RecitalHighestFloor = 0;
             profile.RecitalEchoesBanked = content.Balance.RecitalEchoesMax;
             profile.RecitalEchoesClockUnix = nowUnix;
+
+            // The Proving: same shape as the Echo bank above and for the same reason - a new
+            // account can attempt immediately rather than waiting out a first recharge. The clock
+            // is stamped to now rather than left at 0, which matters: a zero clock means an elapsed
+            // time measured from 1970, so the first settle would compute an enormous regen and the
+            // bank would be indistinguishable from full however it had actually been spent.
+            profile.ProvingBrandsBanked = content.Balance.ProvingBrandsMax;
+            profile.ProvingBrandsClockUnix = nowUnix;
+            profile.ProvingStanding = 0;
+            profile.ProvingHighestStanding = 0;
 
             List<HeroDef> starters = content.StartingHeroes;
             for (int i = 0; i < starters.Count; i++) AddHero(profile, starters[i], nowUnix);
@@ -276,6 +324,22 @@ namespace Emberfall.Core.Session
             // into pieces - an armor uid resolves against the save, not against content, which is
             // the one thing Content on this request cannot do.
             request.Profile = Profile;
+            return request;
+        }
+
+        /// <summary>
+        /// A battle against a snapshot opponent. Identical to BuildBattleRequest except for the one
+        /// extra field, which is the whole point of the boundary: the fight does not know or care
+        /// that the far side came from a generator rather than from authored content.
+        ///
+        /// The stage still rides along because a fight needs an environment and a name to display -
+        /// only who stands opposite changes, and CombatSimulation ignores Stage.Enemies entirely
+        /// when Opponent is set.
+        /// </summary>
+        public BattleRequest BuildProvingRequest(StageDef stage, BattleLoadout opponent, int seed)
+        {
+            BattleRequest request = BuildBattleRequest(stage, seed);
+            request.Opponent = opponent;
             return request;
         }
 
@@ -998,6 +1062,174 @@ namespace Emberfall.Core.Session
             if (Profile.RecitalEchoesBanked <= 0) return false;
             Profile.RecitalEchoesBanked--;
             return true;
+        }
+
+        // ------------------------------------------------------------------ The Proving (PvP)
+        // The whole block below is the Echo bank's shape, field for field and method for method.
+        // That is DESIGN-PVP section 5's decision, not laziness: two attempt-gated modes with two
+        // different regen idioms is two things to reason about, and the Echo pattern is the one
+        // already proven against a wound-back clock and a fractional remainder.
+
+        public ProvingBrandsStatus PeekProvingBrands(long nowUnix)
+        {
+            ProvingBrandsStatus status = new ProvingBrandsStatus();
+            status.Max = Math.Max(0, Balance.ProvingBrandsMax);
+            long rechargeSeconds = ProvingRechargeSeconds();
+            long elapsed = nowUnix - Profile.ProvingBrandsClockUnix;
+            if (elapsed < 0) elapsed = 0;
+            long gained = rechargeSeconds > 0 ? elapsed / rechargeSeconds : 0;
+            status.Banked = (int)Math.Min(status.Max, Profile.ProvingBrandsBanked + gained);
+
+            if (status.Banked >= status.Max || rechargeSeconds <= 0) status.SecondsToNext = 0;
+            else status.SecondsToNext = rechargeSeconds - (elapsed % rechargeSeconds);
+            return status;
+        }
+
+        private long ProvingRechargeSeconds()
+        {
+            return (long)(Math.Max(0.01f, Balance.ProvingBrandsRechargeHours) * 3600f);
+        }
+
+        /// <summary>SettleRecitalEchoes for Brands. Same fractional-remainder preservation, same
+        /// snap-to-now at the cap, same no-op on a wound-back clock.</summary>
+        private void SettleProvingBrands(long nowUnix)
+        {
+            int max = Math.Max(0, Balance.ProvingBrandsMax);
+            long rechargeSeconds = ProvingRechargeSeconds();
+            long elapsed = nowUnix - Profile.ProvingBrandsClockUnix;
+            if (elapsed <= 0 || rechargeSeconds <= 0) return;
+
+            long gained = elapsed / rechargeSeconds;
+            if (gained <= 0) return;
+
+            long banked = Profile.ProvingBrandsBanked + gained;
+            if (banked >= max)
+            {
+                Profile.ProvingBrandsBanked = max;
+                Profile.ProvingBrandsClockUnix = nowUnix;
+            }
+            else
+            {
+                Profile.ProvingBrandsBanked = (int)banked;
+                Profile.ProvingBrandsClockUnix += gained * rechargeSeconds;
+            }
+        }
+
+        /// <summary>
+        /// Spends one Brand, settling regen first. Returns false - spending nothing - when the bank
+        /// is still empty after settling.
+        ///
+        /// Spent on ENTRY, never on outcome. GrantProvingResult below does not look at Brands at
+        /// all, because by the time it runs one is already gone whether the fight was won or lost.
+        /// Charging on the result instead would make the resource a tax on failure and would
+        /// quietly reward abandoning a fight that is going badly.
+        /// </summary>
+        public bool TryStartProvingAttempt(long nowUnix)
+        {
+            SettleProvingBrands(nowUnix);
+            if (Profile.ProvingBrandsBanked <= 0) return false;
+            Profile.ProvingBrandsBanked--;
+            return true;
+        }
+
+        /// <summary>
+        /// The opponent currently on offer, generating and persisting one if there is none.
+        ///
+        /// Persisted rather than regenerated per view so the line a player is looking at does not
+        /// change under them between opening the screen and pressing fight. Cleared by
+        /// GrantProvingResult, so the next attempt draws a fresh one.
+        /// </summary>
+        public BattleLoadout CurrentProvingOpponent(long nowUnix)
+        {
+            if (Profile.ProvingOpponent != null) return Profile.ProvingOpponent;
+
+            if (ProvingGenerator.ShouldUseGhost(Balance, Profile))
+            {
+                Profile.ProvingOpponent = ProvingGenerator.GhostOf(Content, Profile, "Your Own Line");
+            }
+            else
+            {
+                // Indexed by ATTEMPTS, which always advances. Indexing by highest standing meant a
+                // stalled player - standing floored at 0, highest static - drew the same seed and
+                // therefore the same opponent on every single attempt.
+                int seed = ProvingGenerator.SeedFor(Profile.ProvingStanding, Profile.ProvingAttempts);
+                Profile.ProvingOpponent = ProvingGenerator.Generate(Content, Balance,
+                                                                    Profile.ProvingStanding,
+                                                                    ProvingTargetPower(), seed);
+            }
+            return Profile.ProvingOpponent;
+        }
+
+        /// <summary>
+        /// The power a generated opponent aims at: the player's own line, scaled up with standing.
+        /// Reading the player's real line rather than a table is what keeps the mode tracking where
+        /// they actually are; the standing term is what makes climbing cost something.
+        /// </summary>
+        public int ProvingTargetPower()
+        {
+            int own = 0;
+            List<HeroInstance> team = Profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++)
+            {
+                HeroDef def = Content.GetHero(team[i].DefId);
+                if (def == null) continue;
+                own += StatMath.PowerScore(StatMath.ForHero(def, team[i].Level));
+            }
+            if (own <= 0) own = 1;
+            float standingScale = 1f + 0.01f * Math.Max(0, Profile.ProvingStanding);
+            return (int)(own * standingScale);
+        }
+
+        /// <summary>
+        /// Resolves one Proving attempt. Does NOT touch Brands - TryStartProvingAttempt already
+        /// spent one before the fight ran, regardless of what this reports.
+        ///
+        /// A loss pays ProvingLossRewardFraction of the win amount rather than nothing. Recital
+        /// pays zero on a loss and that is right for a ladder, where losing means not advancing;
+        /// this mode is a repeatable sink for a regenerating resource, and a spent Brand that
+        /// bought literally nothing reads as a bug rather than a result.
+        /// </summary>
+        public ProvingRewards GrantProvingResult(bool victory, long nowUnix)
+        {
+            ProvingRewards rewards = new ProvingRewards();
+            rewards.Victory = victory;
+            rewards.Standing = Profile.ProvingStanding;
+
+            // Counted for every attempt, won or lost, before anything else moves - it drives both
+            // the ghost bootstrap and the opponent seed, and both need it to advance unconditionally.
+            Profile.ProvingAttempts++;
+
+            int valor = Balance.ProvingRewardValorBase
+                      + Balance.ProvingRewardValorPerStanding * Math.Max(0, Profile.ProvingStanding);
+
+            if (!victory) valor = (int)(valor * Math.Max(0f, Balance.ProvingLossRewardFraction));
+
+            rewards.Valor = valor;
+            Profile.Valor += valor;
+
+            if (victory)
+            {
+                Profile.TotalBattlesWon++;
+                Profile.ProvingStanding += Math.Max(0, Balance.ProvingStandingPerWin);
+                if (Profile.ProvingStanding > Profile.ProvingHighestStanding)
+                {
+                    Profile.ProvingHighestStanding = Profile.ProvingStanding;
+                    rewards.NewBest = true;
+                }
+            }
+            else
+            {
+                // Floors at zero. A standing that could go negative would be a punishment with no
+                // floor, and it is also the difficulty dial - driving it below zero would ask the
+                // generator for an opponent weaker than the weakest it can build.
+                Profile.ProvingStanding = Math.Max(0, Profile.ProvingStanding - Math.Max(0, Balance.ProvingStandingPerLoss));
+            }
+
+            rewards.NewStanding = Profile.ProvingStanding;
+
+            // The line just fought is spent either way, so the next attempt draws a fresh one.
+            Profile.ProvingOpponent = null;
+            return rewards;
         }
 
         /// <summary>

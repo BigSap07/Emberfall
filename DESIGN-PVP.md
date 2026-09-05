@@ -237,10 +237,10 @@ systems is how the `idle*` prefix collision DESIGN-DEEP-RECITAL warned about sta
 
 | Field / key | Shape | Illustrative |
 |---|---|---|
-| `PlayerProfile.ArenaBrandsBanked` | `int` | — |
-| `PlayerProfile.ArenaBrandsClockUnix` | `long` | — |
-| `balance.arenaBrandsMax` | `int` | 5 |
-| `balance.arenaBrandsRechargeHours` | `float` | 3 |
+| `PlayerProfile.ProvingBrandsBanked` | `int` | — |
+| `PlayerProfile.ProvingBrandsClockUnix` | `long` | — |
+| `balance.provingBrandsMax` | `int` | 5 |
+| `balance.provingBrandsRechargeHours` | `float` | 3 |
 
 Illustrative values only, matching how DESIGN-DEEP-RECITAL presented its own. Five Brands at three
 hours is a full refill in fifteen hours and roughly two sessions a day, which is a pacing decision
@@ -250,41 +250,68 @@ this document does not have the data to make. **Needs sign-off.**
 
 ## 6. Rewards
 
-**No new currency.** The Proving pays **Gold** and **Relic Dust**, both existing.
+**Superseded, 2026-09-03.** This section originally specified Gold and Relic Dust and no new
+currency. That call was flagged for sign-off and was **overruled**: The Proving now pays a currency
+of its own, **Valor**, and pays nothing else. The original reasoning is kept below the line because
+the risk it identified is real and did not go away — it is now managed differently rather than
+avoided.
 
-The reasoning is economic restraint rather than a lack of ideas. A new currency needs a sink to be
-worth anything, a sink means a shop, and a shop that sells power is a second progression track
-running alongside armor and relics — which is precisely the balance surface DESIGN-COMBAT-STATS and
-the task 13 retune just finished stabilising. Adding a parallel power faucet immediately after that
-work landed would reopen it for no reason this mode requires.
+### What ships
 
-Gold and Relic Dust are chosen over Shards and Slag deliberately:
+A win pays `provingRewardValorBase + provingRewardValorPerStanding × standing`. A loss pays
+`provingLossRewardFraction` of that — see the consolation argument below, which is unchanged.
+**No Gold, no Shards, no Relic Dust, no Slag.** The harness asserts all four are untouched, because
+"the mode touches no existing economy" is only true for as long as nothing quietly starts paying
+one.
 
-- **Gold** is the universal soft currency and already has sinks that do not distort combat power.
-- **Relic Dust** has the precedent: Recital already pays it at milestone floors
-  (`recitalMilestoneDustPerTier`, `recitalDeepMilestoneDustFallback`), so a repeatable mode paying
-  Dust is an established shape rather than a new one.
-- **Shards** are the summoning currency and the primary monetisation-adjacent resource; a repeatable
-  free faucet into it is a much larger economic decision than this document should make alone.
-- **Slag** is armor's currency and armor is brand new (save version 8). Feeding it from a second
-  source before its own faucet has been observed in play would make both untunable at once.
+### Why the reversal is defensible
 
-Reward scale follows standing, not win streak, so the numbers stay a function of a value the save
-already holds: `arenaRewardGoldBase + arenaRewardGoldPerStanding * standing`, and the same shape for
-Dust, mirroring `recitalRewardGoldBase`/`recitalRewardGoldPerFloor` exactly.
+The original objection was: a new currency needs a sink, a sink means a shop, and a shop that sells
+power is a second progression track beside armor and relics — the surface the task 13 retune had
+just stabilised.
 
-**A loss pays a reduced amount rather than nothing.** Recital pays nothing on a loss, which is
-correct for a ladder where a loss means you did not advance. The Proving is a repeatable sink for a
-regenerating resource; paying zero makes a lost Brand feel like a bug rather than a result. A
-consolation fraction (`arenaLossRewardFraction`, illustrative 0.25) keeps the floor above zero.
-**Needs sign-off** — this is an economy call, not a mechanical one.
+Paying an isolated currency turns out to be the **safer** of the two options against that risk, not
+the more dangerous one, and the original section had it backwards:
+
+- Paying **Gold and Relic Dust** injects into two live economies immediately, on day one, at
+  whatever rate the mode ends up being played at. Relic Dust in particular is a relic-progression
+  input, so a repeatable mode feeding it is a second faucet into a system already tuned around one.
+- Paying **Valor** injects into nothing. Until it has a sink it is inert, which means the mode can
+  be played, observed and tuned without moving any existing balance surface at all.
+
+The risk therefore moves from "how much does this distort the economy today" to "what will Valor be
+allowed to buy", which is a decision that can be made later, with play data, instead of a
+consequence that lands now.
+
+### The sink is the open decision, and it is deliberately not made here
+
+**Valor currently buys nothing.** That is a holding position, not an oversight. What it is allowed
+to buy is the whole question, and it is an economy decision that wants its own pass:
+
+- **Cosmetic or vanity only** — safest, changes no balance surface ever, but weakest as a reason to
+  play.
+- **Convenience** — extra Brands, an opponent reroll. Contained, and a reroll in particular has a
+  natural home on the Proving screen. Still touches nothing that fights.
+- **Power** — armor, relics, hero copies. This is the option the original section was written to
+  prevent, and nothing here weakens that argument. Doing it would need the task 13 surface
+  re-examined, not assumed safe.
+
+Until that is decided the number accumulates and is displayed, which is honest, and the mode is
+playable without it.
+
+### Consolation on a loss (unchanged)
+
+A loss pays a reduced amount rather than nothing. Recital pays nothing on a loss, which is correct
+for a ladder where a loss means you did not advance. The Proving is a repeatable sink for a
+regenerating resource; paying zero makes a lost Brand feel like a bug rather than a result.
+`provingLossRewardFraction`, illustrative 0.25.
 
 ---
 
 ## 7. Standing
 
-`ArenaStanding` is an integer that goes up on a win and down on a loss, floored so it cannot go
-negative, with `ArenaHighestStanding` recording the best ever reached.
+`ProvingStanding` is an integer that goes up on a win and down on a loss, floored so it cannot go
+negative, with `ProvingHighestStanding` recording the best ever reached.
 
 **It is a personal-progress number, not a ranking.** This document states that as plainly as
 DESIGN-DEEP-RECITAL section 5 did about its leaderboard, and for the same reason: there is nothing
@@ -317,24 +344,25 @@ Additive, following every prior bump in this project:
 
 | Key | Type | Default for a version 8 save |
 |---|---|---|
-| `arenaBrandsBanked` | int | `balance.arenaBrandsMax` (see below) |
-| `arenaBrandsClockUnix` | long | `0`, settled forward on first read |
-| `arenaStanding` | int | `0` |
-| `arenaHighestStanding` | int | `0` |
-| `arenaCurrentOpponent` | object, nullable | absent — generated on first entry |
+| `valor` | long | `0` |
+| `provingBrandsBanked` | int | `balance.provingBrandsMax` (see below) |
+| `provingBrandsClockUnix` | long | `0`, settled forward on first read |
+| `provingStanding` | int | `0` |
+| `provingHighestStanding` | int | `0` |
+| `provingOpponent` | object, nullable | absent — generated on first entry |
 
 **Upgrade needs no migration.** A version 8 save simply has none of these keys, which read as
 `PlayerProfile`'s own field defaults — exactly a player who has never seen the mode. There is no
-prior format for arena progress to translate out of, the way a hero-level `relicId` had to become an
+prior format for Proving progress to translate out of, the way a hero-level `relicId` had to become an
 owned-relics entry at the version 4 → 5 bump.
 
-**One deliberate exception, copied from version 7.** `arenaBrandsBanked` defaults to
-`balance.arenaBrandsMax` rather than to the bare field default of `0`, so an upgrading player can
+**One deliberate exception, copied from version 7.** `provingBrandsBanked` defaults to
+`balance.provingBrandsMax` rather than to the bare field default of `0`, so an upgrading player can
 attempt immediately instead of waiting out a full recharge for a resource their save never had an
 opinion on. The Echo bank did exactly this and the version 7 comment says why; the reasoning is
 identical here and the deviation is called out for the same reason.
 
-**`arenaCurrentOpponent` is a persisted `BattleLoadout`**, so the opponent a player is looking at
+**`provingOpponent` is a persisted `BattleLoadout`**, so the opponent a player is looking at
 survives closing the app. It is written the same way an armor piece is written — **resolved values,
 not a generator seed** — for the reason DESIGN-ARMOR section 10 gives: a seed is smaller, but
 `heroes.json`, `armor.json` and `balance.json` are all tuning data expected to move, and a seed
@@ -351,8 +379,9 @@ version check (`SaveSerializer.cs:291`) refuses a newer save rather than manglin
 
 - **It is not multiplayer.** No opponent in this system is a real person, and the document takes
   care not to imply otherwise anywhere it would reach a player.
-- **It does not introduce a currency, a shop, or a power source.** Section 6 is deliberately
-  conservative because the balance work it would disturb landed days ago.
+- **It introduces a currency but no shop and no power source.** Valor is paid and displayed and
+  buys nothing; see section 6 for why the sink is deliberately still open, and why paying an inert
+  currency disturbs less than paying two live ones.
 - **It does not specify numbers.** Every value in this document is illustrative and marked as such.
   Brand recharge rate, reward scale, standing gain/loss, opponent power band and tier thresholds are
   all a balance pass, and that pass needs the mode running to have anything to measure.
