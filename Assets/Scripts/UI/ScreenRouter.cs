@@ -9,6 +9,7 @@ namespace Emberfall.UI
     public enum ScreenId
     {
         MainMenu,
+        Formation,
         Heroes,
         HeroDetail,
         Campaign,
@@ -62,6 +63,7 @@ namespace Emberfall.UI
         public RectTransform OverlayLayer;
 
         public Screens.MainMenuScreen MainMenu;
+        public Screens.FormationScreen Formation;
         public Screens.HeroesScreen Heroes;
         public Screens.HeroDetailScreen HeroDetail;
         public Screens.CampaignScreen Campaign;
@@ -82,6 +84,7 @@ namespace Emberfall.UI
             OverlayLayer = overlayLayer;
 
             MainMenu = Create<Screens.MainMenuScreen>();
+            Formation = Create<Screens.FormationScreen>();
             Heroes = Create<Screens.HeroesScreen>();
             HeroDetail = Create<Screens.HeroDetailScreen>();
             Campaign = Create<Screens.CampaignScreen>();

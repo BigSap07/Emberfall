@@ -1731,12 +1731,18 @@ namespace Emberfall.UI.Screens
             OnShow();
         }
 
-        /// <summary>Straight to Heroes to change the team - the stage stays remembered on this
-        /// screen (_stage isn't cleared), so Campaign still opens on the same fight afterward.</summary>
+        /// <summary>
+        /// Straight to the banner to change the line - the stage stays remembered on this screen
+        /// (_stage isn't cleared), so Campaign still opens on the same fight afterward.
+        ///
+        /// Now goes to Formation rather than the collection. The button is called ADJUST LINE and
+        /// it used to land on a roster with no deploy control on it, which is the same complaint
+        /// the Formation screen exists to answer.
+        /// </summary>
         private void AdjustLine()
         {
             App.Audio.Tap();
-            Router.Show(ScreenId.Heroes, false);
+            Router.Show(ScreenId.Formation, false);
         }
     }
 }

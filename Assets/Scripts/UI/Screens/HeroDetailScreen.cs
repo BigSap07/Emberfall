@@ -26,8 +26,8 @@ namespace Emberfall.UI.Screens
         private Text _levelLabel;
         private RectTransform _chipRow;
         private Text _slotHint;
-        private RectTransform _slotRow;
-        private readonly UIButton[] _slotButtons = new UIButton[PlayerProfile.TeamSize];
+        private Text _slotStatus;
+        private UIButton _openFormation;
 
         private RectTransform _statsCard;
         private Text _hpValue, _atkValue, _defValue, _spdValue, _critValue;
@@ -115,25 +115,28 @@ namespace Emberfall.UI.Screens
             _powerLabel = UIBuilder.Label("Power", _identityCard, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperRight);
             UIBuilder.Box(_powerLabel.rectTransform, -28f, -158f, 320f, 44f, new Vector2(1f, 1f));
 
-            _slotHint = UIBuilder.Label("SlotHint", _identityCard, "BANNER SLOT", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            // ---------------------------------------------------------------- banner status
+            // READ-ONLY, deliberately. This used to be five buttons that deployed the hero, which
+            // made it the only working deploy control in the game AND a second place that could
+            // disagree with any other. FormationScreen is now the one place a line-up is edited;
+            // this states where the hero currently stands and offers the route there, exactly the
+            // shape the armor card already uses for EQUIP IN BAG.
+            _slotHint = UIBuilder.Label("SlotHint", _identityCard, "BANNER", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             UIBuilder.Box(_slotHint.rectTransform, 28f, -218f, 300f, 26f, new Vector2(0f, 1f));
 
-            _slotRow = UIBuilder.Node("Slots", _identityCard);
-            UIBuilder.Box(_slotRow, 28f, 24f, 0f, 74f, new Vector2(0f, 0f));
-            _slotRow.anchorMin = new Vector2(0f, 0f);
-            _slotRow.anchorMax = new Vector2(1f, 0f);
-            _slotRow.offsetMin = new Vector2(28f, 24f);
-            _slotRow.offsetMax = new Vector2(-28f, 98f);
-            UIBuilder.HStack(_slotRow, 12f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+            _slotStatus = UIBuilder.Label("SlotStatus", _identityCard, "", UITheme.FontSmall,
+                                          UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_slotStatus.rectTransform, 28f, 52f, 520f, 40f, new Vector2(0f, 0f));
 
-            for (int i = 0; i < PlayerProfile.TeamSize; i++)
-            {
-                int slot = i;
-                UIButton button = UIBuilder.SecondaryButton("Slot" + i, _slotRow, "SLOT " + (i + 1), UITheme.FontSmall);
-                UIBuilder.Flexible(button.Root, 1f, 0f);
-                button.OnClick(delegate { Deploy(slot); });
-                _slotButtons[i] = button;
-            }
+            _openFormation = UIBuilder.SecondaryButton("OpenBanner", _identityCard, "CHANGE BANNER", UITheme.FontTiny);
+            UIBuilder.Box(_openFormation.Root, -28f, 30f, 300f, 62f, new Vector2(1f, 0f));
+            _openFormation.OnClick(OpenFormation);
+        }
+
+        private void OpenFormation()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Formation);
         }
 
         /// <summary>
@@ -382,7 +385,8 @@ namespace Emberfall.UI.Screens
             _statsCard.gameObject.SetActive(!locked);
             _armorCard.gameObject.SetActive(!locked);
             _slotHint.gameObject.SetActive(!locked);
-            _slotRow.gameObject.SetActive(!locked);
+            _slotStatus.gameObject.SetActive(!locked);
+            _openFormation.Root.gameObject.SetActive(!locked);
             _levelUpButton.Root.gameObject.SetActive(!locked);
             _levelUpTenButton.Root.gameObject.SetActive(!locked);
             _obtainButton.Root.gameObject.SetActive(locked);
@@ -452,16 +456,11 @@ namespace Emberfall.UI.Screens
                 : "Next level costs " + cost + " gold  -  you hold " + session.Profile.Gold;
 
             int deployedSlot = session.Profile.TeamSlotOf(_hero.Uid);
-            for (int i = 0; i < _slotButtons.Length; i++)
-            {
-                bool active = deployedSlot == i;
-                _slotButtons[i].Background.color = active ? UITheme.Success : UITheme.PanelRaised;
-                _slotButtons[i].Frame.color = active ? UITheme.Success : UITheme.Border;
-                _slotButtons[i].Label.color = active ? UITheme.TextOnAccent : UITheme.TextPrimary;
-                HeroInstance occupant = session.Profile.FindHeroByUid(session.Profile.Team[i]);
-                _slotButtons[i].SetText(active ? "DEPLOYED " + (i + 1)
-                                              : (occupant != null ? occupant.Def.Name.ToUpperInvariant() : "SLOT " + (i + 1)));
-            }
+            _slotStatus.text = deployedSlot >= 0
+                ? "Standing in slot " + (deployedSlot + 1)
+                  + (deployedSlot == 0 ? "  -  the front of the line" : "")
+                : "On the bench";
+            _slotStatus.color = deployedSlot >= 0 ? UITheme.Success : UITheme.TextMuted;
         }
 
         /// <summary>No HeroInstance exists for a locked hero, so there's no level/power/deploy state to show.</summary>
@@ -505,16 +504,6 @@ namespace Emberfall.UI.Screens
             App.Notify(_hero.Def.Name + " reached level " + result.NewLevel + ".");
             App.RefreshHud();
             App.RequestSave();
-            Refresh();
-        }
-
-        private void Deploy(int slot)
-        {
-            if (_hero == null) return;
-            App.Audio.Tap();
-            App.Session.Profile.AssignToTeam(slot, _hero.Uid);
-            App.RequestSave();
-            App.Notify(_hero.Def.Name + " deployed to slot " + (slot + 1) + ".");
             Refresh();
         }
 

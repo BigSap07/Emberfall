@@ -766,10 +766,15 @@ namespace Emberfall.UI.Screens
             RefreshIdle();
         }
 
+        /// <summary>
+        /// The Hub's team node now opens the BANNER, not the collection. Changing who fights is
+        /// what a player comes here to do; browsing every hero in the game is reachable one tap
+        /// further in, from a button on that screen.
+        /// </summary>
         private void OpenHeroes()
         {
             App.Audio.Tap();
-            Router.Show(ScreenId.Heroes);
+            Router.Show(ScreenId.Formation);
         }
 
         private void OpenCampaign()

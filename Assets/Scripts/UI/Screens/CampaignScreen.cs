@@ -46,10 +46,12 @@ namespace Emberfall.UI.Screens
 
             Button open = card.gameObject.AddComponent<Button>();
             open.targetGraphic = background;
+            // This card says BANNER and TAP TO CHANGE on it, so it goes to the screen that can
+            // actually change one. It used to open the collection, which cannot.
             open.onClick.AddListener(delegate
             {
                 App.Audio.Tap();
-                Router.Show(ScreenId.Heroes);
+                Router.Show(ScreenId.Formation);
             });
 
             Text label = UIBuilder.Label("Label", card, "BANNER", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
