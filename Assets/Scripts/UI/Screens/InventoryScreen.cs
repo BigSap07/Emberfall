@@ -50,6 +50,21 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private RectTransform _pickerPanel;
 
+        /// <summary>
+        /// What the candidate item itself is and does, under the title. The player was being asked
+        /// to choose a wearer without the thing being worn ever stating its own numbers.
+        /// </summary>
+        private Text _pickerItemLine;
+
+        /// <summary>
+        /// The piece being placed, resolved once when the picker opens. Held as the object rather
+        /// than re-looked-up per row because every row prices the same candidate against a
+        /// different hero, and eleven lookups of a value that cannot change mid-modal is work for
+        /// nothing.
+        /// </summary>
+        private ArmorPiece _pickerArmorPiece;
+        private RelicDef _pickerRelicDef;
+
         // The picker holds exactly one of these at a time; the other is always null/empty. Two
         // fields rather than one object reference because a relic is identified by its content id
         // and a piece of armor by its save uid, and collapsing them into one string would make the
@@ -95,7 +110,11 @@ namespace Emberfall.UI.Screens
 
             _pickerTitle = UIBuilder.Label("Title", panel, "", UITheme.FontBody,
                                            UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(_pickerTitle.rectTransform, 0f, -28f, 820f, 36f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_pickerTitle.rectTransform, 0f, -22f, 820f, 34f, new Vector2(0.5f, 1f));
+
+            _pickerItemLine = UIBuilder.Label("ItemLine", panel, "", UITheme.FontTiny,
+                                              UITheme.TextMuted, TextAnchor.UpperCenter);
+            UIBuilder.Box(_pickerItemLine.rectTransform, 0f, -60f, 820f, 30f, new Vector2(0.5f, 1f));
 
             UIButton cancel = UIBuilder.SecondaryButton("Cancel", panel, "CANCEL", UITheme.FontSmall);
             UIBuilder.Box(cancel.Root, 0f, 20f, 240f, 76f, new Vector2(0.5f, 0f));
@@ -106,7 +125,7 @@ namespace Emberfall.UI.Screens
             _pickerHeroList = UIBuilder.ScrollList("Heroes", panel, out heroScroll,
                                                    10f, new RectOffset(16, 16, 8, 8));
             UIBuilder.FillParent(heroScroll.GetComponent<RectTransform>(),
-                                 16f, 72f, 16f, 110f);
+                                 16f, TitleBand, 16f, CancelBand);
 
             _pickerRoot.gameObject.SetActive(false);
         }
@@ -115,6 +134,8 @@ namespace Emberfall.UI.Screens
         {
             _pickerRelic = relic;
             _pickerArmorUid = "";
+            _pickerArmorPiece = null;
+            _pickerRelicDef = App.Session.Content.GetRelic(relic.RelicId);
             RelicDef def = App.Session.Content.GetRelic(relic.RelicId);
             OpenPickerFor(def != null ? def.Name : relic.RelicId,
                           App.Session.Profile.HeroHoldingRelic(relic.RelicId));
@@ -129,6 +150,8 @@ namespace Emberfall.UI.Screens
         {
             _pickerRelic = null;
             _pickerArmorUid = piece.Uid;
+            _pickerArmorPiece = piece;
+            _pickerRelicDef = null;
             OpenPickerFor(piece.Name + "  (" + ArmorInfo.SlotLabel(piece.Slot) + ")",
                           App.Session.Profile.HeroWearingArmor(piece.Uid));
         }
@@ -136,6 +159,7 @@ namespace Emberfall.UI.Screens
         private void OpenPickerFor(string itemName, HeroInstance currentHolder)
         {
             _pickerTitle.text = "EQUIP  " + itemName.ToUpperInvariant() + "  TO...";
+            _pickerItemLine.text = DescribeCandidate();
 
             // Rebuild hero list.
             for (int i = _pickerHeroList.childCount - 1; i >= 0; i--)
@@ -145,29 +169,15 @@ namespace Emberfall.UI.Screens
 
             UIButton unassignBtn = UIBuilder.SecondaryButton("Unassign", _pickerHeroList,
                                                              "UNEQUIP (return to pool)", UITheme.FontSmall);
-            UIBuilder.Sized(unassignBtn.Root, 0f, 72f);
+            UIBuilder.Sized(unassignBtn.Root, 0f, UnassignRowHeight);
             unassignBtn.Interactable = isAssigned;
             unassignBtn.OnClick(delegate { OnPickerUnassign(); });
 
             UIBuilder.Divider("Div", _pickerHeroList, UITheme.WithAlpha(UITheme.BorderSoft, 0.5f));
 
-            // One row per hero.
+            // One row per hero, each PRICED against that hero rather than just naming them.
             List<HeroInstance> heroes = App.Session.Profile.Heroes;
-            for (int i = 0; i < heroes.Count; i++)
-            {
-                HeroInstance hero = heroes[i];
-                bool isHolder = hero == currentHolder;
-                string heroLabel = hero.Def != null ? hero.Def.Name : hero.DefId;
-                string buttonText = heroLabel.ToUpperInvariant() + (isHolder ? "  (equipped)" : "");
-                UIButton heroBtn = UIBuilder.MakeButton("Hero_" + hero.Uid, _pickerHeroList,
-                                                        buttonText, UITheme.FontSmall,
-                                                        isHolder ? UITheme.Ember : UITheme.PanelRaised,
-                                                        isHolder ? UITheme.EmberDeep : UITheme.Border,
-                                                        UITheme.TextPrimary);
-                UIBuilder.Sized(heroBtn.Root, 0f, 72f);
-                HeroInstance captured = hero;
-                heroBtn.OnClick(delegate { OnPickerAssign(captured); });
-            }
+            for (int i = 0; i < heroes.Count; i++) AddCandidateRow(heroes[i], heroes[i] == currentHolder);
 
             if (heroes.Count == 0)
             {
@@ -205,24 +215,18 @@ namespace Emberfall.UI.Screens
         {
             // Mirrors BuildHeroPicker's own numbers: rows are Sized to 72, ScrollList spacing is
             // 10, its padding is RectOffset(16, 16, 8, 8), and UIBuilder.Divider is 2 tall.
-            const float RowHeight = 72f;
             const float Spacing = 10f;
             const float PadV = 16f;
             const float DividerHeight = 2f;
 
-            // The bands BuildHeroPicker reserves above and below the scroll viewport, from its
-            // FillParent(heroScroll, 16, 72, 16, 110) call. The lower band is what holds CANCEL.
-            const float TitleBand = 72f;
-            const float CancelBand = 110f;
-
             const float MinPanel = 320f;
             const float MaxPanel = 940f;   // leaves a margin inside the 1080 reference height
 
-            int rows = heroCount + 1;      // + the unequip row
             float contentHeight = PadV
-                                + rows * RowHeight
+                                + UnassignRowHeight
+                                + heroCount * CandidateRowHeight
                                 + DividerHeight
-                                + Spacing * rows;   // gaps between rows, and around the divider
+                                + Spacing * (heroCount + 1);
 
             float wanted = TitleBand + contentHeight + CancelBand;
             float panelHeight = Mathf.Clamp(wanted, MinPanel, MaxPanel);
@@ -232,6 +236,165 @@ namespace Emberfall.UI.Screens
             bool scrolls = contentHeight > panelHeight - TitleBand - CancelBand;
             _pickerTitle.text = "EQUIP  " + itemName.ToUpperInvariant() + "  TO..."
                                 + (scrolls ? "      (scroll for more)" : "");
+        }
+
+        private const float TitleBand = 108f;
+        private const float CancelBand = 110f;
+        private const float CandidateRowHeight = 96f;
+        private const float UnassignRowHeight = 64f;
+
+        /// <summary>
+        /// One hero, priced. This is the whole point of the change: the row states what this hero
+        /// is WEARING in the slot the candidate wants, and what their power becomes if the swap
+        /// happens, so the decision is made against numbers instead of against a name.
+        ///
+        /// What it replaces: a list of bare uppercase hero names. Nothing on that list said what
+        /// the item did, what it would displace, or which hero it helped most - and EquipArmor
+        /// silently returns whatever was in the slot to the pool, so every tap was an unannounced
+        /// swap. "Messy" was an accurate description of choosing blind.
+        /// </summary>
+        private void AddCandidateRow(HeroInstance hero, bool isHolder)
+        {
+            UIButton row = UIBuilder.MakeButton("Hero_" + hero.Uid, _pickerHeroList, "", UITheme.FontSmall,
+                                                isHolder ? UITheme.Ember : UITheme.PanelRaised,
+                                                isHolder ? UITheme.EmberDeep : UITheme.Border,
+                                                UITheme.TextPrimary);
+            UIBuilder.Sized(row.Root, 0f, CandidateRowHeight);
+            row.Label.gameObject.SetActive(false);   // this row lays its own text out
+
+            RectTransform body = UIBuilder.Node("Body", row.Root);
+            UIBuilder.FillParent(body, 0f);
+            body.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
+
+            UnitStats before = StatsFor(hero, false);
+            UnitStats after = StatsFor(hero, true);
+            int delta = after.Power - before.Power;
+
+            string heroLabel = hero.Def != null ? hero.Def.Name : hero.DefId;
+            Text name = UIBuilder.Label("Name", body, heroLabel.ToUpperInvariant()
+                                        + "   LV " + hero.Level + (isHolder ? "   (equipped)" : ""),
+                                        UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            UIBuilder.Box(name.rectTransform, 24f, 18f, 520f, 30f, new Vector2(0f, 0.5f));
+
+            Text swap = UIBuilder.Label("Swap", body, DescribeDisplaced(hero), UITheme.FontTiny,
+                                        UITheme.TextMuted, TextAnchor.MiddleLeft);
+            UIBuilder.Box(swap.rectTransform, 24f, -18f, 520f, 26f, new Vector2(0f, 0.5f));
+
+            // Before -> after on one line, because the comparison IS the row. Power leads because
+            // it is the one number every other screen already ranks heroes by.
+            Text power = UIBuilder.Label("Power", body, before.Power + "  ->  " + after.Power,
+                                         UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleRight);
+            UIBuilder.Box(power.rectTransform, -24f, 18f, 380f, 30f, new Vector2(1f, 0.5f));
+
+            string sign = delta > 0 ? "+" : "";
+            Color tint = delta > 0 ? UITheme.Success : delta < 0 ? UITheme.Danger : UITheme.TextDim;
+            string detail = sign + delta + " POWER" + StatDiff(before, after);
+            Text change = UIBuilder.Label("Delta", body, detail, UITheme.FontTiny, tint, TextAnchor.MiddleRight);
+            UIBuilder.Box(change.rectTransform, -24f, -18f, 380f, 26f, new Vector2(1f, 0.5f));
+
+            HeroInstance captured = hero;
+            row.OnClick(delegate { OnPickerAssign(captured); });
+        }
+
+        /// <summary>
+        /// This hero's stats as they are, or as they would be with the candidate on. Resolved
+        /// through the same StatMath.ForHero overload the SIMULATION uses, relic and armor folded
+        /// in, so the number the player compares against is the number that fights.
+        /// </summary>
+        private UnitStats StatsFor(HeroInstance hero, bool withCandidate)
+        {
+            ContentDatabase content = App.Session.Content;
+            ArmorConfig config = content != null ? content.Armor : null;
+
+            RelicDef relic = !string.IsNullOrEmpty(hero.EquippedRelicId)
+                ? content.GetRelic(hero.EquippedRelicId) : null;
+            List<ArmorPiece> worn = App.Session.Profile.EquippedArmorOf(hero);
+
+            if (withCandidate)
+            {
+                if (_pickerArmorPiece != null)
+                {
+                    // The candidate DISPLACES whatever shares its slot rather than adding to the
+                    // set - modelling it as an addition would price a two-boots hero and overstate
+                    // every swap.
+                    List<ArmorPiece> next = new List<ArmorPiece>();
+                    for (int i = 0; i < worn.Count; i++)
+                        if (worn[i].Slot != _pickerArmorPiece.Slot) next.Add(worn[i]);
+                    next.Add(_pickerArmorPiece);
+                    worn = next;
+                }
+                else if (_pickerRelicDef != null)
+                {
+                    relic = _pickerRelicDef;
+                }
+            }
+
+            return StatMath.ForHero(hero.Def, hero.Level, relic, worn, config);
+        }
+
+        /// <summary>
+        /// The candidate stating its own numbers, under the title. Previously the modal named the
+        /// item and then asked for a decision about it without ever showing what it did - the
+        /// stats were on the card the player had already navigated away from.
+        /// </summary>
+        private string DescribeCandidate()
+        {
+            if (_pickerArmorPiece != null)
+                return ArmorInfo.TemperLabel(_pickerArmorPiece.Temper).ToUpperInvariant()
+                     + "   -   " + AspectChart.DisplayName(_pickerArmorPiece.Aspect).ToUpperInvariant()
+                     + "   -   " + _pickerArmorPiece.DescribeStats();
+            if (_pickerRelicDef != null)
+            {
+                string stats = _pickerRelicDef.DescribeStats();
+                return string.IsNullOrEmpty(_pickerRelicDef.Rule) ? stats : stats + "   -   " + _pickerRelicDef.Rule;
+            }
+            return "";
+        }
+
+        /// <summary>Names what this tap would take off, which is the half of the trade the old
+        /// list never mentioned at all.</summary>
+        private string DescribeDisplaced(HeroInstance hero)
+        {
+            if (_pickerArmorPiece != null)
+            {
+                List<ArmorPiece> worn = App.Session.Profile.EquippedArmorOf(hero);
+                for (int i = 0; i < worn.Count; i++)
+                    if (worn[i].Slot == _pickerArmorPiece.Slot)
+                        return worn[i].Uid == _pickerArmorPiece.Uid
+                            ? "already in this slot"
+                            : "replaces " + worn[i].Name;
+                return ArmorInfo.SlotLabel(_pickerArmorPiece.Slot) + " slot is empty";
+            }
+
+            if (!string.IsNullOrEmpty(hero.EquippedRelicId))
+            {
+                RelicDef held = App.Session.Content.GetRelic(hero.EquippedRelicId);
+                return held != null ? "replaces " + held.Name : "replaces their relic";
+            }
+            return "no relic held";
+        }
+
+        /// <summary>
+        /// The stats that actually moved, up to three, so the row says WHY the power changed.
+        /// Only non-zero diffs appear - listing every stat with "+0" beside it would bury the two
+        /// that matter under twelve that do not.
+        /// </summary>
+        private static string StatDiff(UnitStats a, UnitStats b)
+        {
+            string outp = "";
+            int shown = 0;
+            shown += Append(ref outp, "HP", b.MaxHp - a.MaxHp, shown);
+            shown += Append(ref outp, "ATK", b.Attack - a.Attack, shown);
+            shown += Append(ref outp, "DEF", b.Defense - a.Defense, shown);
+            shown += Append(ref outp, "SPD", b.Speed - a.Speed, shown);
+            return outp;
+        }
+
+        private static int Append(ref string text, string label, float diff, int shown)
+        {
+            if (shown >= 3 || Mathf.Abs(diff) < 0.5f) return 0;
+            text += "   " + label + (diff > 0 ? " +" : " ") + Mathf.RoundToInt(diff);
+            return 1;
         }
 
         private void ClosePicker()
