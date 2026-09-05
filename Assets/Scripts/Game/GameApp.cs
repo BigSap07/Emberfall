@@ -35,6 +35,21 @@ namespace Emberfall.Game
         private Coroutine _toastRoutine;
         private float _saveTimer = -1f;
 
+        /// <summary>
+        /// How far Awake got, and whether it finished. Static so a guard elsewhere can read it
+        /// even when Instance is missing or half-built.
+        ///
+        /// This exists because "Session is null" was reported twice in this project with no
+        /// accompanying exception, and the second report reasoned - correctly, from what was
+        /// visible - that Awake must be dying somewhere in the content or save load. There was no
+        /// way to tell from outside whether Awake had run at all, died partway, or completed. Now
+        /// there is: any guard that trips can say which stage the boot reached, and BootFailed
+        /// distinguishes "never started" from "threw" from "finished fine".
+        /// </summary>
+        public static string BootStage = "not started";
+        public static bool BootCompleted;
+        public static bool BootFailed;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -45,18 +60,37 @@ namespace Emberfall.Game
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
+            // Every step of the boot is named as it is entered, and the whole run is wrapped, so a
+            // failure reports WHERE rather than leaving the next reader to infer it from which
+            // fields ended up null. The catch rethrows: Unity's own handler should still record
+            // the stack, and swallowing it here would turn a loud failure into exactly the silent
+            // one this instrumentation exists to make impossible.
+            BootStage = "start";
+            BootCompleted = false;
+            BootFailed = false;
+            try
+            {
+            BootStage = "ConfigureRuntime";
             ConfigureRuntime();
             WarnIfWrongRenderPipeline();
 
+            BootStage = "ContentService.Load";
             Content = ContentService.Load();
 
 #if UNITY_EDITOR
             CombatSimulation.OnBattleComplete += CombatLogger.Write;
 #endif
 
+            BootStage = "SaveService.Load";
             PlayerProfile profile = SaveService.Load(Content);
             bool freshStart = profile == null;
-            if (freshStart) profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());
+            if (freshStart)
+            {
+                BootStage = "GameSession.CreateNewProfile";
+                profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());
+            }
+
+            BootStage = "new GameSession";
             Session = new GameSession(Content, profile);
 
 #if UNITY_EDITOR
@@ -69,29 +103,48 @@ namespace Emberfall.Game
                 Session.GrantHeroDirect(kael, TimeUtil.NowUnix());
 #endif
 
+            BootStage = "BuildCanvas";
             BuildCanvas();
             EnsureEventSystem();
 
+            BootStage = "Sfx";
             Audio = gameObject.AddComponent<Sfx>();
 
+            BootStage = "HudTopBar.Build";
             _topBar = new HudTopBar();
             _topBar.Build(ScreenLayer.parent as RectTransform);
 
+            BootStage = "ScreenRouter.Build";
             GameObject routerHost = new GameObject("ScreenRouter");
             routerHost.transform.SetParent(transform, false);
             Router = routerHost.AddComponent<ScreenRouter>();
             Router.Build(this, ScreenLayer, OverlayLayer);
 
+            BootStage = "overlays";
             _toast = new Toast(OverlayLayer);
             _modal = new ModalPopup(OverlayLayer);
 
             _topBar.Root.SetAsLastSibling();
             OverlayLayer.SetAsLastSibling();
 
+            BootStage = "first screen";
             RefreshHud();
             Router.Show(ScreenId.MainMenu, false);
 
             if (freshStart) SaveNow();
+
+            BootStage = "complete";
+            BootCompleted = true;
+            }
+            catch (System.Exception ex)
+            {
+                BootFailed = true;
+                Debug.LogError("GameApp.Awake FAILED at stage '" + BootStage + "'. The app is now "
+                    + "half-built: Session" + (Session == null ? " IS NULL" : " exists")
+                    + ", Router" + (Router == null ? " IS NULL" : " exists")
+                    + ". Everything downstream of this stage did not run. " + ex);
+                throw;
+            }
         }
 
         private static void ConfigureRuntime()
@@ -265,9 +318,7 @@ namespace Emberfall.Game
             if (Session == null)
             {
                 Debug.LogError("GameApp.SaveNow: Session is null, so there is nothing to save and "
-                    + "PROGRESS IS NOT BEING WRITTEN. Session is assigned in Awake before anything "
-                    + "else is built, so reaching here means Awake did not complete - look for an "
-                    + "earlier exception from ContentService.Load or SaveService.Load.");
+                    + "PROGRESS IS NOT BEING WRITTEN. " + DescribeBoot());
                 return;
             }
 
@@ -280,6 +331,28 @@ namespace Emberfall.Game
                 Debug.LogError("GameApp.SaveNow: the save FAILED and PROGRESS IS NOT ON DISK. "
                     + "Autosave is idle until the next RequestSave re-arms it. " + ex);
             }
+        }
+
+        /// <summary>
+        /// One sentence a guard can append that turns "Session is null" into something actionable.
+        ///
+        /// The three answers mean different things. Boot COMPLETE with a null Session is the
+        /// interesting one - Awake assigns Session at the top and builds the router twenty-odd
+        /// lines later, so a completed boot cannot leave it null and something cleared it
+        /// afterwards. A named failed stage points straight at the throw. "not started" means this
+        /// GameApp never ran Awake at all, which is the duplicate-instance path.
+        /// </summary>
+        private static string DescribeBoot()
+        {
+            if (BootFailed)
+                return "Awake FAILED at stage '" + BootStage + "' - the error naming it was logged "
+                     + "when it happened, above this line.";
+            if (BootCompleted)
+                return "Awake COMPLETED, so Session was assigned and something cleared it "
+                     + "afterwards - this is not a boot failure, look for whatever ran since.";
+            return "Awake never completed and never reported a failure; it reached stage '"
+                 + BootStage + "'. 'not started' here means this instance never ran Awake, which "
+                 + "is the duplicate-instance path in Awake's first four lines.";
         }
 
         private void Update()

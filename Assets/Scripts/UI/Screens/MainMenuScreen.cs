@@ -733,10 +733,12 @@ namespace Emberfall.UI.Screens
                 Debug.LogError("MainMenuScreen." + caller + ": "
                     + (App == null ? "App" : "App.Session")
                     + " is null while the Hub is live and ticking, so idle rewards have stopped "
-                    + "updating. GameApp assigns Session in Awake before building any screen, so "
-                    + "this means that Awake did not finish - look for an earlier exception from "
-                    + "ContentService.Load, SaveService.Load, or a 'failed to build' error from "
-                    + "ScreenRouter. Reported once; the per-second retry is suppressed from here.");
+                    + "updating. This screen only exists because ScreenRouter.Build ran, which "
+                    + "happens AFTER Session is assigned, so a boot that got this far cannot "
+                    + "have left Session null. Boot state: GameApp.BootStage='"
+                    + Game.GameApp.BootStage + "' completed=" + Game.GameApp.BootCompleted
+                    + " failed=" + Game.GameApp.BootFailed
+                    + ". Reported once; the per-second retry is suppressed from here.");
             }
             return false;
         }
