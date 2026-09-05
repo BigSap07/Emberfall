@@ -548,18 +548,24 @@ namespace Emberfall.UI.Screens
 
             // Name only. The level number that used to trail it is gone: it never changes during a
             // battle, so it was permanent clutter on a tag that has to be readable in a glance.
+            // Font up from FontTiny-5 to FontTiny-2 and the outline from 1.4 to 2.4. Both matter
+            // and for different reasons: the size is what makes the glyphs resolvable at all, and
+            // the outline is what keeps them readable over a PAINTED backdrop, which is the case
+            // that was failing - light text on the bright horizon band of the ashen and proving
+            // fields had almost no separation. The outline does the work a plate would do without
+            // reinstating the slab this tag was deliberately rebuilt away from.
             bar.Name = UIBuilder.Label("Name", bar.Root, snapshot.Name,
-                                       UITheme.FontTiny - 5, UITheme.TextPrimary, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + EnergyHeight + 3f, 240f, 18f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Name, UITheme.InkArt, 1.4f);
+                                       UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.LowerCenter);
+            UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + EnergyHeight + 3f, 240f, 22f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(bar.Name, UITheme.InkArt, 2.4f);
 
             // Status sits above the name and is empty unless the unit actually carries one, so it
             // costs nothing visually at rest. Kept against a literal reading of "nothing else"
             // because DESIGN-BATTLE-READABILITY.md names it as load-bearing: without it there is
             // no way to see that a unit is burning, taunting or warded down.
-            bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 7, UITheme.Warning, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + EnergyHeight + 21f, 240f, 15f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Status, UITheme.InkArt, 1.2f);
+            bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 5, UITheme.Warning, TextAnchor.LowerCenter);
+            UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + EnergyHeight + 26f, 240f, 18f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(bar.Status, UITheme.InkArt, 1.9f);
 
             // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
             // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
@@ -612,10 +618,14 @@ namespace Emberfall.UI.Screens
         private const float BarWorldRise = 0.12f;
 
         private const float BarWidth = 120f;
-        private const float BarHeight = 7f;
+        // 7 -> 10. At the 1920-wide reference this tag is authored against, a 7-unit bar renders
+        // about three physical pixels on a phone-sized game view, which is below the width at
+        // which a fill LEVEL can be judged at all - the bar could only be read as present or
+        // absent. The stack constant below moves with it.
+        private const float BarHeight = 10f;
 
         /// <summary>Energy meter height. Deliberately thinner than the health bar it sits on.</summary>
-        private const float EnergyHeight = 4f;
+        private const float EnergyHeight = 5f;
 
         /// <summary>How far a damage or heal number climbs over its life, in canvas units.</summary>
         private const float FloatRise = 120f;
@@ -636,7 +646,10 @@ namespace Emberfall.UI.Screens
         // 200 x 18 health bar became 120 x 4 over a 120 x 7 one, so it reads as a subordinate
         // strip on the same tag rather than a second slab. It also lights to gold at full, since
         // "can cast now" is the state worth seeing across the field, not the fill level.
-        private const float BarStackHeight = 48f;
+        // 48 -> 56, tracking the taller bar and larger labels. This is not decoration: the
+        // floating-damage spawn clears exactly this height, so a stack that grew without it would
+        // put numbers back on top of the names.
+        private const float BarStackHeight = 56f;
 
         private void LateUpdate()
         {
@@ -1376,13 +1389,21 @@ namespace Emberfall.UI.Screens
             // the number above it and it rises away rather than across.
             float rise = BarWorldRise * (Screen.height / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize)));
             start.y += (rise / canvasScale) + BarStackHeight + 6f;
-            start.x += Random.Range(-34f, 34f);
 
-            // Clearing the tag pushes the back rank's far-z units past the top of the screen, so
-            // the whole 120-unit climb is clamped to fit rather than just the spawn point. A
-            // number that lands slightly below its own unit is still readable; one that rises off
-            // the screen is not there at all.
-            start.y = Mathf.Min(start.y, Screen.height / canvasScale - FloatRise - 30f);
+            // Jitter was +/-34, which is more than half the 120-unit tag width, so a number could
+            // start closer to a NEIGHBOUR's tag than to the unit that produced it. On a five-unit
+            // line that is the whole attribution problem: the number was correct and unreadable as
+            // to whose it was. +/-9 still separates two hits landing on the same unit in the same
+            // frame, which is all the jitter was ever for.
+            start.x += Random.Range(-9f, 9f);
+
+            // Headroom is taken out of the CLIMB, not out of the spawn point. The old clamp moved
+            // start.y down when the unit sat near the top of the screen, which detached the number
+            // from its unit and parked several of them on one arbitrary line - numbers hanging in
+            // open sky belonging to nobody. A number that starts on its owner and rises a shorter
+            // distance is still attributable; one that starts somewhere else never was.
+            float ceiling = Screen.height / canvasScale - 30f;
+            float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
 
             float duration = 0.75f / _speed;
             float t = 0f;
@@ -1390,7 +1411,7 @@ namespace Emberfall.UI.Screens
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                item.Root.anchoredPosition = start + new Vector2(0f, FloatRise * Mathf.Sqrt(k));
+                item.Root.anchoredPosition = start + new Vector2(0f, climb * Mathf.Sqrt(k));
                 item.Group.alpha = 1f - k * k;
                 yield return null;
             }
@@ -1519,9 +1540,17 @@ namespace Emberfall.UI.Screens
                 if (rewards.UnlockedNextStage) AddRewardRow("NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
                 // Named by its temper rather than just "ARMOR", because the temper is the only part
                 // of the drop a player can judge before opening the inventory.
+                // The row used to put "HONED BOOTS" in the label and "Roadworn Boots" in the
+                // value, which reads as two names for one object. Only one of them ever was a
+                // name: "Roadworn Boots" is the item, from armor.json's Boots list, and "Honed" is
+                // its TEMPER - the Rough/Honed/Gilded/Radiant rung, a rarity. Every other screen
+                // already gets this right, showing the name with the temper as a chip beside it,
+                // so the Debrief was the only place inventing a second title. Label names the kind
+                // of reward, value carries the item and its rung in the order the Bag shows them.
                 if (rewards.ArmorDrop != null)
-                    AddRewardRow(ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper) + " " + ArmorInfo.SlotLabel(rewards.ArmorDrop.Slot).ToUpperInvariant(),
-                                 rewards.ArmorDrop.Name, UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
+                    AddRewardRow("ARMOR DROP",
+                                 rewards.ArmorDrop.Name + "  -  " + ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper).ToUpperInvariant(),
+                                 UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
                 App.Audio.Victory();
             }
             else
@@ -1603,14 +1632,21 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private static string CauseTag(DebriefClause clause)
         {
+            // Every clause Debrief can produce is about what happened TO the player's line -
+            // AbilityDominant only totals damage where target.IsPlayer, Resisted counts the
+            // player's own afflictions being shrugged off - so each tag can say which way it went
+            // instead of naming a bare noun. "ASPECT", "SPEED" and "UNSPENT" named a topic and
+            // left the direction to the sentence beside them, which is the opposite of what a
+            // glance-first label is for: on a VICTORY, "ONE ABILITY" over a line about an enemy's
+            // flail read as praise for one of your own.
             switch (clause)
             {
-                case DebriefClause.Timeout: return "RAN LONG";
-                case DebriefClause.AbilityDominant: return "ONE ABILITY";
-                case DebriefClause.Aspect: return "ASPECT";
-                case DebriefClause.Resisted: return "RESISTED";
-                case DebriefClause.Speed: return "SPEED";
-                case DebriefClause.UnspentActive: return "UNSPENT";
+                case DebriefClause.Timeout: return "RAN OUT OF ROUNDS";
+                case DebriefClause.AbilityDominant: return "ONE ENEMY ABILITY";
+                case DebriefClause.Aspect: return "WRONG ASPECTS";
+                case DebriefClause.Resisted: return "AFFLICTIONS RESISTED";
+                case DebriefClause.Speed: return "OUTSPED";
+                case DebriefClause.UnspentActive: return "ABILITY UNUSED";
                 default: return "";
             }
         }
