@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
@@ -20,6 +21,21 @@ namespace Emberfall.UI.Screens
         private Text _costLabel;
         private UIButton _summonButton;
 
+        /// <summary>
+        /// How many pulls one tap buys. Only ever 1 or 10 - this is a toggle, not a spinner, so it
+        /// is an int rather than an enum because every use of it is arithmetic (cost, loop count,
+        /// the summary line) and none of it is a branch on which mode is selected.
+        /// </summary>
+        private int _pullCount = 1;
+        private UIButton _toggleOne;
+        private UIButton _toggleTen;
+
+        private RectTransform _results;
+        private CanvasGroup _resultsGroup;
+        private RectTransform _resultsList;
+        private Text _resultsTitle;
+        private Text _resultsSummary;
+
         private RectTransform _reveal;
         private CanvasGroup _revealGroup;
         private RectTransform _revealPortraitHost;
@@ -33,7 +49,6 @@ namespace Emberfall.UI.Screens
 
         private float _spin;
         private bool _busy;
-        private HeroInstance _lastSummoned;
 
         protected override void Build()
         {
@@ -44,6 +59,7 @@ namespace Emberfall.UI.Screens
             BuildRates();
             BuildActions();
             BuildReveal();
+            BuildResults();
         }
 
         private void BuildPortal()
@@ -132,9 +148,63 @@ namespace Emberfall.UI.Screens
             _costLabel = UIBuilder.Label("Cost", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
             UIBuilder.Box(_costLabel.rectTransform, 470f, 20f, 860f, 36f, new Vector2(0.5f, 0.5f));
 
+            // The pull button gives up its right-hand end to the count toggle rather than the
+            // toggle being stacked somewhere else on the screen: the two controls are one decision
+            // ("open the rift, this many times") and reading them left-to-right as a single row is
+            // what makes the cost label above them unambiguous.
             _summonButton = UIBuilder.PrimaryButton("Summon", Root, "OPEN THE RIFT", UITheme.FontHeading);
-            UIBuilder.Box(_summonButton.Root, 470f, -110f, 820f, 160f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(_summonButton.Root, 380f, -110f, 580f, 160f, new Vector2(0.5f, 0.5f));
             _summonButton.OnClick(DoSummon);
+
+            _toggleOne = BuildCountToggle("PullOne", "x1", 1, -72f);
+            _toggleTen = BuildCountToggle("PullTen", "x10", 10, -148f);
+            ApplyToggleStyle();
+        }
+
+        /// <summary>
+        /// One segment of the x1 / x10 control. Kept as two plain buttons rather than a Unity
+        /// Toggle group because everything else on these screens is a UIButton and the selected
+        /// look is just a colour swap - a ToggleGroup would add a second interaction model for one
+        /// control.
+        /// </summary>
+        private UIButton BuildCountToggle(string name, string label, int count, float y)
+        {
+            UIButton button = UIBuilder.MakeButton(name, Root, label, UITheme.FontBody,
+                                                   UITheme.PanelRaised, UITheme.Border, UITheme.TextPrimary);
+            UIBuilder.Box(button.Root, 790f, y, 190f, 74f, new Vector2(0.5f, 0.5f));
+            int captured = count;
+            button.OnClick(delegate { SetPullCount(captured); });
+            return button;
+        }
+
+        private void SetPullCount(int count)
+        {
+            if (_busy || _pullCount == count) return;
+            App.Audio.Tap();
+            _pullCount = count;
+            ApplyToggleStyle();
+            Refresh();
+        }
+
+        /// <summary>
+        /// Paints the selected segment. Ember fill for the active count, the standard raised panel
+        /// for the other, so which one a tap will buy is readable without reading the cost line.
+        /// </summary>
+        private void ApplyToggleStyle()
+        {
+            Style(_toggleOne, _pullCount == 1);
+            Style(_toggleTen, _pullCount == 10);
+        }
+
+        private static void Style(UIButton button, bool selected)
+        {
+            if (button == null) return;
+            if (button.Background != null)
+                button.Background.color = selected ? UITheme.Ember : UITheme.PanelRaised;
+            if (button.Frame != null)
+                button.Frame.color = selected ? UITheme.EmberDeep : UITheme.Border;
+            if (button.Label != null)
+                button.Label.color = selected ? UITheme.TextOnAccent : UITheme.TextMuted;
         }
 
         private void BuildReveal()
@@ -176,6 +246,142 @@ namespace Emberfall.UI.Screens
             _reveal.gameObject.SetActive(false);
         }
 
+        /// <summary>
+        /// Where a pull's outcome is read, on this screen, without leaving it.
+        ///
+        /// Replaces a navigation: CloseReveal used to push HeroDetail on the reasoning that "the
+        /// pull's meaning is the choice it forces". That holds for one new hero and falls apart for
+        /// everything else - a duplicate has no choice to force, and ten pulls have ten of them, so
+        /// the old path would have had to pick one hero to land on and silently drop the other
+        /// nine. The list is also the only place the shard-to-currency conversion can actually be
+        /// SEEN rather than inferred from a counter that moved.
+        /// </summary>
+        private void BuildResults()
+        {
+            _results = UIBuilder.Node("Results", Root);
+            UIBuilder.FillParent(_results, 0f);
+            _resultsGroup = _results.gameObject.AddComponent<CanvasGroup>();
+
+            Image dim = _results.gameObject.AddComponent<Image>();
+            dim.sprite = TextureLab.White;
+            dim.color = UITheme.ScrimModal;
+
+            RectTransform panel = UIBuilder.Node("Panel", _results);
+            UIBuilder.Box(panel, 0f, 0f, 1020f, 880f, new Vector2(0.5f, 0.5f));
+
+            Image panelBg = panel.gameObject.AddComponent<Image>();
+            panelBg.sprite = UISkin.Panel(24);
+            panelBg.type = Image.Type.Sliced;
+            panelBg.color = UITheme.Panel;
+            UIBuilder.Frame("Edge", panel, UITheme.Border, 24, 3);
+
+            _resultsTitle = UIBuilder.Label("Title", panel, "", UITheme.FontHeading,
+                                            UITheme.TextPrimary, TextAnchor.UpperCenter);
+            UIBuilder.Box(_resultsTitle.rectTransform, 0f, -26f, 940f, 46f, new Vector2(0.5f, 1f));
+
+            _resultsSummary = UIBuilder.Label("Summary", panel, "", UITheme.FontSmall,
+                                              UITheme.TextMuted, TextAnchor.UpperCenter);
+            UIBuilder.Box(_resultsSummary.rectTransform, 0f, -78f, 940f, 34f, new Vector2(0.5f, 1f));
+
+            ScrollRect scroll;
+            _resultsList = UIBuilder.ScrollList("List", panel, out scroll, 8f, new RectOffset(16, 16, 8, 8));
+            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 20f, 124f, 20f, 132f);
+
+            UIButton close = UIBuilder.GoldButton("ResultsClose", panel, "CONTINUE", UITheme.FontHeading);
+            UIBuilder.Box(close.Root, 0f, 24f, 420f, 96f, new Vector2(0.5f, 0f));
+            close.OnClick(CloseResults);
+
+            _results.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// One pull. New and duplicate are separated three ways at once - the row tint, the
+        /// right-hand status, and its colour - because this is the whole point of the panel and a
+        /// player scanning ten rows should not have to read any of them to count their new allies.
+        /// The NAME carries the star colour, so rarity survives the pool being widened later even
+        /// though every pull is 5-star today.
+        /// </summary>
+        private void AddResultRow(SummonOutcome outcome)
+        {
+            HeroDef def = outcome.Hero;
+
+            RectTransform row = UIBuilder.Node("Result_" + def.Id, _resultsList);
+            UIBuilder.Sized(row, 0f, 66f);
+
+            Image bg = row.gameObject.AddComponent<Image>();
+            bg.sprite = UISkin.Panel(12);
+            bg.type = Image.Type.Sliced;
+            bg.color = outcome.IsNew
+                ? UITheme.WithAlpha(UITheme.Success, 0.16f)
+                : UITheme.PanelRaised;
+
+            Text name = UIBuilder.Label("Name", row, def.Name, UITheme.FontSmall,
+                                        UITheme.StarColor(def.Stars), TextAnchor.MiddleLeft);
+            name.rectTransform.anchorMin = new Vector2(0f, 0f);
+            name.rectTransform.anchorMax = new Vector2(1f, 1f);
+            name.rectTransform.offsetMin = new Vector2(24f, 0f);
+            name.rectTransform.offsetMax = new Vector2(-460f, 0f);
+
+            string status = outcome.IsNew
+                ? "NEW ALLY"
+                : "DUPLICATE  -  +" + outcome.GoldRefund + " gold, +" + outcome.ShardRefund + " shards";
+            Text statusLabel = UIBuilder.Label("Status", row, status, UITheme.FontSmall,
+                                               outcome.IsNew ? UITheme.Success : UITheme.Gold,
+                                               TextAnchor.MiddleRight);
+            statusLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
+            statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
+            statusLabel.rectTransform.offsetMin = new Vector2(440f, 0f);
+            statusLabel.rectTransform.offsetMax = new Vector2(-24f, 0f);
+        }
+
+        private void ShowResults(List<SummonOutcome> outcomes)
+        {
+            for (int i = _resultsList.childCount - 1; i >= 0; i--)
+                Destroy(_resultsList.GetChild(i).gameObject);
+
+            int newCount = 0;
+            int dupeCount = 0;
+            int gold = 0;
+            int shards = 0;
+            for (int i = 0; i < outcomes.Count; i++)
+            {
+                SummonOutcome o = outcomes[i];
+                if (o.IsNew) newCount++;
+                else
+                {
+                    dupeCount++;
+                    gold += o.GoldRefund;
+                    shards += o.ShardRefund;
+                }
+                AddResultRow(o);
+            }
+
+            _resultsTitle.text = outcomes.Count == 1
+                ? "THE RIFT OPENS"
+                : outcomes.Count + " PULLS";
+
+            // States both halves even when one is zero. "3 NEW - 0 DUPLICATES" answers the question
+            // a player actually has; omitting the zero leaves them counting rows to be sure.
+            string summary = newCount + (newCount == 1 ? " NEW ALLY" : " NEW ALLIES")
+                             + "   -   " + dupeCount + (dupeCount == 1 ? " DUPLICATE" : " DUPLICATES");
+            if (dupeCount > 0)
+                summary += "   -   CONVERTED TO +" + gold + " GOLD, +" + shards + " SHARDS";
+            _resultsSummary.text = summary;
+
+            _results.gameObject.SetActive(true);
+            _results.SetAsLastSibling();
+            _resultsGroup.alpha = 1f;
+        }
+
+        private void CloseResults()
+        {
+            App.Audio.Tap();
+            _results.gameObject.SetActive(false);
+            _busy = false;
+            App.RefreshHud();
+            Refresh();
+        }
+
         // ------------------------------------------------------------------ behaviour
 
         public override void OnShow()
@@ -183,6 +389,7 @@ namespace Emberfall.UI.Screens
             App.RefreshHud();
             _busy = false;
             _reveal.gameObject.SetActive(false);
+            _results.gameObject.SetActive(false);
             Refresh();
         }
 
@@ -204,18 +411,30 @@ namespace Emberfall.UI.Screens
 
         private void Refresh()
         {
-            long cost = App.Session.Balance.SummonCost;
+            // Affordability is computed for the WHOLE batch here rather than deferring to
+            // Session.CanSummon, which only ever answers for a single pull. Ten pulls are only
+            // started when all ten are already paid for - see DoSummon for why a part-funded batch
+            // is refused rather than run until the shards stop.
+            long unit = App.Session.Balance.SummonCost;
+            long cost = unit * _pullCount;
+            bool affordable = App.Session.Profile.Shards >= cost;
+
             _costLabel.text = cost + " EMBER SHARDS  -  YOU HOLD " + App.Session.Profile.Shards;
-            _summonButton.Interactable = App.Session.CanSummon && !_busy;
-            _summonButton.SetText(App.Session.CanSummon ? "OPEN THE RIFT   " + cost + "S" : "NOT ENOUGH SHARDS");
+            _summonButton.Interactable = affordable && !_busy;
+            _summonButton.SetText(affordable
+                ? "OPEN THE RIFT   " + cost + "S"
+                : "NOT ENOUGH SHARDS");
         }
 
         private void DoSummon()
         {
             if (_busy) return;
-            if (!App.Session.CanSummon)
+
+            long unit = App.Session.Balance.SummonCost;
+            long cost = unit * _pullCount;
+            if (App.Session.Profile.Shards < cost)
             {
-                App.Notify("You need " + App.Session.Balance.SummonCost + " Ember Shards.");
+                App.Notify("You need " + cost + " Ember Shards for " + _pullCount + ".");
                 return;
             }
 
@@ -223,30 +442,59 @@ namespace Emberfall.UI.Screens
             Refresh();
             App.Audio.Cast();
 
-            int seed = App.Session.Profile.TotalSummons * 7919
-                       + (int)(App.Session.Profile.Shards & 0xFFFF)
-                       + Mathf.RoundToInt(Time.unscaledTime * 1000f);
-            SummonOutcome outcome = App.Session.Summon(seed, TimeUtil.NowUnix());
+            // The batch is a LOOP over the existing single Summon, deliberately, and not a new
+            // multi-pull path in GameSession. Everything that makes a pull what it is - the weight
+            // table, the first-three unowned guarantee, duplicate conversion, the event activity
+            // record - already lives in there and is driven off Profile.TotalSummons, which each
+            // call advances. Looping gets all of it for free and keeps the odds this change was
+            // told not to touch literally untouched. It also means pull 4 of a batch sees the state
+            // pulls 1-3 left behind, which is what the pity rule expects.
+            long now = TimeUtil.NowUnix();
+            List<SummonOutcome> outcomes = new List<SummonOutcome>();
+            for (int i = 0; i < _pullCount; i++)
+            {
+                // Same seed formula as the single pull, plus the index. TotalSummons and Shards
+                // both move between iterations so the seed would vary anyway; i is there so two
+                // pulls cannot collide if a duplicate refund happens to restore the exact shard
+                // count a previous pull started from.
+                int seed = App.Session.Profile.TotalSummons * 7919
+                           + (int)(App.Session.Profile.Shards & 0xFFFF)
+                           + Mathf.RoundToInt(Time.unscaledTime * 1000f)
+                           + i * 104729;
+
+                SummonOutcome outcome = App.Session.Summon(seed, now);
+                if (!outcome.Success)
+                {
+                    // Affordability was checked for the whole batch above, so this is a content
+                    // fault rather than a purse that ran dry. Keep whatever did land instead of
+                    // discarding it, and say what went wrong.
+                    App.Notify(outcome.Message);
+                    break;
+                }
+                outcomes.Add(outcome);
+            }
 
             App.RefreshHud();
             App.RequestSave();
 
-            if (!outcome.Success)
+            if (outcomes.Count == 0)
             {
                 _busy = false;
-                App.Notify(outcome.Message);
                 Refresh();
                 return;
             }
 
-            StartCoroutine(PlayReveal(outcome));
+            // A single pull keeps the portrait reveal - it is the one case where there is a single
+            // subject worth showing at that size. The batch goes straight to the list, because ten
+            // sequential reveals is ten taps to dismiss.
+            if (outcomes.Count == 1) StartCoroutine(PlayReveal(outcomes[0]));
+            else ShowResults(outcomes);
         }
 
         private IEnumerator PlayReveal(SummonOutcome outcome)
         {
             HeroDef def = outcome.Hero;
             Color starColor = UITheme.StarColor(def.Stars);
-            _lastSummoned = outcome.Instance;
 
             for (int i = _revealPortraitHost.childCount - 1; i >= 0; i--)
                 Destroy(_revealPortraitHost.GetChild(i).gameObject);
@@ -288,23 +536,21 @@ namespace Emberfall.UI.Screens
             else App.Audio.Reward();
         }
 
+        /// <summary>
+        /// Back to the Rift, not away from it.
+        ///
+        /// This used to push HeroDetail for the hero just pulled, on the reasoning that the pull's
+        /// meaning is the choice it forces. The cost of that was the summon loop: a player who
+        /// wanted a second pull was three taps and two screens from it, and one who pulled a
+        /// duplicate got sent to a hero page they already knew about. Staying here also means the
+        /// shard counter they are spending stays on screen the whole time.
+        /// </summary>
         private void CloseReveal()
         {
             App.Audio.Tap();
             _reveal.gameObject.SetActive(false);
             _busy = false;
-
-            // the pull's meaning is the choice it forces - land on the hero, slot row live,
-            // instead of back on a shard counter
-            if (_lastSummoned != null)
-            {
-                HeroInstance target = _lastSummoned;
-                _lastSummoned = null;
-                Router.HeroDetail.SetHero(target);
-                Router.Show(ScreenId.HeroDetail);
-                return;
-            }
-
+            App.RefreshHud();
             Refresh();
         }
     }
