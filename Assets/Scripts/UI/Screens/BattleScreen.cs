@@ -96,6 +96,19 @@ namespace Emberfall.UI.Screens
         private RectTransform _resultPanel;
         private CanvasGroup _resultGroup;
         private Text _resultTitle;
+
+        /// <summary>
+        /// REMATCH, but only while a CONTINUE is also on offer. Built as a SECONDARY so the panel
+        /// never shows two gold buttons at once - see ShowResult for why the primary changes
+        /// identity instead of a third prominent button being added.
+        /// </summary>
+        private UIButton _resultTertiary;
+
+        /// <summary>
+        /// True when the gold button means "into the stage this win just unlocked" rather than
+        /// "fight that again". Set once per result in ShowResult, read by OnPrimary.
+        /// </summary>
+        private bool _primaryContinues;
         private Text _resultSub;
         private RectTransform _rewardList;
         private Text _debriefText;
@@ -307,13 +320,20 @@ namespace Emberfall.UI.Screens
             _debriefText = UIBuilder.WrappedLabel("Debrief", _resultPanel, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
             UIBuilder.Box(_debriefText.rectTransform, -460f, 40f, 820f, 220f, new Vector2(0.5f, 0.5f));
 
+            // Three actions, one of which is gold. Positions and the primary's label are set per
+            // result in ShowResult rather than here, because what a player should do next after a
+            // win is not what they should do after a loss, and this panel is built once.
             _resultSecondary = UIBuilder.SecondaryButton("AdjustLine", _resultPanel, "ADJUST LINE", UITheme.FontBody);
-            UIBuilder.Box(_resultSecondary.Root, -460f, -220f, 620f, 112f, new Vector2(0.5f, 0.5f));
             _resultSecondary.OnClick(AdjustLine);
 
+            _resultTertiary = UIBuilder.SecondaryButton("Rematch", _resultPanel, "REMATCH", UITheme.FontBody);
+            _resultTertiary.OnClick(Replay);
+
+            // Wired to OnPrimary, not to Replay or Continue directly: UIButton.OnClick APPENDS a
+            // listener, so rebinding this per result would stack a handler every fight and one tap
+            // would eventually start several. The dispatch flag changes; the wiring never does.
             _resultPrimary = UIBuilder.GoldButton("Rematch", _resultPanel, "REMATCH", UITheme.FontHeading);
-            UIBuilder.Box(_resultPrimary.Root, -460f, -370f, 620f, 126f, new Vector2(0.5f, 0.5f));
-            _resultPrimary.OnClick(Replay);
+            _resultPrimary.OnClick(OnPrimary);
 
             _resultPanel.gameObject.SetActive(false);
         }
@@ -1381,6 +1401,53 @@ namespace Emberfall.UI.Screens
             if (_recitalFloor >= 0) ShowRecitalResult();
             else ShowCampaignResult();
 
+            // ---------------------------------------------------------------- what to do next
+            // Before this, a win offered ADJUST LINE (which leaves for Heroes) and REMATCH (which
+            // replays the stage just cleared), and the gold one - the button a thumb goes to - was
+            // the one that made no progress. The stage the win had just unlocked was announced in
+            // the spoils and then not reachable from the screen announcing it.
+            //
+            // So the gold slot goes to CONTINUE whenever there is somewhere to continue TO. The
+            // panel keeps exactly one gold button by swapping the primary's identity rather than
+            // adding a third: two gold buttons side by side would restate the same "which of these
+            // is the next tap?" question this exists to answer.
+            //
+            // ORDER MATTERS, and it is why this sits here rather than up with the title and the
+            // Debrief line where it reads more naturally. NextStage is derived from
+            // Profile.StagesCleared, and the clear is not recorded until GrantBattleResult, which
+            // ShowCampaignResult calls. Computed any earlier, NextStage still returns the stage
+            // just fought, the id comparison below matches, and CONTINUE never appears on the one
+            // screen it exists for. Measured, not assumed: the first build of this fix put the
+            // block above and a live win still showed REMATCH.
+            //
+            // The id comparison is what keeps this honest once the campaign is finished, since
+            // NextStage returns the LAST stage rather than null in that case, so a bare null check
+            // would offer CONTINUE back into the fight just completed. A Recital run is excluded
+            // outright - it has floors, not campaign stages, and NextStage means nothing there.
+            StageDef nextStage = (_result.Victory && _recitalFloor < 0) ? App.Session.NextStage : null;
+            bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
+
+            _primaryContinues = canContinue;
+            _resultPrimary.SetText(canContinue ? "CONTINUE" : "REMATCH");
+            _resultPrimary.Root.name = canContinue ? "Continue" : "Rematch";
+            _resultTertiary.Root.gameObject.SetActive(canContinue);
+
+            if (canContinue)
+            {
+                // Two replay-shaped options above, CONTINUE below them and taller, so prominence
+                // matches how often each is the right answer.
+                UIBuilder.Box(_resultSecondary.Root, -460f, -170f, 620f, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultTertiary.Root, -460f, -276f, 620f, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
+            }
+            else
+            {
+                // Defeat, campaign finished, or a Recital run: REMATCH genuinely is the next
+                // action, and this is exactly the layout that shipped before this change.
+                UIBuilder.Box(_resultSecondary.Root, -460f, -220f, 620f, 112f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultPrimary.Root, -460f, -370f, 620f, 126f, new Vector2(0.5f, 0.5f));
+            }
+
             _resultPanel.gameObject.SetActive(true);
             _resultPanel.SetAsLastSibling();
             _resultGroup.alpha = 1f;
@@ -1623,6 +1690,43 @@ namespace Emberfall.UI.Screens
         private void Replay()
         {
             App.Audio.Tap();
+            OnHide();
+            OnShow();
+        }
+
+        /// <summary>
+        /// The gold button, whatever it currently means. See the wiring note in Build for why this
+        /// dispatches on a flag rather than being rebound per result.
+        /// </summary>
+        private void OnPrimary()
+        {
+            if (_primaryContinues) ContinueToNextStage();
+            else Replay();
+        }
+
+        /// <summary>
+        /// Straight into the fight the win just unlocked, with no detour through Campaign.
+        ///
+        /// Deliberately reuses Replay's path - SetStage, then OnHide/OnShow - so world teardown and
+        /// rebuild are identical to every other way a battle starts. A second entry point that
+        /// built the world its own way is exactly the kind of thing that drifts apart later.
+        ///
+        /// Re-resolves NextStage at TAP time rather than trusting what ShowResult saw. Nothing
+        /// should change in between, but this is now the most-pressed button in the game and the
+        /// cost of being wrong is a null dereference, so it falls back to Campaign instead.
+        /// </summary>
+        private void ContinueToNextStage()
+        {
+            App.Audio.Tap();
+
+            StageDef next = App.Session.NextStage;
+            if (next == null)
+            {
+                Router.Show(ScreenId.Campaign, false);
+                return;
+            }
+
+            SetStage(next);
             OnHide();
             OnShow();
         }

@@ -93,6 +93,23 @@ namespace Emberfall.UI.Screens
             float total = 0f;
             for (int i = 0; i < w.Length; i++) total += w[i];
             if (total <= 0f) total = 1f;
+            int tiersOffered = 0;
+            int onlyTier = 0;
+            for (int s = 1; s <= 5; s++)
+                if (w[s - 1] > 0f) { tiersOffered++; onlyTier = s; }
+
+            // The heading has to say WHAT the number is a chance OF, because the pool is currently
+            // a single tier and "RIFT ODDS / 5 stars / 100%" reads as "100% chance of a good pull"
+            // rather than "every pull is 5 stars". Those mean the same thing here, but only one of
+            // them survives the pool being widened later, and only one of them is unambiguous now.
+            //
+            // When exactly one tier is offered the panel states the outcome outright instead of
+            // leaving a lone 100% to be interpreted. Anything else falls back to naming the axis,
+            // which is all a multi-tier table needs.
+            heading.text = tiersOffered == 1
+                ? "RIFT ODDS  -  EVERY PULL IS " + onlyTier + "-STAR"
+                : "RIFT ODDS  -  CHANCE PER PULL, BY RARITY";
+
             for (int s = 1; s <= 5; s++)
                 if (w[s - 1] > 0f) AddRate(row, s, w[s - 1] / total);
         }

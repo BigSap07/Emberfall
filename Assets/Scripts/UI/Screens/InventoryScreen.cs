@@ -44,6 +44,12 @@ namespace Emberfall.UI.Screens
         private Text _pickerTitle;
         private RectTransform _pickerHeroList;
 
+        /// <summary>
+        /// The modal card itself. Held because its HEIGHT is now a function of how many heroes are
+        /// on the roster - see SizePickerPanel.
+        /// </summary>
+        private RectTransform _pickerPanel;
+
         // The picker holds exactly one of these at a time; the other is always null/empty. Two
         // fields rather than one object reference because a relic is identified by its content id
         // and a piece of armor by its save uid, and collapsing them into one string would make the
@@ -75,7 +81,10 @@ namespace Emberfall.UI.Screens
             dim.sprite = TextureLab.White;
             dim.color = UITheme.ScrimModal;
 
+            // Height is a placeholder; SizePickerPanel sets the real one each time the picker
+            // opens, because it depends on the roster.
             RectTransform panel = UIBuilder.Node("Panel", _pickerRoot);
+            _pickerPanel = panel;
             UIBuilder.Box(panel, 0f, 0f, 900f, 560f, new Vector2(0.5f, 0.5f));
 
             Image panelBg = panel.gameObject.AddComponent<Image>();
@@ -168,8 +177,61 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Sized(noHeroes.rectTransform, 0f, 60f);
             }
 
+            SizePickerPanel(itemName, heroes.Count);
+
             _pickerRoot.gameObject.SetActive(true);
             _pickerRoot.SetAsLastSibling();
+        }
+
+        /// <summary>
+        /// Grows the modal to fit its rows instead of clipping them.
+        ///
+        /// The bug this fixes: the panel was a fixed 560 tall, which left a 378-tall scroll
+        /// viewport, and five 72px rows plus the unequip row and divider need 510. The list is a
+        /// real ScrollRect with a RectMask2D, so the overflow was not drawn OVER anything - it was
+        /// clipped, and clipped content is not raycastable either. Hit-testing every row found the
+        /// last two returning the panel and the CANCEL button instead of themselves. They were
+        /// reachable only by dragging a list that gave no sign it could scroll, and the row at the
+        /// mask boundary was cut in half, which reads as a rendering fault rather than an
+        /// invitation. Two of five heroes were effectively missing - including, for an aspect-
+        /// attuned piece, the one the item was actually for.
+        ///
+        /// Sizing to content rather than nudging the constant is what makes this hold for a roster
+        /// that grows: any count that fits under MaxPanel is fully visible with no scrolling at
+        /// all. Beyond that it must still scroll - there is no height that fits an unbounded list -
+        /// so the title says so outright rather than leaving the player to discover it by accident.
+        /// </summary>
+        private void SizePickerPanel(string itemName, int heroCount)
+        {
+            // Mirrors BuildHeroPicker's own numbers: rows are Sized to 72, ScrollList spacing is
+            // 10, its padding is RectOffset(16, 16, 8, 8), and UIBuilder.Divider is 2 tall.
+            const float RowHeight = 72f;
+            const float Spacing = 10f;
+            const float PadV = 16f;
+            const float DividerHeight = 2f;
+
+            // The bands BuildHeroPicker reserves above and below the scroll viewport, from its
+            // FillParent(heroScroll, 16, 72, 16, 110) call. The lower band is what holds CANCEL.
+            const float TitleBand = 72f;
+            const float CancelBand = 110f;
+
+            const float MinPanel = 320f;
+            const float MaxPanel = 940f;   // leaves a margin inside the 1080 reference height
+
+            int rows = heroCount + 1;      // + the unequip row
+            float contentHeight = PadV
+                                + rows * RowHeight
+                                + DividerHeight
+                                + Spacing * rows;   // gaps between rows, and around the divider
+
+            float wanted = TitleBand + contentHeight + CancelBand;
+            float panelHeight = Mathf.Clamp(wanted, MinPanel, MaxPanel);
+
+            UIBuilder.Box(_pickerPanel, 0f, 0f, 900f, panelHeight, new Vector2(0.5f, 0.5f));
+
+            bool scrolls = contentHeight > panelHeight - TitleBand - CancelBand;
+            _pickerTitle.text = "EQUIP  " + itemName.ToUpperInvariant() + "  TO..."
+                                + (scrolls ? "      (scroll for more)" : "");
         }
 
         private void ClosePicker()

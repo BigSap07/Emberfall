@@ -50,7 +50,12 @@ namespace Emberfall.UI
         /// <summary>Circular unit portrait: aspect-tinted disc, emblem, aspect ring.</summary>
         public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing)
         {
-            return Portrait(name, parent, def, stars, size, showRing, true);
+            return Portrait(name, parent, def, stars, size, showRing, true, true);
+        }
+
+        public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing, bool showPlate)
+        {
+            return Portrait(name, parent, def, stars, size, showRing, showPlate, true);
         }
 
         /// <summary>
@@ -65,7 +70,18 @@ namespace Emberfall.UI
         /// on the map art. So the dock shows unbacked portraits and full badges side by side, which
         /// is the intended asymmetry rather than an oversight.
         /// </summary>
-        public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing, bool showPlate)
+        /// <summary>
+        /// allowArt false forces the sigil branch even for a unit that HAS a painted portrait.
+        ///
+        /// This exists because portrait coverage is partial and has nothing to do with ownership -
+        /// only some units are painted - so a roster could show a photographic LOCKED hero next to
+        /// an owned one drawn as a flat glyph. That inversion reads as "the one you cannot use is
+        /// the real character", which is exactly backwards, and it moves around every time art is
+        /// added. Forcing locked cards down the abstract branch makes the rule structural rather
+        /// than a coincidence of which files exist: an owned hero can only ever look the same as,
+        /// or better than, a locked one.
+        /// </summary>
+        public static RectTransform Portrait(string name, Transform parent, UnitDef def, int stars, float size, bool showRing, bool showPlate, bool allowArt)
         {
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Size(root, size, size);
@@ -77,7 +93,7 @@ namespace Emberfall.UI
             // A unit with a painted portrait shows it in place of its sigil; everyone else is
             // untouched. The ring stays either way, so the badge keeps its aspect read whichever
             // branch it takes, and a mixed roster still looks like one set of badges.
-            Sprite art = PortraitArt(def.Id);
+            Sprite art = allowArt ? PortraitArt(def.Id) : null;
             bool plate = showPlate || art == null;
 
             if (plate)
@@ -293,7 +309,9 @@ namespace Emberfall.UI
 
             card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.BorderSoft, 0.7f), 20, 2);
 
-            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, false);
+            // allowArt false: a locked hero is a silhouette regardless of whether that hero
+            // happens to have a painted portrait on disk. See the Portrait overload for why.
+            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, false, true, false);
             UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
             // dimmed silhouette: a dark scrim over the portrait hides the palette/sigil detail
             // without hiding the shape, and the whole card fades to signal "not yours yet"

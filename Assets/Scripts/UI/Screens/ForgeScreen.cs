@@ -81,7 +81,8 @@ namespace Emberfall.UI.Screens
             PlayerProfile profile = App.Session.Profile;
             long slag = profile.Slag;
             _slagDisplay.text = "SLAG   " + slag + "   (Reroll and Combine cost Slag - Salvage pays it)";
-            _headerSubtitle.text = profile.OwnedArmor.Count + " PIECES OWNED";
+            int owned = profile.OwnedArmor.Count;
+            _headerSubtitle.text = owned + (owned == 1 ? " PIECE OWNED" : " PIECES OWNED");
 
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Object.Destroy(_listContent.GetChild(i).gameObject);
@@ -163,7 +164,9 @@ namespace Emberfall.UI.Screens
 
             // Three actions instead of four: 14 + 3*46 + 2*12 + 14 = 190.
             RectTransform card = UIBuilder.Node("Armor_" + piece.Uid, _listContent);
-            UIBuilder.Sized(card, 0f, 190f);
+            // 244 rather than 190: each action now carries a one-line reason underneath it, and
+            // the three of them need the extra 54.
+            UIBuilder.Sized(card, 0f, 244f);
 
             Image bg = card.gameObject.AddComponent<Image>();
             bg.sprite = TextureLab.RoundedRect(18);
@@ -204,17 +207,18 @@ namespace Emberfall.UI.Screens
             statusLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
             statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
             statusLabel.rectTransform.offsetMin = new Vector2(376f, -74f);
-            statusLabel.rectTransform.offsetMax = new Vector2(-190f, -46f);
+            statusLabel.rectTransform.offsetMax = new Vector2(-258f, -46f);
 
             Text statsLabel = UIBuilder.WrappedLabel("Stats", card, piece.DescribeStats(),
                                                      UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
             statsLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
             statsLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
             statsLabel.rectTransform.offsetMin = new Vector2(108f, 14f);
-            statsLabel.rectTransform.offsetMax = new Vector2(-190f, -76f);
+            statsLabel.rectTransform.offsetMax = new Vector2(-258f, -76f);
 
             const float btnH = 46f;
-            const float step = 58f;
+            const float reasonH = 24f;
+            const float step = 76f;        // 46 button + 24 reason + 6 breathing room
             const float topMargin = -14f;
 
             // COMBINE first - the action this screen's whole layout (grouped by slot, sorted by
@@ -239,6 +243,8 @@ namespace Emberfall.UI.Screens
             string combineUidB = combinePartners.Count > 0 ? combinePartners[0].Uid : "";
             string combineUidC = combinePartners.Count > 1 ? combinePartners[1].Uid : "";
             combineBtn.OnClick(delegate { OnCombine(combineUidA, combineUidB, combineUidC); });
+            Reason(card, "ReasonCombine", topMargin - btnH - 2f,
+                   CombineReason(equipped, nextTemper.HasValue, combinePartners.Count, combineCost));
 
             int rerollCost = App.Session.RerollCost(piece);
             UIButton rerollBtn = UIBuilder.SecondaryButton("Reroll", card, "REROLL  " + rerollCost, UITheme.FontTiny);
@@ -246,6 +252,8 @@ namespace Emberfall.UI.Screens
             rerollBtn.Interactable = App.Session.Profile.Slag >= rerollCost && rerollCost > 0;
             string capturedUid = piece.Uid;
             rerollBtn.OnClick(delegate { OnReroll(capturedUid); });
+            Reason(card, "ReasonReroll", topMargin - step - btnH - 2f,
+                   rerollCost <= 0 ? "Cannot be rerolled" : SlagShortfall(rerollCost));
 
             int salvageValue = App.Session.SalvageValue(piece);
             UIButton salvageBtn = UIBuilder.MakeButton("Salvage", card, "SALVAGE  " + salvageValue, UITheme.FontTiny,
@@ -255,6 +263,50 @@ namespace Emberfall.UI.Screens
             // than letting the tap fail silently.
             salvageBtn.Interactable = !equipped;
             salvageBtn.OnClick(delegate { OnSalvage(capturedUid); });
+            Reason(card, "ReasonSalvage", topMargin - step * 2f - btnH - 2f,
+                   equipped ? "Unequip it first" : "");
+        }
+
+        /// <summary>
+        /// One line under a disabled action saying why it is disabled, or nothing at all when the
+        /// action is available.
+        ///
+        /// A first visit to this screen presents three priced buttons and no way to press any of
+        /// them: Combine and Reroll want Slag the player has none of and has never been told how to
+        /// get, and Salvage - the one action that PAYS Slag, and so the only way out of that - is
+        /// refused because the piece is worn. Nothing said any of it. Three dead buttons with
+        /// prices on them read as a broken screen rather than a locked one.
+        ///
+        /// Empty text rather than a hidden object so the layout is identical either way, and an
+        /// enabled action simply has nothing written beneath it.
+        /// </summary>
+        private static void Reason(RectTransform card, string name, float y, string text)
+        {
+            Text label = UIBuilder.Label(name, card, text, UITheme.FontTiny, UITheme.TextMuted,
+                                         TextAnchor.UpperRight);
+            UIBuilder.Box(label.rectTransform, -18f, y, 230f, 24f, new Vector2(1f, 1f));
+        }
+
+        /// <summary>
+        /// Why COMBINE is unavailable, in the order the player would hit the walls: a top-tier
+        /// piece can never combine, a worn one is refused outright by GameSession.CombineArmor,
+        /// then the two things they can actually go and fix - finding partners, and affording it.
+        /// </summary>
+        private string CombineReason(bool equipped, bool hasNextTemper, int partnerCount, int cost)
+        {
+            if (!hasNextTemper) return "Already the top tier";
+            if (equipped) return "Unequip it first";
+            if (partnerCount < 2) return "Needs " + (2 - partnerCount) + " more matching";
+            return SlagShortfall(cost);
+        }
+
+        /// <summary>How much more Slag is needed, or nothing when it is already affordable. Names
+        /// the SHORTFALL rather than the price, because the price is already on the button.</summary>
+        private string SlagShortfall(int cost)
+        {
+            long have = App.Session.Profile.Slag;
+            if (have >= cost) return "";
+            return "Needs " + (cost - have) + " more Slag";
         }
 
         // ------------------------------------------------------------------ actions
