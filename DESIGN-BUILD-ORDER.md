@@ -10,8 +10,11 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
   for the retune, i.e. today's task 13.
 - **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
-- **Unassessed:** `feat/sprite-sheet-poc` / `fix/battlevfx-blend-one-minus-src-alpha` (tip
-  `8f0e18d`) and `feat/sprite-sheet-player` - unmerged, unchecked, status unknown not "fine".
+- **Superseded:** `8f0e18d` (two names, one commit: `feat/sprite-sheet-poc` and
+  `fix/battlevfx-blend-one-minus-src-alpha`) - its `SpriteSheetPlayer` lost to the shipped
+  `SpriteAnimator`, and its "blend fix" was comment-only; main's value was never wrong.
+- **Do not merge:** `feat/sprite-sheet-player` (`82eeeb7`) - 244 MB of raw source sheets in
+  `Assets/_Incoming/`, now gitignored. That branch is the only copy; keep it, do not land it.
 - **Known gap:** Kael is `startingHero: false` but `GameApp.Awake` force-grants him under
   `#if UNITY_EDITOR`, so editor runs never see the real new-player roster.
 
