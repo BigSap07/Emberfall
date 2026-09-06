@@ -55,8 +55,12 @@ namespace Emberfall.Battle
 
             quad.Material.SetTexture("_MainTex", texture);
             quad.Material.SetColor("_Color", color);
-            quad.Material.SetFloat("_SrcBlend", 5f);
-            quad.Material.SetFloat("_DstBlend", additive ? 1f : 10f);
+            // OneMinusSrcAlpha is 10, not 6 - see the note in BattleAssets.NewFx. 6 is
+            // OneMinusSrcColor, which leaves alpha out of the destination term, so a
+            // non-additive quad leaks the backdrop through and washes out over bright
+            // backgrounds. Do not "correct" the 10 below to a 6; that is the regression.
+            quad.Material.SetFloat("_SrcBlend", 5f);                  // BlendMode.SrcAlpha
+            quad.Material.SetFloat("_DstBlend", additive ? 1f : 10f); // BlendMode.One : BlendMode.OneMinusSrcAlpha
             _live.Add(quad);
             return quad;
         }
