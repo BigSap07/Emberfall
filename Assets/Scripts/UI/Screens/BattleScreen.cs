@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using Emberfall.Battle;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
@@ -109,7 +110,7 @@ namespace Emberfall.UI.Screens
         /// What the gold button means for THIS result. Was a bool ("continues, or replays"), which
         /// only had room for the two answers a win needs; a loss needs a third.
         /// </summary>
-        private enum PrimaryAction { Replay, Continue, Exit }
+        private enum PrimaryAction { Replay, Continue, Exit, Prologue }
 
         private PrimaryAction _primaryAction = PrimaryAction.Replay;
 
@@ -147,6 +148,17 @@ namespace Emberfall.UI.Screens
         private int _recitalFloor = -1;
 
         /// <summary>
+        /// The prologue's fixed squad while this battle is a prologue step, or null for every other
+        /// mode. The fourth discriminator on this screen, alongside _stage, _recitalFloor and
+        /// _provingOpponent - see SetPrologueStep for why it is a team rather than a bool.
+        /// </summary>
+        private List<HeroInstance> _prologueSquad;
+
+        /// <summary>What FirstRun wants told when a prologue fight is done with, true on a win.
+        /// Null in every other mode.</summary>
+        private System.Action<bool> _prologueOnResolved;
+
+        /// <summary>
         /// The snapshot being fought when this battle is a Proving attempt, or null for every other
         /// mode. Set by SetProvingOpponent and cleared by SetStage/SetRecitalFloor, so the three
         /// modes are mutually exclusive by construction rather than by remembering to reset.
@@ -158,6 +170,7 @@ namespace Emberfall.UI.Screens
             _stage = stage;
             _recitalFloor = -1;
             _provingOpponent = null;
+            _prologueSquad = null;
         }
 
         /// <summary>
@@ -171,6 +184,7 @@ namespace Emberfall.UI.Screens
         {
             _recitalFloor = floor;
             _provingOpponent = null;
+            _prologueSquad = null;
             _stage = App.Session.BuildRecitalStage(floor);
         }
 
@@ -188,7 +202,32 @@ namespace Emberfall.UI.Screens
         {
             _recitalFloor = -1;
             _provingOpponent = opponent;
+            _prologueSquad = null;
             _stage = ProvingGenerator.BuildStage();
+        }
+
+        /// <summary>
+        /// Runs one prologue step. The squad is handed in rather than read from the save, and the
+        /// result is handed BACK rather than acted on here.
+        ///
+        /// The callback is the whole reason this mode exists as a fourth discriminator instead of
+        /// as a campaign stage with a flag. Every other mode owns what happens after its result -
+        /// Campaign continues, Recital returns to its tower, the Proving returns to its ladder.
+        /// The prologue does not: what follows step 8 is a scripted antagonist beat that belongs
+        /// to FirstRun, not to a battle screen, and it has to fire on a WIN as well as a loss.
+        /// Passing the outcome back leaves that decision in the one place that knows the script.
+        ///
+        /// onResolved is invoked from the gold button, not from the moment the sim ends, so the
+        /// player still reads the result panel of the fight they just lost before the story moves.
+        /// </summary>
+        public void SetPrologueStep(PrologueScript.Step step, List<HeroInstance> squad,
+                                    System.Action<bool> onResolved)
+        {
+            _recitalFloor = -1;
+            _provingOpponent = null;
+            _prologueSquad = squad;
+            _prologueOnResolved = onResolved;
+            _stage = PrologueScript.BuildStage(step);
         }
 
         // ------------------------------------------------------------------ construction
@@ -478,9 +517,13 @@ namespace Emberfall.UI.Screens
                                  + Mathf.RoundToInt(Time.unscaledTime * 997f));
             if (seed == 0) seed = 1;
 
-            BattleRequest request = _provingOpponent != null
-                ? App.Session.BuildProvingRequest(_stage, _provingOpponent, seed)
-                : App.Session.BuildBattleRequest(_stage, seed);
+            // Three request shapes, one per mode that does not use the player's own line as-is.
+            // Checked most-specific first: a prologue fight has no profile at all, so it must not
+            // fall through to BuildBattleRequest, which reads Profile.TeamHeroes().
+            BattleRequest request;
+            if (_prologueSquad != null) request = App.Session.BuildPrologueRequest(_stage, _prologueSquad, seed);
+            else if (_provingOpponent != null) request = App.Session.BuildProvingRequest(_stage, _provingOpponent, seed);
+            else request = App.Session.BuildBattleRequest(_stage, seed);
             _result = CombatSimulation.Run(request);
             _world.Populate(_result);
             BuildBars();
@@ -1467,7 +1510,15 @@ namespace Emberfall.UI.Screens
 
             for (int i = _rewardList.childCount - 1; i >= 0; i--) Destroy(_rewardList.GetChild(i).gameObject);
 
-            if (_provingOpponent != null) ShowProvingResult();
+            // The prologue is checked FIRST and this ordering is load-bearing, not stylistic.
+            // ShowCampaignResult is the else of this chain, and it calls GrantBattleResult, which
+            // on a win writes the stage id into ClearedStageIds, adds gold, shards and account XP,
+            // and bumps StagesCleared - permanently, into the save, for a tutorial fight against a
+            // synthetic stage id. A prologue step that reached that branch would not merely show
+            // the wrong panel; it would corrupt the campaign progress of an account that has not
+            // started the campaign. ShowPrologueResult grants nothing at all.
+            if (_prologueSquad != null) ShowPrologueResult();
+            else if (_provingOpponent != null) ShowProvingResult();
             else if (_recitalFloor >= 0) ShowRecitalResult();
             else ShowCampaignResult();
 
@@ -1498,7 +1549,12 @@ namespace Emberfall.UI.Screens
             // clears _recitalFloor, so the Recital check alone stopped being exhaustive the
             // moment a third battle mode existed, and a Proving win would have offered
             // CONTINUE into a campaign stage that had nothing to do with it.
-            StageDef nextStage = (_result.Victory && _recitalFloor < 0 && _provingOpponent == null)
+            // A prologue step is excluded here for the same reason the other two modes are, and
+            // more so: NextStage is the first UNCLEARED campaign stage, which for a brand-new
+            // account is ch1_1 - so a prologue win would offer CONTINUE straight into the real
+            // campaign, skipping the entire scripted ending this feature exists to deliver.
+            StageDef nextStage = (_result.Victory && _recitalFloor < 0
+                                  && _provingOpponent == null && _prologueSquad == null)
                 ? App.Session.NextStage : null;
             bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
 
@@ -1519,6 +1575,35 @@ namespace Emberfall.UI.Screens
             //
             // REMATCH keeps existing, demoted to the middle slot. It is still the right answer
             // sometimes; it is no longer the only one.
+            // THE PROLOGUE OWNS ITS OWN EXIT, AND IT IS THE ONLY ONE.
+            //
+            // Every other mode ends on three buttons: ADJUST LINE, REMATCH, and a forward action.
+            // All three are wrong here. ADJUST LINE walks to the Heroes screen mid-story, on an
+            // account whose roster is not yet the squad on screen. REMATCH re-runs a fight whose
+            // outcome the script does not depend on but whose PLACE in the script it does - and on
+            // step 8 it offers to refight the loss the story is built around, which is an offer to
+            // grind against a wall that cannot be beaten by design. So both are hidden and the
+            // gold button is the only way off this panel, which is exactly the shape a scripted
+            // sequence wants: one forward.
+            if (_prologueSquad != null)
+            {
+                _primaryAction = PrimaryAction.Prologue;
+                _resultPrimary.SetText("CONTINUE");
+                _resultPrimary.Root.name = "PrologueContinue";
+                _resultSecondary.Root.gameObject.SetActive(false);
+                _resultTertiary.Root.gameObject.SetActive(false);
+                UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
+
+                _resultPanel.gameObject.SetActive(true);
+                _resultPanel.SetAsLastSibling();
+                _resultGroup.alpha = 1f;
+                return;
+            }
+
+            // Restored for every other mode, since the branch above can have switched them off on
+            // a previous fight and this screen is built once and reused.
+            _resultSecondary.Root.gameObject.SetActive(true);
+
             if (canContinue)
             {
                 _primaryAction = PrimaryAction.Continue;
@@ -1839,6 +1924,7 @@ namespace Emberfall.UI.Screens
             {
                 case PrimaryAction.Continue: ContinueToNextStage(); break;
                 case PrimaryAction.Exit: ExitToOrigin(); break;
+                case PrimaryAction.Prologue: ResolvePrologueStep(); break;
                 default: Replay(); break;
             }
         }
@@ -1848,6 +1934,48 @@ namespace Emberfall.UI.Screens
         /// already branches its spoils on, so the exit cannot disagree with the result panel about
         /// which mode the player is in.
         /// </summary>
+        /// <summary>
+        /// Hands the outcome back to FirstRun and gets out of the way.
+        ///
+        /// The callback is read into a local and the field cleared BEFORE invoking, because what
+        /// FirstRun does with it is start the next step - which calls SetPrologueStep and assigns
+        /// a new callback. Clearing after the call would wipe the one just installed and strand
+        /// the sequence on the following step with a dead gold button.
+        /// </summary>
+        private void ResolvePrologueStep()
+        {
+            App.Audio.Tap();
+            System.Action<bool> done = _prologueOnResolved;
+            _prologueOnResolved = null;
+            if (done != null) done(_result != null && _result.Victory);
+        }
+
+        /// <summary>
+        /// The prologue's spoils, which are none.
+        ///
+        /// This grants NOTHING - no gold, no shards, no account XP, no cleared-stage id, no battle
+        /// tally. That is the point of it existing rather than reusing ShowCampaignResult with the
+        /// rewards zeroed: there is no reward path left live to accidentally fire. The row is here
+        /// so the panel does not render an empty spoils box, and it is a line of script rather
+        /// than a number because the prologue is the one fight in the game about neither.
+        ///
+        /// The audio still plays. The scripted loss is meant to land, and Defeat() is how every
+        /// other loss in the game lands.
+        /// </summary>
+        private void ShowPrologueResult()
+        {
+            if (_result.Victory)
+            {
+                AddRewardRow("THE LINE HOLDS", "for now", UITheme.TextMuted);
+                App.Audio.Victory();
+            }
+            else
+            {
+                AddRewardRow("THE LINE BREAKS", "as it always does", UITheme.TextMuted);
+                App.Audio.Defeat();
+            }
+        }
+
         private ScreenId OriginScreen()
         {
             if (_provingOpponent != null) return ScreenId.Proving;
