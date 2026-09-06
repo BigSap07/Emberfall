@@ -10,6 +10,28 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
   for the retune, i.e. today's task 13.
 - **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
+- **Open: `art/hero-portraits`** - framed portrait art shipped for the five Ember heroes: Kael,
+  Marrow, Seraphine, Veska, Orren. Committed to the branch, not yet on `main`. It adds a SECOND
+  portrait convention rather than replacing the first, and the folder is what distinguishes them:
+  `Resources/Sprites/Portraits/{heroId}.png` is a finished badge that carries its own gold frame,
+  while the older `Resources/Sprites/Units/portrait_{heroId}.png` is a frameless crop that
+  `Widgets.Portrait` grounds itself with a disc, glows and an inset. Both are resolved in
+  `Widgets.cs`; dropping a file into either folder is what decides how a hero renders, so there is
+  no flag in `heroes.json` to keep in sync.
+  - **Framed art skips the aspect ring, by design.** It also skips the disc and the 14.65% inset.
+    The art already has a frame and four cardinal spikes that reach the edge of the image, so a
+    game-drawn ring around it would sit immediately outside a gold border and clip the spikes. The
+    cost is real and accepted rather than overlooked: these five lose the aspect-colour read every
+    other badge carries. All five are Ember, so the ring was telling the player nothing the art
+    does not. **Revisit this if a non-Ember hero is ever delivered framed.**
+  - **Still sigil-only, pending art:** Orrin Kaal, Kalyx Emberwright, Wren Ilyra, Ryn Solvarr,
+    Maeve Corrin, Nyx Serrow. They render an aspect-tinted sigil disc with the aspect ring, exactly
+    as before - the fallback is untouched and is what any hero without a portrait file gets.
+  - The five superseded 256px `portrait_*` files were deleted with it, which leaves
+    `Sprites/Units/portrait_*` with **no files at all**. The frameless tier is still live code and
+    still the right home for any future frameless delivery, but note that `Tools/make_portraits.py`
+    now writes into a path that framed art shadows: re-running it would regenerate five files that
+    nothing would display.
 - **Superseded:** `8f0e18d` (two names, one commit: `feat/sprite-sheet-poc` and
   `fix/battlevfx-blend-one-minus-src-alpha`) - its `SpriteSheetPlayer` lost to the shipped
   `SpriteAnimator`, and its "blend fix" was comment-only; main's value was never wrong.
