@@ -210,6 +210,19 @@ namespace Emberfall.Core.Model
     public sealed class PlayerProfile
     {
         public string PlayerName = "Wayfarer";
+
+        /// <summary>
+        /// HeroDef id whose portrait stands for the player, or empty for none.
+        ///
+        /// Stored as the DEF id rather than a hero uid on purpose: a uid dies when its hero is
+        /// salvaged or a save is rebuilt, and an avatar pointing at a dead uid is a broken picture.
+        /// A def id is content, so the worst case is a player who no longer owns that hero - which
+        /// the Profile screen treats as "pick again" rather than as an error.
+        ///
+        /// Empty is a real, expected value, not a missing one: a brand-new account owns three
+        /// heroes but has chosen nothing, and every reader has to render that case anyway.
+        /// </summary>
+        public string AvatarHeroId = "";
         public int PlayerLevel = 1;
         public int PlayerXp;
         public long Gold;
