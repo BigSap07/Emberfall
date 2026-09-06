@@ -177,6 +177,25 @@ namespace Emberfall.EditorTools
         /// from the old clock, so the very next settle would push it straight back over the cap and
         /// this would read as having granted nothing.
         /// </summary>
+        /// <summary>
+        /// Toggles the opt-in Kael grant GameApp.Awake reads. Off by default, which is the whole
+        /// point: an editor launch should show the roster a real new player gets - three starters,
+        /// not four - and this exists so the animation-test shortcut is still one click away
+        /// rather than silently gone.
+        ///
+        /// It logs which way it just went rather than carrying a checkmark: UnityEditor.Menu is
+        /// not in Tools/UnityShim, and extending the shim a third time to tick a box was a worse
+        /// trade than one line in the console.
+        /// </summary>
+        [MenuItem("Emberfall/Debug/Grant Kael On Editor Boot", false, 33)]
+        private static void ToggleGrantKael()
+        {
+            bool now = !EditorPrefs.GetBool(GameApp.GrantKaelOnBootKey, false);
+            EditorPrefs.SetBool(GameApp.GrantKaelOnBootKey, now);
+            Debug.Log("Grant Kael on editor boot: " + (now ? "ON" : "OFF")
+                      + ". Off is the default and matches what a new player sees.");
+        }
+
         [MenuItem("Emberfall/Debug/Refill Proving Brands (writes the real save)", false, 32)]
         public static void RefillProvingBrands()
         {

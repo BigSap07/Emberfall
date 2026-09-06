@@ -46,6 +46,13 @@ namespace Emberfall.Game
         /// there is: any guard that trips can say which stage the boot reached, and BootFailed
         /// distinguishes "never started" from "threw" from "finished fine".
         /// </summary>
+        /// <summary>
+        /// EditorPrefs key for the opt-in Kael grant in Awake. Public so the Debug menu item that
+        /// toggles it cannot drift from the key the check reads - the two used to be one literal in
+        /// two files in this project's earlier editor tooling, and they drifted.
+        /// </summary>
+        public const string GrantKaelOnBootKey = "Emberfall.GrantKaelOnBoot";
+
         public static string BootStage = "not started";
         public static bool BootCompleted;
         public static bool BootFailed;
@@ -94,13 +101,29 @@ namespace Emberfall.Game
             Session = new GameSession(Content, profile);
 
 #if UNITY_EDITOR
-            // Animation pipeline proof (kael-hero-animations task): Kael has no summon banner
-            // wiring yet, so this is the smallest path onto a team for a real test battle -
-            // GrantHeroDirect already exists and already calls NormaliseTeam, which slots him
-            // into whichever team slot is empty. Editor-only, so it never touches a device build.
-            HeroDef kael = Content.GetHero("kael_the_ashbound");
-            if (kael != null && !Session.Profile.Owns(kael.Id))
-                Session.GrantHeroDirect(kael, TimeUtil.NowUnix());
+            // OFF BY DEFAULT, and that is the fix. This grant existed for the animation pipeline
+            // task, on the reasoning that "Kael has no summon banner wiring yet, so this is the
+            // smallest path onto a team for a real test battle". That reasoning is now stale on
+            // both halves.
+            //
+            // Kael IS summonable: RollHero draws from Content.HeroesOfStars weighted by star tier,
+            // he is five stars, and summonWeight5 is the only non-zero weight in balance.json - a
+            // live ten-pull returned him as a duplicate. And the cost of it running unconditionally
+            // was worse than the convenience: it fired on EVERY editor launch, so a fresh save in
+            // the editor showed a four-hero roster where a real new player gets three. Every
+            // first-run check any of us has ever done in the editor was against a line-up no
+            // player will ever see - which now matters more, because FirstRun's opening card tells
+            // that player about "your starting allies".
+            //
+            // Kept rather than deleted, behind a flag a human has to turn on
+            // (Emberfall/Debug/Grant Kael On Editor Boot), because the affordance is still useful
+            // and an opt-in switch says so out loud where a silently-removed one says nothing.
+            if (UnityEditor.EditorPrefs.GetBool(GrantKaelOnBootKey, false))
+            {
+                HeroDef kael = Content.GetHero("kael_the_ashbound");
+                if (kael != null && !Session.Profile.Owns(kael.Id))
+                    Session.GrantHeroDirect(kael, TimeUtil.NowUnix());
+            }
 #endif
 
             BootStage = "BuildCanvas";
