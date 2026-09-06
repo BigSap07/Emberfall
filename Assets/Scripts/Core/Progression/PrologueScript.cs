@@ -130,6 +130,62 @@ namespace Emberfall.Core.Progression
                     Spawn(stage, "grave_moth", 34);
                     break;
 
+                // Two husks, and BOTH of them target FrontEnemy (enemies.json, "target":
+                // "FrontEnemy"), which CombatSimulation resolves to the lowest living Slot -
+                // "u.Slot < picked.Slot", the tie-break at the bottom of ResolveTargets. So every
+                // hit in this fight lands on whoever is in slot 1 and the other four finish it
+                // near full. That is the lesson, and it is a fact of the sim rather than a
+                // staged coincidence.
+                //
+                // Umbra on purpose: Umbra counters only Lumen, so an all-Ember line takes and
+                // deals flat damage here. An enemy with an aspect edge would put a second
+                // unexplained variable on the one screen teaching position.
+                case Step.Formation:
+                    stage.Name = "The Narrow Bridge";
+                    stage.Subtitle = "Only one of you can stand in front.";
+                    Spawn(stage, "hollow_husk", 36);
+                    Spawn(stage, "hollow_husk", 36);
+                    break;
+
+                // Every hero in the squad has a 100-cost active, so this fight has to LAST, and
+                // "has to" is measured rather than hoped for. The first draft of this stage was two
+                // ashen revenants at 40 and it ran a mean of 3.0 rounds: across 40 seeded runs an
+                // ultimate fired in ZERO of them. The step taught nothing and both its cards said
+                // otherwise, which is the failure mode a tutorial can least afford.
+                //
+                // Two sundered colossi at 48 was picked from a five-way sweep on the numbers that
+                // matter, then confirmed at 50 seeds: 50/50 wins, mean 4.4 rounds, an ultimate in
+                // 50/50 runs and Seraphine's own in 50/50 - she is the hero the card puts on
+                // screen, so it matters that the ultimate the player is told to watch for is
+                // hers. It is not guaranteed, though: a 30-seed sweep during tuning saw hers in
+                // 29/30, which is why the card says WATCH FOR IT rather than promising it.
+                // Re-measure if the squad, the energy curve or these enemies ever change.
+                //
+                // Umbra against an Ember line is deliberately the neutral matchup - Umbra counters
+                // only Lumen. The aspect wheel is step 6's job, and a fight that also happened to
+                // be an aspect blowout would let the player credit the wrong mechanic for the
+                // damage they are watching.
+                //
+                // That these are chapter-1's boss, casually doubled and walked over, is the point
+                // rather than an accident: it is the clearest statement of what this line was.
+                case Step.Skills:
+                    stage.Name = "The Long Watch";
+                    stage.Subtitle = "Long enough for everything to come up.";
+                    Spawn(stage, "sundered_colossus", 48);
+                    Spawn(stage, "sundered_colossus", 48);
+                    break;
+
+                // Both directions of the wheel on one field, which is why it is two enemies and
+                // not one. The squad is entirely Ember: Ember beats Verdant, so the blight hound
+                // takes +10%; Gale beats Ember, so the grave moth deals it. A fight that only
+                // showed the good half would teach the wheel as a bonus rather than a trade.
+                case Step.Aspects:
+                    stage.Name = "The Colour of Things";
+                    stage.Subtitle = "Some of them burn easier than others.";
+                    Spawn(stage, "blight_hound", 36);
+                    Spawn(stage, "grave_moth", 36);
+                    break;
+
                 case Step.FullBattle:
                     stage.Name = "The Last Gate";
                     stage.Subtitle = "Hold here. Nothing gets past.";
@@ -147,8 +203,9 @@ namespace Emberfall.Core.Progression
                     break;
 
                 default:
-                    // Steps 2-6 are phase two. Returning a real, winnable stage rather than null
-                    // means a mistimed call teaches nothing instead of crashing.
+                    // Roles and Equipment are taught as callouts over HeroDetailScreen and never
+                    // reach this method. Returning a real, winnable stage rather than null means a
+                    // mistimed call teaches nothing instead of crashing.
                     stage.Name = "The Long Retreat";
                     stage.Subtitle = "You have done this a thousand times.";
                     Spawn(stage, "hollow_husk", 34);

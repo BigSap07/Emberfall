@@ -45,6 +45,11 @@ namespace Emberfall.UI.Screens
         private UIButton _levelUpButton;
         private UIButton _levelUpTenButton;
         private UIButton _obtainButton;
+
+        /// <summary>True while this screen is showing a prologue hero. Cleared by SetHero and
+        /// SetLockedHero, the same discipline BattleScreen's mode setters use, so the three ways
+        /// in cannot leave a stale one set.</summary>
+        private bool _prologueView;
         private Text _capNote;
 
         /// <summary>The definition backing the screen right now, whichever mode it's in.</summary>
@@ -57,6 +62,28 @@ namespace Emberfall.UI.Screens
         {
             _hero = hero;
             _lockedDef = null;
+            _prologueView = false;
+        }
+
+        /// <summary>
+        /// A hero the player is being SHOWN rather than one they own: the prologue's fixed squad.
+        ///
+        /// Everything that reads stays - identity, role and aspect chips, abilities, the stat
+        /// block, the armor card. Everything that ACTS is hidden, and that is the entire point of
+        /// this mode existing rather than SetHero being reused. A prologue hero is not in
+        /// Profile.Heroes, so LEVEL UP would charge the player real gold to raise a hero that
+        /// ceases to exist eight cards later; CHANGE BANNER would walk them into FormationScreen
+        /// mid-story to deploy someone who is not on their roster. Both are reachable in one tap
+        /// from a screen the prologue opens on purpose, so neither can be left live.
+        ///
+        /// Read-only is also what makes the callout honest. The step is "look at this", and a
+        /// screen offering two buttons that quietly spend the player's currency is not that.
+        /// </summary>
+        public void SetPrologueHero(HeroInstance hero)
+        {
+            _hero = hero;
+            _lockedDef = null;
+            _prologueView = true;
         }
 
         /// <summary>A hero the player hasn't summoned yet - shows identity and abilities, not stats or deploy/level actions.</summary>
@@ -64,6 +91,7 @@ namespace Emberfall.UI.Screens
         {
             _lockedDef = def;
             _hero = null;
+            _prologueView = false;
         }
 
         protected override void Build()
@@ -382,13 +410,18 @@ namespace Emberfall.UI.Screens
             _titleLabel.text = def.Title.ToUpperInvariant();
             _headerSubtitle.text = def.Lore;
 
+            // Two independent axes, not three modes. `locked` is "the player does not have this
+            // hero yet" and hides everything numeric; `_prologueView` is "this hero is not theirs
+            // to change" and hides only what acts. The stat and armor cards stay up under the
+            // prologue because reading them IS steps 4 and 5.
+            bool acts = !locked && !_prologueView;
             _statsCard.gameObject.SetActive(!locked);
             _armorCard.gameObject.SetActive(!locked);
-            _slotHint.gameObject.SetActive(!locked);
-            _slotStatus.gameObject.SetActive(!locked);
-            _openFormation.Root.gameObject.SetActive(!locked);
-            _levelUpButton.Root.gameObject.SetActive(!locked);
-            _levelUpTenButton.Root.gameObject.SetActive(!locked);
+            _slotHint.gameObject.SetActive(acts);
+            _slotStatus.gameObject.SetActive(acts);
+            _openFormation.Root.gameObject.SetActive(acts);
+            _levelUpButton.Root.gameObject.SetActive(acts);
+            _levelUpTenButton.Root.gameObject.SetActive(acts);
             _obtainButton.Root.gameObject.SetActive(locked);
         }
 
@@ -430,7 +463,13 @@ namespace Emberfall.UI.Screens
 
             RefreshArmorBlock(session, now);
 
-            _levelLabel.text = "LEVEL " + _hero.Level + "<color=#6C6382> / " + cap + "</color>";
+            // The "/ cap" half is a progress readout against the player's Wayfarer rank, which
+            // means nothing for a prologue hero and reads as broken next to one: a brand-new
+            // account caps at 12, so Kael at 42 rendered as "LEVEL 42 / 12". Caught by looking at
+            // the screen, not by reading this line.
+            _levelLabel.text = _prologueView
+                ? "LEVEL " + _hero.Level
+                : "LEVEL " + _hero.Level + "<color=#6C6382> / " + cap + "</color>";
             _powerLabel.text = "POWER " + now.Power;
 
             _hpValue.text = Whole(now.MaxHp);
@@ -439,10 +478,14 @@ namespace Emberfall.UI.Screens
             _spdValue.text = Whole(now.Speed);
             _critValue.text = Pct(now.CritChance) + "  x" + now.CritDamage.ToString("0.00", CultureInfo.InvariantCulture);
 
-            SetDelta(_hpDelta, next.MaxHp - now.MaxHp, atCap);
-            SetDelta(_atkDelta, next.Attack - now.Attack, atCap);
-            SetDelta(_defDelta, next.Defense - now.Defense, atCap);
-            SetDelta(_spdDelta, next.Speed - now.Speed, atCap);
+            // The green "+n" previews answer "what does one more level buy?", which is a
+            // question the prologue does not let you act on - so under the prologue they are
+            // suppressed the same way hitting the level cap suppresses them.
+            bool hideDeltas = atCap || _prologueView;
+            SetDelta(_hpDelta, next.MaxHp - now.MaxHp, hideDeltas);
+            SetDelta(_atkDelta, next.Attack - now.Attack, hideDeltas);
+            SetDelta(_defDelta, next.Defense - now.Defense, hideDeltas);
+            SetDelta(_spdDelta, next.Speed - now.Speed, hideDeltas);
 
             int cost = StatMath.LevelUpCost(session.Balance, _hero.Level);
             bool affordable = !atCap && session.Profile.Gold >= cost;
@@ -451,7 +494,11 @@ namespace Emberfall.UI.Screens
             _levelUpButton.Interactable = affordable;
             _levelUpTenButton.Interactable = affordable;
 
-            _capNote.text = atCap
+            // A gold price under a prologue hero would be a lie twice over: the player cannot buy
+            // it, and the gold quoted is an account that does not exist yet in the story.
+            _capNote.text = _prologueView
+                ? "A thousand years of levels. None of them yours to spend."
+                : atCap
                 ? "Raise your Wayfarer rank in the campaign to lift the level cap."
                 : "Next level costs " + cost + " gold  -  you hold " + session.Profile.Gold;
 

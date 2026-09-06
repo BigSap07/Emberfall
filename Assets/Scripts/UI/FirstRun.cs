@@ -23,9 +23,22 @@ namespace Emberfall.UI
     /// PrologueScript, grants nothing, and hands the outcome back here rather than deciding what
     /// follows.
     ///
-    /// PHASE ONE implements the narrative spine and teaching steps 1, 7 and 8. Steps 2-6 -
-    /// formation, skills, roles, equipment, aspects - are declared in PrologueScript.Step and slot
-    /// in between AfterCombat and TheLastGate without moving anything else.
+    /// ALL EIGHT STEPS ARE HERE. Three of them are callouts and five are fights, and which is
+    /// which was decided per step by one rule: a battle earns its place only when the thing being
+    /// taught is a BEHAVIOUR you cannot see standing still.
+    ///
+    ///   1 Combat      fight   - that a battle resolves without you is only true if you watch it
+    ///   2 Formation   fight   - see the note on BeforeFormation; this one inverts the obvious call
+    ///   3 Skills      fight   - an ultimate firing at 100 energy is an event, not a stat
+    ///   4 Roles       callout - a role is a label on a hero, and HeroDetail already prints it
+    ///   5 Equipment   callout - five empty armor slots ARE the lesson; see BeforeEquipment
+    ///   6 Aspects     fight   - +10%/-8% is a number you feel land, not one you read
+    ///   7 Full battle fight   - the whole line together, before it is taken away
+    ///   8 The Unmade  fight   - the scripted loss
+    ///
+    /// Steps 4 and 5 open HeroDetailScreen through SetPrologueHero, which keeps everything that
+    /// reads and hides everything that acts - see that method for why LEVEL UP in particular
+    /// cannot be left live over a hero the player is about to lose.
     ///
     /// WHY THE ENDING FIRES ON A WIN TOO. Step 8 is meant to be lost - a level 42 line against a
     /// level 60 boss - but "meant to" is not "guaranteed", because CombatSimulation is seeded off
@@ -123,6 +136,179 @@ namespace Emberfall.UI
                     : "That should not have happened.\n\n"
                       + "Something is already wrong, and the line has not\n"
                       + "reached the gate yet.",
+                "GO ON", "SKIP",
+                delegate { BeforeFormation(app); },
+                delegate { Finish(app); });
+        }
+
+        // ================================================================ step 2 - formation
+
+        /// <summary>
+        /// THIS STEP GETS A FIGHT, AND THAT INVERTS THE OBVIOUS CALL. Two things pushed it here.
+        ///
+        /// First, FormationScreen cannot show this squad. It is bound to the live save in about a
+        /// dozen places - profile.Team[], FindHeroByUid, IsDeployed, TeamSlotOf, TeamPower, and a
+        /// locked-hero list built by testing Owns() against the whole content roster - and tapping
+        /// a slot WRITES the player's team. The prologue squad is synthetic and deliberately not
+        /// in Profile.Heroes, so pointing that screen at it would mean either threading a roster
+        /// source through every one of those call sites, which is redesigning the screen, or
+        /// installing five level 42 heroes into the player's save and hoping to remove them again,
+        /// which puts a quit mid-prologue one crash away from a permanently wrong roster.
+        ///
+        /// Second, and this is the better reason: position is a BEHAVIOUR here, not a layout.
+        /// CombatSimulation resolves FrontEnemy to the lowest living Slot, so the front of the
+        /// line is not a label on a card - it is who gets hit. Both husks in this fight target
+        /// FrontEnemy. Kael is built into slot 1 by BuildSquad's ordering and takes the entire
+        /// fight on his own while the other four end it near full, which is a thing you watch
+        /// happen rather than a rule you are told.
+        /// </summary>
+        private static void BeforeFormation(GameApp app)
+        {
+            app.Modal.ShowConfirm(
+                "STEP TWO - THE ORDER OF THE LINE",
+                "Slot one is the front. It is not a label.\n\n"
+                + "Most things that swing at you swing at whoever is stood\n"
+                + "there. Kael has that slot. Watch who bleeds.",
+                "WATCH", "SKIP",
+                delegate { RunStep(app, PrologueScript.Step.Formation, AfterFormation); },
+                delegate { Finish(app); });
+        }
+
+        private static void AfterFormation(GameApp app, bool victory)
+        {
+            app.Modal.ShowConfirm(
+                "ONE OF YOU STANDS IN FRONT",
+                "Kael took nearly all of it. The other four barely got\n"
+                + "touched.\n\n"
+                + "Who you put in slot one decides who that happens to.",
+                "GO ON", "SKIP",
+                delegate { BeforeSkills(app); },
+                delegate { Finish(app); });
+        }
+
+        // ================================================================ step 3 - skills
+
+        /// <summary>
+        /// Opens HeroDetail on Seraphine first so the ultimate has a NAME before it goes off. The
+        /// card and the fight are one step: read "Final Chapter, 100 energy" on the screen behind
+        /// the modal, then watch it land.
+        ///
+        /// The button says WATCH FOR IT rather than SEE IT FIRE, and that is a measured wording
+        /// rather than a hedge. At 50 seeds the retuned stage fires an ultimate in 50/50 runs and
+        /// Seraphine's own in 50/50 - but a 30-seed sweep during tuning saw hers in 29/30, so
+        /// promising the player they will see HERS is a sentence that can be wrong. The card
+        /// names her ability because it is the example on screen; the payoff card below speaks
+        /// about ultimates generally, which is true every time.
+        /// </summary>
+        private static void BeforeSkills(GameApp app)
+        {
+            ShowHero(app, "seraphine_the_last_ember");
+            app.Modal.ShowConfirm(
+                "STEP THREE - WHAT THEY CAN DO",
+                "Behind this: Seraphine's two abilities.\n\n"
+                + "One she uses every turn. The other, FINAL CHAPTER, waits\n"
+                + "until she has 100 energy and then ends things.",
+                "WATCH FOR IT", "SKIP",
+                delegate { RunStep(app, PrologueScript.Step.Skills, AfterSkills); },
+                delegate { Finish(app); });
+        }
+
+        private static void AfterSkills(GameApp app, bool victory)
+        {
+            app.Modal.ShowConfirm(
+                "ENERGY IS THE REAL CLOCK",
+                "Everyone in your line has one of those.\n\n"
+                + "They fill by fighting. A longer fight is not just a worse\n"
+                + "one - it is the only kind where they come up.",
+                "GO ON", "SKIP",
+                delegate { ShowRoles(app); },
+                delegate { Finish(app); });
+        }
+
+        // ================================================================ step 4 - roles
+
+        /// <summary>
+        /// A callout, not a fight. A role is a label HeroDetail already prints on a chip, and what
+        /// a role DOES is spread thin across a whole battle rather than legible in one - a Mender's
+        /// contribution is the damage that never showed up. Naming the five and pointing at where
+        /// the label lives is the honest version of this step.
+        ///
+        /// Marrow is the hero shown because Mender is the most legible of the four the squad
+        /// carries. Note that the squad does NOT cover all seven roles - it has Breaker twice, and
+        /// no Bulwark, Warden or Stalker - so the card names what is actually on the field rather
+        /// than reciting the enum.
+        /// </summary>
+        private static void ShowRoles(GameApp app)
+        {
+            ShowHero(app, "marrow_the_burning_vow");
+            app.Modal.ShowConfirm(
+                "STEP FOUR - WHAT THEY ARE FOR",
+                "Marrow is a MENDER. The chip behind this says so.\n\n"
+                + "Kael and Seraphine break. Veska strikes. Orren shoots.\n"
+                + "Five heroes, four jobs. A line wants more than one.",
+                "GO ON", "SKIP",
+                delegate { ShowEquipment(app); },
+                delegate { Finish(app); });
+        }
+
+        // ================================================================ step 5 - equipment
+
+        /// <summary>
+        /// A callout, and NOT through InventoryScreen's compare picker, which was the obvious
+        /// reuse and turns out to be the one screen that cannot do this. The picker compares a
+        /// candidate piece against what is worn, drawn from the player's OwnedArmor - and a
+        /// prologue hero owns nothing, so it would open on an empty list with nothing to compare
+        /// against nothing.
+        ///
+        /// HeroDetail's armor card is the better surface anyway: with no armor equipped it draws
+        /// five empty slots, and five empty slots is precisely the image this step wants. The
+        /// lesson is where gear goes and what it moves, not how to pick between two boots.
+        /// </summary>
+        private static void ShowEquipment(GameApp app)
+        {
+            ShowHero(app, "kael_the_ashbound");
+            app.Modal.ShowConfirm(
+                "STEP FIVE - WHAT THEY CARRY",
+                "Kael is carrying nothing. Behind this, five empty slots.\n\n"
+                + "Armour goes in them and moves the numbers above them.\n"
+                + "A thousand years and nobody thought to gear him.",
+                "GO ON", "SKIP",
+                delegate { BeforeAspects(app); },
+                delegate { Finish(app); });
+        }
+
+        // ================================================================ step 6 - aspects
+
+        /// <summary>
+        /// The wheel, stated from AspectChart rather than from memory - Ember > Verdant > Tide >
+        /// Gale > Ember, Lumen and Umbra counter each other, 1.10 and 0.92 - and then fought.
+        ///
+        /// The fight is the point. +10% and -8% read as rounding until you watch them land, and
+        /// this field carries both directions at once: the squad is entirely Ember, the blight
+        /// hound is Verdant so it takes the bonus, and the grave moth is Gale so it deals one.
+        /// Showing only the favourable half would teach the wheel as free damage rather than a
+        /// trade you can be on the wrong end of.
+        /// </summary>
+        private static void BeforeAspects(GameApp app)
+        {
+            app.Modal.ShowConfirm(
+                "STEP SIX - THE ASPECT WHEEL",
+                "EMBER > VERDANT > TIDE > GALE > EMBER\n"
+                + "LUMEN and UMBRA counter each other.\n\n"
+                + "Advantage +10%, disadvantage -8%. A tiebreak, not a lock.\n"
+                + "Your line is all Ember. Next: one of each.",
+                "WATCH", "SKIP",
+                delegate { RunStep(app, PrologueScript.Step.Aspects, AfterAspects); },
+                delegate { Finish(app); });
+        }
+
+        private static void AfterAspects(GameApp app, bool victory)
+        {
+            app.Modal.ShowConfirm(
+                "IT CUTS BOTH WAYS",
+                "The hound was Verdant. Your Ember went through it.\n\n"
+                + "The moth was Gale. It went through YOU.\n"
+                + "That is the whole wheel, and it is only ever a tiebreak.",
                 "GO ON", "SKIP",
                 delegate { TheLastGate(app); },
                 delegate { Finish(app); });
@@ -243,6 +429,30 @@ namespace Emberfall.UI
         /// makes inserting steps 2-6 a matter of adding two methods rather than rethreading the
         /// chain.
         /// </summary>
+        /// <summary>
+        /// Puts one prologue hero on HeroDetailScreen underneath the next modal.
+        ///
+        /// The modal is what makes this a guided callout rather than a detour: ModalPopup's root
+        /// carries a full-screen dimming Image, which is a raycast target, so the screen behind it
+        /// can be read but not touched. The player cannot wander off HeroDetail's back arrow
+        /// mid-step, and the only live control is the card's own button.
+        ///
+        /// Router.Show first, THEN the caller opens the modal - the modal re-parents itself to the
+        /// end of the overlay layer on Open, so a screen change afterwards would slide underneath
+        /// it correctly but the screen would not have been laid out when the card appeared.
+        /// </summary>
+        private static void ShowHero(GameApp app, string defId)
+        {
+            if (_squad == null) return;
+            for (int i = 0; i < _squad.Count; i++)
+            {
+                if (_squad[i].DefId != defId) continue;
+                app.Router.HeroDetail.SetPrologueHero(_squad[i]);
+                app.Router.Show(ScreenId.HeroDetail, false);
+                return;
+            }
+        }
+
         private static void RunStep(GameApp app, PrologueScript.Step step,
                                     System.Action<GameApp, bool> next)
         {
