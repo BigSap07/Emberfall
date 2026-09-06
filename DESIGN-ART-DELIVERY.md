@@ -6,6 +6,30 @@ you what to draw. The visual rules (colors, silhouette, material feel, what a he
 and not allowed to look like) live in DESIGN-ART-BIBLE.md. Read that one for direction, this
 one for delivery.
 
+## Scope: this document covers battle sprites only
+
+**If you are looking for portraits, icons, backgrounds or UI panels, they are not in this file.**
+This document is the contract for one thing: a character's battle sprite, at
+`Sprites/Units/{spriteId}.png`. It is not a general art pipeline.
+
+The game has four other art conventions, all of which load by filename and none of which are
+described here or in the art bible:
+
+| What | Where it goes |
+|------|---------------|
+| **Portrait**, framed badge (draws edge to edge, no ring) | `Resources/Sprites/Portraits/{heroId}.png` |
+| **Portrait**, frameless crop (game adds disc and aspect ring) | `Resources/Sprites/Units/portrait_{heroId}.png` |
+| **Background**, full-screen painted backdrop | `Resources/Backgrounds/{environmentId}.png` |
+| **UI panel / button / disc** surfaces | `Resources/Art/UI/{surface}.png` |
+
+**Icons have no convention at all.** Aspect emblems are generated in code, item icons are
+procedural discs, and six painted currency and navigation icons exist in `Resources/Art/UI/` that
+nothing loads.
+
+See **DESIGN-ART-STATE.md** for all four conventions in full, a per-screen census of what art
+exists today, and the prioritized list of what to draw next. That file is status and goes stale;
+re-audit rather than trusting it once art has landed.
+
 Everything below is derived from reading the actual loading code on the branch that adds this
 path (`sprite-path-orrin`), not from how it's supposed to work. Nothing in this document has
 been confirmed by actually seeing it render. That branch has not merged and has not been looked
