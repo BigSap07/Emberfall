@@ -649,6 +649,7 @@ namespace Emberfall.UI.Screens
         private void BuildArmorSection()
         {
             BuildSectionHeader("ARMOR");
+            BuildForgeLink();
 
             List<ArmorPiece> owned = App.Session.Profile.OwnedArmor;
             if (owned.Count == 0)
@@ -742,6 +743,43 @@ namespace Emberfall.UI.Screens
         }
 
         // ------------------------------------------------------------------ helpers
+
+        /// <summary>
+        /// The one route from the Bag to the Forge, and deliberately ONE - a pool-wide link under
+        /// the section header rather than a FORGE button on every armour row.
+        ///
+        /// Per-row forge buttons are exactly what task 17 moved OUT of this screen: Reroll,
+        /// Salvage and Combine need no hero in context, and Combine needs three pieces at once, so
+        /// they belong on a pool-wide hub and not crammed onto a row that represents one piece.
+        /// Putting them back per-row to save a tap would undo that on the quiet. What was missing
+        /// was never the actions - it was any acknowledgement from here that the Forge exists.
+        ///
+        /// Same shape as HeroDetail's EQUIP IN BAG and Formation's VIEW ALL HEROES: the screen
+        /// that cannot perform the action names the screen that can, once.
+        /// </summary>
+        private void BuildForgeLink()
+        {
+            RectTransform row = UIBuilder.Node("ForgeLinkRow", _listContent);
+            UIBuilder.Sized(row, 0f, 64f);
+
+            Text note = UIBuilder.Label("Note", row,
+                                        "Reroll, Salvage and Combine happen at the Forge.",
+                                        UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleLeft);
+            note.rectTransform.anchorMin = new Vector2(0f, 0f);
+            note.rectTransform.anchorMax = new Vector2(1f, 1f);
+            note.rectTransform.offsetMin = new Vector2(4f, 0f);
+            note.rectTransform.offsetMax = new Vector2(-300f, 0f);
+
+            UIButton open = UIBuilder.SecondaryButton("OpenForge", row, "OPEN THE FORGE", UITheme.FontTiny);
+            UIBuilder.Box(open.Root, 0f, 0f, 280f, 56f, new Vector2(1f, 0.5f));
+            open.OnClick(OpenForge);
+        }
+
+        private void OpenForge()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Forge);
+        }
 
         private void BuildSectionHeader(string text)
         {
