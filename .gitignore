@@ -32,3 +32,10 @@
 # OS
 Thumbs.db
 .DS_Store
+
+# Raw animation source sheets, staged for Tools/import-sprite-sheets.ps1.
+# Hundreds of MB of PNGs whose PROCESSED output already lives in
+# Assets/Resources/Sprites/Units and is tracked. Committing the sources too would
+# double that in history permanently, and git cannot forget a blob later.
+# feat/sprite-sheet-player holds the only copy of Kael's set - keep that branch.
+/Assets/_Incoming/
