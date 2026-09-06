@@ -133,6 +133,11 @@ namespace Emberfall.Game
 
             if (freshStart) SaveNow();
 
+            // The only onboarding this game has, and only ever for a genuinely new install.
+            // Keyed to freshStart rather than a saved flag so the save shape is untouched and an
+            // existing player cannot be shown it - see FirstRun for that trade in full.
+            if (freshStart) FirstRun.Begin(this);
+
             BootStage = "complete";
             BootCompleted = true;
             }
