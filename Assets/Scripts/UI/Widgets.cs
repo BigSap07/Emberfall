@@ -22,6 +22,44 @@ namespace Emberfall.UI
         private static readonly System.Collections.Generic.Dictionary<string, Sprite> PortraitCache =
             new System.Collections.Generic.Dictionary<string, Sprite>();
 
+        /// <summary>Same null-caching contract as PortraitCache, for the framed badges.</summary>
+        private static readonly System.Collections.Generic.Dictionary<string, Sprite> FramedCache =
+            new System.Collections.Generic.Dictionary<string, Sprite>();
+
+        /// <summary>
+        /// A SELF-FRAMED portrait badge, or null if the unit has none.
+        ///
+        /// TWO PORTRAIT CONVENTIONS EXIST, AND THE FOLDER IS WHAT DISTINGUISHES THEM:
+        ///
+        ///   Sprites/Units/portrait_{id}.png   frameless head-and-shoulders crop. The widget
+        ///                                     supplies the ground: disc, glows, aspect ring, and
+        ///                                     a 14.65% inset so the SQUARE art is inscribed in
+        ///                                     the ROUND disc.
+        ///   Sprites/Portraits/{id}.png        a finished badge that already carries its own gold
+        ///                                     frame and its own interior. The widget supplies
+        ///                                     nothing and draws it edge to edge.
+        ///
+        /// They are separate folders rather than one folder plus a flag in heroes.json because the
+        /// difference is a property of the FILE, not of the hero - the same character could be
+        /// delivered either way - and a path that answers the question needs no second source of
+        /// truth to be kept in sync with it. Dropping a file in decides how it renders.
+        ///
+        /// Loaded as a Sprite rather than as a Texture2D + Sprite.Create, unlike the frameless
+        /// path above. That path predates these and is left alone; the importer settings on this
+        /// folder set alphaIsTransparency and coverage-preserving mipmaps, which are what stop a
+        /// masked badge growing a dark rim as it mips down from 512 to the 76px roster size.
+        /// </summary>
+        private static Sprite FramedPortrait(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId)) return null;
+            Sprite cached;
+            if (FramedCache.TryGetValue(unitId, out cached)) return cached;
+
+            Sprite sprite = Resources.Load<Sprite>("Sprites/Portraits/" + unitId);
+            FramedCache[unitId] = sprite;
+            return sprite;
+        }
+
         /// <summary>
         /// The painted portrait for a unit, or null if it has none.
         ///
@@ -93,6 +131,30 @@ namespace Emberfall.UI
             // A unit with a painted portrait shows it in place of its sigil; everyone else is
             // untouched. The ring stays either way, so the badge keeps its aspect read whichever
             // branch it takes, and a mixed roster still looks like one set of badges.
+            // A FINISHED BADGE IS DRAWN AS ITSELF AND NOTHING ELSE.
+            //
+            // No disc, no glows, no inset, and no aspect ring: the art already has a frame, and
+            // wrapping a second ring around it would put a gold border immediately inside a
+            // coloured one and clip the four cardinal spikes that reach the edge of the image.
+            // This is why it returns early rather than joining the branch below - every ground
+            // this widget can draw is wrong for it.
+            //
+            // The cost, stated plainly: these badges lose the aspect-colour read the ring gives
+            // everyone else. That is a real loss and it is accepted rather than overlooked - the
+            // five heroes who have this art are all Ember, so the ring was telling the player
+            // nothing they could not get from the art, and the badge's own frame is a stronger
+            // identity cue than a hue. If a non-Ember hero is ever delivered framed, revisit it.
+            //
+            // allowArt still gates it, so a LOCKED hero cannot outshine an owned one - see the
+            // overload note above for why that rule is structural.
+            Sprite framed = allowArt ? FramedPortrait(def.Id) : null;
+            if (framed != null)
+            {
+                Image badge = UIBuilder.Img("Badge", root, framed, Color.white);
+                UIBuilder.FillParent(badge.rectTransform, 0f);
+                return root;
+            }
+
             Sprite art = allowArt ? PortraitArt(def.Id) : null;
             bool plate = showPlate || art == null;
 
