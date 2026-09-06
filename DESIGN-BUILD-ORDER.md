@@ -1,5 +1,20 @@
 # Emberfall - build order
 
+## Now / Next
+
+Current state, checked against the repo on 2026-09-06, not against the rest of this document.
+
+- **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
+  is not; that sentence is stale, task 13's own entry is right.
+- **Open: `retune/ch2-late-stages`** (`a91a2f6`) - unmerged, 6 lines `campaign.json` + 6
+  `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
+  for the retune, i.e. today's task 13.
+- **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
+- **Unassessed:** `feat/sprite-sheet-poc` / `fix/battlevfx-blend-one-minus-src-alpha` (tip
+  `8f0e18d`) and `feat/sprite-sheet-player` - unmerged, unchecked, status unknown not "fine".
+- **Known gap:** Kael is `startingHero: false` but `GameApp.Awake` force-grants him under
+  `#if UNITY_EDITOR`, so editor runs never see the real new-player roster.
+
 Supersedes the previous version, which predates DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS
 and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled against those four plus
 DESIGN-RELICS and the surviving originals (FIRST-TEN-MINUTES, IDLE-PROGRESSION, REPLAY-ECONOMY). No
@@ -77,7 +92,7 @@ this project before:
   GrantRecitalResult` pays it out. A complete loop, not a placeholder.
 - **Inventory** — `InventoryScreen.cs` (541 lines). `AssignRelic`/`UnassignRelic` and
   `EquipArmor`/`UnequipArmor`. Carries both the relic and the armor halves.
-- **Forge** — `ForgeScreen.cs` (344 lines). `SalvageArmor`, `RerollArmor` and `CombineArmor`
+- **Forge** — `ForgeScreen.cs` (396 lines). `SalvageArmor`, `RerollArmor` and `CombineArmor`
   with their three cost queries. This is task 16/17's armor Forge, not task 6's dead
   idle-income mechanic — see task 6 for why the word moved.
 
@@ -1002,6 +1017,16 @@ confirmed green on CI on `main` after the merge.
       stage to 0% on both the unarmored and the economy columns.
 
     Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b - all done. Blocks: nothing.
+
+**One retune pass is still unmerged.** `retune/ch2-late-stages` (`a91a2f6`, "balance(ch2): retune
+Tideturned boss + late ch2 stages (task 14 pass 1)") is not on `main` and carries 6 changed lines
+in `campaign.json` and 6 in `enemies.json` - a first attempt at the `ch2_12` boss defect recorded
+just above. Recorded here so it is not lost; whether it should land is a balance decision, not a
+merge decision.
+
+Note the label: that commit says "task 14" in the OLD numbering, where task 14 meant the campaign
+retune. Under this document's numbering that is task 13 - this entry - and not the events engine
+that is task 14 today. Same trap the warning in task 14's own entry describes.
 
 Task 13 is the only step that produces a valid win-rate table, and it has now been run. The
 five-body column below is that table. The instrument-comparison block `build-check.ps1` prints is
