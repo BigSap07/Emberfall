@@ -10,8 +10,8 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
   for the retune, i.e. today's task 13.
 - **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
-- **Open: `art/hero-portraits`** - framed portrait art shipped for the five Ember heroes: Kael,
-  Marrow, Seraphine, Veska, Orren. Committed to the branch, not yet on `main`. It adds a SECOND
+- **Hero portraits: DONE, on `main`** (`f71d106`, `1de4f9e`) - framed portrait art shipped for the
+  five Ember heroes: Kael, Marrow, Seraphine, Veska, Orren. It adds a SECOND
   portrait convention rather than replacing the first, and the folder is what distinguishes them:
   `Resources/Sprites/Portraits/{heroId}.png` is a finished badge that carries its own gold frame,
   while the older `Resources/Sprites/Units/portrait_{heroId}.png` is a frameless crop that
@@ -37,8 +37,6 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   `SpriteAnimator`, and its "blend fix" was comment-only; main's value was never wrong.
 - **Do not merge:** `feat/sprite-sheet-player` (`82eeeb7`) - 244 MB of raw source sheets in
   `Assets/_Incoming/`, now gitignored. That branch is the only copy; keep it, do not land it.
-- **Known gap:** Kael is `startingHero: false` but `GameApp.Awake` force-grants him under
-  `#if UNITY_EDITOR`, so editor runs never see the real new-player roster.
 
 Supersedes the previous version, which predates DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS
 and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled against those four plus

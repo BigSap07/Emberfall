@@ -30,21 +30,26 @@ See **DESIGN-ART-STATE.md** for all four conventions in full, a per-screen censu
 exists today, and the prioritized list of what to draw next. That file is status and goes stale;
 re-audit rather than trusting it once art has landed.
 
-Everything below is derived from reading the actual loading code on the branch that adds this
-path (`sprite-path-orrin`), not from how it's supposed to work. Nothing in this document has
-been confirmed by actually seeing it render. That branch has not merged and has not been looked
-at in the editor by anyone yet. Treat the numbers as accurate to the code and the visuals as
-unverified.
+Everything below is derived from reading the actual loading code, not from how it's supposed to
+work. This document originally carried a caveat saying the sprite path lived on an unmerged
+branch (`sprite-path-orrin`) and had never been seen to render; that is no longer true and the
+caveat has been removed. The branch merged, the branch itself is gone, the loader is on `main`,
+and sprites have been watched rendering in Play mode many times since.
 
-As of this writing, six heroes and three enemies render from the single static image this
-document describes: Orrin Kaal, Kalyx Emberwright, Wren Ilyra, Ryn Solvarr, Maeve Corrin, Nyx
-Serrow, Grave Moth, Hollow Husk and Sundered Colossus. Kael the Ashbound, the roster's seventh
-hero, is the one exception this document does not cover: instead of a single file, he renders
-from five sprite-sheet clips (idle, basic attack, skill, hit reaction, death) - see the sprite
-sheet note in section 2 and section 8 for what that path adds. Every other hero and every enemy
-still uses the game's built-in procedural look (simple 3D shapes and colors, no image file
-involved) and will keep using it until someone hands over art for them the same way this
-document describes.
+As of 2026-09-06, **every hero in the game renders from delivered art** and no hero uses the
+built-in procedural look any more. The split is between the two paths:
+
+- **Five heroes render from five sprite-sheet clips each** (idle, basic attack, skill, hit
+  reaction, death), which is NOT what this document describes - see the sprite sheet note in
+  section 2 and section 8: Kael the Ashbound, Seraphine the Last Ember, Marrow the Burning Vow,
+  Veska the Broken Oath, Orren the Cinder Hunter.
+- **Six heroes render from the single static image this document does describe:** Orrin Kaal,
+  Kalyx Emberwright, Wren Ilyra, Ryn Solvarr, Maeve Corrin, Nyx Serrow.
+
+Enemies are the opposite way round. **Three of twelve** have art - Grave Moth, Hollow Husk and
+Sundered Colossus, all single static images - and the other nine still use the built-in procedural
+look (simple 3D shapes and colors, no image file involved) and will keep using it until someone
+hands over art for them the way this document describes. DESIGN-ART-STATE.md lists which nine.
 
 ## 1. Where the file goes and what it's called
 
