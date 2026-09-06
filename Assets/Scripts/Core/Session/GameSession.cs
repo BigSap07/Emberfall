@@ -343,6 +343,30 @@ namespace Emberfall.Core.Session
             return request;
         }
 
+        /// <summary>
+        /// A fight the PLAYER's side of which is not the player's team. The prologue's fixed squad
+        /// fights here; the profile is not consulted for either half.
+        ///
+        /// The mirror of BuildProvingRequest, which replaces the ENEMY line with a snapshot and
+        /// leaves the player's own team alone. This replaces the player's line instead, which
+        /// BattleRequest already supports without changing anything: Team is a plain
+        /// List&lt;HeroInstance&gt; that CombatSimulation reads as given.
+        ///
+        /// Profile is deliberately left NULL rather than passed through. It is read for exactly one
+        /// thing - resolving armor uids against OwnedArmor - and a prologue hero owns no armor, so
+        /// passing the real profile could only ever let save state leak into a scripted fight.
+        /// </summary>
+        public BattleRequest BuildPrologueRequest(StageDef stage, List<HeroInstance> squad, int seed)
+        {
+            BattleRequest request = new BattleRequest();
+            request.Content = Content;
+            request.Stage = stage;
+            request.Seed = seed;
+            request.Team = squad != null ? squad : new List<HeroInstance>();
+            request.Profile = null;
+            return request;
+        }
+
         public BattleRewards GrantBattleResult(StageDef stage, bool victory, long nowUnix)
         {
             BattleRewards rewards = new BattleRewards();

@@ -221,6 +221,42 @@
         "id": "chorister_basic", "name": "Errant Verse", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
       }
+    },
+
+    {
+      // PROLOGUE ONLY. The scripted defeat's boss, named by PrologueScript.BuildStage and by
+      // nothing in campaign.json - it is not on any stage a player can reach by playing.
+      //
+      // Overtuned on purpose, and that is the whole mechanism: there is no forced-outcome code
+      // anywhere for the prologue loss. The fight runs through the ordinary CombatSimulation and
+      // the player loses because the numbers say so, exactly like any other loss. Roughly 6x a
+      // chapter-1 boss's HP and 4x its attack, against a five-body line at level 42, which loses
+      // it inside the round limit by a wide margin.
+      //
+      // Deliberately NOT unloseable. A player who somehow survives still reaches the antagonist's
+      // interrupt, because FirstRun fires that beat on the result screen regardless of outcome -
+      // see the note on PrologueStep.Boss. An "impossible" fight and a story that assumes it are
+      // two different promises and only one of them is safe to make.
+      //
+      // Appended at the end of the file on purpose: retune/ch2-late-stages has an unmerged diff
+      // on the tideturned block around line 179, and a new entry there would collide with it for
+      // no reason. This sits ~30 lines clear, in its own hunk.
+      "id": "the_unmade", "name": "The Unmade", "kind": "boss", "aspect": "Umbra",
+      "hp": 14800, "attack": 940, "defense": 180, "speed": 128,
+      "critChance": 0.25, "critDamage": 1.9, "growth": 0.12, "startEnergy": 100,
+      "effectHit": 0.30, "effectResist": 0.30,
+      "visual": { "primary": "2A1A3A", "secondary": "0C0810", "accent": "B98CFF", "silhouette": "golem", "weapon": "none", "scale": 1.35, "sigil": 13 },
+      "basic": {
+        "id": "unmade_basic", "name": "Unwriting", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 1.15 } ]
+      },
+      "active": {
+        "id": "unmade_active", "name": "This Was Never Yours", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 2.20 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.30, "duration": 3, "chance": 0.90 }
+        ]
+      }
     }
   ]
 }
