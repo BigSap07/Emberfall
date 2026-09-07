@@ -126,7 +126,24 @@ namespace Emberfall.Core.Save
         /// save shape. Downgrade is guarded the way every bump above is: version 9 code reads no
         /// avatarHeroId key, so it would silently drop a chosen avatar, and the check below
         /// refuses that instead.
-        public const int CurrentVersion = 10;
+        /// 11: campaign progress INSIDE a stage (CampaignCurrentStageId, CampaignCurrentWave,
+        /// CampaignCurrentBattle), which the Chapter -> Stage -> Wave -> Battle restructure needs
+        /// and the flat model had nowhere to put. Same shape as the version 6 -> 7 Recital bump and
+        /// for the same reason: a version 10 save simply has none of these three keys, which read
+        /// as PlayerProfile's own field defaults - empty stage id, wave 1, battle 1 - and that is
+        /// precisely true of a player who has never started a stage under the new schema rather
+        /// than a synthesised value. No migration is needed and none is done: a version 10 player
+        /// mid-campaign resumes at the start of their next uncleared stage, which is where the flat
+        /// model already had them.
+        ///
+        /// The empty stage id is load-bearing on upgrade. Wave 1 battle 1 with no stage id means
+        /// "nothing in progress", so the first stage entered after upgrading adopts the position
+        /// rather than inheriting a phantom one - see GameSession.ResumePointFor.
+        ///
+        /// Downgrade is guarded the way every bump above is: version 10 code reads no campaign
+        /// progress keys, so it would silently drop a player's position inside a 144-battle stage
+        /// and drop them back to its first battle, and the check below refuses that instead.
+        public const int CurrentVersion = 11;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -303,6 +320,9 @@ namespace Emberfall.Core.Save
             root.Set("nextArmorUid", profile.NextArmorUid);
             root.Set("totalSummons", profile.TotalSummons);
             root.Set("totalBattlesWon", profile.TotalBattlesWon);
+            root.Set("campaignCurrentStageId", profile.CampaignCurrentStageId);
+            root.Set("campaignCurrentWave", profile.CampaignCurrentWave);
+            root.Set("campaignCurrentBattle", profile.CampaignCurrentBattle);
             root.Set("recitalCurrentFloor", profile.RecitalCurrentFloor);
             root.Set("recitalHighestFloor", profile.RecitalHighestFloor);
             root.Set("recitalEchoesBanked", profile.RecitalEchoesBanked);
@@ -465,6 +485,11 @@ namespace Emberfall.Core.Save
             // able to attempt a floor immediately, not stare at a multi-hour recharge for a resource
             // their save format never had an opinion on, so it defaults to a full bank instead.
             int defaultEchoes = content != null ? content.Balance.RecitalEchoesMax : 5;
+            // Defaults are PlayerProfile's own, not synthesised: a version 10 save has no opinion
+            // on where inside a stage its player was, and "nowhere" is the honest answer.
+            profile.CampaignCurrentStageId = root.GetString("campaignCurrentStageId", "");
+            profile.CampaignCurrentWave = Math.Max(1, root.GetInt("campaignCurrentWave", 1));
+            profile.CampaignCurrentBattle = Math.Max(1, root.GetInt("campaignCurrentBattle", 1));
             profile.RecitalCurrentFloor = Math.Max(1, root.GetInt("recitalCurrentFloor", 1));
             profile.RecitalHighestFloor = Math.Max(0, root.GetInt("recitalHighestFloor", 0));
             profile.RecitalEchoesBanked = Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes));

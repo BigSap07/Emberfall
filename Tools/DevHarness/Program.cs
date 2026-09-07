@@ -58,6 +58,7 @@ namespace Emberfall.DevHarness
             CheckRelics(content);
             CheckEvents(content);
             CheckRecital(content);
+            CheckCampaignStructure(content);
             CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckSummonPity(content);
@@ -5440,6 +5441,398 @@ namespace Emberfall.DevHarness
                   "a version " + (SaveSerializer.CurrentVersion + 1) + " save is refused rather than read as version 9");
             Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
                   "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            Line("");
+        }
+
+        // ============================================================ CAMPAIGN STRUCTURE
+
+        private static void CheckCampaignStructure(ContentDatabase db)
+        {
+            Line("");
+            Line("CAMPAIGN STRUCTURE");
+            CheckCampaignCurveSchema(db);
+            CheckCampaignInterpolation(db);
+            CheckCampaignMonotonicity(db);
+            CheckCampaignMigrationRegression(db);
+            CheckCampaignRetrySingleBattle(db);
+            CheckCampaignSweep(db);
+            CheckCampaignProgressSaveRoundTrip(db);
+        }
+
+        /// <summary>Every shipped stage carries a real curve, and the four numbers agree with the
+        /// roster they were derived from.</summary>
+        private static void CheckCampaignCurveSchema(ContentDatabase db)
+        {
+            int stages = db.AllStages.Count;
+            Check(stages == 24, "24 authored stages across chapters 1 and 2 (" + stages + ")");
+
+            int withCurve = 0, waves12 = 0, battles12 = 0, floorMatchesRoster = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                if (st.HasWaveCurve) withCurve++;
+                if (st.WaveCount == 12) waves12++;
+                if (st.BattleCount == 12) battles12++;
+
+                int top = 0;
+                for (int e = 0; e < st.Enemies.Count; e++) if (st.Enemies[e].Level > top) top = st.Enemies[e].Level;
+                if (st.FloorLevel == top) floorMatchesRoster++;
+            }
+            Check(withCurve == stages, "every stage carries a wave curve (" + withCurve + "/" + stages + ")");
+            Check(waves12 == stages, "every stage is 12 waves (" + waves12 + "/" + stages + ")");
+            Check(battles12 == stages, "every stage is 12 battles per wave (" + battles12 + "/" + stages + ")");
+            Check(floorMatchesRoster == stages,
+                  "every stage's floorLevel equals the top level in its own roster, so the floor is the"
+                  + " authored fight rather than a number invented beside it (" + floorMatchesRoster + "/" + stages + ")");
+
+            int total = 0;
+            for (int i = 0; i < db.AllStages.Count; i++) total += db.AllStages[i].TotalBattles;
+            Check(total == 24 * 144, "24 stages x 144 battles = " + (24 * 144) + " battles across the shipped campaign (" + total + ")");
+
+            Check(SaveSerializer.CurrentVersion >= 11,
+                  "save version is at least 11, where campaign wave progress bumped it (" + SaveSerializer.CurrentVersion + ")");
+        }
+
+        /// <summary>
+        /// The interpolation itself: endpoints, the exact t the design specifies, linearity, and
+        /// that a wave boundary is not a cliff.
+        /// </summary>
+        private static void CheckCampaignInterpolation(ContentDatabase db)
+        {
+            StageDef st = db.AllStages[0];
+
+            Check(Math.Abs(CampaignWaveGenerator.Progress(st, 1, 1) - 0f) < 0.0001f,
+                  "t is 0 at wave 1 battle 1");
+            Check(Math.Abs(CampaignWaveGenerator.Progress(st, 12, 12) - 1f) < 0.0001f,
+                  "t is 1 at wave 12 battle 12");
+
+            // t = ((wave-1)*12 + (battle-1)) / 143, stated in the design and checked literally.
+            bool tExact = true;
+            for (int w = 1; w <= 12 && tExact; w++)
+                for (int b = 1; b <= 12; b++)
+                {
+                    float expect = ((w - 1) * 12 + (b - 1)) / 143f;
+                    if (Math.Abs(CampaignWaveGenerator.Progress(st, w, b) - expect) > 0.0001f) { tExact = false; break; }
+                }
+            Check(tExact, "t matches ((wave-1)*12 + battle-1) / 143 at all 144 positions");
+
+            Check(CampaignWaveGenerator.LevelForBattle(st, 1, 1) == st.FloorLevel,
+                  "the first battle sits exactly on floorLevel (" + st.FloorLevel + ")");
+            Check(CampaignWaveGenerator.LevelForBattle(st, 12, 12) == st.CeilingLevel,
+                  "the last battle sits exactly on ceilingLevel (" + st.CeilingLevel + ")");
+
+            // Plain linear, NOT stepped per wave: battle 12 of wave 1 to battle 1 of wave 2 is one
+            // ordinary step. A stepped curve would show a flat run inside each wave and a jump at
+            // the boundary, which is what this rules out.
+            bool neverDrops = true, boundaryIsOrdinary = true;
+            int prev = CampaignWaveGenerator.LevelForBattle(st, 1, 1);
+            for (int w = 1; w <= 12; w++)
+                for (int b = 1; b <= 12; b++)
+                {
+                    if (w == 1 && b == 1) continue;
+                    int lv = CampaignWaveGenerator.LevelForBattle(st, w, b);
+                    if (lv < prev) neverDrops = false;
+                    prev = lv;
+                }
+            Check(neverDrops, "level never decreases as the stage advances");
+
+            int lastOfWave1 = CampaignWaveGenerator.LevelForBattle(st, 1, 12);
+            int firstOfWave2 = CampaignWaveGenerator.LevelForBattle(st, 2, 1);
+            int midWaveStep = CampaignWaveGenerator.LevelForBattle(st, 2, 3) - CampaignWaveGenerator.LevelForBattle(st, 2, 2);
+            boundaryIsOrdinary = (firstOfWave2 - lastOfWave1) <= Math.Max(1, midWaveStep + 1);
+            Check(boundaryIsOrdinary,
+                  "the wave 1 -> wave 2 boundary is an ordinary step, not a cliff (+"
+                  + (firstOfWave2 - lastOfWave1) + " across the boundary)");
+
+            Check(CampaignWaveGenerator.BattleOrdinal(st, 1, 1) == 1
+                  && CampaignWaveGenerator.BattleOrdinal(st, 12, 12) == 144
+                  && CampaignWaveGenerator.BattleOrdinal(st, 4, 7) == 43,
+                  "battle ordinal is 1 at the start, 144 at the end, 43 at wave 4 battle 7");
+
+            // Next() walks the whole stage exactly once and then stops.
+            int visited = 1, w2 = 1, b2 = 1, guard = 0;
+            int nw, nb;
+            while (CampaignWaveGenerator.Next(st, w2, b2, out nw, out nb) && guard++ < 1000)
+            {
+                w2 = nw; b2 = nb; visited++;
+            }
+            Check(visited == 144, "Next() walks exactly 144 battles then reports the stage finished (" + visited + ")");
+            Check(w2 == 12 && b2 == 12, "and stops on wave 12 battle 12 (" + w2 + "," + b2 + ")");
+
+            // A stage with no curve must be inert, or every synthetic stage breaks.
+            StageDef flat = new StageDef();
+            flat.FloorLevel = 5;
+            flat.CeilingLevel = 5;
+            Check(!flat.HasWaveCurve && flat.TotalBattles == 1
+                  && Math.Abs(CampaignWaveGenerator.Progress(flat, 1, 1)) < 0.0001f,
+                  "a stage with no authored curve is a single battle at its floor, so synthetic stages are unaffected");
+        }
+
+        /// <summary>Floor below ceiling on every stage, and the roster's internal spread carried up
+        /// the curve unchanged.</summary>
+        private static void CheckCampaignMonotonicity(ContentDatabase db)
+        {
+            int ascending = 0;
+            string worst = "";
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                if (st.CeilingLevel > st.FloorLevel) ascending++;
+                else worst = st.Id + " (" + st.FloorLevel + " -> " + st.CeilingLevel + ")";
+            }
+            Check(ascending == db.AllStages.Count,
+                  "every stage's ceiling is above its floor, so no stage gets easier as it advances"
+                  + (worst.Length > 0 ? " - offender: " + worst : "") + " (" + ascending + "/" + db.AllStages.Count + ")");
+
+            // Composition is fixed: same enemies, same count, same order, same internal spread.
+            int spreadHeld = 0, countHeld = 0, orderHeld = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                StageDef top = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+                if (top.Enemies.Count == st.Enemies.Count) countHeld++;
+
+                bool sameOrder = top.Enemies.Count == st.Enemies.Count;
+                bool sameSpread = sameOrder;
+                int delta = top.Enemies.Count > 0 ? top.Enemies[0].Level - st.Enemies[0].Level : 0;
+                for (int e = 0; e < top.Enemies.Count && sameOrder; e++)
+                {
+                    if (top.Enemies[e].EnemyId != st.Enemies[e].EnemyId) sameOrder = false;
+                    if (top.Enemies[e].Level - st.Enemies[e].Level != delta) sameSpread = false;
+                }
+                if (sameOrder) orderHeld++;
+                if (sameSpread) spreadHeld++;
+            }
+            Check(countHeld == db.AllStages.Count,
+                  "enemy COUNT never changes across a stage's curve (" + countHeld + "/" + db.AllStages.Count + ")");
+            Check(orderHeld == db.AllStages.Count,
+                  "enemy IDs and their order never change across a stage's curve (" + orderHeld + "/" + db.AllStages.Count + ")");
+            Check(spreadHeld == db.AllStages.Count,
+                  "every enemy moves by the SAME delta, so a 13/14/15 roster stays 13/14/15-shaped up the curve ("
+                  + spreadHeld + "/" + db.AllStages.Count + ")");
+
+            int ceilingAboveRoster = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                StageDef top = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+                int topLevel = 0;
+                for (int e = 0; e < top.Enemies.Count; e++) if (top.Enemies[e].Level > topLevel) topLevel = top.Enemies[e].Level;
+                if (topLevel == st.CeilingLevel) ceilingAboveRoster++;
+            }
+            Check(ceilingAboveRoster == db.AllStages.Count,
+                  "the hardest unit at the last battle lands exactly on ceilingLevel ("
+                  + ceilingAboveRoster + "/" + db.AllStages.Count + ")");
+        }
+
+        /// <summary>
+        /// THE MIGRATION REGRESSION. Wave 1 battle 1 of every migrated stage must spawn precisely
+        /// what the flat pre-wave stage spawned - same ids, same order, same levels. This is what
+        /// makes the retrofit a restructure rather than a retune, and it is the check that fails
+        /// if anyone ever "fixes" the floor by nudging it.
+        /// </summary>
+        private static void CheckCampaignMigrationRegression(ContentDatabase db)
+        {
+            int identical = 0;
+            string firstMismatch = "";
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                StageDef first = CampaignWaveGenerator.BuildBattle(st, 1, 1);
+
+                bool same = first.Enemies.Count == st.Enemies.Count;
+                for (int e = 0; e < first.Enemies.Count && same; e++)
+                {
+                    if (first.Enemies[e].EnemyId != st.Enemies[e].EnemyId) same = false;
+                    else if (first.Enemies[e].Level != st.Enemies[e].Level) same = false;
+                }
+                if (same) identical++;
+                else if (firstMismatch.Length == 0) firstMismatch = st.Id;
+            }
+            Check(identical == db.AllStages.Count,
+                  "wave 1 battle 1 spawns the EXACT pre-migration roster on every stage - the flat stage's"
+                  + " own enemy list, ids, order and levels untouched"
+                  + (firstMismatch.Length > 0 ? " - first mismatch: " + firstMismatch : "")
+                  + " (" + identical + "/" + db.AllStages.Count + ")");
+
+            // Spot-check the two the eye can verify against campaign.json by hand.
+            StageDef ch1_1 = db.GetStage("ch1_1");
+            StageDef opener = CampaignWaveGenerator.BuildBattle(ch1_1, 1, 1);
+            Check(opener != null && opener.Enemies.Count == 3
+                  && opener.Enemies[0].EnemyId == "hollow_husk" && opener.Enemies[0].Level == 2
+                  && opener.Enemies[1].EnemyId == "hollow_husk" && opener.Enemies[1].Level == 2
+                  && opener.Enemies[2].EnemyId == "grave_moth" && opener.Enemies[2].Level == 2,
+                  "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth");
+
+            Check(ch1_1 != null && ch1_1.RewardGold == 120 && ch1_1.RewardShards == 6
+                  && ch1_1.RecommendedPower == 3950,
+                  "ch1_1's rewards and recommendedPower survived the migration untouched (task 13 is not"
+                  + " re-tuned by this restructure)");
+        }
+
+        /// <summary>
+        /// Defeat retries the single battle that was lost. Not the wave, not the stage.
+        /// </summary>
+        private static void CheckCampaignRetrySingleBattle(ContentDatabase db)
+        {
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 1000L));
+            StageDef st = db.GetStage("ch1_3");
+
+            // Walk to a deliberately awkward spot: wave 4, battle 7.
+            session.Profile.CampaignCurrentStageId = st.Id;
+            session.Profile.CampaignCurrentWave = 4;
+            session.Profile.CampaignCurrentBattle = 7;
+
+            int w, b;
+            session.ResumePointFor(st, out w, out b);
+            Check(w == 4 && b == 7, "a saved mid-stage position resumes exactly where it was left (wave " + w + " battle " + b + ")");
+
+            session.RecordBattleLost(st, 4, 7);
+            session.ResumePointFor(st, out w, out b);
+            Check(w == 4 && b == 7,
+                  "losing wave 4 battle 7 leaves the cursor ON wave 4 battle 7 - the single battle is retried,"
+                  + " not the wave and not the stage (wave " + w + " battle " + b + ")");
+
+            bool done = session.RecordBattleWon(st, 4, 7);
+            session.ResumePointFor(st, out w, out b);
+            Check(!done && w == 4 && b == 8, "winning it advances one battle, to wave 4 battle 8");
+
+            done = session.RecordBattleWon(st, 4, 12);
+            session.ResumePointFor(st, out w, out b);
+            Check(!done && w == 5 && b == 1, "winning the last battle of a wave rolls into the next wave at battle 1");
+
+            done = session.RecordBattleWon(st, 12, 12);
+            Check(done, "winning wave 12 battle 12 reports the stage finished");
+            Check(session.Profile.CampaignCurrentStageId.Length == 0,
+                  "and clears the in-stage cursor, so it never points into a finished stage");
+
+            // A different stage must not inherit this one's position.
+            session.Profile.CampaignCurrentStageId = "ch1_3";
+            session.Profile.CampaignCurrentWave = 9;
+            session.Profile.CampaignCurrentBattle = 4;
+            session.ResumePointFor(db.GetStage("ch1_5"), out w, out b);
+            Check(w == 1 && b == 1,
+                  "entering a DIFFERENT stage starts at wave 1 battle 1 rather than inheriting the saved"
+                  + " stage's position (wave " + w + " battle " + b + ")");
+
+            Check(session.HasResumePoint(db.GetStage("ch1_3")) && !session.HasResumePoint(db.GetStage("ch1_5")),
+                  "HasResumePoint is true only for the stage the position belongs to");
+
+            // Out-of-range saved values are clamped rather than trusted.
+            session.Profile.CampaignCurrentWave = 99;
+            session.Profile.CampaignCurrentBattle = 99;
+            session.ResumePointFor(db.GetStage("ch1_3"), out w, out b);
+            Check(w == 12 && b == 12,
+                  "a corrupt or out-of-range saved position clamps into the stage rather than running off it ("
+                  + w + "," + b + ")");
+        }
+
+        /// <summary>
+        /// The one-tap sweep: one simulation rather than 144, and still a stage clear as far as the
+        /// repeat cap is concerned.
+        /// </summary>
+        private static void CheckCampaignSweep(ContentDatabase db)
+        {
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 1000L));
+            StageDef st = db.GetStage("ch1_1");
+
+            Check(!session.CanSweep(st), "a stage never cleared cannot be swept - it has to be fought");
+
+            session.Profile.ClearedStageIds.Add(st.Id);
+            Check(session.CanSweep(st), "a cleared stage offers the sweep");
+
+            long now = 2000L;
+            int before = session.Profile.ClearsTodayFor(st.Id);
+            BattleRewards swept = session.SweepClearedStage(st, 12345, now);
+            int after = session.Profile.ClearsTodayFor(st.Id);
+
+            Check(swept.StageId == st.Id, "the sweep reports the stage it swept");
+            Check(after == before + 1,
+                  "a sweep spends exactly one daily repeat, the same as a fought clear - the repeat cap's"
+                  + " granularity is unchanged by the restructure (" + before + " -> " + after + ")");
+
+            // The sweep decides on the stage's HARDEST battle, so it is not a free win.
+            StageDef hardest = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+            int hardestTop = 0, floorTop = 0;
+            for (int e = 0; e < hardest.Enemies.Count; e++) if (hardest.Enemies[e].Level > hardestTop) hardestTop = hardest.Enemies[e].Level;
+            for (int e = 0; e < st.Enemies.Count; e++) if (st.Enemies[e].Level > floorTop) floorTop = st.Enemies[e].Level;
+            Check(hardestTop > floorTop,
+                  "the battle a sweep is decided on is genuinely harder than the stage's first ("
+                  + floorTop + " -> " + hardestTop + "), so a sweep can fail rather than being a free clear");
+
+            // Repeat cap still bites on the Nth sweep of the day.
+            for (int i = 0; i < db.Balance.RepeatFullClearsPerDay + 2; i++) session.SweepClearedStage(st, 999 + i, now);
+            BattleRewards capped = session.SweepClearedStage(st, 4242, now);
+            Check(capped.RepeatCapped || capped.Gold == 0,
+                  "past repeatFullClearsPerDay a sweep still resolves but stops paying, exactly as a fought repeat does");
+        }
+
+        /// <summary>
+        /// Save round trip for the three new fields, with the same version-guard and
+        /// backwards-clock discipline every prior bump got.
+        /// </summary>
+        private static void CheckCampaignProgressSaveRoundTrip(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1000L);
+            profile.CampaignCurrentStageId = "ch2_7";
+            profile.CampaignCurrentWave = 9;
+            profile.CampaignCurrentBattle = 4;
+
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile back = SaveSerializer.Deserialize(json, db, out error);
+
+            Check(back != null && error == null, "a profile carrying campaign wave progress round-trips without error");
+            Check(back != null && back.CampaignCurrentStageId == "ch2_7", "campaignCurrentStageId survives the round trip");
+            Check(back != null && back.CampaignCurrentWave == 9, "campaignCurrentWave survives the round trip");
+            Check(back != null && back.CampaignCurrentBattle == 4, "campaignCurrentBattle survives the round trip");
+
+            Check(json.IndexOf("campaignCurrentStageId", StringComparison.Ordinal) >= 0
+                  && json.IndexOf("campaignCurrentWave", StringComparison.Ordinal) >= 0
+                  && json.IndexOf("campaignCurrentBattle", StringComparison.Ordinal) >= 0,
+                  "all three keys are actually written, not silently dropped");
+
+            // Upgrade: a save with none of the three keys reads as "nothing in progress" rather
+            // than as a synthesised position. The empty stage id is what carries that meaning.
+            string stripped = json
+                .Replace("\"campaignCurrentStageId\"", "\"_wasStageId\"")
+                .Replace("\"campaignCurrentWave\"", "\"_wasWave\"")
+                .Replace("\"campaignCurrentBattle\"", "\"_wasBattle\"");
+            PlayerProfile upgraded = SaveSerializer.Deserialize(stripped, db, out error);
+            Check(upgraded != null && error == null, "a save predating the campaign-progress keys still loads");
+            Check(upgraded != null && upgraded.CampaignCurrentStageId.Length == 0,
+                  "and reads as no stage in progress rather than inventing one");
+            Check(upgraded != null && upgraded.CampaignCurrentWave == 1 && upgraded.CampaignCurrentBattle == 1,
+                  "with the position at wave 1 battle 1, which is where the flat model already had them");
+
+            GameSession upgradedSession = new GameSession(db, upgraded);
+            int w, b;
+            upgradedSession.ResumePointFor(db.GetStage("ch1_4"), out w, out b);
+            Check(w == 1 && b == 1,
+                  "so an upgrading player entering any stage starts at its first battle rather than"
+                  + " inheriting a phantom position");
+
+            // Downgrade guard, the same shape every prior bump checks.
+            string future = json.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+                                         "\"version\": " + (SaveSerializer.CurrentVersion + 1));
+            string futureError;
+            PlayerProfile refused = SaveSerializer.Deserialize(future, db, out futureError);
+            Check(refused == null,
+                  "a version " + (SaveSerializer.CurrentVersion + 1) + " save is refused rather than read as version "
+                  + SaveSerializer.CurrentVersion);
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            // Backwards clock: the position is a plain cursor with no timestamp, so a clock that
+            // jumps backwards must not disturb it. This is the discipline the Echo bank needed.
+            PlayerProfile clockProfile = SaveSerializer.Deserialize(json, db, out error);
+            GameSession clockSession = new GameSession(db, clockProfile);
+            clockSession.RollDailyReset(500L);
+            clockSession.ResumePointFor(db.GetStage("ch2_7"), out w, out b);
+            Check(w == 9 && b == 4,
+                  "a clock jumping backwards leaves the in-stage position untouched - it is a cursor, not a"
+                  + " timed resource (wave " + w + " battle " + b + ")");
 
             Line("");
         }

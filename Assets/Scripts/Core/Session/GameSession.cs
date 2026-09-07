@@ -308,6 +308,130 @@ namespace Emberfall.Core.Session
             }
         }
 
+        // ============================================================ wave progress inside a stage
+
+        /// <summary>
+        /// Where an attempt on this stage should begin: the saved position if the player is
+        /// part-way through THIS stage, otherwise its first battle.
+        ///
+        /// The stage id check is the whole point. Progress is stored as one (stageId, wave,
+        /// battle) triple rather than a per-stage table, because only one stage is ever in
+        /// progress at a time - so entering a DIFFERENT stage has to start at the beginning
+        /// instead of inheriting the previous stage's position, which is what a bare wave/battle
+        /// pair would have done. An empty saved id (a fresh account, or a version 10 save
+        /// upgrading) matches nothing and therefore starts at (1,1), which is correct for both.
+        /// </summary>
+        public void ResumePointFor(StageDef stage, out int wave, out int battle)
+        {
+            wave = 1;
+            battle = 1;
+            if (stage == null) return;
+            if (Profile.CampaignCurrentStageId != stage.Id) return;
+
+            int waves = Math.Max(1, stage.WaveCount);
+            int battles = Math.Max(1, stage.BattleCount);
+            wave = Math.Min(Math.Max(1, Profile.CampaignCurrentWave), waves);
+            battle = Math.Min(Math.Max(1, Profile.CampaignCurrentBattle), battles);
+        }
+
+        /// <summary>True when the saved position is a real mid-stage resume rather than a fresh
+        /// start, which is what lets the UI say "resume" instead of "begin".</summary>
+        public bool HasResumePoint(StageDef stage)
+        {
+            if (stage == null || Profile.CampaignCurrentStageId != stage.Id) return false;
+            return Profile.CampaignCurrentWave > 1 || Profile.CampaignCurrentBattle > 1;
+        }
+
+        /// <summary>
+        /// Records a won battle inside a stage and returns TRUE when that win finished the stage.
+        ///
+        /// This does NOT pay out. Rewards stay at stage granularity per
+        /// DESIGN-CAMPAIGN-STRUCTURE.md - "repeat cap and idle income stay at Stage granularity" -
+        /// so 143 of a stage's 144 wins move a cursor and pay nothing, and the caller invokes
+        /// GrantBattleResult once, on the win that returns true here. Paying per battle would
+        /// multiply every stage's income by 144 and is exactly what the design rules out.
+        /// </summary>
+        public bool RecordBattleWon(StageDef stage, int wave, int battle)
+        {
+            if (stage == null) return true;
+
+            int nextWave, nextBattle;
+            bool more = CampaignWaveGenerator.Next(stage, wave, battle, out nextWave, out nextBattle);
+            if (more)
+            {
+                Profile.CampaignCurrentStageId = stage.Id;
+                Profile.CampaignCurrentWave = nextWave;
+                Profile.CampaignCurrentBattle = nextBattle;
+                return false;
+            }
+
+            ClearStageProgress(stage);
+            return true;
+        }
+
+        /// <summary>
+        /// A lost battle. Deliberately does nothing at all.
+        ///
+        /// "Defeat inside a stage: retry the single battle that was lost, not the wave and not the
+        /// stage" (DESIGN-CAMPAIGN-STRUCTURE.md, decided 2026-09-07). Leaving the cursor untouched
+        /// IS that behaviour - the next attempt reads the same (wave, battle) back out of
+        /// ResumePointFor and re-fights it. This method exists so the call site reads as a
+        /// deliberate no-op rather than a missing branch someone should add later.
+        /// </summary>
+        public void RecordBattleLost(StageDef stage, int wave, int battle)
+        {
+        }
+
+        /// <summary>Forgets any in-stage position for this stage. Called when a stage completes,
+        /// so the cursor never points into a stage the player has finished.</summary>
+        public void ClearStageProgress(StageDef stage)
+        {
+            if (stage == null) return;
+            if (Profile.CampaignCurrentStageId != stage.Id) return;
+            Profile.CampaignCurrentStageId = "";
+            Profile.CampaignCurrentWave = 1;
+            Profile.CampaignCurrentBattle = 1;
+        }
+
+        /// <summary>
+        /// Replaying a stage that is already fully cleared: one tap, resolved instantly.
+        ///
+        /// ONE SIMULATION, NOT 144. The battle it runs is the stage's LAST one - its hardest, at
+        /// the ceiling - because that is the battle that decides whether the line can clear the
+        /// stage at all. A team that beats the ceiling beats all 143 easier battles below it, so
+        /// running the hardest one answers the same question 144 runs would, in 1/144th of the
+        /// work, and answers it honestly: a sweep can still FAIL, and an under-powered team gets
+        /// told so rather than being handed a free clear for a stage it once beat.
+        ///
+        /// Rewards route through GrantBattleResult unchanged, so a sweep spends one of
+        /// repeatFullClearsPerDay exactly as a normal clear does. That system's granularity is
+        /// untouched: it still counts stage clears, and a sweep is one stage clear.
+        /// </summary>
+        public BattleRewards SweepClearedStage(StageDef stage, int seed, long nowUnix)
+        {
+            BattleRewards rewards = new BattleRewards();
+            if (stage == null) return rewards;
+
+            StageDef hardest = CampaignWaveGenerator.BuildBattle(
+                stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+
+            BattleResult result = CombatSimulation.Run(BuildBattleRequest(hardest, seed));
+            if (!result.Victory)
+            {
+                rewards.Victory = false;
+                rewards.StageId = stage.Id;
+                return rewards;
+            }
+            return GrantBattleResult(stage, true, nowUnix);
+        }
+
+        /// <summary>Whether a one-tap sweep is offered: the stage has a real curve and the player
+        /// has already finished it the long way. A stage never cleared has to be fought.</summary>
+        public bool CanSweep(StageDef stage)
+        {
+            return stage != null && stage.HasWaveCurve && Profile.HasClearedStage(stage.Id);
+        }
+
         public bool CampaignComplete
         {
             get { return Profile.StagesCleared >= Content.AllStages.Count; }

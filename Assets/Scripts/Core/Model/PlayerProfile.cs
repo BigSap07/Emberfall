@@ -252,6 +252,26 @@ namespace Emberfall.Core.Model
         public int StagesCleared;
 
         /// <summary>
+        /// Position INSIDE the stage currently being attempted, per DESIGN-CAMPAIGN-STRUCTURE.md.
+        ///
+        /// StagesCleared says which stages are done; these three say how far into the next one the
+        /// player has got. Mirrors RecitalCurrentFloor exactly: a plain persisted position with no
+        /// expiry, so leaving a stage 90 battles in and coming back a week later resumes at battle
+        /// 91 rather than restarting. There is deliberately no timestamp and no decay.
+        ///
+        /// CampaignCurrentStageId is what makes the pair meaningful. Wave 4 battle 7 is a
+        /// different position in ch1_3 than in ch2_9, so the stage the progress BELONGS to has to
+        /// be stored with it - otherwise switching stages mid-run would silently inherit the other
+        /// stage's position. Empty means "no stage in progress", which is the correct state for a
+        /// new account and for the moment after a stage is cleared.
+        ///
+        /// Both indices are 1-based, matching the readout the player sees ("Wave 4 of 12").
+        /// </summary>
+        public string CampaignCurrentStageId = "";
+        public int CampaignCurrentWave = 1;
+        public int CampaignCurrentBattle = 1;
+
+        /// <summary>
         /// Banner slots every player has, from the first minute. Deploying fewer heroes than this
         /// is fine - empty slots are simply empty. Must stay equal to BalanceConfig.MaxTeamSize,
         /// which gates the same number on the simulation side; they are two names for one decision.

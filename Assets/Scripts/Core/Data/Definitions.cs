@@ -363,6 +363,44 @@ namespace Emberfall.Core.Data
         public int IdleGoldPerHour;
         public int IdleShardsPerHour;
 
+        /// <summary>
+        /// THE WAVE CURVE. A stage is no longer one fixed fight; it is a definition that
+        /// generates waveCount x battleCount of them, per DESIGN-CAMPAIGN-STRUCTURE.md.
+        ///
+        /// Enemies above is the roster AT THE FLOOR - wave 1, battle 1 spawns exactly what the
+        /// flat pre-wave stage used to spawn, which is what makes the migration a restructure
+        /// rather than a retune. Every later battle is the SAME roster at a higher level:
+        /// composition never changes across a stage, only level, so there is one scaling
+        /// language here and it is the one Recital already uses.
+        ///
+        /// FloorLevel is the highest authored level in the roster, and CeilingLevel is where
+        /// that unit lands on the stage's last battle. Every enemy moves by the same delta, so
+        /// a roster's internal spread (13/14/15) is carried up the curve unchanged rather than
+        /// being flattened or re-spread.
+        ///
+        /// Nothing per-battle is stored. CampaignWaveGenerator computes a battle on demand from
+        /// these four numbers; 20,736 battles exist as arithmetic, not as content.
+        /// </summary>
+        public int WaveCount = 1;
+        public int BattleCount = 1;
+        public int FloorLevel;
+        public int CeilingLevel;
+
+        /// <summary>True when this stage carries a real wave curve rather than being a single
+        /// fixed fight. False for synthetic stages - Recital floors, Proving matches, prologue
+        /// steps - which build their own enemies and must never be run through the generator.</summary>
+        public bool HasWaveCurve
+        {
+            get { return WaveCount > 1 || BattleCount > 1; }
+        }
+
+        /// <summary>Total battles in this stage. 144 for a migrated campaign stage, 1 for a
+        /// synthetic one, which is what lets callers treat both the same way.</summary>
+        public int TotalBattles
+        {
+            get { return Math.Max(1, WaveCount) * Math.Max(1, BattleCount); }
+        }
+
         public string DisplayCode
         {
             get { return ChapterNumber + "-" + Index; }
@@ -389,6 +427,20 @@ namespace Emberfall.Core.Data
             s.IdleShardsPerHour = j.GetInt("idleShardsPerHour", 0);
             List<JsonValue> enemies = j.GetList("enemies");
             for (int i = 0; i < enemies.Count; i++) s.Enemies.Add(EnemySpawn.FromJson(enemies[i]));
+
+            // Defaults of 1 rather than 12 on purpose: a stage with no curve authored is a
+            // single fixed fight, which is exactly what every stage was before this schema and
+            // what a hand-built synthetic stage still is. Content opts IN to the curve.
+            s.WaveCount = Math.Max(1, j.GetInt("waveCount", 1));
+            s.BattleCount = Math.Max(1, j.GetInt("battleCount", 1));
+
+            // Floor defaults to the roster's own top level, so a stage that declares a ceiling
+            // and forgets a floor still describes a real curve instead of scaling from zero.
+            int rosterTop = 0;
+            for (int i = 0; i < s.Enemies.Count; i++)
+                if (s.Enemies[i].Level > rosterTop) rosterTop = s.Enemies[i].Level;
+            s.FloorLevel = j.GetInt("floorLevel", rosterTop);
+            s.CeilingLevel = j.GetInt("ceilingLevel", s.FloorLevel);
             return s;
         }
     }

@@ -273,8 +273,56 @@ namespace Emberfall.UI.Screens
                 return;
             }
             App.Audio.Tap();
+
+            // A STAGE ALREADY CLEARED IS SWEPT, NOT REFOUGHT.
+            //
+            // DESIGN-CAMPAIGN-STRUCTURE.md: "a cleared stage becomes a one-tap sweep, resolved
+            // instantly, not a full 144-battle real-time replay". Farming for gold cannot mean
+            // sitting through 144 fights, so the replay path resolves here and never opens the
+            // battle screen at all. It still spends a daily repeat, because a sweep IS a stage
+            // clear and that system's granularity is unchanged.
+            //
+            // A stage never cleared falls through and is fought battle by battle.
+            if (App.Session.CanSweep(stage))
+            {
+                Sweep(stage);
+                return;
+            }
+
             Router.Battle.SetStage(stage);
             Router.Show(ScreenId.Battle);
+        }
+
+        /// <summary>
+        /// Resolves a repeat clear in one tap and reports it as a toast rather than a result
+        /// screen, because there is no fight to narrate - the outcome is already known by the time
+        /// the tap finishes.
+        ///
+        /// A sweep can fail. It runs the stage's hardest battle to decide (see
+        /// GameSession.SweepClearedStage), so a line that has been stripped of gear since the
+        /// original clear is told so instead of being paid for a stage it can no longer beat.
+        /// </summary>
+        private void Sweep(StageDef stage)
+        {
+            int seed = Mathf.Abs(stage.Id.GetHashCode() * 31
+                                 + App.Session.Profile.TotalBattlesWon * 7919
+                                 + Mathf.RoundToInt(Time.unscaledTime * 997f));
+            if (seed == 0) seed = 1;
+
+            BattleRewards rewards = App.Session.SweepClearedStage(stage, seed, TimeUtil.NowUnix());
+            if (!rewards.Victory)
+            {
+                App.Notify("Your line cannot sweep " + stage.Name + " any more.");
+                App.Audio.Defeat();
+                return;
+            }
+
+            App.Audio.Victory();
+            App.Notify(rewards.RepeatCapped
+                ? "Swept " + stage.Name + ". Daily repeat cap reached, no spoils."
+                : "Swept " + stage.Name + ".  +" + rewards.Gold + "g  +" + rewards.Shards + " shards");
+            App.RefreshHud();
+            RebuildStages();
         }
     }
 }
