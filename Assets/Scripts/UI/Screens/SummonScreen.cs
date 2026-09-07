@@ -44,6 +44,14 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Summon; } }
 
+        /// <summary>
+        /// This screen carries its own CurrencyStrip, so the shared top bar's Gold/Shards/Dust
+        /// pills would state three of the same six numbers a few pixels above it. One readout, not
+        /// two. Same mechanism BattleScreen already uses, and ScreenRouter re-applies it on every
+        /// Show, so the bar returns intact on any screen that does not opt out.
+        /// </summary>
+        public override bool HidesTopBar { get { return true; } }
+
         private const float StageWidth = 1500f;
         // 500, not 452. At 452 the rift's outer ring reached to within a couple of pixels of the
         // hero's name plate, so the name was printed across the bottom arc of the ring - which the

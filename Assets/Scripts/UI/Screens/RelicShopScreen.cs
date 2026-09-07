@@ -38,6 +38,14 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.RelicShop; } }
 
+        /// <summary>
+        /// This screen carries its own CurrencyStrip, so the shared top bar's Gold/Shards/Dust
+        /// pills would state three of the same six numbers a few pixels above it. One readout, not
+        /// two. Same mechanism BattleScreen already uses, and ScreenRouter re-applies it on every
+        /// Show, so the bar returns intact on any screen that does not opt out.
+        /// </summary>
+        public override bool HidesTopBar { get { return true; } }
+
         private const int PageSize = 5;
         private const float CardWidth = 262f;
         private const float CardHeight = 500f;
