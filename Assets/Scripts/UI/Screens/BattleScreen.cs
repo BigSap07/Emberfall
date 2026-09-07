@@ -110,7 +110,7 @@ namespace Emberfall.UI.Screens
         /// What the gold button means for THIS result. Was a bool ("continues, or replays"), which
         /// only had room for the two answers a win needs; a loss needs a third.
         /// </summary>
-        private enum PrimaryAction { Replay, Continue, Exit, Prologue }
+        private enum PrimaryAction { Replay, Continue, Exit, Prologue, NextBattle }
 
         private PrimaryAction _primaryAction = PrimaryAction.Replay;
 
@@ -154,6 +154,24 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private List<HeroInstance> _prologueSquad;
 
+        /// <summary>
+        /// Position inside the campaign stage being fought, 1-based, per
+        /// DESIGN-CAMPAIGN-STRUCTURE.md. Meaningful only when _stage carries a wave curve; a
+        /// synthetic stage is a single fight and sits at (1,1) forever.
+        ///
+        /// Held on the screen rather than read from the profile each frame because the profile's
+        /// cursor advances the moment a battle is WON, and this screen still has to render the
+        /// result panel for the battle just fought. Reading the profile would relabel the panel
+        /// with the next battle's number while the player is still looking at the last one's.
+        /// </summary>
+        private int _campaignWave = 1;
+        private int _campaignBattle = 1;
+
+        /// <summary>True when the win just shown advanced the stage but did not finish it, so the
+        /// panel is a checkpoint rather than a clear: no spoils, and the gold button fights on
+        /// instead of leaving.</summary>
+        private bool _midStageAdvance;
+
         /// <summary>What FirstRun wants told when a prologue fight is done with, true on a win.
         /// Null in every other mode.</summary>
         private System.Action<bool> _prologueOnResolved;
@@ -165,12 +183,25 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private BattleLoadout _provingOpponent;
 
+        /// <summary>
+        /// Enters a campaign stage, resuming wherever the player left it.
+        ///
+        /// The resume point comes from the session rather than defaulting to (1,1), which is what
+        /// makes a stage survive being walked away from: 90 battles in, quit to the Hub, come back
+        /// a week later, and this starts battle 91. See GameSession.ResumePointFor for why the
+        /// saved stage id has to match before the position is honoured.
+        /// </summary>
         public void SetStage(StageDef stage)
         {
             _stage = stage;
             _recitalFloor = -1;
             _provingOpponent = null;
             _prologueSquad = null;
+
+            _campaignWave = 1;
+            _campaignBattle = 1;
+            if (stage != null && App != null && App.Session != null)
+                App.Session.ResumePointFor(stage, out _campaignWave, out _campaignBattle);
         }
 
         /// <summary>
@@ -274,7 +305,12 @@ namespace Emberfall.UI.Screens
             UIBuilder.TopStrip(bar, 64f, 16f, UITheme.ScreenPadding);
 
             _stageLabel = UIBuilder.Label("Stage", bar, "", UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 520f, 26f, new Vector2(0f, 1f));
+            // 760 rather than 520: the wave/battle suffix pushed the longest real label
+            // ("2-4  THE DRIFTING CAUSEWAY  WAVE 12/12  BATTLE 12/12") to 652px, which drew
+            // outside the old box. It LOOKED fine because the top-left is otherwise empty, which
+            // is exactly the kind of defect that survives a screenshot and dies the moment
+            // anything else is placed there. Measured, not eyeballed.
+            UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 760f, 26f, new Vector2(0f, 1f));
             UIBuilder.Outlined(_stageLabel, UITheme.InkArt, 1.8f);
 
             _roundLabel = UIBuilder.Label("Round", bar, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.LowerLeft);
@@ -461,7 +497,15 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant();
+                // "1-3  THE SMOKING ORCHARD   WAVE 4 OF 12  -  BATTLE 7 OF 12". The wave line is
+                // appended rather than given its own label so it travels with the stage name and
+                // cannot drift away from it as the top bar changes; a stage with no curve shows
+                // exactly what it showed before.
+                _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant()
+                                 + (_stage.HasWaveCurve
+                                    ? "   WAVE " + _campaignWave + "/" + _stage.WaveCount
+                                      + "   BATTLE " + _campaignBattle + "/" + _stage.BattleCount
+                                    : "");
             }
             _roundLabel.text = "PREPARING";
 
@@ -523,7 +567,14 @@ namespace Emberfall.UI.Screens
             BattleRequest request;
             if (_prologueSquad != null) request = App.Session.BuildPrologueRequest(_stage, _prologueSquad, seed);
             else if (_provingOpponent != null) request = App.Session.BuildProvingRequest(_stage, _provingOpponent, seed);
-            else request = App.Session.BuildBattleRequest(_stage, seed);
+            else
+            {
+                // The stage as it stands at THIS wave and battle. BuildBattle returns the stage
+                // unchanged when it has no curve, so Recital floors and every synthetic stage take
+                // this line without needing a branch of their own.
+                StageDef fought = CampaignWaveGenerator.BuildBattle(_stage, _campaignWave, _campaignBattle);
+                request = App.Session.BuildBattleRequest(fought, seed);
+            }
             _result = CombatSimulation.Run(request);
             _world.Populate(_result);
             BuildBars();
@@ -1604,6 +1655,28 @@ namespace Emberfall.UI.Screens
             // a previous fight and this screen is built once and reused.
             _resultSecondary.Root.gameObject.SetActive(true);
 
+            // MID-STAGE, THE FORWARD ACTION IS THE NEXT BATTLE, NOT THE NEXT STAGE.
+            //
+            // CONTINUE means "the stage you just cleared unlocked another one", which is false
+            // 143 times out of 144 here. Offering it would walk the player out of a stage they are
+            // 40 battles into and quietly abandon that position. REMATCH is dropped for the same
+            // reason it is dropped in the prologue: re-fighting a battle already won cannot
+            // advance anything, and the one button that matters should be unmissable.
+            if (_midStageAdvance)
+            {
+                _primaryAction = PrimaryAction.NextBattle;
+                _resultPrimary.SetText("NEXT BATTLE");
+                _resultPrimary.Root.name = "NextBattle";
+                _resultTertiary.Root.gameObject.SetActive(false);
+                UIBuilder.Box(_resultSecondary.Root, -460f, -170f, 620f, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
+
+                _resultPanel.gameObject.SetActive(true);
+                _resultPanel.SetAsLastSibling();
+                _resultGroup.alpha = 1f;
+                return;
+            }
+
             if (canContinue)
             {
                 _primaryAction = PrimaryAction.Continue;
@@ -1633,6 +1706,33 @@ namespace Emberfall.UI.Screens
 
         private void ShowCampaignResult()
         {
+            _midStageAdvance = false;
+
+            // A WAVE-CURVE STAGE PAYS ONCE, ON ITS LAST BATTLE.
+            //
+            // DESIGN-CAMPAIGN-STRUCTURE.md keeps the repeat cap and idle income at Stage
+            // granularity, so 143 of a stage's 144 wins must move the cursor and pay nothing.
+            // GrantBattleResult is what pays, records a first clear and spends a daily repeat, so
+            // it cannot be reached until the stage is actually finished - calling it per battle
+            // would multiply every stage's income by 144 and hand out 144 first clears.
+            //
+            // A LOST battle deliberately changes nothing: RecordBattleLost is a documented no-op,
+            // so the cursor still points at the battle that was just lost and the next attempt
+            // re-fights exactly that one. Not the wave, not the stage.
+            if (_stage != null && _stage.HasWaveCurve)
+            {
+                if (!_result.Victory)
+                {
+                    App.Session.RecordBattleLost(_stage, _campaignWave, _campaignBattle);
+                }
+                else if (!App.Session.RecordBattleWon(_stage, _campaignWave, _campaignBattle))
+                {
+                    _midStageAdvance = true;
+                    ShowWaveProgressResult();
+                    return;
+                }
+            }
+
             BattleRewards rewards = App.Session.GrantBattleResult(_stage, _result.Victory, TimeUtil.NowUnix());
 
             if (_result.Victory)
@@ -1674,6 +1774,25 @@ namespace Emberfall.UI.Screens
         /// <summary>Echoes are never shown here as a reward line - one was already spent to reach
         /// this screen, win or lose, by TryStartRecitalAttempt before the fight ran, so there is
         /// nothing about them to report on the way out.</summary>
+        /// <summary>
+        /// The spoils box for a battle that advanced a stage without finishing it. Says where the
+        /// player is and what is left, and pays nothing, because nothing was earned yet - the
+        /// stage's gold, shards and XP all land on its last battle.
+        /// </summary>
+        private void ShowWaveProgressResult()
+        {
+            int total = _stage.TotalBattles;
+            int done = CampaignWaveGenerator.BattleOrdinal(_stage, _campaignWave, _campaignBattle);
+
+            AddRewardRow("WAVE", _campaignWave + " OF " + _stage.WaveCount, UITheme.TextPrimary);
+            AddRewardRow("BATTLE", _campaignBattle + " OF " + _stage.BattleCount, UITheme.TextPrimary);
+            AddRewardRow("STAGE PROGRESS", done + " / " + total, UITheme.Gold);
+            // "PAID" rather than "SPOILS": the box this sits in is already headed SPOILS, and the
+            // duplicate read as a stutter on screen. Caught by looking at the panel, not the code.
+            AddRewardRow("PAID", "ON STAGE CLEAR", UITheme.TextMuted);
+            App.Audio.Victory();
+        }
+
         private void ShowRecitalResult()
         {
             RecitalRewards rewards = App.Session.GrantRecitalResult(_recitalFloor, _result.Victory, TimeUtil.NowUnix());
@@ -1925,6 +2044,7 @@ namespace Emberfall.UI.Screens
                 case PrimaryAction.Continue: ContinueToNextStage(); break;
                 case PrimaryAction.Exit: ExitToOrigin(); break;
                 case PrimaryAction.Prologue: ResolvePrologueStep(); break;
+                case PrimaryAction.NextBattle: FightNextBattle(); break;
                 default: Replay(); break;
             }
         }
@@ -1974,6 +2094,23 @@ namespace Emberfall.UI.Screens
                 AddRewardRow("THE LINE BREAKS", "as it always does", UITheme.TextMuted);
                 App.Audio.Defeat();
             }
+        }
+
+        /// <summary>
+        /// Straight into the next battle of the same stage.
+        ///
+        /// Reads the cursor back out of the session rather than incrementing the screen's own
+        /// copy, so the position the player resumes at after quitting is the same number this
+        /// button acts on - one source of truth, and no way for the two to drift apart if a
+        /// battle is ever recorded from somewhere other than here. Then reuses Replay's
+        /// OnHide/OnShow rebuild, the same path every other way into a fight uses.
+        /// </summary>
+        private void FightNextBattle()
+        {
+            App.Audio.Tap();
+            App.Session.ResumePointFor(_stage, out _campaignWave, out _campaignBattle);
+            OnHide();
+            OnShow();
         }
 
         private ScreenId OriginScreen()
