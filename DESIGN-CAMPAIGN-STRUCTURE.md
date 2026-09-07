@@ -87,3 +87,11 @@ restructuring underneath the retuned numbers throws the retune away.
   waves.
 - **Chapters 1 and 2, already shipped.** Retrofit both into the new Stage-plus-wave-curve
   schema rather than leaving them on the old flat format.
+- **Auto-advance through a fresh stage.** A first clear needs a chain mode, not 144
+  individual manual taps: an Auto toggle that automatically starts the next battle the
+  instant the current one resolves in a win, stopping only on defeat or a manual stop, the
+  same pattern Idle Heroes and AFK Arena use for exactly this genre. This is a UI loop on
+  top of the NEXT BATTLE call path the wave-structure work already built, not a new
+  battle-resolution system. Without this, the 144x playtime increase this doc already
+  accepted becomes active tap-time instead of idle clock-time, which was never the trade
+  being made.
