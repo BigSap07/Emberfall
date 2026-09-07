@@ -7,262 +7,628 @@ using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
-    /// <summary>Chapter map. Pick a stage, check the squad, go.</summary>
+    /// <summary>
+    /// The campaign, as the reviewed "squad diorama" mockup: a painted backdrop, a chapter chip
+    /// row, the banner standing in the middle of the frame, and one flat tray along the bottom
+    /// carrying the stage stepper between Setup Team and Enter Battle.
+    ///
+    /// WHAT THIS REPLACED, and why the screen got smaller rather than bigger: a vertically
+    /// scrolling list of 186px stage cards, one per stage, each repeating the stage's name,
+    /// subtitle, enemy pips, rewards and recommended power. That was a reasonable shape for 24
+    /// stages and a bad one for 144 - the list was already the tallest thing in the game and the
+    /// wave restructure multiplied what sits behind each row by 144. The stepper shows one stage
+    /// at a time because there is now far more to say about one stage than a row can hold.
+    ///
+    /// PRESENTATION ONLY. Launch and Sweep below are untouched: the sweep rule, the repeat cap and
+    /// everything the wave structure landed still resolve exactly as they did, and this screen
+    /// still never simulates anything itself.
+    /// </summary>
     public sealed class CampaignScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Campaign; } }
 
+        // campaign.png's authored size. Used for the aspect fit, NOT read back off the imported
+        // sprite: the importer has already scaled the texture per-axis, so feeding its rect back in
+        // would render that distortion instead of correcting it. Same reasoning as the Hub's map.
+        private const float SourceFileWidth = 960f;
+        private const float SourceFileHeight = 420f;
+
+        private const float TrayHeight = 168f;
+        private const float PortraitSize = 132f;
+        private const float PortraitGap = 28f;
+
         private Text _headerSubtitle;
-        private RectTransform _teamStrip;
-        private Text _teamPower;
-        private RectTransform _stageList;
-        private ScrollRect _scroll;
+        private RectTransform _chipRow;
+        private RectTransform _diorama;
+        private RectTransform _stepper;
+        private Text _stageCode;
+        private Text _stageName;
+        private Text _aspectName;
+        private Image _aspectDot;
+        private Text _squadPower;
+        private UIButton _enter;
+
+        /// <summary>Which chapter's stages the stepper is showing, and which of them is selected.
+        /// Both are view state and deliberately not persisted - the screen resolves them from
+        /// campaign progress every time it opens, so it always lands on the fight the player is
+        /// actually up to rather than wherever they last poked.</summary>
+        private int _chapterIndex;
+        private int _stageIndex;
+
+        // ------------------------------------------------------------------ build
 
         protected override void Build()
         {
+            BuildBackdrop();
             ScreenChrome.Header(Root, "CAMPAIGN", Router, out _headerSubtitle);
-            BuildTeamStrip();
-
-            // landscape: banner card sits to the left of the stage list rather than above it,
-            // both starting on the same line below the header
-            _stageList = UIBuilder.ScrollList("Stages", Root, out _scroll, 14f, new RectOffset(0, 0, 6, 48));
-            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding + TeamCardWidth + UITheme.Space24,
-                                 UITheme.TopBarHeight + 132f, UITheme.ScreenPadding, 24f);
+            BuildChipRow();
+            BuildStageLabel();
+            BuildSquadPower();
+            BuildDiorama();
+            BuildTray();
         }
 
-        private const float TeamCardWidth = 520f;
-
-        private void BuildTeamStrip()
+        /// <summary>
+        /// One static painting behind everything, loaded the way MainMenuScreen loads hub.png -
+        /// same Resources.Load, same Sprite.Create, same EnvelopeParent fitter off the authored
+        /// dimensions. Deliberately NOT keyed by environment id: this is one image for the whole
+        /// campaign, so it needs none of BattleAssets' per-environment lookup or its generated
+        /// fallback, and pointing the Hub's own path at a second filename is the entire change.
+        ///
+        /// A missing file leaves the screen on the flat theme backdrop rather than throwing, which
+        /// is the same degradation the Hub takes.
+        /// </summary>
+        private void BuildBackdrop()
         {
-            RectTransform card = UIBuilder.Node("Team", Root);
-            UIBuilder.Box(card, UITheme.ScreenPadding, -(UITheme.TopBarHeight + 132f), TeamCardWidth, 146f, new Vector2(0f, 1f));
+            Texture2D painting = Resources.Load<Texture2D>("Backgrounds/campaign");
+            if (painting == null) return;
 
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(20);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 20, 2);
+            Sprite sprite = Sprite.Create(painting, new Rect(0f, 0f, painting.width, painting.height),
+                                          new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect);
 
-            Button open = card.gameObject.AddComponent<Button>();
-            open.targetGraphic = background;
-            // This card says BANNER and TAP TO CHANGE on it, so it goes to the screen that can
-            // actually change one. It used to open the collection, which cannot.
-            open.onClick.AddListener(delegate
+            RectTransform frame = UIBuilder.Node("Backdrop", Root);
+            frame.anchorMin = new Vector2(0.5f, 0.5f);
+            frame.anchorMax = new Vector2(0.5f, 0.5f);
+            frame.pivot = new Vector2(0.5f, 0.5f);
+            frame.anchoredPosition = Vector2.zero;
+
+            Image art = UIBuilder.Img("Art", frame, sprite, Color.white);
+            art.raycastTarget = false;
+            UIBuilder.FillParent(art.rectTransform, 0f);
+
+            AspectRatioFitter fitter = frame.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            fitter.aspectRatio = SourceFileWidth / SourceFileHeight;
+
+            // A readability wash, not a style choice. The painting is a lit diorama and the text
+            // that sits on it - stage name, aspect, squad power - is small and light. Without this
+            // the top-left label competes with whatever the art happens to put behind it.
+            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, new Color(0f, 0f, 0f, 0.28f));
+            scrim.raycastTarget = false;
+            UIBuilder.FillParent(scrim.rectTransform, 0f);
+        }
+
+        /// <summary>
+        /// One chip per chapter. Count comes from chapter.Stages.Count, never from a constant -
+        /// there is no stages-per-chapter number written anywhere in this file, so a chapter of a
+        /// different length renders correctly without being told.
+        /// </summary>
+        private void BuildChipRow()
+        {
+            _chipRow = UIBuilder.Node("Chapters", Root);
+            UIBuilder.Box(_chipRow, 0f, -(ScreenChrome.HeaderTop + 104f), 1600f, 84f, new Vector2(0.5f, 1f));
+            UIBuilder.HStack(_chipRow, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+        }
+
+        private void BuildStageLabel()
+        {
+            RectTransform block = UIBuilder.Node("StageLabel", Root);
+            UIBuilder.Box(block, UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 210f), 620f, 120f, new Vector2(0f, 1f));
+
+            _stageCode = UIBuilder.Label("Code", block, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
+            UIBuilder.Box(_stageCode.rectTransform, 0f, 0f, 620f, 30f, new Vector2(0f, 1f));
+            UIBuilder.Shadowed(_stageCode, UITheme.InkPanel, 3f);
+
+            _stageName = UIBuilder.Label("Name", block, "", UITheme.FontHeading, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            UIBuilder.Box(_stageName.rectTransform, 0f, -32f, 620f, 46f, new Vector2(0f, 1f));
+            UIBuilder.Shadowed(_stageName, UITheme.InkPanel, 3f);
+
+            // Dot plus name, both driven by UITheme.AspectColor - the palette every other screen
+            // reads. No colour is defined in this file.
+            _aspectDot = UIBuilder.Img("Dot", block, TextureLab.Circle(64), UITheme.TextDim);
+            UIBuilder.Box(_aspectDot.rectTransform, 2f, -88f, 18f, 18f, new Vector2(0f, 1f));
+
+            _aspectName = UIBuilder.Label("Aspect", block, "", UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+            UIBuilder.Box(_aspectName.rectTransform, 30f, -86f, 560f, 26f, new Vector2(0f, 1f));
+            UIBuilder.Shadowed(_aspectName, UITheme.InkPanel, 2f);
+        }
+
+        private void BuildSquadPower()
+        {
+            RectTransform block = UIBuilder.Node("SquadPower", Root);
+            UIBuilder.Box(block, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 210f), 420f, 90f, new Vector2(1f, 1f));
+
+            Text caption = UIBuilder.Label("Caption", block, "YOUR SQUAD", UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperRight);
+            UIBuilder.Box(caption.rectTransform, 0f, 0f, 420f, 26f, new Vector2(1f, 1f));
+            UIBuilder.Shadowed(caption, UITheme.InkPanel, 2f);
+
+            _squadPower = UIBuilder.Label("Power", block, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperRight);
+            UIBuilder.Box(_squadPower.rectTransform, 0f, -28f, 420f, 46f, new Vector2(1f, 1f));
+            UIBuilder.Shadowed(_squadPower, UITheme.InkPanel, 3f);
+        }
+
+        private void BuildDiorama()
+        {
+            _diorama = UIBuilder.Node("Diorama", Root);
+            float width = PlayerProfile.TeamSize * PortraitSize + (PlayerProfile.TeamSize - 1) * PortraitGap;
+            UIBuilder.Box(_diorama, 0f, -40f, width, PortraitSize + 40f, new Vector2(0.5f, 0.5f));
+            UIBuilder.HStack(_diorama, PortraitGap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+        }
+
+        private void BuildTray()
+        {
+            RectTransform tray = UIBuilder.Node("Tray", Root);
+            UIBuilder.Box(tray, 0f, UITheme.ScreenPadding, 1780f, TrayHeight, new Vector2(0.5f, 0f));
+
+            Image bg = tray.gameObject.AddComponent<Image>();
+            bg.sprite = UISkin.Panel(24);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
+            UIBuilder.Frame("Edge", tray, UITheme.BorderSoft, 24, 2);
+
+            UIButton setup = UIBuilder.SecondaryButton("SetupTeam", tray, "SETUP TEAM", UITheme.FontBody);
+            UIBuilder.Box(setup.Root, 28f, 0f, 320f, 104f, new Vector2(0f, 0.5f));
+            setup.OnClick(delegate
             {
                 App.Audio.Tap();
                 Router.Show(ScreenId.Formation);
             });
 
-            Text label = UIBuilder.Label("Label", card, "BANNER", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 22f, -12f, 300f, 24f, new Vector2(0f, 1f));
+            _enter = UIBuilder.GoldButton("EnterBattle", tray, "ENTER BATTLE", UITheme.FontBody);
+            UIBuilder.Box(_enter.Root, -28f, 0f, 340f, 104f, new Vector2(1f, 0.5f));
+            _enter.OnClick(delegate { EnterBattle(); });
 
-            _teamPower = UIBuilder.Label("Power", card, "", UITheme.FontBody, UITheme.Gold, TextAnchor.UpperRight);
-            UIBuilder.Box(_teamPower.rectTransform, -22f, -14f, 360f, 34f, new Vector2(1f, 1f));
-
-            Text hint = UIBuilder.Label("Hint", card, "TAP TO CHANGE", UITheme.FontTiny, UITheme.TextDim, TextAnchor.LowerRight);
-            UIBuilder.Box(hint.rectTransform, -22f, 12f, 300f, 24f, new Vector2(1f, 0f));
-
-            _teamStrip = UIBuilder.Node("Portraits", card);
-            UIBuilder.Box(_teamStrip, 22f, 16f, 460f, 92f, new Vector2(0f, 0f));
-            UIBuilder.HStack(_teamStrip, 12f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleLeft);
+            _stepper = UIBuilder.Node("Stepper", tray);
+            UIBuilder.Box(_stepper, 0f, 0f, 1000f, 104f, new Vector2(0.5f, 0.5f));
         }
+
+        // ------------------------------------------------------------------ refresh
 
         public override void OnShow()
         {
             App.RefreshHud();
-            RefreshTeam();
-            RebuildStages();
+            ResolveSelection();
+            RefreshChips();
+            RefreshDiorama();
+            RefreshStepper();
+            RefreshStageLabel();
         }
 
-        private void RefreshTeam()
+        /// <summary>
+        /// Opens on the stage the player is actually up to: the first uncleared stage, or the last
+        /// one when the campaign is finished. Derived rather than remembered, so the screen cannot
+        /// open on a stale selection after a clear.
+        /// </summary>
+        private void ResolveSelection()
         {
-            for (int i = _teamStrip.childCount - 1; i >= 0; i--) Destroy(_teamStrip.GetChild(i).gameObject);
+            List<ChapterDef> chapters = App.Session.Content.Chapters;
+            if (chapters.Count == 0) return;
 
-            // Five portraits in the 460f strip: 5 * 80 + 4 * 12 spacing = 448. They were 84f at three.
-            const float portraitSize = 80f;
-            List<HeroInstance> team = App.Session.Profile.TeamHeroes();
-            for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
+            _chapterIndex = 0;
+            _stageIndex = 0;
+            for (int c = 0; c < chapters.Count; c++)
             {
-                if (slot < team.Count)
+                for (int s = 0; s < chapters[c].Stages.Count; s++)
                 {
-                    HeroInstance hero = team[slot];
-                    RectTransform portrait = Widgets.Portrait("P" + slot, _teamStrip, hero.Def, hero.Def.Stars, portraitSize, true);
-                    UIBuilder.Sized(portrait, portraitSize, portraitSize);
-                    if (slot == 0) AddFrontSlotLabel(portrait, portraitSize);
-                }
-                else
-                {
-                    RectTransform empty = UIBuilder.Node("Empty" + slot, _teamStrip);
-                    UIBuilder.Sized(empty, portraitSize, portraitSize);
-                    Image image = empty.gameObject.AddComponent<Image>();
-                    image.sprite = TextureLab.Ring(96, 5);
-                    image.color = UITheme.BorderSoft;
-                    if (slot == 0) AddFrontSlotLabel(empty, portraitSize);
+                    if (App.Session.Profile.HasClearedStage(chapters[c].Stages[s].Id)) continue;
+                    _chapterIndex = c;
+                    _stageIndex = s;
+                    return;
                 }
             }
-
-            _teamPower.text = "POWER " + App.Session.Profile.TeamPower();
+            _chapterIndex = chapters.Count - 1;
+            _stageIndex = Mathf.Max(0, chapters[_chapterIndex].Stages.Count - 1);
         }
 
-        /// <summary>FrontEnemy targeting picks the lowest living slot, so slot 1 is the one that gets hit - name it.
-        /// Width tracks the portrait rather than the old fixed 84f, so the tag stays centred at five slots.</summary>
-        private static void AddFrontSlotLabel(RectTransform portrait, float width)
+        private ChapterDef ActiveChapter
         {
-            Text tag = UIBuilder.Label("FrontTag", portrait, "FRONT", UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.LowerCenter);
-            UIBuilder.Box(tag.rectTransform, 0f, -4f, width, 20f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(tag, UITheme.InkArt, 1.4f);
+            get
+            {
+                List<ChapterDef> chapters = App.Session.Content.Chapters;
+                if (chapters.Count == 0) return null;
+                return chapters[Mathf.Clamp(_chapterIndex, 0, chapters.Count - 1)];
+            }
         }
 
-        private void RebuildStages()
+        private StageDef SelectedStage
         {
-            for (int i = _stageList.childCount - 1; i >= 0; i--) Destroy(_stageList.GetChild(i).gameObject);
+            get
+            {
+                ChapterDef ch = ActiveChapter;
+                if (ch == null || ch.Stages.Count == 0) return null;
+                return ch.Stages[Mathf.Clamp(_stageIndex, 0, ch.Stages.Count - 1)];
+            }
+        }
+
+        private void RefreshChips()
+        {
+            for (int i = _chipRow.childCount - 1; i >= 0; i--) Destroy(_chipRow.GetChild(i).gameObject);
 
             List<ChapterDef> chapters = App.Session.Content.Chapters;
             for (int c = 0; c < chapters.Count; c++)
             {
                 ChapterDef chapter = chapters[c];
-                if (c == 0) _headerSubtitle.text = chapter.Name.ToUpperInvariant() + "  -  " + chapter.Subtitle;
+                bool active = c == _chapterIndex;
 
-                BuildChapterHeading(chapter);
-                for (int s = 0; s < chapter.Stages.Count; s++) BuildStageRow(chapter.Stages[s]);
+                RectTransform chip = UIBuilder.Node("Chip" + chapter.Number, _chipRow);
+                UIBuilder.Sized(chip, 300f, 84f);
+
+                // The flat panel style the rest of the project already uses, dimmed when inactive.
+                // No new chrome: same UISkin surface, same frame, only the alpha and the tint move.
+                Image bg = chip.gameObject.AddComponent<Image>();
+                bg.sprite = UISkin.Panel(16);
+                bg.type = Image.Type.Sliced;
+                bg.color = active ? UITheme.WithAlpha(UITheme.PanelRaised, 0.96f)
+                                  : UITheme.WithAlpha(UITheme.PanelSunken, 0.72f);
+                UIBuilder.Frame("Edge", chip, active ? UITheme.Border : UITheme.WithAlpha(UITheme.BorderSoft, 0.6f), 16, 2);
+
+                Text name = UIBuilder.Label("Name", chip, chapter.Name.ToUpperInvariant(), UITheme.FontSmall,
+                                            active ? UITheme.TextPrimary : UITheme.TextDim, TextAnchor.UpperCenter);
+                UIBuilder.Box(name.rectTransform, 0f, -14f, 280f, 30f, new Vector2(0.5f, 1f));
+
+                int cleared = 0;
+                for (int s = 0; s < chapter.Stages.Count; s++)
+                    if (App.Session.Profile.HasClearedStage(chapter.Stages[s].Id)) cleared++;
+
+                Text count = UIBuilder.Label("Count", chip, cleared + " / " + chapter.Stages.Count + " CLEARED",
+                                             UITheme.FontTiny, active ? UITheme.TextMuted : UITheme.TextDim,
+                                             TextAnchor.UpperCenter);
+                UIBuilder.Box(count.rectTransform, 0f, -46f, 280f, 24f, new Vector2(0.5f, 1f));
+
+                if (active)
+                {
+                    Image underline = UIBuilder.Img("Underline", chip, TextureLab.RoundedRect(4), UITheme.Gold);
+                    underline.type = Image.Type.Sliced;
+                    UIBuilder.Box(underline.rectTransform, 0f, 8f, 220f, 5f, new Vector2(0.5f, 0f));
+                }
+
+                Button button = chip.gameObject.AddComponent<Button>();
+                button.targetGraphic = bg;
+                chip.gameObject.AddComponent<ButtonPress>();
+                int captured = c;
+                button.onClick.AddListener(delegate { SelectChapter(captured); });
             }
         }
 
-        private void BuildChapterHeading(ChapterDef chapter)
+        private void SelectChapter(int index)
         {
-            RectTransform row = UIBuilder.Node("Chapter" + chapter.Number, _stageList);
-            UIBuilder.Sized(row, 0f, 76f);
-
-            Text title = UIBuilder.Label("Title", row, "CHAPTER " + chapter.Number + "  -  " + chapter.Name.ToUpperInvariant(),
-                                         UITheme.FontSmall, UITheme.Ember, TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(title.rectTransform, 10f, 0f, 0f, 0f);
-
-            int cleared = 0;
-            for (int i = 0; i < chapter.Stages.Count; i++)
-                if (App.Session.Profile.HasClearedStage(chapter.Stages[i].Id)) cleared++;
-
-            Text progress = UIBuilder.Label("Progress", row, cleared + " / " + chapter.Stages.Count,
-                                            UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleRight);
-            UIBuilder.FillParent(progress.rectTransform, 0f, 0f, 10f, 0f);
+            if (index == _chapterIndex) return;
+            App.Audio.Tap();
+            _chapterIndex = index;
+            _stageIndex = 0;
+            RefreshChips();
+            RefreshStepper();
+            RefreshStageLabel();
         }
 
-        private void BuildStageRow(StageDef stage)
+        /// <summary>
+        /// The banner as it will walk into the fight: one circle per team slot, always
+        /// PlayerProfile.TeamSize of them so the row's shape does not change with how many heroes
+        /// are deployed. A filled slot is the same Widgets.Portrait every other screen draws, so
+        /// framed badges and sigil fallbacks both arrive here already correct and this screen asks
+        /// for no art of its own.
+        /// </summary>
+        private void RefreshDiorama()
         {
+            for (int i = _diorama.childCount - 1; i >= 0; i--) Destroy(_diorama.GetChild(i).gameObject);
+
+            List<HeroInstance> team = App.Session.Profile.TeamHeroes();
+            for (int slot = 0; slot < PlayerProfile.TeamSize; slot++)
+            {
+                RectTransform cell = UIBuilder.Node("Slot" + slot, _diorama);
+                UIBuilder.Sized(cell, PortraitSize, PortraitSize);
+
+                if (slot < team.Count)
+                {
+                    // Drop shadow first so it sits under everything, offset down the way a lit
+                    // diorama would throw it.
+                    Image shadow = UIBuilder.Img("Shadow", cell, TextureLab.Glow(128, 1.6f), new Color(0f, 0f, 0f, 0.55f));
+                    shadow.raycastTarget = false;
+                    UIBuilder.Box(shadow.rectTransform, 0f, -10f, PortraitSize + 18f, PortraitSize + 18f, new Vector2(0.5f, 0.5f));
+
+                    HeroInstance hero = team[slot];
+                    RectTransform portrait = Widgets.Portrait("P" + slot, cell, hero.Def, hero.Def.Stars, PortraitSize, false);
+                    UIBuilder.Box(portrait, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
+
+                    Image ring = UIBuilder.Img("GoldRing", cell, TextureLab.Ring(160, 6), UITheme.Gold);
+                    ring.raycastTarget = false;
+                    UIBuilder.Box(ring.rectTransform, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
+                }
+                else
+                {
+                    Image dashed = UIBuilder.Img("Empty", cell, DashedRing(160, 6, 14), UITheme.WithAlpha(UITheme.BorderSoft, 0.85f));
+                    dashed.raycastTarget = false;
+                    UIBuilder.Box(dashed.rectTransform, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
+                }
+            }
+
+            _squadPower.text = App.Session.Profile.TeamPower().ToString();
+        }
+
+        private void RefreshStageLabel()
+        {
+            StageDef stage = SelectedStage;
+            ChapterDef chapter = ActiveChapter;
+            // The chapter NAME is on the chip directly below this line, so the subtitle carries only
+            // the flavour text. It used to lead with the name and read as a stutter on screen.
+            if (chapter != null) _headerSubtitle.text = chapter.Subtitle;
+
+            if (stage == null)
+            {
+                _stageCode.text = "";
+                _stageName.text = "";
+                _aspectName.text = "";
+                return;
+            }
+
+            _stageCode.text = "STAGE " + stage.DisplayCode;
+            _stageName.text = stage.Name.ToUpperInvariant() + (stage.IsBoss ? "   [BOSS]" : "");
+
+            // The aspect the stage's line is built from, read off its own roster rather than stored
+            // anywhere: the most common aspect among its enemies, which is what the player will
+            // actually be fighting into.
+            Aspect aspect;
+            if (TryDominantAspect(stage, out aspect))
+            {
+                _aspectDot.color = UITheme.AspectColor(aspect);
+                _aspectName.text = aspect.ToString().ToUpperInvariant() + " ENEMIES";
+            }
+            else
+            {
+                _aspectDot.color = UITheme.TextDim;
+                _aspectName.text = "";
+            }
+
             bool unlocked = App.Session.IsStageUnlocked(stage);
             bool cleared = App.Session.Profile.HasClearedStage(stage.Id);
-            bool isNext = unlocked && !cleared;
+            _enter.SetText(!unlocked ? "LOCKED" : (cleared ? "SWEEP STAGE" : "ENTER BATTLE"));
+            _enter.Interactable = unlocked;
+        }
 
-            RectTransform row = UIBuilder.Node(stage.Id, _stageList);
-            UIBuilder.Sized(row, 0f, 186f);
+        private bool TryDominantAspect(StageDef stage, out Aspect aspect)
+        {
+            aspect = Aspect.Ember;
+            if (stage == null || stage.Enemies.Count == 0) return false;
 
-            Image background = row.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(20);
-            background.type = Image.Type.Sliced;
-            background.color = unlocked ? UITheme.Panel : UITheme.WithAlpha(UITheme.PanelSunken, 0.75f);
-
-            Color edge = isNext ? UITheme.Ember : (cleared ? UITheme.WithAlpha(UITheme.Success, 0.5f) : UITheme.BorderSoft);
-            UIBuilder.Frame("Edge", row, edge, 20, isNext ? 3 : 2);
-
-            if (isNext)
-            {
-                Image glow = UIBuilder.Img("Glow", row, TextureLab.Glow(128, 2f), UITheme.WithAlpha(UITheme.Ember, 0.13f));
-                UIBuilder.FillParent(glow.rectTransform, 0f);
-            }
-
-            // stage code badge
-            RectTransform badge = UIBuilder.Node("Badge", row);
-            UIBuilder.Box(badge, 22f, 0f, 96f, 96f, new Vector2(0f, 0.5f));
-            Image badgeFill = badge.gameObject.AddComponent<Image>();
-            badgeFill.sprite = TextureLab.RoundedRect(16);
-            badgeFill.type = Image.Type.Sliced;
-            badgeFill.color = unlocked ? UITheme.PanelSunken : UITheme.WithAlpha(UITheme.PanelSunken, 0.6f);
-            badgeFill.raycastTarget = false;
-            UIBuilder.Frame("Edge", badge, UITheme.WithAlpha(edge, 0.8f), 16, 2);
-
-            Text code = UIBuilder.Label("Code", badge, stage.DisplayCode, UITheme.FontHeading,
-                                        unlocked ? UITheme.TextPrimary : UITheme.TextDim, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(code.rectTransform, 0f);
-
-            // name + subtitle
-            Text name = UIBuilder.Label("Name", row, stage.Name + (stage.IsBoss ? "   [BOSS]" : ""), UITheme.FontBody,
-                                        unlocked ? UITheme.TextPrimary : UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(name.rectTransform, 138f, -22f, 620f, 34f, new Vector2(0f, 1f));
-
-            Text subtitle = UIBuilder.Label("Sub", row, stage.Subtitle, UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(subtitle.rectTransform, 138f, -58f, 640f, 26f, new Vector2(0f, 1f));
-
-            // enemy preview - wide enough for five pips now stages spawn up to five enemies
-            RectTransform pips = UIBuilder.Node("Enemies", row);
-            UIBuilder.Box(pips, 138f, 20f, 380f, 62f, new Vector2(0f, 0f));
-            UIBuilder.HStack(pips, 10f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleLeft);
+            Dictionary<Aspect, int> counts = new Dictionary<Aspect, int>();
+            int best = 0;
+            bool found = false;
             for (int i = 0; i < stage.Enemies.Count; i++)
             {
                 EnemyDef def = App.Session.Content.GetEnemy(stage.Enemies[i].EnemyId);
                 if (def == null) continue;
-                Widgets.EnemyPip("E" + i, pips, def, stage.Enemies[i].Level, 58f);
+                int n;
+                counts.TryGetValue(def.Aspect, out n);
+                n++;
+                counts[def.Aspect] = n;
+                if (n > best) { best = n; aspect = def.Aspect; found = true; }
             }
+            return found;
+        }
 
-            // rewards
-            Text rewards = UIBuilder.Label("Rewards", row, stage.RewardGold + "G   " + stage.RewardShards + "S",
-                                           UITheme.FontTiny, UITheme.Gold, TextAnchor.LowerRight);
-            UIBuilder.Box(rewards.rectTransform, -24f, 24f, 300f, 28f, new Vector2(1f, 0f));
+        /// <summary>
+        /// Chevron, numbered circles, chevron. The current stage is gold and larger; a stage the
+        /// player has not unlocked shows a padlock instead of its number, so "locked" is a shape
+        /// rather than a shade - a dimmed number reads as a rendering fault, a padlock does not.
+        /// </summary>
+        private void RefreshStepper()
+        {
+            for (int i = _stepper.childCount - 1; i >= 0; i--) Destroy(_stepper.GetChild(i).gameObject);
 
-            Text power = UIBuilder.Label("Power", row, "REC. POWER " + stage.RecommendedPower,
-                                         UITheme.FontTiny, UITheme.TextDim, TextAnchor.LowerRight);
-            UIBuilder.Box(power.rectTransform, -24f, 54f, 340f, 26f, new Vector2(1f, 0f));
+            ChapterDef chapter = ActiveChapter;
+            if (chapter == null) return;
+            int count = chapter.Stages.Count;
 
-            // state marker / action
-            if (!unlocked)
+            UIButton prev = UIBuilder.IconButton("Prev", _stepper, "<", 64f,
+                                                 UITheme.WithAlpha(UITheme.PanelRaised, 0.95f), UITheme.TextPrimary);
+            UIBuilder.Box(prev.Root, 0f, 0f, 64f, 64f, new Vector2(0f, 0.5f));
+            prev.Interactable = _stageIndex > 0;
+            prev.OnClick(delegate { StepStage(-1); });
+
+            UIButton next = UIBuilder.IconButton("Next", _stepper, ">", 64f,
+                                                 UITheme.WithAlpha(UITheme.PanelRaised, 0.95f), UITheme.TextPrimary);
+            UIBuilder.Box(next.Root, 0f, 0f, 64f, 64f, new Vector2(1f, 0.5f));
+            next.Interactable = _stageIndex < count - 1;
+            next.OnClick(delegate { StepStage(1); });
+
+            RectTransform strip = UIBuilder.Node("Pips", _stepper);
+            UIBuilder.Box(strip, 0f, 0f, 840f, 76f, new Vector2(0.5f, 0.5f));
+            UIBuilder.HStack(strip, 10f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+
+            for (int s = 0; s < count; s++)
             {
-                // THEME: deliberately NOT migrated to a UITheme.Scrim tier, because it is not
-                // clear this value is right and the migration's rule was to move numbers, not
-                // change them. Every other locked or disabled state in the project scrims at 0.72
-                // (see UITheme.ScrimModal, used by both locked hero portraits); this is 0.22, a
-                // third of that. Either the hatch texture is carrying the "locked" read on its own
-                // and the low alpha is correct, or this is drift and locked stages sit too close
-                // to available ones. That is a call about how locked should feel, so it wants a
-                // human rather than a find-and-replace. See DESIGN-UI-THEME.md.
-                Image hatch = UIBuilder.Img("Locked", row, TextureLab.Hatch(32, 10), new Color(0f, 0f, 0f, 0.22f));
-                UIBuilder.FillParent(hatch.rectTransform, 2f);
-                Text lockLabel = UIBuilder.Label("LockText", row, "LOCKED", UITheme.FontSmall, UITheme.TextDim, TextAnchor.UpperRight);
-                UIBuilder.Box(lockLabel.rectTransform, -24f, -22f, 220f, 30f, new Vector2(1f, 1f));
-                return;
-            }
+                StageDef stage = chapter.Stages[s];
+                bool current = s == _stageIndex;
+                bool unlocked = App.Session.IsStageUnlocked(stage);
+                bool cleared = App.Session.Profile.HasClearedStage(stage.Id);
+                float size = current ? 68f : 52f;
 
-            if (cleared)
-            {
-                // A cleared stage carries one more state than CLEARED: the daily repeat cap
-                // (DESIGN-REPLAY-ECONOMY). It reuses the chip-plus-reward-line language the card
-                // already speaks for LOCKED / CLEARED / NEXT rather than adding a new one, and it
-                // is the only place a player can find out the farm run they are about to start
-                // will pay nothing. The fight itself is still free - the card stays tappable.
-                int repeatsLeft = App.Session.RepeatClearsRemaining(stage, TimeUtil.NowUnix());
-                if (repeatsLeft > 0)
+                RectTransform pip = UIBuilder.Node("Pip" + s, strip);
+                UIBuilder.Sized(pip, size, size);
+
+                // The disc is a fixed SQUARE child rather than filling the cell, because HStack
+                // sets childForceExpandHeight and stretches every cell to the strip's full height.
+                // Filling that gave 52x76 ellipses instead of circles - visible only once the pips
+                // were drawn and zoomed, not from reading the layout call.
+                RectTransform art = UIBuilder.Node("Art", pip);
+                UIBuilder.Box(art, 0f, 0f, size, size, new Vector2(0.5f, 0.5f));
+
+                Image disc = UIBuilder.Img("Disc", art, TextureLab.Circle(96),
+                                           current ? UITheme.Gold
+                                                   : (cleared ? UITheme.WithAlpha(UITheme.Success, 0.28f)
+                                                              : UITheme.WithAlpha(UITheme.PanelSunken, 0.9f)));
+                UIBuilder.FillParent(disc.rectTransform, 0f);
+
+                Image edge = UIBuilder.Img("Edge", art, TextureLab.Ring(96, 4),
+                                           current ? UITheme.GoldDeep : UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
+                edge.raycastTarget = false;
+                UIBuilder.FillParent(edge.rectTransform, 0f);
+
+                if (unlocked)
                 {
-                    RectTransform tick = UIBuilder.Chip("Cleared", row, "CLEARED", UITheme.Success, UITheme.FontTiny);
-                    UIBuilder.Box(tick, -24f, -20f, 180f, 34f, new Vector2(1f, 1f));
-                    rewards.text += "   " + repeatsLeft + " LEFT";
+                    Text number = UIBuilder.Label("N", art, (s + 1).ToString(),
+                                                  current ? UITheme.FontBody : UITheme.FontSmall,
+                                                  current ? UITheme.TextOnAccent : UITheme.TextPrimary,
+                                                  TextAnchor.MiddleCenter);
+                    UIBuilder.FillParent(number.rectTransform, 0f);
                 }
                 else
                 {
-                    RectTransform capped = UIBuilder.Chip("Capped", row, "NO REWARD", UITheme.Warning, UITheme.FontTiny);
-                    UIBuilder.Box(capped, -24f, -20f, 200f, 34f, new Vector2(1f, 1f));
-                    rewards.text = "NO REWARD TODAY";
-                    rewards.color = UITheme.TextDim;
+                    // 0.62 of the pip, not 0.5: at 52px a half-size padlock is 26px, which holds its
+                    // silhouette but reads as a smudge next to a full-size numeral. Locked has to be
+                    // a shape you recognise, not just a cell with something small in it.
+                    Image padlock = UIBuilder.Img("Lock", art, Padlock(64), UITheme.TextMuted);
+                    padlock.raycastTarget = false;
+                    UIBuilder.Box(padlock.rectTransform, 0f, 0f, size * 0.62f, size * 0.62f, new Vector2(0.5f, 0.5f));
+                }
+
+                Button button = pip.gameObject.AddComponent<Button>();
+                button.targetGraphic = disc;
+                int captured = s;
+                button.onClick.AddListener(delegate { SelectStage(captured); });
+            }
+        }
+
+        private void StepStage(int delta)
+        {
+            ChapterDef chapter = ActiveChapter;
+            if (chapter == null) return;
+            SelectStage(Mathf.Clamp(_stageIndex + delta, 0, chapter.Stages.Count - 1));
+        }
+
+        private void SelectStage(int index)
+        {
+            if (index == _stageIndex) return;
+            App.Audio.Tap();
+            _stageIndex = index;
+            RefreshStepper();
+            RefreshStageLabel();
+        }
+
+        // ------------------------------------------------------------------ procedural marks
+
+        private static readonly Dictionary<string, Sprite> Marks = new Dictionary<string, Sprite>();
+
+        /// <summary>
+        /// An open slot: a ring broken into dashes. Drawn here rather than added to TextureLab
+        /// because it is this screen's only caller; promote it if a second screen ever wants one.
+        /// </summary>
+        private static Sprite DashedRing(int size, int thickness, int dashes)
+        {
+            string key = "dash_" + size + "_" + thickness + "_" + dashes;
+            Sprite cached;
+            if (Marks.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+
+            Color32[] px = new Color32[size * size];
+            float r = size * 0.5f;
+            float segment = Mathf.PI * 2f / Mathf.Max(1, dashes);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - r;
+                    float dy = y + 0.5f - r;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float band = Mathf.Clamp01(r - d) - Mathf.Clamp01(r - thickness - d);
+                    if (band > 0f)
+                    {
+                        float a = Mathf.Atan2(dy, dx) + Mathf.PI;
+                        float phase = (a % segment) / segment;
+                        if (phase > 0.55f) band = 0f;   // the gap between dashes
+                    }
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(band) * 255f));
                 }
             }
-            else
-            {
-                RectTransform marker = UIBuilder.Chip("Next", row, "NEXT", UITheme.Ember, UITheme.FontTiny);
-                UIBuilder.Box(marker, -24f, -20f, 140f, 34f, new Vector2(1f, 1f));
-            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Marks[key] = sprite;
+            return sprite;
+        }
 
-            Button button = row.gameObject.AddComponent<Button>();
-            button.targetGraphic = background;
-            row.gameObject.AddComponent<ButtonPress>();
-            StageDef captured = stage;
-            button.onClick.AddListener(delegate { Launch(captured); });
+        /// <summary>
+        /// A padlock: a solid body with a keyhole, under a shackle arch. Shape rather than shade is
+        /// the point - see RefreshStepper.
+        /// </summary>
+        private static Sprite Padlock(int size)
+        {
+            string key = "lock_" + size;
+            Sprite cached;
+            if (Marks.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+
+            Color32[] px = new Color32[size * size];
+            float s = size;
+            float bodyLeft = s * 0.22f, bodyRight = s * 0.78f;
+            float bodyTop = s * 0.52f, bodyBottom = s * 0.94f;
+            float shackleCx = s * 0.5f, shackleCy = s * 0.46f;
+            float shackleOuter = s * 0.22f, shackleInner = s * 0.13f;
+            float keyCx = s * 0.5f, keyCy = s * 0.70f, keyR = s * 0.06f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    // Texture y runs bottom-up; flip so the shackle is drawn on top.
+                    float fx = x + 0.5f;
+                    float fy = size - (y + 0.5f);
+                    float a = 0f;
+
+                    if (fx >= bodyLeft && fx <= bodyRight && fy >= bodyTop && fy <= bodyBottom) a = 1f;
+
+                    if (fy < shackleCy)
+                    {
+                        float dx = fx - shackleCx;
+                        float dy = fy - shackleCy;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy);
+                        if (d <= shackleOuter && d >= shackleInner) a = 1f;
+                    }
+
+                    float kx = fx - keyCx;
+                    float ky = fy - keyCy;
+                    if (Mathf.Sqrt(kx * kx + ky * ky) <= keyR) a = 0f;
+                    if (fx >= keyCx - keyR * 0.5f && fx <= keyCx + keyR * 0.5f
+                        && fy >= keyCy && fy <= keyCy + keyR * 2.2f) a = 0f;
+
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Marks[key] = sprite;
+            return sprite;
+        }
+
+        // ------------------------------------------------------------------ actions
+
+        private void EnterBattle()
+        {
+            StageDef stage = SelectedStage;
+            if (stage == null) return;
+            if (!App.Session.IsStageUnlocked(stage))
+            {
+                App.Notify("Clear the stage before it to unlock this one.");
+                return;
+            }
+            Launch(stage);
         }
 
         private void Launch(StageDef stage)
@@ -322,7 +688,7 @@ namespace Emberfall.UI.Screens
                 ? "Swept " + stage.Name + ". Daily repeat cap reached, no spoils."
                 : "Swept " + stage.Name + ".  +" + rewards.Gold + "g  +" + rewards.Shards + " shards");
             App.RefreshHud();
-            RebuildStages();
+            OnShow();
         }
     }
 }
