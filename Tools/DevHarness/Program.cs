@@ -8155,15 +8155,115 @@ namespace Emberfall.DevHarness
         /// cannot level anything down and the row is marked FLOOR. Those rows measure the floor,
         /// not the target, and the fix is the stage's enemy levels, not this check.
         /// </summary>
+        // ============================================================ curve sampling helpers
+        //
+        // Added 2026-09-07 with the instrument fix. Before this, every balance instrument called
+        // BuildBattleRequest(stage, seed) on the raw StageDef, whose Enemies list is by
+        // construction the wave 1 / battle 1 roster - so all of them reported the FLOOR battle of
+        // 144 while appearing to report "the stage". Routing through CampaignWaveGenerator is the
+        // whole fix; everything below is about what to sample now that any point is reachable.
+
+        /// <summary>
+        /// Win rate at one point on a stage's curve. A stage with no curve returns its single
+        /// fight, because BuildBattle hands back an unchanged copy in that case - so Recital
+        /// floors, Proving matches and prologue steps all still work through this.
+        /// </summary>
+        private static float CurveRate(GameSession session, StageDef stage, int wave, int battle,
+                                       int samples, int seedBase)
+        {
+            StageDef fought = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
+            int wins = 0;
+            for (int i = 0; i < samples; i++)
+                if (CombatSimulation.Run(session.BuildBattleRequest(fought, seedBase + i * 31)).Victory) wins++;
+            return wins / (float)samples;
+        }
+
+        private static float CurveRateAtOrdinal(GameSession session, StageDef stage, int ordinal,
+                                                int samples, int seedBase)
+        {
+            int battles = Math.Max(1, stage.BattleCount);
+            int wave = (ordinal - 1) / battles + 1;
+            int battle = (ordinal - 1) % battles + 1;
+            return CurveRate(session, stage, wave, battle, samples, seedBase);
+        }
+
+        /// <summary>
+        /// The earliest battle in the stage whose win rate is zero, or 0 when the line can win
+        /// somewhere at every point.
+        ///
+        /// WHY THIS IS THE NUMBER THAT MATTERS. Defeat retries the single battle that was lost, so
+        /// a 40% battle is not "hard" - it is roughly two and a half attempts. A 0% battle is a
+        /// hard stop, retried forever, and the stage can never be completed past it. Floor and
+        /// ceiling readings both miss this: 1-11 reads 37% at its floor and blocks 97 battles later.
+        ///
+        /// BINARY SEARCH IS VALID HERE because the predicate is monotone: level rises monotonically
+        /// along the curve (CampaignWaveGenerator interpolates floor->ceiling and the CAMPAIGN
+        /// STRUCTURE section already asserts ceiling > floor on every stage), and a higher-level
+        /// version of the same roster cannot be easier. Roughly log2(144) = 8 probes rather than 144.
+        ///
+        /// PROBES USE A SMALLER SAMPLE THAN THE REPORTED COLUMNS, deliberately. Each probe answers a
+        /// yes/no question - "did the line win even once" - and one win in ProbeSamples settles it
+        /// immediately. The battle the search lands on is then re-measured at full ReportSamples
+        /// before being reported, so the number that reaches the table carries the same rigor as
+        /// the floor and ceiling columns; only the throwaway midpoints are cheap.
+        /// </summary>
+        private static int FirstBlockingBattle(GameSession session, StageDef stage, int seedBase,
+                                               float measuredCeilRate)
+        {
+            int total = stage.TotalBattles;
+            if (total <= 1) return 0;
+
+            // THE CEILING GATE USES THE ALREADY-MEASURED 200-SAMPLE RATE, not a fresh cheap probe.
+            //
+            // Probing it at ProbeSamples was the first version and it made the table contradict
+            // itself: a ceiling whose true rate is around half a percent usually wins at least once
+            // in 40 draws, so the finder reported "none" on five stages whose CEIL column, measured
+            // at 200, read 0%. Feeding the reported number in makes the two columns agree by
+            // construction rather than by luck - if CEIL is 0%, something blocks, and the search
+            // runs to find where.
+            if (measuredCeilRate > 0f) return 0;
+
+            // If even the first battle is unwinnable, the stage blocks at its own opening.
+            if (CurveRateAtOrdinal(session, stage, 1, ProbeSamples, seedBase + 7919) == 0f) return 1;
+
+            int lo = 1;      // known winnable
+            int hi = total;  // known blocked
+            while (lo + 1 < hi)
+            {
+                int mid = lo + (hi - lo) / 2;
+                if (CurveRateAtOrdinal(session, stage, mid, ProbeSamples, seedBase + mid * 131) > 0f) lo = mid;
+                else hi = mid;
+            }
+            return hi;
+        }
+
+        /// <summary>Samples behind a number that gets printed. The audit that motivated this fix used
+        /// 200 and found 24 too coarse to tell 0% from noise - a 24-sample read called one stage's
+        /// midpoint easier than its floor, which 200 samples showed was sampling noise.</summary>
+        private const int ReportSamples = 200;
+
+        /// <summary>Samples behind a throwaway binary-search probe. Lower on purpose - see
+        /// FirstBlockingBattle.</summary>
+        private const int ProbeSamples = 40;
+
         private static void CheckPinnedFiveBodyCurve(ContentDatabase db)
         {
             Line("PINNED FIVE-BODY CURVE - UNDER-GEARED FLOOR (bare power, no relics, no armor)");
             Line("  Not the standard. See GEARED CURVE below for the column content is tuned against;");
             Line("  this one is kept because it is continuous with task 13's own 24-stage table.");
-            Line("  stage  name                       bodies  teamPwr  recPwr  winRate");
+            Line("");
+            Line("  A stage is a 144-battle curve, so one win rate cannot describe it. FLOOR is wave 1");
+            Line("  battle 1 - the reading this table gave on its own until 2026-09-07, and the number");
+            Line("  task 13 was tuned against. CEIL is wave 12 battle 12, the stage's real worst case.");
+            Line("  BLOCK is the first battle with NO win in " + ReportSamples + " samples. Read it as 'under 1.5%");
+            Line("  at 95% confidence', not as a proven zero - but because defeat retries the battle that");
+            Line("  was lost, even 1% means ~100 attempts on one battle, so a BLOCK is where the stage");
+            Line("  stops being completable in practice rather than in principle.");
+            Line("  FLOOR/CEIL at " + ReportSamples + " samples, BLOCK found by binary search then re-measured.");
+            Line("  stage  name                       bodies  teamPwr  recPwr   FLOOR    CEIL   BLOCK");
 
-            const int Samples = 24;
             int floorRows = 0;
+            int blockedStages = 0;
             float firstRate = -1f;
             bool anyDifferent = false;
 
@@ -8259,13 +8359,24 @@ namespace Emberfall.DevHarness
                 bool atFloor = stage.RecommendedPower <= floorPower;
                 if (atFloor) floorRows++;
 
-                int wins = 0;
-                for (int i = 0; i < Samples; i++)
-                {
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + s * 97 + i));
-                    if (r.Victory) wins++;
-                }
-                float rate = wins / (float)Samples;
+                // THE FLOOR READING IS STILL row.Pinned5Rate, on purpose. Every downstream check
+                // and the whole of task 13's 24-stage table are calibrated against wave 1 battle 1,
+                // so replacing that field would silently invalidate them. The ceiling and the
+                // blocking battle are reported BESIDE it rather than instead of it - the same
+                // choice CheckArmoredCurveDelta made when it added the geared column.
+                float rate = CurveRate(session, stage, 1, 1, ReportSamples, 5000000 + s * 97);
+                float ceilRate = CurveRate(session, stage,
+                                           Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount),
+                                           ReportSamples, 6000000 + s * 97);
+                int block = FirstBlockingBattle(session, stage, 6500000 + s * 97, ceilRate);
+
+                // Re-measure the battle the search landed on at full rigor, so the number printed
+                // was not decided by a 40-sample probe. If it turns out winnable at 200, walk
+                // forward rather than giving up: the ceiling is known blocked, so a block exists
+                // somewhere at or after this point and reporting "none" would contradict CEIL.
+                while (block > 0 && block < stage.TotalBattles
+                       && CurveRateAtOrdinal(session, stage, block, ReportSamples, 6800000 + s * 97 + block) > 0f)
+                    block++;
 
                 if (firstRate < 0f) firstRate = rate;
                 else if (Math.Abs(rate - firstRate) > 0.001f) anyDifferent = true;
@@ -8276,18 +8387,35 @@ namespace Emberfall.DevHarness
                 row.Pinned5Bodies = team.Count;
                 row.Pinned5AtFloor = atFloor;
 
+                if (block > 0) blockedStages++;
+
                 Line("  " + stage.DisplayCode.PadRight(5)
                      + "  " + Trim(stage.Name, 25).PadRight(25)
                      + "  " + team.Count.ToString().PadLeft(6)
                      + "  " + profile.TeamPower().ToString().PadLeft(7)
                      + "  " + stage.RecommendedPower.ToString().PadLeft(6)
                      + "  " + Pct(rate).PadLeft(6)
-                     + (atFloor ? "   FLOOR (recommendedPower is under a five-body line's minimum, " + floorPower + ")" : ""));
+                     + "  " + Pct(ceilRate).PadLeft(6)
+                     + "  " + (block > 0 ? ("b" + block).PadLeft(6) : "none".PadLeft(6))
+                     + (atFloor ? "   FLOOR-PINNED (recommendedPower is under a five-body line's minimum, " + floorPower + ")" : ""));
             }
 
             if (floorRows > 0)
-                Line("  " + floorRows + " stage(s) marked FLOOR: the pin could not level down to the target, so those rows"
-                     + " measure the five-body floor rather than recommendedPower. Enemy levels, not this check.");
+                Line("  " + floorRows + " stage(s) marked FLOOR-PINNED: the pin could not level down to the target, so those"
+                     + " rows measure the five-body floor rather than recommendedPower. Enemy levels, not this check.");
+
+            Line("  " + blockedStages + " of " + db.AllStages.Count + " stage(s) reach a battle with no win in "
+                 + ReportSamples + " samples at recommendedPower. Every one of those stages also reads 0% at its"
+                 + " ceiling, so the block is the curve running past the line rather than a sampling artefact.");
+
+            // Reported, NOT failed. Whether a stage should be completable at exactly
+            // recommendedPower is a tuning decision and this is an instrument, not a target - the
+            // same reason the curve check below only asserts that the curve discriminates. The
+            // retune is what acts on this number.
+            Check(true, blockedStages == 0
+                        ? "no stage blocks at recommendedPower"
+                        : blockedStages + " stage(s) block at recommendedPower - see the BLOCK column"
+                          + " (reported, not failed: this is the retune's input, not its target)");
 
             Check(anyDifferent,
                   "the pinned five-body curve still discriminates between stages (a flat curve measures nothing - "
@@ -8548,7 +8676,11 @@ namespace Emberfall.DevHarness
                     // 0.45 drop chance, at the real Rough/Honed ceiling.
                     EquipBestOwnedArmor(db, session);
 
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seedCounter++));
+                    // The session's fight is the stage's FLOOR battle - where a player entering
+                    // this stage actually starts. Routed through the generator rather than the raw
+                    // StageDef so it says so explicitly instead of getting the floor by accident.
+                    StageDef floorBattle = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(floorBattle, seedCounter++));
                     attemptsForStage++;
                     totalAttempts++;
                     samples++;
@@ -8557,15 +8689,48 @@ namespace Emberfall.DevHarness
 
                     if (r.Victory)
                     {
-                        session.GrantBattleResult(stage, true, now);
-                        cleared = true;
-                        break;
+                        // A STAGE CLEAR NOW COSTS 144 WINS, NOT ONE.
+                        //
+                        // This used to call GrantBattleResult on the strength of a single won
+                        // battle, which paid a full stage clear - gold, shards, account XP, the
+                        // first-clear bonus - for 1/144th of the work, and advanced the simulated
+                        // player through the campaign at 144x the real rate. Every gold-sink and
+                        // idle-income number this pass printed rested on that.
+                        //
+                        // The gate is the CEILING battle, matching the rule the game itself already
+                        // uses for a sweep (GameSession.SweepClearedStage): a line that beats the
+                        // hardest battle in a stage beats the 143 easier ones below it, so winning
+                        // the ceiling is a sound proxy for completing the curve, at one extra
+                        // simulation instead of 144.
+                        //
+                        // This is deliberately NOT a re-derivation of the correct pacing. The
+                        // session count, the idle income between sessions and the gold sink are all
+                        // still modelled at one-session-per-attempt and are all still wrong for a
+                        // 144-battle stage. That is the larger task the audit sized separately. All
+                        // this does is stop the instrument paying out for a clear that did not
+                        // happen.
+                        StageDef ceilBattle = CampaignWaveGenerator.BuildBattle(
+                            stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+                        BattleResult ceil = CombatSimulation.Run(
+                            session.BuildBattleRequest(ceilBattle, seedCounter++));
+                        if (ceil.Victory)
+                        {
+                            session.GrantBattleResult(stage, true, now);
+                            cleared = true;
+                            break;
+                        }
+                        // Won the floor, cannot beat the ceiling: the stage is entered but not
+                        // finished, so nothing is granted and the loop keeps building power.
                     }
-                    // losing still means replaying the best cleared stage for gold
+                    // losing still means replaying the best cleared stage for gold - and a repeat
+                    // clear of an already-cleared stage is a sweep, which the game resolves on that
+                    // stage's hardest battle for exactly the same reason.
                     if (stageIdx > 0)
                     {
                         StageDef farm = db.AllStages[stageIdx - 1];
-                        BattleResult fr = CombatSimulation.Run(session.BuildBattleRequest(farm, seedCounter++));
+                        StageDef farmCeil = CampaignWaveGenerator.BuildBattle(
+                            farm, Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
+                        BattleResult fr = CombatSimulation.Run(session.BuildBattleRequest(farmCeil, seedCounter++));
                         if (fr.Victory) session.GrantBattleResult(farm, true, now);
                     }
                 }
@@ -8584,7 +8749,10 @@ namespace Emberfall.DevHarness
                 for (int m = 0; m < MeasureRuns; m++)
                 {
                     int seed = 100000 + m * 37 + stageIdx;
-                    BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+                    // Same floor battle the attempt loop above fought, named explicitly so the
+                    // win rate this prints and the attempts beside it describe the same encounter.
+                    StageDef measured = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
+                    BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(measured, seed));
                     if (mr.Victory) measureWins++;
                     AccumulateDamage(mr, damageByHero);
 
@@ -8595,7 +8763,10 @@ namespace Emberfall.DevHarness
                         {
                             BattleRequest altRequest = new BattleRequest();
                             altRequest.Content = db;
-                            altRequest.Stage = stage;
+                            // The SAME battle mr just fought, not the raw stage. This probe asks
+                            // "would that win have been a loss without the healer", and it can only
+                            // answer that if both halves fight the same encounter at the same seed.
+                            altRequest.Stage = measured;
                             altRequest.Seed = seed;
                             altRequest.Team = altTeam;
                             BattleResult altResult = CombatSimulation.Run(altRequest);
