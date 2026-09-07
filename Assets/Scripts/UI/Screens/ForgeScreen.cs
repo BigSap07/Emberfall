@@ -4,68 +4,190 @@ using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
-using Emberfall.Core.Progression;
 
 namespace Emberfall.UI.Screens
 {
     /// <summary>
-    /// The Forge: every owned armor piece, grouped by slot, with the three bulk actions over the
-    /// pool - Reroll, Combine, Salvage (DESIGN-ARMOR section 7). Same shape `RelicShopScreen` and
-    /// `RecitalScreen` already establish - `ScreenChrome.Header`, a resource banner, a scrollable
-    /// list beneath - rather than a new visual language for one screen.
+    /// The Forge: one piece on the anvil, what it would become beside it, and the three actions
+    /// over the owned-armor pool - Salvage, Reroll, Combine (DESIGN-ARMOR section 7).
     ///
     /// Equip is deliberately NOT here. It is a per-hero decision made in the presence of the hero
-    /// it affects, so it stays on `InventoryScreen`'s picker, the same place it has always been.
-    /// Reroll, Combine and Salvage need no hero in context at all - they are bulk decisions over
-    /// the whole owned-armor pool, which is exactly why cramming them onto per-hero rows on the
-    /// Inventory screen (this system's first two passes) was the wrong shape: Combine's real
-    /// precondition, three pieces sharing a slot AND a Temper, is a pool-wide fact, and a player
-    /// scanning for it one hero-row at a time cannot see the rest of the pool while deciding.
+    /// it affects, so it stays on InventoryScreen's picker. Reroll, Combine and Salvage need no
+    /// hero in context at all - they are bulk decisions over the whole pool.
     ///
-    /// The list is grouped by slot (`ArmorInfo.AllSlots`, all six sections always shown - a slot
-    /// with nothing owned in it is information, not absence, the same rule `HeroDetailScreen`'s
-    /// six-slot block already follows) and sorted by Temper within each slot, so three matching
-    /// pieces for a Combine sit visibly next to each other instead of needing to be found by eye
-    /// across an unsorted list.
+    /// ---- visual pass ----
+    /// ONE PIECE AT A TIME, NOT A LIST OF EVERY PIECE. This screen used to be a scroll of every
+    /// owned piece with three buttons on each row, which meant the number of controls on screen
+    /// grew with the size of the collection and no single piece was ever the subject. It is now an
+    /// anvil: a slot filter down the left, a tray of the pieces in that slot, ONE of them focused
+    /// at size, and the three actions acting on that one. Same three calls into GameSession, same
+    /// preconditions, same refusal text - what changed is that the player picks the subject first
+    /// and the actions are unambiguous about what they will act on.
+    ///
+    /// COMBINE'S PARTNERS ARE VISIBLE. The two matching pieces a Combine would consume flank the
+    /// focused piece, drawn with the same ItemCard component at a smaller size. Combine's real
+    /// precondition - three pieces sharing a slot AND a temper - was previously a sentence under a
+    /// disabled button; it is now the picture.
+    ///
+    /// WHAT THE COMPARISON PANEL CAN HONESTLY SHOW. Combine's output temper and substat count are
+    /// deterministic (ArmorInfo.NextTemper, ArmorInfo.SubStatCount), so those are previewed. The
+    /// ROLLS are not - they are rolled at the anvil - and the panel says so rather than drawing
+    /// invented numbers. Reroll and Salvage have no previewable "after" at all and the panel states
+    /// what they do instead. Nothing here simulates anything; predicting a roll would have meant
+    /// reaching into logic this pass was told not to touch.
     /// </summary>
     public sealed class ForgeScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Forge; } }
 
+        private const float RailX = -872f;
+        private const float RailWidth = 116f;
+        private const float AnvilX = -232f;
+        private const float FocusSize = 196f;
+        private const float PartnerSize = 108f;
+        private const float TraySize = 92f;
+        private const float PanelX = 620f;
+        private const float PanelWidth = 560f;
+
+        /// <summary>
+        /// Heading plus a tray tall enough for TWO full rows: 30 + 8 + 92 + 12 + 92 + 8. At the
+        /// first pass's 178 the second row was sliced through the middle by the viewport mask,
+        /// which reads as a rendering fault rather than as an invitation to scroll.
+        /// </summary>
+        private const float TrayBlock = 242f;
+
         private Text _headerSubtitle;
-        private Text _slagDisplay;
-        private RectTransform _listContent;
+        private Text _slagValue;
+
+        private RectTransform _rail;
+        private RectTransform _anvil;
+        private RectTransform _tray;
+        private RectTransform _panel;
+        private RectTransform _actions;
+
+        private readonly List<UIButton> _railButtons = new List<UIButton>();
+
+        /// <summary>Presentation state only. -1 is "every slot"; nothing here reaches the profile.</summary>
+        private int _slotFilter = -1;
+        private string _selectedUid = "";
 
         protected override void Build()
         {
             ScreenChrome.Header(Root, "FORGE", Router, out _headerSubtitle);
-            BuildSlagBanner();
 
-            ScrollRect scroll;
-            _listContent = UIBuilder.ScrollList("ForgeList", Root, out scroll,
-                                                16f, new RectOffset(32, 32, 12, 40));
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 0f, ScreenChrome.HeaderTop + 108f + 72f, 0f, 0f);
+            float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
+            BuildSlagPlate(top);
+
+            top += 56f + UITheme.Space16;
+            BuildRail(top);
+            BuildAnvil(top);
+            BuildTray(top + FocusSize + UITheme.Space32);
+            BuildActions(top + FocusSize + UITheme.Space32 + TrayBlock + UITheme.Space24);
+            BuildPanel(top);
         }
 
-        /// <summary>Same shape as RelicShopScreen's dust banner - a currency line between the
-        /// chrome header and the scroll list, sized and positioned identically.</summary>
-        private void BuildSlagBanner()
+        private void BuildSlagPlate(float top)
         {
-            RectTransform banner = UIBuilder.Node("SlagBanner", Root);
-            float top = ScreenChrome.HeaderTop + 108f + 8f;
-            UIBuilder.Box(banner, 0f, -top, 900f, 56f, new Vector2(0.5f, 1f));
+            RectTransform plate = UIBuilder.Node("SlagPlate", Root);
+            UIBuilder.Box(plate, AnvilX, -top, 460f, 56f, new Vector2(0.5f, 1f));
 
-            Image bg = banner.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(14);
+            Image bg = plate.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(12);
             bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
-            Color slagTint = UITheme.ArmorTemperColor(ArmorTemper.Gilded);
-            UIBuilder.Frame("Edge", banner, UITheme.WithAlpha(slagTint, 0.45f), 14, 2);
+            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.94f);
+            bg.raycastTarget = false;
+            UIBuilder.NotchedFrame("Edge", plate, UITheme.WithAlpha(UITheme.Slag, 0.7f), 12, 2);
 
-            _slagDisplay = UIBuilder.Label("Slag", banner, "", UITheme.FontSmall,
-                                           UITheme.TextPrimary, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(_slagDisplay.rectTransform, 12f);
+            Image icon = UIBuilder.Img("Icon", plate, TextureLab.IngotIcon(64), UITheme.Slag);
+            UIBuilder.Box(icon.rectTransform, UITheme.Space16, 0f, 30f, 30f, new Vector2(0f, 0.5f));
+
+            _slagValue = UIBuilder.Label("Slag", plate, "", UITheme.FontSmall,
+                                         UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(_slagValue.rectTransform, UITheme.Space16 + 30f + UITheme.Space12, 0f,
+                                 UITheme.Space16, 0f);
+        }
+
+        /// <summary>The slot filter, down the left, as the mockup draws it.</summary>
+        private void BuildRail(float top)
+        {
+            _rail = UIBuilder.Node("Rail", Root);
+            UIBuilder.Box(_rail, RailX, -top, RailWidth, 7f * 82f, new Vector2(0.5f, 1f));
+
+            Image bg = _rail.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(14);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.9f);
+            bg.raycastTarget = false;
+            UIBuilder.NotchedFrame("Edge", _rail, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 14, 2);
+
+            AddRailButton(0, -1, TextureLab.Chest(64), "ALL");
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+                AddRailButton(i + 1, i, ItemCard.SlotIcon(ArmorInfo.AllSlots[i]),
+                              ItemCard.ShortSlotName(ArmorInfo.AllSlots[i]));
+        }
+
+        private void AddRailButton(int index, int slotFilter, Sprite icon, string tip)
+        {
+            UIButton button = UIBuilder.Notch(
+                UIBuilder.MakeButton("Rail" + index, _rail, "", UITheme.FontTiny,
+                                     UITheme.WithAlpha(UITheme.Panel, 0.9f), UITheme.BorderSoft,
+                                     UITheme.TextPrimary), 10);
+            UIBuilder.Box(button.Root, 0f, -(8f + index * 82f), 92f, 74f, new Vector2(0.5f, 1f));
+
+            Image glyph = UIBuilder.Img("Glyph", button.Root, icon, UITheme.TextMuted);
+            UIBuilder.Box(glyph.rectTransform, 0f, 6f, 34f, 34f, new Vector2(0.5f, 0.5f));
+
+            Text label = UIBuilder.Label("Tip", button.Root, tip,
+                                         UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.LowerCenter);
+            UIBuilder.Box(label.rectTransform, 0f, 4f, 88f, 18f, new Vector2(0.5f, 0f));
+
+            int captured = slotFilter;
+            button.OnClick(delegate { SetFilter(captured); });
+            _railButtons.Add(button);
+        }
+
+        /// <summary>The anvil: the focused piece, and the two a Combine would consume beside it.</summary>
+        private void BuildAnvil(float top)
+        {
+            _anvil = UIBuilder.Node("Anvil", Root);
+            UIBuilder.Box(_anvil, AnvilX, -top, 700f, FocusSize + 8f, new Vector2(0.5f, 1f));
+        }
+
+        private void BuildTray(float top)
+        {
+            Text heading = UIBuilder.Label("TrayHeading", Root, "", UITheme.FontTiny,
+                                           UITheme.TextDim, TextAnchor.UpperLeft);
+            // Centred on the tray with left-aligned TEXT. See InventoryScreen's own note: Box's
+            // anchor doubles as its pivot, so a (0,1) anchor measures x from the canvas edge.
+            UIBuilder.Box(heading.rectTransform, AnvilX, -top, 700f, 26f, new Vector2(0.5f, 1f));
+            heading.name = "TrayHeading";
+
+            ScrollRect scroll;
+            _tray = UIBuilder.ScrollGrid("Tray", Root, out scroll,
+                                         new Vector2(TraySize, TraySize),
+                                         new Vector2(UITheme.Space12, UITheme.Space12), 7,
+                                         new RectOffset(8, 8, 8, 8));
+            RectTransform shell = scroll.GetComponent<RectTransform>();
+            UIBuilder.Box(shell, AnvilX, -(top + 30f), 700f, TrayBlock - 30f, new Vector2(0.5f, 1f));
+        }
+
+        private void BuildActions(float top)
+        {
+            _actions = UIBuilder.Node("Actions", Root);
+            UIBuilder.Box(_actions, AnvilX, -top, 700f, 132f, new Vector2(0.5f, 1f));
+        }
+
+        private void BuildPanel(float top)
+        {
+            _panel = UIBuilder.Node("Compare", Root);
+            UIBuilder.Box(_panel, PanelX, -top, PanelWidth, 628f, new Vector2(0.5f, 1f));
+
+            Image bg = _panel.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(18);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
+            bg.raycastTarget = false;
+            UIBuilder.NotchedFrame("Edge", _panel, UITheme.WithAlpha(UITheme.ChromeBrass, 0.8f), 18, 2);
         }
 
         // ------------------------------------------------------------------ refresh
@@ -76,195 +198,250 @@ namespace Emberfall.UI.Screens
             Rebuild();
         }
 
+        private void SetFilter(int slotFilter)
+        {
+            if (_slotFilter == slotFilter) return;
+            _slotFilter = slotFilter;
+            _selectedUid = "";
+            App.Audio.Tap();
+            Rebuild();
+        }
+
+        private void Select(string uid)
+        {
+            if (_selectedUid == uid) return;
+            _selectedUid = uid;
+            App.Audio.Tap();
+            Rebuild();
+        }
+
+        /// <summary>The pool this screen is currently looking at, sorted so a Combine trio clusters.</summary>
+        private List<ArmorPiece> Filtered()
+        {
+            List<ArmorPiece> result = new List<ArmorPiece>();
+            List<ArmorPiece> owned = App.Session.Profile.OwnedArmor;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                if (_slotFilter >= 0 && owned[i].Slot != ArmorInfo.AllSlots[_slotFilter]) continue;
+                result.Add(owned[i]);
+            }
+
+            // Stable insertion sort by slot then temper, so three matching pieces sit together
+            // rather than scattering across acquisition order - the same reason the old list was
+            // sorted, kept because it is what makes a Combine findable at a glance.
+            for (int i = 1; i < result.Count; i++)
+            {
+                ArmorPiece key = result[i];
+                int keyRank = (int)key.Slot * 8 + (int)key.Temper;
+                int j = i - 1;
+                while (j >= 0 && (int)result[j].Slot * 8 + (int)result[j].Temper > keyRank)
+                {
+                    result[j + 1] = result[j];
+                    j--;
+                }
+                result[j + 1] = key;
+            }
+            return result;
+        }
+
         private void Rebuild()
         {
             PlayerProfile profile = App.Session.Profile;
-            long slag = profile.Slag;
-            _slagDisplay.text = "SLAG   " + slag + "   (Reroll and Combine cost Slag - Salvage pays it)";
+            _slagValue.text = "SLAG   " + profile.Slag;
+
             int owned = profile.OwnedArmor.Count;
             _headerSubtitle.text = owned + (owned == 1 ? " PIECE OWNED" : " PIECES OWNED");
 
-            for (int i = _listContent.childCount - 1; i >= 0; i--)
-                Object.Destroy(_listContent.GetChild(i).gameObject);
-
-            if (profile.OwnedArmor.Count == 0)
+            for (int i = 0; i < _railButtons.Count; i++)
             {
-                RectTransform emptyCard = BuildCard();
-                UIBuilder.Sized(emptyCard, 0f, 100f);
-                Text empty = UIBuilder.Label("Empty", emptyCard,
-                                             "No armor yet — pieces drop from stage clears.",
-                                             UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(empty.rectTransform, 20f);
-                return;
+                bool active = (i - 1) == _slotFilter;
+                _railButtons[i].Background.color = active
+                    ? UITheme.WithAlpha(UITheme.Gold, 0.20f)
+                    : UITheme.WithAlpha(UITheme.Panel, 0.9f);
+                _railButtons[i].Frame.color = active ? UITheme.Gold : UITheme.BorderSoft;
+                Transform glyph = _railButtons[i].Root.Find("Glyph");
+                if (glyph != null)
+                    glyph.GetComponent<Image>().color = active ? UITheme.Gold : UITheme.TextMuted;
             }
 
-            for (int s = 0; s < ArmorInfo.AllSlots.Length; s++)
-            {
-                if (s > 0) UIBuilder.Spacer("Gap_" + s, _listContent, 8f);
-                BuildSlotSection(ArmorInfo.AllSlots[s], profile);
-            }
+            List<ArmorPiece> pool = Filtered();
+            if (_selectedUid == "" && pool.Count > 0) _selectedUid = pool[0].Uid;
+
+            ArmorPiece focus = profile.FindArmor(_selectedUid);
+            if (focus != null && !pool.Contains(focus)) focus = pool.Count > 0 ? pool[0] : null;
+            if (focus != null) _selectedUid = focus.Uid;
+
+            RebuildTray(pool, focus);
+            RebuildAnvil(focus);
+            RebuildActions(focus);
+            RebuildPanel(focus);
         }
 
-        /// <summary>One slot's section: a header naming the slot and how many pieces are in it,
-        /// then every owned piece of that slot sorted by Temper ascending so a matching trio for
-        /// Combine clusters together rather than scattering across acquisition order.</summary>
-        private void BuildSlotSection(ArmorSlot slot, PlayerProfile profile)
+        private void RebuildTray(List<ArmorPiece> pool, ArmorPiece focus)
         {
-            List<ArmorPiece> inSlot = new List<ArmorPiece>();
-            List<ArmorPiece> owned = profile.OwnedArmor;
-            for (int i = 0; i < owned.Count; i++)
-                if (owned[i].Slot == slot) inSlot.Add(owned[i]);
+            Transform heading = Root.Find("TrayHeading");
+            if (heading != null)
+                heading.GetComponent<Text>().text = _slotFilter < 0
+                    ? "ALL PIECES  (" + pool.Count + ")"
+                    : ArmorInfo.SlotLabel(ArmorInfo.AllSlots[_slotFilter]).ToUpperInvariant()
+                      + "  (" + pool.Count + ")";
 
-            // Simple insertion sort by Temper - lists here are a handful of pieces per slot at
-            // most, and stability (equal-Temper pieces keep their acquisition order) is what makes
-            // a matching trio read as "these three, together" rather than shuffling on every
-            // rebuild.
-            for (int i = 1; i < inSlot.Count; i++)
+            for (int i = _tray.childCount - 1; i >= 0; i--) Object.Destroy(_tray.GetChild(i).gameObject);
+
+            for (int i = 0; i < pool.Count; i++)
             {
-                ArmorPiece key = inSlot[i];
-                int j = i - 1;
-                while (j >= 0 && (int)inSlot[j].Temper > (int)key.Temper)
+                ArmorPiece piece = pool[i];
+                RectTransform cell = UIBuilder.Node("Tray_" + piece.Uid, _tray);
+
+                RectTransform card = ItemCard.ForArmor("Card", cell, TraySize, piece);
+                UIBuilder.FillParent(card, 0f);
+
+                // The selected piece is lifted rather than recoloured: recolouring would fight the
+                // temper border, which is the one thing the card's frame is for.
+                if (focus != null && piece.Uid == focus.Uid)
                 {
-                    inSlot[j + 1] = inSlot[j];
-                    j--;
+                    Image halo = UIBuilder.Img("Selected", cell, TextureLab.Glow(96, 1.6f),
+                                               UITheme.WithAlpha(UITheme.Gold, 0.30f));
+                    UIBuilder.FillParent(halo.rectTransform, -12f);
+                    halo.rectTransform.SetAsFirstSibling();
                 }
-                inSlot[j + 1] = key;
+
+                if (App.Session.Profile.HeroWearingArmor(piece.Uid) != null)
+                {
+                    Image worn = UIBuilder.Img("Worn", cell, TextureLab.Check(32), UITheme.Success);
+                    UIBuilder.Box(worn.rectTransform, -4f, -4f, 20f, 20f, new Vector2(1f, 1f));
+                }
+
+                Button press = cell.gameObject.AddComponent<Button>();
+                press.transition = Selectable.Transition.None;
+                Image target = cell.gameObject.AddComponent<Image>();
+                target.color = new Color(1f, 1f, 1f, 0.003f);   // needs a graphic to take the tap
+                press.targetGraphic = target;
+                target.rectTransform.SetAsFirstSibling();
+
+                string captured = piece.Uid;
+                press.onClick.AddListener(delegate { Select(captured); });
             }
+        }
 
-            Text heading = UIBuilder.Label("Heading_" + slot, _listContent,
-                                           ArmorInfo.SlotLabel(slot).ToUpperInvariant() + "   (" + inSlot.Count + ")",
-                                           UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Sized(heading.rectTransform, 0f, 36f);
+        /// <summary>The focused piece, flanked by the two a Combine would consume.</summary>
+        private void RebuildAnvil(ArmorPiece focus)
+        {
+            for (int i = _anvil.childCount - 1; i >= 0; i--) Object.Destroy(_anvil.GetChild(i).gameObject);
 
-            if (inSlot.Count == 0)
+            if (focus == null)
             {
-                RectTransform emptyCard = BuildCard();
-                UIBuilder.Sized(emptyCard, 0f, 64f);
-                Text empty = UIBuilder.Label("Empty", emptyCard, "None owned",
-                                             UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(empty.rectTransform, 16f);
+                Text none = UIBuilder.Label("None", _anvil, "NOTHING ON THE ANVIL",
+                                            UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
 
-            for (int i = 0; i < inSlot.Count; i++) BuildForgeRow(inSlot[i]);
+            List<ArmorPiece> partners = App.Session.Profile.ArmorCombineCandidates(focus);
+
+            for (int i = 0; i < 2; i++)
+            {
+                float x = i == 0 ? -252f : 252f;
+                RectTransform host = UIBuilder.Node("Partner" + i, _anvil);
+                UIBuilder.Box(host, x, 0f, PartnerSize, PartnerSize, new Vector2(0.5f, 0.5f));
+
+                if (i < partners.Count)
+                {
+                    RectTransform card = ItemCard.ForArmor("Card", host, PartnerSize, partners[i]);
+                    UIBuilder.FillParent(card, 0f);
+                }
+                else
+                {
+                    RectTransform card = ItemCard.Vacant("Card", host, PartnerSize, focus.Slot);
+                    UIBuilder.FillParent(card, 0f);
+                    Text q = UIBuilder.Label("Need", host, "NEEDED", UITheme.FontTiny - 6,
+                                             UITheme.TextDim, TextAnchor.UpperCenter);
+                    UIBuilder.Box(q.rectTransform, 0f, -PartnerSize * 0.5f - 14f, 160f, 20f, new Vector2(0.5f, 0.5f));
+                }
+
+                // The elbow joining a partner to the anvil, as the mockup draws it.
+                Image link = UIBuilder.Img("Link" + i, _anvil, TextureLab.White,
+                                           UITheme.WithAlpha(UITheme.ChromeBrass, 0.7f));
+                UIBuilder.Box(link.rectTransform, x * 0.5f, 0f, 140f, 3f, new Vector2(0.5f, 0.5f));
+                link.rectTransform.SetAsFirstSibling();
+            }
+
+            RectTransform focusHost = UIBuilder.Node("Focus", _anvil);
+            UIBuilder.Box(focusHost, 0f, 0f, FocusSize, FocusSize, new Vector2(0.5f, 0.5f));
+            RectTransform focusCard = ItemCard.ForArmor("Card", focusHost, FocusSize, focus);
+            UIBuilder.FillParent(focusCard, 0f);
+
+            Text name = UIBuilder.Label("Name", _anvil, focus.Name, UITheme.FontSmall,
+                                        UITheme.TextPrimary, TextAnchor.UpperCenter);
+            UIBuilder.Box(name.rectTransform, 0f, -FocusSize * 0.5f - 6f, 560f, 30f, new Vector2(0.5f, 0.5f));
         }
 
-        /// <summary>
-        /// One armor piece with the Forge's three bulk actions. Ported from InventoryScreen's
-        /// original four-button armor row with EQUIP dropped - the temper/aspect chips, stat lines
-        /// and status line are unchanged, and REROLL/COMBINE/SALVAGE keep exactly the pricing and
-        /// refusal behaviour they always had, since none of GameSession's Combine/Reroll/Salvage
-        /// logic changed - only where the buttons that call them live.
-        /// </summary>
-        private void BuildForgeRow(ArmorPiece piece)
+        private void RebuildActions(ArmorPiece focus)
         {
-            HeroInstance wearer = App.Session.Profile.HeroWearingArmor(piece.Uid);
+            for (int i = _actions.childCount - 1; i >= 0; i--) Object.Destroy(_actions.GetChild(i).gameObject);
+            if (focus == null) return;
+
+            HeroInstance wearer = App.Session.Profile.HeroWearingArmor(focus.Uid);
             bool equipped = wearer != null;
-            Color temperColor = UITheme.ArmorTemperColor(piece.Temper);
 
-            // Three actions instead of four: 14 + 3*46 + 2*12 + 14 = 190.
-            RectTransform card = UIBuilder.Node("Armor_" + piece.Uid, _listContent);
-            // 244 rather than 190: each action now carries a one-line reason underneath it, and
-            // the three of them need the extra 54.
-            UIBuilder.Sized(card, 0f, 244f);
+            // ---- SALVAGE
+            int salvageValue = App.Session.SalvageValue(focus);
+            UIButton salvage = Action("Salvage", -234f, "SALVAGE", "+" + salvageValue + " SLAG",
+                                      UITheme.Danger, TextureLab.IngotIcon(64));
+            salvage.Interactable = !equipped;
+            string uid = focus.Uid;
+            salvage.OnClick(delegate { OnSalvage(uid); });
+            Reason(_actions, "ReasonSalvage", -234f, equipped ? "Unequip it first" : "");
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = equipped ? UITheme.WithAlpha(UITheme.Panel, 0.95f) : UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(temperColor, equipped ? 0.75f : 0.35f), 18, 2);
-
-            RectTransform icon = UIBuilder.Node("Icon", card);
-            UIBuilder.Box(icon, 22f, 0f, 68f, 68f, new Vector2(0f, 0.5f));
-            Image disc = icon.gameObject.AddComponent<Image>();
-            disc.sprite = TextureLab.Circle(96);
-            disc.color = UITheme.WithAlpha(UITheme.AspectColor(piece.Aspect), 0.22f);
-            disc.raycastTarget = false;
-            Image ring = UIBuilder.Img("Ring", icon, TextureLab.Ring(96, 4), UITheme.WithAlpha(UITheme.AspectColor(piece.Aspect), 0.85f));
-            UIBuilder.FillParent(ring.rectTransform, 0f);
-
-            Text nameLabel = UIBuilder.Label("Name", card, piece.Name,
-                                             UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            nameLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            nameLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            nameLabel.rectTransform.offsetMin = new Vector2(108f, -46f);
-            nameLabel.rectTransform.offsetMax = new Vector2(-190f, -16f);
-
-            RectTransform temperChip = UIBuilder.Chip("Temper", card, ArmorInfo.TemperLabel(piece.Temper),
-                                                      temperColor, UITheme.FontTiny);
-            UIBuilder.Box(temperChip, 108f, -46f, 128f, 28f, new Vector2(0f, 1f));
-
-            RectTransform aspectChip = UIBuilder.Chip("Aspect", card, AspectChart.DisplayName(piece.Aspect),
-                                                      UITheme.AspectColor(piece.Aspect), UITheme.FontTiny);
-            UIBuilder.Box(aspectChip, 244f, -46f, 120f, 28f, new Vector2(0f, 1f));
-
-            string statusText = equipped
-                ? "Equipped  -  " + (wearer.Def != null ? wearer.Def.Name : wearer.DefId)
-                : "In the pool";
-            Text statusLabel = UIBuilder.Label("Status", card, statusText,
-                                               UITheme.FontTiny, equipped ? UITheme.Success : UITheme.TextMuted,
-                                               TextAnchor.UpperLeft);
-            statusLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            statusLabel.rectTransform.offsetMin = new Vector2(376f, -74f);
-            statusLabel.rectTransform.offsetMax = new Vector2(-258f, -46f);
-
-            Text statsLabel = UIBuilder.WrappedLabel("Stats", card, piece.DescribeStats(),
-                                                     UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            statsLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
-            statsLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            statsLabel.rectTransform.offsetMin = new Vector2(108f, 14f);
-            statsLabel.rectTransform.offsetMax = new Vector2(-258f, -76f);
-
-            const float btnH = 46f;
-            const float reasonH = 24f;
-            const float step = 76f;        // 46 button + 24 reason + 6 breathing room
-            const float topMargin = -14f;
-
-            // COMBINE first - the action this screen's whole layout (grouped by slot, sorted by
-            // Temper) exists to make findable. Its edge is tinted with the OUTPUT Temper's colour,
-            // previewing what rarity a tap forges; at the top of the ladder (Radiant) there is no
-            // output to preview, so it falls back to a neutral border and the label says why.
-            ArmorTemper? nextTemper = ArmorInfo.NextTemper(piece.Temper);
-            List<ArmorPiece> combinePartners = App.Session.Profile.ArmorCombineCandidates(piece);
-            int combineCost = nextTemper.HasValue ? App.Session.CombineCost(nextTemper.Value) : 0;
-            string combineLabel = nextTemper.HasValue ? "COMBINE  " + combineCost : "MAX TIER";
-            Color combineEdge = nextTemper.HasValue ? UITheme.ArmorTemperColor(nextTemper.Value) : UITheme.Border;
-            UIButton combineBtn = UIBuilder.MakeButton("Combine", card, combineLabel, UITheme.FontTiny,
-                                                       UITheme.PanelRaised, combineEdge, UITheme.TextPrimary);
-            UIBuilder.Box(combineBtn.Root, -18f, topMargin, 160f, btnH, new Vector2(1f, 1f));
-            // !equipped is required here, not just on the two partners ArmorCombineCandidates
-            // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of
-            // them is worn, including this piece itself, and without this check a worn piece with
-            // two free-standing matching partners would show an enabled button that always fails.
-            combineBtn.Interactable = !equipped && nextTemper.HasValue && combinePartners.Count == 2
-                                    && App.Session.Profile.Slag >= combineCost;
-            string combineUidA = piece.Uid;
-            string combineUidB = combinePartners.Count > 0 ? combinePartners[0].Uid : "";
-            string combineUidC = combinePartners.Count > 1 ? combinePartners[1].Uid : "";
-            combineBtn.OnClick(delegate { OnCombine(combineUidA, combineUidB, combineUidC); });
-            Reason(card, "ReasonCombine", topMargin - btnH - 2f,
-                   CombineReason(equipped, nextTemper.HasValue, combinePartners.Count, combineCost));
-
-            int rerollCost = App.Session.RerollCost(piece);
-            UIButton rerollBtn = UIBuilder.SecondaryButton("Reroll", card, "REROLL  " + rerollCost, UITheme.FontTiny);
-            UIBuilder.Box(rerollBtn.Root, -18f, topMargin - step, 160f, btnH, new Vector2(1f, 1f));
-            rerollBtn.Interactable = App.Session.Profile.Slag >= rerollCost && rerollCost > 0;
-            string capturedUid = piece.Uid;
-            rerollBtn.OnClick(delegate { OnReroll(capturedUid); });
-            Reason(card, "ReasonReroll", topMargin - step - btnH - 2f,
+            // ---- REROLL
+            int rerollCost = App.Session.RerollCost(focus);
+            UIButton reroll = Action("Reroll", 0f, "REROLL", rerollCost + " SLAG",
+                                     UITheme.Gold, TextureLab.SpiralIcon(64));
+            reroll.Interactable = App.Session.Profile.Slag >= rerollCost && rerollCost > 0;
+            reroll.OnClick(delegate { OnReroll(uid); });
+            Reason(_actions, "ReasonReroll", 0f,
                    rerollCost <= 0 ? "Cannot be rerolled" : SlagShortfall(rerollCost));
 
-            int salvageValue = App.Session.SalvageValue(piece);
-            UIButton salvageBtn = UIBuilder.MakeButton("Salvage", card, "SALVAGE  " + salvageValue, UITheme.FontTiny,
-                                                       UITheme.PanelRaised, UITheme.Danger, UITheme.TextPrimary);
-            UIBuilder.Box(salvageBtn.Root, -18f, topMargin - step * 2f, 160f, btnH, new Vector2(1f, 1f));
-            // Salvage refuses an equipped piece in GameSession; the button says so up front rather
-            // than letting the tap fail silently.
-            salvageBtn.Interactable = !equipped;
-            salvageBtn.OnClick(delegate { OnSalvage(capturedUid); });
-            Reason(card, "ReasonSalvage", topMargin - step * 2f - btnH - 2f,
-                   equipped ? "Unequip it first" : "");
+            // ---- COMBINE. Its edge previews the OUTPUT temper's colour.
+            ArmorTemper? nextTemper = ArmorInfo.NextTemper(focus.Temper);
+            List<ArmorPiece> partners = App.Session.Profile.ArmorCombineCandidates(focus);
+            int combineCost = nextTemper.HasValue ? App.Session.CombineCost(nextTemper.Value) : 0;
+            Color combineEdge = nextTemper.HasValue ? UITheme.ArmorTemperColor(nextTemper.Value) : UITheme.Border;
+
+            UIButton combine = Action("Combine", 234f, "COMBINE",
+                                      nextTemper.HasValue ? combineCost + " SLAG" : "MAX TIER",
+                                      combineEdge, TextureLab.Swords(64));
+            // !equipped is required here, not just on the two partners ArmorCombineCandidates
+            // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of them
+            // is worn, including this piece itself.
+            combine.Interactable = !equipped && nextTemper.HasValue && partners.Count == 2
+                                 && App.Session.Profile.Slag >= combineCost;
+            string uidB = partners.Count > 0 ? partners[0].Uid : "";
+            string uidC = partners.Count > 1 ? partners[1].Uid : "";
+            combine.OnClick(delegate { OnCombine(uid, uidB, uidC); });
+            Reason(_actions, "ReasonCombine", 234f,
+                   CombineReason(equipped, nextTemper.HasValue, partners.Count, combineCost));
+        }
+
+        private UIButton Action(string name, float x, string title, string cost, Color edge, Sprite icon)
+        {
+            UIButton button = UIBuilder.Notch(
+                UIBuilder.MakeButton(name, _actions, "", UITheme.FontSmall,
+                                     UITheme.PanelRaised, edge, UITheme.TextPrimary), 14);
+            UIBuilder.Box(button.Root, x, 0f, 220f, 96f, new Vector2(0.5f, 1f));
+
+            Image glyph = UIBuilder.Img("Glyph", button.Root, icon, edge);
+            UIBuilder.Box(glyph.rectTransform, UITheme.Space16, 0f, 34f, 34f, new Vector2(0f, 0.5f));
+
+            button.Label.alignment = TextAnchor.LowerLeft;
+            UIBuilder.Box(button.Label.rectTransform, 62f, 4f, 148f, 32f, new Vector2(0f, 0.5f));
+            button.Label.text = title;
+
+            button.SubLabel = UIBuilder.Label("Cost", button.Root, cost, UITheme.FontTiny - 2,
+                                              UITheme.TextMuted, TextAnchor.UpperLeft);
+            UIBuilder.Box(button.SubLabel.rectTransform, 62f, -18f, 148f, 26f, new Vector2(0f, 0.5f));
+            button.SubLabel.raycastTarget = false;
+            return button;
         }
 
         /// <summary>
@@ -272,25 +449,171 @@ namespace Emberfall.UI.Screens
         /// action is available.
         ///
         /// A first visit to this screen presents three priced buttons and no way to press any of
-        /// them: Combine and Reroll want Slag the player has none of and has never been told how to
-        /// get, and Salvage - the one action that PAYS Slag, and so the only way out of that - is
-        /// refused because the piece is worn. Nothing said any of it. Three dead buttons with
-        /// prices on them read as a broken screen rather than a locked one.
-        ///
-        /// Empty text rather than a hidden object so the layout is identical either way, and an
-        /// enabled action simply has nothing written beneath it.
+        /// them: Combine and Reroll want Slag the player has none of, and Salvage - the one action
+        /// that PAYS Slag - is refused because the piece is worn. Three dead buttons with prices on
+        /// them read as a broken screen rather than a locked one.
         /// </summary>
-        private static void Reason(RectTransform card, string name, float y, string text)
+        private static void Reason(RectTransform parent, string name, float x, string text)
         {
-            Text label = UIBuilder.Label(name, card, text, UITheme.FontTiny, UITheme.TextMuted,
-                                         TextAnchor.UpperRight);
-            UIBuilder.Box(label.rectTransform, -18f, y, 230f, 24f, new Vector2(1f, 1f));
+            Text label = UIBuilder.Label(name, parent, text, UITheme.FontTiny - 4, UITheme.TextMuted,
+                                         TextAnchor.UpperCenter);
+            UIBuilder.Box(label.rectTransform, x, -102f, 232f, 28f, new Vector2(0.5f, 1f));
         }
 
         /// <summary>
-        /// Why COMBINE is unavailable, in the order the player would hit the walls: a top-tier
-        /// piece can never combine, a worn one is refused outright by GameSession.CombineArmor,
-        /// then the two things they can actually go and fix - finding partners, and affording it.
+        /// Before, and what a Combine would make of it.
+        ///
+        /// Only Combine gets an "after" because only Combine has one that can be stated without
+        /// guessing: ArmorInfo.NextTemper gives the rung and ArmorInfo.SubStatCount gives how many
+        /// substats it will carry, both deterministic. The VALUES are rolled at the anvil, and the
+        /// panel says that in words rather than drawing numbers it would have had to invent.
+        /// </summary>
+        private void RebuildPanel(ArmorPiece focus)
+        {
+            for (int i = _panel.childCount - 1; i >= 0; i--)
+            {
+                Transform child = _panel.GetChild(i);
+                if (child.name == "Edge") continue;
+                Object.Destroy(child.gameObject);
+            }
+
+            if (focus == null)
+            {
+                Text none = UIBuilder.Label("None", _panel, "SELECT A PIECE",
+                                            UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(none.rectTransform, 0f);
+                return;
+            }
+
+            float top = UITheme.Space24;
+            top = BuildCompareBlock("Before", focus, focus.Temper, top, false);
+
+            ArmorTemper? next = ArmorInfo.NextTemper(focus.Temper);
+
+            Image arrow = UIBuilder.Img("Arrow", _panel, TextureLab.Diamond(48),
+                                        UITheme.WithAlpha(next.HasValue ? UITheme.Gold : UITheme.TextDim, 0.9f));
+            UIBuilder.Box(arrow.rectTransform, 0f, -top, 26f, 26f, new Vector2(0.5f, 1f));
+            top += 26f + UITheme.Space16;
+
+            if (!next.HasValue)
+            {
+                Text max = UIBuilder.Label("Max", _panel, "ALREADY THE TOP RUNG",
+                                           UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+                UIBuilder.Box(max.rectTransform, 0f, -top, PanelWidth - 40f, 30f, new Vector2(0.5f, 1f));
+                return;
+            }
+
+            top = BuildCompareBlock("After", focus, next.Value, top, true);
+
+            Text note = UIBuilder.WrappedLabel("Note", _panel,
+                "Rung and substat count are fixed. The rolls themselves are rolled at the anvil.",
+                UITheme.FontTiny - 6, UITheme.TextDim, TextAnchor.UpperCenter);
+            UIBuilder.Box(note.rectTransform, 0f, -top, PanelWidth - 56f, 42f, new Vector2(0.5f, 1f));
+        }
+
+        private float BuildCompareBlock(string name, ArmorPiece piece, ArmorTemper temper, float top, bool preview)
+        {
+            RectTransform block = UIBuilder.Node(name, _panel);
+            UIBuilder.Box(block, 0f, -top, PanelWidth - 40f, CompareBlock, new Vector2(0.5f, 1f));
+
+            Color tint = UITheme.ArmorTemperColor(temper);
+
+            RectTransform host = UIBuilder.Node("CardHost", block);
+            UIBuilder.Box(host, UITheme.Space16, -UITheme.Space8, 116f, 116f, new Vector2(0f, 1f));
+
+            // The SHARED component, at a third size, on a third screen. Same frame, same pip row.
+            RectTransform card = ItemCard.Build("Card", host, 116f, ItemCard.SlotIcon(piece.Slot),
+                                                tint, (int)temper + 1, 4,
+                                                UITheme.WithAlpha(UITheme.AspectAccent(piece.Aspect), 0.16f));
+            UIBuilder.FillParent(card, 0f);
+
+            Text rung = UIBuilder.Label("Rung", block, ArmorInfo.TemperLabel(temper).ToUpperInvariant(),
+                                        UITheme.FontSmall, tint, TextAnchor.UpperLeft);
+            UIBuilder.Box(rung.rectTransform, 116f + UITheme.Space32, -UITheme.Space8, 300f, 30f, new Vector2(0f, 1f));
+
+            int subs = ArmorInfo.SubStatCount(temper);
+            Text detail = UIBuilder.Label("Detail", block,
+                                          subs + (subs == 1 ? " SUBSTAT" : " SUBSTATS"),
+                                          UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.UpperLeft);
+            UIBuilder.Box(detail.rectTransform, 116f + UITheme.Space32, -42f, 300f, 26f, new Vector2(0f, 1f));
+
+            // The piece's actual lines. On the preview block these are the CURRENT rolls, dimmed and
+            // labelled as such, because the new ones do not exist until the anvil rolls them.
+            // The stat rows sit BELOW the card, not beside it. Beside it they shared the card's
+            // x range and were drawn straight across the artwork, which is what the first pass
+            // shipped: the bars started at the block's left edge and so did the card.
+            List<ArmorStatRoll> rolls = piece.AllRolls();
+            float rowTop = 132f;
+            int shown = Mathf.Min(rolls.Count, 3);
+            for (int i = 0; i < shown; i++)
+            {
+                ArmorStatRoll roll = rolls[i];
+                RectTransform row = ItemCard.StatBar("Stat" + i, block, StatIcon(roll.Stat),
+                                                     preview ? UITheme.WithAlpha(tint, 0.35f) : tint,
+                                                     DisplayRatio(roll), 6, 24f);
+                UIBuilder.Box(row, UITheme.Space16, -rowTop,
+                              PanelWidth - 40f - UITheme.Space32 - 190f, 24f, new Vector2(0f, 1f));
+
+                Text value = UIBuilder.Label("Value", block, ArmorInfo.StatLabel(roll.Stat) + "  " + RollText(roll),
+                                             UITheme.FontTiny - 6,
+                                             preview ? UITheme.TextDim : UITheme.TextMuted, TextAnchor.MiddleRight);
+                UIBuilder.Box(value.rectTransform, -UITheme.Space16, -rowTop, 182f, 24f, new Vector2(1f, 1f));
+                rowTop += 30f;
+            }
+
+            if (preview)
+            {
+                Text pending = UIBuilder.Label("Pending", block, "CURRENT ROLLS SHOWN - THESE REROLL",
+                                               UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.UpperLeft);
+                UIBuilder.Box(pending.rectTransform, UITheme.Space16, -rowTop, 420f, 22f, new Vector2(0f, 1f));
+            }
+
+            return top + CompareBlock;
+        }
+
+        /// <summary>Card (116) plus its 8px inset, then three 30px stat rows and a pending note.</summary>
+        private const float CompareBlock = 238f;
+
+        private static Sprite StatIcon(ArmorStat stat)
+        {
+            switch (stat)
+            {
+                case ArmorStat.MaxHp: return TextureLab.Heart(64);
+                case ArmorStat.Defense: return TextureLab.Shield(64);
+                case ArmorStat.Speed: return TextureLab.Boot(64);
+                case ArmorStat.EffectHit: return TextureLab.Spark(64);
+                case ArmorStat.EffectResist: return TextureLab.SpiralIcon(64);
+            }
+            return TextureLab.Sword(64);
+        }
+
+        private static string RollText(ArmorStatRoll roll)
+        {
+            return ArmorInfo.IsPercentStat(roll.Stat)
+                ? "+" + Mathf.RoundToInt(roll.Value * 100f) + "%"
+                : "+" + Mathf.RoundToInt(roll.Value);
+        }
+
+        /// <summary>
+        /// How full to draw a roll's bar.
+        ///
+        /// DISPLAY ONLY, and the printed number beside it is the authority. A roll has no natural
+        /// maximum to divide by - there is no "max possible Attack roll" exposed anywhere - so
+        /// these reference scales are chosen for legibility, not read from balance. They exist so
+        /// two pieces sitting side by side in the comparison panel are comparable at a glance; they
+        /// are not a percentage of anything and must not be read as one.
+        /// </summary>
+        private static float DisplayRatio(ArmorStatRoll roll)
+        {
+            if (ArmorInfo.IsPercentStat(roll.Stat)) return roll.Value / 0.45f;
+            if (roll.Stat == ArmorStat.MaxHp) return roll.Value / 1200f;
+            return roll.Value / 260f;
+        }
+
+        /// <summary>
+        /// Why COMBINE is unavailable, in the order the player would hit the walls: a top-tier piece
+        /// can never combine, a worn one is refused outright by GameSession.CombineArmor, then the
+        /// two things they can actually go and fix - finding partners, and affording it.
         /// </summary>
         private string CombineReason(bool equipped, bool hasNextTemper, int partnerCount, int cost)
         {
@@ -312,9 +635,9 @@ namespace Emberfall.UI.Screens
         // ------------------------------------------------------------------ actions
 
         /// <summary>Re-resolves the piece and its next temper here rather than trusting
-        /// closure-captured values from BuildForgeRow - the profile can only have changed since the
-        /// button was built by another action from THIS screen, and Rebuild runs after every one of
-        /// those, but re-resolving costs nothing and removes the assumption entirely.</summary>
+        /// closure-captured values - the profile can only have changed since the button was built by
+        /// another action from THIS screen, and Rebuild runs after every one of those, but
+        /// re-resolving costs nothing and removes the assumption entirely.</summary>
         private void OnCombine(string armorUidA, string armorUidB, string armorUidC)
         {
             ArmorPiece piece = App.Session.Profile.FindArmor(armorUidA);
@@ -334,6 +657,9 @@ namespace Emberfall.UI.Screens
 
             App.Audio.Tap();
             App.Notify("Forged a " + (next.HasValue ? ArmorInfo.TemperLabel(next.Value) + " " : "") + slot + ".");
+            // The three inputs are consumed, so the focus must let go of a uid that no longer
+            // resolves; Rebuild re-seats it on whatever the filter still holds.
+            _selectedUid = "";
             App.RequestSave();
             App.RefreshHud();
             Rebuild();
@@ -347,7 +673,7 @@ namespace Emberfall.UI.Screens
             int cost = App.Session.RerollCost(piece);
             if (!App.Session.RerollArmor(armorUid, TimeUtil.NowUnix()))
             {
-                App.Notify("Not enough Slag — the Forge wants " + cost + ".");
+                App.Notify("Not enough Slag - the Forge wants " + cost + ".");
                 return;
             }
 
@@ -373,24 +699,10 @@ namespace Emberfall.UI.Screens
 
             App.Audio.Tap();
             App.Notify(name + " salvaged for " + value + " Slag.");
+            _selectedUid = "";
             App.RequestSave();
             App.RefreshHud();
             Rebuild();
-        }
-
-        // ------------------------------------------------------------------ helpers
-
-        private RectTransform BuildCard()
-        {
-            RectTransform card = UIBuilder.Node("Card", _listContent);
-
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
-
-            return card;
         }
     }
 }

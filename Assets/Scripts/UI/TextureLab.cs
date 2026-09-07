@@ -829,6 +829,125 @@ namespace Emberfall.UI
             });
         }
 
+
+        // ---------------------------------------------------------------- gear and stat glyphs
+        //
+        // The same alpha-mask language as the currency icons above: a flat silhouette, at most one
+        // interior cut at reduced alpha. These are what the shared item card draws when a piece has
+        // no art of its own, and what the hero stat rows and the forge's comparison table label
+        // their rows with. Placeholders in the sense that real gear art would replace the card's
+        // icon; NOT placeholders as stat-row labels, where a flat glyph is the right answer.
+
+        /// <summary>Max HP.</summary>
+        public static Sprite Heart(int size)
+        {
+            float[] lobeless = { 0.04f, 0.62f, 0.96f, 0.62f, 0.50f, 0.04f };
+            return Mask("g_heart_" + size, size, delegate (float u, float v)
+            {
+                if (InPoly(u, v, lobeless) > 0f) return 1f;
+                float l = Mathf.Sqrt((u - 0.30f) * (u - 0.30f) + (v - 0.66f) * (v - 0.66f));
+                float r = Mathf.Sqrt((u - 0.70f) * (u - 0.70f) + (v - 0.66f) * (v - 0.66f));
+                return (l < 0.235f || r < 0.235f) ? 1f : 0f;
+            });
+        }
+
+        /// <summary>Attack, and the weapon slot.</summary>
+        public static Sprite Sword(int size)
+        {
+            float[] blade = { 0.50f, 0.97f, 0.60f, 0.72f, 0.60f, 0.34f, 0.40f, 0.34f, 0.40f, 0.72f };
+            return Mask("g_sword_" + size, size, delegate (float u, float v)
+            {
+                if (InPoly(u, v, blade) > 0f) return 1f;
+                if (v > 0.26f && v < 0.34f && u > 0.16f && u < 0.84f) return 1f;   // crossguard
+                if (v > 0.10f && v < 0.26f && u > 0.44f && u < 0.56f) return 1f;   // grip
+                float d = Mathf.Sqrt((u - 0.50f) * (u - 0.50f) + (v - 0.08f) * (v - 0.08f));
+                return d < 0.075f ? 1f : 0f;                                        // pommel
+            });
+        }
+
+        /// <summary>Defense.</summary>
+        public static Sprite Shield(int size)
+        {
+            float[] body = { 0.12f, 0.94f, 0.88f, 0.94f, 0.88f, 0.44f, 0.50f, 0.04f, 0.12f, 0.44f };
+            return Mask("g_shield_" + size, size, delegate (float u, float v)
+            {
+                if (InPoly(u, v, body) <= 0f) return 0f;
+                return OnSegment(u, v, 0.50f, 0.90f, 0.50f, 0.14f, 0.035f) > 0f ? 0.5f : 1f;
+            });
+        }
+
+        /// <summary>
+        /// Speed, and the boots slot.
+        ///
+        /// A side-view boot with an ankle taper and a toe, not the right-angled L the first pass
+        /// drew. At the 30px these render at, a plain L reads as the letter L - which is what it
+        /// looked like on the hero sheet's SPEED row and in the Forge's slot rail.
+        /// </summary>
+        public static Sprite Boot(int size)
+        {
+            float[] body = { 0.30f, 0.95f, 0.60f, 0.95f, 0.62f, 0.46f,
+                             0.88f, 0.38f, 0.95f, 0.24f, 0.26f, 0.24f, 0.26f, 0.62f };
+            return Mask("g_boot_" + size, size, delegate (float u, float v)
+            {
+                if (v > 0.10f && v < 0.24f && u > 0.22f && u < 0.95f) return 0.55f;   // sole
+                if (InPoly(u, v, body) <= 0f) return 0f;
+                if (v > 0.56f && v < 0.64f && u > 0.28f && u < 0.62f) return 0.5f;    // cuff seam
+                return 1f;
+            });
+        }
+
+        /// <summary>Effect Hit. A four-point spark.</summary>
+        public static Sprite Spark(int size)
+        {
+            return Mask("g_spark_" + size, size, delegate (float u, float v)
+            {
+                float x = Mathf.Abs(u - 0.5f) / 0.47f;
+                float y = Mathf.Abs(v - 0.5f) / 0.47f;
+                // Astroid: the concave-sided four-point star a "sparkle" reads as, rather than the
+                // straight-sided diamond that Diamond() already draws.
+                return (Mathf.Sqrt(x) + Mathf.Sqrt(y)) <= 1f ? 1f : 0f;
+            });
+        }
+
+        /// <summary>The helm slot.</summary>
+        public static Sprite Helm(int size)
+        {
+            return Mask("g_helm_" + size, size, delegate (float u, float v)
+            {
+                float dx = (u - 0.50f) / 0.38f, dy = (v - 0.50f) / 0.44f;
+                bool dome = v >= 0.50f && dx * dx + dy * dy <= 1f;
+                bool body = v < 0.50f && v > 0.10f && u > 0.14f && u < 0.86f;
+                if (!dome && !body) return 0f;
+                if (v > 0.30f && v < 0.48f && u > 0.24f && u < 0.76f) return 0.35f;   // visor slit
+                return 1f;
+            });
+        }
+
+        /// <summary>The plate slot.</summary>
+        public static Sprite Plate(int size)
+        {
+            float[] body = { 0.08f, 0.78f, 0.30f, 0.95f, 0.70f, 0.95f, 0.92f, 0.78f,
+                             0.86f, 0.18f, 0.64f, 0.06f, 0.36f, 0.06f, 0.14f, 0.18f };
+            return Mask("g_plate_" + size, size, delegate (float u, float v)
+            {
+                if (InPoly(u, v, body) <= 0f) return 0f;
+                return OnSegment(u, v, 0.50f, 0.86f, 0.50f, 0.12f, 0.05f) > 0f ? 0.45f : 1f;
+            });
+        }
+
+        /// <summary>Either accessory slot. A band with a set stone.</summary>
+        public static Sprite Ring(int size, bool gem)
+        {
+            return Mask("g_ring_" + size + "_" + gem, size, delegate (float u, float v)
+            {
+                float d = Mathf.Sqrt((u - 0.50f) * (u - 0.50f) + (v - 0.40f) * (v - 0.40f));
+                if (d > 0.30f && d < 0.42f) return 1f;                       // band
+                if (!gem) return 0f;
+                float[] stone = { 0.50f, 0.98f, 0.66f, 0.82f, 0.50f, 0.66f, 0.34f, 0.82f };
+                return InPoly(u, v, stone);                                  // set stone
+            });
+        }
+
         /// <summary>A locked node.</summary>
         public static Sprite Padlock(int size)
         {

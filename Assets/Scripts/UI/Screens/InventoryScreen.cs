@@ -9,35 +9,60 @@ using Emberfall.Core.Progression;
 namespace Emberfall.UI.Screens
 {
     /// <summary>
-    /// Player resources and owned relics in one place.
+    /// Everything the player owns, in one grid.
     ///
-    /// Resources section: a data-driven list of line items (Gold, Relic Dust) so adding a third
-    /// resource later is one new entry, not a new field.
+    /// Relics and armor share the grid rather than living in separate stacked sections: they are
+    /// both "a thing you own and put on a hero", the decision to equip one is made against the
+    /// other, and a player looking for their best Weapon should not have to know which of two
+    /// systems it belongs to first. The category rail narrows the grid; it does not change what
+    /// kind of screen this is.
     ///
-    /// Owned relics section: shows every relic the player holds, assigned or not, each with its
-    /// grade badge and its own text - a legendary's stat line, or a mythic's rule plus its stat
-    /// line. Tapping a relic's ASSIGN button opens an in-screen hero picker. Tapping UNASSIGN
-    /// returns the relic to the unassigned pool. No aspect restriction of any kind, and none by
-    /// grade either: the one slot is shared between the grades, so a hero wears one relic,
-    /// legendary or mythic, not one of each.
+    /// Tapping a card selects it. The detail panel states what it is and what it does, and carries
+    /// the one action - EQUIP, which opens the same hero picker this screen has always used. No
+    /// aspect restriction of any kind, and none by grade either: a hero wears one relic, legendary
+    /// or mythic, not one of each.
     ///
-    /// Armor section (DESIGN-ARMOR section 11): every piece the player owns, with its slot, aspect
-    /// and temper chips, its stat lines, and one action - EQUIP, the same hero picker relics use.
-    /// Reroll, Salvage and Combine live on their own screen, the Forge (`ScreenId.Forge`) - they
-    /// need no hero in context, so they moved out to a pool-wide hub rather than staying crammed
-    /// onto per-hero rows here. Equip stays: it is a per-hero decision, made in the presence of the
-    /// hero it affects.
+    /// Reroll, Salvage and Combine live on their own screen, the Forge (ScreenId.Forge) - they need
+    /// no hero in context, so they belong to a pool-wide hub rather than to a per-item row here.
+    /// Equip stays: it is a per-hero decision, made in the presence of the hero it affects.
     ///
-    /// The picker overlay is shared between relics and armor rather than duplicated. It was already
-    /// written against "pick a hero for this item", so what changed is that the item it is holding
-    /// is now one of two kinds - see _pickerRelic and _pickerArmorUid.
+    /// ---- visual pass ----
+    /// A GRID OF SHARED ITEM CARDS, not three stacked lists of text rows. The screen used to be a
+    /// resources card, then a list of relic rows, then a list of armor rows, each row a wide strip
+    /// of prose - which meant nothing was scannable, the two kinds of item looked like two kinds of
+    /// screen, and the player's whole collection was a vertical scroll. It is now the rail-grid-
+    /// detail shape the mockup draws, and every cell is ItemCard, the same component the Hero
+    /// Detail slots and the Forge anvil draw.
+    ///
+    /// THE PICKER IS UNTOUCHED. Everything from OpenPicker down to OnPickerUnassign is the code it
+    /// was, including the roster-sized modal, the per-hero power pricing and the displaced-item
+    /// line. That machinery is the good part of this screen and none of it is visual.
     /// </summary>
     public sealed class InventoryScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Inventory; } }
 
+        private const float RailX = -872f;
+        private const float RailWidth = 116f;
+        private const float GridX = -226f;
+        private const float GridWidth = 1044f;
+        private const float CardSize = 128f;
+        private const float DetailX = 626f;
+        private const float DetailWidth = 552f;
+
         private Text _headerSubtitle;
-        private RectTransform _listContent;
+
+        private RectTransform _rail;
+        private RectTransform _grid;
+        private RectTransform _detail;
+        private Text _gridHeading;
+        private readonly List<UIButton> _railButtons = new List<UIButton>();
+
+        /// <summary>Presentation state. 0 all, 1 relics, 2..7 an armor slot. Nothing reaches the profile.</summary>
+        private int _filter;
+
+        /// <summary>"R:relicId" or "A:armorUid". Prefixed because the two are keyed differently.</summary>
+        private string _selected = "";
 
         // Hero picker overlay -- built once in Build(), shown/hidden on demand.
         private RectTransform _pickerRoot;
@@ -76,13 +101,83 @@ namespace Emberfall.UI.Screens
         {
             ScreenChrome.Header(Root, "INVENTORY", Router, out _headerSubtitle);
 
-            ScrollRect scroll;
-            _listContent = UIBuilder.ScrollList("Content", Root, out scroll,
-                                                16f, new RectOffset(32, 32, 12, 48));
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 0f, ScreenChrome.HeaderTop + 108f, 0f, 0f);
-
+            float top = ScreenChrome.HeaderTop + 108f + UITheme.Space16;
+            BuildRail(top);
+            BuildGrid(top);
+            BuildDetail(top);
             BuildHeroPicker();
+        }
+
+        /// <summary>The category rail, down the left, as the mockup draws it.</summary>
+        private void BuildRail(float top)
+        {
+            _rail = UIBuilder.Node("Rail", Root);
+            UIBuilder.Box(_rail, RailX, -top, RailWidth, 8f * 82f + 8f, new Vector2(0.5f, 1f));
+
+            Image bg = _rail.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(14);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.9f);
+            bg.raycastTarget = false;
+            UIBuilder.NotchedFrame("Edge", _rail, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 14, 2);
+
+            AddRailButton(0, TextureLab.Chest(64), "ALL");
+            AddRailButton(1, TextureLab.Sigil(13, 64), "RELIC");
+            for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
+                AddRailButton(i + 2, ItemCard.SlotIcon(ArmorInfo.AllSlots[i]),
+                              ItemCard.ShortSlotName(ArmorInfo.AllSlots[i]));
+        }
+
+        private void AddRailButton(int index, Sprite icon, string tip)
+        {
+            UIButton button = UIBuilder.Notch(
+                UIBuilder.MakeButton("Rail" + index, _rail, "", UITheme.FontTiny,
+                                     UITheme.WithAlpha(UITheme.Panel, 0.9f), UITheme.BorderSoft,
+                                     UITheme.TextPrimary), 10);
+            UIBuilder.Box(button.Root, 0f, -(8f + index * 82f), 92f, 74f, new Vector2(0.5f, 1f));
+
+            Image glyph = UIBuilder.Img("Glyph", button.Root, icon, UITheme.TextMuted);
+            UIBuilder.Box(glyph.rectTransform, 0f, 6f, 34f, 34f, new Vector2(0.5f, 0.5f));
+
+            Text label = UIBuilder.Label("Tip", button.Root, tip, UITheme.FontTiny - 8,
+                                         UITheme.TextDim, TextAnchor.LowerCenter);
+            UIBuilder.Box(label.rectTransform, 0f, 4f, 88f, 18f, new Vector2(0.5f, 0f));
+
+            int captured = index;
+            button.OnClick(delegate { SetFilter(captured); });
+            _railButtons.Add(button);
+        }
+
+        private void BuildGrid(float top)
+        {
+            _gridHeading = UIBuilder.Label("GridHeading", Root, "", UITheme.FontTiny,
+                                           UITheme.TextDim, TextAnchor.UpperLeft);
+            // Centred on the grid with left-aligned TEXT, not anchored to the parent's left edge.
+            // Box's anchor is also its pivot, so a (0,1) anchor measures x from the canvas edge -
+            // which put this heading at x=-1708, off screen and through the rail.
+            UIBuilder.Box(_gridHeading.rectTransform, GridX, -top, GridWidth, 28f,
+                          new Vector2(0.5f, 1f));
+
+            ScrollRect scroll;
+            _grid = UIBuilder.ScrollGrid("Grid", Root, out scroll,
+                                         new Vector2(CardSize, CardSize),
+                                         new Vector2(UITheme.Space16, UITheme.Space16), 7,
+                                         new RectOffset(10, 10, 10, 10));
+            UIBuilder.Box(scroll.GetComponent<RectTransform>(), GridX, -(top + 32f), GridWidth, 604f,
+                          new Vector2(0.5f, 1f));
+        }
+
+        private void BuildDetail(float top)
+        {
+            _detail = UIBuilder.Node("Detail", Root);
+            UIBuilder.Box(_detail, DetailX, -top, DetailWidth, 636f, new Vector2(0.5f, 1f));
+
+            Image bg = _detail.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(18);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
+            bg.raycastTarget = false;
+            UIBuilder.NotchedFrame("Edge", _detail, UITheme.WithAlpha(UITheme.ChromeBrass, 0.8f), 18, 2);
         }
 
         // ------------------------------------------------------------------ picker overlay
@@ -475,330 +570,501 @@ namespace Emberfall.UI.Screens
             RebuildAll();
         }
 
-        private void RebuildAll()
+        private void SetFilter(int filter)
         {
-            for (int i = _listContent.childCount - 1; i >= 0; i--)
-                Object.Destroy(_listContent.GetChild(i).gameObject);
-
-            BuildResourcesSection();
-            UIBuilder.Spacer("Gap", _listContent, 8f);
-            BuildRelicsSection();
-            UIBuilder.Spacer("Gap2", _listContent, 8f);
-            BuildArmorSection();
-        }
-
-        private void RebuildRelics()
-        {
-            // Remove only the relic section (everything from "RelicsHeader" down).
-            // Simpler: just rebuild the whole list.
+            if (_filter == filter) return;
+            _filter = filter;
+            _selected = "";
+            App.Audio.Tap();
             RebuildAll();
         }
 
-        // ------------------------------------------------------------------ resources section
-
-        private void BuildResourcesSection()
+        private void Select(string key)
         {
-            BuildSectionHeader("RESOURCES");
+            if (_selected == key) return;
+            _selected = key;
+            App.Audio.Tap();
+            RebuildAll();
+        }
 
-            PlayerProfile p = App.Session.Profile;
+        /// <summary>Kept: the picker's assign/unassign paths call this by name.</summary>
+        private void RebuildRelics()
+        {
+            RebuildAll();
+        }
 
-            // Data-driven: adding a third resource is one more entry here. Slag is that third
-            // entry, and it went in as one line exactly as the card was written to allow.
-            var rows = new[]
+        private void RebuildAll()
+        {
+            PlayerProfile profile = App.Session.Profile;
+
+            for (int i = 0; i < _railButtons.Count; i++)
             {
-                new { Label = "Gold", Value = HudTopBar.Format(p.Gold), Color = UITheme.Gold },
-                new { Label = "Relic Dust", Value = HudTopBar.Format(p.RelicDust), Color = UITheme.Ember },
-                new { Label = "Slag", Value = HudTopBar.Format(p.Slag), Color = UITheme.ArmorTemperColor(ArmorTemper.Gilded) },
-            };
+                bool active = i == _filter;
+                _railButtons[i].Background.color = active
+                    ? UITheme.WithAlpha(UITheme.Gold, 0.20f)
+                    : UITheme.WithAlpha(UITheme.Panel, 0.9f);
+                _railButtons[i].Frame.color = active ? UITheme.Gold : UITheme.BorderSoft;
+                Transform glyph = _railButtons[i].Root.Find("Glyph");
+                if (glyph != null)
+                    glyph.GetComponent<Image>().color = active ? UITheme.Gold : UITheme.TextMuted;
+            }
 
-            RectTransform card = BuildCard();
-            RectTransform list = UIBuilder.Node("ResourceList", card);
-            UIBuilder.FillParent(list, 16f, 16f, 16f, 16f);
-            UIBuilder.VStack(list, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+            _headerSubtitle.text = profile.OwnedRelics.Count + " RELICS   -   "
+                                 + profile.OwnedArmor.Count + " ARMOR PIECES";
 
-            for (int i = 0; i < rows.Length; i++)
+            RebuildGrid();
+            RebuildDetail();
+        }
+
+        // ------------------------------------------------------------------ the grid
+
+        private bool ShowRelics { get { return _filter == 0 || _filter == 1; } }
+
+        private bool ShowsSlot(ArmorSlot slot)
+        {
+            if (_filter == 0) return true;
+            if (_filter == 1) return false;
+            return ArmorInfo.AllSlots[_filter - 2] == slot;
+        }
+
+        private void RebuildGrid()
+        {
+            for (int i = _grid.childCount - 1; i >= 0; i--) Object.Destroy(_grid.GetChild(i).gameObject);
+
+            PlayerProfile profile = App.Session.Profile;
+            int count = 0;
+
+            if (ShowRelics)
             {
-                Color rowColor = rows[i].Color;
-                string rowLabel = rows[i].Label;
-                string rowValue = rows[i].Value;
-
-                RectTransform row = UIBuilder.Node("Row_" + i, list);
-                UIBuilder.Sized(row, 0f, 54f);
-
-                Text labelText = UIBuilder.Label("Label", row, rowLabel,
-                                                 UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleLeft);
-                UIBuilder.FillParent(labelText.rectTransform, 16f, 0f, 0f, 0f);
-
-                Text valueText = UIBuilder.Label("Value", row, rowValue,
-                                                 UITheme.FontSmall, rowColor, TextAnchor.MiddleRight);
-                UIBuilder.FillParent(valueText.rectTransform, 0f, 0f, 16f, 0f);
-
-                if (i < rows.Length - 1)
+                List<OwnedRelic> relics = profile.OwnedRelics;
+                for (int i = 0; i < relics.Count; i++)
                 {
-                    Image rule = UIBuilder.Img("Rule", row, TextureLab.White,
-                                               UITheme.WithAlpha(UITheme.BorderSoft, 0.5f));
-                    rule.rectTransform.anchorMin = new Vector2(0f, 0f);
-                    rule.rectTransform.anchorMax = new Vector2(1f, 0f);
-                    rule.rectTransform.pivot = new Vector2(0.5f, 0f);
-                    rule.rectTransform.offsetMin = new Vector2(8f, 0f);
-                    rule.rectTransform.offsetMax = new Vector2(-8f, 0f);
-                    rule.rectTransform.sizeDelta = new Vector2(0f, 1f);
+                    RelicDef def = App.Session.Content.GetRelic(relics[i].RelicId);
+                    if (def == null) continue;
+                    AddRelicCell(relics[i], def);
+                    count++;
                 }
             }
 
-            // Fix card height to match content: rows.Length rows × 54px + 32px padding.
-            UIBuilder.Sized(card, 0f, rows.Length * 54f + 32f);
+            List<ArmorPiece> armor = profile.OwnedArmor;
+            for (int i = 0; i < armor.Count; i++)
+            {
+                if (!ShowsSlot(armor[i].Slot)) continue;
+                AddArmorCell(armor[i]);
+                count++;
+            }
+
+            _gridHeading.text = FilterName() + "   (" + count + ")";
+
+            if (count == 0)
+            {
+                RectTransform cell = UIBuilder.Node("Empty", _grid);
+                Text empty = UIBuilder.Label("Text", cell, "-", UITheme.FontSmall,
+                                             UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(empty.rectTransform, 0f);
+
+                Text hint = UIBuilder.Label("Hint", Root, EmptyHint(), UITheme.FontTiny,
+                                            UITheme.TextDim, TextAnchor.UpperCenter);
+                UIBuilder.Box(hint.rectTransform, GridX, -(ScreenChrome.HeaderTop + 108f + UITheme.Space16 + 220f),
+                              700f, 30f, new Vector2(0.5f, 1f));
+                hint.name = "EmptyHint";
+            }
+            else
+            {
+                Transform stale = Root.Find("EmptyHint");
+                if (stale != null) Object.Destroy(stale.gameObject);
+            }
+
+            // Nothing selected, or the selection fell out of the filter: land on the first cell so
+            // the detail panel always has a subject.
+            if (_grid.childCount > 0 && !SelectionVisible()) SelectFirstVisible();
         }
 
-        // ------------------------------------------------------------------ relics section
-
-        private void BuildRelicsSection()
+        private string FilterName()
         {
-            BuildSectionHeader("OWNED RELICS");
+            if (_filter == 0) return "EVERYTHING";
+            if (_filter == 1) return "RELICS";
+            return ArmorInfo.SlotLabel(ArmorInfo.AllSlots[_filter - 2]).ToUpperInvariant();
+        }
 
-            List<OwnedRelic> owned = App.Session.Profile.OwnedRelics;
-            if (owned.Count == 0)
+        private string EmptyHint()
+        {
+            if (_filter == 1) return "Relics are bought at the Relic Shop.";
+            return "Armor drops from stage clears.";
+        }
+
+        private bool SelectionVisible()
+        {
+            if (string.IsNullOrEmpty(_selected)) return false;
+            for (int i = 0; i < _grid.childCount; i++)
+                if (_grid.GetChild(i).name == "Cell_" + _selected) return true;
+            return false;
+        }
+
+        private void SelectFirstVisible()
+        {
+            for (int i = 0; i < _grid.childCount; i++)
             {
-                RectTransform emptyCard = BuildCard();
-                UIBuilder.Sized(emptyCard, 0f, 100f);
-                Text empty = UIBuilder.Label("Empty", emptyCard,
-                                             "No relics yet — buy them from the Relic Shop.",
-                                             UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(empty.rectTransform, 20f);
+                string n = _grid.GetChild(i).name;
+                if (!n.StartsWith("Cell_")) continue;
+                _selected = n.Substring(5);
+                RebuildDetail();
+                MarkSelected();
+                return;
+            }
+        }
+
+        /// <summary>Lifts the selected cell. Re-run rather than rebuilt, so selecting is cheap.</summary>
+        private void MarkSelected()
+        {
+            for (int i = 0; i < _grid.childCount; i++)
+            {
+                Transform cell = _grid.GetChild(i);
+                Transform halo = cell.Find("Selected");
+                if (halo == null) continue;
+                halo.gameObject.SetActive(cell.name == "Cell_" + _selected);
+            }
+        }
+
+        private void AddRelicCell(OwnedRelic owned, RelicDef def)
+        {
+            string key = "R:" + owned.RelicId;
+            RectTransform cell = MakeCell(key);
+
+            RectTransform card = ItemCard.ForRelic("Card", cell, CardSize, def,
+                                                   owned.Tier, App.Session.RelicMaxTier);
+            UIBuilder.FillParent(card, 0f);
+
+            if (App.Session.Profile.HeroHoldingRelic(owned.RelicId) != null) MarkWorn(cell);
+            FinishCell(cell, key);
+        }
+
+        private void AddArmorCell(ArmorPiece piece)
+        {
+            string key = "A:" + piece.Uid;
+            RectTransform cell = MakeCell(key);
+
+            RectTransform card = ItemCard.ForArmor("Card", cell, CardSize, piece);
+            UIBuilder.FillParent(card, 0f);
+
+            if (App.Session.Profile.HeroWearingArmor(piece.Uid) != null) MarkWorn(cell);
+            FinishCell(cell, key);
+        }
+
+        private RectTransform MakeCell(string key)
+        {
+            RectTransform cell = UIBuilder.Node("Cell_" + key, _grid);
+
+            Image halo = UIBuilder.Img("Selected", cell, TextureLab.Glow(96, 1.6f),
+                                       UITheme.WithAlpha(UITheme.Gold, 0.32f));
+            UIBuilder.FillParent(halo.rectTransform, -14f);
+            halo.gameObject.SetActive(key == _selected);
+            return cell;
+        }
+
+        /// <summary>A worn item is marked, so the grid says what is already in use.</summary>
+        private static void MarkWorn(RectTransform cell)
+        {
+            Image worn = UIBuilder.Img("Worn", cell, TextureLab.Check(32), UITheme.Success);
+            UIBuilder.Box(worn.rectTransform, -6f, -6f, 22f, 22f, new Vector2(1f, 1f));
+        }
+
+        private void FinishCell(RectTransform cell, string key)
+        {
+            Image target = cell.gameObject.AddComponent<Image>();
+            target.color = new Color(1f, 1f, 1f, 0.003f);   // a Button needs a graphic to be hit
+            target.rectTransform.SetAsFirstSibling();
+
+            Button press = cell.gameObject.AddComponent<Button>();
+            press.transition = Selectable.Transition.None;
+            press.targetGraphic = target;
+
+            string captured = key;
+            press.onClick.AddListener(delegate { Select(captured); });
+        }
+
+        // ------------------------------------------------------------------ the detail panel
+
+        private void RebuildDetail()
+        {
+            for (int i = _detail.childCount - 1; i >= 0; i--)
+            {
+                Transform child = _detail.GetChild(i);
+                if (child.name == "Edge") continue;
+                Object.Destroy(child.gameObject);
+            }
+
+            if (string.IsNullOrEmpty(_selected))
+            {
+                Text none = UIBuilder.Label("None", _detail, "SELECT AN ITEM", UITheme.FontSmall,
+                                            UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
 
-            for (int i = 0; i < owned.Count; i++) BuildRelicRow(owned[i]);
+            if (_selected.StartsWith("A:")) DetailForArmor(_selected.Substring(2));
+            else DetailForRelic(_selected.Substring(2));
         }
 
-        private void BuildRelicRow(OwnedRelic owned)
+        /// <summary>The shared head of both detail panels: the card, the tier row, the name.</summary>
+        private float DetailHead(RectTransform card, string name, string rung, Color tint,
+                                 int pips, int maxPips)
         {
-            RelicDef def = App.Session.Content.GetRelic(owned.RelicId);
-            string name = def != null ? def.Name : owned.RelicId;
-            // A legendary's stat line, or a mythic's rule plus its stat line, picked by the def
-            // rather than here. A relic id the content no longer defines falls back to empty.
-            string cardText = def != null ? def.CardText() : "";
+            float top = UITheme.Space24;
 
-            HeroInstance holder = App.Session.Profile.HeroHoldingRelic(owned.RelicId);
-            bool assigned = holder != null;
-            string holderName = assigned && holder.Def != null ? holder.Def.Name : "";
+            RectTransform host = UIBuilder.Node("CardHost", _detail);
+            UIBuilder.Box(host, UITheme.Space24, -top, 150f, 150f, new Vector2(0f, 1f));
+            card.SetParent(host, false);
+            UIBuilder.FillParent(card, 0f);
 
-            RectTransform card = UIBuilder.Node("Relic_" + owned.RelicId, _listContent);
-            UIBuilder.Sized(card, 0f, 150f);
+            float textLeft = UITheme.Space24 + 150f + UITheme.Space24;
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = assigned ? UITheme.WithAlpha(UITheme.Panel, 0.95f) : UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.Ember, assigned ? 0.7f : 0.3f), 18, 2);
+            Text nameLabel = UIBuilder.WrappedLabel("Name", _detail, name, UITheme.FontSmall,
+                                                    UITheme.TextPrimary, TextAnchor.UpperLeft);
+            UIBuilder.Box(nameLabel.rectTransform, textLeft, -top, DetailWidth - textLeft - UITheme.Space24,
+                          62f, new Vector2(0f, 1f));
 
-            // Ember disc icon.
-            RectTransform icon = UIBuilder.Node("Icon", card);
-            UIBuilder.Box(icon, 22f, 0f, 68f, 68f, new Vector2(0f, 0.5f));
-            Image disc = icon.gameObject.AddComponent<Image>();
-            disc.sprite = TextureLab.Circle(96);
-            disc.color = UITheme.WithAlpha(UITheme.Ember, 0.22f);
-            disc.raycastTarget = false;
-            Image ring = UIBuilder.Img("Ring", icon, TextureLab.Ring(96, 4), UITheme.WithAlpha(UITheme.Ember, 0.8f));
-            UIBuilder.FillParent(ring.rectTransform, 0f);
+            Text rungLabel = UIBuilder.Label("Rung", _detail, rung, UITheme.FontTiny, tint, TextAnchor.UpperLeft);
+            UIBuilder.Box(rungLabel.rectTransform, textLeft, -(top + 66f),
+                          DetailWidth - textLeft - UITheme.Space24, 26f, new Vector2(0f, 1f));
 
-            // Name.
-            Text nameLabel = UIBuilder.Label("Name", card, name,
-                                             UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            nameLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            nameLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            nameLabel.rectTransform.offsetMin = new Vector2(108f, -46f);
-            nameLabel.rectTransform.offsetMax = new Vector2(-190f, -16f);
+            // The tier row, bracketed by rule lines exactly as the mockup draws it.
+            Rule(textLeft, top + 98f, DetailWidth - textLeft - UITheme.Space24);
+            RectTransform pipRow = UIBuilder.Node("Pips", _detail);
+            UIBuilder.Box(pipRow, textLeft, -(top + 104f), 220f, 30f, new Vector2(0f, 1f));
+            for (int i = 0; i < maxPips; i++)
+            {
+                Image pip = UIBuilder.Img("Pip" + i, pipRow, TextureLab.Diamond(32),
+                                          i < pips ? tint : UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
+                UIBuilder.Box(pip.rectTransform, 13f + i * 34f, 0f, 24f, 24f, new Vector2(0f, 0.5f));
+            }
+            Rule(textLeft, top + 140f, DetailWidth - textLeft - UITheme.Space24);
 
-            // Grade badge, on every row of both grades - it is what tells a player whether the
-            // line at the bottom of the card is a plain stat list or a rule with stats stacked on
-            // it. Falls back to Legendary for a relic id the content no longer defines, which is
-            // also what CardText() falls back to via RelicDef's own default.
-            RelicGrade grade = def != null ? def.Grade : RelicGrade.Legendary;
-            RectTransform gradeBadge = UIBuilder.Chip("Grade", card, UITheme.RelicGradeLabel(grade),
-                                                      UITheme.RelicGradeColor(grade), UITheme.FontTiny);
-            UIBuilder.Box(gradeBadge, 108f, -46f, 132f, 28f, new Vector2(0f, 1f));
+            return top + 168f;
+        }
 
-            // Assignment status, beside the badge.
-            string statusText = assigned ? ("Equipped  -  " + holderName) : "Unassigned";
-            Color statusColor = assigned ? UITheme.Success : UITheme.TextMuted;
-            Text statusLabel = UIBuilder.Label("Status", card, statusText,
-                                               UITheme.FontTiny, statusColor, TextAnchor.UpperLeft);
-            statusLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            statusLabel.rectTransform.offsetMin = new Vector2(252f, -72f);
-            statusLabel.rectTransform.offsetMax = new Vector2(-190f, -46f);
+        private void Rule(float x, float y, float width)
+        {
+            Image rule = UIBuilder.Img("Rule" + y, _detail, TextureLab.White,
+                                       UITheme.WithAlpha(UITheme.ChromeBrass, 0.55f));
+            UIBuilder.Box(rule.rectTransform, x, -y, width, 1f, new Vector2(0f, 1f));
+        }
 
-            // The relic's own text: a legendary's numbers, or a mythic's rule plus its numbers.
-            Text ruleLabel = UIBuilder.WrappedLabel("Rule", card, cardText,
-                                                    UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            ruleLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
-            ruleLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            ruleLabel.rectTransform.offsetMin = new Vector2(108f, 14f);
-            ruleLabel.rectTransform.offsetMax = new Vector2(-190f, -74f);
+        private void DetailForArmor(string uid)
+        {
+            ArmorPiece piece = App.Session.Profile.FindArmor(uid);
+            if (piece == null) { _selected = ""; RebuildDetail(); return; }
 
-            // Assign button.
-            UIButton assignBtn = UIBuilder.PrimaryButton("Assign", card, "ASSIGN", UITheme.FontSmall);
-            UIBuilder.Box(assignBtn.Root, -18f, 0f, 160f, 72f, new Vector2(1f, 0.5f));
+            Color tint = UITheme.ArmorTemperColor(piece.Temper);
+            RectTransform card = ItemCard.ForArmor("Card", _detail, 150f, piece);
+            float top = DetailHead(card, piece.Name,
+                                   ArmorInfo.TemperLabel(piece.Temper).ToUpperInvariant()
+                                   + "   -   " + ArmorInfo.SlotLabel(piece.Slot).ToUpperInvariant(),
+                                   tint, (int)piece.Temper + 1, 4);
+
+            List<ArmorStatRoll> rolls = piece.AllRolls();
+            for (int i = 0; i < rolls.Count && i < 5; i++)
+            {
+                ArmorStatRoll roll = rolls[i];
+                StatLine(ArmorInfo.StatLabel(roll.Stat), RollText(roll), StatIcon(roll.Stat),
+                         tint, DisplayRatio(roll), top);
+                top += 34f;
+            }
+
+            top += UITheme.Space16;
+            AspectRow(top, piece.Aspect, true);
+            top += 92f;
+
+            Wearer(top, App.Session.Profile.HeroWearingArmor(uid));
+            ArmorPiece captured = piece;
+            Action(delegate { OpenArmorPicker(captured); });
+        }
+
+        private void DetailForRelic(string relicId)
+        {
+            OwnedRelic owned = null;
+            List<OwnedRelic> all = App.Session.Profile.OwnedRelics;
+            for (int i = 0; i < all.Count; i++) if (all[i].RelicId == relicId) { owned = all[i]; break; }
+
+            RelicDef def = App.Session.Content.GetRelic(relicId);
+            if (owned == null || def == null) { _selected = ""; RebuildDetail(); return; }
+
+            Color tint = UITheme.RelicGradeColor(def.Grade);
+            RectTransform card = ItemCard.ForRelic("Card", _detail, 150f, def, owned.Tier,
+                                                   App.Session.RelicMaxTier);
+            float top = DetailHead(card, def.Name, UITheme.RelicGradeLabel(def.Grade),
+                                   tint, owned.Tier, Mathf.Max(1, App.Session.RelicMaxTier));
+
+            for (int i = 0; i < def.Stats.Count && i < 5; i++)
+            {
+                RelicStatBonus bonus = def.Stats[i];
+                int pct = Mathf.RoundToInt(bonus.Value * 100f);
+                StatLine(RelicDef.StatLabel(bonus.Stat), (pct >= 0 ? "+" : "") + pct + "%",
+                         RelicStatIcon(bonus.Stat), tint, bonus.Value / 0.30f, top);
+                top += 34f;
+            }
+
+            if (!string.IsNullOrEmpty(def.Rule))
+            {
+                top += UITheme.Space8;
+                Text rule = UIBuilder.WrappedLabel("Rule", _detail, def.Rule, UITheme.FontTiny - 4,
+                                                   UITheme.TextMuted, TextAnchor.UpperLeft);
+                UIBuilder.Box(rule.rectTransform, UITheme.Space24, -top,
+                              DetailWidth - UITheme.Space48, 74f, new Vector2(0f, 1f));
+                top += 78f;
+            }
+
+            top += UITheme.Space16;
+            // A relic is never flavoured to an aspect, so the row is drawn inert rather than
+            // omitted - the absence is the fact, and leaving the row out would just look like the
+            // panel forgot it. See UITheme.RelicGradeColor's own note.
+            AspectRow(top, Aspect.Ember, false);
+            top += 92f;
+
+            Wearer(top, App.Session.Profile.HeroHoldingRelic(relicId));
             OwnedRelic captured = owned;
-            assignBtn.OnClick(delegate { OpenPicker(captured); });
+            Action(delegate { OpenPicker(captured); });
         }
 
-        // ------------------------------------------------------------------ armor section
-
-        private void BuildArmorSection()
+        private void StatLine(string label, string value, Sprite icon, Color tint, float ratio, float top)
         {
-            BuildSectionHeader("ARMOR");
-            BuildForgeLink();
+            RectTransform row = ItemCard.StatBar("Stat_" + label, _detail, icon, tint, ratio, 6, 26f);
+            UIBuilder.Box(row, UITheme.Space24, -top, DetailWidth - UITheme.Space48 - 178f, 26f,
+                          new Vector2(0f, 1f));
 
-            List<ArmorPiece> owned = App.Session.Profile.OwnedArmor;
-            if (owned.Count == 0)
+            Text text = UIBuilder.Label("Val_" + label, _detail, label + "  " + value,
+                                        UITheme.FontTiny - 6, UITheme.TextMuted, TextAnchor.MiddleRight);
+            UIBuilder.Box(text.rectTransform, -UITheme.Space24, -top, 186f, 26f, new Vector2(1f, 1f));
+        }
+
+        /// <summary>
+        /// The six aspects, with this item's own lit. Armour carries a rolled Aspect that decides
+        /// its attunement with a wearer; a relic carries none at all, and <paramref name="live"/>
+        /// false draws every pip dark to say exactly that.
+        /// </summary>
+        private void AspectRow(float top, Aspect own, bool live)
+        {
+            RectTransform row = UIBuilder.Node("Aspects", _detail);
+            UIBuilder.Box(row, 0f, -top, DetailWidth - UITheme.Space48, 78f, new Vector2(0.5f, 1f));
+
+            Image bg = row.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(10);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.85f);
+            bg.raycastTarget = false;
+
+            float width = DetailWidth - UITheme.Space48;
+            float step = width / 6f;
+            for (int i = 0; i < 6; i++)
             {
-                RectTransform emptyCard = BuildCard();
-                UIBuilder.Sized(emptyCard, 0f, 100f);
-                Text empty = UIBuilder.Label("Empty", emptyCard,
-                                             "No armor yet — pieces drop from stage clears.",
-                                             UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(empty.rectTransform, 20f);
-                return;
+                Aspect aspect = (Aspect)i;
+                bool lit = live && aspect == own;
+                Color accent = UITheme.AspectAccent(aspect);
+
+                float x = -width * 0.5f + step * (i + 0.5f);
+                Image icon = UIBuilder.Img("A" + i, row, TextureLab.Sigil(AspectSigil(aspect), 128),
+                                           lit ? accent : UITheme.WithAlpha(accent, 0.22f));
+                UIBuilder.Box(icon.rectTransform, x, 12f, 30f, 30f, new Vector2(0.5f, 0.5f));
+
+                Image dot = UIBuilder.Img("D" + i, row, TextureLab.Circle(32),
+                                          lit ? accent : UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
+                UIBuilder.Box(dot.rectTransform, x, -18f, 12f, 12f, new Vector2(0.5f, 0.5f));
             }
 
-            for (int i = 0; i < owned.Count; i++) BuildArmorRow(owned[i]);
+            if (!live)
+            {
+                Text note = UIBuilder.Label("Note", row, "RELICS CARRY NO ASPECT",
+                                            UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.LowerCenter);
+                UIBuilder.Box(note.rectTransform, 0f, 2f, width, 18f, new Vector2(0.5f, 0f));
+            }
+        }
+
+        private void Wearer(float top, HeroInstance holder)
+        {
+            string text = holder != null
+                ? "WORN BY " + (holder.Def != null ? holder.Def.Name.ToUpperInvariant() : holder.DefId)
+                : "NOT EQUIPPED";
+            Text label = UIBuilder.Label("Wearer", _detail, text, UITheme.FontTiny,
+                                         holder != null ? UITheme.Success : UITheme.TextDim,
+                                         TextAnchor.UpperCenter);
+            UIBuilder.Box(label.rectTransform, 0f, -top, DetailWidth - UITheme.Space48, 28f,
+                          new Vector2(0.5f, 1f));
+        }
+
+        private void Action(UnityEngine.Events.UnityAction onEquip)
+        {
+            UIButton equip = UIBuilder.Notch(
+                UIBuilder.GoldButton("Equip", _detail, "EQUIP", UITheme.FontSmall), 14);
+            UIBuilder.Box(equip.Root, 0f, UITheme.Space24, DetailWidth - UITheme.Space48, 64f,
+                          new Vector2(0.5f, 0f));
+            equip.Button.onClick.AddListener(onEquip);
+        }
+
+        // ------------------------------------------------------------------ glyph mapping
+
+        private static Sprite StatIcon(ArmorStat stat)
+        {
+            switch (stat)
+            {
+                case ArmorStat.MaxHp: return TextureLab.Heart(64);
+                case ArmorStat.Defense: return TextureLab.Shield(64);
+                case ArmorStat.Speed: return TextureLab.Boot(64);
+                case ArmorStat.EffectHit: return TextureLab.Spark(64);
+                case ArmorStat.EffectResist: return TextureLab.SpiralIcon(64);
+            }
+            return TextureLab.Sword(64);
+        }
+
+        private static Sprite RelicStatIcon(RelicStat stat)
+        {
+            switch (stat)
+            {
+                case RelicStat.MaxHp: return TextureLab.Heart(64);
+                case RelicStat.Defense: return TextureLab.Shield(64);
+                case RelicStat.Speed: return TextureLab.Boot(64);
+                case RelicStat.EffectHit: return TextureLab.Spark(64);
+                case RelicStat.EffectResist: return TextureLab.SpiralIcon(64);
+            }
+            return TextureLab.Sword(64);
         }
 
         /// <summary>
-        /// One armor piece. Taller than a relic row because a piece carries more to say: two chips
-        /// (temper and aspect) plus a slot label and its stat lines. One action - EQUIP - unlike a
-        /// relic row's ASSIGN, but laid out the same way, on the same right-edge anchor.
-        ///
-        /// Reroll, Salvage and Combine used to live here too (three more stacked buttons); they
-        /// moved to the Forge screen, which is why this row is back to its original, shorter
-        /// height rather than the four-action stack it briefly grew to.
+        /// Which of TextureLab's emblems stands for an aspect. Mapped by MEANING, not by casting the
+        /// enum - the same table RecitalScreen uses, for the same reason: the enum's own order puts
+        /// a flame mark on Tide.
         /// </summary>
-        private void BuildArmorRow(ArmorPiece piece)
+        private static int AspectSigil(Aspect aspect)
         {
-            HeroInstance wearer = App.Session.Profile.HeroWearingArmor(piece.Uid);
-            bool equipped = wearer != null;
-            Color temperColor = UITheme.ArmorTemperColor(piece.Temper);
-
-            RectTransform card = UIBuilder.Node("Armor_" + piece.Uid, _listContent);
-            UIBuilder.Sized(card, 0f, 176f);
-
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = equipped ? UITheme.WithAlpha(UITheme.Panel, 0.95f) : UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(temperColor, equipped ? 0.75f : 0.35f), 18, 2);
-
-            // Disc icon, tinted by the piece's own aspect rather than by its temper - the aspect is
-            // what a player is scanning for when they are assembling an attunement set, and the
-            // temper already has the whole card edge and its own chip.
-            RectTransform icon = UIBuilder.Node("Icon", card);
-            UIBuilder.Box(icon, 22f, 0f, 68f, 68f, new Vector2(0f, 0.5f));
-            Image disc = icon.gameObject.AddComponent<Image>();
-            disc.sprite = TextureLab.Circle(96);
-            disc.color = UITheme.WithAlpha(UITheme.AspectColor(piece.Aspect), 0.22f);
-            disc.raycastTarget = false;
-            Image ring = UIBuilder.Img("Ring", icon, TextureLab.Ring(96, 4), UITheme.WithAlpha(UITheme.AspectColor(piece.Aspect), 0.85f));
-            UIBuilder.FillParent(ring.rectTransform, 0f);
-
-            Text nameLabel = UIBuilder.Label("Name", card, piece.Name,
-                                             UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            nameLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            nameLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            nameLabel.rectTransform.offsetMin = new Vector2(108f, -46f);
-            nameLabel.rectTransform.offsetMax = new Vector2(-190f, -16f);
-
-            RectTransform temperChip = UIBuilder.Chip("Temper", card, ArmorInfo.TemperLabel(piece.Temper),
-                                                      temperColor, UITheme.FontTiny);
-            UIBuilder.Box(temperChip, 108f, -46f, 128f, 28f, new Vector2(0f, 1f));
-
-            RectTransform aspectChip = UIBuilder.Chip("Aspect", card, AspectChart.DisplayName(piece.Aspect),
-                                                      UITheme.AspectColor(piece.Aspect), UITheme.FontTiny);
-            UIBuilder.Box(aspectChip, 244f, -46f, 120f, 28f, new Vector2(0f, 1f));
-
-            string statusText = ArmorInfo.SlotLabel(piece.Slot)
-                              + (equipped ? "  -  " + (wearer.Def != null ? wearer.Def.Name : wearer.DefId) : "  -  In the pool");
-            Text statusLabel = UIBuilder.Label("Status", card, statusText,
-                                               UITheme.FontTiny, equipped ? UITheme.Success : UITheme.TextMuted,
-                                               TextAnchor.UpperLeft);
-            statusLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            statusLabel.rectTransform.offsetMin = new Vector2(376f, -74f);
-            statusLabel.rectTransform.offsetMax = new Vector2(-190f, -46f);
-
-            Text statsLabel = UIBuilder.WrappedLabel("Stats", card, piece.DescribeStats(),
-                                                     UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            statsLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
-            statsLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            statsLabel.rectTransform.offsetMin = new Vector2(108f, 14f);
-            statsLabel.rectTransform.offsetMax = new Vector2(-190f, -76f);
-
-            // One action, laid out exactly like the relic row's ASSIGN button - centred on the
-            // right edge rather than stacked, since there is only the one now.
-            UIButton equipBtn = UIBuilder.PrimaryButton("Equip", card, equipped ? "MOVE" : "EQUIP", UITheme.FontSmall);
-            UIBuilder.Box(equipBtn.Root, -18f, 0f, 160f, 72f, new Vector2(1f, 0.5f));
-            ArmorPiece capturedForEquip = piece;
-            equipBtn.OnClick(delegate { OpenArmorPicker(capturedForEquip); });
+            switch (aspect)
+            {
+                case Aspect.Ember: return 7;
+                case Aspect.Tide: return 12;
+                case Aspect.Verdant: return 2;
+                case Aspect.Gale: return 8;
+                case Aspect.Umbra: return 6;
+                case Aspect.Lumen: return 13;
+            }
+            return 13;
         }
 
-        // ------------------------------------------------------------------ helpers
+        private static string RollText(ArmorStatRoll roll)
+        {
+            return ArmorInfo.IsPercentStat(roll.Stat)
+                ? "+" + Mathf.RoundToInt(roll.Value * 100f) + "%"
+                : "+" + Mathf.RoundToInt(roll.Value);
+        }
 
         /// <summary>
-        /// The one route from the Bag to the Forge, and deliberately ONE - a pool-wide link under
-        /// the section header rather than a FORGE button on every armour row.
-        ///
-        /// Per-row forge buttons are exactly what task 17 moved OUT of this screen: Reroll,
-        /// Salvage and Combine need no hero in context, and Combine needs three pieces at once, so
-        /// they belong on a pool-wide hub and not crammed onto a row that represents one piece.
-        /// Putting them back per-row to save a tap would undo that on the quiet. What was missing
-        /// was never the actions - it was any acknowledgement from here that the Forge exists.
-        ///
-        /// Same shape as HeroDetail's EQUIP IN BAG and Formation's VIEW ALL HEROES: the screen
-        /// that cannot perform the action names the screen that can, once.
+        /// How full to draw a roll's bar. DISPLAY ONLY - the printed number beside it is the
+        /// authority. A roll has no natural maximum to divide by, so these reference scales are
+        /// chosen for legibility rather than read from balance, and are not a percentage of
+        /// anything. Same table the Forge's comparison panel uses.
         /// </summary>
-        private void BuildForgeLink()
+        private static float DisplayRatio(ArmorStatRoll roll)
         {
-            RectTransform row = UIBuilder.Node("ForgeLinkRow", _listContent);
-            UIBuilder.Sized(row, 0f, 64f);
-
-            Text note = UIBuilder.Label("Note", row,
-                                        "Reroll, Salvage and Combine happen at the Forge.",
-                                        UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleLeft);
-            note.rectTransform.anchorMin = new Vector2(0f, 0f);
-            note.rectTransform.anchorMax = new Vector2(1f, 1f);
-            note.rectTransform.offsetMin = new Vector2(4f, 0f);
-            note.rectTransform.offsetMax = new Vector2(-300f, 0f);
-
-            UIButton open = UIBuilder.SecondaryButton("OpenForge", row, "OPEN THE FORGE", UITheme.FontTiny);
-            UIBuilder.Box(open.Root, 0f, 0f, 280f, 56f, new Vector2(1f, 0.5f));
-            open.OnClick(OpenForge);
-        }
-
-        private void OpenForge()
-        {
-            App.Audio.Tap();
-            Router.Show(ScreenId.Forge);
-        }
-
-        private void BuildSectionHeader(string text)
-        {
-            Text heading = UIBuilder.Label("Heading_" + text, _listContent,
-                                           text, UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Sized(heading.rectTransform, 0f, 36f);
-        }
-
-        private RectTransform BuildCard()
-        {
-            RectTransform card = UIBuilder.Node("Card", _listContent);
-
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
-
-            return card;
+            if (ArmorInfo.IsPercentStat(roll.Stat)) return roll.Value / 0.45f;
+            if (roll.Stat == ArmorStat.MaxHp) return roll.Value / 1200f;
+            return roll.Value / 260f;
         }
     }
 }
