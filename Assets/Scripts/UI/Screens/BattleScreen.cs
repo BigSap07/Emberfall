@@ -305,7 +305,12 @@ namespace Emberfall.UI.Screens
             UIBuilder.TopStrip(bar, 64f, 16f, UITheme.ScreenPadding);
 
             _stageLabel = UIBuilder.Label("Stage", bar, "", UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 520f, 26f, new Vector2(0f, 1f));
+            // 760 rather than 520: the wave/battle suffix pushed the longest real label
+            // ("2-4  THE DRIFTING CAUSEWAY  WAVE 12/12  BATTLE 12/12") to 652px, which drew
+            // outside the old box. It LOOKED fine because the top-left is otherwise empty, which
+            // is exactly the kind of defect that survives a screenshot and dies the moment
+            // anything else is placed there. Measured, not eyeballed.
+            UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 760f, 26f, new Vector2(0f, 1f));
             UIBuilder.Outlined(_stageLabel, UITheme.InkArt, 1.8f);
 
             _roundLabel = UIBuilder.Label("Round", bar, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.LowerLeft);
@@ -498,8 +503,8 @@ namespace Emberfall.UI.Screens
                 // exactly what it showed before.
                 _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant()
                                  + (_stage.HasWaveCurve
-                                    ? "   WAVE " + _campaignWave + " OF " + _stage.WaveCount
-                                      + "  -  BATTLE " + _campaignBattle + " OF " + _stage.BattleCount
+                                    ? "   WAVE " + _campaignWave + "/" + _stage.WaveCount
+                                      + "   BATTLE " + _campaignBattle + "/" + _stage.BattleCount
                                     : "");
             }
             _roundLabel.text = "PREPARING";
@@ -1782,7 +1787,9 @@ namespace Emberfall.UI.Screens
             AddRewardRow("WAVE", _campaignWave + " OF " + _stage.WaveCount, UITheme.TextPrimary);
             AddRewardRow("BATTLE", _campaignBattle + " OF " + _stage.BattleCount, UITheme.TextPrimary);
             AddRewardRow("STAGE PROGRESS", done + " / " + total, UITheme.Gold);
-            AddRewardRow("SPOILS", "ON STAGE CLEAR", UITheme.TextMuted);
+            // "PAID" rather than "SPOILS": the box this sits in is already headed SPOILS, and the
+            // duplicate read as a stutter on screen. Caught by looking at the panel, not the code.
+            AddRewardRow("PAID", "ON STAGE CLEAR", UITheme.TextMuted);
             App.Audio.Victory();
         }
 
