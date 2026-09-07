@@ -65,6 +65,35 @@ namespace Emberfall.UI.Screens
         private Coroutine _playback;
         private Coroutine _bannerRoutine;
         private float _speed = 1f;
+
+        /// <summary>
+        /// Chain mode, per DESIGN-CAMPAIGN-STRUCTURE.md's "Auto-advance through a fresh stage".
+        /// While on, a won battle starts the next one without a tap. A first clear is 144 battles
+        /// and NEXT BATTLE is one tap each, so this is the difference between the 144x the design
+        /// accepted being idle clock-time and it being active tap-time.
+        ///
+        /// A UI loop over the existing FightNextBattle path, NOT a second way to resolve a battle:
+        /// every fight still runs through the same OnShow/RunSimulation the manual button uses, so
+        /// there is no auto-only code path that could drift from the played one.
+        /// </summary>
+        private bool _auto;
+        private UIButton _autoButton;
+
+        /// <summary>True only for the instant FightNextBattle spends between two battles of the
+        /// same chain. OnHide cannot otherwise tell "the player left" from "the chain hopped", and
+        /// FightNextBattle goes through OnHide every time.</summary>
+        private bool _chaining;
+
+        /// <summary>The AUTO/SPEED/SKIP strip. Held so it can be raised back above the result panel
+        /// - see the note where that happens.</summary>
+        private RectTransform _topHud;
+
+        /// <summary>Device-level UI preferences, deliberately in PlayerPrefs rather than
+        /// PlayerProfile: how fast someone likes their battles and whether they chain is a property
+        /// of the handset, not of the account, and putting it in the save would have cost a
+        /// SaveSerializer version bump for something no other device should inherit.</summary>
+        private const string AutoPrefKey = "Emberfall.Battle.Auto";
+        private const string SpeedPrefKey = "Emberfall.Battle.Speed";
         private bool _finished;
 
         /// <summary>True once ShowResult has run - the fight is fully resolved and the result
@@ -302,6 +331,7 @@ namespace Emberfall.UI.Screens
         private void BuildTopHud()
         {
             RectTransform bar = UIBuilder.Node("TopHud", Root);
+            _topHud = bar;
             UIBuilder.TopStrip(bar, 64f, 16f, UITheme.ScreenPadding);
 
             _stageLabel = UIBuilder.Label("Stage", bar, "", UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperLeft);
@@ -320,6 +350,13 @@ namespace Emberfall.UI.Screens
             _speedButton = UIBuilder.SecondaryButton("Speed", bar, "1x", UITheme.FontTiny);
             UIBuilder.Box(_speedButton.Root, -4f, 0f, 84f, 44f, new Vector2(1f, 0.5f));
             _speedButton.OnClick(CycleSpeed);
+
+            // Same row as SPEED and SKIP, to the left of both: the three controls that change how
+            // the fight in front of you plays out belong together, and AUTO is the one you set once
+            // per stage rather than per battle, so it sits furthest from the thumb's resting edge.
+            _autoButton = UIBuilder.SecondaryButton("Auto", bar, "AUTO", UITheme.FontTiny);
+            UIBuilder.Box(_autoButton.Root, -204f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
+            _autoButton.OnClick(ToggleAuto);
 
             _skipButton = UIBuilder.SecondaryButton("Skip", bar, "SKIP", UITheme.FontTiny);
             UIBuilder.Box(_skipButton.Root, -96f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
@@ -454,9 +491,26 @@ namespace Emberfall.UI.Screens
             _finished = false;
             _resultPanel.gameObject.SetActive(false);
             _banner.gameObject.SetActive(false);
-            _speed = 1f;
-            _speedButton.SetText("1x");
+            // RESTORED, not reset. This used to force 1x on every OnShow, which is invisible when a
+            // battle is a one-off and actively wrong now a stage is 144 of them: chaining through a
+            // wave would have dropped the player back to 1x on every single battle.
+            // Stored as an int because the only values the cycle produces are 1, 2 and 4, and
+            // because the harness's Unity shim carries PlayerPrefs.GetInt but not GetFloat -
+            // widening the shim for a value that was never fractional would be the wrong fix.
+            int storedSpeed = PlayerPrefs.GetInt(SpeedPrefKey, 1);
+            _speed = (storedSpeed == 2 || storedSpeed == 4) ? storedSpeed : 1;
+            _speedButton.SetText(Mathf.RoundToInt(_speed) + "x");
             _skipButton.Interactable = true;
+
+            // Auto only ever applies to a campaign stage with a curve. A Recital floor, a Proving
+            // match and a prologue step are each a single fight with nothing to chain into, so the
+            // control is hidden rather than shown-and-inert.
+            bool chainable = _stage != null && _stage.HasWaveCurve
+                             && _recitalFloor < 0 && _provingOpponent == null && _prologueSquad == null;
+            _autoButton.Root.gameObject.SetActive(chainable);
+            if (!chainable) _auto = false;
+            else _auto = PlayerPrefs.GetInt(AutoPrefKey, 0) == 1;
+            RefreshAutoButton();
 
             if (_recitalFloor < 0 && _stage == null) _stage = App.Session.NextStage;
             if (_stage == null)
@@ -518,6 +572,18 @@ namespace Emberfall.UI.Screens
 
         public override void OnHide()
         {
+            // ANY EXIT FROM THIS SCREEN ENDS THE CHAIN - the exit button, the back gesture,
+            // CONTINUE into the next stage, the prologue hand-off. Auto is a mode you are in while
+            // watching a stage run, and leaving says plainly that you are not watching it.
+            //
+            // The _chaining guard is what makes that possible at all: FightNextBattle goes through
+            // OnHide on every hop between two battles of the same chain, so without it the first
+            // auto-advance would immediately turn auto off and the chain would stop after one
+            // battle. A hop clears the flag and leaves the preference alone; anything else is a
+            // real exit and writes it off.
+            if (_chaining) _chaining = false;
+            else if (_auto) SetAuto(false);
+
             // stops playback plus every death, drain and floating-text routine, so nothing
             // touches the world objects that are about to be destroyed
             StopAllCoroutines();
@@ -1647,6 +1713,18 @@ namespace Emberfall.UI.Screens
 
                 _resultPanel.gameObject.SetActive(true);
                 _resultPanel.SetAsLastSibling();
+                // AND THEN THE CONTROL STRIP BACK ON TOP OF IT.
+                //
+                // The result panel is a full-screen overlay, so it swallowed taps on AUTO - which
+                // is precisely the moment a player decides they want it. Seeing "battle 3 of 144"
+                // is what makes someone reach for a chain mode, and until this they had to dismiss
+                // the panel, start the next fight and hit it mid-battle instead. Found by tapping
+                // it in Play mode and watching the raycast land on Result.
+                //
+                // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
+                // which has the same argument, and costs nothing: the strip is 64px at the very top
+                // and the panel's own content starts well below it.
+                if (_topHud != null) _topHud.SetAsLastSibling();
                 _resultGroup.alpha = 1f;
                 return;
             }
@@ -1673,6 +1751,18 @@ namespace Emberfall.UI.Screens
 
                 _resultPanel.gameObject.SetActive(true);
                 _resultPanel.SetAsLastSibling();
+                // AND THEN THE CONTROL STRIP BACK ON TOP OF IT.
+                //
+                // The result panel is a full-screen overlay, so it swallowed taps on AUTO - which
+                // is precisely the moment a player decides they want it. Seeing "battle 3 of 144"
+                // is what makes someone reach for a chain mode, and until this they had to dismiss
+                // the panel, start the next fight and hit it mid-battle instead. Found by tapping
+                // it in Play mode and watching the raycast land on Result.
+                //
+                // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
+                // which has the same argument, and costs nothing: the strip is 64px at the very top
+                // and the panel's own content starts well below it.
+                if (_topHud != null) _topHud.SetAsLastSibling();
                 _resultGroup.alpha = 1f;
                 return;
             }
@@ -1701,6 +1791,18 @@ namespace Emberfall.UI.Screens
 
             _resultPanel.gameObject.SetActive(true);
             _resultPanel.SetAsLastSibling();
+                // AND THEN THE CONTROL STRIP BACK ON TOP OF IT.
+                //
+                // The result panel is a full-screen overlay, so it swallowed taps on AUTO - which
+                // is precisely the moment a player decides they want it. Seeing "battle 3 of 144"
+                // is what makes someone reach for a chain mode, and until this they had to dismiss
+                // the panel, start the next fight and hit it mid-battle instead. Found by tapping
+                // it in Play mode and watching the raycast land on Result.
+                //
+                // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
+                // which has the same argument, and costs nothing: the strip is 64px at the very top
+                // and the panel's own content starts well below it.
+                if (_topHud != null) _topHud.SetAsLastSibling();
             _resultGroup.alpha = 1f;
         }
 
@@ -1724,11 +1826,33 @@ namespace Emberfall.UI.Screens
                 if (!_result.Victory)
                 {
                     App.Session.RecordBattleLost(_stage, _campaignWave, _campaignBattle);
+
+                    // A LOSS ALWAYS STOPS THE CHAIN, and turns the toggle off rather than pausing
+                    // it. Defeat retries the SAME battle, so a chain that kept going would re-fight
+                    // an encounter it has just been shown it cannot win, forever, burning the
+                    // player's evening on a wall. Turning it off rather than leaving it armed makes
+                    // continuing a decision: the player has to look at what stopped them and opt
+                    // back in.
+                    if (_auto)
+                    {
+                        SetAuto(false);
+                        App.Notify("Auto stopped - wave " + _campaignWave + ", battle " + _campaignBattle + " was lost.");
+                    }
                 }
                 else if (!App.Session.RecordBattleWon(_stage, _campaignWave, _campaignBattle))
                 {
                     _midStageAdvance = true;
                     ShowWaveProgressResult();
+
+                    // The chain. Deliberately routed through the SAME FightNextBattle the gold
+                    // button calls rather than a private fast path, so auto and manual cannot drift
+                    // apart - if one is ever broken, both are.
+                    //
+                    // One frame of delay, not zero: FightNextBattle runs OnHide/OnShow, and calling
+                    // that from inside the result-building code would tear down the panel currently
+                    // being built. The wait also leaves the checkpoint readable rather than
+                    // strobing 144 panels past unread.
+                    if (_auto) StartCoroutine(AutoAdvanceNext());
                     return;
                 }
             }
@@ -1991,7 +2115,33 @@ namespace Emberfall.UI.Screens
             else _speed = 1f;
             _speedButton.SetText(Mathf.RoundToInt(_speed) + "x");
             if (_world != null && _world.Vfx != null) _world.Vfx.SpeedScale = _speed;
+            PlayerPrefs.SetInt(SpeedPrefKey, Mathf.RoundToInt(_speed));
             App.Audio.Tap();
+        }
+
+        private void ToggleAuto()
+        {
+            App.Audio.Tap();
+            SetAuto(!_auto);
+        }
+
+        /// <summary>
+        /// One place the flag moves, so every reason auto turns off - a defeat, leaving the screen,
+        /// ADJUST LINE - writes the preference the same way. A player who is stopped by a loss and
+        /// comes back should find the toggle off, because that is what they were last told.
+        /// </summary>
+        private void SetAuto(bool on)
+        {
+            _auto = on;
+            PlayerPrefs.SetInt(AutoPrefKey, on ? 1 : 0);
+            RefreshAutoButton();
+        }
+
+        private void RefreshAutoButton()
+        {
+            if (_autoButton == null) return;
+            _autoButton.SetText(_auto ? "AUTO ON" : "AUTO");
+            _autoButton.Label.color = _auto ? UITheme.Gold : UITheme.TextDim;
         }
 
         private void SkipToEnd()
@@ -2109,6 +2259,10 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             App.Session.ResumePointFor(_stage, out _campaignWave, out _campaignBattle);
+            // Tells the OnHide below that this is a hop inside a chain rather than the player
+            // leaving, so an auto run is not cancelled by its own advance. Harmless when auto is
+            // off: the flag is cleared by that same OnHide either way.
+            _chaining = _auto;
             OnHide();
             OnShow();
         }
@@ -2173,9 +2327,32 @@ namespace Emberfall.UI.Screens
         /// it used to land on a roster with no deploy control on it, which is the same complaint
         /// the Formation screen exists to answer.
         /// </summary>
+        /// <summary>
+        /// Waits out a short beat so the checkpoint panel is seen, then presses NEXT BATTLE.
+        ///
+        /// Scaled by _speed, so a player who has chosen 4x gets a chain that is actually four times
+        /// faster rather than one gated by a fixed pause. Re-checks _auto after the wait because
+        /// anything can have turned it off in between - a tap on the toggle, ADJUST LINE, leaving
+        /// the screen - and a coroutine that fired regardless would restart a chain the player has
+        /// just stopped.
+        /// </summary>
+        private IEnumerator AutoAdvanceNext()
+        {
+            float wait = 0.85f / Mathf.Max(1f, _speed);
+            float t = 0f;
+            while (t < wait) { t += Time.unscaledDeltaTime; yield return null; }
+
+            if (!_auto) yield break;
+            if (_primaryAction != PrimaryAction.NextBattle) yield break;
+            FightNextBattle();
+        }
+
         private void AdjustLine()
         {
             App.Audio.Tap();
+            // Going to change the banner is a deliberate stop: the line that comes back is not the
+            // line the chain was running with, so continuing on the old decision would be wrong.
+            SetAuto(false);
             Router.Show(ScreenId.Formation, false);
         }
     }
