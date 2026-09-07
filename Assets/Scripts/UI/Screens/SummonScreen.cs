@@ -8,19 +8,68 @@ using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
-    /// <summary>The Rift. Spend Ember Shards, get an ally.</summary>
+    /// <summary>
+    /// The Rift. Spend Ember Shards, get an ally.
+    ///
+    /// ---- visual pass ----
+    /// ONE DOMINANT IMAGE. The screen used to be a spinning portal on the left and a stack of odds,
+    /// purse and two buttons on the right - two competing halves, neither of them a subject. It is
+    /// now a single banner stage carrying the featured hero at size, with the action beneath it.
+    ///
+    /// WHICH HERO IS "FEATURED", AND WHY IT IS DERIVED. There is no banner concept in content:
+    /// heroes.json has no featured flag and no banner definition, and content was out of scope for
+    /// this pass. So the face of the banner is DERIVED - the highest-star hero in the summon pool,
+    /// resolved in content order so it is stable between sessions and between players. That is a
+    /// stand-in for a real rotating banner, not an implementation of one, and it is written up in
+    /// the report rather than left to look like a feature.
+    ///
+    /// THE PITY BAR SHOWS THE GUARANTEE THAT ACTUALLY EXISTS. The mockup puts a progress bar and a
+    /// chest under the pull button, which in most games of this shape means a recurring pity
+    /// counter. Emberfall has no recurring pity. What it has is GameSession.PityGuaranteedSummons -
+    /// the first three pulls of an account draw only from heroes not already owned - and that is
+    /// what this bar tracks. Once it is spent the bar says so plainly instead of resetting, because
+    /// a bar that refilled would be describing a mechanic the game does not have. Inventing one
+    /// here would have been a game-logic change wearing a visual pass's clothes.
+    ///
+    /// PULL X10 SURVIVES, SUBORDINATED. The mockup shows a single button and the brief asks for
+    /// one; deleting the ten-pull would have removed a working action during a pass that was told
+    /// to leave behaviour alone. So x1 is the dominant button the mockup calls for and x10 is
+    /// clearly secondary beside it - a hierarchy rather than an amputation. Also flagged.
+    ///
+    /// Everything below the visual layer is untouched: DoSummon still loops the single
+    /// GameSession.Summon, the reveal and the results panel are the same code, and neither the
+    /// weight table nor the duplicate conversion was read, let alone changed.
+    /// </summary>
     public sealed class SummonScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Summon; } }
 
+        private const float StageWidth = 1500f;
+        // 500, not 452. At 452 the rift's outer ring reached to within a couple of pixels of the
+        // hero's name plate, so the name was printed across the bottom arc of the ring - which the
+        // rect check missed, because the ring is drawn by the portal and not by the portrait whose
+        // bounds were being measured. The extra 48px buys the name real clearance instead. The
+        // action block below simply moves down with it; there was 70px of unused screen under the
+        // odds line to spend.
+        private const float StageHeight = 500f;
+        private const float PullWidth = 640f;
+
         private Text _headerSubtitle;
-        private RectTransform _portal;
+        private readonly CurrencyStrip _currencies = new CurrencyStrip();
+
+        private RectTransform _portraitHost;
         private Image _portalRingOuter;
         private Image _portalRingInner;
         private Image _portalCore;
-        private Text _purseLabel;
+        private Text _featuredName;
+        private Text _featuredTitle;
+
         private UIButton _pullOne;
         private UIButton _pullTen;
+        private Image _pityFill;
+        private Text _pityLabel;
+        private Image _pityChest;
+        private Text _oddsLabel;
 
         private RectTransform _results;
         private CanvasGroup _resultsGroup;
@@ -41,148 +90,185 @@ namespace Emberfall.UI.Screens
 
         private float _spin;
         private bool _busy;
+        private string _featuredId = "";
 
         protected override void Build()
         {
             ScreenChrome.Header(Root, "THE RIFT", Router, out _headerSubtitle);
             _headerSubtitle.text = "BIND A NEW ALLY TO YOUR BANNER";
+            _currencies.Build(Root);
 
-            BuildPortal();
-            BuildRates();
-            BuildActions();
+            float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
+            BuildStage(top);
+            BuildActions(top + StageHeight + UITheme.Space16);
             BuildReveal();
             BuildResults();
         }
 
-        private void BuildPortal()
+        /// <summary>The banner stage: the rift behind, the featured hero in front of it.</summary>
+        private void BuildStage(float top)
         {
-            // landscape: the portal takes the left half of the screen, the odds and the button
-            // take the right, instead of everything stacking down the middle
-            _portal = UIBuilder.Node("Portal", Root);
-            UIBuilder.Box(_portal, -480f, -20f, 680f, 680f, new Vector2(0.5f, 0.5f));
+            RectTransform stage = UIBuilder.Node("Stage", Root);
+            UIBuilder.Box(stage, 0f, -top, StageWidth, StageHeight, new Vector2(0.5f, 1f));
 
-            Image halo = UIBuilder.Img("Halo", _portal, TextureLab.Glow(256, 1.6f), UITheme.WithAlpha(UITheme.StarColor(5), 0.20f));
-            UIBuilder.FillParent(halo.rectTransform, -70f);
+            Image bg = stage.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(20);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.96f);
+            UIBuilder.NotchedFrame("Edge", stage, UITheme.WithAlpha(UITheme.ChromeBrass, 0.9f), 20, 3);
 
-            _portalRingOuter = UIBuilder.Img("RingOuter", _portal, TextureLab.Ring(256, 10), UITheme.WithAlpha(UITheme.Shard, 0.75f));
-            UIBuilder.FillParent(_portalRingOuter.rectTransform, 10f);
+            // The rift itself, kept but demoted: it is the light the hero stands in now rather than
+            // the subject of the screen. Same rings, same Update-driven spin, smaller and behind.
+            // Lifted off centre and tightened to 340, so it reads as an aura around the hero
+            // rather than as a hoop the layout has to work around.
+            RectTransform portal = UIBuilder.Node("Portal", stage);
+            UIBuilder.Box(portal, 0f, 76f, 340f, 340f, new Vector2(0.5f, 0.5f));
 
-            _portalRingInner = UIBuilder.Img("RingInner", _portal, TextureLab.Ring(256, 16), UITheme.WithAlpha(UITheme.Ember, 0.6f));
-            UIBuilder.FillParent(_portalRingInner.rectTransform, 92f);
+            Image halo = UIBuilder.Img("Halo", portal, TextureLab.Glow(256, 1.6f),
+                                       UITheme.WithAlpha(UITheme.StarColor(5), 0.22f));
+            UIBuilder.FillParent(halo.rectTransform, -90f);
 
-            _portalCore = UIBuilder.Img("Core", _portal, TextureLab.Glow(192, 2.4f), UITheme.WithAlpha(UITheme.StarColor(5), 0.55f));
-            UIBuilder.FillParent(_portalCore.rectTransform, 150f);
+            _portalRingOuter = UIBuilder.Img("RingOuter", portal, TextureLab.Ring(256, 8),
+                                             UITheme.WithAlpha(UITheme.Shard, 0.55f));
+            UIBuilder.FillParent(_portalRingOuter.rectTransform, 0f);
 
-            Image sigil = UIBuilder.Img("Sigil", _portal, TextureLab.Sigil(13, 128), UITheme.WithAlpha(UITheme.TextPrimary, 0.85f));
-            UIBuilder.FillParent(sigil.rectTransform, 210f);
-        }
+            _portalRingInner = UIBuilder.Img("RingInner", portal, TextureLab.Ring(256, 12),
+                                             UITheme.WithAlpha(UITheme.Ember, 0.45f));
+            UIBuilder.FillParent(_portalRingInner.rectTransform, 62f);
 
-        private void BuildRates()
-        {
-            RectTransform card = UIBuilder.Node("Rates", Root);
-            UIBuilder.Box(card, 470f, 150f, 880f, 170f, new Vector2(0.5f, 0.5f));
+            _portalCore = UIBuilder.Img("Core", portal, TextureLab.Glow(192, 2.4f),
+                                        UITheme.WithAlpha(UITheme.StarColor(5), 0.4f));
+            UIBuilder.FillParent(_portalCore.rectTransform, 110f);
 
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = UISkin.Panel(20);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.94f);
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 20, 2);
-
-            Text heading = UIBuilder.Label("Heading", card, "RIFT ODDS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -14f, 400f, 26f, new Vector2(0.5f, 1f));
-
-            RectTransform row = UIBuilder.Node("Row", card);
-            UIBuilder.Box(row, 0f, 18f, 820f, 78f, new Vector2(0.5f, 0f));
-            UIBuilder.HStack(row, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-
-            BalanceConfig balance = App.Session.Balance;
-            float[] w = { balance.SummonWeight1, balance.SummonWeight2, balance.SummonWeight3,
-                           balance.SummonWeight4, balance.SummonWeight5 };
-            float total = 0f;
-            for (int i = 0; i < w.Length; i++) total += w[i];
-            if (total <= 0f) total = 1f;
-            int tiersOffered = 0;
-            int onlyTier = 0;
-            for (int s = 1; s <= 5; s++)
-                if (w[s - 1] > 0f) { tiersOffered++; onlyTier = s; }
-
-            // The heading has to say WHAT the number is a chance OF, because the pool is currently
-            // a single tier and "RIFT ODDS / 5 stars / 100%" reads as "100% chance of a good pull"
-            // rather than "every pull is 5 stars". Those mean the same thing here, but only one of
-            // them survives the pool being widened later, and only one of them is unambiguous now.
+            // The featured hero, filled in on OnShow once the session is readable.
             //
-            // When exactly one tier is offered the panel states the outcome outright instead of
-            // leaving a lone 100% to be interpreted. Anything else falls back to naming the axis,
-            // which is all a multi-tier table needs.
-            heading.text = tiersOffered == 1
-                ? "RIFT ODDS  -  EVERY PULL IS " + onlyTier + "-STAR"
-                : "RIFT ODDS  -  CHANCE PER PULL, BY RARITY";
+            // 300 at +46, not 340 at +26: at the larger size the portrait's lower edge reached
+            // y=-144 and the name plate's upper edge reached -141, so the name was printed across
+            // the bottom of the art. Measured, not guessed - see the report.
+            _portraitHost = UIBuilder.Node("Featured", stage);
+            UIBuilder.Box(_portraitHost, 0f, 76f, 300f, 300f, new Vector2(0.5f, 0.5f));
 
-            for (int s = 1; s <= 5; s++)
-                if (w[s - 1] > 0f) AddRate(row, s, w[s - 1] / total);
-        }
+            _featuredName = UIBuilder.Label("FeaturedName", stage, "", UITheme.FontTitle,
+                                            UITheme.TextPrimary, TextAnchor.LowerCenter);
+            UIBuilder.Box(_featuredName.rectTransform, 0f, 62f, StageWidth - 120f, 54f, new Vector2(0.5f, 0f));
+            UIBuilder.Shadowed(_featuredName, UITheme.InkDisplay, 4f);
 
-        private void AddRate(RectTransform parent, int stars, float chance)
-        {
-            RectTransform cell = UIBuilder.Node("Rate" + stars, parent);
-            UIBuilder.Flexible(cell, 1f, 0f);
-
-            RectTransform starRow = Widgets.StarRow("Stars", cell, stars, 18f);
-            UIBuilder.Box(starRow, 0f, 0f, 96f, 18f, new Vector2(0.5f, 1f));
-
-            Text value = UIBuilder.Label("Value", cell, Mathf.Round(chance * 1000f) / 10f + "%", UITheme.FontBody,
-                                         UITheme.TextPrimary, TextAnchor.LowerCenter);
-            UIBuilder.Box(value.rectTransform, 0f, 6f, 260f, 34f, new Vector2(0.5f, 0f));
+            _featuredTitle = UIBuilder.Label("FeaturedTitle", stage, "", UITheme.FontSmall,
+                                             UITheme.TextMuted, TextAnchor.LowerCenter);
+            UIBuilder.Box(_featuredTitle.rectTransform, 0f, 24f, StageWidth - 120f, 34f, new Vector2(0.5f, 0f));
         }
 
         /// <summary>
-        /// Two buttons, two actions. PULL X1 pulls once, PULL X10 pulls ten times, and each one
-        /// carries its own price and its own enabled state.
+        /// The action block: one dominant pull, the ten-pull beside it, the guarantee bar under
+        /// both, and the odds reduced to a single line.
         ///
-        /// This replaces a segmented x1/x10 toggle plus a separate OPEN THE RIFT button, which was
-        /// wrong in two ways at once. The design fault: three controls for what is one decision,
-        /// where two of them looked like actions and were not, so the obvious thing to press did
-        /// nothing on purpose. The actual BUG that made it feel broken is written up on
-        /// SetPullCount's grave in the commit - the short version is that selecting the count that
-        /// was ALREADY selected returned before it played a sound or changed a pixel, and x1 was
-        /// the default, so the very first control a player could reach was dead on arrival.
-        ///
-        /// Neither button is subordinate to the other. There is no shared mode to get wrong, no
-        /// state to read back, and no ordering: whichever one is affordable can be pressed, on its
-        /// own terms, at any time.
+        /// The odds used to occupy a 880x170 card. They are one sentence, and this screen now has a
+        /// subject that deserves the room, so they are one line - the same sentence BuildRates
+        /// composed, with the same single-tier special case, just not framed like a feature.
         /// </summary>
-        private void BuildActions()
+        private void BuildActions(float top)
         {
-            _purseLabel = UIBuilder.Label("Purse", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_purseLabel.rectTransform, 470f, 20f, 860f, 36f, new Vector2(0.5f, 0.5f));
+            // ---- the dominant pull.
+            //
+            // Label LEFT, cost RIGHT, each anchored to its own edge. Centring both and nudging them
+            // apart by hand is what the first pass did, and at "NEED 1122 MORE" the cost ran back
+            // under the word PULL. Anchoring them to opposite edges means the cost can grow to
+            // whatever the shortfall needs without ever reaching the label.
+            _pullOne = UIBuilder.Notch(UIBuilder.GoldButton("PullOne", Root, "PULL", UITheme.FontHeading), 16);
+            UIBuilder.Box(_pullOne.Root, -150f, -top, PullWidth, 104f, new Vector2(0.5f, 1f));
 
-            _pullOne = BuildPullButton("PullOne", "PULL X1", 250f, 1);
-            _pullTen = BuildPullButton("PullTen", "PULL X10", 690f, 10);
+            Image shard = UIBuilder.Img("Shard", _pullOne.Root, TextureLab.CrystalIcon(64), UITheme.Shard);
+            UIBuilder.Box(shard.rectTransform, 34f, 0f, 32f, 32f, new Vector2(0f, 0.5f));
+
+            _pullOne.Label.alignment = TextAnchor.MiddleLeft;
+            UIBuilder.Box(_pullOne.Label.rectTransform, 82f, 0f, 220f, 48f, new Vector2(0f, 0.5f));
+
+            _pullOne.SubLabel = UIBuilder.Label("Cost", _pullOne.Root, "", UITheme.FontSmall,
+                                                UITheme.TextOnAccent, TextAnchor.MiddleRight);
+            UIBuilder.Box(_pullOne.SubLabel.rectTransform, -28f, 0f, 300f, 36f, new Vector2(1f, 0.5f));
+            _pullOne.SubLabel.raycastTarget = false;
+            _pullOne.OnClick(delegate { DoSummon(1); });
+
+            // Secondary, and shaped to read that way: narrower, shorter, and the panel fill rather
+            // than gold. Same action it always had. Seated clear of PullOne's right edge - the two
+            // overlapped by 20px in the first pass, measured at x[190,210].
+            _pullTen = UIBuilder.Notch(UIBuilder.SecondaryButton("PullTen", Root, "PULL X10", UITheme.FontSmall), 14);
+            UIBuilder.Box(_pullTen.Root, PullWidth * 0.5f + 20f, -(top + 8f), 300f, 88f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_pullTen.Label.rectTransform, 0f, 14f, 260f, 34f, new Vector2(0.5f, 0.5f));
+
+            _pullTen.SubLabel = UIBuilder.Label("Cost", _pullTen.Root, "", UITheme.FontTiny,
+                                                UITheme.TextMuted, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_pullTen.SubLabel.rectTransform, 0f, -18f, 260f, 30f, new Vector2(0.5f, 0.5f));
+            _pullTen.SubLabel.raycastTarget = false;
+            _pullTen.OnClick(delegate { DoSummon(10); });
+
+            BuildPityBar(top + 104f + UITheme.Space16);
         }
 
         /// <summary>
-        /// A pull button and the cost line under its own title. The cost is a SECOND label parented
-        /// to the button rather than baked into the title string, so the price can be repainted on
-        /// every Refresh without rewriting the action, and so a shortfall can replace it in place.
-        /// It is inside the button, which keeps the whole card one tap target - the label does not
-        /// take raycasts, and a tap anywhere on it bubbles to the Button as usual.
+        /// The opening guarantee, as a slim track with the reward at its end.
+        ///
+        /// Tick marks sit at each pull boundary rather than being decorative: with a three-pull
+        /// guarantee the segments ARE the pulls, so a player can count what they have left without
+        /// reading the label.
         /// </summary>
-        private UIButton BuildPullButton(string name, string title, float x, int count)
+        private void BuildPityBar(float top)
         {
-            UIButton button = UIBuilder.PrimaryButton(name, Root, title, UITheme.FontHeading);
-            UIBuilder.Box(button.Root, x, -110f, 420f, 160f, new Vector2(0.5f, 0.5f));
+            RectTransform row = UIBuilder.Node("Pity", Root);
+            UIBuilder.Box(row, -34f, -top, PullWidth + 300f, 22f, new Vector2(0.5f, 1f));
 
-            // PrimaryButton fills the whole face with its label; lift it so the cost has room.
-            UIBuilder.Box(button.Label.rectTransform, 0f, 24f, 380f, 58f, new Vector2(0.5f, 0.5f));
+            RectTransform track = UIBuilder.Node("Track", row);
+            track.anchorMin = new Vector2(0f, 0.5f);
+            track.anchorMax = new Vector2(1f, 0.5f);
+            track.pivot = new Vector2(0.5f, 0.5f);
+            track.offsetMin = new Vector2(0f, -9f);
+            track.offsetMax = new Vector2(-44f, 9f);
 
-            button.SubLabel = UIBuilder.Label("Cost", button.Root, "", UITheme.FontSmall,
-                                              UITheme.TextOnAccent, TextAnchor.MiddleCenter);
-            UIBuilder.Box(button.SubLabel.rectTransform, 0f, -36f, 380f, 40f, new Vector2(0.5f, 0.5f));
-            button.SubLabel.raycastTarget = false;
+            Image trackBg = track.gameObject.AddComponent<Image>();
+            trackBg.sprite = TextureLab.NotchedRect(8);
+            trackBg.type = Image.Type.Sliced;
+            trackBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
+            trackBg.raycastTarget = false;
 
-            int captured = count;
-            button.OnClick(delegate { DoSummon(captured); });
-            return button;
+            RectTransform fill = UIBuilder.Node("Fill", track);
+            fill.anchorMin = new Vector2(0f, 0f);
+            fill.anchorMax = new Vector2(1f, 1f);
+            fill.offsetMin = new Vector2(2f, 2f);
+            fill.offsetMax = new Vector2(-2f, -2f);
+            fill.pivot = new Vector2(0f, 0.5f);
+
+            _pityFill = fill.gameObject.AddComponent<Image>();
+            _pityFill.sprite = TextureLab.NotchedRect(6);
+            _pityFill.type = Image.Type.Filled;
+            _pityFill.fillMethod = Image.FillMethod.Horizontal;
+            _pityFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _pityFill.color = UITheme.Gold;
+            _pityFill.raycastTarget = false;
+
+            // A tick at each pull boundary inside the guarantee.
+            for (int i = 1; i < GameSession.PityGuaranteedSummons; i++)
+            {
+                float t = i / (float)GameSession.PityGuaranteedSummons;
+                Image tick = UIBuilder.Img("Tick" + i, track, TextureLab.Diamond(32),
+                                           UITheme.WithAlpha(UITheme.BackdropDeep, 0.85f));
+                RectTransform tickRect = tick.rectTransform;
+                tickRect.anchorMin = new Vector2(t, 0.5f);
+                tickRect.anchorMax = new Vector2(t, 0.5f);
+                tickRect.pivot = new Vector2(0.5f, 0.5f);
+                tickRect.sizeDelta = new Vector2(16f, 16f);
+                tickRect.anchoredPosition = Vector2.zero;
+            }
+
+            _pityChest = UIBuilder.Img("Chest", row, TextureLab.Chest(64), UITheme.Gold);
+            UIBuilder.Box(_pityChest.rectTransform, 0f, 0f, 34f, 34f, new Vector2(1f, 0.5f));
+
+            _pityLabel = UIBuilder.Label("PityLabel", Root, "", UITheme.FontTiny - 2,
+                                         UITheme.TextDim, TextAnchor.UpperCenter);
+            UIBuilder.Box(_pityLabel.rectTransform, -34f, -(top + 26f), 1000f, 28f, new Vector2(0.5f, 1f));
+
+            _oddsLabel = UIBuilder.Label("Odds", Root, "", UITheme.FontTiny - 2,
+                                         UITheme.TextDim, TextAnchor.UpperCenter);
+            UIBuilder.Box(_oddsLabel.rectTransform, 0f, -(top + 56f), 1200f, 28f, new Vector2(0.5f, 1f));
         }
 
         private void BuildReveal()
@@ -217,7 +303,7 @@ namespace Emberfall.UI.Screens
             _revealNote = UIBuilder.WrappedLabel("Note", _reveal, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
             UIBuilder.Box(_revealNote.rectTransform, 0f, -150f, 820f, 100f, new Vector2(0.5f, 0.5f));
 
-            _revealClose = UIBuilder.GoldButton("Close", _reveal, "CONTINUE", UITheme.FontHeading);
+            _revealClose = UIBuilder.Notch(UIBuilder.GoldButton("Close", _reveal, "CONTINUE", UITheme.FontHeading), 16);
             UIBuilder.Box(_revealClose.Root, 0f, 150f, 620f, 130f, new Vector2(0.5f, 0f));
             _revealClose.OnClick(CloseReveal);
 
@@ -248,10 +334,10 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(panel, 0f, 0f, 1020f, 880f, new Vector2(0.5f, 0.5f));
 
             Image panelBg = panel.gameObject.AddComponent<Image>();
-            panelBg.sprite = UISkin.Panel(24);
+            panelBg.sprite = TextureLab.NotchedRect(22);
             panelBg.type = Image.Type.Sliced;
             panelBg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", panel, UITheme.Border, 24, 3);
+            UIBuilder.NotchedFrame("Edge", panel, UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f), 22, 3);
 
             _resultsTitle = UIBuilder.Label("Title", panel, "", UITheme.FontHeading,
                                             UITheme.TextPrimary, TextAnchor.UpperCenter);
@@ -265,7 +351,7 @@ namespace Emberfall.UI.Screens
             _resultsList = UIBuilder.ScrollList("List", panel, out scroll, 8f, new RectOffset(16, 16, 8, 8));
             UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 20f, 124f, 20f, 132f);
 
-            UIButton close = UIBuilder.GoldButton("ResultsClose", panel, "CONTINUE", UITheme.FontHeading);
+            UIButton close = UIBuilder.Notch(UIBuilder.GoldButton("ResultsClose", panel, "CONTINUE", UITheme.FontHeading), 16);
             UIBuilder.Box(close.Root, 0f, 24f, 420f, 96f, new Vector2(0.5f, 0f));
             close.OnClick(CloseResults);
 
@@ -368,6 +454,7 @@ namespace Emberfall.UI.Screens
             _busy = false;
             _reveal.gameObject.SetActive(false);
             _results.gameObject.SetActive(false);
+            RefreshFeatured();
             Refresh();
         }
 
@@ -387,18 +474,141 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>
+        /// The banner's face. Rebuilt only when the featured hero CHANGES, which in practice means
+        /// once - the portrait is a real sprite load and tearing it down every OnShow would be
+        /// waste for a subject that cannot move without a content change.
+        /// </summary>
+        private void RefreshFeatured()
+        {
+            HeroDef featured = FeaturedHero();
+            if (featured == null || featured.Id == _featuredId) return;
+            _featuredId = featured.Id;
+
+            for (int i = _portraitHost.childCount - 1; i >= 0; i--)
+                Destroy(_portraitHost.GetChild(i).gameObject);
+
+            RectTransform portrait = Widgets.Portrait("Featured", _portraitHost, featured, featured.Stars, 300f, true);
+            UIBuilder.FillParent(portrait, 0f);
+
+            _featuredName.text = featured.Name;
+            _featuredName.color = UITheme.StarColor(featured.Stars);
+            _featuredTitle.text = featured.Title.ToUpperInvariant() + "   -   "
+                                + UITheme.RoleName(featured.Role) + "   -   "
+                                + AspectChart.DisplayName(featured.Aspect).ToUpperInvariant();
+        }
+
+        /// <summary>
+        /// The face of the banner: the highest-star hero WHO HAS BEEN DRAWN, in content order.
+        ///
+        /// A STAND-IN for a real banner, not one. There is no featured flag in heroes.json and no
+        /// banner definition anywhere, and content was out of scope, so this picks a hero rather
+        /// than reading one. It is deterministic - same hero every session, same hero for every
+        /// player - which is the least misleading thing an undefined banner can be.
+        ///
+        /// The art check is the whole point of the two passes. Ranking on stars alone selected
+        /// Orrin Kaal, who is one of the heroes still awaiting art, so the single dominant image
+        /// this screen is built around rendered as the procedural placeholder blob. A banner face
+        /// with no face is worse than a lower-rarity hero, so heroes with art are preferred and
+        /// rarity only breaks the tie among them. The fallback still returns SOMETHING if no hero
+        /// has art at all, because a screen with no subject is worse than a placeholder one.
+        /// </summary>
+        private HeroDef FeaturedHero()
+        {
+            List<HeroDef> heroes = App.Session.Content.Heroes;
+            HeroDef drawn = null;
+            HeroDef any = null;
+            for (int i = 0; i < heroes.Count; i++)
+            {
+                HeroDef h = heroes[i];
+                if (any == null || h.Stars > any.Stars) any = h;
+                if (!Widgets.HasPortraitArt(h.Id)) continue;
+                if (drawn == null || h.Stars > drawn.Stars) drawn = h;
+            }
+            return drawn != null ? drawn : any;
+        }
+
         private void Refresh()
         {
+            long now = TimeUtil.NowUnix();
+            _currencies.Refresh(App.Session, now);
+
             long unit = App.Session.Balance.SummonCost;
             long shards = App.Session.Profile.Shards;
 
-            _purseLabel.text = "YOU HOLD " + shards + " EMBER SHARDS";
-
-            // Each button is priced and gated on ITS OWN size. Deliberately not chained: being
-            // unable to afford ten says nothing about whether one is affordable, and the old
-            // single-button-plus-mode arrangement could only ever describe one of those at a time.
             RefreshPullButton(_pullOne, unit, shards);
             RefreshPullButton(_pullTen, unit * 10L, shards);
+            RefreshPity();
+            RefreshOdds();
+        }
+
+        /// <summary>
+        /// The opening guarantee. Once TotalSummons passes it, the bar reads as SPENT and stays
+        /// there - it does not reset, because there is nothing to reset to. See the class note.
+        /// </summary>
+        private void RefreshPity()
+        {
+            int cap = GameSession.PityGuaranteedSummons;
+            int used = Mathf.Min(App.Session.Profile.TotalSummons, cap);
+            int left = Mathf.Max(0, cap - App.Session.Profile.TotalSummons);
+
+            UIBuilder.SetBar(_pityFill, cap > 0 ? used / (float)cap : 1f);
+
+            if (left > 0)
+            {
+                _pityFill.color = UITheme.Gold;
+                _pityChest.color = UITheme.Gold;
+                _pityLabel.color = UITheme.TextMuted;
+                _pityLabel.text = "OPENING GUARANTEE  -  " + left
+                                + (left == 1 ? " PULL LEFT THAT CANNOT DUPLICATE" : " PULLS LEFT THAT CANNOT DUPLICATE");
+            }
+            else
+            {
+                _pityFill.color = UITheme.WithAlpha(UITheme.Gold, 0.35f);
+                _pityChest.color = UITheme.TextDim;
+                _pityLabel.color = UITheme.TextDim;
+                _pityLabel.text = "OPENING GUARANTEE SPENT  -  PULLS NOW DRAW FROM THE FULL POOL";
+            }
+        }
+
+        /// <summary>
+        /// The odds, as one line.
+        ///
+        /// Same rule the old RIFT ODDS card used: when exactly one tier is offered, state the
+        /// outcome outright, because a lone "100%" reads as "100% chance of a good pull" rather
+        /// than "every pull is 5-star". Those mean the same thing today and only one of them
+        /// survives the pool being widened.
+        /// </summary>
+        private void RefreshOdds()
+        {
+            BalanceConfig balance = App.Session.Balance;
+            float[] w = { balance.SummonWeight1, balance.SummonWeight2, balance.SummonWeight3,
+                          balance.SummonWeight4, balance.SummonWeight5 };
+            float total = 0f;
+            for (int i = 0; i < w.Length; i++) total += w[i];
+            if (total <= 0f) total = 1f;
+
+            int tiersOffered = 0;
+            int onlyTier = 0;
+            for (int s = 1; s <= 5; s++)
+                if (w[s - 1] > 0f) { tiersOffered++; onlyTier = s; }
+
+            if (tiersOffered == 1)
+            {
+                _oddsLabel.text = "RIFT ODDS  -  EVERY PULL IS " + onlyTier + "-STAR";
+                return;
+            }
+
+            string line = "RIFT ODDS  -  ";
+            bool first = true;
+            for (int s = 1; s <= 5; s++)
+            {
+                if (w[s - 1] <= 0f) continue;
+                if (!first) line += "   ";
+                line += s + "-STAR " + (Mathf.Round(w[s - 1] / total * 1000f) / 10f) + "%";
+                first = false;
+            }
+            _oddsLabel.text = line;
         }
 
         /// <summary>
@@ -413,7 +623,7 @@ namespace Emberfall.UI.Screens
             button.Interactable = affordable && !_busy;
             if (button.SubLabel != null)
                 button.SubLabel.text = affordable
-                    ? cost + " SHARDS"
+                    ? cost.ToString()
                     : "NEED " + (cost - shards) + " MORE";
         }
 

@@ -40,6 +40,45 @@ namespace Emberfall.UI
         // First Light the six aspects came from, so its own currency colour should not borrow one.
         public static readonly Color Dust = Hex("A8967A");
 
+        /// <summary>
+        /// Slag's own tone: the hot-iron red of a fresh pour. Forge salvage, and until now the one
+        /// currency in the game with no colour of its own - ForgeScreen was tinting its Slag banner
+        /// with ArmorTemperColor(Gilded), borrowing a rung off the armour ladder for a purse. That
+        /// said "Slag is Gilded", which is not a thing, and it is the same class of accident that
+        /// put Lumen's old pale gold next to the currency colour.
+        ///
+        /// Deliberately redder than Ember (E8642F, orange) and less pink than Danger (E0574C), so a
+        /// Slag figure is never mistaken for an ember accent or for a failure state.
+        /// </summary>
+        public static readonly Color Slag = Hex("C9553A");
+
+        /// <summary>
+        /// Echoes: the Deep Recital's attempt token, banked to a cap and refilled on a clock.
+        ///
+        /// Violet rather than the warm brass the mockup's hourglass is painted in, because warm is
+        /// already spoken for three times over at this end of the palette - Gold is currency,
+        /// Warning is a state, ChromeBrass is structure - and a fourth warm value sitting beside
+        /// them is exactly the collision UITheme's own notes keep warning about. The hourglass
+        /// SHAPE carries "this one refills with time"; the colour only has to say "this one is the
+        /// Recital's", and violet is the Recital's already.
+        ///
+        /// Distinct from Mythic (E84FD1, magenta - a relic grade) by hue and from Dust (A8967A) by
+        /// temperature, so the strip's six icons never read as five.
+        /// </summary>
+        public static readonly Color Echo = Hex("9B7FE8");
+
+        /// <summary>
+        /// The stand-in accent for an event's own currency.
+        ///
+        /// EventDef carries a CurrencyName but no colour, and events.json is content this pass was
+        /// told not to touch, so every event's token renders in this one tone rather than in a
+        /// per-event accent. That is a real limitation, not a design choice: two simultaneous
+        /// events with currencies would be indistinguishable by colour alone in the strip. It is
+        /// survivable today because the currency cell is labelled and only one event carries a
+        /// currency at a time; the fix is a colour field on EventDef, which is a content change.
+        /// </summary>
+        public static readonly Color EventToken = Hex("D6455E");
+
         public static readonly Color Success = Hex("5BC98C");
         public static readonly Color Danger = Hex("E0574C");
         public static readonly Color Warning = Hex("EAA640");
@@ -355,6 +394,37 @@ namespace Emberfall.UI
                 // gold currency figure read as the same colour at a glance - the collision this
                 // fix exists to remove, since Gold is a load-bearing semantic colour (currency,
                 // progress, primary action) and an aspect accent must never be mistaken for it.
+                case Aspect.Lumen: return Hex("3568E8");
+            }
+            return TextMuted;
+        }
+
+        /// <summary>
+        /// The six aspect accents EXACTLY as DESIGN-ART-BIBLE section 1 specifies them.
+        ///
+        /// This exists because AspectColor above does NOT match the bible for five of six aspects,
+        /// and its own doc comment says so: Gale is a different hue there and Umbra a different
+        /// colour family entirely. Reconciling AspectColor is a project-wide visual pass touching
+        /// every hero card, armour disc and aspect chip in the game, which is not this pass's job
+        /// and would have silently restyled six screens this pass was told not to touch.
+        ///
+        /// So: screens that have had their visual pass call THIS. Screens still awaiting one keep
+        /// calling AspectColor. That is a fork, and a fork in exactly the place this project has
+        /// already been burned once - two portrait conventions sat side by side undetected until an
+        /// audit found them - so it is written down here rather than left to be discovered. The two
+        /// must converge, by moving AspectColor onto these values in a pass that owns every screen
+        /// at once. Until then, do not add a third set, and do not "fix" one call site to point at
+        /// the other in isolation.
+        /// </summary>
+        public static Color AspectAccent(Aspect aspect)
+        {
+            switch (aspect)
+            {
+                case Aspect.Ember: return Hex("E84532");
+                case Aspect.Tide: return Hex("28C7D9");
+                case Aspect.Verdant: return Hex("62A77A");
+                case Aspect.Gale: return Hex("C6E34A");
+                case Aspect.Umbra: return Hex("E7E0D0");
                 case Aspect.Lumen: return Hex("3568E8");
             }
             return TextMuted;

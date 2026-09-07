@@ -17,27 +17,50 @@ namespace Emberfall.UI.Screens
     /// coming, and an ended one stays visible for as long as it has an unclaimed milestone or a
     /// spendable currency balance, since GameSession does not gate claiming or redeeming on the
     /// window - only earning is gated to it.
+    ///
+    /// ---- visual pass ----
+    /// THE MILESTONE LADDER IS HORIZONTAL AND IT IS A TRACK. It used to be a stack of identical
+    /// full-width rows, each with its own CLAIM button, which said nothing about ORDER or DISTANCE
+    /// - the two things a milestone ladder exists to communicate. It is now a rail with a node per
+    /// threshold: the rail is lit up to where the player has reached, nodes past that are dark, and
+    /// the reward under each node is a tile rather than a sentence. Where they are on the track is
+    /// now visible without reading a single number.
+    ///
+    /// THE CURRENCY TIERS ARE A CARD ROW, AND VISIBLY NOT THE TRACK. They were the same row widget
+    /// as the milestones, one section heading apart, which made a spend look like a claim. They are
+    /// now cards - a different shape, a different frame, their own currency icon on every price -
+    /// because the two do genuinely different things: a milestone is earned once and taken, a tier
+    /// is bought repeatedly out of a balance.
+    ///
+    /// Claiming and redeeming are the same calls they always were. OnClaimMilestone and
+    /// OnRedeemCurrency are untouched, and both still gate on GameSession rather than on anything
+    /// this screen believes.
     /// </summary>
     public sealed class EventsScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Events; } }
 
-        private Text _headerSubtitle;
-        private RectTransform _listContent;
-
-        private const float RowHeight = 56f;
-        private const float HeaderHeight = 128f;
-        private const float SectionLabelHeight = 32f;
         private const float CardPadding = 24f;
-        private const float CardGap = 16f;
+        private const float HeaderBlock = 108f;
+        private const float TrackBlock = 244f;
+        private const float TierBlock = 250f;
+        private const float SectionLabelHeight = 30f;
+        private const float NodeSize = 26f;
+        private const float TileSize = 96f;
+
+        private Text _headerSubtitle;
+        private readonly CurrencyStrip _currencies = new CurrencyStrip();
+        private RectTransform _listContent;
 
         protected override void Build()
         {
             ScreenChrome.Header(Root, "EVENTS", Router, out _headerSubtitle);
+            _currencies.Build(Root);
 
             ScrollRect scroll;
             _listContent = UIBuilder.ScrollList("EventList", Root, out scroll, 20f, new RectOffset(32, 32, 12, 40));
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 0f, ScreenChrome.HeaderTop + 108f, 0f, 0f);
+            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 0f,
+                                 CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop), 0f, 0f);
         }
 
         // ------------------------------------------------------------------ refresh
@@ -51,6 +74,8 @@ namespace Emberfall.UI.Screens
         private void Rebuild()
         {
             long now = TimeUtil.NowUnix();
+            _currencies.Refresh(App.Session, now);
+
             List<EventDef> events = App.Session.Content.Events;
 
             int activeCount = 0;
@@ -72,10 +97,8 @@ namespace Emberfall.UI.Screens
 
         private float CardHeight(EventDef evt)
         {
-            float h = CardPadding + HeaderHeight + CardGap + SectionLabelHeight + 8f
-                    + evt.Milestones.Count * RowHeight;
-            if (evt.HasCurrency)
-                h += CardGap + SectionLabelHeight + 8f + evt.CurrencyRewards.Count * RowHeight;
+            float h = CardPadding + HeaderBlock + SectionLabelHeight + TrackBlock;
+            if (evt.HasCurrency) h += UITheme.Space24 + SectionLabelHeight + TierBlock;
             return h + CardPadding;
         }
 
@@ -84,32 +107,33 @@ namespace Emberfall.UI.Screens
             EventProgressEntry progress = App.Session.Profile.FindEventProgress(evt.Id);
             long points = progress != null ? progress.Points : 0L;
             long currency = progress != null ? progress.Currency : 0L;
+            bool active = evt.IsActive(now);
 
-            float cardHeight = CardHeight(evt);
             RectTransform card = UIBuilder.Node("Event_" + evt.Id, _listContent);
-            UIBuilder.Sized(card, 0f, cardHeight);
+            UIBuilder.Sized(card, 0f, CardHeight(evt));
 
             Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(20);
+            bg.sprite = TextureLab.NotchedRect(20);
             bg.type = Image.Type.Sliced;
-            bg.color = evt.IsActive(now) ? UITheme.WithAlpha(UITheme.PanelRaised, 0.92f) : UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(evt.IsActive(now) ? UITheme.Success : UITheme.BorderSoft, 0.6f), 20, 2);
+            bg.color = active ? UITheme.WithAlpha(UITheme.PanelRaised, 0.92f) : UITheme.Panel;
+            UIBuilder.NotchedFrame("Edge", card,
+                                   UITheme.WithAlpha(active ? UITheme.ChromeBrass : UITheme.BorderSoft,
+                                                     active ? 0.85f : 0.5f), 20, 2);
 
             float top = CardPadding;
 
-            // Name, left, and a status chip, right.
-            Text nameLabel = UIBuilder.Label("Name", card, evt.Name, UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(nameLabel.rectTransform, 24f, -top, 560f, 36f, new Vector2(0f, 1f));
+            // ---- name, status, and the points line
+            Text nameLabel = UIBuilder.Label("Name", card, evt.Name, UITheme.FontBody,
+                                             UITheme.TextPrimary, TextAnchor.UpperLeft);
+            UIBuilder.Box(nameLabel.rectTransform, 28f, -top, 700f, 38f, new Vector2(0f, 1f));
 
             string statusText; Color statusColor;
             StatusOf(evt, now, out statusText, out statusColor);
             RectTransform statusChip = UIBuilder.Chip("Status", card, statusText, statusColor, UITheme.FontTiny);
-            UIBuilder.Box(statusChip, -24f, -top, 220f, 32f, new Vector2(1f, 1f));
+            UIBuilder.Box(statusChip, -28f, -top, 240f, 32f, new Vector2(1f, 1f));
 
-            top += 40f;
+            top += 44f;
 
-            // Points row: "168 / 200 MEMORY FRAGMENTS" against the next unclaimed threshold, plus a
-            // bar toward it. Once every milestone is claimed the bar simply reads full.
             long nextThreshold = NextUnclaimedThreshold(evt, progress);
             long denominator = nextThreshold > 0 ? nextThreshold : evt.HighestThreshold;
             float ratio = denominator > 0 ? Mathf.Clamp01(points / (float)denominator) : 1f;
@@ -117,108 +141,270 @@ namespace Emberfall.UI.Screens
             Text pointsLabel = UIBuilder.Label("Points", card,
                 points + (nextThreshold > 0 ? " / " + nextThreshold : "") + "  " + evt.PointsLabel.ToUpperInvariant(),
                 UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperLeft);
-            UIBuilder.Box(pointsLabel.rectTransform, 24f, -top, 700f, 30f, new Vector2(0f, 1f));
+            UIBuilder.Box(pointsLabel.rectTransform, 28f, -top, 700f, 30f, new Vector2(0f, 1f));
             top += 34f;
 
-            Image pointsBar = UIBuilder.Bar("PointsBar", card, UITheme.PanelSunken, UITheme.Success);
-            StretchTop(pointsBar.rectTransform.parent as RectTransform, top, 18f, 24f, 24f);
+            Image pointsBar = UIBuilder.Bar("PointsBar", card, UITheme.PanelSunken, UITheme.Gold);
+            StretchTop(pointsBar.rectTransform.parent as RectTransform, top, 14f, 28f, 28f);
             UIBuilder.SetBar(pointsBar, ratio);
-            top += 18f + CardGap;
+            top += 14f + UITheme.Space16;
 
-            // Milestone ladder.
-            Text milestonesLabel = UIBuilder.Label("MilestonesHeading", card, "MILESTONES",
-                                                    UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(milestonesLabel.rectTransform, 24f, -top, 400f, SectionLabelHeight, new Vector2(0f, 1f));
-            top += SectionLabelHeight + 8f;
+            // ---- the milestone track
+            Text trackHeading = UIBuilder.Label("TrackHeading", card, "MILESTONES",
+                                                UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            UIBuilder.Box(trackHeading.rectTransform, 28f, -top, 400f, SectionLabelHeight, new Vector2(0f, 1f));
+            top += SectionLabelHeight;
 
-            for (int i = 0; i < evt.Milestones.Count; i++)
-                top = BuildMilestoneRow(card, evt, evt.Milestones[i], progress, top);
+            BuildTrack(card, evt, progress, points, top);
+            top += TrackBlock;
 
-            // Currency ladder, only when the event has one.
-            if (evt.HasCurrency)
-            {
-                top += CardGap;
-                Text currencyLabel = UIBuilder.Label("CurrencyHeading", card,
-                    evt.CurrencyName.ToUpperInvariant() + "  -  " + currency,
-                    UITheme.FontTiny, UITheme.Shard, TextAnchor.UpperLeft);
-                UIBuilder.Box(currencyLabel.rectTransform, 24f, -top, 500f, SectionLabelHeight, new Vector2(0f, 1f));
-                top += SectionLabelHeight + 8f;
+            // ---- the currency tiers, when the event has any
+            if (!evt.HasCurrency) return;
 
-                for (int i = 0; i < evt.CurrencyRewards.Count; i++)
-                    top = BuildCurrencyRow(card, evt, evt.CurrencyRewards[i], currency, top);
-            }
+            top += UITheme.Space24;
+            Text tierHeading = UIBuilder.Label("TierHeading", card,
+                evt.CurrencyName.ToUpperInvariant() + "  -  " + currency + " HELD",
+                UITheme.FontTiny, UITheme.EventToken, TextAnchor.UpperLeft);
+            UIBuilder.Box(tierHeading.rectTransform, 28f, -top, 600f, SectionLabelHeight, new Vector2(0f, 1f));
+            top += SectionLabelHeight;
+
+            BuildTierRow(card, evt, currency, top);
         }
 
-        private float BuildMilestoneRow(RectTransform card, EventDef evt, EventMilestone milestone,
-                                        EventProgressEntry progress, float top)
+        /// <summary>
+        /// The horizontal point ladder: a rail, a node per threshold, a reward tile under each.
+        ///
+        /// Positioned by ANCHOR FRACTION rather than by pixel offset, because a card in a scroll
+        /// list has whatever width the list gives it and this screen never learns that number. Node
+        /// i of n sits at (i + 0.5) / n across, which spaces them evenly and leaves half a cell of
+        /// margin at both ends without the card's own width appearing anywhere.
+        /// </summary>
+        private void BuildTrack(RectTransform card, EventDef evt, EventProgressEntry progress,
+                                long points, float top)
         {
-            long points = progress != null ? progress.Points : 0L;
+            int count = evt.Milestones.Count;
+
+            RectTransform track = UIBuilder.Node("Track", card);
+            StretchTop(track, top, TrackBlock, 28f, 28f);
+
+            if (count == 0)
+            {
+                Text none = UIBuilder.Label("None", track, "This event authors no milestones.",
+                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(none.rectTransform, 0f);
+                return;
+            }
+
+            float first = 0.5f / count;
+            float last = (count - 0.5f) / count;
+
+            // How far along the rail the player has actually got. The rail is lit to the last
+            // threshold they have MET, so the lit length is the same fact the nodes state - not a
+            // second, subtly different progress number.
+            float reachedFraction = 0f;
+            for (int i = 0; i < count; i++)
+                if (points >= evt.Milestones[i].Threshold) reachedFraction = (i + 0.5f) / count;
+
+            Rail(track, "RailDim", first, last, UITheme.WithAlpha(UITheme.BorderSoft, 0.9f), 4f);
+            if (reachedFraction > first)
+                Rail(track, "RailLit", first, reachedFraction, UITheme.Gold, 6f);
+
+            for (int i = 0; i < count; i++)
+                BuildNode(track, evt, evt.Milestones[i], progress, points, (i + 0.5f) / count, i == count - 1);
+        }
+
+        private static void Rail(RectTransform parent, string name, float from, float to, Color color, float height)
+        {
+            Image rail = UIBuilder.Img(name, parent, TextureLab.White, color);
+            RectTransform rt = rail.rectTransform;
+            rt.anchorMin = new Vector2(from, 1f);
+            rt.anchorMax = new Vector2(to, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(0f, -(NodeSize * 0.5f + height * 0.5f));
+            rt.offsetMax = new Vector2(0f, -(NodeSize * 0.5f - height * 0.5f));
+        }
+
+        /// <summary>
+        /// One milestone: the threshold, a node on the rail, and a reward tile that IS the claim
+        /// button when there is something to claim.
+        ///
+        /// Three states, and each is a different shape rather than a different shade: claimed shows
+        /// a check and stops being pressable, reached shows the reward on a lit tile that can be
+        /// pressed, and locked shows a padlock. The old list said all three with grey text.
+        /// </summary>
+        private void BuildNode(RectTransform track, EventDef evt, EventMilestone milestone,
+                               EventProgressEntry progress, long points, float centre, bool isLast)
+        {
             bool claimed = progress != null && progress.ClaimedMilestoneThresholds.Contains(milestone.Threshold);
             bool reached = points >= milestone.Threshold;
+            bool claimable = reached && !claimed;
 
-            RectTransform row = UIBuilder.Node("Milestone_" + milestone.Threshold, card);
-            StretchTop(row, top, RowHeight - 8f, 24f, 24f);
+            Color tint = claimed ? UITheme.Success : (reached ? UITheme.Gold : UITheme.TextDim);
 
-            Image rowBg = row.gameObject.AddComponent<Image>();
-            rowBg.sprite = UISkin.Panel(12);
-            rowBg.type = Image.Type.Sliced;
-            rowBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.7f);
+            RectTransform column = UIBuilder.Node("Node_" + milestone.Threshold, track);
+            column.anchorMin = new Vector2(centre, 0f);
+            column.anchorMax = new Vector2(centre, 1f);
+            column.pivot = new Vector2(0.5f, 0.5f);
+            column.offsetMin = new Vector2(-72f, 0f);
+            column.offsetMax = new Vector2(72f, 0f);
 
-            Text text = UIBuilder.Label("Text", row,
-                milestone.Threshold + " " + evt.PointsLabel + "  -  " + milestone.Reward.Describe(),
-                UITheme.FontTiny, claimed ? UITheme.TextDim : UITheme.TextPrimary, TextAnchor.MiddleLeft);
-            text.rectTransform.anchorMin = new Vector2(0f, 0f);
-            text.rectTransform.anchorMax = new Vector2(1f, 1f);
-            text.rectTransform.offsetMin = new Vector2(16f, 0f);
-            text.rectTransform.offsetMax = new Vector2(-160f, 0f);
+            // ---- the node on the rail
+            float nodeSize = isLast ? NodeSize * 1.35f : NodeSize;
+            Image node = UIBuilder.Img("Pip", column, TextureLab.Diamond(48),
+                                       reached ? tint : UITheme.WithAlpha(UITheme.PanelSunken, 1f));
+            UIBuilder.Box(node.rectTransform, 0f, -(NodeSize * 0.5f), nodeSize, nodeSize, new Vector2(0.5f, 1f));
 
-            if (claimed)
+            Image nodeEdge = UIBuilder.Img("PipEdge", column, TextureLab.Diamond(48),
+                                           UITheme.WithAlpha(reached ? tint : UITheme.BorderSoft, 0.5f));
+            UIBuilder.Box(nodeEdge.rectTransform, 0f, -(NodeSize * 0.5f), nodeSize + 8f, nodeSize + 8f,
+                          new Vector2(0.5f, 1f));
+            nodeEdge.rectTransform.SetAsFirstSibling();
+
+            float top = NodeSize + UITheme.Space8;
+
+            // ---- threshold
+            Text threshold = UIBuilder.Label("Threshold", column, milestone.Threshold.ToString(),
+                                             UITheme.FontTiny - 2, reached ? UITheme.TextPrimary : UITheme.TextDim,
+                                             TextAnchor.UpperCenter);
+            UIBuilder.Box(threshold.rectTransform, 0f, -top, 140f, 24f, new Vector2(0.5f, 1f));
+            top += 26f;
+
+            // ---- the reward tile
+            RectTransform tile = UIBuilder.Node("Tile", column);
+            UIBuilder.Box(tile, 0f, -top, TileSize, TileSize, new Vector2(0.5f, 1f));
+
+            Image tileBg = tile.gameObject.AddComponent<Image>();
+            tileBg.sprite = TextureLab.NotchedRect(12);
+            tileBg.type = Image.Type.Sliced;
+            tileBg.color = claimable
+                ? UITheme.WithAlpha(UITheme.Gold, 0.16f)
+                : UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
+            UIBuilder.NotchedFrame("TileEdge", tile, UITheme.WithAlpha(tint, reached ? 0.85f : 0.4f), 12, 2);
+
+            Sprite glyph = claimed ? TextureLab.Check(64)
+                         : (!reached ? TextureLab.Padlock(64)
+                         : (isLast ? TextureLab.Chest(64) : TextureLab.GemIcon(64)));
+            Image mark = UIBuilder.Img("Mark", tile, glyph, tint);
+            UIBuilder.Box(mark.rectTransform, 0f, 0f, 44f, 44f, new Vector2(0.5f, 0.5f));
+
+            // The tile is the button. A separate CLAIM control under a 96px tile would double the
+            // column's height for a second target hitting the same action.
+            if (claimable)
             {
-                RectTransform chip = UIBuilder.Chip("Claimed", row, "CLAIMED", UITheme.TextMuted, UITheme.FontTiny);
-                UIBuilder.Box(chip, -12f, 0f, 128f, 32f, new Vector2(1f, 0.5f));
-            }
-            else
-            {
-                UIButton claimButton = UIBuilder.GoldButton("Claim", row, "CLAIM", UITheme.FontTiny);
-                UIBuilder.Box(claimButton.Root, -12f, 0f, 128f, 40f, new Vector2(1f, 0.5f));
-                claimButton.Interactable = reached;
+                Button press = tile.gameObject.AddComponent<Button>();
+                press.transition = Selectable.Transition.None;
                 EventDef capturedEvt = evt;
                 long capturedThreshold = milestone.Threshold;
-                claimButton.OnClick(delegate { OnClaimMilestone(capturedEvt, capturedThreshold); });
+                press.onClick.AddListener(delegate { OnClaimMilestone(capturedEvt, capturedThreshold); });
             }
 
-            return top + RowHeight;
+            top += TileSize + UITheme.Space4;
+
+            // ---- what it actually is
+            Text reward = UIBuilder.WrappedLabel("Reward", column, milestone.Reward.Describe(),
+                                                 UITheme.FontTiny - 6,
+                                                 reached ? UITheme.TextMuted : UITheme.TextDim,
+                                                 TextAnchor.UpperCenter);
+            UIBuilder.Box(reward.rectTransform, 0f, -top, 140f, 34f, new Vector2(0.5f, 1f));
+            top += 36f;
+
+            Text state = UIBuilder.Label("State", column,
+                                         claimed ? "CLAIMED" : (claimable ? "CLAIM" : ""),
+                                         UITheme.FontTiny - 4, tint, TextAnchor.UpperCenter);
+            UIBuilder.Box(state.rectTransform, 0f, -top, 140f, 22f, new Vector2(0.5f, 1f));
         }
 
-        private float BuildCurrencyRow(RectTransform card, EventDef evt, EventCurrencyTier tier,
-                                       long currency, float top)
+        /// <summary>
+        /// The redeemable tiers, as a card row that cannot be mistaken for the track above it.
+        ///
+        /// Evenly spaced by anchor fraction for the same reason the track is: the card's width
+        /// belongs to the scroll list, not to this screen.
+        /// </summary>
+        private void BuildTierRow(RectTransform card, EventDef evt, long currency, float top)
+        {
+            int count = evt.CurrencyRewards.Count;
+
+            RectTransform row = UIBuilder.Node("Tiers", card);
+            StretchTop(row, top, TierBlock, 28f, 28f);
+
+            if (count == 0)
+            {
+                Text none = UIBuilder.Label("None", row, "Nothing to redeem yet.",
+                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(none.rectTransform, 0f);
+                return;
+            }
+
+            for (int i = 0; i < count; i++)
+                BuildTierCard(row, evt, evt.CurrencyRewards[i], currency, (i + 0.5f) / count);
+        }
+
+        private void BuildTierCard(RectTransform row, EventDef evt, EventCurrencyTier tier,
+                                   long currency, float centre)
         {
             bool affordable = currency >= tier.Cost;
 
-            RectTransform row = UIBuilder.Node("Currency_" + tier.Cost, card);
-            StretchTop(row, top, RowHeight - 8f, 24f, 24f);
+            RectTransform cardRoot = UIBuilder.Node("Tier_" + tier.Cost, row);
+            cardRoot.anchorMin = new Vector2(centre, 0f);
+            cardRoot.anchorMax = new Vector2(centre, 1f);
+            cardRoot.pivot = new Vector2(0.5f, 0.5f);
+            cardRoot.offsetMin = new Vector2(-150f, 0f);
+            cardRoot.offsetMax = new Vector2(150f, 0f);
 
-            Image rowBg = row.gameObject.AddComponent<Image>();
-            rowBg.sprite = UISkin.Panel(12);
-            rowBg.type = Image.Type.Sliced;
-            rowBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.7f);
+            Image bg = cardRoot.gameObject.AddComponent<Image>();
+            bg.sprite = TextureLab.NotchedRect(14);
+            bg.type = Image.Type.Sliced;
+            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
+            UIBuilder.NotchedFrame("Edge", cardRoot,
+                                   UITheme.WithAlpha(UITheme.EventToken, affordable ? 0.85f : 0.4f), 14, 2);
 
-            Text text = UIBuilder.Label("Text", row,
-                tier.Cost + " " + evt.CurrencyName + "  -  " + tier.Reward.Describe(),
-                UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.MiddleLeft);
-            text.rectTransform.anchorMin = new Vector2(0f, 0f);
-            text.rectTransform.anchorMax = new Vector2(1f, 1f);
-            text.rectTransform.offsetMin = new Vector2(16f, 0f);
-            text.rectTransform.offsetMax = new Vector2(-160f, 0f);
+            float top = UITheme.Space12;
 
-            UIButton redeemButton = UIBuilder.SecondaryButton("Redeem", row, "REDEEM", UITheme.FontTiny);
-            UIBuilder.Box(redeemButton.Root, -12f, 0f, 128f, 40f, new Vector2(1f, 0.5f));
-            redeemButton.Interactable = affordable;
+            RectTransform tile = UIBuilder.Node("Tile", cardRoot);
+            UIBuilder.Box(tile, 0f, -top, 78f, 78f, new Vector2(0.5f, 1f));
+
+            Image tileBg = tile.gameObject.AddComponent<Image>();
+            tileBg.sprite = TextureLab.NotchedRect(10);
+            tileBg.type = Image.Type.Sliced;
+            tileBg.color = UITheme.WithAlpha(UITheme.Panel, 0.95f);
+            tileBg.raycastTarget = false;
+            UIBuilder.NotchedFrame("TileEdge", tile, UITheme.WithAlpha(UITheme.EventToken, 0.6f), 10, 2);
+
+            Image mark = UIBuilder.Img("Mark", tile, TextureLab.GemIcon(64), UITheme.EventToken);
+            UIBuilder.Box(mark.rectTransform, 0f, 0f, 40f, 40f, new Vector2(0.5f, 0.5f));
+
+            top += 78f + UITheme.Space4;
+
+            Text reward = UIBuilder.WrappedLabel("Reward", cardRoot, tier.Reward.Describe(),
+                                                 UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
+            UIBuilder.Box(reward.rectTransform, 0f, -top, 276f, 44f, new Vector2(0.5f, 1f));
+
+            // ---- cost, in the strip's language
+            RectTransform cost = UIBuilder.Node("Cost", cardRoot);
+            UIBuilder.Box(cost, 0f, 56f, 260f, 28f, new Vector2(0.5f, 0f));
+
+            Image costPlate = cost.gameObject.AddComponent<Image>();
+            costPlate.sprite = UISkin.Panel(8);
+            costPlate.type = Image.Type.Sliced;
+            costPlate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            costPlate.raycastTarget = false;
+
+            Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.GemIcon(64), UITheme.EventToken);
+            UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 20f, 20f, new Vector2(0f, 0.5f));
+
+            Text costText = UIBuilder.Label("Value", cost, tier.Cost.ToString(), UITheme.FontTiny - 2,
+                                            affordable ? UITheme.TextPrimary : UITheme.Danger,
+                                            TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(costText.rectTransform, UITheme.Space8 + 20f + UITheme.Space8, 0f, UITheme.Space8, 0f);
+
+            UIButton redeem = UIBuilder.Notch(
+                UIBuilder.SecondaryButton("Redeem", cardRoot, "REDEEM", UITheme.FontTiny), 10);
+            UIBuilder.Box(redeem.Root, 0f, UITheme.Space12, 260f, 38f, new Vector2(0.5f, 0f));
+            redeem.Interactable = affordable;
+
             EventDef capturedEvt = evt;
             long capturedCost = tier.Cost;
-            redeemButton.OnClick(delegate { OnRedeemCurrency(capturedEvt, capturedCost); });
-
-            return top + RowHeight;
+            redeem.OnClick(delegate { OnRedeemCurrency(capturedEvt, capturedCost); });
         }
 
         /// <summary>

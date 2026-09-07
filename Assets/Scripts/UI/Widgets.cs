@@ -49,6 +49,19 @@ namespace Emberfall.UI
         /// folder set alphaIsTransparency and coverage-preserving mipmaps, which are what stop a
         /// masked badge growing a dark rim as it mips down from 512 to the 76px roster size.
         /// </summary>
+        /// <summary>
+        /// Whether this unit has painted portrait art of EITHER kind, framed or frameless.
+        ///
+        /// Presence of the file is the rule everywhere else in this class, so it is the rule here
+        /// too - a caller that wants to prefer a hero with art asks this rather than hard-coding a
+        /// list of which heroes have been drawn, which would be a second source of truth that goes
+        /// stale the moment an artist delivers one more file.
+        /// </summary>
+        public static bool HasPortraitArt(string unitId)
+        {
+            return FramedPortrait(unitId) != null || PortraitArt(unitId) != null;
+        }
+
         private static Sprite FramedPortrait(string unitId)
         {
             if (string.IsNullOrEmpty(unitId)) return null;

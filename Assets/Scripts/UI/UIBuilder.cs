@@ -84,6 +84,35 @@ namespace Emberfall.UI
             return image;
         }
 
+        /// <summary>
+        /// A panel with CHAMFERED corners rather than round ones - the frame language the shop,
+        /// Rift, Recital and Events screens are built from. Pairs with NotchedFrame, exactly the
+        /// way Panel pairs with Frame.
+        /// </summary>
+        public static Image NotchedPanel(string name, Transform parent, Color color, int cut)
+        {
+            RectTransform rt = Node(name, parent);
+            Image image = rt.gameObject.AddComponent<Image>();
+            image.sprite = TextureLab.NotchedRect(cut);
+            image.type = Image.Type.Sliced;
+            image.color = color;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        /// <summary>The chamfered counterpart to Frame: an outline that fills its parent.</summary>
+        public static Image NotchedFrame(string name, Transform parent, Color color, int cut, int thickness)
+        {
+            RectTransform rt = Node(name, parent);
+            Image image = rt.gameObject.AddComponent<Image>();
+            image.sprite = TextureLab.NotchedOutline(cut, thickness);
+            image.type = Image.Type.Sliced;
+            image.color = color;
+            image.raycastTarget = false;
+            FillParent(rt, 0f);
+            return image;
+        }
+
         public static Image Img(string name, Transform parent, Sprite sprite, Color color)
         {
             RectTransform rt = Node(name, parent);
@@ -364,6 +393,35 @@ namespace Emberfall.UI
 
             handle.Root.gameObject.AddComponent<ButtonPress>();
             return handle;
+        }
+
+        /// <summary>
+        /// Re-cuts an existing button's corners from round to CHAMFERED, in place.
+        ///
+        /// A post-hoc swap rather than a seventh MakeButton overload, because the only thing that
+        /// differs is three sprites - fill, frame and sheen - and every other property a button has
+        /// (its colour block, its press feedback, its label treatment) must stay identical whatever
+        /// shape it is. Threading a shape argument down through PrimaryButton, GoldButton and
+        /// SecondaryButton to reach MakeButton would have touched every button in the game to
+        /// change four of them.
+        ///
+        /// The sheen is re-cut too. Missing it leaves a rounded highlight floating inside a
+        /// chamfered face, which is visible at the top corners and reads as a rendering fault.
+        /// </summary>
+        public static UIButton Notch(UIButton button, int cut)
+        {
+            if (button == null) return button;
+
+            if (button.Background != null) button.Background.sprite = TextureLab.NotchedRect(cut);
+            if (button.Frame != null) button.Frame.sprite = TextureLab.NotchedOutline(cut, 3);
+
+            Transform sheen = button.Root.Find("Sheen");
+            if (sheen != null)
+            {
+                Image sheenImage = sheen.GetComponent<Image>();
+                if (sheenImage != null) sheenImage.sprite = TextureLab.NotchedRect(cut);
+            }
+            return button;
         }
 
         /// <summary>Compact circular icon button used for back arrows and toggles.</summary>
