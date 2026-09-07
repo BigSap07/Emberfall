@@ -39,3 +39,8 @@ Thumbs.db
 # double that in history permanently, and git cannot forget a blob later.
 # feat/sprite-sheet-player holds the only copy of Kael's set - keep that branch.
 /Assets/_Incoming/
+
+ProjectSettings/Packages/
+
+Assets/_Incoming.meta
+Tools/Screenshots/
