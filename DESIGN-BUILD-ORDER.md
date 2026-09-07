@@ -10,6 +10,13 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
   for the retune, i.e. today's task 13.
 - **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
+- **Known gap: the Campaign chip row does not fit 12 chapters.** `CampaignScreen.BuildChipRow`
+  sizes the row at 1600px wide (`UIBuilder.Box(_chipRow, 0f, ..., 1600f, 84f, ...)`) and
+  `RefreshChips` gives every chip `UIBuilder.Sized(chip, 300f, 84f)` inside an `HStack` with 16px
+  spacing. That is `12 * 300 + 11 * 16` = 3776px for a full 12-chapter roster against 1600px of
+  row: it fits five chapters exactly (`5 * 300 + 4 * 16` = 1564) and overflows at six. Not a
+  problem today with two chapters shipped, and not fixed here - it needs either a scrolling row or
+  narrower chips, which is a design call rather than a number to nudge.
 - **Hero portraits: DONE, on `main`** (`f71d106`, `1de4f9e`) - framed portrait art shipped for the
   five Ember heroes: Kael, Marrow, Seraphine, Veska, Orren. It adds a SECOND
   portrait convention rather than replacing the first, and the folder is what distinguishes them:
@@ -1038,6 +1045,58 @@ confirmed green on CI on `main` after the merge.
     - **`ch2_12`'s boss is authored below its own minions** - `tideturned` at level 32 against adds
       at 41 to 47, which is why the throne reads easier than 2-11. Raising it alone to 48 drove the
       stage to 0% on both the unarmored and the economy columns.
+
+    **`recommendedPower` now means something task 13 never measured. Audited 2026-09-07.** The
+    Chapter -> Stage -> Wave -> Battle restructure (DESIGN-CAMPAIGN-STRUCTURE.md) landed after this
+    entry was written. A stage is no longer one fixed fight; it is a 12x12 ladder interpolating from
+    a `floorLevel` to a `ceilingLevel`, 144 battles, and `recommendedPower` is a single number
+    attached to the whole range. Task 13 tuned it against ONE encounter, which is now the first
+    battle of 144.
+
+    This is not a documentation nicety - it is measurable, and both instruments are affected:
+
+    - **Neither instrument errors, and neither reports a meaningless number. Both silently report
+      the FLOOR battle only.** `CheckPinnedFiveBodyCurve` (`Tools/DevHarness/Program.cs:8265`) and
+      `RunCampaignBalancePass` (`:8551`, `:8587`) call
+      `session.BuildBattleRequest(stage, seed)` on the raw `StageDef`, whose `Enemies` list is by
+      construction the wave 1 / battle 1 roster. `CampaignWaveGenerator.BuildBattle` is never
+      reached from either - the only calls to it in the harness are lines 5593-5756, inside the
+      CAMPAIGN STRUCTURE section. The proof is that the pinned table's numbers did not move across
+      the restructure at all (1-8 still 54.2%, 1-9 still 4.2%), which is exactly what a floor-pinned
+      instrument does when the floor was deliberately left untouched.
+    - **`RunCampaignBalancePass`'s economy half is wrong by a factor of 144**, which is worse than
+      its difficulty half. At `:8557` a single won battle calls `GrantBattleResult(stage, true, now)`
+      and `break`s the attempt loop as `cleared`. Under the new structure a stage needs 144 wins, so
+      the simulated player is paid a full stage clear - gold, shards, account XP, first-clear bonus -
+      for 1/144th of the work, and advances through the campaign at 144x the real rate. Every
+      gold-sink and idle-income conclusion in this entry rests on that pacing.
+
+    **Measured curve shape, 2026-09-07**, pinned five-body line levelled to each stage's
+    `recommendedPower`, 200 samples per point, run against live code:
+
+    | stage | lv floor->ceil | W1B1 | W4B1 | W6B6 | W9B1 | W12B12 |
+    |-------|----------------|------|------|------|------|--------|
+    | 1-3   | 10 -> 12       | 100% | 100% | 100% | 100% | 100%   |
+    | 1-9   | 27 -> 32       |   7% |   0% |   0% |   0% |   0%   |
+    | 1-11  | 27 -> 32       |  37% |  15% |   2% |   0% |   0%   |
+    | 2-4   | 53 -> 56       |  74% |  56% |  60% |  34% |  25%   |
+    | 2-11  | 76 -> 81       |  12% |   8% |   6% |   5% |   0%   |
+
+    Three things follow, and none of them are tuning opinions:
+
+    1. **On an easy stage the curve does nothing.** 1-3 spans two enemy levels across 144 battles and
+       reads 100% at every point. A +2 span is below the resolution of the difficulty model.
+    2. **Three of the five sampled stages reach 0% before the ceiling.** Because defeat retries the
+       single battle that was lost, a 0% battle is not "hard" - it is a hard stop, retried forever.
+       1-9 blocks at battle 37 of 144, 1-11 at battle 97, 2-11 at battle 144. At `recommendedPower`,
+       those stages cannot be completed at all.
+    3. **Only 2-4 has a usable gradient** (74% down to 25%), and it is a stage the ceiling rule
+       handled normally rather than one of the five that took the inversion fallback.
+
+    So the retune's target is no longer a number per stage. It is a curve per stage that has to stay
+    above zero at its ceiling for the stage to be finishable, and the two instruments cannot see
+    either end of it. **Re-point the instruments before re-tuning anything** - retuning against a
+    floor-only reading would tune the one battle in 144 that is already fine.
 
     Blocked by: 1, 3, 5, 6, 8, 9, 10, 11, 12a, 12b - all done. Blocks: nothing.
 
