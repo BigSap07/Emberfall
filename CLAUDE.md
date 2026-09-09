@@ -3,6 +3,29 @@
 An original mobile idle RPG prototype: collectible heroes, automatic 5-a-side turn-based combat,
 campaign progression, summoning, idle income, local saving. Landscape, touch-first, Android.
 
+## Ground rules
+
+- **`DESIGN-BUILD-ORDER.md` is the only document kept current.** Read its **Now / Next** and
+  **Already done, do not rebuild** sections before assuming anything about what is built.
+- **Every other `DESIGN-*.md` is a decision record from its date.** The reasoning in them is
+  durable; the status claims, names and numbers are not. Never conclude from one that a system
+  is unbuilt.
+- **`README.md`, `UI-AUDIT.md`, `GYM-SESSION.md` and `STATE-OF-THE-GAME.md` are superseded** and
+  must not be used as evidence.
+- **Cite symbols, never line numbers.** Write "`ApplyLedger` in `CombatSimulation.cs`", not
+  "`CombatSimulation.cs:1060`".
+- **Cite observable file content, never commit hashes.** Write what the commit proved, not which
+  commit proved it.
+- **A branch name may be cited only in `DESIGN-BUILD-ORDER.md`'s Now / Next**, only while the
+  branch is live, and only alongside a description of what it contains. Unmerged work has no
+  observable state in the tree, so a pointer is the only thing that can express it. When the
+  branch merges, the line moves to **Already done** and the branch name is replaced by what is
+  now observable in the files.
+- **When a session finds a design doc wrong against real code, it edits that doc in the same
+  commit.**
+- **A commit that changes a screen's layout is not done** until that screen has been captured
+  with `PlayModeScreenshot`.
+
 ## Project facts
 
 - **Unity 6.5** (`6000.5.9f1`, see `ProjectSettings/ProjectVersion.txt`).
@@ -18,8 +41,9 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
   outcome. **No game logic goes in UI.** If the screen seems to be missing information, it is
   almost always already in the event list and merely unread — read the record, don't recompute
   it. See `DESIGN-BATTLE-READABILITY.md`.
-- **Content is JSON** in `Assets/Resources/Content` (`heroes.json`, `enemies.json`,
-  `campaign.json`, `balance.json`). Balance and content changes go there, not into code.
+- **Content is JSON** in `Assets/Resources/Content`, seven files: `armor.json`, `balance.json`,
+  `campaign.json`, `enemies.json`, `events.json`, `heroes.json`, `relics.json`. Balance and
+  content changes go there, not into code.
 - **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.
 - **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
   them.
