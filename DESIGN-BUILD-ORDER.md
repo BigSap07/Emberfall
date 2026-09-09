@@ -31,16 +31,6 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
 
 - **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
   is not; that sentence is stale, task 13's own entry is right.
-- **Open: `fix/balance-instrument-ladder`** - unmerged, CI green. Closes the last floor-pinned
-  instrument and re-runs the retune against what it now measures. Three parts: the GEARED CURVE
-  reports FLOOR/CEIL/BLOCK at 200 samples instead of one number describing battle 1 of 144;
-  `BuildBattleRequest` refuses any unresolved multi-battle stage, so floor-pinning is impossible
-  by construction rather than caught by audit; and 18 stage ceilings are retuned against the
-  CEIL column. **0 of 24 stages block, against 4 before.** Eleven stages sit below the 80-90%
-  band and cannot be raised into it without re-authoring rosters - `floorLevel` is not a lever,
-  and CEIL is bounded above by FLOOR. The economy column was investigated and left byte-identical
-  to `main`: 2.5x gold moves it 3 points and 3x XP moves it none, because the economy model is
-  still one-session-per-attempt and wrong for a 144-battle stage. See task 13's entry.
 - **Open: `retune/ch2-late-stages`** - unmerged. One commit changing 6 lines of `campaign.json`
   and 6 of `enemies.json`: a first pass at the `ch2_12` boss defect recorded under task 13. Its
   own message says "task 14", which is the OLD numbering for the retune, i.e. today's task 13.
