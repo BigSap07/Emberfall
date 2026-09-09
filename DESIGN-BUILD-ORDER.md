@@ -6,10 +6,11 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
 
 - **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
   is not; that sentence is stale, task 13's own entry is right.
-- **Open: `retune/ch2-late-stages`** (`a91a2f6`) - unmerged, 6 lines `campaign.json` + 6
-  `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
-  for the retune, i.e. today's task 13.
-- **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
+- **Open: `retune/ch2-late-stages`** - unmerged. One commit changing 6 lines of `campaign.json`
+  and 6 of `enemies.json`: a first pass at the `ch2_12` boss defect recorded under task 13. Its
+  own message says "task 14", which is the OLD numbering for the retune, i.e. today's task 13.
+- **Parked: `wip/battlefield-bg`** - unmerged. One edited `ashen.png` and a note that it needs
+  more work.
 - **Known gap: the Campaign chip row does not fit 12 chapters.** `CampaignScreen.BuildChipRow`
   sizes the row at 1600px wide (`UIBuilder.Box(_chipRow, 0f, ..., 1600f, 84f, ...)`) and
   `RefreshChips` gives every chip `UIBuilder.Sized(chip, 300f, 84f)` inside an `HStack` with 16px
@@ -17,8 +18,9 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
   row: it fits five chapters exactly (`5 * 300 + 4 * 16` = 1564) and overflows at six. Not a
   problem today with two chapters shipped, and not fixed here - it needs either a scrolling row or
   narrower chips, which is a design call rather than a number to nudge.
-- **Hero portraits: DONE, on `main`** (`f71d106`, `1de4f9e`) - framed portrait art shipped for the
-  five Ember heroes: Kael, Marrow, Seraphine, Veska, Orren. It adds a SECOND
+- **Hero portraits: DONE, on `main`.** Framed portrait art shipped for the five Ember heroes:
+  Kael, Marrow, Seraphine, Veska, Orren. Observable in `Resources/Sprites/Portraits`, which holds
+  exactly those five files and no others. It adds a SECOND
   portrait convention rather than replacing the first, and the folder is what distinguishes them:
   `Resources/Sprites/Portraits/{heroId}.png` is a finished badge that carries its own gold frame,
   while the older `Resources/Sprites/Units/portrait_{heroId}.png` is a frameless crop that
@@ -39,11 +41,13 @@ Current state, checked against the repo on 2026-09-06, not against the rest of t
     still the right home for any future frameless delivery, but note that `Tools/make_portraits.py`
     now writes into a path that framed art shadows: re-running it would regenerate five files that
     nothing would display.
-- **Superseded:** `8f0e18d` (two names, one commit: `feat/sprite-sheet-poc` and
-  `fix/battlevfx-blend-one-minus-src-alpha`) - its `SpriteSheetPlayer` lost to the shipped
-  `SpriteAnimator`, and its "blend fix" was comment-only; main's value was never wrong.
-- **Do not merge:** `feat/sprite-sheet-player` (`82eeeb7`) - 244 MB of raw source sheets in
-  `Assets/_Incoming/`, now gitignored. That branch is the only copy; keep it, do not land it.
+- **Superseded:** one commit carrying two branch names, `feat/sprite-sheet-poc` and
+  `fix/battlevfx-blend-one-minus-src-alpha`. Its `SpriteSheetPlayer` lost to the shipped
+  `SpriteAnimator`, and its "blend fix" turned out to be comment-only - main's blend value was
+  never wrong. Nothing in it is worth landing.
+- **Do not merge:** `feat/sprite-sheet-player` - 244 MB of raw source sheets under
+  `Assets/_Incoming/`, which is now gitignored. That branch is the only copy of those sheets;
+  keep it, do not land it.
 
 Supersedes the previous version, which predates DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS
 and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled against those four plus
@@ -1053,26 +1057,73 @@ confirmed green on CI on `main` after the merge.
     attached to the whole range. Task 13 tuned it against ONE encounter, which is now the first
     battle of 144.
 
-    This is not a documentation nicety - it is measurable, and both instruments are affected:
+    This is not a documentation nicety - it is measurable, and it affected every instrument:
 
-    - **Neither instrument errors, and neither reports a meaningless number. Both silently report
-      the FLOOR battle only.** `CheckPinnedFiveBodyCurve` (`Tools/DevHarness/Program.cs:8265`) and
-      `RunCampaignBalancePass` (`:8551`, `:8587`) call
-      `session.BuildBattleRequest(stage, seed)` on the raw `StageDef`, whose `Enemies` list is by
-      construction the wave 1 / battle 1 roster. `CampaignWaveGenerator.BuildBattle` is never
-      reached from either - the only calls to it in the harness are lines 5593-5756, inside the
-      CAMPAIGN STRUCTURE section. The proof is that the pinned table's numbers did not move across
-      the restructure at all (1-8 still 54.2%, 1-9 still 4.2%), which is exactly what a floor-pinned
-      instrument does when the floor was deliberately left untouched.
-    - **`RunCampaignBalancePass`'s economy half is wrong by a factor of 144**, which is worse than
-      its difficulty half. At `:8557` a single won battle calls `GrantBattleResult(stage, true, now)`
-      and `break`s the attempt loop as `cleared`. Under the new structure a stage needs 144 wins, so
-      the simulated player is paid a full stage clear - gold, shards, account XP, first-clear bonus -
-      for 1/144th of the work, and advances through the campaign at 144x the real rate. Every
-      gold-sink and idle-income conclusion in this entry rests on that pacing.
+    - **FIXED for two of them, 2026-09-07.** `CheckPinnedFiveBodyCurve` and `RunCampaignBalancePass`
+      both used to call `session.BuildBattleRequest` on the raw `StageDef`, whose `Enemies` list is
+      by construction the wave 1 / battle 1 roster, so both silently reported the FLOOR battle while
+      appearing to report the stage. Both now resolve through `CampaignWaveGenerator.BuildBattle`:
+      the pinned curve reports FLOOR, CEIL and the first blocking battle, and the economy pass gates
+      a stage clear on the ceiling battle rather than paying out for one won floor.
+      `CheckInstrumentsSeeTheWholeCurve` asserts this and fails loudly if either is ever re-pinned.
+    - **`RunCampaignBalancePass`'s economy half was wrong by a factor of 144, and is no longer.**
+      A single won battle used to call `GrantBattleResult` and break the attempt loop as cleared,
+      paying a full stage clear - gold, shards, account XP, first-clear bonus - for 1/144th of the
+      work and advancing the simulated player at 144x the real rate. The clear is now gated on the
+      ceiling battle, matching the sweep rule the game itself uses. The session count, the idle
+      income between sessions and the gold sink are still modelled at one session per attempt and
+      are still wrong for a 144-battle stage; that is a separate, larger piece of work.
 
-    **Measured curve shape, 2026-09-07**, pinned five-body line levelled to each stage's
-    `recommendedPower`, 200 samples per point, run against live code:
+    - **STILL FLOOR-PINNED, and it is the column the retune is aimed at: the GEARED CURVE.**
+      `CheckArmoredCurveDelta` reports through `PinnedLineWinRate`, which fights
+      `session.BuildBattleRequest(stage, ...)` on the raw `StageDef` - battle 1 of 144. The proof is
+      in the printed output: that table's `ungeared` column and the pinned curve's `FLOOR` column
+      are the same measurement and read within a few points of each other on every stage (1-8:
+      45.5% against 49.5%, 1-9: 7.5% against 6.5%, 1-12: 0.5% against 2.5%), while the pinned
+      curve's `CEIL` column - the same line at battle 144 - reads 0% on eight of them. So a GEARED
+      number of 90.5% on 2-11 describes its opening battle, not the stage: the same line reaches a
+      battle it cannot win at all before the stage ends.
+
+      This matters because it decides what a tuning target MEANS. "Ordinary stages at 80 to 90%"
+      applied to this column tunes battle 1 of 144 and says nothing about battles 2 to 144, which
+      rise in level and are unmeasured by it. Re-pointing it needs a decision that is not a bug fix:
+      a single number for a 144-battle curve has to be a chosen point on that curve - floor, ceiling,
+      or something between - and which one is chosen sets the difficulty standard for the whole
+      campaign. Deliberately not chosen here.
+
+    **GEARED CURVE baseline, 200 samples, measured against live code.** The sample count was
+    raised from 24, where one win moved the number 4.2 points and the column could not separate a
+    real change from noise. The 24-sample table it replaces reported 2-12 at 87.5% against 2-6 at
+    66.7%; at 200 those read 83.5% and 79.5%, so most of that particular gap was sampling noise.
+    Chapter 2 still has no arc - its finale is easier than five of its ordinary stages - but the
+    defect is smaller than the coarse table implied. Read every number here as the stage's FIRST
+    battle until the column is re-pointed; see the entry above.
+
+    | stage | recPwr | GEARED | ungeared |
+    |-------|--------|--------|----------|
+    | 1-1 to 1-5 | 3950 to 6100 | 100% | 100% |
+    | 1-6   |  7150 | 100%  | 100%  |
+    | 1-7   |  7200 | 100%  | 100%  |
+    | 1-8   |  7450 | 91.5% | 45.5% |
+    | 1-9   |  9100 | 70.5% |  7.5% |
+    | 1-10  |  9250 | 70%   | 15.5% |
+    | 1-11  |  9750 | 66%   | 35.5% |
+    | 1-12  | 10200 | 44.5% |  0.5% |
+    | 2-1   |  8000 | 100%  | 100%  |
+    | 2-2   |  9000 | 97.5% | 83%   |
+    | 2-3   | 10000 | 99.5% | 86.5% |
+    | 2-4   | 11500 | 91%   | 72.5% |
+    | 2-5   | 13000 | 90%   | 32%   |
+    | 2-6   | 14500 | 79.5% | 17.5% |
+    | 2-7   | 16000 | 80%   | 43.5% |
+    | 2-8   | 17500 | 93.5% | 51%   |
+    | 2-9   | 19500 | 85.5% | 38%   |
+    | 2-10  | 21500 | 82%   |  5.5% |
+    | 2-11  | 23500 | 90.5% | 14.5% |
+    | 2-12  | 26000 | 83.5% | 30%   |
+
+    **Curve shape at five sampled stages, 2026-09-07**, pinned five-body line levelled to each
+    stage's `recommendedPower`, 200 samples per point, run against live code:
 
     | stage | lv floor->ceil | W1B1 | W4B1 | W6B6 | W9B1 | W12B12 |
     |-------|----------------|------|------|------|------|--------|

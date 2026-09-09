@@ -72,6 +72,8 @@ namespace Emberfall.DevHarness
             CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
+            // After both, because it asserts on what they actually resolved while running.
+            CheckInstrumentsSeeTheWholeCurve(content);
             PrintInstrumentComparison();
 
             Line("");
@@ -8172,6 +8174,7 @@ namespace Emberfall.DevHarness
                                        int samples, int seedBase)
         {
             StageDef fought = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
+            NoteResolvedOrdinal(_pinnedCurveOrdinals, stage, wave, battle);
             int wins = 0;
             for (int i = 0; i < samples; i++)
                 if (CombatSimulation.Run(session.BuildBattleRequest(fought, seedBase + i * 31)).Victory) wins++;
@@ -8235,6 +8238,93 @@ namespace Emberfall.DevHarness
                 else hi = mid;
             }
             return hi;
+        }
+
+        // ---------------------------------------------------------------- instrument coverage
+        //
+        // Which points on a stage's curve each tuned-against instrument actually resolved. Recorded
+        // as the instruments run and asserted afterwards by CheckInstrumentsSeeTheWholeCurve.
+        //
+        // This exists because the failure it guards against is SILENT. Before 2026-09-07 every
+        // balance instrument called BuildBattleRequest on the raw StageDef, whose Enemies list is by
+        // construction the wave 1 / battle 1 roster: they reported the floor battle of 144 while
+        // appearing to report the stage, no error, no warning, and the only symptom was a table
+        // whose numbers did not move across a restructure that should have moved them. A counter of
+        // distinct ordinals is the cheapest thing that cannot be fooled that way - an instrument
+        // re-pinned to the raw StageDef stops calling the generator at all and records nothing.
+        private static readonly Dictionary<string, HashSet<int>> _pinnedCurveOrdinals =
+            new Dictionary<string, HashSet<int>>();
+        private static readonly Dictionary<string, HashSet<int>> _economyOrdinals =
+            new Dictionary<string, HashSet<int>>();
+
+        private static void NoteResolvedOrdinal(Dictionary<string, HashSet<int>> into,
+                                                StageDef stage, int wave, int battle)
+        {
+            int battles = Math.Max(1, stage.BattleCount);
+            int ordinal = (wave - 1) * battles + battle;
+            HashSet<int> seen;
+            if (!into.TryGetValue(stage.DisplayCode, out seen))
+            {
+                seen = new HashSet<int>();
+                into[stage.DisplayCode] = seen;
+            }
+            seen.Add(ordinal);
+        }
+
+        /// <summary>
+        /// Fails loudly if either tuned-against instrument resolved a single battle for a stage the
+        /// wave generator expands to many.
+        ///
+        /// It passes today. It exists so the next structural change to the campaign cannot silently
+        /// re-pin them to the floor the way the Chapter -> Stage -> Wave -> Battle restructure did,
+        /// where both instruments kept reporting and both were wrong for 143 battles out of 144.
+        ///
+        /// Two halves, and the second is the one that matters. Asserting "every stage this
+        /// instrument touched saw more than one ordinal" passes vacuously if the instrument touched
+        /// nothing at all - which is exactly the state a re-pinned instrument would be in - so the
+        /// coverage map must also be non-empty.
+        ///
+        /// NOT ASSERTED HERE: CheckArmoredCurveDelta's GEARED column, which still resolves the raw
+        /// StageDef through PinnedLineWinRate and so reads the floor battle only. That is a live
+        /// defect, recorded in DESIGN-BUILD-ORDER task 13 rather than fixed in this pass, and it is
+        /// deliberately outside this guard because adding it would make the guard fail on arrival
+        /// instead of protecting a property that currently holds.
+        /// </summary>
+        private static void CheckInstrumentsSeeTheWholeCurve(ContentDatabase db)
+        {
+            Line("");
+            Line("INSTRUMENT COVERAGE - the tuned-against instruments must see past the floor battle");
+
+            CheckCoverage(db, _pinnedCurveOrdinals, "CheckPinnedFiveBodyCurve");
+            CheckCoverage(db, _economyOrdinals, "RunCampaignBalancePass");
+            Line("");
+        }
+
+        private static void CheckCoverage(ContentDatabase db, Dictionary<string, HashSet<int>> map, string label)
+        {
+            int multiBattleStagesSeen = 0;
+            string pinnedToFloor = null;
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                if (stage.TotalBattles <= 1) continue;
+
+                HashSet<int> seen;
+                if (!map.TryGetValue(stage.DisplayCode, out seen)) continue;
+
+                multiBattleStagesSeen++;
+                if (seen.Count < 2 && pinnedToFloor == null)
+                    pinnedToFloor = stage.DisplayCode + " (" + stage.TotalBattles
+                                  + " battles, instrument resolved " + seen.Count + ")";
+            }
+
+            Check(multiBattleStagesSeen > 0,
+                  label + " resolved at least one multi-battle stage through the wave generator "
+                  + "(saw " + multiBattleStagesSeen + "; zero would mean it is reading raw StageDefs again)");
+            Check(pinnedToFloor == null,
+                  label + " resolved more than one battle on every multi-battle stage it touched"
+                  + (pinnedToFloor == null ? "" : " - FLOOR-PINNED AT " + pinnedToFloor));
         }
 
         /// <summary>Samples behind a number that gets printed. The audit that motivated this fix used
@@ -8518,7 +8608,13 @@ namespace Emberfall.DevHarness
                 return;
             }
 
-            const int Samples = 24;
+            // ReportSamples (200), not 24. At 24 one win is 4.2 percentage points, which is wider
+            // than most of the differences this table is read for - it cannot separate a real
+            // change from sampling noise, and the audit that motivated the instrument fix already
+            // caught 24 samples calling one stage's midpoint easier than its floor. This is the
+            // column content is tuned against, so it gets the same rigor as the pinned curve's own
+            // FLOOR and CEIL readings.
+            const int Samples = ReportSamples;
             float[] geared = new float[db.AllStages.Count];
             Line("  stage  name                          recPwr    GEARED  ungeared      delta");
             int flattened = 0;
@@ -8680,6 +8776,7 @@ namespace Emberfall.DevHarness
                     // this stage actually starts. Routed through the generator rather than the raw
                     // StageDef so it says so explicitly instead of getting the floor by accident.
                     StageDef floorBattle = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
+                    NoteResolvedOrdinal(_economyOrdinals, stage, 1, 1);
                     BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(floorBattle, seedCounter++));
                     attemptsForStage++;
                     totalAttempts++;
@@ -8711,6 +8808,8 @@ namespace Emberfall.DevHarness
                         // happen.
                         StageDef ceilBattle = CampaignWaveGenerator.BuildBattle(
                             stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+                        NoteResolvedOrdinal(_economyOrdinals, stage,
+                                            Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
                         BattleResult ceil = CombatSimulation.Run(
                             session.BuildBattleRequest(ceilBattle, seedCounter++));
                         if (ceil.Victory)
@@ -8730,6 +8829,8 @@ namespace Emberfall.DevHarness
                         StageDef farm = db.AllStages[stageIdx - 1];
                         StageDef farmCeil = CampaignWaveGenerator.BuildBattle(
                             farm, Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
+                        NoteResolvedOrdinal(_economyOrdinals, farm,
+                                            Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
                         BattleResult fr = CombatSimulation.Run(session.BuildBattleRequest(farmCeil, seedCounter++));
                         if (fr.Victory) session.GrantBattleResult(farm, true, now);
                     }
@@ -8752,6 +8853,7 @@ namespace Emberfall.DevHarness
                     // Same floor battle the attempt loop above fought, named explicitly so the
                     // win rate this prints and the attempts beside it describe the same encounter.
                     StageDef measured = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
+                    NoteResolvedOrdinal(_economyOrdinals, stage, 1, 1);
                     BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(measured, seed));
                     if (mr.Victory) measureWins++;
                     AccumulateDamage(mr, damageByHero);
