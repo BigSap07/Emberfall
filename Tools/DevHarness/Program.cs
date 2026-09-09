@@ -327,7 +327,7 @@ namespace Emberfall.DevHarness
             {
                 for (int seed = 1; seed <= 12; seed++)
                 {
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[s], seed));
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[s]), seed));
 
                     Dictionary<string, int> burnTicks = new Dictionary<string, int>();
                     Dictionary<string, int> regenHits = new Dictionary<string, int>();
@@ -1139,7 +1139,7 @@ namespace Emberfall.DevHarness
             for (int si = 0; si < db.AllStages.Count; si++)
             {
                 GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[si], 4000 + si));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[si]), 4000 + si));
                 for (int i = 0; i < r.Events.Count; i++)
                 {
                     BattleEvent e = r.Events[i];
@@ -1168,7 +1168,7 @@ namespace Emberfall.DevHarness
                 for (int seed = 1; seed <= 24; seed++)
                 {
                     GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(colossus, seed));
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(colossus), seed));
                     bool any = false;
                     for (int i = 0; i < r.Events.Count; i++)
                         if (r.Events[i].Type == BattleEventType.StatusSpread) { bossSpreads++; any = true; }
@@ -2436,7 +2436,7 @@ namespace Emberfall.DevHarness
             Check(a == b, "same seed produces an identical battle");
             Check(a != c, "different seeds produce different battles");
 
-            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 12345));
+            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), 12345));
             Check(r.Events.Count > 10, "battle produced an event stream (" + r.Events.Count + " events)");
             // Team size is no longer a fixed 3v3: unit count is deploys plus spawns, both capped
             // by MaxTeamSize. A fresh profile deploys its 3 starters against whatever stage 1 spawns.
@@ -2719,7 +2719,7 @@ namespace Emberfall.DevHarness
             const int Samples = 20;
             for (int i = 0; i < Samples; i++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 8000000 + i));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[0]), 8000000 + i));
                 if (r.Victory) wins++;
             }
             Check(wins > 0, "a brand new account's 3 starters can win stage 1 (" + Pct(wins / (float)Samples) + " of sampled battles)");
@@ -2743,7 +2743,7 @@ namespace Emberfall.DevHarness
 
             for (int seed = 1; seed <= 40 && !violation; seed++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), seed));
                 List<int> activeTaunters = new List<int>();
 
                 int i = 0;
@@ -3225,7 +3225,7 @@ namespace Emberfall.DevHarness
 
             for (int seed = 0; seed < 24; seed++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 9100 + seed));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[0]), 9100 + seed));
                 for (int i = 0; i < r.Events.Count; i++)
                 {
                     BattleEvent e = r.Events[i];
@@ -3428,7 +3428,7 @@ namespace Emberfall.DevHarness
         private static BattleResult RunResolveArena(ContentDatabase db)
         {
             GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
-            return CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 77));
+            return CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[0]), 77));
         }
 
         /// <summary>
@@ -3805,7 +3805,7 @@ namespace Emberfall.DevHarness
 
         private static string BattleFingerprint(GameSession session, StageDef stage, int seed)
         {
-            return FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(stage, seed)));
+            return FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), seed)));
         }
 
         /// <summary>
@@ -3847,7 +3847,7 @@ namespace Emberfall.DevHarness
 
             for (int seed = 1; seed <= 60 && !violation; seed++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, seed));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), seed));
                 Dictionary<string, int[]> pending = new Dictionary<string, int[]>(); // key -> [applyRound, duration]
 
                 for (int i = 0; i < r.Events.Count; i++)
@@ -6360,7 +6360,7 @@ namespace Emberfall.DevHarness
             Line("SAMPLE BATTLE (stage 1-1, seed 7)");
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             GameSession session = new GameSession(db, profile);
-            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(db.AllStages[0], 7));
+            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[0]), 7));
 
             for (int i = 0; i < r.Units.Count; i++)
             {
@@ -6466,6 +6466,10 @@ namespace Emberfall.DevHarness
 
             public float Balance5Rate = -1f;
             public int Balance5Power;
+
+            public float GearedFloor = -1f;
+            public float GearedCeil = -1f;
+            public int GearedBlock;
         }
 
         private static readonly List<InstrumentRow> _instrumentRows = new List<InstrumentRow>();
@@ -7187,8 +7191,8 @@ namespace Emberfall.DevHarness
             // The profile now rides on BattleRequest. An unarmored one must resolve exactly as a
             // request with no profile at all did before armor existed.
             StageDef stage = db.AllStages[0];
-            BattleRequest withProfile = session.BuildBattleRequest(stage, 31337);
-            BattleRequest withoutProfile = session.BuildBattleRequest(stage, 31337);
+            BattleRequest withProfile = session.BuildBattleRequest(Opening(stage), 31337);
+            BattleRequest withoutProfile = session.BuildBattleRequest(Opening(stage), 31337);
             withoutProfile.Profile = null;
 
             Check(FingerprintOf(CombatSimulation.Run(withProfile)) == FingerprintOf(CombatSimulation.Run(withoutProfile)),
@@ -7209,7 +7213,7 @@ namespace Emberfall.DevHarness
 
             PlayerProfile bare = GameSession.CreateNewProfile(db, Noon);
             GameSession bareSession = new GameSession(db, bare);
-            string before = FingerprintOf(CombatSimulation.Run(bareSession.BuildBattleRequest(stage, 5150)));
+            string before = FingerprintOf(CombatSimulation.Run(bareSession.BuildBattleRequest(Opening(stage), 5150)));
 
             PlayerProfile armored = GameSession.CreateNewProfile(db, Noon);
             GameSession armoredSession = new GameSession(db, armored);
@@ -7234,7 +7238,7 @@ namespace Emberfall.DevHarness
             Check(withPiece.Attack > withoutPiece.Attack,
                   "a +50% Attack piece raises the wearer's Attack (" + withoutPiece.Attack + " -> " + withPiece.Attack + ")");
 
-            string after = FingerprintOf(CombatSimulation.Run(armoredSession.BuildBattleRequest(stage, 5150)));
+            string after = FingerprintOf(CombatSimulation.Run(armoredSession.BuildBattleRequest(Opening(stage), 5150)));
             Check(before != after, "and the same seeded battle resolves differently with it equipped - armor reaches the simulation");
 
             // A piece only ever sits in its own slot, and unequipping returns it to the pool
@@ -8104,7 +8108,7 @@ namespace Emberfall.DevHarness
                 const int Samples = 20;
                 for (int i = 0; i < Samples; i++)
                 {
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + s * 97 + i));
+                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), 5000000 + s * 97 + i));
                     if (r.Victory) wins++;
                     if (r.EnemyHpRatio < bestEnemyHpRatio) bestEnemyHpRatio = r.EnemyHpRatio;
                 }
@@ -8170,11 +8174,33 @@ namespace Emberfall.DevHarness
         /// fight, because BuildBattle hands back an unchanged copy in that case - so Recital
         /// floors, Proving matches and prologue steps all still work through this.
         /// </summary>
+        /// <summary>
+        /// A stage's OPENING battle, said out loud.
+        ///
+        /// Every call site below used to hand the authored StageDef straight to
+        /// BuildBattleRequest, which fought exactly this - the authored Enemies list IS wave 1
+        /// battle 1 - so nothing about what these checks measure changes. What changes is that the
+        /// choice is now written down instead of arrived at by default, which is what
+        /// BuildBattleRequest now insists on. Where a check genuinely wants a different point on
+        /// the ladder it should call BuildBattle directly and say which.
+        /// </summary>
+        private static StageDef Opening(StageDef stage)
+        {
+            return CampaignWaveGenerator.BuildBattle(stage, 1, 1);
+        }
+
         private static float CurveRate(GameSession session, StageDef stage, int wave, int battle,
                                        int samples, int seedBase)
         {
+            return CurveRate(session, stage, wave, battle, samples, seedBase, _pinnedCurveOrdinals);
+        }
+
+        private static float CurveRate(GameSession session, StageDef stage, int wave, int battle,
+                                       int samples, int seedBase,
+                                       Dictionary<string, HashSet<int>> coverage)
+        {
             StageDef fought = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
-            NoteResolvedOrdinal(_pinnedCurveOrdinals, stage, wave, battle);
+            NoteResolvedOrdinal(coverage, stage, wave, battle);
             int wins = 0;
             for (int i = 0; i < samples; i++)
                 if (CombatSimulation.Run(session.BuildBattleRequest(fought, seedBase + i * 31)).Victory) wins++;
@@ -8184,10 +8210,17 @@ namespace Emberfall.DevHarness
         private static float CurveRateAtOrdinal(GameSession session, StageDef stage, int ordinal,
                                                 int samples, int seedBase)
         {
+            return CurveRateAtOrdinal(session, stage, ordinal, samples, seedBase, _pinnedCurveOrdinals);
+        }
+
+        private static float CurveRateAtOrdinal(GameSession session, StageDef stage, int ordinal,
+                                                int samples, int seedBase,
+                                                Dictionary<string, HashSet<int>> coverage)
+        {
             int battles = Math.Max(1, stage.BattleCount);
             int wave = (ordinal - 1) / battles + 1;
             int battle = (ordinal - 1) % battles + 1;
-            return CurveRate(session, stage, wave, battle, samples, seedBase);
+            return CurveRate(session, stage, wave, battle, samples, seedBase, coverage);
         }
 
         /// <summary>
@@ -8213,6 +8246,13 @@ namespace Emberfall.DevHarness
         private static int FirstBlockingBattle(GameSession session, StageDef stage, int seedBase,
                                                float measuredCeilRate)
         {
+            return FirstBlockingBattle(session, stage, seedBase, measuredCeilRate, _pinnedCurveOrdinals);
+        }
+
+        private static int FirstBlockingBattle(GameSession session, StageDef stage, int seedBase,
+                                               float measuredCeilRate,
+                                               Dictionary<string, HashSet<int>> coverage)
+        {
             int total = stage.TotalBattles;
             if (total <= 1) return 0;
 
@@ -8227,14 +8267,14 @@ namespace Emberfall.DevHarness
             if (measuredCeilRate > 0f) return 0;
 
             // If even the first battle is unwinnable, the stage blocks at its own opening.
-            if (CurveRateAtOrdinal(session, stage, 1, ProbeSamples, seedBase + 7919) == 0f) return 1;
+            if (CurveRateAtOrdinal(session, stage, 1, ProbeSamples, seedBase + 7919, coverage) == 0f) return 1;
 
             int lo = 1;      // known winnable
             int hi = total;  // known blocked
             while (lo + 1 < hi)
             {
                 int mid = lo + (hi - lo) / 2;
-                if (CurveRateAtOrdinal(session, stage, mid, ProbeSamples, seedBase + mid * 131) > 0f) lo = mid;
+                if (CurveRateAtOrdinal(session, stage, mid, ProbeSamples, seedBase + mid * 131, coverage) > 0f) lo = mid;
                 else hi = mid;
             }
             return hi;
@@ -8255,6 +8295,8 @@ namespace Emberfall.DevHarness
         private static readonly Dictionary<string, HashSet<int>> _pinnedCurveOrdinals =
             new Dictionary<string, HashSet<int>>();
         private static readonly Dictionary<string, HashSet<int>> _economyOrdinals =
+            new Dictionary<string, HashSet<int>>();
+        private static readonly Dictionary<string, HashSet<int>> _gearedCurveOrdinals =
             new Dictionary<string, HashSet<int>>();
 
         private static void NoteResolvedOrdinal(Dictionary<string, HashSet<int>> into,
@@ -8284,11 +8326,9 @@ namespace Emberfall.DevHarness
         /// nothing at all - which is exactly the state a re-pinned instrument would be in - so the
         /// coverage map must also be non-empty.
         ///
-        /// NOT ASSERTED HERE: CheckArmoredCurveDelta's GEARED column, which still resolves the raw
-        /// StageDef through PinnedLineWinRate and so reads the floor battle only. That is a live
-        /// defect, recorded in DESIGN-BUILD-ORDER task 13 rather than fixed in this pass, and it is
-        /// deliberately outside this guard because adding it would make the guard fail on arrival
-        /// instead of protecting a property that currently holds.
+        /// All three tuned-against instruments are covered. CheckArmoredCurveDelta joined them when
+        /// its GEARED column stopped reading the raw StageDef and started reporting FLOOR, CEIL and
+        /// BLOCK off the generator like the other two.
         /// </summary>
         private static void CheckInstrumentsSeeTheWholeCurve(ContentDatabase db)
         {
@@ -8296,6 +8336,7 @@ namespace Emberfall.DevHarness
             Line("INSTRUMENT COVERAGE - the tuned-against instruments must see past the floor battle");
 
             CheckCoverage(db, _pinnedCurveOrdinals, "CheckPinnedFiveBodyCurve");
+            CheckCoverage(db, _gearedCurveOrdinals, "CheckArmoredCurveDelta");
             CheckCoverage(db, _economyOrdinals, "RunCampaignBalancePass");
             Line("");
         }
@@ -8570,7 +8611,7 @@ namespace Emberfall.DevHarness
             const int Samples = 20;
             for (int i = 0; i < Samples; i++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(finalStage, 7000000 + i));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(finalStage), 7000000 + i));
                 if (r.Victory) wins++;
             }
             float winRate = wins / (float)Samples;
@@ -8608,57 +8649,69 @@ namespace Emberfall.DevHarness
                 return;
             }
 
-            // ReportSamples (200), not 24. At 24 one win is 4.2 percentage points, which is wider
-            // than most of the differences this table is read for - it cannot separate a real
-            // change from sampling noise, and the audit that motivated the instrument fix already
-            // caught 24 samples calling one stage's midpoint easier than its floor. This is the
-            // column content is tuned against, so it gets the same rigor as the pinned curve's own
-            // FLOOR and CEIL readings.
-            const int Samples = ReportSamples;
-            float[] geared = new float[db.AllStages.Count];
-            Line("  stage  name                          recPwr    GEARED  ungeared      delta");
-            int flattened = 0;
+            Line("  Same three readings as the pinned curve above, on a GEARED line. FLOOR is wave 1");
+            Line("  battle 1, CEIL is wave 12 battle 12, BLOCK is the first battle with no win in "
+                 + ReportSamples + " samples.");
+            Line("  This column is what content is tuned against, and CEIL is the number that decides");
+            Line("  whether a stage is finishable: defeat retries the battle that was lost, so a BLOCK");
+            Line("  is a hard stop rather than a hard fight.");
+            Line("");
+            Line("  stage  name                        recPwr  teamPwr   FLOOR    CEIL   BLOCK");
+
+            int blocked = 0;
+            int softFloors = 0;
+            string firstBlocked = null;
+            float loCeil = 2f, hiCeil = -1f;
+
             for (int s = 0; s < db.AllStages.Count; s++)
             {
                 StageDef stage = db.AllStages[s];
-                float bare = PinnedLineWinRate(db, stage, Samples, false);
-                float armored = PinnedLineWinRate(db, stage, Samples, true);
-                geared[s] = armored;
-                if (bare < 0.999f && armored > 0.999f) flattened++;
+                GameSession session = BuildPinnedLine(db, stage, true);
+
+                int seed = 6000000 + stage.GlobalIndex * 97;
+                float floor = CurveRate(session, stage, 1, 1, ReportSamples, seed, _gearedCurveOrdinals);
+                float ceil = CurveRate(session, stage, Math.Max(1, stage.WaveCount),
+                                       Math.Max(1, stage.BattleCount), ReportSamples,
+                                       seed + 13, _gearedCurveOrdinals);
+                int block = FirstBlockingBattle(session, stage, seed + 29, ceil, _gearedCurveOrdinals);
+
+                InstrumentRow row = Row(stage);
+                row.GearedFloor = floor;
+                row.GearedCeil = ceil;
+                row.GearedBlock = block;
+
+                if (block > 0) { blocked++; if (firstBlocked == null) firstBlocked = stage.DisplayCode; }
+                if (floor < 0.9f) softFloors++;
+                if (ceil < loCeil) loCeil = ceil;
+                if (ceil > hiCeil) hiCeil = ceil;
+
                 Line("  " + stage.DisplayCode.PadRight(6)
-                     + " " + Trim(stage.Name, 26).PadRight(28)
+                     + " " + Trim(stage.Name, 26).PadRight(26)
                      + stage.RecommendedPower.ToString().PadLeft(6)
-                     + Pct(armored).PadLeft(10)
-                     + Pct(bare).PadLeft(10)
-                     + ("+" + Pct(armored - bare)).PadLeft(11));
+                     + session.Profile.EffectiveTeamPower(db).ToString().PadLeft(9)
+                     + Pct(floor).PadLeft(8)
+                     + Pct(ceil).PadLeft(8)
+                     + (block > 0 ? ("b" + block) : "none").PadLeft(8)
+                     + (floor < 0.9f ? "   FLOOR UNDER 90%" : ""));
             }
+
             Line("");
-            Line("  GEARED is the primary column: five bodies wearing median drops, levelled until their");
-            Line("  EFFECTIVE power (relics and armor folded in, same StatMath overload the fight uses)");
-            Line("  reaches the stage's recommendedPower. That is a line AT its stage, and it is the");
-            Line("  number content should be tuned against.");
-            Line("");
-            Line("  ungeared is an UNDER-GEARED FLOOR, not the standard: the same five bodies wearing");
-            Line("  nothing, levelled until BARE power reaches the same target - a player who has to");
-            Line("  out-level what they cannot wear. It is expected to read lower, and a stage being hard");
-            Line("  for it is not by itself a balance problem.");
+            Line("  " + blocked + " of " + db.AllStages.Count + " stage(s) reach a battle with no win in "
+                 + ReportSamples + " samples on a GEARED line."
+                 + (firstBlocked == null ? "" : " First: " + firstBlocked + "."));
+            Line("  " + softFloors + " stage(s) open below a 90% floor. Reported, not tuned - the floor is");
+            Line("  where a player ARRIVES at a stage, and an opening battle they lose one time in five is");
+            Line("  a different complaint from a stage they cannot finish.");
             Line("");
 
-            // The discrimination assertion lives HERE now, on the geared column, because that is the
-            // column content is tuned against. CheckPinnedFiveBodyCurve keeps its own on the bare
-            // line, which still discriminates and is still continuous with task 13's table.
-            float lo = 2f, hi = -1f;
-            for (int s = 0; s < db.AllStages.Count; s++)
-            {
-                float r = geared[s];
-                if (r < lo) lo = r;
-                if (r > hi) hi = r;
-            }
-            Check(hi - lo > 0.001f,
-                  "the geared curve discriminates between stages (spread " + Pct(lo) + " to " + Pct(hi)
-                  + ") - a flat curve here means content is tuned against nothing a real player is");
+            // The discrimination assertion stays on this column, because this is the column content
+            // is tuned against. A flat curve measures nothing.
+            Check(hiCeil - loCeil > 0.05f,
+                  "the geared curve still discriminates between stages at its ceiling (spread "
+                  + Pct(loCeil) + " to " + Pct(hiCeil) + ")");
             Line("");
         }
+
 
         /// <summary>
         /// The pinned line at one stage, optionally geared. Duplicates CheckPinnedFiveBodyCurve's
@@ -8666,7 +8719,17 @@ namespace Emberfall.DevHarness
         /// is continuous with, and refactoring it to serve two callers is exactly how a yardstick
         /// starts drifting. The two differ in one thing only, and it is the argument named here.
         /// </summary>
-        private static float PinnedLineWinRate(ContentDatabase db, StageDef stage, int samples, bool armored)
+        /// <summary>
+        /// The pinned five-body line, geared and levelled for one stage, handed back WITHOUT having
+        /// fought anything.
+        ///
+        /// It used to be PinnedLineWinRate, which built this line and then immediately fought
+        /// BuildBattleRequest(stage, ...) on the raw StageDef - battle 1 of 144 - so the whole
+        /// GEARED column described a stage's opening battle while reading as though it described
+        /// the stage. Returning the session instead of a win rate is the fix: choosing which battle
+        /// to measure is now the caller's job and cannot be defaulted.
+        /// </summary>
+        private static GameSession BuildPinnedLine(ContentDatabase db, StageDef stage, bool armored)
         {
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             profile.PlayerLevel = 60;
@@ -8721,10 +8784,7 @@ namespace Emberfall.DevHarness
                 guard++;
             }
 
-            int wins = 0;
-            for (int i = 0; i < samples; i++)
-                if (CombatSimulation.Run(session.BuildBattleRequest(stage, 5000000 + stage.GlobalIndex * 97 + i)).Victory) wins++;
-            return wins / (float)samples;
+            return session;
         }
 
         private static void RunCampaignBalancePass(ContentDatabase db)

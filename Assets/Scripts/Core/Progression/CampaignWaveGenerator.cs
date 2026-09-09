@@ -110,6 +110,11 @@ namespace Emberfall.Core.Progression
             s.FloorLevel = stage.FloorLevel;
             s.CeilingLevel = stage.CeilingLevel;
 
+            // Stamped here and nowhere else. This is the token BuildBattleRequest checks for, so
+            // the only way to obtain a battle it will accept is to come through this function.
+            int battles = Math.Max(1, stage.BattleCount);
+            s.ResolvedBattleOrdinal = (Math.Max(1, wave) - 1) * battles + Math.Max(1, battle);
+
             int delta = LevelDelta(stage, wave, battle);
             for (int i = 0; i < stage.Enemies.Count; i++)
             {

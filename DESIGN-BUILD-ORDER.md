@@ -2,10 +2,20 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-06, not against the rest of this document.
+Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
 - **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
   is not; that sentence is stale, task 13's own entry is right.
+- **Open: `fix/balance-instrument-ladder`** - unmerged, CI green. Closes the last floor-pinned
+  instrument and re-runs the retune against what it now measures. Three parts: the GEARED CURVE
+  reports FLOOR/CEIL/BLOCK at 200 samples instead of one number describing battle 1 of 144;
+  `BuildBattleRequest` refuses any unresolved multi-battle stage, so floor-pinning is impossible
+  by construction rather than caught by audit; and 18 stage ceilings are retuned against the
+  CEIL column. **0 of 24 stages block, against 4 before.** Eleven stages sit below the 80-90%
+  band and cannot be raised into it without re-authoring rosters - `floorLevel` is not a lever,
+  and CEIL is bounded above by FLOOR. The economy column was investigated and left byte-identical
+  to `main`: 2.5x gold moves it 3 points and 3x XP moves it none, because the economy model is
+  still one-session-per-attempt and wrong for a 144-battle stage. See task 13's entry.
 - **Open: `retune/ch2-late-stages`** - unmerged. One commit changing 6 lines of `campaign.json`
   and 6 of `enemies.json`: a first pass at the `ch2_12` boss defect recorded under task 13. Its
   own message says "task 14", which is the OLD numbering for the retune, i.e. today's task 13.
@@ -1074,53 +1084,104 @@ confirmed green on CI on `main` after the merge.
       income between sessions and the gold sink are still modelled at one session per attempt and
       are still wrong for a 144-battle stage; that is a separate, larger piece of work.
 
-    - **STILL FLOOR-PINNED, and it is the column the retune is aimed at: the GEARED CURVE.**
-      `CheckArmoredCurveDelta` reports through `PinnedLineWinRate`, which fights
-      `session.BuildBattleRequest(stage, ...)` on the raw `StageDef` - battle 1 of 144. The proof is
-      in the printed output: that table's `ungeared` column and the pinned curve's `FLOOR` column
-      are the same measurement and read within a few points of each other on every stage (1-8:
-      45.5% against 49.5%, 1-9: 7.5% against 6.5%, 1-12: 0.5% against 2.5%), while the pinned
-      curve's `CEIL` column - the same line at battle 144 - reads 0% on eight of them. So a GEARED
-      number of 90.5% on 2-11 describes its opening battle, not the stage: the same line reaches a
-      battle it cannot win at all before the stage ends.
+    - **The GEARED CURVE was floor-pinned too, and is not any more. Fixed 2026-09-09.**
+      `CheckArmoredCurveDelta` reported through `PinnedLineWinRate`, which fought
+      `BuildBattleRequest` on the raw `StageDef` - battle 1 of 144. The proof was in the printed
+      output: that table's `ungeared` column and the pinned curve's `FLOOR` column were the same
+      measurement and read within a few points of each other on every stage, while the pinned
+      curve's `CEIL` column - the same line at battle 144 - read 0% on eight of them.
 
-      This matters because it decides what a tuning target MEANS. "Ordinary stages at 80 to 90%"
-      applied to this column tunes battle 1 of 144 and says nothing about battles 2 to 144, which
-      rise in level and are unmeasured by it. Re-pointing it needs a decision that is not a bug fix:
-      a single number for a 144-battle curve has to be a chosen point on that curve - floor, ceiling,
-      or something between - and which one is chosen sets the difficulty standard for the whole
-      campaign. Deliberately not chosen here.
+      Re-pointing needed a decision rather than a fix, because a single number for a 144-battle
+      curve has to be a chosen point on it, and which point is chosen sets the difficulty standard
+      for the campaign. **The standard chosen is CEIL**, wave 12 battle 12. The reason is that
+      defeat retries the battle that was lost rather than the stage, so the ceiling is the only
+      reading that answers "can this stage be finished". The column now prints FLOOR, CEIL and
+      BLOCK, the same shape as the pinned curve, at 200 samples. `PinnedLineWinRate` became
+      `BuildPinnedLine`, which returns the geared session **without fighting anything**: choosing
+      the battle is the caller's job now and cannot be defaulted.
 
-    **GEARED CURVE baseline, 200 samples, measured against live code.** The sample count was
-    raised from 24, where one win moved the number 4.2 points and the column could not separate a
-    real change from noise. The 24-sample table it replaces reported 2-12 at 87.5% against 2-6 at
-    66.7%; at 200 those read 83.5% and 79.5%, so most of that particular gap was sampling noise.
-    Chapter 2 still has no arc - its finale is easier than five of its ordinary stages - but the
-    defect is smaller than the coarse table implied. Read every number here as the stage's FIRST
-    battle until the column is re-pointed; see the entry above.
+    - **Floor-pinning is now impossible by construction, not merely discouraged. 2026-09-09.**
+      `StageDef.ResolvedBattleOrdinal` is stamped by `CampaignWaveGenerator.BuildBattle` and by
+      nothing else, and `GameSession.BuildBattleRequest` throws on any stage whose `TotalBattles`
+      exceeds 1 while that field is still 0. The authored `Enemies` list IS the wave 1 battle 1
+      roster, so the old mistake never failed - it returned an ordinary, ordinary-looking result
+      for the opening battle - which is the entire reason three instruments made it for months.
+      The unresolved case is now loud at the call site that caused it. Single-battle stages
+      (Recital floors, Proving matches, prologue steps) are unaffected.
 
-    | stage | recPwr | GEARED | ungeared |
-    |-------|--------|--------|----------|
-    | 1-1 to 1-5 | 3950 to 6100 | 100% | 100% |
-    | 1-6   |  7150 | 100%  | 100%  |
-    | 1-7   |  7200 | 100%  | 100%  |
-    | 1-8   |  7450 | 91.5% | 45.5% |
-    | 1-9   |  9100 | 70.5% |  7.5% |
-    | 1-10  |  9250 | 70%   | 15.5% |
-    | 1-11  |  9750 | 66%   | 35.5% |
-    | 1-12  | 10200 | 44.5% |  0.5% |
-    | 2-1   |  8000 | 100%  | 100%  |
-    | 2-2   |  9000 | 97.5% | 83%   |
-    | 2-3   | 10000 | 99.5% | 86.5% |
-    | 2-4   | 11500 | 91%   | 72.5% |
-    | 2-5   | 13000 | 90%   | 32%   |
-    | 2-6   | 14500 | 79.5% | 17.5% |
-    | 2-7   | 16000 | 80%   | 43.5% |
-    | 2-8   | 17500 | 93.5% | 51%   |
-    | 2-9   | 19500 | 85.5% | 38%   |
-    | 2-10  | 21500 | 82%   |  5.5% |
-    | 2-11  | 23500 | 90.5% | 14.5% |
-    | 2-12  | 26000 | 83.5% | 30%   |
+      It paid for itself immediately: on first compile it caught a fourth floor-pinned call site,
+      in `CheckAspectEmberVerdant`, that no audit had found. Seventeen harness call sites that were
+      genuinely asking for the opening battle now say so through an `Opening(stage)` helper.
+      `CheckInstrumentsSeeTheWholeCurve` stays as a backstop.
+
+    **GEARED CURVE after the retune, 200 samples, measured against live code 2026-09-09.**
+    FLOOR is wave 1 battle 1, CEIL is wave 12 battle 12, BLOCK is the first battle with no win in
+    200 samples. CEIL is the tuned column; FLOOR is reported, not tuned.
+
+    | stage | recPwr | FLOOR | CEIL | BLOCK | ceiling lv |
+    |-------|--------|-------|------|-------|------------|
+    | 1-1 to 1-5 | 3950 to 6100 | 100% | 100% | none | untouched |
+    | 1-6   |  7150 | 100%  | 83%   | none | 21 -> 24 |
+    | 1-7   |  7200 | 100%  | 90%   | none | 24 -> 29 |
+    | 1-8   |  7450 | 94%   | 82.5% | none | 27 -> 25 |
+    | 1-9   |  9100 | 69.5% | 38.5% | none | 32 -> 28 |
+    | 1-10  |  9250 | 72%   | 44.5% | none | 27, at minimum span |
+    | 1-11  |  9750 | 74%   | 46.5% | none | 32 -> 28 |
+    | 1-12  | 10200 | 48.5% | 23.5% | none | 33 -> 23 |
+    | 2-1   |  8000 | 100%  | 88.5% | none | 36 -> 42 |
+    | 2-2   |  9000 | 97.5% | 89%   | none | 40 -> 38 |
+    | 2-3   | 10000 | 99%   | 89.5% | none | 53 -> 42 |
+    | 2-4   | 11500 | 87.5% | 72.5% | none | 56 -> 54 |
+    | 2-5   | 13000 | 89%   | 73%   | none | 61 -> 57 |
+    | 2-6   | 14500 | 73%   | 66%   | none | 57 -> 52 |
+    | 2-7   | 16000 | 81%   | 76.5% | none | 62 -> 58 |
+    | 2-8   | 17500 | 98%   | 82%   | none | 60 -> 57 |
+    | 2-9   | 19500 | 85%   | 75.5% | none | 70 -> 61 |
+    | 2-10  | 21500 | 83%   | 76.5% | none | 76 -> 71 |
+    | 2-11  | 23500 | 94%   | 81%   | none | 81 -> 77 |
+    | 2-12  | 26000 | 88%   | 47.5% | none | 54 -> 51 |
+
+    **What the retune achieved, and what it could not.**
+
+    - **The hard requirement is met: 0 of 24 stages BLOCK, against 4 before** (1-9 at b103, 1-11 at
+      b103, 1-12 at b47, 2-3 at b101). Every stage in the campaign is now completable end to end by
+      the geared five-body line at its own `recommendedPower`.
+    - **Eight stages land in the 80-90% band**: 1-6, 1-7, 1-8, 2-1, 2-2, 2-3, 2-8, 2-11. 1-1
+      through 1-5 were left untouched at 100% as instructed.
+    - **Eleven stages sit below the band and cannot be raised into it by this lever.** The
+      difficulty model is extremely steep at these power levels - one enemy level is worth 15 to 30
+      percentage points - and `floorLevel` is not a tuning lever (see the trap below), so a stage's
+      CEIL is bounded above by its FLOOR. With minimum span being 1, a stage can only reach 80-90%
+      at its ceiling if its floor is around 95% or better. Eleven stages open below that. Raising
+      them means moving the floor, which means re-authoring rosters, not editing two integers.
+    - **Chapter 2's arc conflicts with the "finale around 65%" guide, and the arc won.** "No
+      ordinary stage harder than its own chapter's finale" and "finale around 65%" are not
+      simultaneously satisfiable at this granularity: the ordinary stages that cannot be raised
+      (2-6 at 66%) already sit at the finale's target. 2-12 is set to CEIL 47.5%, making it
+      chapter 2's hardest stage by a clear margin. The arc defect was the named problem; the 65%
+      figure was a guide.
+    - **Eleven stages are flagged FLOOR UNDER 90%** by the instrument: 1-9, 1-10, 1-11, 1-12, 2-4,
+      2-5, 2-6, 2-7, 2-9, 2-10, 2-12. Reported, not tuned, as specified.
+
+    **The economy column was investigated and deliberately not touched. 2026-09-09.**
+    Chapter 2's power ratio declines monotonically from x1.52 at 2-1 to x0.82 at 2-11, and the task
+    asked for 2-10 through 2-12 specifically. Neither half of the gold/EXP curve is the lever:
+
+    - **2.5x gold on `ch2_5` through `ch2_12` moved the ratio about 3 points** (2-10 x0.86 to
+      x0.89, 2-11 x0.82 to x0.85, 2-12 x0.83 unchanged).
+    - **3x account XP on the same stages moved it zero points** (2-10 x0.86, 2-11 x0.83, 2-12
+      x0.80 - i.e. baseline).
+    - The sim is not cap-blocked: `0 of 46 sessions ended CAP-BLOCKED`, peak balance 3402 against
+      an ending balance of 13397, so it spends roughly as it earns and is not sitting on unspent
+      gold it cannot use.
+
+    An instrument that does not respond to a 2.5x change in its own input is not measuring what the
+    lever controls, and the reason is recorded three bullets above: **the economy model's session
+    count, idle income and gold sink are all still modelled at one session per attempt and are all
+    still wrong for a 144-battle stage.** Scaling content rewards against it would be tuning against
+    a known-broken instrument - the same mistake this branch exists to undo, one column over. The
+    economy fields in `campaign.json` are byte-identical to `main`. Fixing the model is the
+    prerequisite, and it is the separate larger piece of work already named.
 
     **Curve shape at five sampled stages, 2026-09-07**, pinned five-body line levelled to each
     stage's `recommendedPower`, 200 samples per point, run against live code:

@@ -437,8 +437,30 @@ namespace Emberfall.Core.Session
             get { return Profile.StagesCleared >= Content.AllStages.Count; }
         }
 
+        /// <summary>
+        /// Builds the request for ONE battle. A stage that expands to a ladder must arrive already
+        /// resolved to a position on it, via CampaignWaveGenerator.BuildBattle.
+        ///
+        /// The refusal below is the point. The authored StageDef's Enemies list is, by
+        /// construction, the wave 1 battle 1 roster, so passing it here does not fail - it quietly
+        /// fights the opening battle and returns a perfectly ordinary result. Three balance
+        /// instruments did that for months and reported it as the whole stage; the tables looked
+        /// right and did not move when the campaign was restructured underneath them, which is the
+        /// only reason it was ever noticed. Making the unresolved case throw converts a silent
+        /// wrong answer into a loud one at the call site that caused it.
+        ///
+        /// Stages with no ladder (Recital floors, Proving matches, prologue steps, any synthetic
+        /// one-battle stage) are unaffected: HasWaveStructure is false for them and BuildBattle
+        /// hands them back unchanged, so nothing has to know about this.
+        /// </summary>
         public BattleRequest BuildBattleRequest(StageDef stage, int seed)
         {
+            if (stage != null && stage.TotalBattles > 1 && stage.ResolvedBattleOrdinal <= 0)
+                throw new InvalidOperationException(
+                    "BuildBattleRequest was handed the authored StageDef '" + stage.Id + "', which expands to "
+                    + stage.TotalBattles + " battles. Resolve it first with CampaignWaveGenerator.BuildBattle("
+                    + "stage, wave, battle) - passing it unresolved silently fights wave 1 battle 1.");
+
             BattleRequest request = new BattleRequest();
             request.Content = Content;
             request.Stage = stage;
