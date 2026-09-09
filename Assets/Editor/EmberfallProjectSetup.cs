@@ -115,11 +115,21 @@ namespace Emberfall.EditorTools
             PlayerSettings.productName = "Emberfall";
             PlayerSettings.bundleVersion = "0.1.0";
 
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
-            PlayerSettings.allowedAutorotateToPortrait = true;
+            // LANDSCAPE, mirroring ProjectSettings.asset rather than contradicting it.
+            //
+            // This block used to set Portrait and switch both landscape autorotations OFF, which
+            // is the opposite of every other statement the project makes: ProjectSettings.asset
+            // carries defaultScreenOrientation 3 (LandscapeLeft) with both landscape rotations
+            // allowed and both portrait rotations denied, UITheme.ReferenceResolution is 1920x1080,
+            // and the battle line is built to need the width. Nothing had noticed because this
+            // method only runs from the Emberfall menu items and the first-open auto-setup, so on
+            // an already-configured checkout it never fires - but running Set Up Project on a
+            // fresh clone would have quietly flipped a shipped landscape game to portrait.
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
+            PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
-            PlayerSettings.allowedAutorotateToLandscapeLeft = false;
-            PlayerSettings.allowedAutorotateToLandscapeRight = false;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
 
             PlayerSettings.colorSpace = ColorSpace.Gamma;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, BundleId);
