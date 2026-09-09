@@ -72,6 +72,7 @@ namespace Emberfall.DevHarness
             CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
+            CheckEconomyRespondsToIncome(content);
             PrintInstrumentComparison();
 
             Line("");
@@ -8631,170 +8632,302 @@ namespace Emberfall.DevHarness
             return wins / (float)samples;
         }
 
-        private static void RunCampaignBalancePass(ContentDatabase db)
-        {
-            // Gold-sink instrumentation (DESIGN-SHOP section 1). These three turn "does idle income
-            // outrun the spendable sink" from a structural argument into a measured number.
-            int capBlockedSessions = 0;
-            int spendableSessions = 0;
-            long peakGold = 0;
-            Line("CAMPAIGN BALANCE (simulated player, 1 hour idle between sessions)");
-            Line("  stage  name                      teamPwr  recPwr   winRate  avgRounds  attempts");
+        // ==================================================================== the economy model
+        //
+        // RunCampaignBalancePass used to model ONE SESSION PER ATTEMPT, and an attempt was one
+        // battle. That was written when a stage WAS one battle. A stage is now 12 waves of 12
+        // battles, so every quantity the pass derived from an attempt was derived from a shape the
+        // game no longer has. The measured symptom: the whole 24-stage campaign - 3456 battles -
+        // simulated in 54 battles and 54 hours of game clock, finishing at rank 9 with a hero level
+        // cap of 44 against a hard cap of 80. The instrument was starving its own player.
+        //
+        // This is the same defect class as the floor-pinned curve instruments: a number that reads
+        // as a property of a stage while being computed from one battle of it. The proof that it
+        // was not measuring its own input: scaling stage gold 2.5x moved the output about 3 points,
+        // and scaling account XP 3x moved it none.
+        //
+        // Where each quantity belongs now. DESIGN-CAMPAIGN-STRUCTURE decides the right-hand column
+        // for the reward rows: "the repeat cap and idle income stay at Stage granularity while wave
+        // and battle exist only inside an attempt".
+        //
+        //   quantity                    was                  is now
+        //   --------------------------------------------------------------------------------
+        //   elapsed clock               +1h per attempt      PER BATTLE, from its round count
+        //   idle income claim           per attempt          PER SESSION, capped by IdleCapHours
+        //   gold spend, summons, armor  per attempt          PER SESSION
+        //   the fight                   1 battle per stage   PER BATTLE, down the real ladder
+        //   reward purse                per stage clear      STILL PER STAGE  (unchanged)
+        //   idle RATE per hour          keyed to progress    STILL PER STAGE  (unchanged)
+        //   repeat cap unit             a stage clear        STILL PER STAGE  (unchanged)
+        //   wave / battle position      did not exist        ONLY INSIDE AN ATTEMPT
+        //
+        // The reward rows were already right and are deliberately untouched: GameSession's
+        // RecordBattleWon moves a cursor for 143 of a stage's 144 wins and pays nothing, and the
+        // caller grants the purse once on the win that finishes the stage. Paying per battle would
+        // multiply every stage's income by 144, which is what the design rules out.
+        //
+        // The ladder walk below drives the game's OWN progression API - ResumePointFor,
+        // RecordBattleWon, RecordBattleLost, SweepClearedStage - rather than a hand-rolled proxy
+        // for it. That is deliberate: the previous proxy is what drifted away from the game, so the
+        // instrument now fails if that API changes underneath it instead of quietly disagreeing.
 
+        /// <summary>Seconds of real play one battle costs, given how many rounds it ran. Combat is
+        /// animated, and a battle also costs its loading, formation and results screens.</summary>
+        private const float EconomySecondsPerRound = 3.5f;
+        private const float EconomyBattleOverheadSeconds = 8f;
+
+        /// <summary>Battles in one sitting, and the gap to the next one. Twelve hours between
+        /// sittings is a twice-a-day player, which means each claim collects the full
+        /// BalanceConfig.IdleCapHours rather than the uncapped gap - the cap does its job here
+        /// exactly as it does in the game, instead of never being reached as it was before.</summary>
+        private const int EconomySessionBattleBudget = 40;
+        private const long EconomyAwaySeconds = 12L * 3600L;
+
+        /// <summary>Give up on a stage when power has stopped growing. A player who cannot beat a
+        /// battle farms until they can; if farming has stopped raising power, more sittings will
+        /// not help, and that is what STUCK means.</summary>
+        private const int EconomyStallSessions = 14;
+        private const int EconomyMaxSessionsPerStage = 400;
+        private const int EconomyMaxConsecutiveLossesPerSession = 8;
+
+        private sealed class EconomyStageOutcome
+        {
+            public StageDef Stage;
+            public int TeamPower;
+            public int Battles;
+            public int Sessions;
+            public int Losses;
+            public long ElapsedSeconds;
+            public bool Cleared;
+            public float WinRate = -1f;
+            public float AvgRounds;
+        }
+
+        private sealed class EconomyRun
+        {
+            public List<EconomyStageOutcome> Stages = new List<EconomyStageOutcome>();
+            public PlayerProfile Profile;
+            public GameSession Session;
+            public int CapBlockedSessions;
+            public int SpendableSessions;
+            public long PeakGold;
+            public int StuckAt = -1;
+            public long Now;
+            public int TotalBattles;
+            public int TotalSessions;
+
+            private int _seed = 1;
+            public int NextSeed() { return _seed++; }
+        }
+
+        /// <summary>
+        /// One simulated player, start of the campaign to wherever they stop. Verbose prints the
+        /// table; silent is for the responsiveness check, which runs this more than once.
+        /// </summary>
+        private static EconomyRun SimulateEconomy(ContentDatabase db, bool verbose)
+        {
+            EconomyRun run = new EconomyRun();
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             GameSession session = new GameSession(db, profile);
-            HeroDef noHealWren = BuildNoHealWren(db);
-            long now = 0;
-            int totalAttempts = 0;
-            int seedCounter = 1;
-            int stuckAt = -1;
+            run.Profile = profile;
+            run.Session = session;
+
+            HeroDef noHealWren = verbose ? BuildNoHealWren(db) : null;
 
             for (int stageIdx = 0; stageIdx < db.AllStages.Count; stageIdx++)
             {
                 StageDef stage = db.AllStages[stageIdx];
-                int attemptsForStage = 0;
-                int wins = 0;
+                EconomyStageOutcome outcome = new EconomyStageOutcome();
+                outcome.Stage = stage;
+                long stageStart = run.Now;
+
                 int rounds = 0;
-                int samples = 0;
+                int sessions = 0;
+                int stalled = 0;
+                int bestPower = profile.EffectiveTeamPower(db);
                 bool cleared = false;
 
-                while (attemptsForStage < 60)
+                while (!cleared && sessions < EconomyMaxSessionsPerStage)
                 {
-                    // a session: collect idle income, spend gold on the team, then fight
-                    now += 3600;
-                    session.ClaimIdle(now);
-                    if (SpendGold(session)) capBlockedSessions++;
-                    else spendableSessions++;
-                    if (session.Profile.Gold > peakGold) peakGold = session.Profile.Gold;
-                    while (session.CanSummon) session.Summon(seedCounter++, now);
-                    session.Profile.NormaliseTeam();
-                    // Wear what has actually been earned. GrantBattleResult already rolls a real
-                    // drop on every uncapped clear and RollArmorDrop already adds it to
-                    // OwnedArmor - so this instrument has been ACCUMULATING armor all along and
-                    // simply never equipping any of it, which is why ApplyArmor stayed a no-op.
-                    // Nothing synthetic is granted here; the drops are the real ones, at the real
-                    // 0.45 drop chance, at the real Rough/Honed ceiling.
+                    // ---- between sittings the player is away, and idle accrues against that gap.
+                    //      One claim per sitting, capped exactly as the game caps it.
+                    run.Now += EconomyAwaySeconds;
+                    session.ClaimIdle(run.Now);
+                    if (SpendGold(session)) run.CapBlockedSessions++;
+                    else run.SpendableSessions++;
+                    if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
+                    while (session.CanSummon) session.Summon(run.NextSeed(), run.Now);
+                    profile.NormaliseTeam();
+                    // Wear what has actually been earned - GrantBattleResult rolls the real drops
+                    // at the real drop chance, and this instrument has been accumulating them all
+                    // along.
                     EquipBestOwnedArmor(db, session);
+                    sessions++;
+                    run.TotalSessions++;
 
-                    // The session's fight is the stage's FLOOR battle - where a player entering
-                    // this stage actually starts. Routed through the generator rather than the raw
-                    // StageDef so it says so explicitly instead of getting the floor by accident.
-                    StageDef floorBattle = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
-                    BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(floorBattle, seedCounter++));
-                    attemptsForStage++;
-                    totalAttempts++;
-                    samples++;
-                    rounds += r.Rounds;
-                    if (r.Victory) wins++;
-
-                    if (r.Victory)
+                    // ---- the sitting itself: a bounded number of battles, fought DOWN THE LADDER
+                    //      from wherever the last sitting stopped. The cursor is the game's, so a
+                    //      loss retries that one battle and a win advances one position, which is
+                    //      the rule DESIGN-CAMPAIGN-STRUCTURE decided.
+                    int budget = EconomySessionBattleBudget;
+                    int consecutiveLosses = 0;
+                    while (budget > 0 && !cleared)
                     {
-                        // A STAGE CLEAR NOW COSTS 144 WINS, NOT ONE.
-                        //
-                        // This used to call GrantBattleResult on the strength of a single won
-                        // battle, which paid a full stage clear - gold, shards, account XP, the
-                        // first-clear bonus - for 1/144th of the work, and advanced the simulated
-                        // player through the campaign at 144x the real rate. Every gold-sink and
-                        // idle-income number this pass printed rested on that.
-                        //
-                        // The gate is the CEILING battle, matching the rule the game itself already
-                        // uses for a sweep (GameSession.SweepClearedStage): a line that beats the
-                        // hardest battle in a stage beats the 143 easier ones below it, so winning
-                        // the ceiling is a sound proxy for completing the curve, at one extra
-                        // simulation instead of 144.
-                        //
-                        // This is deliberately NOT a re-derivation of the correct pacing. The
-                        // session count, the idle income between sessions and the gold sink are all
-                        // still modelled at one-session-per-attempt and are all still wrong for a
-                        // 144-battle stage. That is the larger task the audit sized separately. All
-                        // this does is stop the instrument paying out for a clear that did not
-                        // happen.
-                        StageDef ceilBattle = CampaignWaveGenerator.BuildBattle(
-                            stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
-                        BattleResult ceil = CombatSimulation.Run(
-                            session.BuildBattleRequest(ceilBattle, seedCounter++));
-                        if (ceil.Victory)
+                        int wave, battle;
+                        session.ResumePointFor(stage, out wave, out battle);
+                        StageDef encounter = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
+                        BattleResult r = CombatSimulation.Run(
+                            session.BuildBattleRequest(encounter, run.NextSeed()));
+
+                        outcome.Battles++;
+                        run.TotalBattles++;
+                        budget--;
+                        rounds += r.Rounds;
+                        run.Now += (long)(EconomyBattleOverheadSeconds + r.Rounds * EconomySecondsPerRound);
+
+                        if (r.Victory)
                         {
-                            session.GrantBattleResult(stage, true, now);
-                            cleared = true;
-                            break;
+                            consecutiveLosses = 0;
+                            if (session.RecordBattleWon(stage, wave, battle))
+                            {
+                                session.GrantBattleResult(stage, true, run.Now);
+                                cleared = true;
+                            }
                         }
-                        // Won the floor, cannot beat the ceiling: the stage is entered but not
-                        // finished, so nothing is granted and the loop keeps building power.
+                        else
+                        {
+                            outcome.Losses++;
+                            session.RecordBattleLost(stage, wave, battle);
+                            consecutiveLosses++;
+                            // Hitting a wall ends the sitting: the player goes and farms instead of
+                            // throwing the same team at the same battle forever.
+                            if (consecutiveLosses >= EconomyMaxConsecutiveLossesPerSession) break;
+                        }
                     }
-                    // losing still means replaying the best cleared stage for gold - and a repeat
-                    // clear of an already-cleared stage is a sweep, which the game resolves on that
-                    // stage's hardest battle for exactly the same reason.
-                    if (stageIdx > 0)
+
+                    // ---- walled: farm the best already-cleared stage for what the day allows.
+                    //      SweepClearedStage is the game's own one-tap replay, so the repeat cap,
+                    //      the purse and the sweep's own ceiling fight all behave as they do live.
+                    if (!cleared && stageIdx > 0)
                     {
                         StageDef farm = db.AllStages[stageIdx - 1];
-                        StageDef farmCeil = CampaignWaveGenerator.BuildBattle(
-                            farm, Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
-                        BattleResult fr = CombatSimulation.Run(session.BuildBattleRequest(farmCeil, seedCounter++));
-                        if (fr.Victory) session.GrantBattleResult(farm, true, now);
-                    }
-                }
-
-                // measure the true win rate at the power the player actually had, and while we're
-                // re-fighting this stage anyway, attribute damage per hero and probe whether the
-                // healer's healing (as opposed to just having a third body on the field) actually
-                // swung any of those same battles from a win to a loss.
-                int measureWins = 0;
-                const int MeasureRuns = 24;
-                Dictionary<string, long> damageByHero = new Dictionary<string, long>();
-                int healerFlips = 0;
-                int winsRetested = 0;
-                bool healerDeployed = false;
-
-                for (int m = 0; m < MeasureRuns; m++)
-                {
-                    int seed = 100000 + m * 37 + stageIdx;
-                    // Same floor battle the attempt loop above fought, named explicitly so the
-                    // win rate this prints and the attempts beside it describe the same encounter.
-                    StageDef measured = CampaignWaveGenerator.BuildBattle(stage, 1, 1);
-                    BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(measured, seed));
-                    if (mr.Victory) measureWins++;
-                    AccumulateDamage(mr, damageByHero);
-
-                    if (mr.Victory && noHealWren != null)
-                    {
-                        List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealWren, out healerDeployed);
-                        if (healerDeployed)
+                        int allowed = session.RepeatClearsRemaining(farm, run.Now);
+                        for (int i = 0; i < allowed; i++)
                         {
-                            BattleRequest altRequest = new BattleRequest();
-                            altRequest.Content = db;
-                            // The SAME battle mr just fought, not the raw stage. This probe asks
-                            // "would that win have been a loss without the healer", and it can only
-                            // answer that if both halves fight the same encounter at the same seed.
-                            altRequest.Stage = measured;
-                            altRequest.Seed = seed;
-                            altRequest.Team = altTeam;
-                            BattleResult altResult = CombatSimulation.Run(altRequest);
-                            winsRetested++;
-                            if (!altResult.Victory) healerFlips++;
+                            BattleRewards fr = session.SweepClearedStage(farm, run.NextSeed(), run.Now);
+                            run.TotalBattles++;
+                            outcome.Battles++;
+                            run.Now += (long)(EconomyBattleOverheadSeconds + 8f * EconomySecondsPerRound);
+                            if (!fr.Victory) break;
                         }
                     }
+
+                    int power = profile.EffectiveTeamPower(db);
+                    if (power > bestPower) { bestPower = power; stalled = 0; }
+                    else stalled++;
+                    if (!cleared && stalled >= EconomyStallSessions) break;
                 }
 
-                float winRate = measureWins / (float)MeasureRuns;
-                float avgRounds = samples > 0 ? rounds / (float)samples : 0f;
+                outcome.Cleared = cleared;
+                outcome.Sessions = sessions;
+                outcome.TeamPower = profile.EffectiveTeamPower(db);
+                outcome.ElapsedSeconds = run.Now - stageStart;
+                outcome.AvgRounds = outcome.Battles > 0 ? rounds / (float)outcome.Battles : 0f;
+                run.Stages.Add(outcome);
 
-                InstrumentRow instrument = Row(stage);
-                instrument.Balance5Rate = winRate;
-                instrument.Balance5Power = profile.TeamPower();
-                Line("  " + stage.DisplayCode.PadRight(6)
-                     + " " + Trim(stage.Name, 25).PadRight(25)
-                     + " " + profile.TeamPower().ToString().PadLeft(7)
-                     + "  " + stage.RecommendedPower.ToString().PadLeft(6)
-                     + "   " + Pct(winRate).PadLeft(6)
-                     + "  " + Fmt(avgRounds).PadLeft(9)
-                     + "  " + attemptsForStage.ToString().PadLeft(8)
-                     + (cleared ? "" : "   <-- STUCK"));
-                Line("           dmg share: " + FormatDamageShare(damageByHero)
-                     + "   healer changed outcome: " + (healerDeployed ? healerFlips + " of " + winsRetested + " wins would have been losses without her healing" : "n/a (not deployed)"));
+                // Only the reported run publishes to the comparison table. The responsiveness
+                // check below runs this simulation twice more with content deliberately altered,
+                // and those runs must not be able to reach the numbers other instruments read.
+                if (verbose)
+                {
+                    Row(stage).Balance5Power = outcome.TeamPower;
+                    ReportEconomyStage(db, session, stage, outcome, noHealWren, stageIdx);
+                }
 
-                if (!cleared) { stuckAt = stageIdx; break; }
+                if (!cleared) { run.StuckAt = stageIdx; break; }
             }
+
+            return run;
+        }
+
+        /// <summary>The per-stage table row, plus the damage-share and healer probes. Verbose path
+        /// only - the responsiveness check does not need them and they cost 24 battles a stage.</summary>
+        private static void ReportEconomyStage(ContentDatabase db, GameSession session, StageDef stage,
+                                               EconomyStageOutcome outcome, HeroDef noHealWren, int stageIdx)
+        {
+            PlayerProfile profile = session.Profile;
+            const int MeasureRuns = 24;
+            int measureWins = 0;
+            Dictionary<string, long> damageByHero = new Dictionary<string, long>();
+            int healerFlips = 0;
+            int winsRetested = 0;
+            bool healerDeployed = false;
+
+            for (int m = 0; m < MeasureRuns; m++)
+            {
+                int seed = 100000 + m * 37 + stageIdx;
+                // The stage's CEILING battle - its hardest, the one that decides whether the stage
+                // can be finished. The old pass measured the floor here, which is the battle a
+                // player has already beaten by the time the stage matters.
+                StageDef measured = CampaignWaveGenerator.BuildBattle(
+                    stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+                BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(measured, seed));
+                if (mr.Victory) measureWins++;
+                AccumulateDamage(mr, damageByHero);
+
+                if (mr.Victory && noHealWren != null)
+                {
+                    List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealWren, out healerDeployed);
+                    if (healerDeployed)
+                    {
+                        BattleRequest altRequest = new BattleRequest();
+                        altRequest.Content = db;
+                        altRequest.Stage = measured;
+                        altRequest.Seed = seed;
+                        altRequest.Team = altTeam;
+                        BattleResult altResult = CombatSimulation.Run(altRequest);
+                        winsRetested++;
+                        if (!altResult.Victory) healerFlips++;
+                    }
+                }
+            }
+
+            outcome.WinRate = measureWins / (float)MeasureRuns;
+            Row(stage).Balance5Rate = outcome.WinRate;
+
+            float ratio = stage.RecommendedPower > 0
+                ? outcome.TeamPower / (float)stage.RecommendedPower : 0f;
+
+            Line("  " + stage.DisplayCode.PadRight(6)
+                 + " " + Trim(stage.Name, 24).PadRight(24)
+                 + outcome.TeamPower.ToString().PadLeft(8)
+                 + stage.RecommendedPower.ToString().PadLeft(8)
+                 + ("x" + Fmt(ratio)).PadLeft(7)
+                 + Pct(outcome.WinRate).PadLeft(8)
+                 + outcome.Battles.ToString().PadLeft(8)
+                 + outcome.Sessions.ToString().PadLeft(6)
+                 + Fmt(outcome.ElapsedSeconds / 86400f).PadLeft(7)
+                 + (outcome.Cleared ? "" : "   <-- STUCK"));
+            Line("           dmg share: " + FormatDamageShare(damageByHero)
+                 + "   healer changed outcome: " + (healerDeployed
+                     ? healerFlips + " of " + winsRetested + " wins would have been losses without her healing"
+                     : "n/a (not deployed)"));
+        }
+
+        private static void RunCampaignBalancePass(ContentDatabase db)
+        {
+            Line("CAMPAIGN BALANCE (simulated player walking the real 144-battle ladder)");
+            Line("  A sitting is " + EconomySessionBattleBudget + " battles, sittings are "
+                 + (EconomyAwaySeconds / 3600) + "h apart, and a battle costs "
+                 + Fmt(EconomyBattleOverheadSeconds) + "s + " + Fmt(EconomySecondsPerRound)
+                 + "s per round of real time. Idle accrues against that clock and is capped by");
+            Line("  BalanceConfig.IdleCapHours exactly as the game caps it. Rewards stay per STAGE.");
+            Line("  winRate is measured at the stage's CEILING battle - its hardest.");
+            Line("");
+            Line("  stage  name                     teamPwr  recPwr  ratio winRate battles  sess   days");
+
+            EconomyRun run = SimulateEconomy(db, true);
+            PlayerProfile profile = run.Profile;
 
             Line("");
             Line("  final: rank " + profile.PlayerLevel
@@ -8802,14 +8935,15 @@ namespace Emberfall.DevHarness
                  + ", " + profile.Heroes.Count + " heroes"
                  + ", gold " + profile.Gold
                  + ", shards " + profile.Shards
-                 + ", hero cap Lv" + session.HeroLevelCap
-                 + ", total battles " + totalAttempts);
+                 + ", hero cap Lv" + run.Session.HeroLevelCap
+                 + ", total battles " + run.TotalBattles
+                 + ", " + run.TotalSessions + " sittings over " + Fmt(run.Now / 86400f) + " days");
 
-            int totalSessions = capBlockedSessions + spendableSessions;
-            float blockedShare = totalSessions > 0 ? capBlockedSessions / (float)totalSessions : 0f;
-            Line("  gold sink: " + capBlockedSessions + " of " + totalSessions + " sessions ("
+            int totalSessions = run.CapBlockedSessions + run.SpendableSessions;
+            float blockedShare = totalSessions > 0 ? run.CapBlockedSessions / (float)totalSessions : 0f;
+            Line("  gold sink: " + run.CapBlockedSessions + " of " + totalSessions + " sittings ("
                  + Pct(blockedShare) + ") ended CAP-BLOCKED - every deployed hero at HeroLevelCap"
-                 + " with Gold still in hand. Peak balance " + peakGold + ", ending " + profile.Gold + ".");
+                 + " with Gold still in hand. Peak balance " + run.PeakGold + ", ending " + profile.Gold + ".");
             Line("           A high share is the Gold surplus DESIGN-SHOP argues for, measured rather than"
                  + " reasoned: it is time spent earning Gold that has nowhere to go. A low share means the"
                  + " level sink was keeping up and the shop's premise is weaker than the doc claims.");
@@ -8823,9 +8957,137 @@ namespace Emberfall.DevHarness
                      + "  " + h.Def.Role + "/" + h.Def.Aspect + "  " + h.Def.Stars + "*");
             }
 
-            Check(stuckAt < 0, "a normal player can clear the whole campaign");
+            Check(run.StuckAt < 0, "a normal player can clear the whole campaign");
             Check(profile.Heroes.Count > 3, "summoning grew the roster past the 3 starters");
             Line("");
+        }
+
+        /// <summary>
+        /// The economy model must respond to the economy.
+        ///
+        /// This exists because the previous model did not. It derived one session, one hour of idle
+        /// income and one battle per stage, so almost all of a stage's authored gold never reached
+        /// the simulated player: scaling stage gold by 2.5x moved the reported power ratio about 3
+        /// points, and scaling account XP by 3x moved it none at all. A number that ignores its own
+        /// input is not a measurement, and the failure was silent - the table still printed, still
+        /// looked plausible, and still got quoted.
+        ///
+        /// So the responsiveness is now asserted rather than assumed. Multiply every gold channel
+        /// on the back half of the campaign by 2.5x, re-run the whole simulation, and require the
+        /// late-campaign power ratio to actually move. If a future structural change re-severs the
+        /// link between authored income and simulated power, this fails on the commit that does it
+        /// instead of years later.
+        ///
+        /// It scales the loaded StageDefs in memory and puts them back afterwards. Nothing is
+        /// written to campaign.json, and the restore is unconditional.
+        /// </summary>
+        private static void CheckEconomyRespondsToIncome(ContentDatabase db)
+        {
+            Line("");
+            Line("ECONOMY RESPONDS TO INCOME (the guard the old model would have failed)");
+
+            const float Multiplier = 2.5f;
+
+            // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
+            // input; the fixed one moves about 0.16. The bar sits at 0.10 - more than three times
+            // the broken signature, and well clear of the working value so ordinary content tuning
+            // cannot trip it.
+            //
+            // It is not set higher because 0.16 is genuinely the ceiling, for a reason the line
+            // below prints: at 2.5x gold, 49% of sittings end CAP-BLOCKED against 7.3% at 1x. Gold
+            // buys hero levels, hero levels stop at HeroLevelCap, and only account rank raises that.
+            // Half the extra gold has nowhere to go. That is the game's design working as written,
+            // so demanding a bigger response here would be demanding the model lie.
+            const float MinimumResponse = 0.10f;
+
+            List<StageDef> scaled = new List<StageDef>();
+            for (int i = db.AllStages.Count / 2; i < db.AllStages.Count; i++) scaled.Add(db.AllStages[i]);
+            if (scaled.Count == 0)
+            {
+                Line("  no stages to scale - campaign content is empty.");
+                Line("");
+                return;
+            }
+
+            EconomyRun poor = SimulateEconomy(db, false);
+            float poorRatio = LateCampaignRatio(poor);
+
+            int[] gold = new int[scaled.Count];
+            int[] firstClear = new int[scaled.Count];
+            int[] idle = new int[scaled.Count];
+            for (int i = 0; i < scaled.Count; i++)
+            {
+                gold[i] = scaled[i].RewardGold;
+                firstClear[i] = scaled[i].FirstClearGold;
+                idle[i] = scaled[i].IdleGoldPerHour;
+            }
+
+            float richRatio;
+            EconomyRun rich = null;
+            try
+            {
+                for (int i = 0; i < scaled.Count; i++)
+                {
+                    scaled[i].RewardGold = (int)(gold[i] * Multiplier);
+                    scaled[i].FirstClearGold = (int)(firstClear[i] * Multiplier);
+                    scaled[i].IdleGoldPerHour = (int)(idle[i] * Multiplier);
+                }
+                rich = SimulateEconomy(db, false);
+                richRatio = LateCampaignRatio(rich);
+            }
+            finally
+            {
+                for (int i = 0; i < scaled.Count; i++)
+                {
+                    scaled[i].RewardGold = gold[i];
+                    scaled[i].FirstClearGold = firstClear[i];
+                    scaled[i].IdleGoldPerHour = idle[i];
+                }
+            }
+
+            float response = richRatio - poorRatio;
+            Line("  " + scaled.Count + " stages (the back half of the campaign) at " + Fmt(Multiplier)
+                 + "x gold - reward, first clear and idle rate together.");
+            Line("  late-campaign power ratio: x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
+                 + "   response " + Fmt(response));
+            // Why the response is not larger, stated rather than guessed at: gold buys hero levels,
+            // and hero levels stop at HeroLevelCap, which is set by account rank and account rank
+            // comes only from stage clears. Past the cap the extra gold has nowhere to go, and the
+            // share of sittings that ended holding gold they could not spend says how much of the
+            // 2.5x hit that wall.
+            Line("  sittings that ended CAP-BLOCKED: " + Pct(CapBlockedShare(poor))
+                 + " at 1x, " + Pct(CapBlockedShare(rich)) + " at " + Fmt(Multiplier) + "x"
+                 + "   (gold buys levels; levels stop at HeroLevelCap, which only account rank raises)");
+            Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
+            Line("  which is how it was caught. Anything near that means the link is severed again.");
+
+            Check(response > MinimumResponse,
+                  "the economy model responds to a " + Fmt(Multiplier) + "x change in authored gold"
+                  + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
+            Line("");
+        }
+
+        private static float CapBlockedShare(EconomyRun run)
+        {
+            int total = run.CapBlockedSessions + run.SpendableSessions;
+            return total > 0 ? run.CapBlockedSessions / (float)total : 0f;
+        }
+
+        /// <summary>Mean power-to-recommendedPower ratio over the last three stages reached. This is
+        /// the column the late-chapter underpowered symptom is read off, so it is the one the
+        /// responsiveness guard watches.</summary>
+        private static float LateCampaignRatio(EconomyRun run)
+        {
+            float total = 0f;
+            int counted = 0;
+            for (int i = run.Stages.Count - 1; i >= 0 && counted < 3; i--)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (o.Stage.RecommendedPower <= 0) continue;
+                total += o.TeamPower / (float)o.Stage.RecommendedPower;
+                counted++;
+            }
+            return counted > 0 ? total / counted : 0f;
         }
 
         private static void AccumulateDamage(BattleResult r, Dictionary<string, long> damageByHero)

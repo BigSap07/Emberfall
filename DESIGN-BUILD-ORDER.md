@@ -2,7 +2,16 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-06, not against the rest of this document.
+Current state, checked against the repo on 2026-09-09, not against the rest of this document.
+
+- **Open: `fix/economy-session-model`** - unmerged. Re-models `RunCampaignBalancePass`, which
+  derived session count, idle income and the gold sink per ATTEMPT when an attempt was one battle
+  and a stage is now 144. It simulated the whole campaign in 54 battles and finished at rank 9 with
+  a hero cap of 44; it now walks the real ladder through the game's own progression API - 3594
+  battles, 96 sittings, 49 days, rank 14, hero cap 64. The late-chapter "underpowered player"
+  symptom was the instrument: 2-10 through 2-12 read x0.88/x0.87/x0.85 before and x1.79/x1.70/x1.58
+  after, with no content changed. `CheckEconomyRespondsToIncome` now asserts the model responds to
+  its own input, because the old one did not. See the entry under task 13's audit.
 
 - **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
   is not; that sentence is stale, task 13's own entry is right.
@@ -1070,6 +1079,94 @@ confirmed green on CI on `main` after the merge.
       the simulated player is paid a full stage clear - gold, shards, account XP, first-clear bonus -
       for 1/144th of the work, and advances through the campaign at 144x the real rate. Every
       gold-sink and idle-income conclusion in this entry rests on that pacing.
+
+    **The economy half is fixed. 2026-09-09.**
+
+    The paying-for-1/144th-of-the-work bug above was patched earlier by gating the clear on the
+    ceiling battle, but that fix said in its own comment that "the session count, the idle income
+    between sessions and the gold sink are all still modelled at one-session-per-attempt and are
+    all still wrong for a 144-battle stage". They were. This is that larger piece of work.
+
+    **What the old model actually did, measured before changing anything:** it simulated the entire
+    24-stage, 3456-battle campaign in **54 battles and 54 hours of game clock**, because it advanced
+    the clock one hour per *attempt* and an attempt was one battle. Twenty of twenty-four stages
+    resolved in a single attempt. The simulated player finished the campaign at **rank 9 with a hero
+    level cap of 44** against a hard cap of 80 - the instrument was starving the player it was
+    measuring, then reporting the starvation as a content problem.
+
+    **The granularity ledger**, written before the rewrite. DESIGN-CAMPAIGN-STRUCTURE decides the
+    reward rows: "the repeat cap and idle income stay at Stage granularity while wave and battle
+    exist only inside an attempt".
+
+    | quantity | was | is now |
+    |---|---|---|
+    | elapsed clock | +1h per attempt | **per battle**, from its round count |
+    | idle income claim | per attempt | **per session**, capped by `IdleCapHours` |
+    | gold spend, summons, armor | per attempt | **per session** |
+    | the fight | 1 battle standing for a stage | **per battle**, down the real 144-battle ladder |
+    | reward purse | per stage clear | still per stage, unchanged |
+    | idle rate per hour | keyed to stages cleared | still per stage, unchanged |
+    | repeat cap unit | a stage clear | still per stage, unchanged |
+    | wave / battle position | did not exist | only inside an attempt |
+
+    The reward rows were already correct and were deliberately left alone: `RecordBattleWon` moves a
+    cursor for 143 of a stage's 144 wins and pays nothing, and the caller grants the purse once on
+    the win that finishes the stage. Paying per battle would multiply every stage's income by 144,
+    which is exactly what the design rules out.
+
+    **The rewrite drives the game's own progression API** - `ResumePointFor`, `RecordBattleWon`,
+    `RecordBattleLost`, `SweepClearedStage` - instead of a hand-rolled proxy for it. That is the
+    point: the proxy is what drifted away from the game in the first place, so the instrument now
+    breaks loudly if that API changes rather than quietly disagreeing with it. It walks 3594 battles
+    across 96 sittings and 49 simulated days, finishing at rank 14 with a hero cap of 64.
+
+    Three assumptions are now named constants with doc comments instead of being implicit: a sitting
+    is 40 battles, sittings are 12 hours apart, and a battle costs 8s plus 3.5s per round.
+
+    **Economy power-vs-`recommendedPower`, before and after.** Content was NOT touched - this is the
+    same `campaign.json`, measured by a corrected instrument.
+
+    | stage | before | after |  | stage | before | after |
+    |---|---|---|---|---|---|---|
+    | 1-1 | x1.32 | x2.21 | | 2-1 | x1.62 | x3.34 |
+    | 1-4 | x1.41 | x2.54 | | 2-4 | x1.26 | x2.67 |
+    | 1-8 | x1.33 | x2.79 | | 2-8 | x0.95 | x2.05 |
+    | 1-12 | x1.24 | x2.51 | | 2-9 | x0.94 | x1.91 |
+    | | | | | 2-10 | x0.88 | **x1.79** |
+    | | | | | 2-11 | x0.87 | **x1.70** |
+    | | | | | 2-12 | x0.85 | **x1.58** |
+
+    **The reported symptom was the instrument, not the content.** "A simulated player arrives at the
+    late chapter underpowered" was x0.85 to x0.94 on 2-8 through 2-12. Corrected, those stages read
+    x1.58 to x2.05. Nobody was arriving underpowered; the model was declining to pay them for 143 of
+    every 144 battles they fought. **No content was tuned to achieve this**, deliberately - whether
+    the corrected numbers now need tuning is a separate decision.
+
+    **What survives the correction is the SHAPE.** Chapter 2 still declines monotonically, x3.34 at
+    2-1 down to x1.58 at 2-12, so `recommendedPower` in chapter 2 still grows faster than the
+    modelled player's power does. That slope is the real finding and it is invariant: at 20, 40 and
+    80 battles per sitting the late-campaign ratios read x2.31/x2.15/x1.99, x1.79/x1.70/x1.58 and
+    x1.51/x1.42/x1.37 - the level moves with the assumed play cadence, the decline does not.
+    Read the absolute number as "given a twice-a-day, 40-battle player"; read the slope as a
+    property of the content.
+
+    **`CheckEconomyRespondsToIncome` is the guard, and it exists because the old model would have
+    failed it.** It multiplies every gold channel on the back half of the campaign by 2.5x, re-runs
+    the whole simulation and requires the late-campaign power ratio to move. The old model moved
+    0.03 on that input, and moved 0.00 when account XP was tripled; the corrected model moves 0.16.
+    The bar is 0.10 - more than three times the broken signature, well clear of the working value.
+
+    It is not set higher because 0.16 is the honest ceiling, for a reason the check now prints
+    beside it: at 2.5x gold **49% of sittings end CAP-BLOCKED against 7.3% at 1x**. Gold buys hero
+    levels, hero levels stop at `HeroLevelCap`, and only account rank raises that. Half the extra
+    gold has nowhere to go. That is the design working as written, and it is also the answer to why
+    the previous session's 2.5x-gold and 3x-XP probes both looked inert: gold saturates against the
+    level cap, and the old model's XP was so far below the cap's needs that tripling a late-chapter
+    fraction of it changed no rank at all.
+
+    The check scales the loaded `StageDef`s in memory and restores them in a `finally`. Nothing is
+    written to `campaign.json`, and the silent probe runs are barred from publishing to the
+    instrument comparison table so they cannot contaminate what other checks read.
 
     **Measured curve shape, 2026-09-07**, pinned five-body line levelled to each stage's
     `recommendedPower`, 200 samples per point, run against live code:
