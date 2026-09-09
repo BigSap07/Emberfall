@@ -1,0 +1,109 @@
+Emberfall - Play mode audit probes, 2026-09-09
+==============================================
+
+Throwaway. Not compiled by anything. These are the bodies that were pasted into Unity MCP's
+RunCommand during the audit that produced PLAYMODE-AUDIT.md, kept so the audit can be re-run
+rather than re-derived. Each block is the inside of:
+
+    using UnityEngine; using UnityEditor; /* plus what the block names */
+    internal class CommandScript : IRunCommand { public void Execute(ExecutionResult result) { ... } }
+
+Four things about the harness, learned the hard way and worth keeping:
+
+  1. The class MUST be named CommandScript and MUST be internal. The wrapper also HOISTS any
+     nested class to namespace scope and leaves a duplicate behind, so a `private class` inside
+     CommandScript fails to compile with CS1527. Use parallel arrays, not helper types.
+  2. `Image` resolves to a namespace, so it must be written `UnityEngine.UI.Image`.
+     `System.Diagnostics.Stopwatch` is not referenced; use EditorApplication.timeSinceStartup.
+  3. `System.IO.File.Delete` makes the MCP call fail with "User interactions are not supported".
+     Write captures to a fresh filename instead of deleting first.
+  4. EditorApplication.Step() advances one frame SYNCHRONOUSLY inside the call, at a fixed
+     Time.deltaTime of 0.02. That is what makes a whole battle sampleable in one round trip -
+     do not poll across calls.
+
+-------------------------------------------------------------------------------- 0. resolution
+// Must run before any capture. 891x501 cannot answer a layout question.
+Emberfall.EditorTools.GameViewSize.Apply(1600, 900);
+if (!EditorApplication.isPlaying) EditorApplication.EnterPlaymode();
+// then, in a SEPARATE call (the domain reload kills this one):
+//   Screen.width/Screen.height should now read 1600x900
+
+------------------------------------------------------------------- 1/2/3. battle per-frame walk
+// Grounding, framing and facing, sampled every frame for three stages in one call.
+//
+// Sample act.Rig.Root, NOT act.transform. The actor transform is planted at (slot.x, 0, slot.z)
+// and never moves; the lunge writes Rig.Root.localPosition and the death sink writes
+// Rig.Body.localPosition. Sampling the actor transform reports a perfectly still battle.
+//
+// Expected values: rootY rests at exactly 0. The only lift is CastRoutine's
+// sin(k*PI) * 0.28, so a peak of ~0.279 is the cast animation, not a grounding fault.
+// Facing is UnitRig's 180 -/+ ThreeQuarterTurn: allies 150, enemies 210, constant.
+foreach stage in { ch1_1, ch1_12, ch2_6 }:
+    app.Router.Show(ScreenId.MainMenu); step 15
+    app.Router.Battle.SetStage(stage); app.Router.Show(ScreenId.Battle); step 30
+    BattleStage w = Object.FindFirstObjectByType<BattleStage>();
+    for 2200 frames:
+        EditorApplication.Step();
+        for each w.Actors[a]:
+            track min/max of act.Rig.Root.position.y
+            track frame-to-frame delta AFTER act.Alive goes false + 120 frames  // "still animating?"
+            track Mathf.RoundToInt(act.Rig.Root.localRotation.eulerAngles.y)     // facing
+            v = w.Camera.WorldToViewportPoint(act.CenterPosition)
+            count frames where v.z <= 0 || v.x outside [0,1] || v.y outside [0,1]  // framing
+
+// NOTE on the post-death metric: compare against the PREVIOUS FRAME, not against the spawn
+// position. Comparing to spawn measures displacement (a corpse left where it was lunged reads as
+// "still moving" for the rest of the battle) and produced a false finding on the first pass.
+
+--------------------------------------------------------------------------- 5. reachability sweep
+// Every ScreenId, entered and returned from, with errors attributed per screen.
+Application.LogCallback cb = (msg, st, ty) => { if (ty is Error/Exception/Assert) errs.Add(msg); };
+Application.logMessageReceived += cb;
+foreach id in every ScreenId:
+    if (id == Battle) app.Router.Battle.SetStage(someStage);   // Battle needs a stage or it has no world
+    try { app.Router.Show(id); } catch (e) { record }
+    step 25; record app.Router.Current.GetType().Name and the error delta
+    app.Router.Show(ScreenId.MainMenu); step 10                 // back out so each entry starts equal
+Application.logMessageReceived -= cb;
+
+------------------------------------------------------------------------------- 7. layout at 1600x900
+// Measure, do not eyeball. Three separate questions, and the first two versions of this got
+// all three wrong in ways worth writing down:
+//
+//   TRUE CLIPPING is only HorizontalWrapMode.Truncate (or VerticalWrapMode.Truncate) with
+//   preferredWidth/Height over the rect. Overflow SPILLS and loses nothing; Wrap reflows.
+//   Counting Overflow as clipped reported the Proving title as broken when it renders fine.
+//
+//   OVERLAP must use GLYPH bounds, not the RectTransform. A left-aligned label and a
+//   right-aligned value sharing one full-width row have fully overlapping RECTS and zero
+//   overlapping glyphs - that false positive fired on Profile, Proving and Recital.
+//   Glyph box = drawn size (preferred, clamped unless Overflow) placed inside rect by
+//   TextAnchor: hf = (int)alignment % 3, vf = (int)alignment / 3.
+//
+//   SAFE AREA must skip anything under a Mask/RectMask2D. Scroll content that is scrolled out
+//   of view is outside the screen on purpose - that false positive fired on Formation, Heroes
+//   and Events, 65 rows of it.
+//
+// And the fourth question, which is the one that actually found things:
+//   TEXT UNDER OPAQUE CHROME. For every Selectable with a raycast-target Image, test its screen
+//   rect against every glyph box that is NOT a child of it. This is what caught the hidden
+//   POWER readout and the occluded enemy nameplate; text-vs-text alone finds neither.
+//
+// Settle at least 200 frames before measuring. At 35 frames the battle nameplates have not been
+// positioned yet and all eight report stacked at the origin.
+
+-------------------------------------------------------------------------------------- captures
+// ScreenCapture.CaptureScreenshot is async - step ~25 frames after it before the file exists.
+// "Emberfall/Capture/ALL of the above, in sequence" must be invoked from EDIT mode: it opens the
+// scene and enters Play mode itself, and throws InvalidOperationException if already playing.
+ScreenCapture.CaptureScreenshot(Application.dataPath + "/../Tools/Screenshots/audit_X.png", 1);
+
+------------------------------------------------------------------------------------ Ryn / Gale
+// Ryn Solvarr is owned but not deployed on the live save. Save Profile.Team, assign him, run the
+// battle, then restore every slot - the profile is the real save.
+// The extra turn itself is read from the game's own combat log, not from the scene:
+//   D:\Emberfall\Game\Logs\combat\*.txt, then
+//   awk '/^─+ Round/{r++} /^  Turn/{print r": "$0}'
+// Two "Turn <same unit>" lines in one round is the trace an ExtraTurn leaves. In the sampled
+// battle every unit took exactly one turn per round, so re-entry never fired and the
+// out-of-order animation case was NOT exercised.
