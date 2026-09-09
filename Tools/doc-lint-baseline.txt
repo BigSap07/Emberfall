@@ -8,8 +8,6 @@ DESIGN-ASPECTS.md|claude/aspects-lumen
 DESIGN-ASPECTS.md|claude/aspects-tide-umbra
 DESIGN-ASPECTS.md|claude/relics-rework
 DESIGN-ASPECTS.md|feat/aspect-identities
-DESIGN-BUILD-ORDER.md|82eeeb7
-DESIGN-BUILD-ORDER.md|8f0e18d
 DESIGN-BUILD-ORDER.md|BattleEvent.cs:104
 DESIGN-BUILD-ORDER.md|CombatSimulation.cs:1060
 DESIGN-BUILD-ORDER.md|CombatSimulation.cs:1093

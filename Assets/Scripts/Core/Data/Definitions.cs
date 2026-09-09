@@ -383,6 +383,20 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int WaveCount = 1;
         public int BattleCount = 1;
+
+        /// <summary>
+        /// Which battle of the stage's ladder this StageDef IS, 1-based, or 0 for the authored
+        /// stage that has not been resolved to a battle yet.
+        ///
+        /// Only CampaignWaveGenerator.BuildBattle sets it, and GameSession.BuildBattleRequest
+        /// refuses any stage that expands to more than one battle while this is still 0. That
+        /// pairing is what makes floor-pinning impossible rather than merely discouraged: before
+        /// it, handing the authored StageDef straight to BuildBattleRequest silently fought wave 1
+        /// battle 1 - the Enemies list is by construction the opening roster - and three separate
+        /// balance instruments did exactly that for months while appearing to measure whole stages.
+        /// A caller now has to say which battle it means, and cannot get the floor by accident.
+        /// </summary>
+        public int ResolvedBattleOrdinal;
         public int FloorLevel;
         public int CeilingLevel;
 

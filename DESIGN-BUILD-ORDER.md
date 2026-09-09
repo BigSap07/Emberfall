@@ -4,21 +4,48 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
-- **Open: `fix/economy-session-model`** - unmerged. Re-models `RunCampaignBalancePass`, which
-  derived session count, idle income and the gold sink per ATTEMPT when an attempt was one battle
-  and a stage is now 144. It simulated the whole campaign in 54 battles and finished at rank 9 with
-  a hero cap of 44; it now walks the real ladder through the game's own progression API - 3594
-  battles, 96 sittings, 49 days, rank 14, hero cap 64. The late-chapter "underpowered player"
-  symptom was the instrument: 2-10 through 2-12 read x0.88/x0.87/x0.85 before and x1.79/x1.70/x1.58
-  after, with no content changed. `CheckEconomyRespondsToIncome` now asserts the model responds to
-  its own input, because the old one did not. See the entry under task 13's audit.
+- **Both balance-instrument branches have landed on `main`.** They were written from the same base
+  and merged economy-first, ladder-second. Between them they close the last of the floor-pinned
+  instruments and re-run the retune against what those instruments now actually measure.
+  - **The geared curve, the construction guard, the task 13 retune.** The GEARED CURVE reports
+    FLOOR/CEIL/BLOCK at 200 samples instead of one number describing battle 1 of 144;
+    `BuildBattleRequest` refuses any unresolved multi-battle stage, so floor-pinning is impossible
+    by construction rather than caught by audit; 18 stage ceilings are retuned against the CEIL
+    column. **0 of 24 stages block, against 4 before.** Eleven stages sit below the 80-90% band and
+    cannot be raised into it without re-authoring rosters - `floorLevel` is not a lever, and CEIL is
+    bounded above by FLOOR.
+  - **The economy re-model.** `RunCampaignBalancePass` derived session count, idle income and the
+    gold sink per ATTEMPT, when an attempt was one battle and a stage is now 144. It simulated the
+    whole campaign in 54 battles and finished at rank 9 with a hero cap of 44; it now walks the real
+    ladder through the game's own progression API - 3594 battles, 96 sittings, 49 days, rank 14,
+    hero cap 64. The late-chapter "underpowered player" symptom was the instrument: 2-10 through
+    2-12 read x0.88/x0.87/x0.85 before and x1.79/x1.70/x1.58 after, with no content changed.
+    `CheckEconomyRespondsToIncome` asserts the model responds to its own input.
+  - **One claim did not survive the merge, and it is called out where it appears below.** The
+    retune branch recorded that it left the economy column alone because the economy model was
+    "still one-session-per-attempt and wrong for a 144-battle stage". That was true when written.
+    The re-model is precisely that fix and landed alongside it, so the reasoning is preserved as
+    the diagnostic it was, not as current status.
+  - **Still open:** whether the corrected economy ratios need content tuning at all. They are a
+    different set of numbers from the ones any earlier entry argues about.
 
 - **Task 13 (campaign retune): DONE, on `main`.** The 2026-08-29 status line below still says it
   is not; that sentence is stale, task 13's own entry is right.
-- **Open: `retune/ch2-late-stages`** (`a91a2f6`) - unmerged, 6 lines `campaign.json` + 6
-  `enemies.json`, a first pass at the `ch2_12` boss defect. Its "task 14" means the OLD numbering
-  for the retune, i.e. today's task 13.
-- **Parked: `wip/battlefield-bg`** (`5eb6d48`) - one edited `ashen.png`, "needs more work".
+- **Open: `fix/balance-instrument-ladder`** - unmerged, CI green. Closes the last floor-pinned
+  instrument and re-runs the retune against what it now measures. Three parts: the GEARED CURVE
+  reports FLOOR/CEIL/BLOCK at 200 samples instead of one number describing battle 1 of 144;
+  `BuildBattleRequest` refuses any unresolved multi-battle stage, so floor-pinning is impossible
+  by construction rather than caught by audit; and 18 stage ceilings are retuned against the
+  CEIL column. **0 of 24 stages block, against 4 before.** Eleven stages sit below the 80-90%
+  band and cannot be raised into it without re-authoring rosters - `floorLevel` is not a lever,
+  and CEIL is bounded above by FLOOR. The economy column was investigated and left byte-identical
+  to `main`: 2.5x gold moves it 3 points and 3x XP moves it none, because the economy model is
+  still one-session-per-attempt and wrong for a 144-battle stage. See task 13's entry.
+- **Open: `retune/ch2-late-stages`** - unmerged. One commit changing 6 lines of `campaign.json`
+  and 6 of `enemies.json`: a first pass at the `ch2_12` boss defect recorded under task 13. Its
+  own message says "task 14", which is the OLD numbering for the retune, i.e. today's task 13.
+- **Parked: `wip/battlefield-bg`** - unmerged. One edited `ashen.png` and a note that it needs
+  more work.
 - **Known gap: the Campaign chip row does not fit 12 chapters.** `CampaignScreen.BuildChipRow`
   sizes the row at 1600px wide (`UIBuilder.Box(_chipRow, 0f, ..., 1600f, 84f, ...)`) and
   `RefreshChips` gives every chip `UIBuilder.Sized(chip, 300f, 84f)` inside an `HStack` with 16px
@@ -26,8 +53,9 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
   row: it fits five chapters exactly (`5 * 300 + 4 * 16` = 1564) and overflows at six. Not a
   problem today with two chapters shipped, and not fixed here - it needs either a scrolling row or
   narrower chips, which is a design call rather than a number to nudge.
-- **Hero portraits: DONE, on `main`** (`f71d106`, `1de4f9e`) - framed portrait art shipped for the
-  five Ember heroes: Kael, Marrow, Seraphine, Veska, Orren. It adds a SECOND
+- **Hero portraits: DONE, on `main`.** Framed portrait art shipped for the five Ember heroes:
+  Kael, Marrow, Seraphine, Veska, Orren. Observable in `Resources/Sprites/Portraits`, which holds
+  exactly those five files and no others. It adds a SECOND
   portrait convention rather than replacing the first, and the folder is what distinguishes them:
   `Resources/Sprites/Portraits/{heroId}.png` is a finished badge that carries its own gold frame,
   while the older `Resources/Sprites/Units/portrait_{heroId}.png` is a frameless crop that
@@ -48,11 +76,13 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
     still the right home for any future frameless delivery, but note that `Tools/make_portraits.py`
     now writes into a path that framed art shadows: re-running it would regenerate five files that
     nothing would display.
-- **Superseded:** `8f0e18d` (two names, one commit: `feat/sprite-sheet-poc` and
-  `fix/battlevfx-blend-one-minus-src-alpha`) - its `SpriteSheetPlayer` lost to the shipped
-  `SpriteAnimator`, and its "blend fix" was comment-only; main's value was never wrong.
-- **Do not merge:** `feat/sprite-sheet-player` (`82eeeb7`) - 244 MB of raw source sheets in
-  `Assets/_Incoming/`, now gitignored. That branch is the only copy; keep it, do not land it.
+- **Superseded:** one commit carrying two branch names, `feat/sprite-sheet-poc` and
+  `fix/battlevfx-blend-one-minus-src-alpha`. Its `SpriteSheetPlayer` lost to the shipped
+  `SpriteAnimator`, and its "blend fix" turned out to be comment-only - main's blend value was
+  never wrong. Nothing in it is worth landing.
+- **Do not merge:** `feat/sprite-sheet-player` - 244 MB of raw source sheets under
+  `Assets/_Incoming/`, which is now gitignored. That branch is the only copy of those sheets;
+  keep it, do not land it.
 
 Supersedes the previous version, which predates DESIGN-ASPECTS, DESIGN-WORLD, DESIGN-COMBAT-STATS
 and DESIGN-ART-BIBLE. Single ordered plan for the whole project, reconciled against those four plus
@@ -1062,23 +1092,129 @@ confirmed green on CI on `main` after the merge.
     attached to the whole range. Task 13 tuned it against ONE encounter, which is now the first
     battle of 144.
 
-    This is not a documentation nicety - it is measurable, and both instruments are affected:
+    This is not a documentation nicety - it is measurable, and it affected every instrument:
 
-    - **Neither instrument errors, and neither reports a meaningless number. Both silently report
-      the FLOOR battle only.** `CheckPinnedFiveBodyCurve` (`Tools/DevHarness/Program.cs:8265`) and
-      `RunCampaignBalancePass` (`:8551`, `:8587`) call
-      `session.BuildBattleRequest(stage, seed)` on the raw `StageDef`, whose `Enemies` list is by
-      construction the wave 1 / battle 1 roster. `CampaignWaveGenerator.BuildBattle` is never
-      reached from either - the only calls to it in the harness are lines 5593-5756, inside the
-      CAMPAIGN STRUCTURE section. The proof is that the pinned table's numbers did not move across
-      the restructure at all (1-8 still 54.2%, 1-9 still 4.2%), which is exactly what a floor-pinned
-      instrument does when the floor was deliberately left untouched.
-    - **`RunCampaignBalancePass`'s economy half is wrong by a factor of 144**, which is worse than
-      its difficulty half. At `:8557` a single won battle calls `GrantBattleResult(stage, true, now)`
-      and `break`s the attempt loop as `cleared`. Under the new structure a stage needs 144 wins, so
-      the simulated player is paid a full stage clear - gold, shards, account XP, first-clear bonus -
-      for 1/144th of the work, and advances through the campaign at 144x the real rate. Every
-      gold-sink and idle-income conclusion in this entry rests on that pacing.
+    - **FIXED for two of them, 2026-09-07.** `CheckPinnedFiveBodyCurve` and `RunCampaignBalancePass`
+      both used to call `session.BuildBattleRequest` on the raw `StageDef`, whose `Enemies` list is
+      by construction the wave 1 / battle 1 roster, so both silently reported the FLOOR battle while
+      appearing to report the stage. Both now resolve through `CampaignWaveGenerator.BuildBattle`:
+      the pinned curve reports FLOOR, CEIL and the first blocking battle, and the economy pass gates
+      a stage clear on the ceiling battle rather than paying out for one won floor.
+      `CheckInstrumentsSeeTheWholeCurve` asserts this and fails loudly if either is ever re-pinned.
+    - **`RunCampaignBalancePass`'s economy half was wrong by a factor of 144, and is no longer.**
+      A single won battle used to call `GrantBattleResult` and break the attempt loop as cleared,
+      paying a full stage clear - gold, shards, account XP, first-clear bonus - for 1/144th of the
+      work and advancing the simulated player at 144x the real rate. The clear is now gated on the
+      ceiling battle, matching the sweep rule the game itself uses. The session count, the idle
+      income between sessions and the gold sink were still modelled at one session per attempt
+      and were still wrong for a 144-battle stage. That was the separate, larger piece of work,
+      and it has since been done - see **The economy half is fixed** below. This sentence is left
+      in place, corrected, because the bullet it closes is the audit that identified the defect.
+
+    - **The GEARED CURVE was floor-pinned too, and is not any more. Fixed 2026-09-09.**
+      `CheckArmoredCurveDelta` reported through `PinnedLineWinRate`, which fought
+      `BuildBattleRequest` on the raw `StageDef` - battle 1 of 144. The proof was in the printed
+      output: that table's `ungeared` column and the pinned curve's `FLOOR` column were the same
+      measurement and read within a few points of each other on every stage, while the pinned
+      curve's `CEIL` column - the same line at battle 144 - read 0% on eight of them.
+
+      Re-pointing needed a decision rather than a fix, because a single number for a 144-battle
+      curve has to be a chosen point on it, and which point is chosen sets the difficulty standard
+      for the campaign. **The standard chosen is CEIL**, wave 12 battle 12. The reason is that
+      defeat retries the battle that was lost rather than the stage, so the ceiling is the only
+      reading that answers "can this stage be finished". The column now prints FLOOR, CEIL and
+      BLOCK, the same shape as the pinned curve, at 200 samples. `PinnedLineWinRate` became
+      `BuildPinnedLine`, which returns the geared session **without fighting anything**: choosing
+      the battle is the caller's job now and cannot be defaulted.
+
+    - **Floor-pinning is now impossible by construction, not merely discouraged. 2026-09-09.**
+      `StageDef.ResolvedBattleOrdinal` is stamped by `CampaignWaveGenerator.BuildBattle` and by
+      nothing else, and `GameSession.BuildBattleRequest` throws on any stage whose `TotalBattles`
+      exceeds 1 while that field is still 0. The authored `Enemies` list IS the wave 1 battle 1
+      roster, so the old mistake never failed - it returned an ordinary, ordinary-looking result
+      for the opening battle - which is the entire reason three instruments made it for months.
+      The unresolved case is now loud at the call site that caused it. Single-battle stages
+      (Recital floors, Proving matches, prologue steps) are unaffected.
+
+      It paid for itself immediately: on first compile it caught a fourth floor-pinned call site,
+      in `CheckAspectEmberVerdant`, that no audit had found. Seventeen harness call sites that were
+      genuinely asking for the opening battle now say so through an `Opening(stage)` helper.
+      `CheckInstrumentsSeeTheWholeCurve` stays as a backstop.
+
+    **GEARED CURVE after the retune, 200 samples, measured against live code 2026-09-09.**
+    FLOOR is wave 1 battle 1, CEIL is wave 12 battle 12, BLOCK is the first battle with no win in
+    200 samples. CEIL is the tuned column; FLOOR is reported, not tuned.
+
+    | stage | recPwr | FLOOR | CEIL | BLOCK | ceiling lv |
+    |-------|--------|-------|------|-------|------------|
+    | 1-1 to 1-5 | 3950 to 6100 | 100% | 100% | none | untouched |
+    | 1-6   |  7150 | 100%  | 83%   | none | 21 -> 24 |
+    | 1-7   |  7200 | 100%  | 90%   | none | 24 -> 29 |
+    | 1-8   |  7450 | 94%   | 82.5% | none | 27 -> 25 |
+    | 1-9   |  9100 | 69.5% | 38.5% | none | 32 -> 28 |
+    | 1-10  |  9250 | 72%   | 44.5% | none | 27, at minimum span |
+    | 1-11  |  9750 | 74%   | 46.5% | none | 32 -> 28 |
+    | 1-12  | 10200 | 48.5% | 23.5% | none | 33 -> 23 |
+    | 2-1   |  8000 | 100%  | 88.5% | none | 36 -> 42 |
+    | 2-2   |  9000 | 97.5% | 89%   | none | 40 -> 38 |
+    | 2-3   | 10000 | 99%   | 89.5% | none | 53 -> 42 |
+    | 2-4   | 11500 | 87.5% | 72.5% | none | 56 -> 54 |
+    | 2-5   | 13000 | 89%   | 73%   | none | 61 -> 57 |
+    | 2-6   | 14500 | 73%   | 66%   | none | 57 -> 52 |
+    | 2-7   | 16000 | 81%   | 76.5% | none | 62 -> 58 |
+    | 2-8   | 17500 | 98%   | 82%   | none | 60 -> 57 |
+    | 2-9   | 19500 | 85%   | 75.5% | none | 70 -> 61 |
+    | 2-10  | 21500 | 83%   | 76.5% | none | 76 -> 71 |
+    | 2-11  | 23500 | 94%   | 81%   | none | 81 -> 77 |
+    | 2-12  | 26000 | 88%   | 47.5% | none | 54 -> 51 |
+
+    **What the retune achieved, and what it could not.**
+
+    - **The hard requirement is met: 0 of 24 stages BLOCK, against 4 before** (1-9 at b103, 1-11 at
+      b103, 1-12 at b47, 2-3 at b101). Every stage in the campaign is now completable end to end by
+      the geared five-body line at its own `recommendedPower`.
+    - **Eight stages land in the 80-90% band**: 1-6, 1-7, 1-8, 2-1, 2-2, 2-3, 2-8, 2-11. 1-1
+      through 1-5 were left untouched at 100% as instructed.
+    - **Eleven stages sit below the band and cannot be raised into it by this lever.** The
+      difficulty model is extremely steep at these power levels - one enemy level is worth 15 to 30
+      percentage points - and `floorLevel` is not a tuning lever (see the trap below), so a stage's
+      CEIL is bounded above by its FLOOR. With minimum span being 1, a stage can only reach 80-90%
+      at its ceiling if its floor is around 95% or better. Eleven stages open below that. Raising
+      them means moving the floor, which means re-authoring rosters, not editing two integers.
+    - **Chapter 2's arc conflicts with the "finale around 65%" guide, and the arc won.** "No
+      ordinary stage harder than its own chapter's finale" and "finale around 65%" are not
+      simultaneously satisfiable at this granularity: the ordinary stages that cannot be raised
+      (2-6 at 66%) already sit at the finale's target. 2-12 is set to CEIL 47.5%, making it
+      chapter 2's hardest stage by a clear margin. The arc defect was the named problem; the 65%
+      figure was a guide.
+    - **Eleven stages are flagged FLOOR UNDER 90%** by the instrument: 1-9, 1-10, 1-11, 1-12, 2-4,
+      2-5, 2-6, 2-7, 2-9, 2-10, 2-12. Reported, not tuned, as specified.
+
+    **The economy column was investigated and deliberately not touched here. 2026-09-09.**
+    *Superseded by the economy re-model below, which landed alongside this work. Kept because it
+    is the diagnostic that motivated that re-model, and because its numbers are the clearest
+    statement of what a broken instrument looks like. Every ratio in this subsection is an
+    OLD-MODEL read and does not match what the corrected pass prints.*
+    Chapter 2's power ratio declines monotonically from x1.52 at 2-1 to x0.82 at 2-11, and the task
+    asked for 2-10 through 2-12 specifically. Neither half of the gold/EXP curve is the lever:
+
+    - **2.5x gold on `ch2_5` through `ch2_12` moved the ratio about 3 points** (2-10 x0.86 to
+      x0.89, 2-11 x0.82 to x0.85, 2-12 x0.83 unchanged).
+    - **3x account XP on the same stages moved it zero points** (2-10 x0.86, 2-11 x0.83, 2-12
+      x0.80 - i.e. baseline).
+    - The sim is not cap-blocked: `0 of 46 sessions ended CAP-BLOCKED`, peak balance 3402 against
+      an ending balance of 13397, so it spends roughly as it earns and is not sitting on unspent
+      gold it cannot use.
+
+    An instrument that does not respond to a 2.5x change in its own input is not measuring what the
+    lever controls, and the reason is recorded three bullets above: **the economy model's session
+    count, idle income and gold sink are all still modelled at one session per attempt and are all
+    still wrong for a 144-battle stage.** Scaling content rewards against it would be tuning against
+    a known-broken instrument - the same mistake this branch exists to undo, one column over. The
+    economy fields in `campaign.json` are byte-identical to `main`. Fixing the model is the
+    prerequisite, and it is the separate larger piece of work already named - which was then done.
+    See **The economy half is fixed** immediately below.
+
 
     **The economy half is fixed. 2026-09-09.**
 
@@ -1168,8 +1304,8 @@ confirmed green on CI on `main` after the merge.
     written to `campaign.json`, and the silent probe runs are barred from publishing to the
     instrument comparison table so they cannot contaminate what other checks read.
 
-    **Measured curve shape, 2026-09-07**, pinned five-body line levelled to each stage's
-    `recommendedPower`, 200 samples per point, run against live code:
+    **Curve shape at five sampled stages, 2026-09-07**, pinned five-body line levelled to each
+    stage's `recommendedPower`, 200 samples per point, run against live code:
 
     | stage | lv floor->ceil | W1B1 | W4B1 | W6B6 | W9B1 | W12B12 |
     |-------|----------------|------|------|------|------|--------|
