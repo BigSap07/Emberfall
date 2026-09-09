@@ -49,6 +49,19 @@ namespace Emberfall.UI.Screens
         private const float LeftX = -480f;
         private const float RightX = 480f;
         private const float SlotSize = 112f;
+
+        /// <summary>
+        /// Width of the CHANGE BANNER button, and the room the power readout reserves for it.
+        ///
+        /// Both sit on the same header row anchored to the panel's top-right corner. They used to
+        /// be positioned independently, at the same anchor and the same offsets, and the button
+        /// - added second, drawn second, opaque - covered the readout completely. It rendered at
+        /// full alpha and active the whole time, so nothing errored and nothing looked broken;
+        /// the number was simply never on screen. Naming the width once and having the readout
+        /// offset itself by it makes the two positions dependent, so the next edit to either has
+        /// to move both.
+        /// </summary>
+        private const float BannerButtonWidth = 260f;
         private const float PortraitSize = 300f;
 
         /// <summary>Stat row pitch: a 16px name, a 28px bar, and breathing room.</summary>
@@ -167,8 +180,11 @@ namespace Emberfall.UI.Screens
 
             _powerLabel = UIBuilder.Label("Power", _left, "", UITheme.FontSmall,
                                           UITheme.Gold, TextAnchor.UpperRight);
-            UIBuilder.Box(_powerLabel.rectTransform, -UITheme.Space24, -UITheme.Space16, 400f, 32f,
-                          new Vector2(1f, 1f));
+            // Right-aligned, so it grows leftward from its own right edge - which is parked one
+            // button-width plus a gutter clear of the panel edge, leaving the corner to the button.
+            UIBuilder.Box(_powerLabel.rectTransform,
+                          -(UITheme.Space24 + BannerButtonWidth + UITheme.Space16), -UITheme.Space16,
+                          400f, 32f, new Vector2(1f, 1f));
 
             // The six slots: three down each side of the hero, in ArmorInfo's own order.
             _slotHost = UIBuilder.Node("Slots", _left);
@@ -184,8 +200,8 @@ namespace Emberfall.UI.Screens
 
             _openFormation = UIBuilder.Notch(
                 UIBuilder.SecondaryButton("Formation", _left, "CHANGE BANNER", UITheme.FontTiny), 12);
-            UIBuilder.Box(_openFormation.Root, -UITheme.Space24, -UITheme.Space16, 260f, 48f,
-                          new Vector2(1f, 1f));
+            UIBuilder.Box(_openFormation.Root, -UITheme.Space24, -UITheme.Space16,
+                          BannerButtonWidth, 48f, new Vector2(1f, 1f));
             _openFormation.OnClick(OpenFormation);
         }
 
