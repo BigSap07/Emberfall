@@ -10,6 +10,35 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # Full history, not the default depth-1 shallow clone. The root-commit guard below walks
+          # every ancestor of every ref; against a shallow checkout it reports 1 root regardless of
+          # what the real history holds, so the guard would pass vacuously and prove nothing.
+          # doc-lint's hash resolution needs the objects present for the same reason.
+          fetch-depth: 0
+
+      - name: Guard against a re-rooted history
+        shell: pwsh
+        run: |
+          # This repository has exactly ONE root commit, and the number is PINNED, not a maximum.
+          #
+          # A root commit is one with no parents. A second appearing means a session ran git init or
+          # committed a fresh tree instead of continuing the existing history, which silently
+          # orphans everything before it: the old work is still in the object store but nothing
+          # reaches it from a ref, and it goes when the repo is next garbage collected. That failure
+          # is quiet and expensive, which is why it is worth a check that cannot be satisfied by
+          # accident.
+          #
+          # If this fails, do NOT raise the number to make it green. Run
+          # git rev-list --max-parents=0 --all, find the commit that introduced the new root, and
+          # work out which session created it.
+          $expected = 1
+          $roots = (git rev-list --max-parents=0 --all | Measure-Object -Line).Lines
+          Write-Host "root commits: $roots (expected $expected)"
+          if ($roots -ne $expected) {
+            Write-Error "Expected exactly $expected root commit(s), found $roots. History has been re-rooted."
+            exit 1
+          }
 
       - name: Run build-check.ps1
         shell: pwsh

@@ -17,6 +17,17 @@ New-Item -ItemType Directory -Force $out | Out-Null
 
 if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1 }
 
+# ---- documentation lint.
+#
+# Runs FIRST because it needs no compiler and takes about a second, but deliberately does not exit
+# on failure: a citation violation and a compile error are independent problems, and a run that
+# stopped at the first would hide the second. The verdict is carried to the end and folded into the
+# exit code there, so one run reports everything wrong with the branch.
+$lintOk = $true
+& (Join-Path $PSScriptRoot "doc-lint.ps1")
+if ($LASTEXITCODE -ne 0) { $lintOk = $false }
+Write-Host ""
+
 function Compile($label, $sources, $target, $outputPath, $defines) {
     $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
     ($sources | ForEach-Object { '"' + $_ + '"' }) | Set-Content -Path $rsp -Encoding UTF8
@@ -59,5 +70,14 @@ if (-not ($okHarness -and $okEngine)) { exit 1 }
 if (-not $NoRun) {
     Write-Host ""
     & (Join-Path $out "DevHarness.exe")
-    exit $LASTEXITCODE
+    $harnessCode = $LASTEXITCODE
+    if ($harnessCode -ne 0) { exit $harnessCode }
+}
+
+# The lint verdict is applied last so its failure cannot mask a compile or harness failure, which
+# are the more urgent of the two.
+if (-not $lintOk) {
+    Write-Host ""
+    Write-Host "doc-lint reported new violations - see above." -ForegroundColor Red
+    exit 1
 }
