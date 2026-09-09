@@ -31,6 +31,14 @@
 # exit 1. Both counts print on every run so the debt is visible and its shrinkage is observable,
 # rather than the whole thing being switched off until someone has time to fix it.
 #
+# REGENERATE IT AGAINST ORIGIN'S VIEW, NOT A LOADED LOCAL CLONE. Both the hash and the branch check
+# ask git what exists, so their verdict depends on which refs the running clone happens to hold. A
+# machine carrying unpushed branches resolves hashes that are dead for everybody else, and
+# -WriteBaseline there records fewer violations than CI will find. That is not hypothetical: the
+# first baseline written for this file was three entries short for exactly that reason, and CI
+# caught it on the first push. If a run fails on a hash you can resolve locally, check whether the
+# branch holding it has actually been pushed before assuming the linter is wrong.
+#
 # THERE IS NO CARVE-OUT FOR HASHES ANYWHERE, including DESIGN-BUILD-ORDER.md's Now / Next. What
 # limits the check is not a file exception but the resolve test above: it reports a hash only once
 # that hash has stopped resolving.
@@ -158,14 +166,22 @@ function Get-Entry($v) { return ($v.File + '|' + $v.Token) }
 $entries = @($found | ForEach-Object { Get-Entry $_ } | Sort-Object -Unique)
 
 if ($WriteBaseline) {
-    Set-Content -LiteralPath $BaselinePath -Value $entries -Encoding UTF8
+    # WriteAllLines with an explicit BOM-less UTF8Encoding, not Set-Content -Encoding UTF8.
+    # PowerShell 5.1's UTF8 means UTF8-with-BOM, and those three bytes land on the FIRST entry.
+    # Every later read then sees a first line that matches nothing, so one real violation silently
+    # reports as new forever. The same BOM trap is documented for the Discord webhook in CLAUDE.md.
+    [IO.File]::WriteAllLines($BaselinePath, $entries, [Text.UTF8Encoding]::new($false))
     Write-Host ("doc-lint: wrote " + $entries.Count + " entries to " + (Split-Path $BaselinePath -Leaf))
     exit 0
 }
 
 $baseline = @()
 if (Test-Path $BaselinePath) {
-    $baseline = @(Get-Content -LiteralPath $BaselinePath | Where-Object { $_.Trim().Length -gt 0 })
+    # Strip a BOM on read as well as refusing to write one: a baseline edited by hand, or by a
+    # tool that is less careful, must not fail closed on an invisible character.
+    $baseline = @(Get-Content -LiteralPath $BaselinePath |
+                  ForEach-Object { $_ -replace "^\uFEFF", "" } |
+                  Where-Object { $_.Trim().Length -gt 0 })
 }
 $baselineSet = @{}
 foreach ($b in $baseline) { $baselineSet[$b] = $true }
