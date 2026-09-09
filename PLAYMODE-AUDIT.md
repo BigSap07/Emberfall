@@ -40,7 +40,7 @@ Stated first because a findings list with silent gaps reads as a clean bill of h
 
 | # | Sev | Finding | Where | Screenshot |
 |---|-----|---------|-------|------------|
-| 1 | High | The hero power readout `POWER 1205` is drawn entirely underneath the opaque CHANGE BANNER button and is never visible; 2750px2 of its glyph box sits under `Hero/Formation`, both at full alpha and active in hierarchy | Hero Detail | `Tools/Screenshots/audit_HeroDetail.png` |
+| 1 | **FIXED 2026-09-09** | The hero power readout `POWER 1205` was drawn entirely underneath the opaque CHANGE BANNER button and was never visible - both were anchored to the panel's top-right corner at identical offsets, and the button was added second and drawn second. The readout now offsets itself by a shared `BannerButtonWidth` constant plus a gutter, so the two positions are dependent by construction rather than coincidentally apart. Verified in Play mode at 1600x900: power glyphs moved from x[638,763] to x[408,533] against an unmoved button at x[547,763] - **no intersection, 13px gap**, and 254px clear of the LEVEL readout. Neither element was hidden, disabled or resized | Hero Detail | `Tools/Screenshots/fix_power_BEFORE.png`, `Tools/Screenshots/fix_power_AFTER.png` |
 | 2 | Medium | The front enemy nameplate is occluded by the AUTO button - "Hollow Husk" renders as "Hollow Hus." with its HP bar running under the button; 144px2 of glyph box under `Auto` | Battle, stage 1-10 | `Tools/Screenshots/audit_Battle_ch1_10.png`, `Tools/Screenshots/screen_Battle.png` |
 | 3 | Low | Action label and cost line overlap inside all three action buttons: `SALVAGE`/`+4 SLAG` 356px2, `COMBINE`/`30 SLAG` 350px2, `REROLL`/`12 SLAG` 350px2. Roughly 2-3px of vertical glyph-box overlap; both lines stay legible | Forge | `Tools/Screenshots/audit_Forge.png` |
 | 4 | Low | `SALVAGE` and its cost overlap the tray graphic behind them, 293px2 and 211px2; both stay legible | Forge | `Tools/Screenshots/audit_Forge.png` |
@@ -132,7 +132,8 @@ captured individually at the same resolution. Text geometry was then measured on
   excluded - that content is clipped by a mask on purpose.
 - **Clean:** Main Menu, Profile, Formation, Heroes, Campaign, Summon, Relic Shop, Inventory,
   Events, Recital, Proving.
-- **Not clean:** Hero Detail (finding 1), Forge (findings 3 and 4), Battle (finding 2).
+- **Not clean:** Forge (findings 3 and 4), Battle (finding 2). Hero Detail was in this list and
+  is not any more - finding 1 is fixed and re-measured, see its row above.
 
 Three earlier versions of this measurement produced false findings that are not in the table above,
 recorded here so a re-run does not repeat them: counting `Overflow` text as clipped flagged the
