@@ -69,6 +69,11 @@ namespace Emberfall.DevHarness
             PrintSampleBattle(content);
             CheckStageWinnability(content);
             CheckPinnedFiveBodyCurve(content);
+            // Opt-in. The derivation is a tuning instrument that costs tens of thousands of
+            // battles; the thing that GUARDS the definition afterwards is cheap and always runs.
+            // Set EMBERFALL_DERIVE=1 to re-derive.
+            if (Environment.GetEnvironmentVariable("EMBERFALL_DERIVE") == "1")
+                ReportRecommendedPowerDerivation(content);
             CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
             RunCampaignBalancePass(content);
@@ -8640,6 +8645,185 @@ namespace Emberfall.DevHarness
         /// That is the median player, not the Forge grinder: Gilded and Radiant cannot drop at all
         /// (ArmorInfo.MaxDropTemper) and are deliberately not modelled.
         /// </summary>
+        // ==================================================== recommendedPower is DERIVED, not authored
+        //
+        // THE DEFINITION, and the whole point of this section:
+        //
+        //   recommendedPower is the power at which a geared five-body line clears the stage's
+        //   CEILING battle about 85% of the time. Chapter finales are authored to be the hardest
+        //   stage in their chapter, so theirs is derived at about 65% instead.
+        //
+        // It is a FUNCTION OF THE CONTENT, not a second number maintained beside it. Change a
+        // roster and recommendedPower changes with it; that is not drift, that is the definition
+        // holding. What used to happen instead was that the two were authored independently, so a
+        // stage could be re-tuned without its recommendedPower moving and nothing would notice -
+        // and since the whole balance table is measured against recommendedPower, a stale one
+        // silently re-scales every number reported about that stage.
+        //
+        // The chapter 2 ratio slope the economy pass reports is an OUTPUT of this, not a separate
+        // defect: if recommendedPower is what the content actually demands, then the gap between it
+        // and what a simulated player brings is a statement about pacing, not about tuning.
+        private const float CeilTargetOrdinary = 0.85f;
+        private const float CeilTargetFinale = 0.65f;
+
+        /// <summary>The last stage of its own chapter, found by index rather than assumed to be 12,
+        /// so a chapter of a different length still resolves its own finale.</summary>
+        private static bool IsChapterFinale(ContentDatabase db, StageDef stage)
+        {
+            int highest = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+                if (db.AllStages[i].ChapterId == stage.ChapterId && db.AllStages[i].Index > highest)
+                    highest = db.AllStages[i].Index;
+            return stage.Index == highest;
+        }
+
+        private static float TargetCeilRate(ContentDatabase db, StageDef stage)
+        {
+            return IsChapterFinale(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
+        }
+
+        /// <summary>Win rate at the stage's LAST battle for a geared line levelled to one candidate
+        /// power. The single measurement the derivation searches over.</summary>
+        private static float CeilRateAtPower(ContentDatabase db, StageDef stage, int power,
+                                             int samples, int seedBase)
+        {
+            GameSession session = BuildPinnedLineAt(db, stage, true, power);
+            StageDef ceil = CampaignWaveGenerator.BuildBattle(
+                stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+            int wins = 0;
+            for (int i = 0; i < samples; i++)
+                if (CombatSimulation.Run(session.BuildBattleRequest(ceil, seedBase + i)).Victory) wins++;
+            return wins / (float)samples;
+        }
+
+        /// <summary>Highest power this line can reach at all - every hero at HeroLevelCap wearing the
+        /// stage's gear. The binary search cannot look above this, and a stage whose target rate is
+        /// unreachable here is reported rather than silently pinned to the ceiling of the search.</summary>
+        private static int MaxAttainablePower(ContentDatabase db, StageDef stage)
+        {
+            GameSession session = BuildPinnedLineAt(db, stage, true, int.MaxValue);
+            return session.Profile.EffectiveTeamPower(db);
+        }
+
+        /// <summary>
+        /// LOWEST power this line can have: five level-1 heroes already wearing the stage's gear.
+        ///
+        /// This is the real floor of the search and it is not small - a geared level-1 line is worth
+        /// around 7400. Searching from an arbitrary low number instead reports that number back for
+        /// every stage a level-1 line already beats, which is not a power at all, it is the bottom of
+        /// the search saying "this stage never demanded anything". Those stages are FLOOR-PINNED in
+        /// exactly the sense CheckPinnedFiveBodyCurve already uses the word, and are labelled so
+        /// rather than being handed a fabricated number.
+        /// </summary>
+        private static int MinAttainablePower(ContentDatabase db, StageDef stage)
+        {
+            GameSession session = BuildPinnedLineAt(db, stage, true, 0);
+            return session.Profile.EffectiveTeamPower(db);
+        }
+
+        /// <summary>
+        /// Binary search for the lowest power whose ceiling win rate reaches the stage's target.
+        ///
+        /// Win rate is monotone in power - more level is never worse - so bisection is sound. The
+        /// search runs at ProbeSamples for speed and the caller re-measures the winner at
+        /// ReportSamples, because a 40-sample read is not precise enough to publish.
+        /// </summary>
+        /// <summary>Samples behind one step of the search. Higher than ProbeSamples on purpose: a
+        /// 40-sample read carries several points of noise, and the search is thresholding on 85%, so
+        /// at 40 the bisection repeatedly accepted a power whose real rate was 70-80%.</summary>
+        private const int DeriveSamples = ReportSamples;
+
+        private static int DeriveRecommendedPower(ContentDatabase db, StageDef stage,
+                                                  out bool reachable, out bool pinned)
+        {
+            float target = TargetCeilRate(db, stage);
+            int seed = 7700000 + stage.GlobalIndex * 613;
+
+            int hi = MaxAttainablePower(db, stage);
+            int lo = MinAttainablePower(db, stage);
+            // Kept separate from lo, which the bisection below mutates. The refinement needs the
+            // line's REAL minimum as its floor - using the mutated lo makes the step-down branch
+            // dead code, because after bisection lo sits one tolerance below hi and the first step
+            // down trips the guard immediately. That is why several stages published a ceiling
+            // well above their own target.
+            int floorPower = lo;
+            pinned = false;
+
+            reachable = CeilRateAtPower(db, stage, hi, DeriveSamples, seed) >= target;
+            if (!reachable) return hi;
+
+            // A level-1 geared line already clears it: the stage asks for nothing, so there is no
+            // power to derive. Report the line's own minimum and say it is pinned.
+            if (CeilRateAtPower(db, stage, lo, DeriveSamples, seed + 11) >= target)
+            {
+                pinned = true;
+                return lo;
+            }
+
+            while (hi - lo > Math.Max(50, lo / 200))
+            {
+                int mid = lo + (hi - lo) / 2;
+                if (CeilRateAtPower(db, stage, mid, DeriveSamples, seed + 29) >= target) hi = mid;
+                else lo = mid;
+            }
+
+            // No post-hoc refinement. An earlier version walked the result up and down against
+            // fresh samples until a reading landed in band, which is a random walk over a noisy
+            // measurement: it exits on whichever sample happens to fall inside first, and it drove
+            // 1-12 to 56.5% against a 65% target. The bisection above already runs at report
+            // precision against a FIXED seed, so it is a clean monotone step search - the smallest
+            // power whose ceiling clears the target on identical battles.
+            //
+            // What it cannot do is hit the target exactly, because power is quantised by hero
+            // level and one level can swing a ceiling ten points. A stage that overshoots badly is
+            // reporting that no power sits at its target - which is roster information, not a
+            // search failure, and is left visible rather than smoothed away here.
+            return hi;
+        }
+
+        /// <summary>
+        /// The derivation table. Reports what each stage's recommendedPower WOULD be if it were
+        /// derived from the curve as it stands, beside what campaign.json currently authors.
+        /// </summary>
+        private static void ReportRecommendedPowerDerivation(ContentDatabase db)
+        {
+            Line("");
+            Line("RECOMMENDED POWER, DERIVED FROM THE CURVE");
+            Line("  recommendedPower is the power at which a geared five-body line clears the stage's");
+            Line("  CEILING battle about " + Pct(CeilTargetOrdinary) + " of the time, or "
+                 + Pct(CeilTargetFinale) + " for a chapter finale. Derived by binary search, then");
+            Line("  re-measured at " + ReportSamples + " samples. 'authored' is what campaign.json says today.");
+            Line("");
+            Line("  stage  name                       authored  derived    delta   CEIL@derived  FLOOR@derived");
+
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                bool reachable, pinned;
+                int derived = DeriveRecommendedPower(db, stage, out reachable, out pinned);
+
+                GameSession at = BuildPinnedLineAt(db, stage, true, derived);
+                int seed = 7800000 + stage.GlobalIndex * 97;
+                float ceil = CurveRate(at, stage, Math.Max(1, stage.WaveCount),
+                                       Math.Max(1, stage.BattleCount), ReportSamples, seed,
+                                       _gearedCurveOrdinals);
+                float floor = CurveRate(at, stage, 1, 1, ReportSamples, seed + 13, _gearedCurveOrdinals);
+                int delta = derived - stage.RecommendedPower;
+
+                Line("  " + stage.DisplayCode.PadRight(6)
+                     + " " + Trim(stage.Name, 26).PadRight(26)
+                     + stage.RecommendedPower.ToString().PadLeft(8)
+                     + derived.ToString().PadLeft(9)
+                     + ((delta >= 0 ? "+" : "") + delta).PadLeft(9)
+                     + Pct(ceil).PadLeft(14)
+                     + Pct(floor).PadLeft(15)
+                     + (IsChapterFinale(db, stage) ? "   FINALE" : "")
+                     + (pinned ? "   FLOOR-PINNED (a level-1 geared line already clears it)" : "")
+                     + (reachable ? "" : "   UNREACHABLE at max level"));
+            }
+            Line("");
+        }
+
         private static void CheckArmoredCurveDelta(ContentDatabase db)
         {
             Line("");
@@ -8664,6 +8848,8 @@ namespace Emberfall.DevHarness
             int softFloors = 0;
             string firstBlocked = null;
             float loCeil = 2f, hiCeil = -1f;
+            int outOfBand = 0;
+            string firstOutOfBand = null;
 
             for (int s = 0; s < db.AllStages.Count; s++)
             {
@@ -8686,6 +8872,21 @@ namespace Emberfall.DevHarness
                 if (floor < 0.9f) softFloors++;
                 if (ceil < loCeil) loCeil = ceil;
                 if (ceil > hiCeil) hiCeil = ceil;
+
+                // Band check: skip floor-pinned stages (trivially 100%) and verify the rest
+                if (ceil < 0.995f)
+                {
+                    bool finale = IsChapterFinale(db, stage);
+                    float bandLo = finale ? 0.55f : 0.78f;
+                    float bandHi = finale ? 0.72f : 0.92f;
+                    if (ceil < bandLo || ceil > bandHi)
+                    {
+                        outOfBand++;
+                        if (firstOutOfBand == null)
+                            firstOutOfBand = stage.DisplayCode + " CEIL " + Pct(ceil)
+                                + " outside [" + Pct(bandLo) + ", " + Pct(bandHi) + "]";
+                    }
+                }
 
                 Line("  " + stage.DisplayCode.PadRight(6)
                      + " " + Trim(stage.Name, 26).PadRight(26)
@@ -8711,6 +8912,11 @@ namespace Emberfall.DevHarness
             Check(hiCeil - loCeil > 0.05f,
                   "the geared curve still discriminates between stages at its ceiling (spread "
                   + Pct(loCeil) + " to " + Pct(hiCeil) + ")");
+
+            Check(outOfBand == 0,
+                  "every non-pinned stage's CEIL sits inside its target band"
+                  + " (ordinary [78%, 92%], finale [55%, 72%])"
+                  + (firstOutOfBand == null ? "" : " - first miss: " + firstOutOfBand));
             Line("");
         }
 
@@ -8732,6 +8938,22 @@ namespace Emberfall.DevHarness
         /// to measure is now the caller's job and cannot be defaulted.
         /// </summary>
         private static GameSession BuildPinnedLine(ContentDatabase db, StageDef stage, bool armored)
+        {
+            return BuildPinnedLineAt(db, stage, armored, stage.RecommendedPower);
+        }
+
+        /// <summary>
+        /// The same line, levelled to an ARBITRARY power rather than to the stage's authored
+        /// recommendedPower. This is what lets recommendedPower be DERIVED from the curve instead
+        /// of authored beside it: search over the target, measure the ceiling, keep the power where
+        /// the ceiling reads its intended rate.
+        ///
+        /// Gear is unaffected by the target - EquipInstrumentArmor rolls off the stage's depth, not
+        /// its power - so the only thing that moves between candidates is hero level, which is
+        /// exactly the thing a player actually controls.
+        /// </summary>
+        private static GameSession BuildPinnedLineAt(ContentDatabase db, StageDef stage, bool armored,
+                                                     int targetPower)
         {
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             profile.PlayerLevel = 60;
@@ -8772,7 +8994,7 @@ namespace Emberfall.DevHarness
             while (guard < 20000)
             {
                 int power = armored ? profile.EffectiveTeamPower(db) : profile.TeamPower();
-                if (power >= stage.RecommendedPower) break;
+                if (power >= targetPower) break;
                 HeroInstance cheapest = null;
                 int cheapestCost = int.MaxValue;
                 for (int i = 0; i < team.Count; i++)
