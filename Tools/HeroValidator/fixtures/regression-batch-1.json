@@ -1,5 +1,5 @@
 {
-  "_comment": "Regression fixture for validate_heroes.py. Derived from heroes.json but translated to the ChatGPT-generator schema (stars, stats block, basicAttack/activeSkill/passive1/passive2/talents). Covers all seven validation checks.",
+  "_comment": "Regression fixture for validate_heroes.py. Derived from heroes.json but translated to the ChatGPT-generator schema (stars, stats block, basicAttack/activeSkill/passive1/passive2/talents). Covers all validation checks.",
   "heroes": [
     {
       "_expect": "PASS — valid stars-3 hero (adapted from orrin_kaal)",
@@ -78,7 +78,7 @@
     },
 
     {
-      "_expect": "FAIL — stats block contains unknown keys: mana, magicResist (check 1)",
+      "_expect": "FAIL — stats block contains unknown keys: mana, magicResist (check_stats)",
       "id": "hero_bad_stat_keys",
       "name": "Bad Stat Hero",
       "role": "Striker",
@@ -87,7 +87,8 @@
       "stats": {
         "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
         "mana": 50,
-        "magicResist": 0.15
+        "magicResist": 0.15,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": { "sigil": null },
       "basicAttack": {
@@ -100,14 +101,15 @@
     },
 
     {
-      "_expect": "FAIL — 'Burn' used as an effect kind instead of ApplyStatus+status (check 2)",
+      "_expect": "FAIL — 'Burn' used as an effect kind instead of ApplyStatus+status (check_effect_kinds)",
       "id": "hero_status_as_kind",
       "name": "Status As Kind Hero",
       "role": "Breaker",
       "aspect": "Ember",
       "stars": 1,
       "stats": {
-        "hp": 1400, "attack": 180, "defense": 55, "speed": 95
+        "hp": 1400, "attack": 180, "defense": 55, "speed": 95,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": { "sigil": null },
       "basicAttack": {
@@ -123,14 +125,15 @@
     },
 
     {
-      "_expect": "FAIL — ApplyStatus with an invalid status value 'Poison' (check 3)",
+      "_expect": "FAIL — ApplyStatus with an invalid status value 'Poison' (check_status_kinds)",
       "id": "hero_bad_status",
       "name": "Bad Status Hero",
       "role": "Warden",
       "aspect": "Tide",
       "stars": 1,
       "stats": {
-        "hp": 1700, "attack": 148, "defense": 82, "speed": 108
+        "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": { "sigil": null },
       "basicAttack": {
@@ -146,14 +149,15 @@
     },
 
     {
-      "_expect": "WARN — stars 2 but activeSkill is set (check 4 star-shape)",
+      "_expect": "FAIL — stars 2 but activeSkill is set (check_star_shape, now severity fail)",
       "id": "hero_wrong_star_shape",
       "name": "Wrong Shape Hero",
       "role": "Striker",
       "aspect": "Gale",
       "stars": 2,
       "stats": {
-        "hp": 1500, "attack": 200, "defense": 65, "speed": 115
+        "hp": 1500, "attack": 200, "defense": 65, "speed": 115,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": { "sigil": null },
       "basicAttack": {
@@ -171,16 +175,17 @@
     },
 
     {
-      "_expect": "FAIL — rarity field present (check 5)",
+      "_expect": "FAIL — rarity field present (check_rarity)",
       "id": "hero_has_rarity",
       "name": "Rarity Hero",
       "role": "Stalker",
       "aspect": "Umbra",
       "stars": 3,
-      "rarity": "Epic",
       "stats": {
-        "hp": 1420, "attack": 227, "defense": 58, "speed": 126
+        "hp": 1420, "attack": 227, "defense": 58, "speed": 126,
+        "growth": 0.11, "startEnergy": 0
       },
+      "rarity": "Epic",
       "visual": { "sigil": null },
       "basicAttack": {
         "effects": [ { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.0 } ]
@@ -200,14 +205,15 @@
     },
 
     {
-      "_expect": "FAIL — visual.sigil is non-null (check 6)",
+      "_expect": "FAIL — visual.sigil is non-null (check_sigil)",
       "id": "hero_sigil_set",
       "name": "Sigil Hero",
       "role": "Bulwark",
       "aspect": "Ember",
       "stars": 1,
       "stats": {
-        "hp": 2000, "attack": 110, "defense": 120, "speed": 85
+        "hp": 2000, "attack": 110, "defense": 120, "speed": 85,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": {
         "primary": "8A6BFF", "sigil": 2
@@ -222,14 +228,15 @@
     },
 
     {
-      "_expect": "INFO — stacks property on an effect (check 7)",
+      "_expect": "INFO — stacks property on an effect (check_stacks)",
       "id": "hero_stacks_property",
       "name": "Stacks Hero",
       "role": "Breaker",
       "aspect": "Verdant",
       "stars": 1,
       "stats": {
-        "hp": 1600, "attack": 170, "defense": 65, "speed": 100
+        "hp": 1600, "attack": 170, "defense": 65, "speed": 100,
+        "growth": 0.11, "startEnergy": 0
       },
       "visual": { "sigil": null },
       "basicAttack": {
@@ -237,6 +244,184 @@
           { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "DefenseDown",
             "magnitude": 0.10, "duration": 2, "stacks": 3 }
         ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — missing required fields: id, name, stars, visual, basicAttack (check_required_fields)",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "growth": 0.11, "startEnergy": 0
+      }
+    },
+
+    {
+      "_expect": "FAIL — missing required stats growth and startEnergy (check_required_fields)",
+      "id": "hero_missing_growth",
+      "name": "Missing Growth Hero",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — aspect 'Fire' is not a valid Aspect (check_aspect)",
+      "id": "hero_bad_aspect",
+      "name": "Bad Aspect Hero",
+      "role": "Striker",
+      "aspect": "Fire",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — role 'Mage' is not a valid HeroRole (check_role)",
+      "id": "hero_bad_role",
+      "name": "Bad Role Hero",
+      "role": "Mage",
+      "aspect": "Ember",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — target 'Enemy' is not a valid TargetMode (check_target_modes)",
+      "id": "hero_bad_target",
+      "name": "Bad Target Hero",
+      "role": "Striker",
+      "aspect": "Gale",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "Enemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — stats.hp is zero, stats.speed is negative (check_stat_values)",
+      "id": "hero_bad_stat_values",
+      "name": "Bad Stat Values Hero",
+      "role": "Bulwark",
+      "aspect": "Tide",
+      "stars": 1,
+      "stats": {
+        "hp": 0, "attack": 100, "defense": 80, "speed": -5,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "WARN — critChance above 1.0 (check_stat_values)",
+      "id": "hero_high_crit",
+      "name": "High Crit Hero",
+      "role": "Stalker",
+      "aspect": "Umbra",
+      "stars": 1,
+      "stats": {
+        "hp": 1200, "attack": 220, "defense": 50, "speed": 130,
+        "critChance": 1.5, "critDamage": 2.0,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — duplicate id, first of pair (duplicate id check in main)",
+      "id": "hero_duplicate_id",
+      "name": "Duplicate A",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stars": 1,
+      "stats": {
+        "hp": 1500, "attack": 200, "defense": 60, "speed": 110,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "activeSkill": null,
+      "passive1": null,
+      "passive2": null,
+      "talents": [null, null, null]
+    },
+
+    {
+      "_expect": "FAIL — duplicate id, second of pair (duplicate id check in main)",
+      "id": "hero_duplicate_id",
+      "name": "Duplicate B",
+      "role": "Breaker",
+      "aspect": "Tide",
+      "stars": 1,
+      "stats": {
+        "hp": 1400, "attack": 180, "defense": 55, "speed": 105,
+        "growth": 0.11, "startEnergy": 0
+      },
+      "visual": { "sigil": null },
+      "basicAttack": {
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
       },
       "activeSkill": null,
       "passive1": null,

@@ -35,6 +35,7 @@ namespace Emberfall.DevHarness
             if (content == null) return 1;
 
             CheckContent(content);
+            CheckEnumParity(content);
             CheckAspectDirection(content);
             CheckAspectEmberVerdant(content);
             CheckAspectTideUmbra(content);
@@ -147,7 +148,8 @@ namespace Emberfall.DevHarness
             Line("CONTENT");
             for (int i = 0; i < db.Warnings.Count; i++) Line("  warning: " + db.Warnings[i]);
             Check(db.Warnings.Count == 0, "content parses with no warnings");
-            Check(db.Heroes.Count == 11, "11 heroes loaded (got " + db.Heroes.Count + ")");
+            Check(db.Heroes.Count >= db.Balance.MaxTeamSize,
+                  "at least MaxTeamSize heroes loaded (" + db.Heroes.Count + " >= " + db.Balance.MaxTeamSize + ")");
             Check(db.Enemies.Count >= 6, "enemies loaded (got " + db.Enemies.Count + ")");
             Check(db.AllStages.Count >= 10, "campaign stages loaded (got " + db.AllStages.Count + ")");
             Check(db.StartingHeroes.Count == 3, "3 starting heroes (got " + db.StartingHeroes.Count + ")");
@@ -161,35 +163,144 @@ namespace Emberfall.DevHarness
             }
             Check(everyRoleCovered, "every combat role has a hero");
 
-            // A basic and an active are structural - a hero without them cannot take a turn. A
-            // passive is not, and stopped being mandatory when DESIGN-ASPECTS section 3 cut Kalyx's
-            // Kindling as a percentage stat stick without replacing it: his Ember identity is now
-            // the Burn-stacking aspect rule, which lives in the simulation rather than on his sheet.
-            // Passive-less heroes are listed rather than failed, so the roster stays visible and a
-            // third one cannot appear unnoticed. Kael is the second: his passives and talents are
-            // explicitly out of scope for the animation-pipeline pass that first added him (they
-            // depend on a Ruin stacking resource and a talent system, neither of which exist yet),
-            // so he ships passive-less like Kalyx until that follow-up task builds them.
-            bool abilitiesOk = true;
-            int passiveless = 0;
+            // ---- per-tier reporting ----
+            int[] tierCounts = new int[6];
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                int s = db.Heroes[i].Stars;
+                if (s >= 1 && s <= 5) tierCounts[s]++;
+            }
+            Line("  roster shape (" + db.Heroes.Count + " heroes):");
+            for (int t = 1; t <= 5; t++)
+                Line("    " + t + "-star: " + tierCounts[t]);
+
+            Line("  per aspect:");
+            foreach (Aspect asp in Enum.GetValues(typeof(Aspect)))
+            {
+                int count = 0;
+                for (int i = 0; i < db.Heroes.Count; i++)
+                    if (db.Heroes[i].Aspect == asp) count++;
+                Line("    " + asp + ": " + count);
+            }
+
+            Line("  per role:");
+            foreach (HeroRole role in Enum.GetValues(typeof(HeroRole)))
+            {
+                int count = 0;
+                for (int i = 0; i < db.Heroes.Count; i++)
+                    if (db.Heroes[i].Role == role) count++;
+                Line("    " + role + ": " + count);
+            }
+
+            // ---- star contract: basicAttack and active ----
+            // BasicAttack is always present (engine creates DefaultBasicAttack if null).
+            // Active is required at 3 stars and above, must be absent below 3.
+            bool kitOk = true;
             for (int i = 0; i < db.Heroes.Count; i++)
             {
                 HeroDef h = db.Heroes[i];
-                if (h.BasicAttack == null || h.Active == null)
+                if (h.BasicAttack == null)
                 {
-                    abilitiesOk = false;
-                    Line("  hero " + h.Id + " is missing a basic attack or an active");
+                    kitOk = false;
+                    Line("  " + h.Id + " (star " + h.Stars + "): missing basic attack");
                 }
+                if (h.Stars >= 3 && h.Active == null)
+                {
+                    kitOk = false;
+                    Line("  " + h.Id + " (star " + h.Stars + "): star " + h.Stars + " requires an active");
+                }
+                if (h.Stars < 3 && h.Active != null)
+                {
+                    kitOk = false;
+                    Line("  " + h.Id + " (star " + h.Stars + "): star " + h.Stars + " should not have an active");
+                }
+            }
+            Check(kitOk, "every hero's active matches its star contract (active at 3+, absent below)");
+
+            // ---- star contract: passive ----
+            // Passive (= passive1 in the import format) is required at 2 stars and above.
+            // passive2 and talents exist in the import schema but not in the engine model
+            // (HeroDef has one Passive field), so they cannot be checked here.
+            // Reported rather than capped — the old "at most two" cap was written for 11 heroes.
+            int passiveless = 0;
+            int passiveViolations = 0;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
                 if (h.Passive == null)
                 {
                     passiveless++;
-                    Line("  hero " + h.Id + " has no passive (identity comes from its Aspect rule)");
+                    if (h.Stars >= 2)
+                    {
+                        passiveViolations++;
+                        Line("  " + h.Id + " (star " + h.Stars + "): star " + h.Stars + " requires a passive");
+                    }
                 }
             }
-            Check(abilitiesOk, "every hero has a basic attack and an active");
-            Check(passiveless <= 2,
-                  "at most two heroes rely on their Aspect rule instead of a passive (got " + passiveless + ")");
+            Line("  " + passiveless + " hero(es) have no passive"
+                 + (passiveViolations > 0
+                    ? " (" + passiveViolations + " violate the star contract: passive required at 2+)"
+                    : ""));
             Line("");
+        }
+
+        /// <summary>Asserts that the enum sets hardcoded in Tools/HeroValidator/validate_heroes.py
+        /// match the actual C# enums in Enums.cs. A member added to one side but not the other
+        /// is caught here rather than discovered on the next import.</summary>
+        private static void CheckEnumParity(ContentDatabase db)
+        {
+            Line("ENUM PARITY (C# Enums.cs vs validate_heroes.py hardcoded sets)");
+            bool ok = true;
+            ok &= CheckEnumSet("Aspect",
+                new string[] { "Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen" },
+                Enum.GetNames(typeof(Aspect)));
+            ok &= CheckEnumSet("HeroRole",
+                new string[] { "Bulwark", "Striker", "Breaker", "Mender", "Warden", "Stalker", "Ranger" },
+                Enum.GetNames(typeof(HeroRole)));
+            ok &= CheckEnumSet("TargetMode",
+                new string[] { "Self", "LowestHpEnemy", "HighestHpEnemy", "HighestAttackEnemy",
+                               "FrontEnemy", "RandomEnemy", "AllEnemies", "LowestHpAlly",
+                               "AllAllies", "RandomAlly", "LastAttacker", "LastTarget" },
+                Enum.GetNames(typeof(TargetMode)));
+            ok &= CheckEnumSet("EffectKind",
+                new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
+                               "EnergyGain", "Dispel", "SwapPositions", "GainResolve" },
+                Enum.GetNames(typeof(EffectKind)));
+            ok &= CheckEnumSet("StatusKind",
+                new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
+                               "Burn", "Regen", "Shield", "Taunt", "Focus", "Slow",
+                               "Silence", "Stun", "Stealth", "Resolve" },
+                Enum.GetNames(typeof(StatusKind)));
+            Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
+            Line("");
+        }
+
+        private static bool CheckEnumSet(string label, string[] expected, string[] actual)
+        {
+            bool ok = true;
+            for (int i = 0; i < actual.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < expected.Length; j++)
+                    if (actual[i] == expected[j]) { found = true; break; }
+                if (!found)
+                {
+                    Line("  " + label + ": C# has '" + actual[i] + "' but validate_heroes.py does not");
+                    ok = false;
+                }
+            }
+            for (int i = 0; i < expected.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < actual.Length; j++)
+                    if (expected[i] == actual[j]) { found = true; break; }
+                if (!found)
+                {
+                    Line("  " + label + ": validate_heroes.py has '" + expected[i] + "' but C# does not");
+                    ok = false;
+                }
+            }
+            return ok;
         }
 
         /// <summary>Pure data check against AspectChart - no battle needed. Ember>Verdant>Tide>Gale>Ember, Lumen&lt;-&gt;Umbra.</summary>

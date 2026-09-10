@@ -123,7 +123,23 @@ late), and a battle background loader that did not exist in the plan at all. See
 the full account. None of this changes what shipped structurally for task 8 or the content shipped
 for task 10; it is scoped to presentation.
 
-- **Recital Guardians and Coda: on `feat/recital-guardians-and-currency`.** Two additions to The
+- **Star contract (the authoritative kit rule).** Heroes have 1 to 5 stars. Kit completeness
+  varies by tier:
+
+  | Stars | Kit |
+  |-------|-----|
+  | 1 | basicAttack only. No active, no passive, no talents. |
+  | 2 | Adds passive1. No active, no talents. |
+  | 3 | Adds activeSkill. passive1 required. No passive2, no talents. |
+  | 4 | activeSkill and passive1 required. passive2 optional. No talents. |
+  | 5 | Full kit: activeSkill, passive1, passive2, all three talents. |
+
+  `validate_heroes.py` enforces this at import time (severity fail). The DevHarness enforces what
+  the engine model can see (basicAttack always present, active at 3+, passive at 2+; passive2 and
+  talents are import-format fields not yet in `HeroDef`). Both checks are on
+  `chore/import-validation`.
+
+- **Recital Guardians and Coda (merged).** Two additions to The
   Deep Recital.
   - **Guardians** — every 10th floor (`recitalGuardianInterval` in `balance.json`) is a
     boss-plus-escorts encounter, the same shape the campaign finales use. One enemy at a raised
@@ -1523,7 +1539,7 @@ renumbering, and nobody has gone back to update the harness's own prose.
     the daily repeat cap already proves), save round-trip, and every Aspect having at least one
     enemy template to draw from.
 
-    **Guardians and Coda** added atop this base (`feat/recital-guardians-and-currency`):
+    **Guardians and Coda** added atop this base:
     - **Guardians**: every 10th floor (`recitalGuardianInterval`) is a boss-plus-escorts encounter.
       `RecitalGenerator.IsGuardian` and `BuildFloor` express the shape.
     - **Coda**: the Recital's own isolated currency, earned on every clear with a larger payout on
