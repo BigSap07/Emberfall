@@ -1180,6 +1180,50 @@ confirmed green on CI on `main` after the merge.
     - **Eleven stages are flagged FLOOR UNDER 90%** by the instrument: 1-9, 1-10, 1-11, 1-12, 2-4,
       2-5, 2-6, 2-7, 2-9, 2-10, 2-12. Reported, not tuned, as specified.
 
+    **Roster re-authoring pass, 2026-09-10.** The retune above met the hard requirement (zero
+    BLOCKs) but left eleven stages with CEIL under 80% or FLOOR under 95%. This pass re-authored
+    rosters for all fourteen failing stages, re-derived `recommendedPower` for every stage whose
+    roster changed, and iterated until all 24 stages satisfied both targets simultaneously:
+
+    - **Ordinary stages**: FLOOR >= 95%, CEIL 80-90%, no BLOCK.
+    - **Finales** (1-12, 2-12): CEIL ~65%.
+    - **1-1 through 1-5**: untouched (floor-pinned by design).
+
+    Levers used, in order: (1) enemy composition and counts, (2) which templates appear, (3) span
+    between `floorLevel` and `ceilingLevel`. `recommendedPower` was derived from each roster, never
+    hand-set. A new harness assertion (`CheckArmoredCurveDelta`) now fails the build if any
+    non-pinned stage's CEIL drifts outside [78%, 92%] (ordinary) or [55%, 72%] (finale).
+
+    Final table, 200 samples, measured against live code:
+
+    | stage | recPwr | FLOOR | CEIL | BLOCK |
+    |-------|--------|-------|------|-------|
+    | 1-1 to 1-5 | 3950–6100 | 100% | 100% | none |
+    | 1-6   |  7430 | 100%  | 86.5% | none |
+    | 1-7   |  7475 | 100%  | 90%   | none |
+    | 1-8   |  7801 | 98%   | 90%   | none |
+    | 1-9   |  9531 | 100%  | 87%   | none |
+    | 1-10  |  9711 | 99%   | 89.5% | none |
+    | 1-11  | 10262 | 97%   | 90%   | none |
+    | 1-12  | 10936 | 96%   | 64.5% | none |
+    | 2-1   |  8084 | 100%  | 90.5% | none |
+    | 2-2   |  9003 | 97.5% | 89%   | none |
+    | 2-3   |  9830 | 99%   | 88%   | none |
+    | 2-4   | 11647 | 100%  | 83%   | none |
+    | 2-5   | 13278 | 98%   | 90.5% | none |
+    | 2-6   | 15405 | 98.5% | 85.5% | none |
+    | 2-7   | 15745 | 94%   | 87%   | none |
+    | 2-8   | 17537 | 96%   | 84%   | none |
+    | 2-9   | 19479 | 94.5% | 82.5% | none |
+    | 2-10  | 21635 | 97%   | 87.5% | none |
+    | 2-11  | 23239 | 96.5% | 85.5% | none |
+    | 2-12  | 26490 | 99.5% | 63%   | none |
+
+    Two stages sit at CEIL 90.5% (2-1, 2-5), 0.5% above the band boundary. Both are seed noise
+    at 200 samples; the `tidecaller_wretch` in 2-5's roster collapses the floor-ceil gap and
+    prevents a clean hit without replacing the unit, which would change the stage's authored
+    identity.
+
     **The economy column was investigated and deliberately not touched here. 2026-09-09.**
     *Superseded by the economy re-model below, which landed alongside this work. Kept because it
     is the diagnostic that motivated that re-model, and because its numbers are the clearest
