@@ -59,6 +59,7 @@ namespace Emberfall.UI.Screens
         private Image _hexEdge;
         private Image _hexFill;
         private Text _highestValue;
+        private Text _codaValue;
 
         private RectTransform _echoMeter;
         private Text _echoCountdown;
@@ -140,7 +141,21 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_highestValue.rectTransform,
                                  UITheme.Space12 + 28f + UITheme.Space8, 0f, UITheme.Space12, 0f);
 
-            inner += 40f + UITheme.Space16;
+            inner += 40f + UITheme.Space8;
+
+            // ---- Coda balance
+            RectTransform codaRow = UIBuilder.Node("Coda", banner);
+            UIBuilder.Box(codaRow, 0f, -inner, 260f, 32f, new Vector2(0.5f, 1f));
+
+            Image codaIcon = UIBuilder.Img("CodaIcon", codaRow, TextureLab.GemIcon(64), UITheme.Coda);
+            UIBuilder.Box(codaIcon.rectTransform, UITheme.Space12, 0f, 24f, 24f, new Vector2(0f, 0.5f));
+
+            _codaValue = UIBuilder.Label("CodaValue", codaRow, "0", UITheme.FontSmall,
+                                          UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(_codaValue.rectTransform,
+                                 UITheme.Space12 + 24f + UITheme.Space8, 0f, UITheme.Space12, 0f);
+
+            inner += 32f + UITheme.Space16;
 
             // ---- the echo meter
             RectTransform echoRow = UIBuilder.Node("Echoes", banner);
@@ -236,6 +251,8 @@ namespace Emberfall.UI.Screens
             _highestValue.text = App.Session.Profile.RecitalHighestFloor > 0
                 ? "BEST  " + App.Session.Profile.RecitalHighestFloor
                 : "NO RECORD YET";
+
+            _codaValue.text = "CODA  " + HudTopBar.Format(App.Session.Profile.Coda);
 
             RecitalEchoesStatus echoes = App.Session.PeekRecitalEchoes(now);
             RefreshEchoMeter(echoes);

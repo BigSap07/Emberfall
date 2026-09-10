@@ -149,6 +149,7 @@ namespace Emberfall.Core.Session
         public int Gold;
         public int Shards;
         public int RelicDust;
+        public int Coda;
 
         /// <summary>Non-empty only on a deep milestone that had an unowned relic left to grant -
         /// "something rarer" at depth, per spec. Empty on every other floor, including a deep
@@ -157,6 +158,7 @@ namespace Emberfall.Core.Session
 
         public bool IsMilestone;
         public bool IsDeepMilestone;
+        public bool IsGuardian;
     }
 
     /// <summary>
@@ -1421,6 +1423,7 @@ namespace Emberfall.Core.Session
             rewards.Shards = Balance.RecitalRewardShardsBase + Balance.RecitalRewardShardsPerFloor * floor;
             rewards.IsDeepMilestone = RecitalGenerator.IsDeepMilestone(Balance, floor);
             rewards.IsMilestone = RecitalGenerator.IsMilestone(Balance, floor) && !rewards.IsDeepMilestone;
+            rewards.IsGuardian = RecitalGenerator.IsGuardian(Balance, floor);
 
             if (rewards.IsDeepMilestone)
             {
@@ -1434,9 +1437,16 @@ namespace Emberfall.Core.Session
                 rewards.RelicDust = Balance.RecitalMilestoneDustPerTier * Math.Max(1, tier);
             }
 
+            // Coda: larger payout on Guardian floors, same isolated-purse pattern as Valor.
+            if (rewards.IsGuardian)
+                rewards.Coda = Balance.RecitalCodaGuardianBase + Balance.RecitalCodaGuardianPerFloor * floor;
+            else
+                rewards.Coda = Balance.RecitalCodaBase + Balance.RecitalCodaPerFloor * floor;
+
             Profile.Gold += rewards.Gold;
             Profile.Shards += rewards.Shards;
             Profile.RelicDust += rewards.RelicDust;
+            Profile.Coda += rewards.Coda;
 
             if (floor >= Profile.RecitalCurrentFloor)
             {

@@ -77,6 +77,13 @@ namespace Emberfall.UI
         /// survivable today because the currency cell is labelled and only one event carries a
         /// currency at a time; the fix is a colour field on EventDef, which is a content change.
         /// </summary>
+        /// <summary>
+        /// The Deep Recital's own currency. Warm amber-gold, distinct from Echo (violet, the
+        /// attempt gate) by hue, from Gold (the campaign currency) by saturation, and from
+        /// Warning (EAA640) by lightness. Coda is the reward, Echo is the cost.
+        /// </summary>
+        public static readonly Color Coda = Hex("D4A843");
+
         public static readonly Color EventToken = Hex("D6455E");
 
         public static readonly Color Success = Hex("5BC98C");

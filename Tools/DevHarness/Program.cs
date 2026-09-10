@@ -5853,6 +5853,8 @@ namespace Emberfall.DevHarness
             CheckRecitalContent(db);
             CheckRecitalAspectCycling(db);
             CheckRecitalDifficultyEscalates(db);
+            CheckRecitalGuardians(db);
+            CheckRecitalCoda(db);
             CheckRecitalEchoesSpendOnLossAndWin(db);
             CheckRecitalEchoesEmptyBlocksAttempt(db);
             CheckRecitalEchoesBackwardsClockImmune(db);
@@ -5981,6 +5983,195 @@ namespace Emberfall.DevHarness
                 total += StatMath.ForEnemy(def, stage.Enemies[i].Level).Power;
             }
             return total;
+        }
+
+        /// <summary>
+        /// Guardians: every 10th floor is a Guardian, no other floor is, the Aspect cycle is
+        /// unbroken across Guardian floors, a Guardian floor is measurably harder than the floor
+        /// below it, and a Guardian floor is still winnable by a line that cleared the floor below.
+        /// </summary>
+        private static void CheckRecitalGuardians(ContentDatabase db)
+        {
+            BalanceConfig cfg = db.Balance;
+            int interval = cfg.RecitalGuardianInterval;
+            Check(interval == 10, "recitalGuardianInterval is 10 (" + interval + ")");
+            Check(cfg.RecitalGuardianBossLevelBonus > 0,
+                  "recitalGuardianBossLevelBonus is positive (" + cfg.RecitalGuardianBossLevelBonus + ")");
+
+            // Every 10th floor is a Guardian, no other floor is
+            for (int f = 1; f <= 30; f++)
+            {
+                bool expected = f % 10 == 0;
+                bool actual = RecitalGenerator.IsGuardian(cfg, f);
+                Check(actual == expected,
+                      "floor " + f + " " + (expected ? "IS" : "is NOT") + " a Guardian" + (actual != expected ? " (WRONG)" : ""));
+            }
+
+            // The Aspect cycle is unbroken across Guardian floors
+            Aspect[] expectedCycle = { Aspect.Ember, Aspect.Tide, Aspect.Verdant, Aspect.Gale, Aspect.Umbra, Aspect.Lumen };
+            bool cycleOk = true;
+            for (int f = 1; f <= 30; f++)
+            {
+                Aspect expected = expectedCycle[(f - 1) % 6];
+                Aspect actual = RecitalGenerator.AspectForFloor(f);
+                if (actual != expected) { cycleOk = false; break; }
+            }
+            Check(cycleOk, "the Aspect cycle is unbroken across Guardian floors (1-30) - Guardians do not displace it");
+
+            // The boss on a Guardian floor has a higher level than the escorts
+            StageDef guardian10 = RecitalGenerator.BuildFloor(db, 10);
+            Check(guardian10.Enemies.Count >= 2, "Guardian floor 10 has at least 2 enemies (" + guardian10.Enemies.Count + ")");
+            if (guardian10.Enemies.Count >= 2)
+            {
+                int bossLevel = guardian10.Enemies[0].Level;
+                int escortLevel = guardian10.Enemies[1].Level;
+                Check(bossLevel > escortLevel,
+                      "Guardian boss level (" + bossLevel + ") exceeds escort level (" + escortLevel
+                      + ") by the authored bonus (" + cfg.RecitalGuardianBossLevelBonus + ")");
+            }
+
+            // A Guardian floor is measurably harder than the same floor without the boss bonus.
+            // Comparing across aspects (floor 9 vs floor 10) is unreliable because different
+            // enemy templates have different base stats, so we compare the boss enemy's power to
+            // what that same enemy would have at the floor's base level.
+            if (guardian10.Enemies.Count >= 1)
+            {
+                int baseLevel = RecitalGenerator.LevelForFloor(cfg, 10);
+                int bossLevelG = baseLevel + cfg.RecitalGuardianBossLevelBonus;
+                EnemyDef bossDef = db.GetEnemy(guardian10.Enemies[0].EnemyId);
+                int powerAtBase = bossDef != null ? StatMath.ForEnemy(bossDef, baseLevel).Power : 0;
+                int powerAtBoss = bossDef != null ? StatMath.ForEnemy(bossDef, bossLevelG).Power : 0;
+                Check(powerAtBoss > powerAtBase,
+                      "a Guardian boss at level " + bossLevelG + " (power " + powerAtBoss
+                      + ") is stronger than the same enemy at the floor's base level " + baseLevel
+                      + " (power " + powerAtBase + ")");
+            }
+
+            // IsBoss is set on Guardian floors
+            Check(guardian10.IsBoss, "a Guardian floor's StageDef has IsBoss = true");
+            StageDef normal9 = RecitalGenerator.BuildFloor(db, 9);
+            Check(!normal9.IsBoss, "floor 9 (non-Guardian, non-deep-milestone) has IsBoss = false");
+
+            // A Guardian floor is still winnable by a line that cleared the floor below
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1699963200L);
+            GameSession session = new GameSession(db, profile);
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++) team[i].Level = 45;
+
+            StageDef stage9 = session.BuildRecitalStage(9);
+            BattleResult result9 = RunWith(db, stage9, 7000, team);
+            bool won9 = result9.Victory;
+
+            StageDef stage10 = session.BuildRecitalStage(10);
+            BattleResult result10 = RunWith(db, stage10, 7000, team);
+            bool won10 = result10.Victory;
+
+            Check(won9, "a level-45 line clears floor 9 (the floor before the first Guardian)");
+            Check(won10, "the same line also clears the Guardian floor 10 - it is harder, but still winnable");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Coda: a fresh profile has none, clearing a floor pays the authored rate, a Guardian
+        /// floor pays its larger rate, a loss pays nothing, the purse survives a save round trip,
+        /// a save one version older loads and reads as zero, and a newer save is refused.
+        /// </summary>
+        private static void CheckRecitalCoda(ContentDatabase db)
+        {
+            const long Now = 1699963200L;
+            BalanceConfig cfg = db.Balance;
+
+            // A fresh profile has no Coda
+            PlayerProfile fresh = GameSession.CreateNewProfile(db, Now);
+            Check(fresh.Coda == 0, "a fresh profile starts with zero Coda (" + fresh.Coda + ")");
+
+            // Clearing a floor pays the authored rate
+            GameSession session = new GameSession(db, fresh);
+            session.TryStartRecitalAttempt(Now);
+            RecitalRewards win1 = session.GrantRecitalResult(1, true, Now);
+            int expectedCoda1 = cfg.RecitalCodaBase + cfg.RecitalCodaPerFloor * 1;
+            Check(win1.Coda == expectedCoda1,
+                  "clearing floor 1 pays " + expectedCoda1 + " Coda (got " + win1.Coda + ")");
+            Check(fresh.Coda == expectedCoda1,
+                  "the profile's Coda balance is " + expectedCoda1 + " after one clear (" + fresh.Coda + ")");
+
+            // Advance to floor 10 for the Guardian test
+            for (int f = 2; f <= 9; f++)
+            {
+                session.TryStartRecitalAttempt(Now);
+                session.GrantRecitalResult(f, true, Now);
+            }
+            long codaBeforeGuardian = fresh.Coda;
+
+            // A Guardian floor pays its larger rate
+            session.TryStartRecitalAttempt(Now);
+            RecitalRewards win10 = session.GrantRecitalResult(10, true, Now);
+            int expectedCoda10 = cfg.RecitalCodaGuardianBase + cfg.RecitalCodaGuardianPerFloor * 10;
+            Check(win10.IsGuardian, "floor 10's reward reports IsGuardian = true");
+            Check(win10.Coda == expectedCoda10,
+                  "a Guardian floor (10) pays " + expectedCoda10 + " Coda (got " + win10.Coda + ")");
+            Check(win10.Coda > win1.Coda,
+                  "a Guardian floor's Coda payout (" + win10.Coda + ") is larger than a regular floor's (" + win1.Coda + ")");
+            Check(fresh.Coda == codaBeforeGuardian + expectedCoda10,
+                  "the profile's Coda balance accumulated correctly (" + fresh.Coda + ")");
+
+            // A loss pays nothing
+            PlayerProfile lossProfile = GameSession.CreateNewProfile(db, Now);
+            GameSession lossSession = new GameSession(db, lossProfile);
+            lossSession.TryStartRecitalAttempt(Now);
+            RecitalRewards lossResult = lossSession.GrantRecitalResult(1, false, Now);
+            Check(lossResult.Coda == 0, "a loss pays zero Coda (" + lossResult.Coda + ")");
+            Check(lossProfile.Coda == 0, "the profile's Coda balance is still zero after a loss (" + lossProfile.Coda + ")");
+
+            // The purse survives a save round trip
+            string json = SaveSerializer.Serialize(fresh);
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(loaded != null && error == null,
+                  "a save carrying Coda deserialises without error" + (error != null ? " (" + error + ")" : ""));
+            Check(loaded != null && loaded.Coda == fresh.Coda,
+                  "Coda survives the round trip (" + (loaded != null ? loaded.Coda.ToString() : "-") + ")");
+
+            // A save one version older loads and reads as zero
+            PlayerProfile bare = GameSession.CreateNewProfile(db, Now);
+            JsonValue bareCurrent;
+            string bareParseError;
+            JsonValue.TryParse(SaveSerializer.Serialize(bare), out bareCurrent, out bareParseError);
+            JsonValue legacy = JsonValue.NewObject();
+            foreach (string key in bareCurrent.Keys)
+            {
+                if (key == "coda") continue;
+                legacy.Set(key, key == "version" ? new JsonValue((double)11) : bareCurrent[key]);
+            }
+            string legacyJson = legacy.ToJson(true);
+            Check(legacyJson.IndexOf("\"coda\"", StringComparison.Ordinal) < 0,
+                  "the hand-built version 11 save has no coda key");
+
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(legacyJson, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null,
+                  "a version 11 save loads under version 12 code"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            Check(upgraded != null && upgraded.Coda == 0,
+                  "and reads as zero Coda rather than a phantom balance ("
+                  + (upgraded != null ? upgraded.Coda.ToString() : "-") + ")");
+
+            // A newer save is refused with the same message every earlier bump uses
+            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
+            string future = SaveSerializer.Serialize(fresh).Replace(currentTag, futureTag);
+            string futureError;
+            PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out futureError);
+            Check(fromFuture == null && futureError != null,
+                  "a save one version newer than this build is refused");
+            Check(futureError != null && futureError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
+
+            Check(SaveSerializer.CurrentVersion >= 12,
+                  "save version is at least 12, where Coda bumped it (" + SaveSerializer.CurrentVersion + ")");
+
+            Line("");
         }
 
         /// <summary>

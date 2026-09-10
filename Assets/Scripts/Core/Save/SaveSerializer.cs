@@ -143,7 +143,14 @@ namespace Emberfall.Core.Save
         /// Downgrade is guarded the way every bump above is: version 10 code reads no campaign
         /// progress keys, so it would silently drop a player's position inside a 144-battle stage
         /// and drop them back to its first battle, and the check below refuses that instead.
-        public const int CurrentVersion = 11;
+        ///
+        /// 12: Coda, The Deep Recital's own currency (PlayerProfile.Coda). Same additive shape as
+        /// every bump since version 6: a version 11 save simply has no `coda` key, which reads as
+        /// zero, which is exactly right for a player who has never earned Coda - no migration
+        /// needed, no synthesised value. Downgrade is guarded the same way every bump above is:
+        /// version 11 code reads no `coda` key, so it would silently drop a player's Coda balance,
+        /// and the check below refuses that instead.
+        public const int CurrentVersion = 12;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -327,6 +334,7 @@ namespace Emberfall.Core.Save
             root.Set("recitalHighestFloor", profile.RecitalHighestFloor);
             root.Set("recitalEchoesBanked", profile.RecitalEchoesBanked);
             root.Set("recitalEchoesClockUnix", profile.RecitalEchoesClockUnix);
+            root.Set("coda", profile.Coda);
             root.Set("valor", profile.Valor);
             root.Set("provingBrandsBanked", profile.ProvingBrandsBanked);
             root.Set("provingBrandsClockUnix", profile.ProvingBrandsClockUnix);
@@ -494,6 +502,7 @@ namespace Emberfall.Core.Save
             profile.RecitalHighestFloor = Math.Max(0, root.GetInt("recitalHighestFloor", 0));
             profile.RecitalEchoesBanked = Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes));
             profile.RecitalEchoesClockUnix = root.GetLong("recitalEchoesClockUnix", 0);
+            profile.Coda = Math.Max(0, root.GetLong("coda", 0));
 
             // The version 7 Echo exception, repeated for Brands: an upgrading player starts able to
             // attempt immediately rather than waiting out a full recharge for a resource their save
