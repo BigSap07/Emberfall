@@ -1303,6 +1303,35 @@ namespace Emberfall.Core.Data
         /// grant.</summary>
         public int RecitalDeepMilestoneDustFallback = 1000;
 
+        // ---- Guardians: boss-plus-escorts encounter on every Nth floor.
+        // The spec names the interval as 10; the value lives here so it can be tuned alongside
+        // the rest of the Recital curve rather than hardcoded in RecitalGenerator.
+
+        /// <summary>Every floor divisible by this is a Guardian floor (boss + escorts at a
+        /// raised level). The Aspect cycle is unbroken across Guardians.</summary>
+        public int RecitalGuardianInterval = 10;
+
+        /// <summary>Extra levels the Guardian boss gets above the floor's base level. The
+        /// escorts stay at the base level, matching the campaign finales' shape.</summary>
+        public int RecitalGuardianBossLevelBonus = 5;
+
+        // ---- Coda: The Deep Recital's own currency, isolated from Gold/Shards/Dust/Slag/Valor.
+        // No sink yet; the purse exists so the accrual is visible and the save field is in place.
+        // See DESIGN-DEEP-RECITAL.md for what it is expected to buy later.
+
+        /// <summary>Base Coda earned per non-Guardian floor clear.</summary>
+        public int RecitalCodaBase = 5;
+
+        /// <summary>Extra Coda per floor number on top of RecitalCodaBase.</summary>
+        public int RecitalCodaPerFloor = 1;
+
+        /// <summary>Base Coda earned on a Guardian floor clear (replaces, not stacks with, the
+        /// regular rate).</summary>
+        public int RecitalCodaGuardianBase = 25;
+
+        /// <summary>Extra Coda per floor number on a Guardian clear.</summary>
+        public int RecitalCodaGuardianPerFloor = 3;
+
         public static BalanceConfig FromJson(JsonValue j)
         {
             BalanceConfig b = new BalanceConfig();
@@ -1370,6 +1399,12 @@ namespace Emberfall.Core.Data
             b.RecitalMilestoneDustPerTier = j.GetInt("recitalMilestoneDustPerTier", b.RecitalMilestoneDustPerTier);
             b.RecitalDeepMilestoneInterval = j.GetInt("recitalDeepMilestoneInterval", b.RecitalDeepMilestoneInterval);
             b.RecitalDeepMilestoneDustFallback = j.GetInt("recitalDeepMilestoneDustFallback", b.RecitalDeepMilestoneDustFallback);
+            b.RecitalGuardianInterval = j.GetInt("recitalGuardianInterval", b.RecitalGuardianInterval);
+            b.RecitalGuardianBossLevelBonus = j.GetInt("recitalGuardianBossLevelBonus", b.RecitalGuardianBossLevelBonus);
+            b.RecitalCodaBase = j.GetInt("recitalCodaBase", b.RecitalCodaBase);
+            b.RecitalCodaPerFloor = j.GetInt("recitalCodaPerFloor", b.RecitalCodaPerFloor);
+            b.RecitalCodaGuardianBase = j.GetInt("recitalCodaGuardianBase", b.RecitalCodaGuardianBase);
+            b.RecitalCodaGuardianPerFloor = j.GetInt("recitalCodaGuardianPerFloor", b.RecitalCodaGuardianPerFloor);
             return b;
         }
     }

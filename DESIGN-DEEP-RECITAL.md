@@ -1,8 +1,11 @@
 # The Deep Recital
 
 A specification for an endless PvE mode. This document extends the fiction in DESIGN-WORLD.md and
-proposes mechanics for implementation. Nothing here is implemented. Numbers flagged as *illustrative*
-are examples for a later balance pass; exact values are not decided here.
+proposes mechanics for implementation. **The mode ships** — `RecitalGenerator`, `RecitalScreen`,
+`GameSession.GrantRecitalResult`, save version 7 (Echoes and ladder position) and version 12 (Coda).
+See DESIGN-BUILD-ORDER task 15 for the full account of what was built and where it diverges from this
+document's original shape. Numbers flagged as *illustrative* are examples for a later balance pass;
+exact values are not decided here.
 
 ## The third category
 
@@ -194,3 +197,44 @@ are not proposed as the answer to that question. The category the Deep Recital i
 not resolve anything DESIGN-WORLD flagged as open.
 
 **Server infrastructure for the leaderboard.** Out of scope. Decided elsewhere.
+
+---
+
+## 7. Guardians
+
+Every 10th floor (`recitalGuardianInterval` in `balance.json`) is a **Guardian floor**. A Guardian
+keeps its position in the Aspect cycle — floor 10 is Gale because the cycle says it is, not because
+Guardians override it. Guardians are boss-plus-escorts encounters, the same shape the campaign
+finales use: one enemy at a raised level (`recitalGuardianBossLevelBonus` above the floor's base
+level) with the remaining escorts at the base level. `StageDef.IsBoss` is set on Guardian floors.
+
+The Guardian interval is deliberately a multiple of the Aspect cycle length only by coincidence
+(10 vs 6). Guardians land on whatever Aspect the cycle dictates, not on a fixed one.
+
+---
+
+## 8. Coda
+
+**Coda** is the Deep Recital's own currency. It is earned from clearing Recital floors, with a
+larger payout on Guardian floors. It is its own purse and does not move Gold, Shards, Relic Dust,
+Slag or Valor — the same isolation The Proving's Valor has and for the same reason.
+
+Rates in `balance.json`:
+
+| Key | Default | Purpose |
+|---|---|---|
+| `recitalCodaBase` | 5 | Base Coda per non-Guardian floor clear |
+| `recitalCodaPerFloor` | 1 | Extra Coda per floor number |
+| `recitalCodaGuardianBase` | 25 | Base Coda on a Guardian floor (replaces, not stacks with, the regular rate) |
+| `recitalCodaGuardianPerFloor` | 3 | Extra Coda per floor number on a Guardian clear |
+
+A loss pays nothing. All rates are first-pass placeholders.
+
+**There is no sink yet.** This is a deliberate holding position, the same one Valor occupied at
+launch. What Coda is expected to buy later: cosmetic or progression content specific to the Deep
+Recital — echo-themed upgrades, floor modifiers, visual unlocks — anything that does not affect
+campaign or Proving balance. The sink decision is deferred until the mode has enough play data to
+know what a fair price looks like.
+
+Save version **11 to 12** adds `PlayerProfile.Coda`. A version 11 save reads as zero Coda on
+upgrade — the correct default for a player who has never earned any.

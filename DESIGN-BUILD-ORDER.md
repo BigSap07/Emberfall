@@ -123,6 +123,23 @@ late), and a battle background loader that did not exist in the plan at all. See
 the full account. None of this changes what shipped structurally for task 8 or the content shipped
 for task 10; it is scoped to presentation.
 
+- **Recital Guardians and Coda: on `feat/recital-guardians-and-currency`.** Two additions to The
+  Deep Recital.
+  - **Guardians** — every 10th floor (`recitalGuardianInterval` in `balance.json`) is a
+    boss-plus-escorts encounter, the same shape the campaign finales use. One enemy at a raised
+    level (`recitalGuardianBossLevelBonus`, default 5) with the rest at the floor's base level.
+    The Aspect cycle is unbroken across Guardian floors. `RecitalGenerator.IsGuardian` and
+    `BuildFloor` express the shape; `StageDef.IsBoss` is set on Guardian floors. Harness checks
+    prove every 10th floor is a Guardian and no other is, the cycle is unbroken, the boss is
+    measurably stronger, and a Guardian floor is still winnable.
+  - **Coda** — the Recital's own currency, isolated from Gold/Shards/Dust/Slag/Valor. Earned on
+    every Recital clear (larger on Guardian floors), rates in `balance.json`. Save version
+    **11 to 12**, additive. **There is no sink yet** — the purse, accrual and save field exist so
+    a player can see the balance accruing. See DESIGN-DEEP-RECITAL.md section 8 for what Coda is
+    expected to buy later. The Coda balance is shown on the Recital screen. The CurrencyStrip
+    (shared across four screens) does not yet carry a Coda cell — adding a 7th cell exceeds the
+    1500px strip width and needs layout work.
+
 **Legend.** `[H]` build-check.ps1 / DevHarness only, no Unity needed. `[U]` needs Unity Play mode to
 verify, because it fails silently rather than with a compile error. `[D]` a decision, not code.
 `[H+U]` the logic is harness-provable, the presentation or feel still wants a look in the editor.
@@ -1505,6 +1522,13 @@ renumbering, and nobody has gone back to update the harness's own prose.
     escalation, Echo spend/regen including a backwards-clock-immunity check (the same discipline
     the daily repeat cap already proves), save round-trip, and every Aspect having at least one
     enemy template to draw from.
+
+    **Guardians and Coda** added atop this base (`feat/recital-guardians-and-currency`):
+    - **Guardians**: every 10th floor (`recitalGuardianInterval`) is a boss-plus-escorts encounter.
+      `RecitalGenerator.IsGuardian` and `BuildFloor` express the shape.
+    - **Coda**: the Recital's own isolated currency, earned on every clear with a larger payout on
+      Guardian floors. Save version 11 to 12. No sink yet — purse and accrual only. See
+      DESIGN-DEEP-RECITAL.md section 8.
 
     Blocked by: nothing remaining - the full campaign (task 13) gives a player a reason to want an
     endless mode once it's cleared, but Recital does not require the retune to exist first. Blocks:

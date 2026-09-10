@@ -325,6 +325,14 @@ namespace Emberfall.Core.Model
         /// the repeat cap applies here: a clock wound back must not grant regen.</summary>
         public long RecitalEchoesClockUnix;
 
+        /// <summary>
+        /// Coda: The Deep Recital's own currency, the same isolated-purse pattern The Proving's
+        /// Valor uses and for the same reason. It does not move Gold, Shards, Relic Dust, Slag or
+        /// Valor. There is no sink yet; the purse and accrual exist so the balance is visible and
+        /// the save field is in place for whatever Coda buys later.
+        /// </summary>
+        public long Coda;
+
         // ---------------------------------------------------------------- The Proving (PvP)
         // Four fields plus a pending opponent, mirroring the Recital block above field for field.
         // Deliberately the same shape rather than a new one: DESIGN-PVP section 5 chose the Echo

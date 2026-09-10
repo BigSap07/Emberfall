@@ -32,6 +32,17 @@ namespace Emberfall.Core.Progression
 
         public const int AspectCycleLength = 6;
 
+        /// <summary>True on every 10th floor: a Guardian is a boss-plus-escorts encounter at a
+        /// raised level, the same shape the campaign finales use. The interval is read from
+        /// balance.json so it can be tuned, but the spec names it as 10 and the harness checks
+        /// assume it. Guardians keep the Aspect cycle unbroken - floor 10 is whatever the cycle
+        /// says floor 10 is (Gale), not a special Aspect.</summary>
+        public static bool IsGuardian(BalanceConfig cfg, int floor)
+        {
+            int interval = cfg.RecitalGuardianInterval;
+            return interval > 0 && floor > 0 && floor % interval == 0;
+        }
+
         public static Aspect AspectForFloor(int floor)
         {
             int index = (Math.Max(1, floor) - 1) % AspectCycleLength;
@@ -82,6 +93,7 @@ namespace Emberfall.Core.Progression
             int f = Math.Max(1, floor);
             Aspect aspect = AspectForFloor(f);
             int level = LevelForFloor(cfg, f);
+            bool guardian = IsGuardian(cfg, f);
 
             List<EnemyDef> pool = new List<EnemyDef>();
             for (int i = 0; i < content.Enemies.Count; i++)
@@ -89,20 +101,24 @@ namespace Emberfall.Core.Progression
 
             StageDef stage = new StageDef();
             stage.Id = "recital_floor_" + f;
-            stage.Name = "Floor " + f;
+            stage.Name = guardian ? "Floor " + f + " (Guardian)" : "Floor " + f;
             stage.Subtitle = aspect + " echoes";
             stage.Environment = EnvironmentForAspect(aspect);
-            stage.IsBoss = IsDeepMilestone(cfg, f);
+            stage.IsBoss = IsDeepMilestone(cfg, f) || guardian;
 
             if (pool.Count == 0) return stage;
 
             int teamSize = Math.Max(1, cfg.MaxTeamSize);
+            int bossLevel = guardian ? level + Math.Max(0, cfg.RecitalGuardianBossLevelBonus) : level;
+
             for (int slot = 0; slot < teamSize; slot++)
             {
                 EnemyDef def = pool[(f + slot) % pool.Count];
                 EnemySpawn spawn = new EnemySpawn();
                 spawn.EnemyId = def.Id;
-                spawn.Level = level;
+                // Guardian shape: first enemy at a raised level, rest at the floor's base level,
+                // the same boss-plus-escorts pattern the campaign finales use.
+                spawn.Level = (guardian && slot == 0) ? bossLevel : level;
                 stage.Enemies.Add(spawn);
             }
             return stage;

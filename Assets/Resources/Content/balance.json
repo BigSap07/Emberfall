@@ -119,5 +119,15 @@
   "recitalMilestoneInterval": 10,
   "recitalMilestoneDustPerTier": 150,
   "recitalDeepMilestoneInterval": 50,
-  "recitalDeepMilestoneDustFallback": 1000
+  "recitalDeepMilestoneDustFallback": 1000,
+
+  // Guardians: boss-plus-escorts encounter on every Nth Recital floor.
+  "recitalGuardianInterval": 10,
+  "recitalGuardianBossLevelBonus": 5,
+
+  // Coda: The Deep Recital's own currency. No sink yet - purse, accrual and save field only.
+  "recitalCodaBase": 5,
+  "recitalCodaPerFloor": 1,
+  "recitalCodaGuardianBase": 25,
+  "recitalCodaGuardianPerFloor": 3
 }
