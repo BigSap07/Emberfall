@@ -3,6 +3,7 @@ using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
 using Emberfall.Game;
+using UnityEngine;
 
 namespace Emberfall.UI
 {
