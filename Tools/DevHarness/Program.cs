@@ -35,6 +35,7 @@ namespace Emberfall.DevHarness
             if (content == null) return 1;
 
             CheckContent(content);
+            CheckHeroRoleOrdinals(content);
             CheckAspectDirection(content);
             CheckNoAspectKeyedBehaviour(content);
             CheckOnKillPassive(content);
@@ -3184,13 +3185,17 @@ namespace Emberfall.DevHarness
             Check(db.AllStages.Count >= 10, "campaign stages loaded (got " + db.AllStages.Count + ")");
             Check(db.StartingHeroes.Count == 3, "3 starting heroes (got " + db.StartingHeroes.Count + ")");
 
-            // LEFT FAILING ON PURPOSE while the roster swap is half done.
+            // LEFT FAILING ON PURPOSE while the roster swap is half done, and failing WIDER now
+            // than it did.
             //
             // Deleting the six placeholders took the roster's only Bulwark, Warden and Stalker with
-            // them, so three of the seven combat roles have no hero at all. That is a genuine gap
-            // in content, not an artefact of this check, and weakening it to a note would hide the
-            // one thing the 94-hero import most has to close. It goes green again when a hero
-            // exists for every role.
+            // them. Widening HeroRole from seven members to the ten the incoming roster is authored
+            // against then added Vanguard, Binder, Marksman and Tinkerer, and re-roled two of the
+            // five survivors onto two of those, so the gap is five roles of ten rather than three
+            // of seven. Both halves are genuine content gaps rather than artefacts of this check,
+            // and the number getting worse is the honest reading of a taxonomy that grew while the
+            // roster did not. It goes green when a hero exists for every role, which is the import
+            // and nothing short of it.
             List<string> missingRoles = new List<string>();
             foreach (HeroRole role in Enum.GetValues(typeof(HeroRole)))
             {
@@ -3200,9 +3205,12 @@ namespace Emberfall.DevHarness
             }
             Check(missingRoles.Count == 0,
                   "every combat role has a hero"
-                  + (missingRoles.Count == 0 ? "" : " - EMPTY: " + string.Join(", ", missingRoles.ToArray())
-                     + ". Expected while the roster swap is half done: the six deleted placeholders were"
-                     + " the only hero for each of these. The import that replaces them closes this."));
+                  + (missingRoles.Count == 0 ? "" : " (" + missingRoles.Count + " of "
+                     + Enum.GetValues(typeof(HeroRole)).Length + ") - EMPTY: "
+                     + string.Join(", ", missingRoles.ToArray())
+                     + ". Expected while the roster swap is half done: the six deleted placeholders held"
+                     + " three of these, and the other two are roles the widened taxonomy added that no"
+                     + " current hero fills. The import that replaces them closes this."));
 
             // A basic and an active are structural - a hero without them cannot take a turn. A
             // passive is not, and stopped being mandatory when DESIGN-ASPECTS section 3 cut Kalyx
@@ -3232,6 +3240,139 @@ namespace Emberfall.DevHarness
             Check(passiveless <= 2,
                   "at most two heroes ship with no passive at all (got " + passiveless + ")");
             Line("");
+        }
+
+
+        /// <summary>
+        /// HeroRole's ordinals, and the one claim that made widening it safe.
+        ///
+        /// The enum went from seven members to ten to match the taxonomy the incoming roster is
+        /// authored against. Six of the seven survive at their original ordinals and four are
+        /// appended, which is the same append-only discipline StatusKind, TargetMode, EffectKind
+        /// and PassiveTrigger are each pinned to.
+        ///
+        /// RANGER WAS REMOVED, which none of those enums has ever done, and the pin below is what
+        /// pays for it. Two facts make it safe and both are asserted rather than argued: it was the
+        /// LAST member, so nothing declared before it renumbers, and a role reaches no persisted
+        /// record, so no stored byte anywhere means "6, Ranger" and would now read "6, Vanguard".
+        /// The second fact is the load-bearing one, and it is checked by serialising a real profile
+        /// and looking for a role in the output rather than by reading SaveSerializer and trusting
+        /// the reading. The day a role does get written to a save, this fails and the reuse of
+        /// ordinal 6 has to be answered properly.
+        /// </summary>
+        private static void CheckHeroRoleOrdinals(ContentDatabase db)
+        {
+            Line("HERO ROLES");
+
+            Check((int)HeroRole.Bulwark == 0 && (int)HeroRole.Striker == 1 && (int)HeroRole.Breaker == 2
+                  && (int)HeroRole.Mender == 3 && (int)HeroRole.Warden == 4 && (int)HeroRole.Stalker == 5,
+                  "the six roles that survived the widening keep their ordinals (0-5)");
+            Check((int)HeroRole.Vanguard == 6 && (int)HeroRole.Binder == 7
+                  && (int)HeroRole.Marksman == 8 && (int)HeroRole.Tinkerer == 9,
+                  "the four new roles are appended at 6-9, not inserted");
+            Check(Enum.GetValues(typeof(HeroRole)).Length == 10,
+                  "HeroRole has exactly the ten members the incoming roster uses (got "
+                  + Enum.GetValues(typeof(HeroRole)).Length + ")");
+
+            // The precondition for reusing ordinal 6. A profile is serialised and every role name
+            // is looked for in the text - names rather than numbers, because that is the shape a
+            // role would take if anyone ever wrote one, and a bare 6 is unsearchable.
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            string saved = SaveSerializer.Serialize(profile);
+            List<string> leaked = new List<string>();
+            foreach (HeroRole role in Enum.GetValues(typeof(HeroRole)))
+                if (saved.IndexOf("\"" + role + "\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                    leaked.Add(role.ToString());
+            Check(leaked.Count == 0,
+                  "no role reaches the save format, which is what makes removing the last member and"
+                  + " reusing its ordinal safe (" + (leaked.Count == 0 ? "none found"
+                     : "FOUND: " + string.Join(", ", leaked.ToArray())) + ")");
+
+            // EnumUtil.Parse falls back to Striker rather than throwing, so a role this enum does
+            // not know is not a load error - it is a hero that quietly becomes a Striker and a
+            // roster that looks fine. Read the authored strings back out of the JSON and check each
+            // one survives the trip, because the parsed def can no longer tell you it was wrong.
+            List<KeyValuePair<string, string>> authoredRoles = AuthoredHeroRoles();
+            List<string> unknown = new List<string>();
+            int matched = 0;
+            for (int i = 0; i < authoredRoles.Count; i++)
+            {
+                HeroDef def = db.GetHero(authoredRoles[i].Key);
+                if (def == null) continue;
+                matched++;
+                if (!string.Equals(def.Role.ToString(), authoredRoles[i].Value, StringComparison.OrdinalIgnoreCase))
+                    unknown.Add(authoredRoles[i].Key + " authors \"" + authoredRoles[i].Value
+                                + "\", parsed as " + def.Role);
+            }
+            // Counted, because this check failed silently once already: an earlier version paired
+            // each role with the wrong id after the first hero, found nothing to compare, and
+            // passed. A guard against a silent fallback that can itself go quiet is worth nothing,
+            // so the sample size is asserted before the verdict is.
+            Check(matched == db.Heroes.Count,
+                  "the authored-role scan actually read every hero (" + matched + " of "
+                  + db.Heroes.Count + ") - a scan that pairs nothing passes for the wrong reason");
+            Check(unknown.Count == 0,
+                  "every role heroes.json authors round-trips through HeroRole instead of silently"
+                  + " falling back to Striker" + (unknown.Count == 0 ? ""
+                     : " - " + string.Join(" | ", unknown.ToArray())));
+
+            // Content, reported rather than asserted: which of the ten are filled today. The
+            // coverage check in CONTENT above is the one that fails on a gap; this prints the shape
+            // so the failure there reads as a roster fact rather than a bare list.
+            Dictionary<HeroRole, int> filled = new Dictionary<HeroRole, int>();
+            foreach (HeroRole role in Enum.GetValues(typeof(HeroRole))) filled[role] = 0;
+            for (int i = 0; i < db.Heroes.Count; i++) filled[db.Heroes[i].Role]++;
+            List<string> shape = new List<string>();
+            foreach (HeroRole role in Enum.GetValues(typeof(HeroRole)))
+                shape.Add(role + " " + filled[role]);
+            Line("  [note] roster by role: " + string.Join(", ", shape.ToArray()));
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The `role` string each hero authors, read straight out of heroes.json rather than off
+        /// the parsed def. The parsed def cannot answer "what did the file say" once EnumUtil.Parse
+        /// has replaced an unknown value with the fallback, which is the whole point of reading it
+        /// twice. Deliberately a flat scan rather than a JSON parse: it needs the raw text, and the
+        /// harness already proves the file parses everywhere else.
+        /// </summary>
+        private static List<KeyValuePair<string, string>> AuthoredHeroRoles()
+        {
+            List<KeyValuePair<string, string>> pairs = new List<KeyValuePair<string, string>>();
+            string path = Path.Combine(FindContentDir(), "heroes.json");
+            if (!File.Exists(path)) return pairs;
+
+            // The most recent id line wins, rather than the first unconsumed one. A hero block
+            // opens with its own id and reaches "role" four lines later, before any ability block
+            // introduces an id of its own, so "nearest id above" is always the hero. The first
+            // version of this held the first id until a role consumed it, which meant every hero
+            // after the first paired a role with an ABILITY id, resolved to no HeroDef, and was
+            // skipped - the scan checked exactly one hero and reported nothing wrong.
+            string lastId = null;
+            foreach (string raw in File.ReadAllLines(path))
+            {
+                string line = raw.Trim();
+                string got = FieldValue(line, "id");
+                if (got != null) { lastId = got; continue; }
+                string role = FieldValue(line, "role");
+                if (role != null && lastId != null) pairs.Add(new KeyValuePair<string, string>(lastId, role));
+            }
+            return pairs;
+        }
+
+        /// <summary>The value of a `"name": "value",` pair on one line, or null if this line is not
+        /// that field. Matches the whole key so `"id"` does not also match `"defId"`.</summary>
+        private static string FieldValue(string line, string field)
+        {
+            string key = "\"" + field + "\":";
+            int at = line.IndexOf(key, StringComparison.Ordinal);
+            if (at != 0) return null;
+            int open = line.IndexOf('"', key.Length);
+            if (open < 0) return null;
+            int close = line.IndexOf('"', open + 1);
+            if (close < 0) return null;
+            return line.Substring(open + 1, close - open - 1);
         }
 
         /// <summary>Pure data check against AspectChart - no battle needed. Ember>Verdant>Tide>Gale>Ember, Lumen&lt;-&gt;Umbra.</summary>
@@ -10368,8 +10509,8 @@ namespace Emberfall.DevHarness
         private static readonly string[] PinnedLine = {
             "veska_the_broken_oath",       // Striker - the closest thing left to Ryn's single-target finisher
             "seraphine_the_last_ember",    // Breaker - area damage and the roster's only Burn on a basic
-            "orren_the_cinder_hunter",     // Ranger  - single-target with a DefenseDown rider
-            "kael_the_ashbound",           // Breaker - the fattest body, and the nearest thing to a front line
+            "orren_the_cinder_hunter",     // Marksman - single-target at range with a DefenseDown rider
+            "kael_the_ashbound",           // Vanguard - the fattest body, and the nearest thing to a front line
             "marrow_the_burning_vow",      // Mender  - the only healer in the game right now
         };
 

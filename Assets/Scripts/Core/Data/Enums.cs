@@ -13,16 +13,43 @@ namespace Emberfall.Core.Data
         Lumen    // light
     }
 
-    /// <summary>Combat archetype. Purely descriptive - behaviour comes from the ability data.</summary>
+    /// <summary>
+    /// Combat archetype. Purely descriptive - behaviour comes from the ability data, and nothing in
+    /// `CombatSimulation` branches on a role.
+    ///
+    /// TEN, IN FIVE PAIRS, matching the taxonomy the incoming 94-hero roster is authored against:
+    /// Bulwark/Vanguard hold a line, Binder/Breaker break one, Warden/Mender keep it standing,
+    /// Marksman/Tinkerer work at range, Striker/Stalker end single targets. The first of each pair
+    /// is the older, more defensive or more direct reading; the second is its variant.
+    ///
+    /// ORDINALS: the six roles that survive the widening keep theirs, and the four new ones are
+    /// appended. `Ranger` was REMOVED rather than kept as a deprecated member, which is the one
+    /// deviation from the append-only rule every other enum in this project follows, and it is
+    /// safe for one specific reason: it was the LAST member, so nothing before it renumbers, and a
+    /// role reaches no persisted record at all - it is absent from the save format and from every
+    /// battle event, living only on `HeroDef`, `CombatUnit` and the per-battle `UnitSnapshot`,
+    /// each of which is rebuilt from content on load. `CheckHeroRoleOrdinals` in the harness pins
+    /// both halves of that: the surviving ordinals, and the claim that no save carries a role.
+    /// Ranger had exactly one holder in content, Orren, who is a Marksman under this taxonomy.
+    ///
+    /// A role that content names but this enum does not know parses to `Striker` silently
+    /// (`EnumUtil.Parse` falls back rather than throwing), so a roster authored ahead of this enum
+    /// would look fine and be wrong. `CheckContent` asserts every authored role round-trips.
+    /// </summary>
     public enum HeroRole
     {
-        Bulwark, // tank
-        Striker, // single target damage
-        Breaker, // area damage
-        Mender,  // healer
-        Warden,  // support
-        Stalker, // assassin
-        Ranger   // ranged / mixed single-target and line damage
+        Bulwark,  // 0  holds the line, absorbs and redirects
+        Striker,  // 1  single-target damage
+        Breaker,  // 2  area damage
+        Mender,   // 3  healing
+        Warden,   // 4  support, energy and buffs
+        Stalker,  // 5  single-target assassin, debuff-led
+
+        // ---------- appended for the 94-hero taxonomy, never inserted ----------
+        Vanguard, // 6  the offensive half of the tank pair: a durable body that also deals damage
+        Binder,   // 7  the control half of the break pair: debuffs and denial over raw area damage
+        Marksman, // 8  ranged single-target, mark-led
+        Tinkerer  // 9  ranged utility: gadgets, energy manipulation, conditional riders
     }
 
     public enum AbilityKind

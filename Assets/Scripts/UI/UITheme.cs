@@ -455,16 +455,30 @@ namespace Emberfall.UI
             return Hex("8FA7C4");
         }
 
+        /// <summary>
+        /// A colour per role, PAIRED: the two halves of each family sit next to each other on the
+        /// wheel so a chip reads as "a tank" or "a healer" before it reads as which one. The
+        /// second of each pair is the cooler, slightly desaturated sibling.
+        ///
+        /// Every one of the ten is named. The `TextMuted` fallthrough below used to be reachable -
+        /// Ranger had no case and rendered grey - and is now unreachable by construction, kept only
+        /// so adding a role without a colour degrades to a legible chip instead of failing to
+        /// compile in a UI file nobody is looking at.
+        /// </summary>
         public static Color RoleColor(HeroRole role)
         {
             switch (role)
             {
-                case HeroRole.Bulwark: return Hex("D8A05A");
-                case HeroRole.Striker: return Hex("E06A6A");
-                case HeroRole.Breaker: return Hex("E88A3C");
-                case HeroRole.Mender: return Hex("64C98A");
-                case HeroRole.Warden: return Hex("5AA8E0");
-                case HeroRole.Stalker: return Hex("A97BE8");
+                case HeroRole.Bulwark:  return Hex("D8A05A");   // amber, the line
+                case HeroRole.Vanguard: return Hex("C07A46");   // deeper amber, the line that hits back
+                case HeroRole.Breaker:  return Hex("E88A3C");   // orange, area damage
+                case HeroRole.Binder:   return Hex("C9702E");   // burnt orange, control
+                case HeroRole.Mender:   return Hex("64C98A");   // green, healing
+                case HeroRole.Warden:   return Hex("5AA8E0");   // blue, support
+                case HeroRole.Marksman: return Hex("D9C46A");   // pale gold, ranged single-target
+                case HeroRole.Tinkerer: return Hex("8FBF9E");   // sage, ranged utility
+                case HeroRole.Striker:  return Hex("E06A6A");   // red, the finisher
+                case HeroRole.Stalker:  return Hex("A97BE8");   // violet, the assassin
             }
             return TextMuted;
         }
