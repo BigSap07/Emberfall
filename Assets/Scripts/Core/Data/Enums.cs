@@ -45,7 +45,53 @@ namespace Emberfall.Core.Data
         AllAllies,
         RandomAlly,
         LastAttacker,
-        LastTarget
+        LastTarget,
+
+        // ---------- appended, never inserted ----------
+        //
+        // Same rule as StatusKind above, and the same reason with one extra edge: ResolveTargets
+        // writes (int)mode into a TargetAnchored event's Value, so renumbering an existing mode
+        // rewrites what every anchored battle recorded about why it was anchored.
+        //
+        // THE ANCHOR APPLIES TO EVERY SINGLE-ENEMY MODE BELOW, unchanged by this pass. A living
+        // Lumen unit, or failing that a Taunt holder, answers every single-enemy targeting question
+        // aimed at its side, so EnemyWithStatus and the three stat picks collapse onto it whenever
+        // one exists. That is the Lumen identity working as designed rather than an oversight, and
+        // it is deliberately NOT altered here - see DESIGN-BUILD-ORDER's entry for this branch,
+        // which flags the one case where it reads badly and leaves the decision to a human.
+        //
+        // The four ALLY modes are unaffected, because the anchor only ever answers for the enemy
+        // side: they return from the first switch in ResolveTargets, above the anchor lookup,
+        // exactly as LowestHpAlly and RandomAlly already do.
+
+        /// <summary>
+        /// One enemy carrying EffectDef.TargetStatus, front-most first. The single-target half of
+        /// the roster's largest targeting group ("deal 245% to a Forsaken enemy").
+        ///
+        /// There is deliberately no AllEnemiesWithStatus beside it: AllEnemies plus an
+        /// EffectCondition of HasStatus already does exactly that, per target, and a second way to
+        /// say the same thing is a second thing to keep in sync.
+        /// </summary>
+        EnemyWithStatus,
+
+        HighestEnergyEnemy,
+        HighestSpeedEnemy,
+
+        /// <summary>Slowest living enemy, by EffectiveSpeed - so a Slow already applied counts,
+        /// which is what "the slowest enemy" means to a player watching the turn order.</summary>
+        LowestSpeedEnemy,
+
+        LowestEnergyAlly,
+
+        /// <summary>Both of the two lowest-HP allies, as one effect. Returns one unit on a line of
+        /// one, and the same ordering SecondLowestHpAlly reads.</summary>
+        TwoLowestHpAllies,
+
+        SecondLowestHpAlly,
+
+        /// <summary>The ally carrying the most harmful statuses, counted with StatusInfo.IsHarmful
+        /// so it agrees with what Cleanse would remove.</summary>
+        AllyWithMostDebuffs
     }
 
     public enum EffectKind
@@ -162,7 +208,48 @@ namespace Emberfall.Core.Data
         Silence, // blocks the Active on the holder's next turn; a Basic Attack resolves instead
         Stun,    // skips the holder's entire next turn - no Basic Attack, no Active
         Stealth, // inert placeholder — no targeting-visibility logic yet
-        Resolve  // generic personal stacking counter - see EffectKind.GainResolve
+        Resolve, // generic personal stacking counter - see EffectKind.GainResolve
+
+        // ---------- stat statuses: the eight stats no status could move ----------
+        //
+        // APPENDED, never inserted, and that is not a style preference. BattleEvent.Status is
+        // written into the event list and read back as an int by anything fingerprinting a battle,
+        // so renumbering an existing member rewrites the record of every battle ever resolved.
+        // Every member below therefore goes at the end, and any future one goes after them.
+        //
+        // TWO SHAPES, because UnitStats stores these stats two different ways - the same split
+        // RelicStatMode and ArmorStatMode already encode, and for the same reason.
+        //
+        //   MULTIPLY: Speed alone, here. It is a large scaled number, so a buff scales it:
+        //   Speed * (1 + SpeedUp - Slow), exactly as Attack reads AttackUp/AttackDown.
+        //
+        //   ADD: everything else. They are small fractions (or, for Crit Damage, a multiplier)
+        //   that are never scaled by level or star rarity, so multiplying them does nothing - a
+        //   multiplicative +12% on a 0.00 Block is exactly zero. A buff therefore ADDS:
+        //   Block + BlockUp - BlockDown, exactly as Crit Chance already reads Focus.
+        //
+        // THERE IS NO SpeedDown, deliberately. Slow is already the speed debuff, it is what
+        // EffectiveSpeed subtracts, and Gale's intra-round turn-order shift keys on
+        // StatusKind.Slow specifically. A second speed debuff would be a duplicate mechanism that
+        // silently bypasses that rule, so SpeedUp joins Slow's term rather than bringing its own
+        // mirror. Crit Chance is absent for the same reason one layer over: Focus is already its
+        // buff, and nothing in the incoming roster asks to reduce it.
+        SpeedUp,
+
+        BlockUp,
+        BlockDown,
+        DamageReductionUp,
+        DamageReductionDown,
+        EffectHitUp,
+        EffectHitDown,
+        EffectResistUp,
+        EffectResistDown,
+        CritDamageUp,
+        CritDamageDown,
+        SkillDamageUp,
+        SkillDamageDown,
+        ArmorBreakUp,
+        ArmorBreakDown
     }
 
     public enum PassiveTrigger
@@ -629,7 +716,19 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.Burn
                 || kind == StatusKind.Slow
                 || kind == StatusKind.Silence
-                || kind == StatusKind.Stun;
+                || kind == StatusKind.Stun
+                // Every stat DOWN is harmful, so Cleanse can remove it, Dispel cannot, and an
+                // Umbra source makes it uncleansable - the three rules that all read this one
+                // predicate. The matching UPs are deliberately absent: they are buffs, which is
+                // what makes them Dispel's business and not Cleanse's. SpeedUp has no Down here
+                // because Slow, already listed above, is the speed debuff.
+                || kind == StatusKind.BlockDown
+                || kind == StatusKind.DamageReductionDown
+                || kind == StatusKind.EffectHitDown
+                || kind == StatusKind.EffectResistDown
+                || kind == StatusKind.CritDamageDown
+                || kind == StatusKind.SkillDamageDown
+                || kind == StatusKind.ArmorBreakDown;
         }
 
         public static string DisplayName(StatusKind kind)
@@ -650,6 +749,21 @@ namespace Emberfall.Core.Data
                 case StatusKind.Stun: return "Stun";
                 case StatusKind.Stealth: return "Stealth";
                 case StatusKind.Resolve: return "Resolve";
+                case StatusKind.SpeedUp: return "Quickened";
+                case StatusKind.BlockUp: return "Block Up";
+                case StatusKind.BlockDown: return "Block Down";
+                case StatusKind.DamageReductionUp: return "Bulwark";
+                case StatusKind.DamageReductionDown: return "Exposed";
+                case StatusKind.EffectHitUp: return "Effect Hit Up";
+                case StatusKind.EffectHitDown: return "Effect Hit Down";
+                case StatusKind.EffectResistUp: return "Effect Resist Up";
+                case StatusKind.EffectResistDown: return "Effect Resist Down";
+                case StatusKind.CritDamageUp: return "Crit Damage Up";
+                case StatusKind.CritDamageDown: return "Crit Damage Down";
+                case StatusKind.SkillDamageUp: return "Skill Damage Up";
+                case StatusKind.SkillDamageDown: return "Skill Damage Down";
+                case StatusKind.ArmorBreakUp: return "Armor Break Up";
+                case StatusKind.ArmorBreakDown: return "Armor Break Down";
             }
             return kind.ToString();
         }
@@ -673,6 +787,21 @@ namespace Emberfall.Core.Data
                 case StatusKind.Stun: return "STN";
                 case StatusKind.Stealth: return "STH";
                 case StatusKind.Resolve: return "RSV";
+                case StatusKind.SpeedUp: return "SPD+";
+                case StatusKind.BlockUp: return "BLK+";
+                case StatusKind.BlockDown: return "BLK-";
+                case StatusKind.DamageReductionUp: return "DR+";
+                case StatusKind.DamageReductionDown: return "DR-";
+                case StatusKind.EffectHitUp: return "EHT+";
+                case StatusKind.EffectHitDown: return "EHT-";
+                case StatusKind.EffectResistUp: return "ERS+";
+                case StatusKind.EffectResistDown: return "ERS-";
+                case StatusKind.CritDamageUp: return "CDM+";
+                case StatusKind.CritDamageDown: return "CDM-";
+                case StatusKind.SkillDamageUp: return "SKD+";
+                case StatusKind.SkillDamageDown: return "SKD-";
+                case StatusKind.ArmorBreakUp: return "ABK+";
+                case StatusKind.ArmorBreakDown: return "ABK-";
             }
             return "?";
         }
