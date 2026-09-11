@@ -55,12 +55,10 @@ namespace Emberfall.Core.Progression
         /// <summary>
         /// The five heroes the player opens the game holding.
         ///
-        /// This is the Ember line, and the choice is not flavour. They are the only five heroes in
-        /// the game with PAINTED sprites - everyone else renders as a generated primitive rig - and
-        /// a prologue whose whole job is to feel like power the player has not earned yet has to
-        /// LOOK like it. They are also all non-starters, so the three heroes handed over after the
-        /// rewind (Orrin Kaal, Kalyx Emberwright, Wren Ilyra) share nobody with this squad: the
-        /// loss takes away a line the player never sees again, rather than demoting one they keep.
+        /// These five span four aspects (Ember, Gale, Tide, Lumen) and five roles. They are all
+        /// non-starters, so the three heroes handed over after the rewind (Kael, Isara, Kiva)
+        /// share nobody with this squad: the loss takes away a line the player never sees again,
+        /// rather than demoting one they keep.
         ///
         /// Built as plain HeroInstances with no relic and no armor. BattleRequest.Profile is left
         /// null for prologue fights, and a null profile is an exact no-op through

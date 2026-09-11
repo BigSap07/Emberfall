@@ -103,7 +103,7 @@ namespace Emberfall.UI
         {
             app.Modal.ShowConfirm(
                 "WHAT IS LEFT OF THE LEGION",
-                "Kael. Seraphine. Veska. Marrow. Orren.\n\n"
+                "Seraphine. Aeron. Nereia. Isolde. Hale.\n\n"
                 + "Five, out of thousands.\n"
                 + "They have never lost a field with you behind them.",
                 "GO ON", "SKIP",
@@ -158,9 +158,9 @@ namespace Emberfall.UI
         /// Second, and this is the better reason: position is a BEHAVIOUR here, not a layout.
         /// CombatSimulation resolves FrontEnemy to the lowest living Slot, so the front of the
         /// line is not a label on a card - it is who gets hit. Both husks in this fight target
-        /// FrontEnemy. Kael is built into slot 1 by BuildSquad's ordering and takes the entire
-        /// fight on his own while the other four end it near full, which is a thing you watch
-        /// happen rather than a rule you are told.
+        /// FrontEnemy. Seraphine is built into slot 1 by BuildSquad's ordering and takes the
+        /// entire fight on her own while the other four end it near full, which is a thing you
+        /// watch happen rather than a rule you are told.
         /// </summary>
         private static void BeforeFormation(GameApp app)
         {
@@ -168,7 +168,7 @@ namespace Emberfall.UI
                 "STEP TWO - THE ORDER OF THE LINE",
                 "Slot one is the front. It is not a label.\n\n"
                 + "Most things that swing at you swing at whoever is stood\n"
-                + "there. Kael has that slot. Watch who bleeds.",
+                + "there. Seraphine has that slot. Watch who bleeds.",
                 "WATCH", "SKIP",
                 delegate { RunStep(app, PrologueScript.Step.Formation, AfterFormation); },
                 delegate { Finish(app); });
@@ -178,7 +178,7 @@ namespace Emberfall.UI
         {
             app.Modal.ShowConfirm(
                 "ONE OF YOU STANDS IN FRONT",
-                "Kael took nearly all of it. The other four barely got\n"
+                "Seraphine took nearly all of it. The other four barely got\n"
                 + "touched.\n\n"
                 + "Who you put in slot one decides who that happens to.",
                 "GO ON", "SKIP",
@@ -233,9 +233,9 @@ namespace Emberfall.UI
         /// contribution is the damage that never showed up. Naming the five and pointing at where
         /// the label lives is the honest version of this step.
         ///
-        /// Marrow is the hero shown because Mender is the most legible of the five the squad
+        /// Nereia is the hero shown because Mender is the most legible of the five the squad
         /// carries. Note that the squad does NOT cover all ten roles - it fills five of them and
-        /// leaves Bulwark, Binder, Warden, Tinkerer and Stalker empty - so the card names what is
+        /// leaves Bulwark, Striker, Binder, Warden and Tinkerer empty - so the card names what is
         /// actually on the field rather than reciting the enum. It counted SEVEN before the enum
         /// was widened for the incoming roster, which is why this comment is worth keeping in step:
         /// it is the only place in the project that states how many roles there are in prose.
@@ -269,10 +269,10 @@ namespace Emberfall.UI
         /// </summary>
         private static void ShowEquipment(GameApp app)
         {
-            ShowHero(app, "kael_the_unyielding");
+            ShowHero(app, "aeron_the_unbroken_stride");
             app.Modal.ShowConfirm(
                 "STEP FIVE - WHAT THEY CARRY",
-                "Kael is carrying nothing. Behind this, five empty slots.\n\n"
+                "Aeron is carrying nothing. Behind this, five empty slots.\n\n"
                 + "Armour goes in them and moves the numbers above them.\n"
                 + "A thousand years and nobody thought to gear him.",
                 "GO ON", "SKIP",
@@ -287,10 +287,10 @@ namespace Emberfall.UI
         /// Gale > Ember, Lumen and Umbra counter each other, 1.10 and 0.92 - and then fought.
         ///
         /// The fight is the point. +10% and -8% read as rounding until you watch them land, and
-        /// this field carries both directions at once: the squad is entirely Ember, the blight
-        /// hound is Verdant so it takes the bonus, and the grave moth is Gale so it deals one.
-        /// Showing only the favourable half would teach the wheel as free damage rather than a
-        /// trade you can be on the wrong end of.
+        /// this field carries both directions at once: the squad's two Embers (Seraphine, Hale)
+        /// beat the Verdant blight hound and lose to the Gale grave moth, while the other three
+        /// (Gale, Tide, Lumen) are neutral to both. Showing only the favourable half would teach
+        /// the wheel as free damage rather than a trade you can be on the wrong end of.
         /// </summary>
         private static void BeforeAspects(GameApp app)
         {
@@ -299,7 +299,7 @@ namespace Emberfall.UI
                 "EMBER > VERDANT > TIDE > GALE > EMBER\n"
                 + "LUMEN and UMBRA counter each other.\n\n"
                 + "Advantage +10%, disadvantage -8%. A tiebreak, not a lock.\n"
-                + "Your line is all Ember. Next: one of each.",
+                + "Your line carries four aspects. Watch who hits harder.",
                 "WATCH", "SKIP",
                 delegate { RunStep(app, PrologueScript.Step.Aspects, AfterAspects); },
                 delegate { Finish(app); });
@@ -309,9 +309,9 @@ namespace Emberfall.UI
         {
             app.Modal.ShowConfirm(
                 "IT CUTS BOTH WAYS",
-                "The hound was Verdant. Your Ember went through it.\n\n"
-                + "The moth was Gale. It went through YOU.\n"
-                + "That is the whole wheel, and it is only ever a tiebreak.",
+                "The hound was Verdant. Your Embers went through it.\n\n"
+                + "The moth was Gale. It went through your Embers.\n"
+                + "That is the wheel, and it is only ever a tiebreak.",
                 "GO ON", "SKIP",
                 delegate { TheLastGate(app); },
                 delegate { Finish(app); });
