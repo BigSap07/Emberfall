@@ -1,0 +1,14 @@
+{
+  "frameWidth": 220,
+  "frameHeight": 260,
+  "sheet": {
+    "cols": 8,
+    "rows": 8
+  },
+  "defaultAnimation": {
+    "start": 0,
+    "end": 57,
+    "fps": 30,
+    "loop": true
+  }
+}
