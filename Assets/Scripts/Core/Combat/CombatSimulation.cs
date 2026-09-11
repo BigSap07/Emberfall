@@ -166,6 +166,40 @@ namespace Emberfall.Core.Combat
 
                 case EffectCondition.LedgerAtLeast:
                     return caster != null && subject.LedgerTotalFrom(caster.Id) >= effect.ConditionValue;
+
+                case EffectCondition.SubjectActedThisRound:
+                    return subject.ActedThisRound;
+
+                case EffectCondition.SubjectHasNotActedThisRound:
+                    return !subject.ActedThisRound;
+
+                // Round-granular, and the comparison says so: the subject was damaged in a round at
+                // or after the one the caster last acted in. Two units acting inside the same round
+                // are not ordered against each other by this.
+                case EffectCondition.SubjectDamagedSinceMyTurn:
+                    return caster != null && subject.LastDamagedRound > 0
+                        && subject.LastDamagedRound >= caster.LastTurnRound;
+
+                case EffectCondition.SubjectIsMyPreviousTarget:
+                    return caster != null && caster.PreviousTargetId >= 0
+                        && caster.PreviousTargetId == subject.Id;
+
+                // False when there IS no previous target, not true. A hero that has attacked
+                // nobody has not switched targets; reading "no history" as "different" would make
+                // every opening attack claim a change that did not happen.
+                case EffectCondition.SubjectIsNotMyPreviousTarget:
+                    return caster != null && caster.PreviousTargetId >= 0
+                        && caster.PreviousTargetId != subject.Id;
+
+                // Needs two turns on record before it can say anything, which is why ActionsTaken
+                // is counted at all: without it a hero's first turn compares against a default and
+                // reports a repeat it never made.
+                case EffectCondition.CasterRepeatedActionType:
+                    return caster != null && caster.ActionsTaken >= 2
+                        && caster.LastActionWasActive == caster.PreviousActionWasActive;
+
+                case EffectCondition.AlreadyDamagedSubjectThisRound:
+                    return caster != null && caster.TimesDamagedThisRound(subject.Id) > 0;
             }
 
             // An unknown member is refused rather than waved through. A condition nobody has taught
@@ -219,6 +253,18 @@ namespace Emberfall.Core.Combat
             private bool _inReflect;
 
             /// <summary>
+            /// True while a Covered share is being delivered to a protector, bounding the redirect
+            /// to one hop. Not latent: two units covering each other is an ordinary thing for a
+            /// player to build, and without this the first hit between them passes a share back and
+            /// forth until the stack gives out. Same shape as _inRedirect and _inReflect.
+            /// </summary>
+            private bool _inCover;
+
+            /// <summary>True while an OnAllyWouldDie broadcast is being delivered, bounding the
+            /// interception to one attempt per hit.</summary>
+            private bool _inDeathCheck;
+
+            /// <summary>
             /// The round's live initiative list, and the index of the turn being taken out of it.
             /// Null outside the round loop - Execute() fires the BattleStart passives before any
             /// round exists, and a kill there has no round order to re-enter. Both Gale hooks check
@@ -253,11 +299,7 @@ namespace Emberfall.Core.Combat
                     BattleEvent roundEvent = Emit(BattleEventType.RoundStart, -1, -1);
                     roundEvent.Value = _round;
 
-                    for (int i = 0; i < _units.Count; i++)
-                    {
-                        _units[i].ExtraTurnsThisRound = 0;
-                        _units[i].StatusesExpiredThisRound = false;
-                    }
+                    for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
 
                     // Gale (DESIGN-ASPECTS section 2): this was a plain `for` over a snapshot, which
                     // is exactly what had to change. The list is now live and the cursor is a field,
@@ -512,6 +554,11 @@ namespace Emberfall.Core.Combat
             {
                 Emit(BattleEventType.TurnStart, unit.Id, unit.Id);
 
+                // History, stamped as the turn opens rather than as it closes: a passive firing
+                // inside this turn should see the turn it is part of as having happened.
+                unit.ActedThisRound = true;
+                unit.LastTurnRound = _round;
+
                 TickDamageOverTime(unit);
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
@@ -546,6 +593,13 @@ namespace Emberfall.Core.Combat
                 // zero in ExpireStatuses, not a manual removal here.
                 bool silenced = unit.Has(StatusKind.Silence);
                 bool usedActive = !silenced && unit.Active != null && unit.Energy >= unit.Active.EnergyCost;
+
+                // Two flags and a count, not a list: no description in the roster asks about more
+                // than the last two actions, and "the same action type on each of its last two
+                // turns" needs exactly this much.
+                unit.PreviousActionWasActive = unit.LastActionWasActive;
+                unit.LastActionWasActive = usedActive;
+                unit.ActionsTaken++;
                 if (usedActive)
                 {
                     unit.Energy = 0;
@@ -785,14 +839,16 @@ namespace Emberfall.Core.Combat
                     case EffectKind.Heal:
                     {
                         if (!target.Alive) break;
-                        float amount = source.EffectiveAttack * effect.Power + effect.Flat + source.MaxHp * effect.SelfHpRatio;
+                        float amount = source.EffectiveAttack * effect.Power + effect.Flat
+                                     + source.MaxHp * effect.SelfHpRatio + TargetHpTerm(effect, target);
                         ApplyHealValue(source.Id, target, (int)Math.Round(amount, MidpointRounding.AwayFromZero), "heal", true);
                         break;
                     }
                     case EffectKind.Shield:
                     {
                         if (!target.Alive) break;
-                        float amount = source.EffectiveAttack * effect.Power + effect.Flat + source.MaxHp * effect.SelfHpRatio;
+                        float amount = source.EffectiveAttack * effect.Power + effect.Flat
+                                     + source.MaxHp * effect.SelfHpRatio + TargetHpTerm(effect, target);
                         int value = (int)Math.Round(amount, MidpointRounding.AwayFromZero);
                         if (value <= 0) break;
                         target.Shield += value;
@@ -800,6 +856,15 @@ namespace Emberfall.Core.Combat
                         BattleEvent e = Emit(BattleEventType.ShieldGain, source.Id, target.Id);
                         e.Value = value;
                         e.Vfx = "buff";
+
+                        // Charges, stamped as the ward lands, so a Shield can also be a
+                        // charge-limited one. Zero on every shield in shipped content.
+                        if (effect.Charges > 0)
+                            for (int si = 0; si < target.Statuses.Count; si++)
+                                if (target.Statuses[si].Kind == StatusKind.Shield)
+                                    target.Statuses[si].Charges = effect.Charges;
+
+                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShielded, depth, target);
                         break;
                     }
                     case EffectKind.ApplyStatus:
@@ -867,6 +932,16 @@ namespace Emberfall.Core.Combat
                         // the entry as it lands rather than being looked up by whatever pays it
                         // out. Scaled off the applier's Attack, like every other authored
                         // magnitude, so a cap means the same thing at every level.
+                        // Charges, stamped as the status lands. Zero for every status in shipped
+                        // content, so no entry gains a use count nobody authored.
+                        if (effect.Charges > 0)
+                            for (int ci = 0; ci < target.Statuses.Count; ci++)
+                            {
+                                StatusInstance ch = target.Statuses[ci];
+                                if (ch.Kind == effect.Status && ch.SourceId == source.Id)
+                                    ch.Charges = effect.Charges;
+                            }
+
                         if (effect.Status == StatusKind.Ledger)
                             for (int li = 0; li < target.Statuses.Count; li++)
                             {
@@ -1172,8 +1247,10 @@ namespace Emberfall.Core.Combat
                     return;
                 }
 
-                // 1. Base
-                float raw = source.EffectiveAttack * effect.Power + effect.Flat;
+                // 1. Base. The target-HP term joins here, before mitigation, so "12% of its
+                // missing HP" is reduced by Defense like any other authored damage rather than
+                // arriving as a second, unmitigated payload.
+                float raw = source.EffectiveAttack * effect.Power + effect.Flat + TargetHpTerm(effect, target);
                 float holyBonus = source.EffectiveHolyDamage;
 
                 // 2. Aspect factor
@@ -1229,12 +1306,25 @@ namespace Emberfall.Core.Combat
                     raw *= 1f - damageReduction;
                 }
 
+                // 7.5. Vulnerable - SOURCE-KEYED, which is what makes it different from
+                // DefenseDown. DefenseDown changes the input to the mitigation ratio and softens
+                // the target against the whole field; this reads only the entries THIS attacker
+                // applied, so "takes 12% more damage from Nadine" is 12% more from Nadine and
+                // normal from everybody else. Exactly zero when the attacker has applied none,
+                // and x + 0 is exact, so it cannot move a battle nobody authored it into.
+                float vulnerable = target.VulnerableTo(source.Id);
+                if (vulnerable != 0f) raw *= 1f + vulnerable;
+
                 // 8. Variance, round, clamp
                 raw *= 1f + _rng.Spread(_cfg.DamageVariance);
 
                 int damage = (int)Math.Round(raw, MidpointRounding.AwayFromZero);
                 if (damage < _cfg.MinDamage) damage = (int)_cfg.MinDamage;
 
+                // PreviousTargetId first, and only when the target actually changes: an ability
+                // that hits the same body twice in a row must not shuffle its own history and
+                // report itself as having switched.
+                if (source.LastTargetId != target.Id) source.PreviousTargetId = source.LastTargetId;
                 source.LastTargetId = target.Id;
                 string vfx = ability != null ? ability.Vfx : "impact";
                 string abilityName = ability != null ? ability.Name : "";
@@ -1243,11 +1333,76 @@ namespace Emberfall.Core.Combat
                 if (critical && source.Alive) TriggerPassive(source, PassiveTrigger.OnCriticalHit, depth);
             }
 
+            /// <summary>
+            /// The part of an amount that scales off the TARGET's health rather than the caster's.
+            ///
+            /// Exactly zero for every effect that sets none of the three fields, which is all of
+            /// shipped content - three multiplications by 0f summed, which is 0f, and adding 0f to
+            /// a float is exact. That is what keeps this out of every existing battle.
+            /// </summary>
+            private static float TargetHpTerm(EffectDef effect, CombatUnit target)
+            {
+                if (target == null) return 0f;
+                return target.MaxHp * effect.TargetMaxHpRatio
+                     + target.Hp * effect.TargetCurrentHpRatio
+                     + (target.MaxHp - target.Hp) * effect.TargetMissingHpRatio;
+            }
+
             /// <summary>Single funnel for every point of damage in the game.</summary>
             private void DealRawDamage(int sourceId, CombatUnit target, int damage, bool critical, string vfx, StatusKind dotKind,
                                         float aspectFactor, string abilityName)
             {
                 if (!target.Alive || damage <= 0) return;
+
+                // Guard: a charge-based reduction, spent by USE rather than by time. Applied before
+                // the shield pool, so a guarded ward meets a smaller hit. Walked backwards because
+                // a spent charge removes its entry.
+                for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
+                {
+                    StatusInstance guard = target.Statuses[gi];
+                    if (guard.Kind != StatusKind.Guard || guard.Charges <= 0 || guard.Magnitude <= 0f) continue;
+                    float cut = guard.Magnitude > 1f ? 1f : guard.Magnitude;
+                    damage -= (int)Math.Round(damage * cut, MidpointRounding.AwayFromZero);
+                    guard.Charges--;
+                    if (guard.Charges <= 0)
+                    {
+                        target.Statuses.RemoveAt(gi);
+                        BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
+                        spent.Status = StatusKind.Guard;
+                    }
+                    if (damage <= 0) return;
+                    break;   // one guard a hit, so two cannot stack into immunity
+                }
+
+                // Cover: a share of the hit is taken by the protector instead. Split BEFORE the
+                // holder's own shield pool, so the protector soaks its part and the ward underneath
+                // meets only the remainder - which is what "25% of damage they take is redirected
+                // to Rovan before Shields are checked" says.
+                //
+                // Bounded by _inRedirect's sibling guard: the redirected part goes through this
+                // same funnel, so a protector who is itself Covered would otherwise pass its share
+                // on again. One hop, the same rule Tide's energy redirect and Mirrored Wound both
+                // hold to.
+                if (!_inCover)
+                {
+                    int protectorId;
+                    float share = target.CoverFraction(out protectorId);
+                    CombatUnit protector = share > 0f ? FindUnit(protectorId) : null;
+                    if (protector != null && protector.Alive && protector != target)
+                    {
+                        if (share > 1f) share = 1f;
+                        int moved = (int)Math.Round(damage * share, MidpointRounding.AwayFromZero);
+                        if (moved > 0)
+                        {
+                            damage -= moved;
+                            _inCover = true;
+                            DealRawDamage(sourceId, protector, moved, false, vfx, dotKind, aspectFactor, abilityName);
+                            _inCover = false;
+                            if (damage <= 0) return;
+                            if (!target.Alive) return;
+                        }
+                    }
+                }
 
                 if (target.Shield > 0f)
                 {
@@ -1298,8 +1453,43 @@ namespace Emberfall.Core.Combat
 
                 if (sourceId >= 0) target.LastAttackerId = sourceId;
 
+                target.LastDamagedRound = _round;
+                if (sourceId >= 0)
+                {
+                    CombatUnit dealer = FindUnit(sourceId);
+                    if (dealer != null) dealer.DamagedThisRound.Add(target.Id);
+                }
+
                 if (target.Hp <= 0f)
                 {
+                    // THE ONE INTERCEPTING TRIGGER. Raised while the unit is still flagged alive
+                    // and its HP is at or below zero, then the condition is re-checked: a passive
+                    // that healed it above zero has saved it, and one that did nothing leaves the
+                    // death to resolve exactly as it did before.
+                    //
+                    // No new effect kind was needed for the save. ApplyHealValue refuses a dead
+                    // target, and this unit is not dead yet - Alive is still true - so an ordinary
+                    // Heal lands and lifts HP back over the line.
+                    //
+                    // _inDeathCheck bounds it to one attempt. Without it a passive that kills
+                    // somebody else while answering this could re-enter here for a second unit and
+                    // unwind in an order nothing reasons about.
+                    if (!_inDeathCheck)
+                    {
+                        _inDeathCheck = true;
+                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyWouldDie, 0, target);
+                        _inDeathCheck = false;
+                    }
+
+                    // Re-read, because the broadcast above may have healed it. With nothing
+                    // listening - which is all of shipped content - Hp is untouched and this is the
+                    // same test that guarded the block before.
+                    if (target.Hp > 0f)
+                    {
+                        TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
+                        return;
+                    }
+
                     target.Hp = 0f;
                     target.Alive = false;
 
@@ -1334,6 +1524,13 @@ namespace Emberfall.Core.Combat
                 // sourceless one does not.
                 if (sourceId >= 0)
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnEnemyDamagedAlly, 0, target);
+
+                // And separately, that an ally has dropped low. A distinct question from being hit
+                // at all - a chip hit on a full bar is not what "when an ally falls below 35%" is
+                // asking about - so it is its own trigger rather than a condition on that one. The
+                // watcher's OWN Threshold decides how low counts, read where every other threshold
+                // passive reads it.
+                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
 
                 // Mirrored Wound shares this dispatch point with the OnDamaged passive above and
                 // deliberately runs AFTER it. That trigger is not free real estate - Backwash
@@ -1376,6 +1573,11 @@ namespace Emberfall.Core.Combat
                         CombatUnit healer = FindUnit(sourceId);
                         if (healer != null && healer.Alive)
                             TriggerPassive(healer, PassiveTrigger.OnHealApplied, 0);
+
+                        // The recipient's allies hear about it too; the recipient is excluded,
+                        // since a hero answering its own healing is a different ability from one
+                        // answering somebody else's.
+                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
                     }
                 }
 
@@ -1988,6 +2190,34 @@ namespace Emberfall.Core.Combat
                 // Note for anyone reading the RNG stream: returning here short-circuits the switch
                 // below, so RandomEnemy does not draw when a side has an anchor. That was already
                 // true for Taunt; Lumen simply makes it true far more often.
+                // PROVOKED, checked before the anchor and after every ally mode has returned.
+                //
+                // The opposite direction to Taunt, and its own rule rather than a variant: Taunt
+                // sits on a protector and makes it answer for its whole side against everyone,
+                // while this sits on ONE attacker - the caster standing here - and constrains that
+                // attacker alone. Four abilities in the roster say "Taunts the front enemy",
+                // meaning exactly one enemy is provoked, and Taunt on Self is wrong in both
+                // directions for them: too wide, because every other enemy is redirected too, and
+                // too narrow, because it says nothing about what that one enemy does when the
+                // caster is not its side's anchor.
+                //
+                // The ANCHOR STILL WINS where both apply. A living Lumen unit answers every
+                // single-enemy question aimed at its side, and DESIGN-WORLD makes that determinism
+                // the whole of the identity - so a provoke that outranked it would be an aspect
+                // change wearing a targeting change's clothes. Unreachable today either way, since
+                // nothing in content applies Provoked.
+                for (int i = 0; i < caster.Statuses.Count; i++)
+                {
+                    StatusInstance p = caster.Statuses[i];
+                    if (p.Kind != StatusKind.Provoked) continue;
+                    CombatUnit provoker = FindUnit(p.SourceId);
+                    if (provoker == null || !provoker.Alive || provoker == excluded) continue;
+                    if (provoker.IsPlayer == caster.IsPlayer) continue;
+                    if (FindTargetAnchor(!caster.IsPlayer) != null) break;   // the anchor answers instead
+                    result.Add(provoker);
+                    return result;
+                }
+
                 CombatUnit anchor = FindTargetAnchor(!caster.IsPlayer);
                 if (anchor == excluded) anchor = null;
                 if (anchor != null)

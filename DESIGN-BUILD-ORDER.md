@@ -46,6 +46,54 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
   - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
     and the whole harness report a strict superset with no existing line changed. 36 new checks,
     seven standing guards, and the ordinal pins extended again. No new `BattleEventType`.
+- **Open: `feat/history-allies-and-charges`** - unmerged, based on `feat/marks-limits-and-ledger`
+  and carrying the five branches under it. **Deliberately NOT based on `fix/shield-pool-coherence`:**
+  that branch is a balance change whose harness is red by design, and no-op work must not inherit
+  it. Fourth-tier inventory work, all of it a no-op against shipped content.
+  - **Action history costs the save nothing.** A `CombatUnit` is built fresh from a `HeroDef` and a
+    `HeroInstance` at the start of every fight, and the save stores the instance - uid, defId,
+    level, copies, relic, armor, selected talent - and nothing about how a battle went. So the new
+    per-unit state (`PreviousTargetId`, `ActedThisRound`, `LastTurnRound`, `LastDamagedRound`,
+    the two action-kind flags, `ActionsTaken`, and a per-round `DamagedThisRound` list) is zero
+    save bytes and **needs no version bump, which is why this branch has none.** Seven new
+    `EffectCondition` members read it.
+  - **`PreviousTargetId` had to exist.** `LastTargetId` is overwritten in `ApplyDamageEffect` as
+    the hit is set up, so by the time anything asks "a different target than last turn" it already
+    names the new target. Note also that with no previous target at all the condition reads FALSE:
+    a hero that has attacked nobody has not switched.
+  - **"Since my last turn" is round-granular** and the code says so. It compares the round the
+    subject was last damaged in against the round the caster last acted in, so two units acting
+    inside one round are not ordered against each other.
+  - **Ally triggers reuse the broadcast**, and **"would die" is built, not deferred.**
+    `OnAllyWouldDie` is raised in `DealRawDamage` while the unit is still flagged alive and its HP
+    is at or below zero, and the condition is then RE-CHECKED: a passive that healed it above zero
+    has saved it. No new effect kind was needed, because `ApplyHealValue` refuses a dead target and
+    this one is not dead yet. The harness proves the interception as an outcome rather than an
+    event: the same battle kills one unit with no watcher and none with one.
+  - **A single-target provoke, not Taunt on Self.** `StatusKind.Provoked` sits on one ATTACKER and
+    constrains that attacker alone, which is the opposite direction to Taunt - Taunt sits on a
+    protector and makes it answer for its whole side against everyone. For the four abilities that
+    say "Taunts the front enemy", Taunt on Self is wrong in both directions at once: too wide,
+    since every other enemy is redirected too, and too narrow, since it says nothing about what
+    that one enemy does when the caster is not its side's anchor. **The anchor still outranks it**,
+    consistent with every earlier pass, and that is recorded at the call site.
+  - **`Covered` splits a hit before the shield pool**, so a protector soaks its share and the ward
+    underneath meets only the remainder. Bounded to one hop by `_inCover`, the same shape Tide's
+    energy redirect and Mirrored Wound already use.
+  - **Charges are their own field, not the ledger's.** `StatusInstance.Charges` is an int counting
+    DOWN to removal; `Stored` is a float accumulating UP toward a cap. One status can legitimately
+    want both - a mark that records damage and also wears off after three hits - and sharing one
+    field would make that unauthorable. `StatusKind.Guard` is the first carrier.
+  - **`Vulnerable` is source-keyed**, which is the whole of what makes it different from
+    `DefenseDown`: the harness shows the applier's damage rising while a bystander's is unchanged.
+  - **Target-HP scaling** is three fields added on top of the Attack-scaled amount, so an effect
+    can be part flat, part Attack-scaled and part HP-scaled at once.
+  - **Deferred, with counts:** "cannot target the same ally twice" (1 ability) needs the exclusion
+    threaded through every pick path and interacts with the anchor; "ends its turn" as an ally
+    trigger (1 ability) has no turn-end dispatch point that is not also the status-expiry sweep.
+  - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
+    and the whole harness report a strict superset with no existing line changed. 44 new checks,
+    five standing guards, ordinal pins extended, and `BattleEventType` untouched for a third pass.
 - **Open: `fix/shield-pool-coherence`** - unmerged, and deliberately NOT folded into the branch
   above, because it is the one change in this group that is not a no-op. Today a Shield status
   removed by duration expiry or by Dispel leaves the absorbing pool behind; only absorption and

@@ -229,7 +229,45 @@ namespace Emberfall.Core.Data
 
         /// <summary>The subject's Ledger entries applied by the caster hold at least
         /// ConditionValue between them.</summary>
-        LedgerAtLeast
+        LedgerAtLeast,
+
+        // ---------- action history ----------
+        //
+        // All of it is BATTLE-TIME state on CombatUnit and NONE of it reaches the save. A
+        // CombatUnit is built fresh from a HeroDef and a HeroInstance at the start of every fight;
+        // the save stores the instance - uid, defId, level, copies, relic, armor, selected talent -
+        // and nothing about how a battle went. So this costs zero save bytes and needs no version
+        // bump, which is why there is none in this branch.
+
+        /// <summary>The subject has already taken its turn this round.</summary>
+        SubjectActedThisRound,
+
+        /// <summary>The subject has not yet acted this round.</summary>
+        SubjectHasNotActedThisRound,
+
+        /// <summary>
+        /// The subject has taken damage since the CASTER's own last turn.
+        ///
+        /// Round-granular: it compares the round the subject was last damaged in against the round
+        /// the caster last acted in. Two units acting in the same round are not ordered against
+        /// each other by this, which is an approximation of "since my last turn" rather than the
+        /// thing itself, and is stated here rather than hidden.
+        /// </summary>
+        SubjectDamagedSinceMyTurn,
+
+        /// <summary>The subject is the one the caster's previous attack landed on.</summary>
+        SubjectIsMyPreviousTarget,
+
+        /// <summary>The subject is NOT the one the caster's previous attack landed on - "a
+        /// different target than last turn".</summary>
+        SubjectIsNotMyPreviousTarget,
+
+        /// <summary>The caster used the same kind of action - Basic or Active - on each of its last
+        /// two turns.</summary>
+        CasterRepeatedActionType,
+
+        /// <summary>The caster has already damaged this subject at least once this round.</summary>
+        AlreadyDamagedSubjectThisRound
     }
 
     /// <summary>
@@ -350,7 +388,44 @@ namespace Emberfall.Core.Data
         /// other status does. A parallel per-unit store would need its own lifetime rules and would
         /// then have to be kept in step with the status that represents it.
         /// </summary>
-        Ledger
+        Ledger,
+
+        // ---------- redirection, charges, per-source modifiers ----------
+
+        /// <summary>
+        /// A share of the holder's incoming damage is taken by whoever applied it. Magnitude is the
+        /// fraction, SourceId is the protector, and the split happens in DealRawDamage before the
+        /// holder's own shield pool is touched - so a protector soaks its share first and the ward
+        /// underneath only meets what is left.
+        /// </summary>
+        Covered,
+
+        /// <summary>
+        /// The holder's single-enemy targeting resolves onto whoever applied this, and nobody else.
+        ///
+        /// The OPPOSITE DIRECTION to Taunt, and a genuinely different rule rather than a variant of
+        /// it. Taunt sits on the protector and makes it answer for its whole side against every
+        /// attacker; this sits on one ATTACKER and constrains that attacker alone. Four abilities
+        /// in the roster say "Taunts the front enemy", meaning exactly one enemy is provoked, and
+        /// Taunt on Self would have been wrong in both directions at once - too wide, because every
+        /// other enemy would also be redirected, and too narrow, because it says nothing about what
+        /// that one enemy does if the caster is not the anchor.
+        /// </summary>
+        Provoked,
+
+        /// <summary>
+        /// Reduces the next StatusInstance.Charges hits the holder takes by Magnitude, then leaves.
+        /// The charge-based counterpart of DamageReductionUp, which is time-based: "the next hit is
+        /// reduced 18%" is a use count, not a duration, and a duration cannot express it.
+        /// </summary>
+        Guard,
+
+        /// <summary>
+        /// The holder takes Magnitude more damage FROM WHOEVER APPLIED IT, and normal damage from
+        /// everybody else. Source-keyed, which is the whole point: DefenseDown is the unconditional
+        /// near-miss and makes a target softer to the entire field.
+        /// </summary>
+        Vulnerable
     }
 
     /// <summary>
@@ -444,7 +519,36 @@ namespace Emberfall.Core.Data
         /// that was carrying it, and only for a genuine duration expiry - not for a status that was
         /// cleansed, dispelled, absorbed away or cleared by death, each of which is a different
         /// thing happening and has its own path.</summary>
-        OnStatusExpired
+        OnStatusExpired,
+
+        // ---------- ally-event triggers ----------
+        //
+        // Broadcast, the same shape OnEnemyActive and its siblings use: they fire on every living
+        // unit of a side because the thing that happened, happened to somebody else. The victim or
+        // recipient is excluded from each, since it already has its own owner-centric trigger for
+        // the same event.
+
+        /// <summary>An ally of the owner dropped to or below PassiveDef.Threshold of its max HP.
+        /// Raised in DealRawDamage after the hit lands, so the passive reads the HP it is
+        /// answering.</summary>
+        OnAllyHpBelowThreshold,
+
+        /// <summary>An ally of the owner was healed.</summary>
+        OnAllyHealed,
+
+        /// <summary>An ally of the owner gained a shield.</summary>
+        OnAllyShielded,
+
+        /// <summary>
+        /// An ally of the owner is about to die, raised BEFORE the death resolves.
+        ///
+        /// The one trigger here that intercepts rather than observes. DealRawDamage raises it while
+        /// the unit is still alive and its HP is at or below zero, then RE-CHECKS: a passive that
+        /// healed it above zero has saved it, and a passive that did nothing leaves the death to
+        /// resolve exactly as it did before. No new effect kind was needed for that - an ordinary
+        /// Heal lands because the unit is still flagged alive at the moment the trigger runs.
+        /// </summary>
+        OnAllyWouldDie
     }
 
     /// <summary>
@@ -910,7 +1014,12 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.EffectResistDown
                 || kind == StatusKind.CritDamageDown
                 || kind == StatusKind.SkillDamageDown
-                || kind == StatusKind.ArmorBreakDown;
+                || kind == StatusKind.ArmorBreakDown
+                // Provoked and Vulnerable are things done TO a unit, so a Cleanse can take them and
+                // an Umbra source makes them stick. Covered and Guard are protections and are
+                // Dispel's business instead.
+                || kind == StatusKind.Provoked
+                || kind == StatusKind.Vulnerable;
         }
 
         /// <summary>
@@ -978,6 +1087,13 @@ namespace Emberfall.Core.Data
                 case StatusKind.SkillDamageDown: return "Skill Damage Down";
                 case StatusKind.ArmorBreakUp: return "Armor Break Up";
                 case StatusKind.ArmorBreakDown: return "Armor Break Down";
+                case StatusKind.Mark: return "Mark";
+                case StatusKind.MarkAlt: return "Mark II";
+                case StatusKind.Ledger: return "Record";
+                case StatusKind.Covered: return "Covered";
+                case StatusKind.Provoked: return "Provoked";
+                case StatusKind.Guard: return "Guard";
+                case StatusKind.Vulnerable: return "Vulnerable";
             }
             return kind.ToString();
         }
@@ -1016,6 +1132,13 @@ namespace Emberfall.Core.Data
                 case StatusKind.SkillDamageDown: return "SKD-";
                 case StatusKind.ArmorBreakUp: return "ABK+";
                 case StatusKind.ArmorBreakDown: return "ABK-";
+                case StatusKind.Mark: return "MRK";
+                case StatusKind.MarkAlt: return "MRK2";
+                case StatusKind.Ledger: return "REC";
+                case StatusKind.Covered: return "COV";
+                case StatusKind.Provoked: return "PRV!";
+                case StatusKind.Guard: return "GRD";
+                case StatusKind.Vulnerable: return "VUL";
             }
             return "?";
         }

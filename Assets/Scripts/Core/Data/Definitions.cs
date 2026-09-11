@@ -179,6 +179,25 @@ namespace Emberfall.Core.Data
         /// </summary>
         public float StoredCap;
 
+        /// <summary>
+        /// Uses stamped onto a charge-based status as it lands. Zero leaves the status on its
+        /// duration alone, which is every status that existed before this pass.
+        /// </summary>
+        public int Charges;
+
+        /// <summary>
+        /// Scaling off the TARGET's health rather than the caster's. `SelfHpRatio` already covers
+        /// the caster's own max HP; these three cover the other side of the hit, which is what
+        /// "12% of its missing HP" and "heals them for 8% Max HP" need.
+        ///
+        /// All three are added on top of the Attack-scaled amount rather than replacing it, so an
+        /// effect can be part flat, part Attack-scaled and part HP-scaled at once - which is how
+        /// the descriptions that use them are written.
+        /// </summary>
+        public float TargetMaxHpRatio;
+        public float TargetCurrentHpRatio;
+        public float TargetMissingHpRatio;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -204,6 +223,10 @@ namespace Emberfall.Core.Data
             e.PerStackStatus = EnumUtil.Parse(j.GetString("perStackStatus", "Resolve"), StatusKind.Resolve);
             e.PerStackOn = EnumUtil.Parse(j.GetString("perStackOn", "Caster"), ConditionSubject.Caster);
             e.StoredCap = j.GetFloat("storedCap", 0f);
+            e.Charges = Math.Max(0, j.GetInt("charges", 0));
+            e.TargetMaxHpRatio = j.GetFloat("targetMaxHpRatio", 0f);
+            e.TargetCurrentHpRatio = j.GetFloat("targetCurrentHpRatio", 0f);
+            e.TargetMissingHpRatio = j.GetFloat("targetMissingHpRatio", 0f);
             return e;
         }
 
@@ -239,6 +262,10 @@ namespace Emberfall.Core.Data
             c.PerStackStatus = PerStackStatus;
             c.PerStackOn = PerStackOn;
             c.StoredCap = StoredCap;
+            c.Charges = Charges;
+            c.TargetMaxHpRatio = TargetMaxHpRatio;
+            c.TargetCurrentHpRatio = TargetCurrentHpRatio;
+            c.TargetMissingHpRatio = TargetMissingHpRatio;
             return c;
         }
     }
