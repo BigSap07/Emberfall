@@ -4,7 +4,6 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
-<<<<<<< HEAD
 - **Open: `feat/marks-limits-and-ledger`** - unmerged, based on
   `feat/turn-status-and-enemy-triggers` and carrying the four branches under it. Third-tier
   inventory work, all of it a no-op against shipped content.
@@ -95,25 +94,7 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
   - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
     and the whole harness report a strict superset with no existing line changed. 44 new checks,
     five standing guards, ordinal pins extended, and `BattleEventType` untouched for a third pass.
-- **Open: `fix/shield-pool-coherence`** - unmerged, and deliberately NOT folded into the branch
-  above, because it is the one change in this group that is not a no-op. Today a Shield status
-  removed by duration expiry or by Dispel leaves the absorbing pool behind; only absorption and
-  death empty it. **Measured in shipped content: 26 absorptions across 16 of 144 battles happen
-  after the status is already gone, soaking 2673 damage the player cannot see being soaked.** The
-  fix makes the status the authority - when it goes, the pool goes - which is already how the
-  absorption path works in reverse.
-  - **Fingerprints: 78 of 714**, in chapter 1 stages 1-4 plus an Orrin solo case. 72 change only
-    event count, 2 change round count, one victory flips and that one is a synthetic solo sweep
-    rather than a campaign line.
-  - **The fingerprint count understates it. The balance instruments are where the cost is:** 11 of
-    24 geared-curve rows move, all downward, across late chapter 2 - the Tide chapter, where
-    Orrin's ward was quietly carrying the fights. 2-8's FLOOR drops 84% to 60%; 2-11's CEIL drops
-    96.5% to 84%; three stages become flagged under 90% floor; and **2-7's CEIL falls outside its
-    tuned [78%, 92%] band, which fails `build-check.ps1`.** That failure is left standing on the
-    branch rather than papered over.
-  - **So it is a balance change wearing a bug fix's clothes.** Landing it means retuning late
-    chapter 2, which is a content decision rather than an engine one. Needs a human.
-=======
+
 - **Open: `fix/shield-pool-coherence`** - unmerged. Two commits: a behaviour change, then the
   retune it forced. **This is the first time a fix in this project has moved the balance numbers,**
   so both halves are recorded here rather than left to be rediscovered from a diff.
@@ -176,7 +157,7 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
   **Where it lands:** 0 of 24 stages BLOCK, every CEIL in band, soft floors down from 3 to 1, and
   `build-check.ps1` green. This commit deliberately MOVES fingerprints, unlike every other branch
   in this stack - it is a content retune, and byte-identity is not the standard it is held to.
->>>>>>> fix/shield-pool-coherence
+
 - **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
   `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
   inventory work: turn order, status operations, and the first triggers that are not owner-centric.
