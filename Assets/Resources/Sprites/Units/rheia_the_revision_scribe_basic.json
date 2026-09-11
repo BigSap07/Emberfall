@@ -10,6 +10,7 @@
     "end": 59,
     "fps": 30,
     "loop": true,
-    "impactFraction": 0.644
+    "impactFraction": 0.644,
+    "footFraction": 0.219
   }
 }

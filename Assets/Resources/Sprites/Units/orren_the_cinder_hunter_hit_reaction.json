@@ -1,32 +1,33 @@
 {
-    "generatedBy":  "Sorceress Sprite Analyzer",
-    "importedBy":  "Tools/import-sprite-sheets.ps1",
-    "sprite":  "orren_the_cinder_hunter_hit_reaction",
-    "image":  "orren_the_cinder_hunter_hit_reaction.png",
-    "frameWidth":  288,
-    "frameHeight":  512,
-    "sheet":  {
-                  "cols":  9,
-                  "rows":  8,
-                  "frames":  72,
-                  "imageWidth":  2592,
-                  "imageHeight":  4096
-              },
-    "defaultAnimation":  {
-                             "start":  0,
-                             "end":  71,
-                             "fps":  30,
-                             "loop":  true,
-                             "impactFraction":  0.5,
-                             "playbackSpeed":  1.3
-                         },
-    "sourceSheet":  "orren_hit_reaction_mp4_sheet.png",
-    "downscaleNote":  "Frames resampled 720x1280 -\u003e 288x512, one frame at a time. The source sheet was 6480x10240, past the 8192 maxTextureSize Kael\u0027s sheets import at; Unity would have rescaled it non-uniformly and sheared the frame grid.",
-    "contentBox":  {
-                       "topPx":  109,
-                       "bottomPx":  398,
-                       "footFraction":  0.2207,
-                       "bodyFraction":  0.5645
-                   },
-    "tuningNote":  "impactFraction and playbackSpeed are NOT in the export and are not derived from anything - they are seeded starting values, exactly as Kael\u0027s were. Eyeball them in Play mode and retune."
+  "generatedBy": "Sorceress Sprite Analyzer",
+  "importedBy": "Tools/import-sprite-sheets.ps1",
+  "sprite": "orren_the_cinder_hunter_hit_reaction",
+  "image": "orren_the_cinder_hunter_hit_reaction.png",
+  "frameWidth": 288,
+  "frameHeight": 512,
+  "sheet": {
+    "cols": 9,
+    "rows": 8,
+    "frames": 72,
+    "imageWidth": 2592,
+    "imageHeight": 4096
+  },
+  "defaultAnimation": {
+    "start": 0,
+    "end": 71,
+    "fps": 30,
+    "loop": true,
+    "impactFraction": 0.5,
+    "playbackSpeed": 1.3,
+    "footFraction": 0.221
+  },
+  "sourceSheet": "orren_hit_reaction_mp4_sheet.png",
+  "downscaleNote": "Frames resampled 720x1280 -> 288x512, one frame at a time. The source sheet was 6480x10240, past the 8192 maxTextureSize Kael's sheets import at; Unity would have rescaled it non-uniformly and sheared the frame grid.",
+  "contentBox": {
+    "topPx": 109,
+    "bottomPx": 398,
+    "footFraction": 0.2207,
+    "bodyFraction": 0.5645
+  },
+  "tuningNote": "impactFraction and playbackSpeed are NOT in the export and are not derived from anything - they are seeded starting values, exactly as Kael's were. Eyeball them in Play mode and retune."
 }

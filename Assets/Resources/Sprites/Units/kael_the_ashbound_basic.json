@@ -17,7 +17,8 @@
     "fps": 30,
     "loop": true,
     "impactFraction": 0.5,
-    "playbackSpeed": 2.75
+    "playbackSpeed": 2.75,
+    "footFraction": 0.223
   },
   "note": "No sections defined — treat as a single looping animation over the listed frames.",
   "correctionNote": "end corrected from the exported 149 to 144: frames 145-149 are fully transparent in this sheet (verified by alpha bounding box), so playing through the exported range flashed the unit invisible for the last 5 frames before falling back to idle.",

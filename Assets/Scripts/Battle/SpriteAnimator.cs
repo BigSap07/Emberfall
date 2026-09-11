@@ -40,6 +40,16 @@ namespace Emberfall.Battle
         /// </summary>
         public float PlaybackSpeed = 1f;
 
+        /// <summary>
+        /// Fraction of the frame height that is empty below the character's feet. -1 means
+        /// "not authored" and leaves the quad wherever BuildSprite put it; any value >= 0
+        /// repositions the quad so that margin sits underground. Derived per-clip by the same
+        /// alpha scan that produced the hero-level SpriteFootFraction, and written into each
+        /// clip's sidecar JSON so a hit-reaction frame that shifts the character vertically
+        /// keeps the feet at ground level rather than inheriting idle's margin.
+        /// </summary>
+        public float FootFraction = -1f;
+
         public int FrameCount { get { return EndFrame - StartFrame + 1; } }
     }
 
@@ -70,6 +80,8 @@ namespace Emberfall.Battle
         private readonly string _spriteId;
         private readonly Dictionary<string, SpriteAnimClip> _clips = new Dictionary<string, SpriteAnimClip>();
         private Material _material;
+        private Transform _quad;
+        private float _canvasHeight;
 
         private SpriteAnimClip _current;
         private float _frameTime;
@@ -122,11 +134,15 @@ namespace Emberfall.Battle
 
         private SpriteAnimator(string spriteId) { _spriteId = spriteId; }
 
-        /// <summary>Called once by UnitRig.BuildSprite right after it creates the quad's material.</summary>
-        public void Bind(Material material)
+        /// <summary>Called once by UnitRig.BuildSprite after it creates the quad and its material.
+        /// quad and canvasHeight allow per-clip foot repositioning — see ApplyFootPosition.</summary>
+        public void Bind(Material material, Transform quad, float canvasHeight)
         {
             _material = material;
+            _quad = quad;
+            _canvasHeight = canvasHeight;
             ApplyFrame(0);
+            ApplyFootPosition();
         }
 
         private SpriteAnimClip GetOrLoad(string clipId)
@@ -149,6 +165,7 @@ namespace Emberfall.Battle
             _looping = true;
             _returnToIdleOnFinish = false;
             ApplyFrame(0);
+            ApplyFootPosition();
         }
 
         /// <summary>
@@ -161,12 +178,17 @@ namespace Emberfall.Battle
         public void PlayOnce(string clipId, bool holdOnFinish)
         {
             SpriteAnimClip clip = GetOrLoad(clipId);
-            if (clip == null) return;
+            if (clip == null)
+            {
+                PlayLoop(IdleClip);
+                return;
+            }
             _current = clip;
             _frameTime = 0f;
             _looping = false;
             _returnToIdleOnFinish = !holdOnFinish;
             ApplyFrame(0);
+            ApplyFootPosition();
         }
 
         public void Update(float deltaTime)
@@ -195,6 +217,14 @@ namespace Emberfall.Battle
             ApplyFrame(local);
 
             if (finished && _returnToIdleOnFinish) PlayLoop(IdleClip);
+        }
+
+        private void ApplyFootPosition()
+        {
+            if (_quad == null || _current == null || _current.FootFraction < 0f) return;
+            Vector3 pos = _quad.localPosition;
+            pos.y = _canvasHeight * (0.5f - _current.FootFraction);
+            _quad.localPosition = pos;
         }
 
         /// <summary>

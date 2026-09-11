@@ -71,7 +71,7 @@ Shader "Emberfall/Fx"
             {
                 fixed4 c = tex2D(_MainTex, i.uv) * _Color;
                 c.rgb += c.rgb * _Emission;
-                c.rgb = lerp(c.rgb, fixed3(1, 1, 1), _Flash);
+                c.rgb = lerp(c.rgb, fixed3(1, 1, 1), _Flash * step(0.5, c.a));
                 c.a *= _Fade;
                 return c;
             }
