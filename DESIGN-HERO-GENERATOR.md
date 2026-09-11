@@ -111,8 +111,14 @@ never produce a class-driven mechanic (a Priest ability that revives, an Assassi
 executes) because mechanic ownership is aspect's job, decided elsewhere, and Class doesn't get a
 second vote.
 
+**The open question below has since been answered by content, in Role's favour.** `HeroRole` now
+carries ten members in five pairs - Bulwark/Vanguard, Binder/Breaker, Warden/Mender,
+Marksman/Tinkerer, Striker/Stalker - and the 94-hero roster is authored against exactly those. No
+`class` field was ever added, and a taxonomy of ten covers what the five Class names were reaching
+for. The paragraph below is the record of the question, not current status.
+
 **Worth naming plainly:** the game already has an enum that does almost exactly this job.
-`HeroRole` (`Bulwark`, `Striker`, `Breaker`, `Mender`, `Warden`, `Stalker`) is documented in
+`HeroRole` (then `Bulwark`, `Striker`, `Breaker`, `Mender`, `Warden`, `Stalker`) is documented in
 `Enums.cs` as "purely descriptive, behaviour comes from ability data", the same boundary Class is
 being given here. The five Class names and the six Role names aren't the same list and don't map
 one-to-one (`Warrior` reads as `Bulwark`, `Mage` as `Breaker`, `Priest` as `Mender`, and both

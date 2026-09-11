@@ -233,10 +233,12 @@ namespace Emberfall.UI
         /// contribution is the damage that never showed up. Naming the five and pointing at where
         /// the label lives is the honest version of this step.
         ///
-        /// Marrow is the hero shown because Mender is the most legible of the four the squad
-        /// carries. Note that the squad does NOT cover all seven roles - it has Breaker twice, and
-        /// no Bulwark, Warden or Stalker - so the card names what is actually on the field rather
-        /// than reciting the enum.
+        /// Marrow is the hero shown because Mender is the most legible of the five the squad
+        /// carries. Note that the squad does NOT cover all ten roles - it fills five of them and
+        /// leaves Bulwark, Binder, Warden, Tinkerer and Stalker empty - so the card names what is
+        /// actually on the field rather than reciting the enum. It counted SEVEN before the enum
+        /// was widened for the incoming roster, which is why this comment is worth keeping in step:
+        /// it is the only place in the project that states how many roles there are in prose.
         /// </summary>
         private static void ShowRoles(GameApp app)
         {
@@ -244,8 +246,9 @@ namespace Emberfall.UI
             app.Modal.ShowConfirm(
                 "STEP FOUR - WHAT THEY ARE FOR",
                 "Marrow is a MENDER. The chip behind this says so.\n\n"
-                + "Kael and Seraphine break. Veska strikes. Orren shoots.\n"
-                + "Five heroes, four jobs. A line wants more than one.",
+                + "Kael holds the front. Seraphine breaks a line.\n"
+                + "Veska finishes. Orren shoots from the back.\n"
+                + "Five heroes, five jobs. A line wants more than one.",
                 "GO ON", "SKIP",
                 delegate { ShowEquipment(app); },
                 delegate { Finish(app); });

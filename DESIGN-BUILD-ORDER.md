@@ -2,7 +2,7 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-11, not against the rest of this document.
+Current state, checked against the repo on 2026-09-12, not against the rest of this document.
 
 ### `main`'s harness is DELIBERATELY RED on exactly three checks
 
@@ -10,11 +10,13 @@ Not a broken build, and not debt anyone is expected to pay down opportunisticall
 three is a consequence of finished work whose other half has not landed yet, and each has one
 closing condition and no other.
 
-1. **`every combat role has a hero`.** Bulwark, Warden and Stalker have no hero at all: the six
-   placeholder heroes were the only holders of those three roles, and deleting them emptied
-   three of the seven. **Closes when the 94-hero roster is imported.** Nothing else closes it -
-   re-roling one of the five remaining Ember heroes would paper over the gap the import exists
-   to fill.
+1. **`every combat role has a hero`.** Five of the ten roles have no hero at all: Bulwark,
+   Warden, Stalker, Binder and Tinkerer. The six placeholder heroes held the first three, and
+   deleting them emptied those; `HeroRole` was then widened from seven members to the ten the
+   incoming roster is authored against, which added the other two as empty from birth. The gap
+   got wider on purpose, and that is the honest reading of a taxonomy that grew while the roster
+   did not. **Closes when the 94-hero roster is imported.** Nothing else closes it - re-roling one
+   of the five remaining Ember heroes would paper over the gap the import exists to fill.
 2. **Summon pity is unsatisfiable.** Pity guarantees three distinct UNOWNED heroes, and five
    heroes minus three starters leaves two. It is arithmetic, not a pity bug, which is why the
    precondition is asserted separately from the mechanic. **Closes with the same import.**
@@ -36,6 +38,49 @@ whole of the expected red.
 - The pinned five-body line is all-Ember, because the roster is, so its FLOOR/CEIL/BLOCK numbers
   are not a statement about the game until the roster lands and the line is re-picked.
 
+- **Open: `feat/ten-hero-roles`** - unmerged. `HeroRole` widened from seven members to the ten the
+  incoming 94-hero roster is authored against, in five pairs: Bulwark/Vanguard, Binder/Breaker,
+  Warden/Mender, Marksman/Tinkerer, Striker/Stalker. Verified against the roster itself, which
+  uses exactly those ten and no others (Bulwark 14, Vanguard 14, Mender 13, Tinkerer 13,
+  Marksman 12, Breaker 9, Stalker 6, Striker 5, Binder 5, Warden 3).
+  - **`Ranger` was removed, not deprecated in place**, which is the one deviation from the
+    append-only rule every other enum here follows. Two things make it safe and both are now
+    asserted rather than argued: it was the LAST member, so nothing declared before it renumbers,
+    and **a role reaches no persisted record at all** - it is absent from the save format and from
+    every battle event, living only on `HeroDef`, `CombatUnit` and the per-battle `UnitSnapshot`,
+    each rebuilt from content on load. `CheckHeroRoleOrdinals` pins the six surviving ordinals,
+    pins the four new ones at 6-9, and serialises a real profile to confirm no role appears in it.
+    The day a role does get written to a save, that check fails and reusing ordinal 6 has to be
+    answered properly.
+  - **Two of the five heroes were re-roled.** Kael Breaker -> **Vanguard**: he is the fattest body
+    left (1850 HP, the highest Defense of the five) and his only passive is a BattleStart self
+    DefenseUp, which is a durability passive rather than a damage one; his HP-to-Attack ratio of
+    11.2 sits on the roster's Vanguard band (11.7) rather than its Breaker band (9.3), and calling
+    him Breaker alongside Seraphine was the one duplicated role among five heroes. Orren Ranger ->
+    **Marksman**, because Ranger no longer exists and the roster's Marksman exemplar carries a bow
+    and leads with a mark, which is Orren exactly. Seraphine stays **Breaker** (area damage plus
+    Burn on both basic and active), Marrow stays **Mender** (the only healer in the game), Veska
+    stays **Striker** (highest Attack, lowest HP, hook blades, an OnKill trigger).
+  - **One consumer assumed exactly seven, and it was prose, not code.** `FirstRun.ShowRoles` said
+    the starting squad "does NOT cover all seven roles" and its on-screen card read "Five heroes,
+    four jobs"; both were corrected, and with Kael on Vanguard the squad now fills five distinct
+    roles. Everything else was already shape-agnostic: `UITheme.RoleName` and `CombatLogger`
+    stringify, `CheckContent` iterates `Enum.GetValues`, and nothing anywhere indexes an array by
+    role ordinal. `UITheme.RoleColor` was a switch over six of the seven - Ranger fell through to
+    grey - and now names all ten in paired hues, with the fallthrough kept but unreachable.
+  - **A new guard, because the failure mode here is silence.** `EnumUtil.Parse` falls back to
+    `Striker` rather than throwing, so a roster authoring a role this enum does not know loads
+    clean and is wrong. The check reads the `role` strings straight out of `heroes.json` and
+    asserts each round-trips through the enum. **It shipped broken once and the fix is part of
+    this branch:** the first version paired each role with the nearest preceding `"id"`, which
+    after the first hero is an ABILITY id, so it resolved no `HeroDef`, compared nothing and
+    passed. A guard against a silent fallback that can itself go quiet is worth nothing, so the
+    scan now asserts it read every hero before it reports a verdict.
+  - **Harness: still the same three reds, and the first is now wider by design.** Role coverage
+    reports 5 of 10 empty (Bulwark, Warden, Stalker, Binder, Tinkerer) where it reported 3 of 7.
+    It was not weakened and must not be: the two new empties are roles the taxonomy added that no
+    current hero fills, which is the same gap the import closes. Summon pity and the CEIL band are
+    unchanged.
 - **Shipped: the first half of the roster swap.** Six placeholder heroes are deleted from
   `heroes.json` - `orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`,
   `ryn_solvarr`, `maeve_corrin`, `nyx_serrow`. Five remain: Kael, Seraphine, Marrow, Veska, Orren.
@@ -2101,8 +2146,10 @@ renumbering, and nobody has gone back to update the harness's own prose.
     Marrow (Mender), Veska (Striker), Orren (Ranger) - appended to `heroes.json`, taking the roster
     from 7 to 11. `HeroRole` gained `Ranger` after `Stalker` for Orren; nothing was reordered or
     renamed, and `CheckContent`'s "every combat role has a hero" passed on the first run because
-    Orren covers the new value. Two checks did fail, both content invariants rather than anything
-    about Ranger: the hero count is asserted as an exact literal (7, now 11), and Veska and Orren
+    Orren covers the new value. **`Ranger` no longer exists**, and Orren is a Marksman: the enum
+    was later widened to the incoming roster's ten roles, which have no Ranger among them. See the
+    role-widening entry in Now / Next. Two checks did fail at the time, both content invariants
+    rather than anything about Ranger: the hero count is asserted as an exact literal (7, now 11), and Veska and Orren
     shipped `armorBreak` 0.05 and 0.06, which trips the guard that keeps Kael the only unit
     authoring a phase-B stat - a non-zero value there adds an RNG draw and can move a seeded
     `BattleFingerprint`. Both zeroed.
