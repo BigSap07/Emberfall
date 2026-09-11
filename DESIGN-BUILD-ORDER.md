@@ -4,9 +4,40 @@
 
 Current state, checked against the repo on 2026-09-11, not against the rest of this document.
 
-- **Open: `feat/drop-placeholder-heroes`** - unmerged, based on `feat/remove-aspect-rules` and
-  carrying the seven branches under it. **The first half of the roster swap.** Six placeholder
-  heroes are deleted from `heroes.json` - `orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`,
+### `main`'s harness is DELIBERATELY RED on exactly three checks
+
+Not a broken build, and not debt anyone is expected to pay down opportunistically. Each of the
+three is a consequence of finished work whose other half has not landed yet, and each has one
+closing condition and no other.
+
+1. **`every combat role has a hero`.** Bulwark, Warden and Stalker have no hero at all: the six
+   placeholder heroes were the only holders of those three roles, and deleting them emptied
+   three of the seven. **Closes when the 94-hero roster is imported.** Nothing else closes it -
+   re-roling one of the five remaining Ember heroes would paper over the gap the import exists
+   to fill.
+2. **Summon pity is unsatisfiable.** Pity guarantees three distinct UNOWNED heroes, and five
+   heroes minus three starters leaves two. It is arithmetic, not a pity bug, which is why the
+   precondition is asserted separately from the mechanic. **Closes with the same import.**
+3. **The CEIL band check.** Removing the six engine-owned aspect rules moved every difficulty
+   number in the game, and the retune is deliberately deferred rather than smeared across the
+   change that caused it. **Closes at a single retune after the roster lands AND its abilities
+   are authored** - not before. Retuning against five mono-aspect heroes with placeholder kits
+   would bake a measurement of the wrong game into `campaign.json`.
+
+**A fourth failure is a regression, and so is any of these three changing shape.** If the count
+goes to four, or a message here stops matching what the harness prints, something broke - treat
+it as a real finding and diagnose it rather than adding it to this list. These three are the
+whole of the expected red.
+
+**Two open items, recorded so they are not rediscovered:**
+
+- Six orphaned sprite PNGs remain under `Assets/Resources/Sprites/Units` for the deleted heroes,
+  referenced by nothing now that their `visual.sprite` entries are gone.
+- The pinned five-body line is all-Ember, because the roster is, so its FLOOR/CEIL/BLOCK numbers
+  are not a statement about the game until the roster lands and the line is re-picked.
+
+- **Shipped: the first half of the roster swap.** Six placeholder heroes are deleted from
+  `heroes.json` - `orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`,
   `ryn_solvarr`, `maeve_corrin`, `nyx_serrow`. Five remain: Kael, Seraphine, Marrow, Veska, Orren.
   A 94-hero roster replaces the six; nothing here is retuned for the gap in between.
   - **Three starters, one per role: Kael (Breaker), Marrow (Mender), Veska (Striker).** All three
@@ -41,18 +72,18 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     run of `Damage` events, so any multi-target ability whose first victim died read as
     single-target and was graded a violation. It grades per turn now. Neither was an engine bug.
   - **Harness state: three red, and only one of them is a test artefact.** The CEIL band check is
-    inherited from the aspect removal and is not retuned here. The other two are genuine content
-    gaps, left failing deliberately: **three combat roles - Bulwark, Warden, Stalker - now have no
-    hero at all**, and **summon pity cannot be satisfied**, because it guarantees three distinct
-    unowned heroes and a fresh profile leaves two. Both are arithmetic consequences of a five-hero
-    roster and both close when the import lands. Weakening either would hide the thing the import
-    most has to fix.
+    inherited from the aspect removal and was not retuned alongside. The other two are genuine
+    content gaps, left failing deliberately: **three combat roles - Bulwark, Warden, Stalker - now
+    have no hero at all**, and **summon pity cannot be satisfied**, because it guarantees three
+    distinct unowned heroes and a fresh profile leaves two. Both are arithmetic consequences of a
+    five-hero roster and both close when the import lands. Weakening either would hide the thing
+    the import most has to fix. These are the three reds listed at the top of this section.
   - **The balance numbers are stale on purpose and the yardstick is worse than it was.** The pinned
     line is now Veska, Seraphine, Orren, Kael and Marrow - **all five Ember**, because the roster is.
     A six-aspect game measured by a line that can be neither at an advantage nor at a disadvantage
     against anything is measuring with an axis missing, and `PinnedLine`'s own comment says so at
-    length. Against the aspect-removal branch's line, 17 of 24 stages read easier, 2 harder, 5
-    unchanged; 4 of the 19 non-pinned rows sit inside their band, against 5 before; 2-1 now blocks
+    length. Against the line the aspect removal was measured on, 17 of 24 stages read easier, 2
+    harder, 5 unchanged; 4 of the 19 non-pinned rows sit inside their band, against 5 before; 2-1 now blocks
     at battle 119 where nothing blocked on that line. **None of it is a statement about the game.**
     The table task 13 was tuned against was measured on a Stalker, a Striker, a Breaker, a Bulwark
     and a Warden across five aspects, and all five of those heroes are now deleted, so the
@@ -63,9 +94,8 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     `visual.sprite` entries are gone. All five remaining heroes have full sheets and portraits.
     `Tools/HeroValidator/fixtures/regression-batch-1.json` still carries a synthetic hero with
     Orrin's id; it is self-contained and reads nothing from `heroes.json`, so it still passes.
-- **Open: `feat/remove-aspect-rules`** - unmerged, based on `feat/history-allies-and-charges` and
-  carrying the six branches under it. **NOT a no-op, and by far the largest behavioural change of
-  the stack.** The six engine-owned aspect rules are deleted. An Aspect is now the damage chart,
+- **Shipped: the six engine-owned aspect rules are gone.** **NOT a no-op, and by far the largest
+  behavioural change of the whole sequence.** They are deleted. An Aspect is now the damage chart,
   armor attunement and flavour, and nothing else.
   - **What came out.** Ember's Burn stacking (a status now refreshes for every source alike);
     Tide's energy redirect on overflow (overflow is discarded again); Verdant's overheal banking
@@ -114,8 +144,8 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     sit at 100% either way. Chapter 1 CEILs fall from a 64.5-90% band to 0-49%; 2-2 goes 89% to 3%,
     2-5 goes 90.5% to 0%; the smallest move is 2-7 at -2.5 points. Eleven stages now open below a
     90% FLOOR, against zero before. **The harness is
-    committed red on exactly one check** - the CEIL band - and the retune is deliberately NOT in
-    this branch, so the cost is legible as one number rather than smeared across a tuning pass.
+    committed red on exactly one check** - the CEIL band - and the retune was deliberately NOT
+    landed with it, so the cost is legible as one number rather than smeared across a tuning pass.
   - **The Lumen anchor is the bulk of it**, and that was visible before the change: across the 144
     battles of shipped content it fired 1177 times and put 36.2% of all damage onto a Lumen body.
     Removing it stops routing single-target enemy damage onto Orrin, the line's only tank, and
@@ -124,10 +154,10 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     Gale's intra-round Slow shift fired **0** times in shipped content and was already unreachable.
   - **One content consequence to own:** Kalyx Emberwright's identity was the Ember stacking rule -
     DESIGN-ASPECTS 3 cut his passive and left the aspect to carry him. He now has nothing on his
-    sheet but numbers and targeting. Giving him a passive is content work this branch does not do.
-- **Open: `feat/marks-limits-and-ledger`** - unmerged, based on
-  `feat/turn-status-and-enemy-triggers` and carrying the four branches under it. Third-tier
-  inventory work, all of it a no-op against shipped content.
+    sheet but numbers and targeting. Giving him a passive is content work this change did not do,
+    and he has since been deleted with the rest of the placeholder roster, so it is moot.
+- **Shipped: named marks, trigger limits, a stored ledger and own-outcome triggers.** Third-tier
+  inventory work, all of it a no-op against the content that existed when it landed.
   - **Named marks: one kind, told apart by who applied it.** `StatusKind.Mark` and `MarkAlt` are
     inert, and "my mark" is the kind plus `StatusInstance.SourceId`, which every status entry
     already carries. **`StatusKind.Stealth` was NOT used and no MarkA..MarkH bank was added:**
@@ -155,7 +185,7 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     and `PerStackOn` picks whose. Caster keeps the snapshot-once-per-effect behaviour PerStack
     always had; Target cannot and is read per target, which is a real difference in meaning and why
     Caster stays the default. Threshold payoffs were already reachable through
-    `StatusStacksAtLeast` from the conditionals branch.
+    `StatusStacksAtLeast`, which the conditionals work below had already added.
   - **Own-outcome triggers:** `OnHealApplied`, `OnStatusRemoved` and `OnStatusExpired`, all firing
     on the actor. The heal trigger is skipped for a Regen tick, so a heal-over-time does not
     re-raise its caster's trigger every round; the expiry trigger fires only for a genuine duration
@@ -167,16 +197,16 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
   - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
     and the whole harness report a strict superset with no existing line changed. 36 new checks,
     seven standing guards, and the ordinal pins extended again. No new `BattleEventType`.
-- **Open: `feat/history-allies-and-charges`** - unmerged, based on `feat/marks-limits-and-ledger`
-  and carrying the five branches under it. **Deliberately NOT based on `fix/shield-pool-coherence`:**
-  that branch is a balance change whose harness is red by design, and no-op work must not inherit
-  it. Fourth-tier inventory work, all of it a no-op against shipped content.
+- **Shipped: action history, ally triggers, forced targeting, charges and target-HP scaling.**
+  Fourth-tier inventory work, all of it a no-op against the content that existed when it landed.
+  It was built deliberately clear of the Shield fix below, which is a balance change whose harness
+  was red by design and which no-op work must not inherit; both are on `main` now.
   - **Action history costs the save nothing.** A `CombatUnit` is built fresh from a `HeroDef` and a
     `HeroInstance` at the start of every fight, and the save stores the instance - uid, defId,
     level, copies, relic, armor, selected talent - and nothing about how a battle went. So the new
     per-unit state (`PreviousTargetId`, `ActedThisRound`, `LastTurnRound`, `LastDamagedRound`,
     the two action-kind flags, `ActionsTaken`, and a per-round `DamagedThisRound` list) is zero
-    save bytes and **needs no version bump, which is why this branch has none.** Seven new
+    save bytes and **needed no version bump, which is why this pass carried none.** Seven new
     `EffectCondition` members read it.
   - **`PreviousTargetId` had to exist.** `LastTargetId` is overwritten in `ApplyDamageEffect` as
     the hit is set up, so by the time anything asks "a different target than last turn" it already
@@ -200,7 +230,7 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     consistent with every earlier pass, and that is recorded at the call site.
   - **`Covered` splits a hit before the shield pool**, so a protector soaks its share and the ward
     underneath meets only the remainder. Bounded to one hop by `_inCover`, the same shape Tide's
-    energy redirect and Mirrored Wound already use.
+    energy redirect used and Mirrored Wound still uses.
   - **Charges are their own field, not the ledger's.** `StatusInstance.Charges` is an int counting
     DOWN to removal; `Stored` is a float accumulating UP toward a cap. One status can legitimately
     want both - a mark that records damage and also wears off after three hits - and sharing one
@@ -216,8 +246,8 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     and the whole harness report a strict superset with no existing line changed. 44 new checks,
     five standing guards, ordinal pins extended, and `BattleEventType` untouched for a third pass.
 
-- **Open: `fix/shield-pool-coherence`** - unmerged. Two commits: a behaviour change, then the
-  retune it forced. **This is the first time a fix in this project has moved the balance numbers,**
+- **Shipped: the Shield pool and the Shield status now empty together.** Two commits: a behaviour
+  change, then the retune it forced. **This is the first time a fix in this project has moved the balance numbers,**
   so both halves are recorded here rather than left to be rediscovered from a diff.
 
   **Commit 1, the behaviour change.** A Shield status removed by duration expiry or by Dispel left
@@ -275,12 +305,13 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
   it read 94% before the fix - so this is a pre-existing property the fix exposed rather than
   created.
 
-  **Where it lands:** 0 of 24 stages BLOCK, every CEIL in band, soft floors down from 3 to 1, and
-  `build-check.ps1` green. This commit deliberately MOVES fingerprints, unlike every other branch
-  in this stack - it is a content retune, and byte-identity is not the standard it is held to.
+  **Where it landed:** 0 of 24 stages BLOCK, every CEIL in band, soft floors down from 3 to 1, and
+  `build-check.ps1` green at the time. It deliberately MOVES fingerprints, unlike every other
+  change in this sequence - it is a content retune, and byte-identity is not the standard it is
+  held to. Those numbers are superseded: the aspect removal landed after it and moved every one of
+  them, which is why the CEIL band is red on `main` today.
 
-- **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
-  `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
+- **Shipped: turn-order effects, status operations, and enemy-action triggers.** Second-tier
   inventory work: turn order, status operations, and the first triggers that are not owner-centric.
   - **Turn progress, and the honest account of it.** There is no ATB. A round is a speed sort
     walked once, so a unit has no continuous gauge to move a percentage of - it has a POSITION
@@ -291,9 +322,10 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     `TryGaleReentry` already splices a unit into the tail. `EffectKind.SwapTurnOrder` exchanges
     the side's earliest and latest remaining turns, which is what Merek's active asks for.
   - **Of the 34 turn-progress abilities, roughly 19 are a shift, 6 are a Speed buff, and 9 need
-    something this branch does not build.** The 6 are the "advances my own NEXT turn" family: the
+    something this pass did not build.** The 6 are the "advances my own NEXT turn" family: the
     caster has already acted, so it has no position left to move, and a round-scoped `SpeedUp`
-    from the branch below is what "my next turn comes sooner" actually means. The 9 that do not
+    from the stat-status work below is what "my next turn comes sooner" actually means. The 9 that
+    do not
     fit are Aeron's Turn Debt (5), which is a stored quantity with a turn-start payout hook and
     therefore the ledger mechanic rather than turn progress; and reading progress as a QUANTITY
     (2: "targets above 50% turn progress", "acts before the slowest enemy"), which needs a gauge
@@ -330,8 +362,7 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     checks, both standing guards, and the ordinal pins extended to `EffectKind`, `PassiveTrigger`
     and `BattleEventType`. This pass adds **no** new `BattleEventType`: an authored shift reuses
     `TurnOrderShift` and is told apart from Gale's by carrying `Status` None.
-- **Open: `feat/stat-buffs-and-target-modes`** - unmerged, based on `feat/effect-conditionals`
-  and so carrying the multi-passive work under that. Two additive gaps from the inventory, no
+- **Shipped: 15 stat statuses and 8 new target modes.** Two additive gaps from the inventory, no
   structural change to anything.
   - **15 new stat statuses, in TWO shapes, not one.** The eight stats asked for split along the
     line `RelicStatMode` and `ArmorStatMode` already draw. **Speed is the only MULTIPLY stat**:
@@ -350,7 +381,7 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     `HighestEnergyEnemy`, `HighestSpeedEnemy`, `LowestSpeedEnemy`, `LowestEnergyAlly`,
     `TwoLowestHpAllies`, `SecondLowestHpAlly`, `AllyWithMostDebuffs`.
   - **There is deliberately no `AllEnemiesWithStatus`.** `AllEnemies` plus an `EffectCondition` of
-    `HasStatus` already does exactly that, per target, from the branch below. Only the
+    `HasStatus` already does exactly that, per target, from the conditionals work below. Only the
     single-target half needed a mode.
   - **Deferred: "the enemy that last damaged an ally"** (1 ability) - it needs a side-level memory
     the Sim does not keep; `LastAttackerId` is per unit, so this is new state rather than a new
@@ -360,12 +391,12 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     side's anchor, and the four new enemy-side modes inherit that, while the four ally-side modes
     are untouched because the anchor only answers for the enemy side. The harness proves both
     halves: with no anchor `EnemyWithStatus` picks the marked body, and with an anchor standing the
-    same mode collapses onto it. **This branch flagged that it reads badly for `EnemyWithStatus`
+    same mode collapses onto it. **This pass flagged that it reads badly for `EnemyWithStatus`
     specifically** - "deal 245% to a Forsaken enemy" hitting an unmarked tank is an ability doing
     something other than what it says - and left the decision to a human, because the anchor was
     then a living Lumen unit first and a Taunt holder second, so an exemption would have been a
     change to an aspect rule. **That has since been answered by removing the Lumen half outright**
-    (see the entry for the removal branch at the top of this section). The anchor is Taunt and
+    (see the aspect-removal entry above). The anchor is Taunt and
     nothing else now, which is a deliberate, visible claim by an ability rather than a property of
     a unit's colour, and the check here varies a Taunt instead of an aspect.
   - **Enum ordinals are pinned by a check.** Both enums were appended to, never inserted into,
@@ -375,10 +406,9 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
   - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
     and the whole harness report a strict superset with no existing line changed. 77 new checks,
     including both standing guards.
-- **Open: `feat/effect-conditionals`** - unmerged, and based on `feat/multi-passive-and-talents`
-  rather than on `main`: both touch `CombatSimulation` and `Definitions`, and the multi-passive
-  branch is verified and unmerged, so stacking avoids a conflict resolution nobody would enjoy.
-  Adds a condition to `EffectDef` and nothing else. 111 of the incoming roster's 374 abilities
+- **Shipped: a condition on `EffectDef`, and nothing else.** It was built on top of the
+  multi-passive work below rather than separately, because both touch `CombatSimulation` and
+  `Definitions`. 111 of the incoming roster's 374 abilities
   carry a conditional clause, the single largest gap in the inventory, and the only conditional
   the engine had was `PassiveTrigger.OnHpBelowThreshold` reading the passive owner's own HP.
   - **Seven condition kinds, one shape.** `EffectCondition` is `HasStatus`, `LacksStatus`,
@@ -405,13 +435,14 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     proportionality reason: composing two conditions on one effect. Every conditional clause in the
     roster is a single clause, and a kit that needs two tests can carry two effects.
   - **No existing battle moved, measured against the merge base.** The same sweep the multi-passive
-    branch used - 24 stages at nine resolved ladder positions each at 3 seeds, plus every hero
+    multi-passive work used - 24 stages at nine resolved ladder positions each at 3 seeds, plus
+    every hero
     fought solo across 6 stages, 714 fingerprints - all byte-identical. The whole harness report is
     a strict superset of the base's: not one existing line changed, because no save version moved
     this time either. 71 new checks, including the standing guard that no shipped effect carries a
     condition.
-- **Open: `feat/multi-passive-and-talents`** - unmerged, and the base of the branch above. Removes the structural gate in front of
-  the 94-hero roster: a unit held exactly one passive and the engine had no talent concept at all,
+- **Shipped: multiple passives per unit, and a selectable talent layer.** The base everything
+  above was built on. It removes the structural gate in front of the 94-hero roster: a unit held exactly one passive and the engine had no talent concept at all,
   which blocked 120 of that roster's abilities (30 second passives, 90 talents) before any new
   combat mechanic was even considered. It adds **no new combat mechanic** - a talent is an
   additional passive and nothing else, so everything a talent can express today is what a passive
@@ -450,7 +481,7 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     The variable says "this clone cannot answer that", prints it and exits 0. CI checks out at
     full depth and sets no environment, so it never fires there - and a baseline must still never
     be regenerated from a clone that needed it.
-  - **Not in this branch, deliberately:** the talent selection UI, and carrying a talent selection
+  - **Not in this pass, deliberately:** the talent selection UI, and carrying a talent selection
     into a Proving opponent snapshot (`BattleLoadout` holds a relic and armor but not a talent, so
     a snapshot opponent currently fights without one).
 - **Both balance-instrument branches have landed on `main`.** They were written from the same base
@@ -572,8 +603,7 @@ late), and a battle background loader that did not exist in the plan at all. See
 the full account. None of this changes what shipped structurally for task 8 or the content shipped
 for task 10; it is scoped to presentation.
 
-- **Recital Guardians and Coda: on `feat/recital-guardians-and-currency`.** Two additions to The
-  Deep Recital.
+- **Recital Guardians and Coda: shipped.** Two additions to The Deep Recital.
   - **Guardians** — every 10th floor (`recitalGuardianInterval` in `balance.json`) is a
     boss-plus-escorts encounter, the same shape the campaign finales use. One enemy at a raised
     level (`recitalGuardianBossLevelBonus`, default 5) with the rest at the floor's base level.
@@ -645,13 +675,13 @@ this project before:
   run covers content validation, determinism, stage winnability, ability potency and status expiry
   timing, the same checks listed above, on every push rather than whenever someone remembers to
   run it locally.
-- **All six aspect identities are being REMOVED. Read the entry at the top of Now / Next before
-  using anything in this bullet.** The description below is true of `main` and of every release
-  built from it, and it is kept for that reason - a reader of an old battle record needs it. It is
-  not a description of the live engine once the removal lands. An Aspect there is the damage chart,
-  armor attunement and flavour; a standing guard in the harness asserts that nothing in
-  `CombatSimulation` or `CombatUnit` reads `Aspect` for anything else.
-- All six aspect identities, wired into `CombatSimulation` (on `main`):
+- **All six aspect identities have been REMOVED. Read the aspect-removal entry in Now / Next
+  before using anything in this bullet.** The description below is true of every release built
+  before that change, and it is kept for that reason - a reader of an old battle record needs it.
+  It is not a description of the live engine. An Aspect is now the damage chart, armor attunement
+  and flavour; a standing guard in the harness asserts that nothing in `CombatSimulation` or
+  `CombatUnit` reads `Aspect` for anything else.
+- All six aspect identities, as they were wired into `CombatSimulation` before the removal:
   - **Ember**: each Burn from an Ember source stacks as its own entry via `AddStack` rather than
     overwriting (`AddOrRefresh`), so multiple Ember attackers pile independent Burn entries at
     their own magnitudes. Capped at `EmberBurnStackCap` (3); a fourth application refreshes the
@@ -1978,7 +2008,7 @@ renumbering, and nobody has gone back to update the harness's own prose.
     the daily repeat cap already proves), save round-trip, and every Aspect having at least one
     enemy template to draw from.
 
-    **Guardians and Coda** added atop this base (`feat/recital-guardians-and-currency`):
+    **Guardians and Coda** added atop this base:
     - **Guardians**: every 10th floor (`recitalGuardianInterval`) is a boss-plus-escorts encounter.
       `RecitalGenerator.IsGuardian` and `BuildFloor` express the shape.
     - **Coda**: the Recital's own isolated currency, earned on every clear with a larger payout on
