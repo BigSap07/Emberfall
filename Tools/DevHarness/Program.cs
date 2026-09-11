@@ -3175,30 +3175,43 @@ namespace Emberfall.DevHarness
             Line("CONTENT");
             for (int i = 0; i < db.Warnings.Count; i++) Line("  warning: " + db.Warnings[i]);
             Check(db.Warnings.Count == 0, "content parses with no warnings");
-            Check(db.Heroes.Count == 11, "11 heroes loaded (got " + db.Heroes.Count + ")");
+            // 5, not 11. The six original placeholder heroes - orrin_kaal, kalyx_emberwright,
+            // wren_ilyra, ryn_solvarr, maeve_corrin, nyx_serrow - have been deleted ahead of a
+            // 94-hero roster import. This number moves again when that lands; it is a bookkeeping
+            // assertion, not a design claim.
+            Check(db.Heroes.Count == 5, "5 heroes loaded (got " + db.Heroes.Count + ")");
             Check(db.Enemies.Count >= 6, "enemies loaded (got " + db.Enemies.Count + ")");
             Check(db.AllStages.Count >= 10, "campaign stages loaded (got " + db.AllStages.Count + ")");
             Check(db.StartingHeroes.Count == 3, "3 starting heroes (got " + db.StartingHeroes.Count + ")");
 
-            bool everyRoleCovered = true;
+            // LEFT FAILING ON PURPOSE while the roster swap is half done.
+            //
+            // Deleting the six placeholders took the roster's only Bulwark, Warden and Stalker with
+            // them, so three of the seven combat roles have no hero at all. That is a genuine gap
+            // in content, not an artefact of this check, and weakening it to a note would hide the
+            // one thing the 94-hero import most has to close. It goes green again when a hero
+            // exists for every role.
+            List<string> missingRoles = new List<string>();
             foreach (HeroRole role in Enum.GetValues(typeof(HeroRole)))
             {
                 bool found = false;
                 for (int i = 0; i < db.Heroes.Count; i++) if (db.Heroes[i].Role == role) found = true;
-                if (!found) { everyRoleCovered = false; Line("  missing role: " + role); }
+                if (!found) missingRoles.Add(role.ToString());
             }
-            Check(everyRoleCovered, "every combat role has a hero");
+            Check(missingRoles.Count == 0,
+                  "every combat role has a hero"
+                  + (missingRoles.Count == 0 ? "" : " - EMPTY: " + string.Join(", ", missingRoles.ToArray())
+                     + ". Expected while the roster swap is half done: the six deleted placeholders were"
+                     + " the only hero for each of these. The import that replaces them closes this."));
 
             // A basic and an active are structural - a hero without them cannot take a turn. A
-            // passive is not, and stopped being mandatory when DESIGN-ASPECTS section 3 cut Kalyx's
-            // Kindling as a percentage stat stick and left his identity to the Ember Burn-stacking
-            // rule in the simulation. THAT RULE IS GONE. Kalyx now has no identity beyond his
-            // numbers and his targeting, and giving him one is content work this removal does not
-            // do. Passive-less heroes are listed rather than failed, so the roster stays visible
-            // and a third one cannot appear unnoticed. Kael is the second: his passives and talents
-            // are explicitly out of scope for the animation-pipeline pass that first added him
-            // (they depend on a Ruin stacking resource and a talent system, neither of which exist
-            // yet), so he ships passive-less like Kalyx until that follow-up task builds them.
+            // passive is not, and stopped being mandatory when DESIGN-ASPECTS section 3 cut Kalyx
+            // Emberwright's Kindling as a percentage stat stick and left his identity to the Ember
+            // Burn-stacking rule in the simulation. That rule was removed, and so, now, was he.
+            // All five remaining heroes carry a passive, so the count below reads zero today.
+            // Passive-less heroes are listed rather than failed, so the roster stays visible and a
+            // third one cannot appear unnoticed - which matters more, not less, with 94 heroes
+            // arriving.
             bool abilitiesOk = true;
             int passiveless = 0;
             for (int i = 0; i < db.Heroes.Count; i++)
@@ -3690,6 +3703,51 @@ namespace Emberfall.DevHarness
             return RunWith(db, db.GetStage("aspect_guard_arena"), 4242, team);
         }
 
+        /// <summary>
+        /// Every harmful ApplyStatus on `unit` whose authored chance is exactly 1.0, plus any of
+        /// them that stops resolving to 1.0 against some enemy's Effect Resist. Known trap 4: the
+        /// float `1f + hit - resist` is 0.99999994 when hit equals resist, which turns a certainty
+        /// into a draw with nothing in the content file changing.
+        ///
+        /// A default of 1.0 is indistinguishable from an authored 1.0 in the parsed def, and that
+        /// is the point - both are a claim that the status always lands, and both break the same way.
+        /// </summary>
+        private static void CollectCertainHarmfulStatuses(ContentDatabase db, UnitDef unit,
+                                                          List<string> certain, List<string> broken)
+        {
+            List<AbilityDef> abilities = new List<AbilityDef>();
+            if (unit.BasicAttack != null) abilities.Add(unit.BasicAttack);
+            if (unit.Active != null) abilities.Add(unit.Active);
+            for (int p = 0; p < unit.Passives.Count; p++)
+            {
+                AbilityDef wrapper = new AbilityDef();
+                wrapper.Name = unit.Passives[p].Name;
+                wrapper.Effects = unit.Passives[p].Effects;
+                abilities.Add(wrapper);
+            }
+
+            for (int a = 0; a < abilities.Count; a++)
+            {
+                for (int e = 0; e < abilities[a].Effects.Count; e++)
+                {
+                    EffectDef eff = abilities[a].Effects[e];
+                    if (eff.Kind != EffectKind.ApplyStatus) continue;
+                    if (!StatusInfo.IsHarmful(eff.Status)) continue;
+                    if (eff.Chance < 1f) continue;
+
+                    string label = unit.Id + "/" + abilities[a].Name + "/" + eff.Status;
+                    certain.Add(label);
+                    for (int f = 0; f < db.Enemies.Count; f++)
+                    {
+                        EnemyDef foe = db.Enemies[f];
+                        float landing = CombatSimulation.ResolveLandingChance(1f, eff.Status, unit.EffectHit, foe.EffectResist);
+                        if (landing != 1f)
+                            broken.Add(label + " rolls against " + foe.Id + " at " + Fmt(landing));
+                    }
+                }
+            }
+        }
+
         /// <summary>Catches authoring mistakes where an effect's numeric fields are all zero, so it silently does nothing.</summary>
         private static void CheckAbilityPotency(ContentDatabase db)
         {
@@ -3737,10 +3795,11 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// Ryn's Follow-Through fires on OnKill rather than OnCriticalHit. That wiring outlived the
-        /// aspect rules it was authored alongside - it is a property of the passive, not of Gale -
-        /// so the check stays and is now called from Main directly. Two things are checked, and the
-        /// second is the one that matters.
+        /// An OnKill passive fires where it says it does. This was written about Ryn Solvarr's
+        /// Follow-Through, moved from OnCriticalHit to OnKill; Ryn was deleted with the placeholder
+        /// roster and Veska's Oathbreaker is the OnKill passive now, so the check follows the
+        /// trigger rather than the hero. Two things are checked, and the second is the one that
+        /// matters.
         ///
         /// One: the trigger actually fires where it now says it does. Every Follow-Through in a real
         /// battle must sit directly behind a Death that Ryn caused, which is the only place
@@ -3760,7 +3819,7 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckOnKillPassive(ContentDatabase db)
         {
-            Line("ON-KILL PASSIVE (Ryn's Follow-Through)");
+            Line("ON-KILL PASSIVE (Veska's Oathbreaker)");
 
             List<UnitDef> units = new List<UnitDef>();
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
@@ -3780,21 +3839,30 @@ namespace Emberfall.DevHarness
             }
 
             Check(onKill.Count > 0,
-                  "OnKill is authored in shipped content for the first time: " + string.Join(", ", onKill.ToArray())
-                  + " - DESIGN-ASPECTS section 2's \"used by nobody\" was true against main and is now deliberately false");
+                  "OnKill is authored in shipped content: " + string.Join(", ", onKill.ToArray())
+                  + " - it was used by nobody before Ryn Solvarr's Follow-Through was moved onto it,"
+                  + " and it outlived her deletion because Veska carries it too");
             Check(lethal.Count == 0,
                   "no OnKill passive can itself land a kill (" + string.Join(", ", lethal.ToArray())
                   + ") - DealRawDamage fires OnKill at a hardcoded depth 0, so MaxPassiveDepth does not bound it"
                   + " and the recursion is kept unreachable by content rather than by that guard");
 
-            HeroDef ryn = db.GetHero("ryn_solvarr");
-            if (ryn == null || ryn.Passives.Count == 0) { Line(""); return; }
-            PassiveDef rynPassive = ryn.Passives[0];
-            Check(rynPassive.Trigger == PassiveTrigger.OnKill,
-                  "Ryn's Follow-Through triggers on OnKill, not OnCriticalHit (section 3's one clear cross-wiring)");
+            HeroDef killer = db.GetHero("veska_the_broken_oath");
+            if (killer == null || killer.Passives.Count == 0)
+            {
+                Check(false, "veska_the_broken_oath exists and carries a passive to check");
+                Line("");
+                return;
+            }
+            PassiveDef killerPassive = killer.Passives[0];
+            Check(killerPassive.Trigger == PassiveTrigger.OnKill,
+                  "Veska's Oathbreaker triggers on OnKill");
 
-            string[] others = { "orrin_kaal", "kalyx_emberwright", "wren_ilyra", "maeve_corrin" };
-            List<HeroInstance> team = BuildNamedTeam(db, ryn, others);
+            // The other four are simply the rest of the roster. It was a hand-picked line while
+            // eleven heroes existed; with five there is no choice left to make.
+            string[] others = { "kael_the_ashbound", "seraphine_the_last_ember",
+                                "marrow_the_burning_vow", "orren_the_cinder_hunter" };
+            List<HeroInstance> team = BuildNamedTeam(db, killer, others);
 
             int fired = 0, notBehindAKill = 0;
             for (int s = 0; s < db.AllStages.Count; s++)
@@ -3806,7 +3874,7 @@ namespace Emberfall.DevHarness
                     {
                         BattleEvent e = r.Events[i];
                         if (e.Type != BattleEventType.PassiveTrigger) continue;
-                        if (e.AbilityId != rynPassive.Id) continue;
+                        if (e.AbilityId != killerPassive.Id) continue;
                         fired++;
                         // TriggerPassive is called immediately after Emit(Death) in the death
                         // branch, so the event directly before this one is that Death.
@@ -3817,10 +3885,10 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(fired > 0, "Follow-Through fires in real battles on its new trigger (" + fired + " time(s))");
+            Check(fired > 0, "Oathbreaker fires in real battles on its trigger (" + fired + " time(s))");
             Check(notBehindAKill == 0,
-                  "every Follow-Through sat directly behind a Death that Ryn caused (" + notBehindAKill
-                  + " did not) - it is a kill trigger now, not a crit trigger");
+                  "every Oathbreaker sat directly behind a Death that Veska caused (" + notBehindAKill
+                  + " did not) - it is a kill trigger, not a crit trigger");
 
             Line("");
         }
@@ -3854,20 +3922,27 @@ namespace Emberfall.DevHarness
 
 
         /// <summary>
-        /// Builds a DispelHero (Wren clone whose active strips one beneficial status from every
-        /// ally) and fights alongside Maeve. Maeve's Tidal Cadence grants AttackUp + Focus to all
-        /// allies; DispelHero's Dispel then removes one of those per target. Confirms the
-        /// StatusExpired path fires for beneficial statuses and that the control (original Wren
-        /// with Cleanse) never removes a beneficial status.
+        /// Builds a DispelHero (a Mender clone whose active strips one beneficial status from every
+        /// ally) and fights alongside a hero who carries one. The clone's Dispel then removes it.
+        /// Confirms the StatusExpired path fires for beneficial statuses and that the control - the
+        /// unmodified Mender, whose active Cleanses rather than Dispels - never removes one.
+        ///
+        /// The two heroes used to be Maeve Corrin, whose Tidal Cadence granted AttackUp and Focus
+        /// to the whole line, and Wren Ilyra, the Mender. Both were deleted with the placeholder
+        /// roster. Marrow is the Mender now, and the beneficial status comes from Kael's Blood for
+        /// Power - a BattleStart DefenseUp on himself, which is the only ally-side buff the
+        /// five-hero roster authors at all. That is thinner than what this check had before: one
+        /// status on one body instead of two on five, so it proves the same mechanic with less
+        /// margin. The 94-hero import should give this a real buffer to strip.
         /// </summary>
         private static void CheckDispel(ContentDatabase db)
         {
             Line("DISPEL");
-            HeroDef maeveDef = db.GetHero("maeve_corrin");
-            HeroDef wrenDef  = db.GetHero("wren_ilyra");
-            if (maeveDef == null || wrenDef == null)
+            HeroDef buffDef   = db.GetHero("kael_the_ashbound");
+            HeroDef menderDef = db.GetHero("marrow_the_burning_vow");
+            if (buffDef == null || menderDef == null)
             {
-                Check(false, "maeve_corrin and wren_ilyra both exist in content");
+                Check(false, "kael_the_ashbound and marrow_the_burning_vow both exist in content");
                 Line("");
                 return;
             }
@@ -3885,46 +3960,56 @@ namespace Emberfall.DevHarness
             dispelActive.Vfx        = "buff";
             dispelActive.Effects.Add(dispelEffect);
 
-            HeroDef dispelHero = CloneHeroWithActive(wrenDef, dispelActive);
-            StageDef stage = db.AllStages[0];
+            HeroDef dispelHero = CloneHeroWithActive(menderDef, dispelActive);
 
-            // Live: run several seeds so timing variance can't hide the mechanic.
-            int dispelled = 0;
+            // SWEEPS STAGES, for a reason that is arithmetic rather than taste. Marrow opens on 15
+            // energy and banks 28 a basic, so his Active - the one being swapped for a Dispel -
+            // first fires on round 4. Two level-20 heroes end stage 1-1 in one or two rounds, so a
+            // check pinned to that stage would measure a Dispel that never got cast and read as a
+            // broken mechanic. It walks forward until it finds a fight long enough, and runs the
+            // control over exactly the same stages so the two columns are comparable.
+            int dispelled = 0, controlDispelled = 0;
+            int stagesWalked = 0;
             List<HeroInstance> dispelTeam = new List<HeroInstance>();
-            dispelTeam.Add(MakeInstance(maeveDef, 20));
+            dispelTeam.Add(MakeInstance(buffDef, 20));
             dispelTeam.Add(MakeInstance(dispelHero, 20));
-            for (int seed = 1; seed <= 5; seed++)
-            {
-                BattleResult r = RunWith(db, stage, seed, dispelTeam);
-                for (int i = 0; i < r.Events.Count; i++)
-                {
-                    BattleEvent e = r.Events[i];
-                    if (e.Type != BattleEventType.StatusExpired) continue;
-                    if (e.SourceId == e.TargetId) continue; // natural expiry
-                    if (!StatusInfo.IsHarmful(e.Status)) dispelled++;
-                }
-            }
-            Check(dispelled > 0, "Dispel removes at least one beneficial status across seeds 1-5 (" + dispelled + " total)");
-
-            // Control: original Wren (Cleanse, not Dispel) must produce zero beneficial-status removals.
-            int controlDispelled = 0;
             List<HeroInstance> controlTeam = new List<HeroInstance>();
-            controlTeam.Add(MakeInstance(maeveDef, 20));
-            controlTeam.Add(MakeInstance(wrenDef, 20));
-            for (int seed = 1; seed <= 5; seed++)
+            controlTeam.Add(MakeInstance(buffDef, 20));
+            controlTeam.Add(MakeInstance(menderDef, 20));
+
+            for (int st = 0; st < db.AllStages.Count && dispelled == 0; st++)
             {
-                BattleResult r = RunWith(db, stage, seed, controlTeam);
-                for (int i = 0; i < r.Events.Count; i++)
+                StageDef stage = Opening(db.AllStages[st]);
+                stagesWalked++;
+                for (int seed = 1; seed <= 5; seed++)
                 {
-                    BattleEvent e = r.Events[i];
-                    if (e.Type != BattleEventType.StatusExpired) continue;
-                    if (e.SourceId == e.TargetId) continue;
-                    if (!StatusInfo.IsHarmful(e.Status)) controlDispelled++;
+                    dispelled += CountBeneficialRemovals(RunWith(db, stage, seed, dispelTeam));
+                    controlDispelled += CountBeneficialRemovals(RunWith(db, stage, seed, controlTeam));
                 }
             }
-            Check(controlDispelled == 0, "control (Cleanse, not Dispel) produces 0 beneficial-status removals");
+
+            Check(dispelled > 0, "Dispel removes at least one beneficial status (" + dispelled
+                  + " across seeds 1-5 of " + stagesWalked + " stage(s))");
+            Check(controlDispelled == 0,
+                  "control (Cleanse, not Dispel) produces 0 beneficial-status removals over the same stages and seeds (got "
+                  + controlDispelled + ")");
 
             Line("");
+        }
+
+        /// <summary>Beneficial statuses removed by somebody other than their carrier. SourceId equal
+        /// to TargetId is a natural duration expiry, which is not a removal by anyone.</summary>
+        private static int CountBeneficialRemovals(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusExpired) continue;
+                if (e.SourceId == e.TargetId) continue;
+                if (!StatusInfo.IsHarmful(e.Status)) n++;
+            }
+            return n;
         }
 
         /// <summary>Clone a hero, replacing only the active ability. Passive is cleared so
@@ -4182,32 +4267,51 @@ namespace Emberfall.DevHarness
                 if (u.EffectResist > bestResist) { bestResist = u.EffectResist; bestResistId = u.Id; }
             }
             Check(banded, "every authored Effect Hit and Effect Resist sits inside a sane 0 to 0.5 band");
-            Check(bestHitId == "nyx_serrow",
-                  "Nyx Serrow has the roster's highest Effect Hit, so her mark landing is a stat rather than a missing field (highest is "
-                  + bestHitId + " at " + Fmt(bestHit) + ")");
 
-            // Known trap 4 still holds after authoring: Hollowing must still never draw
-            HeroDef nyx = db.Heroes.Find(delegate (HeroDef u) { return u.Id == "nyx_serrow"; });
-            bool hollowingStillCertain = true;
+            // THIS USED TO NAME A HERO, AND CANNOT ANY MORE.
+            //
+            // It asserted that Nyx Serrow held the roster's highest Effect Hit, so that Hollowing
+            // landing on everything was a stat doing its job rather than a field nobody filled in.
+            // Nyx was deleted with the placeholder roster and the five heroes left have no Effect
+            // Hit specialist at all - the highest hero value is 0.15, below four enemies. The
+            // assertion is not re-pointed at whoever happens to be top, because "somebody is
+            // highest" is true of any list and proves nothing. It is reported instead, loudly, and
+            // the property it was guarding is restated below against content rather than a name.
+            Line("  [note] roster's highest Effect Hit is " + bestHitId + " at " + Fmt(bestHit)
+                 + ", highest Effect Resist is " + bestResistId + " at " + Fmt(bestResist)
+                 + ". No HERO is the Effect Hit specialist any more - Nyx Serrow was, and she is"
+                 + " deleted. The 94-hero import decides who takes that place.");
+
+            // Known trap 4, restated against content instead of against one hero.
+            //
+            // The trap: an ApplyStatus with no authored "chance" defaults to 1.0, and
+            // ResolveLandingChance then computes 1f + hit - resist. When hit and resist are equal
+            // that evaluates to 0.99999994 in float, which fails DeterministicRng.Chance's >= 1f
+            // short-circuit and silently turns a certainty into a draw. Nyx's Hollowing was the one
+            // harmful status in the game authored that way, which is why this was written about her.
+            //
+            // There is NO SUBJECT LEFT: every harmful ApplyStatus the five remaining heroes and the
+            // enemies author carries an explicit chance below 1.0, and the only implicit-1.0
+            // applications left are beneficial, which bypass both stats outright. So the loop below
+            // has nothing to iterate today and says so rather than passing quietly. It starts
+            // checking again by itself the moment content authors a certain harmful status - which
+            // a 94-hero roster very plausibly will.
+            List<string> certainHarmful = new List<string>();
+            List<string> brokenCertainty = new List<string>();
+            for (int i = 0; i < db.Heroes.Count; i++)
+                CollectCertainHarmfulStatuses(db, db.Heroes[i], certainHarmful, brokenCertainty);
             for (int i = 0; i < db.Enemies.Count; i++)
-            {
-                EnemyDef foe = db.Enemies[i];
-                float landing = CombatSimulation.ResolveLandingChance(1f, StatusKind.DefenseDown, nyx.EffectHit, foe.EffectResist);
-                if (landing != 1f)
-                {
-                    hollowingStillCertain = false;
-                    Line("  [note] Hollowing now rolls against " + foe.Id + " at " + Fmt(landing)
-                         + " - deliberate only if Nyx was meant to be beatable by that unit's Effect Resist");
-                }
-            }
-            Check(hollowingStillCertain,
-                  "Nyx's Hollowing still resolves to exactly 1.0 against every authored enemy - her Effect Hit ("
-                  + Fmt(nyx.EffectHit) + ") STRICTLY EXCEEDS the highest Effect Resist in the game (" + bestResistId
-                  + " at " + Fmt(bestResist) + ")");
-            Check(nyx.EffectHit > bestResist,
-                  "and it exceeds it strictly rather than tying it - a tie is not enough, because 1f + 0.3f - 0.3f "
-                  + "evaluates to 0.99999994 in float, which fails DeterministicRng.Chance's >= 1f short-circuit and "
-                  + "silently turns Hollowing into a real draw (Known trap 4)");
+                CollectCertainHarmfulStatuses(db, db.Enemies[i], certainHarmful, brokenCertainty);
+
+            if (certainHarmful.Count == 0)
+                Line("  [note] no harmful status in shipped content is authored at an implicit 1.0 chance,"
+                     + " so Known trap 4 has nothing to bite on right now. This is a gap in coverage, not a"
+                     + " guarantee - re-read it when the roster lands.");
+            Check(brokenCertainty.Count == 0,
+                  "every harmful status authored at an implicit 1.0 chance still resolves to exactly 1.0"
+                  + " against every authored enemy (" + certainHarmful.Count + " such status(es): "
+                  + (certainHarmful.Count == 0 ? "none" : string.Join(", ", certainHarmful.ToArray())) + ")"
+                  + (brokenCertainty.Count == 0 ? "" : " - BROKEN: " + string.Join(" | ", brokenCertainty.ToArray())));
 
             Line("  Authored values are UNTUNED. Every win rate below moves because of them; task 14 is the retune.");
             Line("");
@@ -4260,10 +4364,16 @@ namespace Emberfall.DevHarness
                   "a fresh save is stamped version " + SaveSerializer.CurrentVersion);
 
             // save, upgrade: a version 1 save with a 3-entry team fills slots 1-3 and leaves 4-5 empty
+            // The three defIds are the CURRENT starters, not the ones this fixture shipped with -
+            // orrin_kaal, kalyx_emberwright and wren_ilyra, all three deleted with the placeholder
+            // roster. Deserialize drops a hero whose defId no longer resolves, so leaving them in
+            // would have turned a version-migration check into an unowned-hero check by accident.
+            // What a real save holding a deleted defId does is a separate question and belongs in
+            // its own check, not smuggled into this one.
             string legacy = "{\"version\":1,\"gold\":100,\"shards\":10,\"nextHeroUid\":4,"
-                + "\"heroes\":[{\"uid\":\"h1\",\"defId\":\"orrin_kaal\",\"level\":4,\"copies\":1,\"acquired\":0},"
-                + "{\"uid\":\"h2\",\"defId\":\"kalyx_emberwright\",\"level\":3,\"copies\":1,\"acquired\":0},"
-                + "{\"uid\":\"h3\",\"defId\":\"wren_ilyra\",\"level\":2,\"copies\":1,\"acquired\":0}],"
+                + "\"heroes\":[{\"uid\":\"h1\",\"defId\":\"kael_the_ashbound\",\"level\":4,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h2\",\"defId\":\"marrow_the_burning_vow\",\"level\":3,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h3\",\"defId\":\"veska_the_broken_oath\",\"level\":2,\"copies\":1,\"acquired\":0}],"
                 + "\"team\":[\"h1\",\"h2\",\"h3\"]}";
             string upgradeError;
             PlayerProfile upgraded = SaveSerializer.Deserialize(legacy, db, out upgradeError);
@@ -4304,75 +4414,130 @@ namespace Emberfall.DevHarness
         {
             Line("TARGETING");
             GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
-            StageDef stage = db.AllStages[0];
 
             bool sawTauntApplied = false;
             bool violation = false;
             string violationDetail = "";
 
+            // SIDE-AGNOSTIC, AND IT SWEEPS STAGES. Both of those changed when the placeholder roster
+            // was deleted. Orrin Kaal's Cinderguard was the only Taunt a hero authored, so this used
+            // to watch the player's side on stage 1 and find one there; with Orrin gone the only
+            // Taunt left in the game is the Stone Warden's Bulwark Slam, in stages 4, 6 and 10. The
+            // rule was never player-side - FindTargetAnchor answers for whichever side holds the
+            // status - so watching one half was always narrower than the mechanic.
+            for (int st = 0; st < db.AllStages.Count && !violation && !sawTauntApplied; st++)
             for (int seed = 1; seed <= 40 && !violation; seed++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), seed));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[st]), seed));
                 List<int> activeTaunters = new List<int>();
 
-                int i = 0;
-                while (i < r.Events.Count)
+                // Graded PER TURN, not per contiguous run of Damage events, and this is the second
+                // thing the move to the enemy side exposed. A Death, a passive trigger or an energy
+                // change sits between two hits of the same ability - Kael's Breaking Point kills its
+                // first victim and hits the rest afterwards - so a run that stops at the first
+                // non-Damage event reads a five-target ability as single-target and grades it as a
+                // violation it did not commit. One unit takes one action per turn, so the turn is
+                // the ability.
+                Dictionary<int, List<int>> hitsThisTurn = new Dictionary<int, List<int>>();
+                Dictionary<int, List<int>> tauntersAtFirstHit = new Dictionary<int, List<int>>();
+
+                for (int i = 0; i <= r.Events.Count && !violation; i++)
                 {
+                    bool boundary = i == r.Events.Count;
+                    if (!boundary)
+                    {
+                        BattleEventType t = r.Events[i].Type;
+                        boundary = t == BattleEventType.TurnStart || t == BattleEventType.RoundStart;
+                    }
+
+                    if (boundary)
+                    {
+                        foreach (KeyValuePair<int, List<int>> kv in hitsThisTurn)
+                        {
+                            if (kv.Value.Count != 1) continue;
+                            UnitSnapshot victim = r.FindUnit(kv.Value[0]);
+                            if (victim == null) continue;
+                            List<int> taunters = tauntersAtFirstHit[kv.Key];
+                            if (!SideHoldsTaunter(r, taunters, victim.IsPlayer)) continue;
+                            if (taunters.Contains(kv.Value[0])) continue;
+
+                            UnitSnapshot attacker = r.FindUnit(kv.Key);
+                            violation = true;
+                            violationDetail = db.AllStages[st].DisplayCode + " seed " + seed + ": "
+                                + (attacker != null ? attacker.Name : "unit " + kv.Key)
+                                + " single-target hit " + victim.Name
+                                + " while a Provoke was active on that side";
+                            break;
+                        }
+                        hitsThisTurn.Clear();
+                        tauntersAtFirstHit.Clear();
+                        if (boundary && i == r.Events.Count) break;
+                        continue;
+                    }
+
                     BattleEvent e = r.Events[i];
 
                     if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt)
                     {
-                        UnitSnapshot who = r.FindUnit(e.TargetId);
-                        if (who != null && who.IsPlayer)
-                        {
-                            sawTauntApplied = true;
-                            if (!activeTaunters.Contains(e.TargetId)) activeTaunters.Add(e.TargetId);
-                        }
-                        i++;
+                        sawTauntApplied = true;
+                        if (!activeTaunters.Contains(e.TargetId)) activeTaunters.Add(e.TargetId);
                         continue;
                     }
                     if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Taunt)
                     {
-                        UnitSnapshot who = r.FindUnit(e.TargetId);
-                        if (who != null && who.IsPlayer) activeTaunters.Remove(e.TargetId);
-                        i++;
+                        activeTaunters.Remove(e.TargetId);
+                        continue;
+                    }
+                    // A DEAD TAUNTER STOPS ANSWERING. FindTargetAnchor skips units that are not
+                    // Alive, and death does not emit StatusExpired for what the corpse was
+                    // carrying, so without this the list keeps a dead id and every later hit reads
+                    // as a violation. Invisible while this watched only the player's side, where
+                    // Orrin taunted and rarely died; the Stone Warden dies most fights.
+                    if (e.Type == BattleEventType.Death)
+                    {
+                        activeTaunters.Remove(e.TargetId);
                         continue;
                     }
 
-                    if (e.Type == BattleEventType.Damage && activeTaunters.Count > 0)
+                    // A damage-over-time tick carries the status that caused it and fires on the
+                    // victim's own turn. It is a consequence of an earlier targeting decision, not
+                    // a new one, and grading it as one would fail every Burn that outlived the
+                    // Taunt being applied.
+                    if (e.Type != BattleEventType.Damage || e.Status != StatusKind.None) continue;
+
+                    UnitSnapshot targetUnit = r.FindUnit(e.TargetId);
+                    UnitSnapshot sourceUnit = r.FindUnit(e.SourceId);
+                    if (targetUnit == null || sourceUnit == null) continue;
+                    if (targetUnit.IsPlayer == sourceUnit.IsPlayer) continue;   // self-hits and reflects
+
+                    List<int> hits;
+                    if (!hitsThisTurn.TryGetValue(e.SourceId, out hits))
                     {
-                        UnitSnapshot targetUnit = r.FindUnit(e.TargetId);
-                        UnitSnapshot sourceUnit = r.FindUnit(e.SourceId);
-                        if (targetUnit != null && targetUnit.IsPlayer && sourceUnit != null && !sourceUnit.IsPlayer)
-                        {
-                            // one enemy turn produces a contiguous run of Damage events (same source, same round).
-                            // a single distinct victim across that run means the ability was single-target.
-                            int j = i;
-                            List<int> hitTargets = new List<int>();
-                            while (j < r.Events.Count && r.Events[j].Type == BattleEventType.Damage
-                                   && r.Events[j].SourceId == e.SourceId && r.Events[j].Round == e.Round)
-                            {
-                                if (!hitTargets.Contains(r.Events[j].TargetId)) hitTargets.Add(r.Events[j].TargetId);
-                                j++;
-                            }
-                            if (hitTargets.Count == 1 && !activeTaunters.Contains(hitTargets[0]))
-                            {
-                                violation = true;
-                                violationDetail = "seed " + seed + " round " + e.Round + ": " + sourceUnit.Name
-                                    + " single-target hit " + targetUnit.Name + " while a Provoke was active";
-                            }
-                            i = j;
-                            continue;
-                        }
+                        hits = new List<int>();
+                        hitsThisTurn[e.SourceId] = hits;
+                        tauntersAtFirstHit[e.SourceId] = new List<int>(activeTaunters);
                     }
-                    i++;
+                    if (!hits.Contains(e.TargetId)) hits.Add(e.TargetId);
                 }
             }
 
-            Check(sawTauntApplied, "Provoke was applied to a player unit across sample battles");
-            Check(!violation, "enemies always single-target the Provoke holder over normal targeting"
+            Check(sawTauntApplied, "Provoke was applied to a unit somewhere in the campaign across sample battles");
+            Check(!violation, "single-target attacks always land on the Provoke holder over normal targeting"
                  + (violation ? " (" + violationDetail + ")" : ""));
             Line("");
+        }
+
+        /// <summary>Whether one of the taunting ids belongs to the given side. The anchor only
+        /// answers for its own side, so a Taunt standing on the attacker's side says nothing about
+        /// where the attacker's own hit should land.</summary>
+        private static bool SideHoldsTaunter(BattleResult r, List<int> taunters, bool playerSide)
+        {
+            for (int i = 0; i < taunters.Count; i++)
+            {
+                UnitSnapshot u = r.FindUnit(taunters[i]);
+                if (u != null && u.IsPlayer == playerSide) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -5405,20 +5570,29 @@ namespace Emberfall.DevHarness
         /// exactly duration - 1 (the first decrement lands at the end of the very turn it was cast).
         /// Shield is excluded - it can also expire early by being fully absorbed, which is correct
         /// behaviour, not a schedule bug.
+        ///
+        /// SWEEPS STAGES rather than sampling stage 1, and that changed when the placeholder roster
+        /// was deleted. Maeve Corrin's Tidal Cadence was the self-cast finite status this found on
+        /// stage 1; she is gone, and the five heroes left author only duration-99 self-buffs, which
+        /// this deliberately skips. The subjects that remain are enemy-side - the Stone Warden's
+        /// Taunt and DefenseUp, the Tidecaller's ward - and they live further into the campaign. The
+        /// rule was never about a particular unit, so the sweep walks until it has sampled enough
+        /// rather than naming a stage that content can empty.
         /// </summary>
         private static void CheckStatusExpiry(ContentDatabase db)
         {
             Line("STATUS DURATION");
             GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
-            StageDef stage = db.AllStages[0];
 
+            const int WantSamples = 20;
             int checkedCount = 0;
             bool violation = false;
             string detail = "";
 
-            for (int seed = 1; seed <= 60 && !violation; seed++)
+            for (int st = 0; st < db.AllStages.Count && !violation && checkedCount < WantSamples; st++)
+            for (int seed = 1; seed <= 60 && !violation && checkedCount < WantSamples; seed++)
             {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(stage), seed));
+                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[st]), seed));
                 Dictionary<string, int[]> pending = new Dictionary<string, int[]>(); // key -> [applyRound, duration]
 
                 for (int i = 0; i < r.Events.Count; i++)
@@ -5442,7 +5616,8 @@ namespace Emberfall.DevHarness
                             if (e.Round != expected)
                             {
                                 violation = true;
-                                detail = "seed " + seed + ": " + StatusInfo.DisplayName(e.Status) + " applied round " + rec[0]
+                                detail = db.AllStages[st].DisplayCode + " seed " + seed + ": "
+                                    + StatusInfo.DisplayName(e.Status) + " applied round " + rec[0]
                                     + " (duration " + rec[1] + ") expired round " + e.Round + ", expected round " + expected;
                             }
                         }
@@ -8095,17 +8270,40 @@ namespace Emberfall.DevHarness
             profile.Shards = 1000000; // bypass the economy - this checks the mechanic, not the grind to afford it
             GameSession session = new GameSession(db, profile);
 
+            // THE ROSTER IS TOO SMALL FOR THIS TO PASS, and that is the finding rather than a
+            // pity bug. Pity guarantees three distinct UNOWNED heroes, so it needs at least three
+            // that a fresh profile does not already own: with five heroes and three starters there
+            // are two. The precondition is asserted separately from the mechanic so the failure
+            // says which of the two is wrong, and the mechanic below is skipped rather than run
+            // against an impossible roster and reported as broken.
+            int unowned = db.Heroes.Count - db.StartingHeroes.Count;
+            bool rosterBigEnough = unowned >= GameSession.PityGuaranteedSummons;
+            Check(rosterBigEnough,
+                  "the roster holds at least " + GameSession.PityGuaranteedSummons
+                  + " heroes a fresh profile does not start with, which pity needs to be satisfiable at all (got "
+                  + unowned + " of " + db.Heroes.Count + ")"
+                  + (rosterBigEnough ? "" : " - expected while the roster swap is half done; the 94-hero import closes it"));
+
             List<string> pulled = new List<string>();
-            bool firstThreeOk = true;
-            for (int i = 0; i < GameSession.PityGuaranteedSummons; i++)
+            if (rosterBigEnough)
             {
-                SummonOutcome outcome = session.Summon(9000 + i, 0);
-                bool ok = outcome.Success && outcome.IsNew && outcome.Hero != null && !pulled.Contains(outcome.Hero.Id);
-                if (!ok) firstThreeOk = false;
-                else pulled.Add(outcome.Hero.Id);
+                bool firstThreeOk = true;
+                for (int i = 0; i < GameSession.PityGuaranteedSummons; i++)
+                {
+                    SummonOutcome outcome = session.Summon(9000 + i, 0);
+                    bool ok = outcome.Success && outcome.IsNew && outcome.Hero != null && !pulled.Contains(outcome.Hero.Id);
+                    if (!ok) firstThreeOk = false;
+                    else pulled.Add(outcome.Hero.Id);
+                }
+                Check(firstThreeOk && pulled.Count == GameSession.PityGuaranteedSummons,
+                      "a fresh profile's first three summons return three distinct unowned heroes");
             }
-            Check(firstThreeOk && pulled.Count == GameSession.PityGuaranteedSummons,
-                  "a fresh profile's first three summons return three distinct unowned heroes");
+            else
+            {
+                // Still drain the guarantee, so the duplicate check below is measuring what it
+                // says it is - normal weights after pity, not pity itself.
+                for (int i = 0; i < GameSession.PityGuaranteedSummons; i++) session.Summon(9000 + i, 0);
+            }
 
             bool sawDuplicate = false;
             for (int seed = 0; seed < 300 && !sawDuplicate; seed++)
@@ -10139,6 +10337,48 @@ namespace Emberfall.DevHarness
         /// FirstBlockingBattle.</summary>
         private const int ProbeSamples = 40;
 
+        /// <summary>
+        /// The five bodies both curve instruments deploy, by name.
+        ///
+        /// READ THE NUMBERS THESE PRODUCE AS PLACEHOLDERS, NOT AS A YARDSTICK. This is the whole
+        /// roster - five heroes, and all five are Ember. A six-aspect game measured by a line that
+        /// cannot be at a disadvantage against anything, and cannot be at an advantage against
+        /// anything either, is measuring with one of its axes missing. Every CEIL, FLOOR and BLOCK
+        /// below is therefore a number about a mono-aspect team, and "the curve" is not a statement
+        /// about the game until the 94-hero roster lands and this list is re-picked to spread
+        /// across the wheel and the roles. It is deliberately temporary and should not survive that
+        /// import unchanged.
+        ///
+        /// WHY IT IS PINNED AT ALL, which outlives the placeholder state. This used to sort the
+        /// whole roster by Lv1 PowerScore and take the top five, and that sort is a function of how
+        /// many heroes exist, so it silently re-picked the team every time content was added. A
+        /// four-hero Ember import once displaced Orrin Kaal from 4th to 7th, fielding five damage
+        /// dealers with no tank and no healer; the curve went from 41-83% across chapter 2 to 0% on
+        /// seventeen of twenty-four stages, and the check stayed GREEN through it, because it only
+        /// failed on a perfectly flat curve and a cliff is not flat. A list that moves on its own
+        /// is not an instrument. Whatever five the import picks, they get named here.
+        ///
+        /// The line task 13's 24-stage table was actually measured against was nyx_serrow,
+        /// ryn_solvarr, kalyx_emberwright, orrin_kaal and maeve_corrin - a Stalker, a Striker, a
+        /// Breaker, a Bulwark and a Warden, across five different aspects, floor 6411. All five
+        /// were deleted with the placeholder roster, so that table has no line left to reproduce it
+        /// and the continuity this pin was protecting is already broken. Nothing is re-tuned to
+        /// hide that.
+        /// </summary>
+        private static readonly string[] PinnedLine = {
+            "veska_the_broken_oath",       // Striker - the closest thing left to Ryn's single-target finisher
+            "seraphine_the_last_ember",    // Breaker - area damage and the roster's only Burn on a basic
+            "orren_the_cinder_hunter",     // Ranger  - single-target with a DefenseDown rider
+            "kael_the_ashbound",           // Breaker - the fattest body, and the nearest thing to a front line
+            "marrow_the_burning_vow",      // Mender  - the only healer in the game right now
+        };
+
+        /// <summary>The roster's healer, named once. The economy pass measures what healing is
+        /// worth by fielding this hero twice, once with every Heal zeroed; it has to know who that
+        /// is. Wren Ilyra until the placeholder roster was deleted, Marrow now, and whoever the
+        /// 94-hero import makes the primary Mender after that.</summary>
+        private const string HealerDefId = "marrow_the_burning_vow";
+
         private static void CheckPinnedFiveBodyCurve(ContentDatabase db)
         {
             Line("PINNED FIVE-BODY CURVE - UNDER-GEARED FLOOR (bare power, no relics, no armor)");
@@ -10175,31 +10415,9 @@ namespace Emberfall.DevHarness
                 for (int h = 0; h < db.Heroes.Count; h++)
                     if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
 
-                // Deploy the PINNED five, by name. This used to sort the whole roster by Lv1
-                // PowerScore and take the top five, which is how the instrument broke: that sort is
-                // a function of how many heroes exist, so it silently re-picks the team every time
-                // content is added. The four-hero Ember import (task 18) landed between 1025 and
-                // 1379 Lv1 power and displaced Orrin from 4th to 7th, fielding five damage dealers
-                // with no tank and no healer. The curve went from 41-83% across chapter 2 to 0% on
-                // seventeen of twenty-four stages, and this check stayed GREEN through it, because
-                // it only fails on a perfectly flat curve and a cliff is not flat.
-                //
-                // Orrin's absence is the whole collapse, not a contributing factor. At the time he
-                // was the Lumen anchor - a living Lumen unit then answered every single-target
-                // question aimed at its side (FindTargetAnchor) - and task 13's entire retune was
-                // authored against that interception. The Lumen clause has since been removed and
-                // FindTargetAnchor serves Taunt and Provoke only; Orrin still Taunts, so he is
-                // still the body single-target attacks land on, but by his ability rather than by
-                // his aspect. Without him every single-target attack spreads across five squishy
-                // bodies instead of landing on the tank, and the line has no healer to absorb it.
-                //
-                // These five are exactly the line task 13's 24-stage table was measured against:
-                // the old sort's top five on the 7-hero roster, floor 6411, the figure this
-                // document and DESIGN-BUILD-ORDER both record. Pinning them by name keeps the
-                // yardstick continuous with the content calibrated against it, and means the next
-                // roster import cannot move it. Changing this list invalidates that table as surely
-                // as the drift did - so change it deliberately and retune, or not at all.
-                string[] pinned = { "nyx_serrow", "ryn_solvarr", "kalyx_emberwright", "orrin_kaal", "maeve_corrin" };
+                // Deploy the PINNED five, by name - see PinnedLine for what that list is and why
+                // reading its numbers as meaningful right now would be a mistake.
+                string[] pinned = PinnedLine;
 
                 for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
                 int assigned = 0;
@@ -10720,7 +10938,7 @@ namespace Emberfall.DevHarness
             for (int h = 0; h < db.Heroes.Count; h++)
                 if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
 
-            string[] pinned = { "nyx_serrow", "ryn_solvarr", "kalyx_emberwright", "orrin_kaal", "maeve_corrin" };
+            string[] pinned = PinnedLine;
             for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
             int assigned = 0;
             for (int i = 0; i < pinned.Length; i++)
@@ -10869,7 +11087,7 @@ namespace Emberfall.DevHarness
             run.Profile = profile;
             run.Session = session;
 
-            HeroDef noHealWren = verbose ? BuildNoHealWren(db) : null;
+            HeroDef noHealMender = verbose ? BuildNoHealMender(db) : null;
 
             for (int stageIdx = 0; stageIdx < db.AllStages.Count; stageIdx++)
             {
@@ -10983,7 +11201,7 @@ namespace Emberfall.DevHarness
                 if (verbose)
                 {
                     Row(stage).Balance5Power = outcome.TeamPower;
-                    ReportEconomyStage(db, session, stage, outcome, noHealWren, stageIdx);
+                    ReportEconomyStage(db, session, stage, outcome, noHealMender, stageIdx);
                 }
 
                 if (!cleared) { run.StuckAt = stageIdx; break; }
@@ -10995,7 +11213,7 @@ namespace Emberfall.DevHarness
         /// <summary>The per-stage table row, plus the damage-share and healer probes. Verbose path
         /// only - the responsiveness check does not need them and they cost 24 battles a stage.</summary>
         private static void ReportEconomyStage(ContentDatabase db, GameSession session, StageDef stage,
-                                               EconomyStageOutcome outcome, HeroDef noHealWren, int stageIdx)
+                                               EconomyStageOutcome outcome, HeroDef noHealMender, int stageIdx)
         {
             PlayerProfile profile = session.Profile;
             const int MeasureRuns = 24;
@@ -11019,9 +11237,9 @@ namespace Emberfall.DevHarness
                 if (mr.Victory) measureWins++;
                 AccumulateDamage(mr, damageByHero);
 
-                if (mr.Victory && noHealWren != null)
+                if (mr.Victory && noHealMender != null)
                 {
-                    List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealWren, out healerDeployed);
+                    List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealMender, out healerDeployed);
                     if (healerDeployed)
                     {
                         BattleRequest altRequest = new BattleRequest();
@@ -11266,11 +11484,19 @@ namespace Emberfall.DevHarness
             return sb.ToString();
         }
 
-        /// <summary>A copy of Wren with her Active's Heal effect zeroed out - everything else (her
-        /// attack, passive ward, the Active's Cleanse) is untouched, isolating healing specifically.</summary>
-        private static HeroDef BuildNoHealWren(ContentDatabase db)
+        /// <summary>
+        /// A copy of the roster's Mender with EVERY Heal effect zeroed out - attack, passive and
+        /// the Active's Cleanse untouched - so the economy pass can measure what healing alone is
+        /// worth by running the same line twice.
+        ///
+        /// It was Wren Ilyra, whose only Heal sat on her Active; she was deleted with the
+        /// placeholder roster. Marrow heals on his BASIC as well, so zeroing the Active alone would
+        /// have left most of the healing in place and quietly understated the delta. The clone now
+        /// walks basic, active and passives rather than the active only.
+        /// </summary>
+        private static HeroDef BuildNoHealMender(ContentDatabase db)
         {
-            HeroDef src = db.GetHero("wren_ilyra");
+            HeroDef src = db.GetHero(HealerDefId);
             if (src == null || src.Active == null) return null;
 
             HeroDef clone = new HeroDef();
@@ -11286,7 +11512,7 @@ namespace Emberfall.DevHarness
             clone.Growth = src.Growth;
             clone.StartEnergy = src.StartEnergy;
             clone.Visual = src.Visual;
-            clone.BasicAttack = src.BasicAttack;
+            clone.BasicAttack = StripHeals(src.BasicAttack);
             clone.Passives.AddRange(src.Passives);
             clone.Talents.AddRange(src.Talents);
             clone.Title = src.Title;
@@ -11295,17 +11521,27 @@ namespace Emberfall.DevHarness
             clone.Stars = src.Stars;
             clone.StartingHero = src.StartingHero;
 
-            AbilityDef activeClone = new AbilityDef();
-            activeClone.Id = src.Active.Id;
-            activeClone.Name = src.Active.Name;
-            activeClone.Description = src.Active.Description;
-            activeClone.Kind = src.Active.Kind;
-            activeClone.EnergyCost = src.Active.EnergyCost;
-            activeClone.Vfx = src.Active.Vfx;
-            for (int i = 0; i < src.Active.Effects.Count; i++)
+            clone.Active = StripHeals(src.Active);
+            return clone;
+        }
+
+        /// <summary>The same ability with every Heal effect's output zeroed and everything else -
+        /// order, targets, statuses, chances - left exactly as authored, so the only difference
+        /// between the two runs is the healing itself.</summary>
+        private static AbilityDef StripHeals(AbilityDef src)
+        {
+            if (src == null) return null;
+            AbilityDef clone = new AbilityDef();
+            clone.Id = src.Id;
+            clone.Name = src.Name;
+            clone.Description = src.Description;
+            clone.Kind = src.Kind;
+            clone.EnergyCost = src.EnergyCost;
+            clone.Vfx = src.Vfx;
+            for (int i = 0; i < src.Effects.Count; i++)
             {
-                EffectDef e = src.Active.Effects[i];
-                if (e.Kind != EffectKind.Heal) { activeClone.Effects.Add(e); continue; }
+                EffectDef e = src.Effects[i];
+                if (e.Kind != EffectKind.Heal) { clone.Effects.Add(e); continue; }
                 EffectDef neutered = new EffectDef();
                 neutered.Kind = EffectKind.Heal;
                 neutered.Target = e.Target;
@@ -11317,14 +11553,14 @@ namespace Emberfall.DevHarness
                 neutered.Duration = e.Duration;
                 neutered.Magnitude = e.Magnitude;
                 neutered.Chance = e.Chance;
-                activeClone.Effects.Add(neutered);
+                clone.Effects.Add(neutered);
             }
-            clone.Active = activeClone;
             return clone;
         }
 
-        /// <summary>Same deployed team, but with Wren (if deployed) swapped for the no-heal clone at the same level.</summary>
-        private static List<HeroInstance> BuildTeamWithoutHealing(PlayerProfile profile, HeroDef noHealWren, out bool healerDeployed)
+        /// <summary>Same deployed team, but with the Mender (if deployed) swapped for the no-heal
+        /// clone at the same level.</summary>
+        private static List<HeroInstance> BuildTeamWithoutHealing(PlayerProfile profile, HeroDef noHealMender, out bool healerDeployed)
         {
             List<HeroInstance> real = profile.TeamHeroes();
             List<HeroInstance> alt = new List<HeroInstance>();
@@ -11332,7 +11568,7 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < real.Count; i++)
             {
                 HeroInstance h = real[i];
-                if (h.DefId == "wren_ilyra")
+                if (h.DefId == HealerDefId)
                 {
                     healerDeployed = true;
                     HeroInstance sub = new HeroInstance();
@@ -11341,7 +11577,7 @@ namespace Emberfall.DevHarness
                     sub.Level = h.Level;
                     sub.Copies = h.Copies;
                     sub.AcquiredUnix = h.AcquiredUnix;
-                    sub.Def = noHealWren;
+                    sub.Def = noHealMender;
                     alt.Add(sub);
                 }
                 else

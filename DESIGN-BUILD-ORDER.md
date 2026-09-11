@@ -4,6 +4,65 @@
 
 Current state, checked against the repo on 2026-09-11, not against the rest of this document.
 
+- **Open: `feat/drop-placeholder-heroes`** - unmerged, based on `feat/remove-aspect-rules` and
+  carrying the seven branches under it. **The first half of the roster swap.** Six placeholder
+  heroes are deleted from `heroes.json` - `orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`,
+  `ryn_solvarr`, `maeve_corrin`, `nyx_serrow`. Five remain: Kael, Seraphine, Marrow, Veska, Orren.
+  A 94-hero roster replaces the six; nothing here is retuned for the gap in between.
+  - **Three starters, one per role: Kael (Breaker), Marrow (Mender), Veska (Striker).** All three
+    original starters were deleted, so a fresh account had none. Marrow is not optional - he is the
+    only healer in the game now, a new account has to be able to win stage 1, and the economy pass
+    measures healing by fielding him twice. Kael is the fattest body left (1850 HP and a BattleStart
+    DefenseUp) and is the nearest thing to a front line; Veska is the single-target finisher.
+    Seraphine duplicates Kael's role and Orren duplicates Veska's shape, so neither adds coverage.
+  - **What named a deleted hero, and what happened to each.** The pinned five-body line (both curve
+    instruments, now one shared `PinnedLine`), the three `startingHero` flags, the economy pass's
+    healer clone, `CheckDispel`'s two heroes, `CheckOnKillPassive`'s Ryn, the Effect Hit block's
+    Nyx, the version-1 save fixture's three `defId`s, the hero-count assertion, and five prose
+    references in `UnitRig`, `MainMenuScreen`, `SummonScreen`, `make_portraits.py` and
+    DESIGN-HERO-GENERATOR. No check was deleted.
+  - **Two checks could not survive as written, and say so rather than being re-pointed at a
+    stand-in.** The Effect Hit block asserted that Nyx held the roster's highest Effect Hit, so her
+    mark landing was a stat rather than an unfilled field; the five heroes left have no specialist
+    at all (highest hero value 0.15, below four enemies), and "somebody is highest" is true of any
+    list, so it is now a loud `[note]` instead of a passing assertion. Known trap 4 - an implicit
+    1.0 chance evaluating to 0.99999994 when Effect Hit equals Effect Resist - was written about
+    Nyx's Hollowing because it was the only harmful status in the game authored that way. It is
+    restated against content rather than a name, and reports that it currently has **no subject**:
+    every harmful `ApplyStatus` left carries an explicit chance below 1.0. It starts checking again
+    by itself the moment the roster authors a certain harmful status.
+  - **Three checks were widened, and two engine-independent flaws fell out of that.** `CheckDispel`,
+    `CheckProvokeTargeting` and `CheckStatusExpiry` were all pinned to stage 1 and to a hero that no
+    longer exists, and all three now sweep stages until they find their subject. Provoke also became
+    side-agnostic - `FindTargetAnchor` answers for whichever side holds the Taunt, and the Stone
+    Warden is the only Taunt left in the game - and moving it to the enemy side exposed two bugs in
+    the CHECK that had been unreachable while it watched a player tank who rarely died: it never
+    dropped a dead taunter from its active list, and it read an ability's target set as a contiguous
+    run of `Damage` events, so any multi-target ability whose first victim died read as
+    single-target and was graded a violation. It grades per turn now. Neither was an engine bug.
+  - **Harness state: three red, and only one of them is a test artefact.** The CEIL band check is
+    inherited from the aspect removal and is not retuned here. The other two are genuine content
+    gaps, left failing deliberately: **three combat roles - Bulwark, Warden, Stalker - now have no
+    hero at all**, and **summon pity cannot be satisfied**, because it guarantees three distinct
+    unowned heroes and a fresh profile leaves two. Both are arithmetic consequences of a five-hero
+    roster and both close when the import lands. Weakening either would hide the thing the import
+    most has to fix.
+  - **The balance numbers are stale on purpose and the yardstick is worse than it was.** The pinned
+    line is now Veska, Seraphine, Orren, Kael and Marrow - **all five Ember**, because the roster is.
+    A six-aspect game measured by a line that can be neither at an advantage nor at a disadvantage
+    against anything is measuring with an axis missing, and `PinnedLine`'s own comment says so at
+    length. Against the aspect-removal branch's line, 17 of 24 stages read easier, 2 harder, 5
+    unchanged; 4 of the 19 non-pinned rows sit inside their band, against 5 before; 2-1 now blocks
+    at battle 119 where nothing blocked on that line. **None of it is a statement about the game.**
+    The table task 13 was tuned against was measured on a Stalker, a Striker, a Breaker, a Bulwark
+    and a Warden across five aspects, and all five of those heroes are now deleted, so the
+    continuity the pin existed to protect is already broken. Retuning against a mono-aspect
+    five-hero roster would bake that in.
+  - **Orphaned art, reported and not deleted.** Six single-image sprites remain in
+    `Assets/Resources/Sprites/Units` for the deleted heroes, referenced by nothing now that their
+    `visual.sprite` entries are gone. All five remaining heroes have full sheets and portraits.
+    `Tools/HeroValidator/fixtures/regression-batch-1.json` still carries a synthetic hero with
+    Orrin's id; it is self-contained and reads nothing from `heroes.json`, so it still passes.
 - **Open: `feat/remove-aspect-rules`** - unmerged, based on `feat/history-allies-and-charges` and
   carrying the six branches under it. **NOT a no-op, and by far the largest behavioural change of
   the stack.** The six engine-owned aspect rules are deleted. An Aspect is now the damage chart,
@@ -2088,6 +2147,11 @@ renumbering, and nobody has gone back to update the harness's own prose.
     contributes nothing to this. Scaling him to roster norms was modelled before deciding: a
     corrected Kael lands about 1235, which puts him 6th and pushes Orrin from 7th to **8th**. The
     obvious suspect is innocent, and treating him first would have deepened the fault.
+
+    **All five of those heroes have since been deleted. The pin survives, the line does not** - see
+    the roster-swap entry at the top of Now / Next. The reasoning below is why the line is pinned at
+    all, which still holds; the names and the restored numbers are a record of a state the repo no
+    longer has.
 
     **The fix, and the argument for it over the alternative.** The five are now pinned by name -
     `nyx_serrow`, `ryn_solvarr`, `kalyx_emberwright`, `orrin_kaal`, `maeve_corrin` - with a check

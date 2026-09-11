@@ -185,8 +185,10 @@ namespace Emberfall.Battle
 
             // Sprite path: a unit with a non-empty VisualDef.Sprite renders a textured billboard
             // instead of the primitive body below, and skips the weapon (baked into the art).
-            // Empty Sprite (every unit except Orrin today) takes the untouched procedural branch -
-            // same code, same output, no behaviour change.
+            // Empty Sprite takes the untouched procedural branch - same code, same output, no
+            // behaviour change. That branch used to cover every unit but Orrin Kaal; with the
+            // placeholder roster deleted, all five remaining heroes carry sheets and the procedural
+            // body is now only reached by enemies that have no art yet.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
                 rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction, visual.SpriteMirror, visual.Silhouette);

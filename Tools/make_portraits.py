@@ -10,7 +10,6 @@ THE COMMANDS THAT PRODUCED THE COMMITTED PORTRAITS. Run all four, exactly as wri
     python Tools/make_portraits.py --from-originals
     python Tools/make_portraits.py --only marrow_the_burning_vow  --from-originals --center-x 0.60
     python Tools/make_portraits.py --only orren_the_cinder_hunter --from-originals --center-x 0.54
-    # kalyx_emberwright deliberately has NO portrait - see below
 
 The per-hero --center-x values are not decoration. The automatic centre is the centroid of opaque
 pixels in the top band, which tracks MASS rather than a face, so anything carried high and wide
@@ -18,11 +17,12 @@ wins: Marrow's warhammer pulled his crop left off his face, and Orren's bow and 
 right onto the bow. The default framing is correct for Kael, Seraphine and Veska and wrong for
 those two, so a plain re-run silently regresses exactly those two portraits.
 
-Portraits are an Ember-hero thing. Ember is six heroes, but kalyx_emberwright is deliberately NOT
-given one: he is a single-image placeholder, and the automatic framing cannot read his art at all
-(his warhammer is carried above his head and is larger than it, so it captures both the horizontal
-centroid AND the topmost opaque row). Hand-framing a placeholder that is going to be redrawn is
-not worth the three constants it takes, so he falls back to his sigil.
+Every hero in the roster has a portrait. That was not always true: kalyx_emberwright was a
+single-image placeholder the automatic framing could not read at all (his warhammer is carried
+above his head and is larger than it, so it captured both the horizontal centroid AND the topmost
+opaque row), and hand-framing art that was going to be redrawn was not worth the three constants,
+so he fell back to his sigil. He has since been deleted along with the rest of the placeholder
+roster. The --include-singles path is kept for whatever arrives undrawn next.
 """
 
 import argparse
@@ -166,9 +166,8 @@ def main():
     ap.add_argument("--include-singles", action="store_true",
                     help="also do the placeholder heroes that have a single image and no sheet")
     ap.add_argument("--only", action="append", metavar="HERO_ID",
-                    help="restrict to these hero ids (repeatable). Portraits are an Ember-hero "
-                         "thing, and Ember is not the same set as 'has an idle sheet' - "
-                         "kalyx_emberwright is Ember but is still a single-image placeholder.")
+                    help="restrict to these hero ids (repeatable). Useful when one hero needs a "
+                         "hand-framed --center-x, or when a newly imported hero has no sheet yet.")
     ap.add_argument("--dry-run", action="store_true", help="measure and report, write nothing")
     ap.add_argument("--crop-frac", type=float, metavar="FRAC",
                     help="override the crop side, as a fraction of bbox width (default %.2f). The "
@@ -181,8 +180,8 @@ def main():
                     help="override the horizontal centre, as a fraction of frame width, when the "
                          "top-band centroid finds the wrong thing. It tracks opaque MASS, not a "
                          "face, so a prop carried above shoulder height and larger than the head "
-                         "wins: kalyx_emberwright's warhammer put his crop on the hammer. Use with "
-                         "--only, since the right value is per-hero.")
+                         "wins: a warhammer carried high put one hero's crop on the hammer. Use "
+                         "with --only, since the right value is per-hero.")
     ap.add_argument("--from-originals", action="store_true",
                     help="crop from the 720x1280 exports in Assets/_Incoming where they still "
                          "exist (everyone but Kael), for a sharp portrait instead of a 2.2x upscale")

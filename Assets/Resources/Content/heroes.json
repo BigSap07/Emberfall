@@ -1,214 +1,10 @@
 {
-  // Emberfall prototype roster. Six original heroes, one per combat role.
-  // Base stats are role-comparable; star tier is applied as a multiplier in StatMath.
+  // Emberfall roster, mid-swap. The six original placeholder heroes - one per combat role - have
+  // been deleted; these five are the first arrivals of the 94-hero roster that replaces them.
+  // ALL FIVE ARE EMBER, and three combat roles (Bulwark, Warden, Stalker) currently have no hero
+  // at all. Both are temporary states of a half-finished import, not design. Base stats are
+  // role-comparable; star tier is applied as a multiplier in StatMath.
   "heroes": [
-    {
-      "id": "orrin_kaal",
-      "name": "Orrin Kaal",
-      "title": "Bulwark of Ash",
-      "role": "Bulwark",
-      "aspect": "Lumen",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Held the Cinder Gate alone for nine nights. The ash never fully washed out of his skin.",
-      "hp": 2600, "attack": 105, "defense": 130, "speed": 88,
-      "critChance": 0.08, "critDamage": 1.5, "growth": 0.115, "startEnergy": 10,
-      "effectHit": 0.05, "effectResist": 0.20,
-      "visual": { "primary": "C2502F", "secondary": "3B2A24", "accent": "FFB347", "silhouette": "brute", "weapon": "greatsword", "scale": 1.12, "sigil": 0, "sprite": "orrin_kaal" },
-      "basic": {
-        "id": "orrin_basic", "name": "Ashen Cleave", "vfx": "slash",
-        "description": "A heavy downward swing at the nearest foe.",
-        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.95 } ]
-      },
-      "active": {
-        "id": "orrin_active", "name": "Cinderguard", "energyCost": 100, "vfx": "burst",
-        "description": "Raises a burning ward, forces enemies to strike Orrin, and scorches the field.",
-        "effects": [
-          { "kind": "Shield", "target": "Self", "selfHpRatio": 0.22, "duration": 3 },
-          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
-          { "kind": "Damage", "target": "AllEnemies", "power": 0.55 },
-          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.20, "duration": 2, "chance": 0.7 }
-        ]
-      },
-      "passive": {
-        "id": "orrin_passive", "name": "Emberskin", "trigger": "OnHpBelowThreshold",
-        "threshold": 0.5, "oncePerBattle": true, "vfx": "buff",
-        "description": "Below half health, Orrin's scars harden: +45% Guard for the rest of the battle.",
-        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.45, "duration": 99 } ]
-      }
-    },
-
-    {
-      "id": "kalyx_emberwright",
-      "name": "Kalyx Emberwright",
-      "title": "Bloom of Cinders",
-      "role": "Breaker",
-      "aspect": "Ember",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Forge-taught, temple-exiled. Believes fire is simply an argument that wins.",
-      "hp": 1450, "attack": 186, "defense": 62, "speed": 96,
-      "critChance": 0.15, "critDamage": 1.6, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.10, "effectResist": 0.05,
-      "visual": { "primary": "F0743A", "secondary": "2A1B2E", "accent": "FFE08A", "silhouette": "humanoid", "weapon": "staff", "scale": 1.0, "sigil": 1, "sprite": "kalyx_emberwright" },
-      "basic": {
-        "id": "kalyx_basic", "name": "Emberlash", "vfx": "bolt",
-        "description": "Whips a cord of live flame at the nearest foe.",
-        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
-      },
-      "active": {
-        "id": "kalyx_active", "name": "Cinder Bloom", "energyCost": 100, "vfx": "burst",
-        "description": "Detonates the air across every enemy and leaves them burning.",
-        "effects": [
-          { "kind": "Damage", "target": "AllEnemies", "power": 0.95 },
-          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.28, "duration": 3, "chance": 0.85 }
-        ]
-      },
-      "passive": null
-    },
-
-    {
-      "id": "wren_ilyra",
-      "name": "Wren Ilyra",
-      "title": "Keeper of the Green Hour",
-      "role": "Mender",
-      "aspect": "Verdant",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Grew a garden in a crater. Insists that was the easy part.",
-      "hp": 1600, "attack": 140, "defense": 70, "speed": 102,
-      "critChance": 0.10, "critDamage": 1.5, "growth": 0.115, "startEnergy": 20,
-      "effectHit": 0.00, "effectResist": 0.10,
-      "visual": { "primary": "4FB477", "secondary": "1E3A2B", "accent": "D9F27E", "silhouette": "humanoid", "weapon": "orb", "scale": 0.96, "sigil": 2, "sprite": "wren_ilyra", "spriteBodyFraction": 1.0 },
-      "basic": {
-        "id": "wren_basic", "name": "Thornspark", "vfx": "bolt",
-        "description": "A snapped seed-pod that stings on impact.",
-        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
-      },
-      "active": {
-        "id": "wren_active", "name": "Verdant Tide", "energyCost": 100, "vfx": "heal",
-        "description": "Green light washes the line: heals every ally and clears one affliction.",
-        "effects": [
-          { "kind": "Heal", "target": "AllAllies", "power": 1.35, "selfHpRatio": 0.05 },
-          { "kind": "Cleanse", "target": "AllAllies", "hits": 1 }
-        ]
-      },
-      "passive": {
-        "id": "wren_passive", "name": "Rootbound", "trigger": "BattleStart",
-        "oncePerBattle": true, "vfx": "buff",
-        "description": "At the start of battle, every ally is wrapped in a ward worth 9% of Wren's health.",
-        "effects": [ { "kind": "Shield", "target": "AllAllies", "selfHpRatio": 0.09, "duration": 99 } ]
-      }
-    },
-
-    {
-      "id": "ryn_solvarr",
-      "name": "Ryn Solvarr",
-      "title": "Stormlance",
-      "role": "Striker",
-      "aspect": "Gale",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": false,
-      "lore": "Rides ahead of her own thunder and complains when it is late.",
-      "hp": 1500, "attack": 205, "defense": 66, "speed": 118,
-      "critChance": 0.20, "critDamage": 1.7, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "7FD8E8", "secondary": "1F2E45", "accent": "FFFFFF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.02, "sigil": 3, "sprite": "ryn_solvarr" },
-      "basic": {
-        "id": "ryn_basic", "name": "Lance Jab", "vfx": "slash",
-        "description": "A fast thrust at whichever enemy is closest to falling.",
-        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.05 } ]
-      },
-      "active": {
-        "id": "ryn_active", "name": "Piercing Gale", "energyCost": 100, "vfx": "slash",
-        "description": "One devastating thrust that also cracks the target's guard.",
-        "effects": [
-          { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.40 },
-          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "DefenseDown", "magnitude": 0.25, "duration": 2, "chance": 0.9 }
-        ]
-      },
-      "passive": {
-        "id": "ryn_passive", "name": "Follow-Through", "trigger": "OnKill",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "Every kill feeds 22 energy straight back into her lance.",
-        "effects": [ { "kind": "EnergyGain", "target": "Self", "flat": 22 } ]
-      }
-    },
-
-    {
-      "id": "maeve_corrin",
-      "name": "Maeve Corrin",
-      "title": "Cadence of the Deep",
-      "role": "Warden",
-      "aspect": "Tide",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": false,
-      "lore": "Conducts a battle the way other people conduct a choir.",
-      "hp": 1700, "attack": 148, "defense": 82, "speed": 108,
-      "critChance": 0.12, "critDamage": 1.5, "growth": 0.115, "startEnergy": 30,
-      "effectHit": 0.00, "effectResist": 0.12,
-      "visual": { "primary": "4A79D8", "secondary": "16233F", "accent": "9FE3FF", "silhouette": "humanoid", "weapon": "orb", "scale": 1.0, "sigil": 4, "sprite": "maeve_corrin" },
-      "basic": {
-        "id": "maeve_basic", "name": "Tideprod", "vfx": "bolt",
-        "description": "A curt shove of pressurised water.",
-        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.90 } ]
-      },
-      "active": {
-        "id": "maeve_active", "name": "Tidal Cadence", "energyCost": 100, "vfx": "buff",
-        "description": "Sets the tempo: allies gain attack, focus and a surge of energy.",
-        "effects": [
-          { "kind": "ApplyStatus", "target": "AllAllies", "status": "AttackUp", "magnitude": 0.30, "duration": 3 },
-          { "kind": "ApplyStatus", "target": "AllAllies", "status": "Focus", "magnitude": 0.12, "duration": 3 },
-          { "kind": "EnergyGain", "target": "AllAllies", "flat": 25 }
-        ]
-      },
-      "passive": {
-        "id": "maeve_passive", "name": "Rising Chorus", "trigger": "TurnStart",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "On each of Maeve's turns the whole line gains 8 energy.",
-        "effects": [ { "kind": "EnergyGain", "target": "AllAllies", "flat": 8 } ]
-      }
-    },
-
-    {
-      "id": "nyx_serrow",
-      "name": "Nyx Serrow",
-      "title": "The Quiet Verdict",
-      "role": "Stalker",
-      "aspect": "Umbra",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": false,
-      "lore": "Contracted to end a war. Ended the people who were profiting from it instead.",
-      "hp": 1420, "attack": 227, "defense": 58, "speed": 126,
-      "critChance": 0.28, "critDamage": 1.85, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.35, "effectResist": 0.00,
-      "visual": { "primary": "8A5CF0", "secondary": "1A1330", "accent": "E4C1FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.98, "sigil": 5, "sprite": "nyx_serrow" },
-      "basic": {
-        "id": "nyx_basic", "name": "Hollow Cut", "vfx": "shadow",
-        "description": "Steps through the dark and opens the most dangerous enemy.",
-        "effects": [ { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.0 } ]
-      },
-      "active": {
-        "id": "nyx_active", "name": "Umbral Step", "energyCost": 100, "vfx": "shadow",
-        "description": "Two strikes from impossible angles, on whichever enemy is most dangerous.",
-        "effects": [
-          { "kind": "Damage", "target": "HighestAttackEnemy", "power": 1.35, "hits": 2 }
-        ]
-      },
-      "passive": {
-        "id": "nyx_passive", "name": "Hollowing", "trigger": "AfterBasicAttack",
-        "oncePerBattle": false, "vfx": "shadow",
-        "description": "Whatever she cuts stays cut: -22% Guard on her last target.",
-        "effects": [ { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.22, "duration": 2 } ]
-      }
-    },
-
     {
       "id": "kael_the_ashbound",
       "name": "Kael",
@@ -217,7 +13,7 @@
       "aspect": "Ember",
       "stars": 5,
       "fusable": true,
-      "startingHero": false,
+      "startingHero": true,
       "lore": "Kael was once the commander of a fortress that could no longer be defended. Rather than retreat when defeat became inevitable, he ordered its gates opened and destroyed the fortress himself, denying the enemy everything they came to claim. He came to believe that destruction is not failure when it creates the chance for something stronger to follow.",
       "hp": 1850, "attack": 165, "defense": 75, "speed": 82,
       "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 0,
@@ -291,7 +87,7 @@
       "aspect": "Ember",
       "stars": 5,
       "fusable": true,
-      "startingHero": false,
+      "startingHero": true,
       "lore": "Marrow served as a battlefield priest who refused to let the wounded cling forever to battles already lost. To him, sacrifice was not suffering for its own sake, but the deliberate destruction of what must be given up so something else can endure.",
       "hp": 1700, "attack": 120, "defense": 75, "speed": 95,
       "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 15,
@@ -329,7 +125,7 @@
       "aspect": "Ember",
       "stars": 5,
       "fusable": true,
-      "startingHero": false,
+      "startingHero": true,
       "lore": "Veska was once sworn to protect a ruler she discovered was sacrificing entire villages to preserve his reign. She broke her oath and accepted the ruin that followed. Some promises deserve to be broken before they destroy everyone bound by them.",
       "hp": 1300, "attack": 220, "defense": 55, "speed": 122,
       "critChance": 0.22, "critDamage": 1.75, "growth": 0.115, "startEnergy": 0,

@@ -692,9 +692,12 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(portrait, 0f, 0f, BadgeSize, BadgeSize, new Vector2(0.5f, 1f));
 
                 // First word only. A cell is BadgeCell wide because that is what the dock's captions
-                // need, and "Kalyx Emberwright" at full length is wider than that - it overflowed
+                // need, and a two-word hero name at full length is wider than that - it overflowed
                 // into its neighbours and was the other half of why this row read as two different
-                // rows. Heroes shows full names where there is room for them.
+                // rows. The name that forced this was "Kalyx Emberwright", who has been deleted
+                // with the placeholder roster; every current hero name is one word, so the trim is
+                // a no-op today and is kept for the roster that is arriving. Heroes shows full
+                // names where there is room for them.
                 string shortName = hero.Def.Name;
                 int space = shortName.IndexOf(' ');
                 if (space > 0) shortName = shortName.Substring(0, space);
