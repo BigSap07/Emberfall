@@ -9,6 +9,7 @@
     "start": 0,
     "end": 69,
     "fps": 30,
-    "loop": true
+    "loop": true,
+    "impactFraction": 0.42
   }
 }

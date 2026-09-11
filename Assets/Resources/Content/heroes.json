@@ -1172,9 +1172,9 @@
         "scale": 1,
         "sigil": null,
         "sprite": "rheia_the_revision_scribe",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.219,
+        "spriteMirror": false
       },
       "basic": {
         "id": "rheia_the_revision_scribe_placeholder_basic",
@@ -1232,8 +1232,8 @@
         "scale": 1.07,
         "sigil": null,
         "sprite": "rovan_the_adaptive_commander",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -1292,8 +1292,8 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "talren_the_wayfinder",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.562,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -1352,8 +1352,8 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "vaelis_the_unfixed_blade",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.569,
+        "spriteFootFraction": 0.215,
         "spriteMirror": true
       },
       "basic": {
@@ -1412,8 +1412,8 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "celen_the_open_hand",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.665,
+        "spriteFootFraction": 0.173,
         "spriteMirror": true
       },
       "basic": {
@@ -2192,8 +2192,8 @@
         "scale": 1.1,
         "sigil": null,
         "sprite": "brenna_the_remaining_wall",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.699,
+        "spriteFootFraction": 0.157,
         "spriteMirror": true
       },
       "basic": {
@@ -2252,8 +2252,8 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "edrin_the_distant_bell",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.55,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -2312,8 +2312,8 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "elyra_the_patient_warden",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.581,
+        "spriteFootFraction": 0.2,
         "spriteMirror": true
       },
       "basic": {
@@ -2372,8 +2372,8 @@
         "scale": 1.03,
         "sigil": null,
         "sprite": "isara_the_second_chance",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.762,
+        "spriteFootFraction": 0.138,
         "spriteMirror": true
       },
       "basic": {
@@ -2432,8 +2432,8 @@
         "scale": 1,
         "sigil": null,
         "sprite": "sylven_the_unfading_blade",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.546,
+        "spriteFootFraction": 0.227,
         "spriteMirror": true
       },
       "basic": {
@@ -3272,8 +3272,8 @@
         "scale": 1.06,
         "sigil": null,
         "sprite": "aeron_the_unbroken_stride",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.827,
+        "spriteFootFraction": 0.096,
         "spriteMirror": true
       },
       "basic": {
@@ -3332,8 +3332,8 @@
         "scale": 1.03,
         "sigil": null,
         "sprite": "dahlia_the_wayward_hymn",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.554,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -3392,8 +3392,8 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "merek_the_sequence_thief",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -3452,9 +3452,9 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "oris_the_unwritten_path",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteBodyFraction": 0.554,
+        "spriteFootFraction": 0.223,
+        "spriteMirror": false
       },
       "basic": {
         "id": "oris_the_unwritten_path_placeholder_basic",
@@ -3512,8 +3512,8 @@
         "scale": 0.99,
         "sigil": null,
         "sprite": "zella_the_slow_argument",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -4352,8 +4352,8 @@
         "scale": 1.03,
         "sigil": null,
         "sprite": "cyrra_the_burden_bearer",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.565,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -4412,8 +4412,8 @@
         "scale": 1.08,
         "sigil": null,
         "sprite": "darian_the_hidden_bulwark",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -4472,8 +4472,8 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "mireth_the_erased_name",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.735,
+        "spriteFootFraction": 0.146,
         "spriteMirror": true
       },
       "basic": {
@@ -4532,9 +4532,9 @@
         "scale": 1,
         "sigil": null,
         "sprite": "nysera_the_missing_arrow",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteBodyFraction": 0.546,
+        "spriteFootFraction": 0.227,
+        "spriteMirror": false
       },
       "basic": {
         "id": "nysera_the_missing_arrow_placeholder_basic",
@@ -4592,9 +4592,9 @@
         "scale": 0.99,
         "sigil": null,
         "sprite": "velis_the_hollow_vow",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteBodyFraction": 0.612,
+        "spriteFootFraction": 0.196,
+        "spriteMirror": false
       },
       "basic": {
         "id": "velis_the_hollow_vow_placeholder_basic",
@@ -4892,8 +4892,8 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "altheon_the_first_witness",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -4952,8 +4952,8 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "aminah_the_true_measure",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.565,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -5012,9 +5012,9 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "arden_the_precise_measure",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteBodyFraction": 0.554,
+        "spriteFootFraction": 0.223,
+        "spriteMirror": false
       },
       "basic": {
         "id": "arden_the_precise_measure_placeholder_basic",
@@ -5072,8 +5072,8 @@
         "scale": 1.07,
         "sigil": null,
         "sprite": "caldus_the_appointed_guard",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -5132,8 +5132,8 @@
         "scale": 0.99,
         "sigil": null,
         "sprite": "isolde_the_slow_fading",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.558,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
