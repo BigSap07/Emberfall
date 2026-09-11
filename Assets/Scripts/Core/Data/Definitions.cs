@@ -113,6 +113,25 @@ namespace Emberfall.Core.Data
         public float PerStack;        // Power multiplier per stack of the caster's Resolve
         public bool ConsumesResolve;  // clear the caster's Resolve after this effect resolves
 
+        // ---------- Conditions: one test on the effect, evaluated where it lands ----------
+        // The same argument Resolve settled above, settled the same way. 111 of the 374 incoming
+        // abilities carry a conditional clause, and the alternative to a field content configures
+        // is a bespoke branch per hero inside the simulation.
+        //
+        // Evaluated in ResolveAbility AFTER targeting and BEFORE ApplyEffect, against the unit the
+        // effect is landing on plus the caster. Per target, so a conditional AoE tests each enemy
+        // on its own rather than testing one and applying to all. An effect whose condition fails
+        // is skipped whole: no hit loop, no landing roll, no Block or crit or variance draw, and no
+        // ConsumesResolve - see CombatSimulation.ConditionMet and its call site.
+        //
+        // Condition None is the default and is every effect in shipped content, which is what makes
+        // this pass unable to move an existing battle: the gate is one comparison against None, and
+        // nothing reaches the evaluator until content asks it to.
+        public EffectCondition Condition = EffectCondition.None;
+        public ConditionSubject ConditionOn = ConditionSubject.Target;
+        public StatusKind ConditionStatus = StatusKind.None;  // for HasStatus/LacksStatus/StatusStacksAtLeast
+        public float ConditionValue;  // HP ratio for HpBelow/HpAbove; stack count for StatusStacksAtLeast
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -129,6 +148,10 @@ namespace Emberfall.Core.Data
             e.MaxStacks = Math.Max(0, j.GetInt("maxStacks", 0));
             e.PerStack = j.GetFloat("perStack", 0f);
             e.ConsumesResolve = j.GetBool("consumesResolve", false);
+            e.Condition = EnumUtil.Parse(j.GetString("condition", "None"), EffectCondition.None);
+            e.ConditionOn = EnumUtil.Parse(j.GetString("conditionOn", "Target"), ConditionSubject.Target);
+            e.ConditionStatus = EnumUtil.Parse(j.GetString("conditionStatus", "None"), StatusKind.None);
+            e.ConditionValue = j.GetFloat("conditionValue", 0f);
             return e;
         }
 
@@ -155,6 +178,10 @@ namespace Emberfall.Core.Data
             c.MaxStacks = MaxStacks;
             c.PerStack = PerStack;
             c.ConsumesResolve = ConsumesResolve;
+            c.Condition = Condition;
+            c.ConditionOn = ConditionOn;
+            c.ConditionStatus = ConditionStatus;
+            c.ConditionValue = ConditionValue;
             return c;
         }
     }

@@ -61,6 +61,91 @@ namespace Emberfall.Core.Data
         GainResolve
     }
 
+    /// <summary>
+    /// The test an effect must pass before it resolves, or None for the effect to always resolve.
+    ///
+    /// One condition per effect, deliberately, and no AND/OR between them. Every conditional clause
+    /// in the incoming roster that this pass is built for is a single clause - "if it is Cracked",
+    /// "if the target is below 35% HP", "at 4 Patience" - and a composition operator is a small
+    /// expression language that would have to be designed, parsed, printed on a hero card and
+    /// tested against orderings nothing authors yet. A kit that genuinely needs two tests can carry
+    /// two effects.
+    ///
+    /// Every member is a pure function of unit state at the moment the effect lands. Nothing here
+    /// draws from the RNG and nothing here mutates: a condition that consumed a draw would shift
+    /// the stream and desync every seeded replay of the battle it appeared in, and one that mutated
+    /// would be an effect pretending to be a test.
+    /// </summary>
+    public enum EffectCondition
+    {
+        /// <summary>Always resolves. Every effect in shipped content, and the default.</summary>
+        None,
+
+        /// <summary>The subject carries at least one instance of ConditionStatus.</summary>
+        HasStatus,
+
+        /// <summary>The subject carries no instance of ConditionStatus.</summary>
+        LacksStatus,
+
+        /// <summary>
+        /// The subject's HP ratio is at or below ConditionValue.
+        ///
+        /// INCLUSIVE, matching PassiveTrigger.OnHpBelowThreshold, which fires when HpRatio is at or
+        /// below its Threshold. Two different meanings of "below" inside one engine would be a trap
+        /// worth more than the tiny expressive difference, so the newer conditional adopts the
+        /// older one's boundary rather than the other way round.
+        /// </summary>
+        HpBelow,
+
+        /// <summary>The subject's HP ratio is at or above ConditionValue. The mirror of HpBelow,
+        /// inclusive at the boundary for the same reason.</summary>
+        HpAbove,
+
+        /// <summary>
+        /// The subject has a live shield pool absorbing for it.
+        ///
+        /// Reads the POOL (CombatUnit.Shield), not StatusKind.Shield on the status row, and the two
+        /// can genuinely disagree: the Shield status expires on its own round clock while the pool
+        /// is only ever emptied by absorption or death, so a unit can hold a pool with no status
+        /// and vice versa. The pool is what actually stops damage, so it is what "has a shield"
+        /// means here. A kit that wants the status row instead can author HasStatus with
+        /// ConditionStatus Shield, and get a different and equally well defined answer.
+        /// </summary>
+        HasShield,
+
+        /// <summary>No shield pool is absorbing for the subject. The mirror of HasShield, and the
+        /// same pool.</summary>
+        LacksShield,
+
+        /// <summary>
+        /// The subject carries at least ConditionValue instances of ConditionStatus, counted the
+        /// way Ember's Burn stacking and EffectKind.GainResolve already count - CombatUnit.CountOf,
+        /// one entry per stack. ConditionValue is rounded away from zero to an integer, because a
+        /// stack count is a count.
+        /// </summary>
+        StatusStacksAtLeast
+    }
+
+    /// <summary>
+    /// Which unit an EffectCondition asks about: the one the effect is landing on, or the one that
+    /// cast it. Two members and no third, because those are the two units an effect has at the
+    /// moment it resolves.
+    ///
+    /// Target is the default, so an unqualified condition reads as a statement about the thing
+    /// being hit, which is how the descriptions this was built for are written ("if IT is below
+    /// 35% HP"). Caster is what "while Hale is below 50% HP" needs.
+    ///
+    /// Note what this cannot express and is not trying to: a comparison BETWEEN the two, such as
+    /// "the target has more Attack than the caster". That needs a stat selector and a two-sided
+    /// operand model rather than a subject and a constant, and it is 2 of the 374 incoming
+    /// abilities against dozens for the members above.
+    /// </summary>
+    public enum ConditionSubject
+    {
+        Target,
+        Caster
+    }
+
     public enum StatusKind
     {
         None,

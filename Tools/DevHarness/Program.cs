@@ -54,6 +54,7 @@ namespace Emberfall.DevHarness
             CheckHolyBlockControlImmunity(content);
             CheckResolveCounter(content);
             CheckPassivesAndTalents(content);
+            CheckEffectConditions(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -91,6 +92,354 @@ namespace Emberfall.DevHarness
         }
 
         // ---------------------------------------------------------------- helpers
+
+
+        // ---------------------------------------------------------------- effect conditions
+
+        /// <summary>
+        /// Conditions on effects: the test an effect passes before it resolves.
+        ///
+        /// Two properties, pulling opposite ways, exactly as the multi-passive pass had. The new one
+        /// is that a conditional effect fires when its condition holds and is skipped when it does
+        /// not. The old one is that shipped content authors no conditions at all, so every battle in
+        /// the game is untouched - which is asserted first, against live content, because a
+        /// regression there moves everything rather than some new corner.
+        ///
+        /// The battle half is measured as fingerprints rather than as "did the thing happen".
+        /// "Skipped entirely" is a claim about the ABSENCE of observable consequences - no hit, no
+        /// landing roll, no Block or crit or variance draw, no Resolve spent, no event of any kind -
+        /// and the only way to state that as a test is to compare against a battle where the effect
+        /// genuinely does not exist.
+        /// </summary>
+        private static void CheckEffectConditions(ContentDatabase live)
+        {
+            Line("EFFECT CONDITIONS");
+
+            CheckShippedContentCarriesNoCondition(live);
+            CheckConditionMetArithmetic();
+            CheckConditionsInBattle();
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The standing guard, in the same shape as the multi-passive pass's: no effect anywhere in
+        /// shipped content carries a condition, so ConditionMet returns true on its first line for
+        /// every effect the game resolves and no existing battle can move.
+        ///
+        /// The day a shipped effect authors one, this fails - and that is the point. The claim
+        /// "conditions cannot have moved a fingerprint" rests on content not using them, not on the
+        /// gate being harmless, so when content starts using them the claim has to be re-earned
+        /// against a fresh sweep rather than inherited from this branch.
+        /// </summary>
+        private static void CheckShippedContentCarriesNoCondition(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int effects = 0, conditioned = 0;
+            string firstOffender = "";
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int p = 0; p < def.Passives.Count; p++) all.AddRange(def.Passives[p].Effects);
+
+                for (int e = 0; e < all.Count; e++)
+                {
+                    effects++;
+                    if (all[e].Condition == EffectCondition.None) continue;
+                    conditioned++;
+                    if (firstOffender.Length == 0) firstOffender = def.Id + "/" + all[e].Condition;
+                }
+            }
+
+            Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
+            Check(conditioned == 0,
+                  "no effect in shipped content carries a condition (" + conditioned + " of " + effects
+                  + (firstOffender.Length > 0 ? ", first " + firstOffender : "")
+                  + ") - so ConditionMet returns true on its first line for every effect the game resolves, "
+                  + "and the day that changes the no-battles-move claim has to be re-earned");
+        }
+
+        /// <summary>
+        /// The evaluator as arithmetic, tested directly rather than inferred from a battle - the
+        /// same treatment ResolveLandingChance gets, and for the same reason: a boundary is easier
+        /// to state here than to arrange in a fight.
+        /// </summary>
+        private static void CheckConditionMetArithmetic()
+        {
+            CombatUnit subject = new CombatUnit();
+            subject.MaxHp = 100f; subject.Hp = 50f;
+
+            CombatUnit other = new CombatUnit();
+            other.MaxHp = 100f; other.Hp = 100f;
+
+            Check(CombatSimulation.ConditionMet(MakeCondition(EffectCondition.None, ConditionSubject.Target,
+                                                              StatusKind.None, 0f), other, subject),
+                  "an effect with no condition is met without reading either unit");
+
+            // Inclusive at the boundary, both ways, matching PassiveTrigger.OnHpBelowThreshold.
+            EffectDef atHalf = MakeCondition(EffectCondition.HpBelow, ConditionSubject.Target, StatusKind.None, 0.5f);
+            Check(CombatSimulation.ConditionMet(atHalf, other, subject),
+                  "HpBelow is inclusive: a subject at exactly the threshold passes, as OnHpBelowThreshold does");
+            Check(CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HpAbove, ConditionSubject.Target, StatusKind.None, 0.5f), other, subject),
+                  "HpAbove is inclusive at the same boundary, so exactly-at-threshold is not a hole between them");
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HpBelow, ConditionSubject.Target, StatusKind.None, 0.49f), other, subject),
+                  "and a subject above the threshold fails HpBelow");
+
+            // Subject selection.
+            Check(CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HpAbove, ConditionSubject.Caster, StatusKind.None, 1f), other, subject),
+                  "ConditionOn Caster reads the caster, not the target (full-HP caster passes HpAbove 1.0)");
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HpAbove, ConditionSubject.Target, StatusKind.None, 1f), other, subject),
+                  "and the same condition on Target reads the target instead");
+
+            // Shield reads the pool, not the status row - and the two are shown to disagree.
+            subject.Shield = 10f;
+            Check(CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HasShield, ConditionSubject.Target, StatusKind.None, 0f), other, subject),
+                  "HasShield reads the absorbing pool");
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HasStatus, ConditionSubject.Target, StatusKind.Shield, 0f), other, subject),
+                  "and HasStatus Shield reads the status row, which a pool with no status entry does not satisfy - "
+                  + "the two questions are deliberately different");
+            subject.Shield = 0f;
+            Check(CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.LacksShield, ConditionSubject.Target, StatusKind.None, 0f), other, subject),
+                  "LacksShield is the mirror of HasShield on the same pool");
+
+            // Stack counting, through the same CountOf Ember's Burn and GainResolve already use.
+            subject.AddStack(StatusKind.Resolve, 9, 0f, -1, 5);
+            subject.AddStack(StatusKind.Resolve, 9, 0f, -1, 5);
+            Check(CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.StatusStacksAtLeast, ConditionSubject.Target, StatusKind.Resolve, 2f),
+                      other, subject),
+                  "StatusStacksAtLeast passes at exactly the required depth (2 of 2)");
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.StatusStacksAtLeast, ConditionSubject.Target, StatusKind.Resolve, 3f),
+                      other, subject),
+                  "and fails one short of it (2 of 3)");
+
+            // Refusals rather than accidental always-fires.
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HasStatus, ConditionSubject.Target, StatusKind.None, 0f), other, subject),
+                  "a status condition naming no status is refused, not waved through");
+            Check(!CombatSimulation.ConditionMet(
+                      MakeCondition(EffectCondition.HpBelow, ConditionSubject.Target, StatusKind.None, 0.5f), other, null),
+                  "a condition about a unit that is not there is false, not true");
+        }
+
+        private static EffectDef MakeCondition(EffectCondition kind, ConditionSubject on, StatusKind status, float value)
+        {
+            EffectDef e = new EffectDef();
+            e.Condition = kind;
+            e.ConditionOn = on;
+            e.ConditionStatus = status;
+            e.ConditionValue = value;
+            return e;
+        }
+
+        /// <summary>
+        /// Every supported condition, proved true and false in a running battle.
+        ///
+        /// Each case is four statements, not one. The condition fires or does not; a firing one
+        /// produces a battle identical to the same effect authored with NO condition; a failing one
+        /// produces a battle identical to the effect not being authored at all; and the
+        /// unconditional control differs from the no-effect control, which is what stops the two
+        /// equalities from both passing vacuously on an effect that never does anything.
+        /// </summary>
+        private static void CheckConditionsInBattle()
+        {
+            // The two controls, per primer, since a primer changes the battle on its own.
+            string[] primers = { "none", "burn", "shield", "resolve" };
+            for (int i = 0; i < primers.Length; i++)
+            {
+                string withEffect = ConditionFingerprint("", primers[i]);
+                string without = NoEffectFingerprint(primers[i]);
+                Check(withEffect.Length > 0 && without.Length > 0 && withEffect != without,
+                      "control (" + primers[i] + " primer): the unconditional effect changes the battle, so the "
+                      + "equalities below are measuring something");
+                Check(ConditionFingerprint("", primers[i]) == withEffect,
+                      "control (" + primers[i] + " primer): the same content resolves identically twice - "
+                      + "conditions draw no RNG, so determinism is unchanged");
+            }
+
+            // target HP, both directions and both boundaries
+            CheckOneCondition("target below 100% HP", "\"condition\": \"HpBelow\", \"conditionOn\": \"Target\", \"conditionValue\": 1.0", "none", true);
+            CheckOneCondition("target below 0% HP", "\"condition\": \"HpBelow\", \"conditionOn\": \"Target\", \"conditionValue\": 0.0", "none", false);
+            CheckOneCondition("target above 0% HP", "\"condition\": \"HpAbove\", \"conditionOn\": \"Target\", \"conditionValue\": 0.0", "none", true);
+            CheckOneCondition("target above 150% HP", "\"condition\": \"HpAbove\", \"conditionOn\": \"Target\", \"conditionValue\": 1.5", "none", false);
+
+            // caster HP, the subject the target-side cases cannot reach
+            CheckOneCondition("caster below 100% HP", "\"condition\": \"HpBelow\", \"conditionOn\": \"Caster\", \"conditionValue\": 1.0", "none", true);
+            CheckOneCondition("caster below 0% HP", "\"condition\": \"HpBelow\", \"conditionOn\": \"Caster\", \"conditionValue\": 0.0", "none", false);
+
+            // named status present and absent, flipped by the primer rather than by the condition
+            string hasBurn = "\"condition\": \"HasStatus\", \"conditionOn\": \"Caster\", \"conditionStatus\": \"Burn\"";
+            string lacksBurn = "\"condition\": \"LacksStatus\", \"conditionOn\": \"Caster\", \"conditionStatus\": \"Burn\"";
+            CheckOneCondition("caster has Burn, and does", hasBurn, "burn", true);
+            CheckOneCondition("caster has Burn, and does not", hasBurn, "none", false);
+            CheckOneCondition("caster lacks Burn, and does", lacksBurn, "none", true);
+            CheckOneCondition("caster lacks Burn, and does not", lacksBurn, "burn", false);
+
+            // shield pool present and absent
+            string hasShield = "\"condition\": \"HasShield\", \"conditionOn\": \"Caster\"";
+            string lacksShield = "\"condition\": \"LacksShield\", \"conditionOn\": \"Caster\"";
+            CheckOneCondition("caster has a shield, and does", hasShield, "shield", true);
+            CheckOneCondition("caster has a shield, and does not", hasShield, "none", false);
+            CheckOneCondition("caster lacks a shield, and does", lacksShield, "none", true);
+            CheckOneCondition("caster lacks a shield, and does not", lacksShield, "shield", false);
+
+            // counter depth, both sides of the same primer
+            CheckOneCondition("caster holds 3+ Resolve, and holds 3",
+                              "\"condition\": \"StatusStacksAtLeast\", \"conditionOn\": \"Caster\", \"conditionStatus\": \"Resolve\", \"conditionValue\": 3",
+                              "resolve", true);
+            CheckOneCondition("caster holds 4+ Resolve, and holds 3",
+                              "\"condition\": \"StatusStacksAtLeast\", \"conditionOn\": \"Caster\", \"conditionStatus\": \"Resolve\", \"conditionValue\": 4",
+                              "resolve", false);
+        }
+
+        /// <summary>
+        /// One condition, stated as the four things that have to be true of it at once. `primer` is
+        /// the BattleStart passive that arranges the state the condition asks about, and is held
+        /// identical across every comparison so the condition is the only thing that differs.
+        /// </summary>
+        private static void CheckOneCondition(string label, string conditionFields, string primer, bool shouldFire)
+        {
+            int fires = ConditionFires(conditionFields, primer);
+            string conditioned = ConditionFingerprint(conditionFields, primer);
+            string unconditional = ConditionFingerprint("", primer);
+            string absent = NoEffectFingerprint(primer);
+
+            if (shouldFire)
+            {
+                Check(fires > 0, label + ": the effect fires in a real battle (" + fires + " time(s))");
+                Check(conditioned == unconditional,
+                      label + ": and a met condition resolves the battle byte-identically to the same effect "
+                      + "authored with no condition at all");
+            }
+            else
+            {
+                Check(fires == 0, label + ": the effect never fires (" + fires + " time(s))");
+                Check(conditioned == absent,
+                      label + ": and a failed condition resolves the battle byte-identically to the effect not "
+                      + "being authored - no hit, no roll, no event, nothing observable");
+            }
+
+            Check(conditioned == ConditionFingerprint(conditionFields, primer),
+                  label + ": and the same seed resolves it the same way twice");
+        }
+
+        /// <summary>
+        /// How many times the conditional effect actually landed, counted exactly rather than
+        /// inferred. The arena sets energyPerBasicAttack and energyOnDamaged to 0 and gives the hero
+        /// no active, so the ONLY thing in the whole battle that can move an energy bar is the
+        /// conditional EnergyGain - which makes an EnergyChanged event and a firing of the effect
+        /// the same thing.
+        /// </summary>
+        private static int ConditionFires(string conditionFields, string primer)
+        {
+            BattleResult r = RunConditionArena(conditionFields, primer, true);
+            if (r == null) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.EnergyChanged) n++;
+            return n;
+        }
+
+        private static string ConditionFingerprint(string conditionFields, string primer)
+        {
+            BattleResult r = RunConditionArena(conditionFields, primer, true);
+            return r == null ? "" : FingerprintOf(r);
+        }
+
+        private static string NoEffectFingerprint(string primer)
+        {
+            BattleResult r = RunConditionArena("", primer, false);
+            return r == null ? "" : FingerprintOf(r);
+        }
+
+        private static BattleResult RunConditionArena(string conditionFields, string primer, bool includeEffect)
+        {
+            ContentDatabase db = BuildConditionContent(conditionFields, primer, includeEffect);
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("test_cond");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 10));
+            return RunWith(db, db.GetStage("test_cond_arena"), 77, team);
+        }
+
+        /// <summary>
+        /// One arena whose every run differs in at most two authored things: the condition fields
+        /// spliced onto the second effect of the hero's basic attack, and the BattleStart passive
+        /// that primes whatever state the condition asks about.
+        ///
+        /// Shaped so the measurement is unambiguous rather than merely possible:
+        ///   - energyPerBasicAttack and energyOnDamaged are 0 and the hero has no active, so every
+        ///     EnergyChanged event in the battle is the conditional effect firing and nothing else.
+        ///   - damage and speed variance are 0, crit chance is 0, and both sides are Ember, so the
+        ///     aspect multiplier is 1 and nothing but the status landing roll can draw from the RNG.
+        ///   - both bodies carry a million HP and hit for almost nothing, so the fight runs to
+        ///     maxRounds every time and no condition flips because somebody died.
+        ///   - the primers use duration 99 so the state they arrange holds for the whole battle,
+        ///     which is what lets a condition be constant rather than true for a while.
+        /// </summary>
+        private static ContentDatabase BuildConditionContent(string conditionFields, string primer, bool includeEffect)
+        {
+            string conditional = includeEffect
+                ? ", { \"kind\": \"EnergyGain\", \"target\": \"Self\", \"flat\": 7"
+                  + (conditionFields.Length > 0 ? ", " + conditionFields : "") + " }"
+                : "";
+
+            string passive = "";
+            if (primer == "burn")
+                passive = @", ""passive"": { ""id"": ""prime_burn"", ""name"": ""Primer"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"", ""magnitude"": 0.0001, ""duration"": 99 } ] }";
+            else if (primer == "shield")
+                passive = @", ""passive"": { ""id"": ""prime_shield"", ""name"": ""Primer"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Shield"", ""target"": ""Self"", ""selfHpRatio"": 0.02, ""duration"": 99 } ] }";
+            else if (primer == "resolve")
+                passive = @", ""passive"": { ""id"": ""prime_resolve"", ""name"": ""Primer"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""hits"": 3, ""maxStacks"": 3, ""duration"": 99 } ] }";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_cond"", ""name"": ""Conditional"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""cond_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 }" + conditional + @" ] }" + passive + @" }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_cond_dummy"", ""name"": ""Dummy"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""cond_dummy_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_cond_ch"", ""name"": ""Test Conditions"", ""stages"": [
+        { ""id"": ""test_cond_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_cond_dummy"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Conditions");
+        }
+
 
         // ---------------------------------------------------------------- passives and talents
 
