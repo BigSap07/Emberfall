@@ -4,6 +4,7 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
+<<<<<<< HEAD
 - **Open: `feat/marks-limits-and-ledger`** - unmerged, based on
   `feat/turn-status-and-enemy-triggers` and carrying the four branches under it. Third-tier
   inventory work, all of it a no-op against shipped content.
@@ -112,6 +113,70 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
     branch rather than papered over.
   - **So it is a balance change wearing a bug fix's clothes.** Landing it means retuning late
     chapter 2, which is a content decision rather than an engine one. Needs a human.
+=======
+- **Open: `fix/shield-pool-coherence`** - unmerged. Two commits: a behaviour change, then the
+  retune it forced. **This is the first time a fix in this project has moved the balance numbers,**
+  so both halves are recorded here rather than left to be rediscovered from a diff.
+
+  **Commit 1, the behaviour change.** A Shield status removed by duration expiry or by Dispel left
+  `CombatUnit.Shield` behind; only absorption and death emptied the pool. So the ward tag left the
+  status bar while the ward kept working - the one place in the engine where what the player is
+  shown and what the simulation does genuinely disagreed. The reverse direction was already
+  correct, since the damage funnel removes the status the moment the pool empties, so this is the
+  missing half of a rule the engine already half-kept. **Measured before the fix: 26 absorptions
+  across 16 of 144 shipped battles happened after the status was already gone, soaking 2673 damage
+  invisibly.**
+
+  **What it cost, and why the fingerprint count was the wrong instrument.** 78 of 714 fingerprints
+  moved, one victory flipped and that one was a synthetic solo sweep - which reads like a small
+  change and is not. The geared curve is where the cost showed: 11 of 24 rows moved, all downward,
+  concentrated in late chapter 2. Chapter 2 is the Tide chapter and Orrin's ward was quietly
+  carrying those fights.
+
+  ```
+  stage                    CEIL            FLOOR
+  2-7   Kelp Vault         94%  -> 73.5%   94%   -> 82.5%
+  2-8   Hollow Anchorage   96%  -> 60%     84%   -> 91.5%
+  2-9   The Shifting Berm  94.5% -> 73.5%  82.5% -> 92%
+  2-10  Wrackline Reach    97%  -> 73.5%   87.5% -> 89%
+  2-11  The Deep Reckoning 96.5% -> 84%    85.5% -> 70.5%
+  ```
+
+  Five ordinary stages left the [78%, 92%] CEIL band and `build-check.ps1` went red on 2-7.
+
+  **Commit 2, the retune.** `recommendedPower` was re-derived for all 24 stages against the
+  corrected engine, using the definition this document already carries: the power at which a
+  geared five-body line clears the stage's CEILING battle about 85% of the time, 65% for a finale.
+  **The number alone was enough for five of the six broken stages.** No roster was touched.
+
+  Only the six stages the fix actually broke were moved. The full derived table also proposed new
+  numbers for 1-12, 2-2, 2-4, 2-5 and 2-12, and applying those was tried and reverted: each of
+  those stages was already in band, and re-seating it on a fresh reading of the same 200-sample
+  measurement pushed 1-12 to 74.5% and 2-5 to 93.5%, both out of band. **Two independent
+  200-sample reads of the same stage differ by up to nine points**, so moving an in-band stage is
+  the random walk over a noisy measurement that `DeriveRecommendedPower`'s own notes warn against.
+  1-1 through 1-5 are untouched and are floor-pinned anyway: a level-1 geared line already clears
+  them, so their derived number is the line's own minimum rather than a target.
+
+  **One stage still needs roster work: 2-7 Kelp Vault.** Its CEIL is back in band at 84%, but its
+  FLOOR is 89% and cannot reach 95% by the number alone. Measured at three powers:
+
+  ```
+  15993  FLOOR 89%    CEIL 84%     ceiling in band, floor short
+  16400  FLOOR 97.5%  CEIL 95%     floor met, ceiling now above the band
+  16800  FLOOR 100%   CEIL 98.5%   stage stops discriminating at all
+  ```
+
+  Power is quantised by hero level, and for 2-7 there is no setting between "floor too low" and
+  "ceiling too high". That is roster information: 2-7's wave-1 roster is too close in difficulty to
+  its wave-12 roster for one power to satisfy both ends. Worth noting it never met the 95% floor -
+  it read 94% before the fix - so this is a pre-existing property the fix exposed rather than
+  created.
+
+  **Where it lands:** 0 of 24 stages BLOCK, every CEIL in band, soft floors down from 3 to 1, and
+  `build-check.ps1` green. This commit deliberately MOVES fingerprints, unlike every other branch
+  in this stack - it is a content retune, and byte-identity is not the standard it is held to.
+>>>>>>> fix/shield-pool-coherence
 - **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
   `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
   inventory work: turn order, status operations, and the first triggers that are not owner-centric.

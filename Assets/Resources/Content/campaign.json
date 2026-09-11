@@ -191,7 +191,7 @@
         },
         {
           "id": "ch2_6", "index": 6, "name": "Undertow Channel", "subtitle": "Strong swimmers have disappeared here.",
-          "environment": "tidal", "gold": 1700, "shards": 85, "accountXp": 256, "recommendedPower": 15405,
+          "environment": "tidal", "gold": 1700, "shards": 85, "accountXp": 256, "recommendedPower": 15653,
           "idleGoldPerHour": 1250, "idleShardsPerHour": 52,
           "firstClearGold": 2780, "firstClearShards": 445,
           "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 54,
@@ -199,7 +199,7 @@
         },
         {
           "id": "ch2_7", "index": 7, "name": "Kelp Vault", "subtitle": "Something owns what was once a road.",
-          "environment": "tidal", "gold": 1900, "shards": 95, "accountXp": 280, "recommendedPower": 15745,
+          "environment": "tidal", "gold": 1900, "shards": 95, "accountXp": 280, "recommendedPower": 15993,
           "idleGoldPerHour": 1340, "idleShardsPerHour": 56,
           "firstClearGold": 3070, "firstClearShards": 490,
           "waveCount": 12, "battleCount": 12, "floorLevel": 57, "ceilingLevel": 58,
@@ -207,7 +207,7 @@
         },
         {
           "id": "ch2_8", "index": 8, "name": "Hollow Anchorage", "subtitle": "The ships that turned around, and the ones that didn't.",
-          "environment": "tidal", "gold": 2100, "shards": 105, "accountXp": 306, "recommendedPower": 17537,
+          "environment": "tidal", "gold": 2100, "shards": 105, "accountXp": 306, "recommendedPower": 17832,
           "idleGoldPerHour": 1430, "idleShardsPerHour": 60,
           "firstClearGold": 3380, "firstClearShards": 540,
           "waveCount": 12, "battleCount": 12, "floorLevel": 55, "ceilingLevel": 57,
@@ -215,7 +215,7 @@
         },
         {
           "id": "ch2_9", "index": 9, "name": "The Shifting Berm", "subtitle": "Four hours ago this was solid ground.",
-          "environment": "deep", "gold": 2340, "shards": 117, "accountXp": 335, "recommendedPower": 19479,
+          "environment": "deep", "gold": 2340, "shards": 117, "accountXp": 335, "recommendedPower": 19889,
           "idleGoldPerHour": 1530, "idleShardsPerHour": 65,
           "firstClearGold": 3720, "firstClearShards": 600,
           "waveCount": 12, "battleCount": 12, "floorLevel": 60, "ceilingLevel": 62,
@@ -223,7 +223,7 @@
         },
         {
           "id": "ch2_10", "index": 10, "name": "Wrackline Reach", "subtitle": "What the Tide discards, it keeps.",
-          "environment": "deep", "gold": 2600, "shards": 130, "accountXp": 365, "recommendedPower": 21635,
+          "environment": "deep", "gold": 2600, "shards": 130, "accountXp": 365, "recommendedPower": 22140,
           "idleGoldPerHour": 1630, "idleShardsPerHour": 69,
           "firstClearGold": 4090, "firstClearShards": 660,
           "waveCount": 12, "battleCount": 12, "floorLevel": 70, "ceilingLevel": 72,
@@ -231,7 +231,7 @@
         },
         {
           "id": "ch2_11", "index": 11, "name": "The Deep Reckoning", "subtitle": "Far enough out that land is a theory.",
-          "environment": "deep", "gold": 2880, "shards": 144, "accountXp": 398, "recommendedPower": 23239,
+          "environment": "deep", "gold": 2880, "shards": 144, "accountXp": 398, "recommendedPower": 23749,
           "idleGoldPerHour": 1730, "idleShardsPerHour": 74,
           "firstClearGold": 4480, "firstClearShards": 725,
           "waveCount": 12, "battleCount": 12, "floorLevel": 76, "ceilingLevel": 78,

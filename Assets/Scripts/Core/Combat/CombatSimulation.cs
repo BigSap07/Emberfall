@@ -710,6 +710,19 @@ namespace Emberfall.Core.Combat
                     s.RoundsLeft--;
                     if (s.RoundsLeft > 0) continue;
                     unit.Statuses.RemoveAt(i);
+
+                    // THE SHIELD POOL FOLLOWS ITS OWN STATUS. Without this the entry is removed and
+                    // CombatUnit.Shield keeps absorbing: the tag leaves the bar while the ward is
+                    // still working, which is the one place in the engine where what the player is
+                    // shown and what the simulation does genuinely disagree. Measured in shipped
+                    // content before the fix: 26 absorptions across 16 of 144 battles happened
+                    // after the status was already gone, soaking 2673 damage invisibly.
+                    //
+                    // The reverse direction was already true - DealRawDamage removes the status the
+                    // moment the pool empties - so this is the missing half of a rule the engine
+                    // already half-kept, not a new rule.
+                    if (s.Kind == StatusKind.Shield) unit.Shield = 0f;
+
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
                     expired = true;
@@ -1017,6 +1030,10 @@ namespace Emberfall.Core.Combat
                             if (StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
+                            // Same rule as the expiry path: a dispelled ward stops absorbing. A
+                            // Dispel that stripped the tag and left the pool would be the same
+                            // disagreement, reached by a different door.
+                            if (target.Statuses[i].Kind == StatusKind.Shield) target.Shield = 0f;
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
