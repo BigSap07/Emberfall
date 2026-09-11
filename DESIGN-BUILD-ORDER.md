@@ -2,8 +2,70 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-09, not against the rest of this document.
+Current state, checked against the repo on 2026-09-11, not against the rest of this document.
 
+- **Open: `feat/remove-aspect-rules`** - unmerged, based on `feat/history-allies-and-charges` and
+  carrying the six branches under it. **NOT a no-op, and by far the largest behavioural change of
+  the stack.** The six engine-owned aspect rules are deleted. An Aspect is now the damage chart,
+  armor attunement and flavour, and nothing else.
+  - **What came out.** Ember's Burn stacking (a status now refreshes for every source alike);
+    Tide's energy redirect on overflow (overflow is discarded again); Verdant's overheal banking
+    as Regen; Gale's turn re-entry on kill AND its intra-round Slow shift; Umbra's uncleansable
+    statuses AND the mark jumping to the highest-Attack survivor on death; Lumen's targeting
+    anchor. Seven private methods went with them - `TryGaleReentry`, `TryGaleSlowShift`,
+    `CollectUmbraMarks`, `TryUmbraSpread`, `FindMarkHeir`, `IsUmbraSourced`,
+    `FurthestFromCasting` - along with `AddEnergy`'s redirect body, the `_inRedirect` guard and
+    `VerdantBankRounds`.
+  - **Dead config removed, and it is removed rather than left inert:** `emberBurnStackCap` and
+    `galeExtraTurnsPerRound` are gone from `balance.json` and from `BalanceConfig`.
+    `CombatUnit.ExtraTurnsThisRound` went too - nothing could write it once re-entry was gone.
+  - **What stayed, deliberately.** `FindTargetAnchor` still exists and still answers for a side;
+    only the Lumen clause came out, so **Taunt and Provoked behave exactly as they did**.
+    `MoveStatus` stayed - Umbra's death-jump wrote it, but `MoveDebuffs` and `MoveBuffs` are its
+    callers now. `AddStack` stayed; `GainResolve` is its only caller. `BattleEventType.ExtraTurn`
+    and `TargetAnchored` stay in the enum with their ordinals: they are in the permanent record of
+    every battle resolved before this, and deleting a member renumbers every type after it.
+    Neither is emitted any more, and both say so in their own doc comment.
+  - **18 harness functions deleted, 76 assertions with them** - not commented out. `CheckOnKillPassive`
+    survived the deletion of its caller and is called from `Main` now: Ryn's OnKill wiring is a
+    property of the passive, not of Gale. `CheckAnchorStillOverridesNewModes` was rewritten to
+    vary a Taunt instead of an aspect, and its arena's `lumenAnchor` flag became `tauntAnchor`.
+  - **The standing guard that replaces them is two-part, because neither half is sufficient.**
+    *Aspect-swap invariance*: one arena is built six times, once per aspect, with every unit on
+    both sides carrying that one aspect. `AspectChart.Multiplier(X, X)` is 1.0 - asserted, not
+    assumed - so the chart cancels and all six fights must be byte-identical. Any rule keyed on a
+    unit's aspect shows up as a run that diverges, and the failure names which aspect. The arena
+    is built to REACH each removed rule's trigger, and each one is asserted reached rather than
+    assumed: two Burns from two sources on one body, a heal that lands short of what was authored,
+    granted energy hitting the cap, a Slow on a unit that has not acted, a Cleanse stripping a
+    harmful status, a unit dying while carrying one, and no Taunt anywhere on the field.
+    *Source scan*: the engine's own text is read, and every mention of the `Aspect` type in
+    `CombatSimulation.cs` and `CombatUnit.cs` must be one of a fixed, named list - the chart
+    lookup, the multiply, the plumbing that carries that one float into the event, and three
+    assignments in `CombatUnit`. The scan exists because invariance cannot see a rule keyed on the
+    RELATIONSHIP between two aspects ("if mine equals my target's"), which a single-aspect field
+    satisfies identically in all six runs. It is deliberately brittle: it matches whole trimmed
+    lines, so reformatting an allowed line brings a human here to re-approve it. It degrades to a
+    `[note]` when the source is not found next to the binary; invariance does not degrade.
+  - **Measured cost, and it is severe. 675 of 714 fingerprints move** (94.5%): every one of the
+    648 campaign fingerprints, and 27 of the 66 solo-hero ones. 21 battles flip outcome, all of
+    them win-to-loss. On the geared curve, **19 of 24 stages get harder, none gets easier, and two
+    now BLOCK** - 1-12 at battle 41 and 2-5 at battle 46 - which violates the standing "no stage
+    may BLOCK" requirement. The five unchanged rows are 1-1 to 1-5, which are over-geared enough to
+    sit at 100% either way. Chapter 1 CEILs fall from a 64.5-90% band to 0-49%; 2-2 goes 89% to 3%,
+    2-5 goes 90.5% to 0%; the smallest move is 2-7 at -2.5 points. Eleven stages now open below a
+    90% FLOOR, against zero before. **The harness is
+    committed red on exactly one check** - the CEIL band - and the retune is deliberately NOT in
+    this branch, so the cost is legible as one number rather than smeared across a tuning pass.
+  - **The Lumen anchor is the bulk of it**, and that was visible before the change: across the 144
+    battles of shipped content it fired 1177 times and put 36.2% of all damage onto a Lumen body.
+    Removing it stops routing single-target enemy damage onto Orrin, the line's only tank, and
+    chapter 1 was tuned with that routing in place. Verdant's banking (115), Ember's stacking (58),
+    Gale's re-entry (54), Tide's hand-off (27) and Umbra's jump (5) are real but small beside it.
+    Gale's intra-round Slow shift fired **0** times in shipped content and was already unreachable.
+  - **One content consequence to own:** Kalyx Emberwright's identity was the Ember stacking rule -
+    DESIGN-ASPECTS 3 cut his passive and left the aspect to carry him. He now has nothing on his
+    sheet but numbers and targeting. Giving him a passive is content work this branch does not do.
 - **Open: `feat/marks-limits-and-ledger`** - unmerged, based on
   `feat/turn-status-and-enemy-triggers` and carrying the four branches under it. Third-tier
   inventory work, all of it a no-op against shipped content.
@@ -235,15 +297,18 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
     the Sim does not keep; `LastAttackerId` is per unit, so this is new state rather than a new
     pick rule. **Deferred: "adjacent enemies"** (3 abilities) - adjacency is relative to a primary
     target the effect does not know, so it is the splash mechanic rather than a target mode.
-  - **THE ANCHOR, reported and NOT changed.** Every single-enemy mode is overridden by the side's
-    anchor - a living Lumen unit, else a Taunt holder - and the four new enemy-side modes inherit
-    that, while the four ally-side modes are untouched because the anchor only answers for the
-    enemy side. The harness proves both halves: with no anchor `EnemyWithStatus` picks the marked
-    body, and with a Lumen unit standing the same mode collapses onto it. **This reads badly for
-    `EnemyWithStatus` specifically** - "deal 245% to a Forsaken enemy" hitting an unmarked Lumen
-    tank is an ability doing something other than what it says - and that is a decision for a
-    human, not this branch. DESIGN-WORLD makes deterministic targeting the whole of the Lumen
-    identity, so an exemption is a change to an aspect rule, not a targeting tweak.
+  - **THE ANCHOR, reported and NOT changed here.** Every single-enemy mode is overridden by the
+    side's anchor, and the four new enemy-side modes inherit that, while the four ally-side modes
+    are untouched because the anchor only answers for the enemy side. The harness proves both
+    halves: with no anchor `EnemyWithStatus` picks the marked body, and with an anchor standing the
+    same mode collapses onto it. **This branch flagged that it reads badly for `EnemyWithStatus`
+    specifically** - "deal 245% to a Forsaken enemy" hitting an unmarked tank is an ability doing
+    something other than what it says - and left the decision to a human, because the anchor was
+    then a living Lumen unit first and a Taunt holder second, so an exemption would have been a
+    change to an aspect rule. **That has since been answered by removing the Lumen half outright**
+    (see the entry for the removal branch at the top of this section). The anchor is Taunt and
+    nothing else now, which is a deliberate, visible claim by an ability rather than a property of
+    a unit's colour, and the check here varies a Taunt instead of an aspect.
   - **Enum ordinals are pinned by a check.** Both enums were appended to, never inserted into,
     because `BattleEvent.Status` and the `(int)mode` a `TargetAnchored` event carries are in the
     permanent record of every battle. A renumbering would rewrite what past battles said with no
@@ -521,7 +586,13 @@ this project before:
   run covers content validation, determinism, stage winnability, ability potency and status expiry
   timing, the same checks listed above, on every push rather than whenever someone remembers to
   run it locally.
-- All six aspect identities, wired into `CombatSimulation`:
+- **All six aspect identities are being REMOVED. Read the entry at the top of Now / Next before
+  using anything in this bullet.** The description below is true of `main` and of every release
+  built from it, and it is kept for that reason - a reader of an old battle record needs it. It is
+  not a description of the live engine once the removal lands. An Aspect there is the damage chart,
+  armor attunement and flavour; a standing guard in the harness asserts that nothing in
+  `CombatSimulation` or `CombatUnit` reads `Aspect` for anything else.
+- All six aspect identities, wired into `CombatSimulation` (on `main`):
   - **Ember**: each Burn from an Ember source stacks as its own entry via `AddStack` rather than
     overwriting (`AddOrRefresh`), so multiple Ember attackers pile independent Burn entries at
     their own magnitudes. Capped at `EmberBurnStackCap` (3); a fourth application refreshes the

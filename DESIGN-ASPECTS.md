@@ -12,11 +12,34 @@ it.
 
 Nothing here is implemented. This is a specification and an argument about cost.
 
-**All six identities are now implemented**, wired into `CombatSimulation`, and recorded in
-DESIGN-BUILD-ORDER's "Already done" section. `AspectChart.Multiplier` is ×1.10 / ×0.92 (narrowed
-from ×1.20 / ×0.85 per §4); `Aspect` is read throughout `CombatSimulation`, `Debrief`, and
-`BattleScreen`, not only in `UITheme.AspectColor`. The opening paragraph above describes the
-pre-implementation state.
+**SUPERSEDED ON THE MECHANICAL HALF, 2026-09-11. All six rules have been removed from the
+engine.** They were built, they shipped, and they are gone; an Aspect is the damage chart, armor
+attunement and flavour again, which is close to the state the opening paragraph above describes.
+A standing guard in the harness now asserts that nothing in `CombatSimulation` or `CombatUnit`
+reads `Aspect` for anything except the chart lookup and the one float it produces.
+
+**What that does and does not void.** Every §1 rule, every §2 hook, §8's team-size argument and
+the identity half of §3 and §5 are void as statements about the engine. The REASONING is not: §4's
+narrowing of the wheel to ×1.10 / ×0.92 is still live and still in `Enums.cs`, §3's reading of
+which heroes fit which belief still holds as a character argument, and §6's reconciliation with the
+other documents is still how those disagreements were settled. Read this as the record of a
+decision that was made, implemented, measured and reversed, not as a description of the code.
+
+**The cost of the reversal is recorded in DESIGN-BUILD-ORDER's Now / Next, and it was large:** 675
+of 714 campaign fingerprints moved and 20 of 24 geared stages got harder, because §1's Lumen rule
+was routing 36.2% of all damage in shipped content onto one body and chapter 1 was tuned with that
+routing in place. §5's "Lumen has no hero" problem does not come back - Orrin is still Lumen, the
+relabel stands, and the aspect still swings his damage against Umbra - but the interception that
+DESIGN-WORLD §3 credits for stage 1-12 getting *easier* is gone, and 1-12 is one of the two stages
+that now blocks.
+
+**One hero is left without an identity.** §3 cut Kalyx Emberwright's Kindling as a percentage stat
+stick on the argument that the Ember stacking rule would carry him. It no longer exists, and he now
+ships with nothing on his sheet but numbers and targeting. That is content work, not engine work,
+and it is owed.
+
+The paragraph above ("Nothing here is implemented") describes the pre-implementation state and is
+accurate again for the six rules, though not for §4's wheel.
 
 ---
 

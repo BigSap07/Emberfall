@@ -1371,28 +1371,6 @@ namespace Emberfall.Core.Data
         public int MaxTeamSize = 5;
 
         /// <summary>
-        /// Cap on extra turns a Gale unit's kill re-entry can grant per round. The re-entry
-        /// mechanic itself is not built yet (DESIGN-BUILD-ORDER task 11); this constant ships
-        /// ahead of it, with team size 5, because uncapped re-entry at five killable enemies
-        /// lets one Gale unit resolve a round unilaterally. Task 11 must read this, never
-        /// hardcode its own bound.
-        /// </summary>
-        public int GaleExtraTurnsPerRound = 1;
-
-        /// <summary>
-        /// Most simultaneous Burn entries one unit can carry from Ember stacking (DESIGN-ASPECTS
-        /// section 8). Ember's rule lets each Ember source add its own Burn instead of overwriting,
-        /// so the entry count scales with how many Embers are on the line: at team size 5, three
-        /// Embers casting an AllEnemies Burn against five enemies is 15 live StatusInstances all
-        /// ticking in TickDamageOverTime. The doc calls that a legibility and stability problem
-        /// rather than a balance one, which is why the bound is a flat entry cap and not a damage
-        /// scale. At the cap a further application degrades to the pre-Ember refresh: it keeps the
-        /// stronger magnitude and the longer duration on an existing entry instead of adding a new
-        /// one, so a strong Ember still deepens the fire and nothing is silently dropped.
-        /// </summary>
-        public int EmberBurnStackCap = 3;
-
-        /// <summary>
         /// Relic slots on one hero (DESIGN-RELICS "Equipping"). One, and the document argues the
         /// number rather than picking it: more than one slot stacks rule changes into a build, and
         /// a team-wide slot would be an aura, which is a global multiplier, which is the stat stick
@@ -1409,8 +1387,8 @@ namespace Emberfall.Core.Data
         /// Fraction of the damage Mirrored Wound returns to the attacker.
         ///
         /// Lives here rather than in the relic's text because a LEGENDARY relic contains no number
-        /// (DESIGN-RELICS), exactly as EmberBurnStackCap and GaleExtraTurnsPerRound do for aspect
-        /// identities: the card says "part of that damage returns", this constant says how much.
+        /// (DESIGN-RELICS): the card says "part of that damage returns", this constant says how
+        /// much.
         /// Named for the relic rather than for the grade, so a second reflecting relic gets its own
         /// constant instead of silently inheriting this one's tuning.
         ///
@@ -1642,8 +1620,6 @@ namespace Emberfall.Core.Data
             b.DamageVariance = j.GetFloat("damageVariance", b.DamageVariance);
             b.SpeedVariance = j.GetFloat("speedVariance", b.SpeedVariance);
             b.MaxTeamSize = j.GetInt("maxTeamSize", b.MaxTeamSize);
-            b.GaleExtraTurnsPerRound = j.GetInt("galeExtraTurnsPerRound", b.GaleExtraTurnsPerRound);
-            b.EmberBurnStackCap = j.GetInt("emberBurnStackCap", b.EmberBurnStackCap);
             b.RelicSlotsPerHero = j.GetInt("relicSlotsPerHero", b.RelicSlotsPerHero);
             b.MirroredWoundReflectFraction = j.GetFloat("mirroredWoundReflectFraction", b.MirroredWoundReflectFraction);
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);

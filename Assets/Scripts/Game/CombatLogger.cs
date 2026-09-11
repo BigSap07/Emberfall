@@ -140,8 +140,8 @@ namespace Emberfall.Game
                     sb.AppendLine("  Expire  " + StatusInfo.DisplayName(e.Status) + " on " + N(r, e.TargetId));
                     break;
 
-                // Umbra (DESIGN-ASPECTS section 8). SourceId is who died, TargetId is who inherited,
-                // Value is the Umbra unit that applied it in the first place.
+                // SourceId is who the status came off, TargetId is who it landed on, Value is the
+                // unit that applied it in the first place.
                 case BattleEventType.StatusSpread:
                     sb.AppendLine("  Spread  " + StatusInfo.DisplayName(e.Status) + " jumps from "
                                   + N(r, e.SourceId) + " to " + N(r, e.TargetId)
@@ -150,9 +150,10 @@ namespace Emberfall.Game
 
                 case BattleEventType.EnergyChanged:
                 {
-                    // Value = unit's current energy (absolute). SourceId != TargetId on a Tide redirect.
+                    // Value = unit's current energy (absolute). SourceId is the granter where one
+                    // handed it over, and equals TargetId for a unit's own energy change.
                     string line = "  Energy  " + N(r, e.TargetId) + " -> " + e.Value;
-                    if (e.SourceId != e.TargetId) line += "  [Tide redirect from " + N(r, e.SourceId) + "]";
+                    if (e.SourceId != e.TargetId) line += "  [granted by " + N(r, e.SourceId) + "]";
                     sb.AppendLine(line);
                     break;
                 }
@@ -161,19 +162,23 @@ namespace Emberfall.Game
                     sb.AppendLine("  Death   " + N(r, e.TargetId) + "  (by " + N(r, e.SourceId) + ")");
                     break;
 
+                // ExtraTurn and TargetAnchored are no longer emitted - Gale's kill re-entry and the
+                // Lumen targeting anchor were their only sources, and both rules are gone. The arms
+                // stay so an older log file replayed through this formatter still reads.
                 case BattleEventType.ExtraTurn:
                     // Value = how many extra turns this unit has taken this round.
-                    sb.AppendLine("  Extra   " + N(r, e.SourceId) + " re-enters turn order  [Gale kill #" + e.Value + " this round]");
+                    sb.AppendLine("  Extra   " + N(r, e.SourceId) + " re-enters turn order  [legacy, #" + e.Value + " this round]");
                     break;
 
                 case BattleEventType.TurnOrderShift:
-                    // Value = how many places later the unit moved.
-                    sb.AppendLine("  Shift   " + N(r, e.TargetId) + " moved back " + e.Value + " places  [Gale slow]");
+                    // Value = places moved, signed: negative advanced, positive delayed.
+                    sb.AppendLine("  Shift   " + N(r, e.TargetId) + (e.Value < 0 ? " moved up " : " moved back ")
+                                  + (e.Value < 0 ? -e.Value : e.Value) + " places");
                     break;
 
                 case BattleEventType.TargetAnchored:
-                    // Value = original TargetMode cast as int. TargetId = the Lumen unit that answered.
-                    sb.AppendLine("  Anchor  " + N(r, e.TargetId) + " intercepts for its side  [Lumen, original mode " + (TargetMode)e.Value + "]");
+                    // Value = original TargetMode cast as int. TargetId = the unit that answered.
+                    sb.AppendLine("  Anchor  " + N(r, e.TargetId) + " intercepts for its side  [legacy, original mode " + (TargetMode)e.Value + "]");
                     break;
 
                 case BattleEventType.BattleEnd:
