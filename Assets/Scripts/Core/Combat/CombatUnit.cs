@@ -23,6 +23,17 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public float Stored;
         public float StoredCap;
+
+        /// <summary>
+        /// Uses left on a charge-based status, or 0 on every other kind.
+        ///
+        /// A separate field from Stored rather than a reuse of it, even though both are "a number
+        /// on a status entry". Stored is a float the Ledger accumulates UP toward a cap; this is an
+        /// int that counts DOWN to removal, and one status can legitimately want both - a mark that
+        /// records damage and also wears off after three hits. Sharing one field would make that
+        /// unauthorable and would make either meaning ambiguous on a status carrying the other.
+        /// </summary>
+        public int Charges;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -136,6 +147,85 @@ namespace Emberfall.Core.Combat
 
         public int LastAttackerId = -1;
         public int LastTargetId = -1;
+
+        // ---------- action history ----------
+        //
+        // NONE OF THIS REACHES THE SAVE. A CombatUnit is built fresh from a HeroDef and a
+        // HeroInstance at the start of every fight, and the save stores the instance - uid, defId,
+        // level, copies, relic, armor, selected talent - and nothing about how a battle went. So
+        // the history below costs zero save bytes and needs no version bump, which is why this
+        // branch has none.
+
+        /// <summary>The target of the attack BEFORE the current one. LastTargetId is overwritten in
+        /// ApplyDamageEffect as the hit is set up, so "a different target than last turn" cannot be
+        /// answered from it alone - by the time anything asks, it already names the new target.</summary>
+        public int PreviousTargetId = -1;
+
+        /// <summary>Whether this unit has taken its turn in the round now being walked. Reset with
+        /// ExtraTurnsThisRound at the top of each round.</summary>
+        public bool ActedThisRound;
+
+        /// <summary>The round this unit last took a turn in, and the round it was last damaged in.
+        /// Together they answer "took damage since my last turn" at round granularity.</summary>
+        public int LastTurnRound;
+        public int LastDamagedRound;
+
+        /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
+        /// Two flags rather than a list: no description asks about more than the last two.</summary>
+        public bool LastActionWasActive;
+        public bool PreviousActionWasActive;
+        public int ActionsTaken;
+
+        /// <summary>Ids this unit has damaged in the round now being walked, cleared each round.
+        /// Answers "already damaged this round" and "more than once in a round".</summary>
+        public readonly List<int> DamagedThisRound = new List<int>();
+
+        /// <summary>How many times this unit has damaged that one this round.</summary>
+        public int TimesDamagedThisRound(int targetId)
+        {
+            int n = 0;
+            for (int i = 0; i < DamagedThisRound.Count; i++) if (DamagedThisRound[i] == targetId) n++;
+            return n;
+        }
+
+        /// <summary>Everything a new round resets. One place, so the round loop cannot reset half
+        /// of it and leave the rest reading last round's answers.</summary>
+        public void BeginRound()
+        {
+            ExtraTurnsThisRound = 0;
+            StatusesExpiredThisRound = false;
+            ActedThisRound = false;
+            DamagedThisRound.Clear();
+        }
+
+        /// <summary>The share of one hit a protector takes for this unit, and who takes it.
+        /// Zero when nobody is covering it.</summary>
+        public float CoverFraction(out int protectorId)
+        {
+            protectorId = -1;
+            float best = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+            {
+                StatusInstance c = Statuses[i];
+                if (c.Kind != StatusKind.Covered || c.Magnitude <= 0f) continue;
+                // The deepest cover wins rather than the shares summing, so two protectors cannot
+                // between them take more than the whole hit and leave the holder untouched.
+                if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; }
+            }
+            return best;
+        }
+
+        /// <summary>Extra damage this unit takes from that attacker specifically, summed over every
+        /// Vulnerable entry that attacker applied. Zero from anybody else.</summary>
+        public float VulnerableTo(int sourceId)
+        {
+            if (sourceId < 0) return 0f;
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == StatusKind.Vulnerable && Statuses[i].SourceId == sourceId)
+                    total += Statuses[i].Magnitude;
+            return total;
+        }
 
         public readonly List<StatusInstance> Statuses = new List<StatusInstance>();
 

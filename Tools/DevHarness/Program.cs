@@ -58,6 +58,7 @@ namespace Emberfall.DevHarness
             CheckStatStatusesAndTargetModes(content);
             CheckTurnStatusAndEnemyTriggers(content);
             CheckMarksLimitsAndLedger(content);
+            CheckHistoryAlliesAndCharges(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -99,6 +100,570 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+        // ---------------------------------------------------------------- history, allies, charges
+
+        private static readonly StatusKind[] FourthTierStatuses =
+            { StatusKind.Covered, StatusKind.Provoked, StatusKind.Guard, StatusKind.Vulnerable };
+
+        private static readonly EffectCondition[] HistoryConditions =
+        {
+            EffectCondition.SubjectActedThisRound, EffectCondition.SubjectHasNotActedThisRound,
+            EffectCondition.SubjectDamagedSinceMyTurn, EffectCondition.SubjectIsMyPreviousTarget,
+            EffectCondition.SubjectIsNotMyPreviousTarget, EffectCondition.CasterRepeatedActionType,
+            EffectCondition.AlreadyDamagedSubjectThisRound
+        };
+
+        private static readonly PassiveTrigger[] AllyTriggers =
+        {
+            PassiveTrigger.OnAllyHpBelowThreshold, PassiveTrigger.OnAllyHealed,
+            PassiveTrigger.OnAllyShielded, PassiveTrigger.OnAllyWouldDie
+        };
+
+        private static void CheckHistoryAlliesAndCharges(ContentDatabase live)
+        {
+            Line("HISTORY, ALLY TRIGGERS, CHARGES, REDIRECTION");
+            CheckNothingShippedUsesTheFourthTier(live);
+            CheckFourthTierOrdinalPins();
+            CheckHistoryConditions();
+            CheckAllyTriggers();
+            CheckRedirectionAndProvoke();
+            CheckChargesAndTargetHp();
+            CheckVulnerable();
+            Line("");
+        }
+
+        private static void CheckNothingShippedUsesTheFourthTier(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int statuses = 0, conds = 0, trigs = 0, charges = 0, hpScaled = 0;
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    all.AddRange(def.Passives[pi].Effects);
+                    for (int t = 0; t < AllyTriggers.Length; t++)
+                        if (def.Passives[pi].Trigger == AllyTriggers[t]) trigs++;
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef ef = all[e];
+                    for (int k = 0; k < FourthTierStatuses.Length; k++)
+                        if (ef.Status == FourthTierStatuses[k] || ef.ConditionStatus == FourthTierStatuses[k]
+                            || ef.TargetStatus == FourthTierStatuses[k]) statuses++;
+                    for (int c = 0; c < HistoryConditions.Length; c++)
+                        if (ef.Condition == HistoryConditions[c]) conds++;
+                    if (ef.Charges != 0) charges++;
+                    if (ef.TargetMaxHpRatio != 0f || ef.TargetCurrentHpRatio != 0f
+                        || ef.TargetMissingHpRatio != 0f) hpScaled++;
+                }
+            }
+
+            Check(statuses == 0, "no shipped effect names Covered, Provoked, Guard or Vulnerable (" + statuses + ")");
+            Check(conds == 0, "no shipped effect uses a history condition (" + conds + ")");
+            Check(trigs == 0, "no shipped passive listens on an ally trigger (" + trigs
+                  + ") - so no broadcast reaches a passive and the death path is unchanged");
+            Check(charges == 0, "no shipped effect stamps charges on a status (" + charges + ")");
+            Check(hpScaled == 0, "and no shipped effect scales off the target's HP (" + hpScaled
+                  + ") - so TargetHpTerm sums three zeroes for every effect the game resolves");
+        }
+
+        private static void CheckFourthTierOrdinalPins()
+        {
+            Check((int)StatusKind.Ledger == 32 && (int)StatusKind.Covered == 33
+                  && (int)StatusKind.Vulnerable == 36,
+                  "StatusKind keeps every earlier ordinal and the four new kinds are appended ("
+                  + (int)StatusKind.Covered + ".." + (int)StatusKind.Vulnerable + ")");
+            Check((int)EffectCondition.LedgerAtLeast == 10 && (int)EffectCondition.SubjectActedThisRound == 11,
+                  "EffectCondition keeps its ordinals and the history members are appended");
+            Check((int)PassiveTrigger.OnStatusExpired == 15 && (int)PassiveTrigger.OnAllyHpBelowThreshold == 16,
+                  "PassiveTrigger keeps its ordinals and the ally members are appended");
+            Check((int)BattleEventType.BattleEnd == 20,
+                  "and BattleEventType is untouched for a third pass running");
+        }
+
+        /// <summary>
+        /// Each history condition proved true where it should be and false where it should not,
+        /// read off the evaluator directly - a boundary like "has not acted yet" is far easier to
+        /// set up here than to arrange inside a fight.
+        /// </summary>
+        private static void CheckHistoryConditions()
+        {
+            CombatUnit caster = new CombatUnit(); caster.Id = 1; caster.MaxHp = 100f; caster.Hp = 100f;
+            CombatUnit foe = new CombatUnit(); foe.Id = 2; foe.MaxHp = 100f; foe.Hp = 100f;
+            CombatUnit other = new CombatUnit(); other.Id = 3; other.MaxHp = 100f; other.Hp = 100f;
+
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectActedThisRound), caster, foe),
+                  "SubjectActedThisRound is false for a unit that has not acted");
+            foe.ActedThisRound = true;
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectActedThisRound), caster, foe),
+                  "and true once it has");
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectHasNotActedThisRound), caster, foe),
+                  "and its mirror is the exact complement");
+
+            caster.LastTurnRound = 3;
+            foe.LastDamagedRound = 2;
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectDamagedSinceMyTurn), caster, foe),
+                  "SubjectDamagedSinceMyTurn is false for damage older than the caster's last turn");
+            foe.LastDamagedRound = 3;
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectDamagedSinceMyTurn), caster, foe),
+                  "and true for damage in that round or later");
+
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectIsNotMyPreviousTarget), caster, foe),
+                  "with NO previous target, \"a different target\" is false rather than true - a hero that "
+                  + "has attacked nobody has not switched");
+            caster.PreviousTargetId = 3;
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectIsNotMyPreviousTarget), caster, foe),
+                  "and true once it has attacked somebody else");
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.SubjectIsMyPreviousTarget), caster, other),
+                  "and its mirror names the body actually attacked last");
+
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.CasterRepeatedActionType), caster, foe),
+                  "CasterRepeatedActionType is false before two turns are on record");
+            caster.ActionsTaken = 2; caster.LastActionWasActive = true; caster.PreviousActionWasActive = true;
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.CasterRepeatedActionType), caster, foe),
+                  "and true after two turns of the same kind");
+            caster.PreviousActionWasActive = false;
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.CasterRepeatedActionType), caster, foe),
+                  "and false again when the kind changed");
+
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.AlreadyDamagedSubjectThisRound), caster, foe),
+                  "AlreadyDamagedSubjectThisRound is false before the caster has hit it");
+            caster.DamagedThisRound.Add(foe.Id);
+            Check(CombatSimulation.ConditionMet(HistCond(EffectCondition.AlreadyDamagedSubjectThisRound), caster, foe),
+                  "and true after");
+            Check(!CombatSimulation.ConditionMet(HistCond(EffectCondition.AlreadyDamagedSubjectThisRound), caster, other),
+                  "and still false for a body it has not hit, so the record is per target");
+
+            // And the history is really kept by a running battle, not only settable by hand.
+            BattleResult r = RunHistoryArena();
+            int switched = 0;
+            if (r != null)
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.PassiveTrigger
+                        && r.Events[i].AbilityId == "hist_passive") switched++;
+            Check(switched > 0,
+                  "and a real battle keeps the history: a passive conditioned on having damaged its "
+                  + "target already this round fired " + switched + " time(s)");
+        }
+
+        private static EffectDef HistCond(EffectCondition kind)
+        {
+            EffectDef e = new EffectDef();
+            e.Condition = kind;
+            e.ConditionOn = ConditionSubject.Target;
+            return e;
+        }
+
+
+        /// <summary>One hero hitting one foe twice a round, with a passive gated on having
+        /// already damaged it - so the history has to be kept by the battle for it to fire.</summary>
+        private static BattleResult RunHistoryArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""hist_hero"", ""name"": ""Hist"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""hist_basic"", ""name"": ""Twice"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 },
+                       { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01,
+                         ""condition"": ""AlreadyDamagedSubjectThisRound"", ""conditionOn"": ""Target"" } ] },
+      ""passive"": { ""id"": ""hist_passive"", ""name"": ""Noted"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1,
+                         ""condition"": ""AlreadyDamagedSubjectThisRound"", ""conditionOn"": ""Target"" } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""hist_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""hf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""hist_ch"", ""name"": ""History"", ""stages"": [
+    { ""id"": ""hist_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""hist_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "History");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("hist_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("hist_arena"), 5252, team);
+        }
+
+        /// <summary>
+        /// The four ally triggers, each fired and each withheld. OnAllyWouldDie is the one that
+        /// intercepts, so it is checked twice over: the passive fires, AND the ally is still
+        /// standing at the end of a battle that would otherwise have killed it.
+        /// </summary>
+        private static void CheckAllyTriggers()
+        {
+            Check(CountPassiveFires(RunAllyArena("OnAllyHealed", true), "ally_passive") > 0,
+                  "OnAllyHealed fires on an ally of the unit that was healed");
+            Check(CountPassiveFires(RunAllyArena("OnAllyHealed", false), "ally_passive") == 0,
+                  "and does not fire when nobody is healed");
+
+            Check(CountPassiveFires(RunAllyArena("OnAllyShielded", true), "ally_passive") > 0,
+                  "OnAllyShielded fires when an ally gains a ward");
+            Check(CountPassiveFires(RunAllyArena("OnAllyShielded", false), "ally_passive") == 0,
+                  "and does not fire when nobody is warded");
+
+            Check(CountPassiveFires(RunAllyArena("OnAllyHpBelowThreshold", true), "ally_passive") > 0,
+                  "OnAllyHpBelowThreshold fires when an ally is driven under its watcher's threshold");
+
+            // The interception, stated as an outcome rather than as an event: the ally that would
+            // have died is alive at the end.
+            BattleResult saved = RunAllyArena("OnAllyWouldDie", true);
+            BattleResult unsaved = RunAllyArena("OnAllyWouldDie", false);
+            Check(CountPassiveFires(saved, "ally_passive") > 0,
+                  "OnAllyWouldDie fires before the death resolves");
+            int deathsSaved = CountEventType(saved, BattleEventType.Death);
+            int deathsUnsaved = CountEventType(unsaved, BattleEventType.Death);
+            Check(deathsUnsaved > deathsSaved,
+                  "and the interception WORKS: the same battle kills " + deathsUnsaved
+                  + " with no watcher and " + deathsSaved + " with one - a passive that heals in "
+                  + "answer lifts the ally back over the line before the death is taken");
+        }
+
+        private static int CountEventType(BattleResult r, BattleEventType type)
+        {
+            if (r == null) return 0;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++) if (r.Events[i].Type == type) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// A watcher, and a fragile ally the foe can actually kill. `armed` decides only whether
+        /// the watcher listens on the trigger under test or on one nothing in the arena raises,
+        /// so the two runs differ by the listener and nothing else.
+        /// </summary>
+        private static BattleResult RunAllyArena(string trigger, bool armed)
+        {
+            string watched = armed ? trigger : "OnBlock";
+            // The watcher answers by healing, which is what makes the would-die case an
+            // interception rather than an observation.
+            string answer = ", { \"kind\": \"Heal\", \"target\": \"LowestHpAlly\", \"power\": 40.0 }";
+            // The healed/shielded cases need somebody to do the healing or warding at all.
+            string act = "";
+            if (trigger == "OnAllyHealed") act = ", { \"kind\": \"Heal\", \"target\": \"LowestHpAlly\", \"power\": 1.0 }";
+            else if (trigger == "OnAllyShielded") act = ", { \"kind\": \"Shield\", \"target\": \"LowestHpAlly\", \"power\": 1.0, \"duration\": 3 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ally_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 600, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""af_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""ally_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""aw_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] },
+      ""passive"": { ""id"": ""ally_passive"", ""name"": ""Answer"", ""trigger"": """ + watched + @""",
+        ""oncePerBattle"": false, ""threshold"": 0.95,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 }" + answer + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""ally_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 400,
+      ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""aff"", ""name"": ""Crush"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ally_ch"", ""name"": ""Allies"", ""stages"": [
+    { ""id"": ""ally_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""ally_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "Allies");
+            if (db == null) return null;
+            string[] ids = { "ally_frail", "ally_watcher" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("ally_arena"), 7474, team);
+        }
+
+
+        /// <summary>
+        /// Cover moves a share of a hit onto the protector; Provoke pulls one attacker onto the
+        /// provoker. Both read off who actually took damage, which is the only thing that settles
+        /// either question.
+        /// </summary>
+        private static void CheckRedirectionAndProvoke()
+        {
+            int plainOnFrail = DamageTakenBy(RunRedirectArena("none"), "rd_frail");
+            int plainOnGuard = DamageTakenBy(RunRedirectArena("none"), "rd_guardian");
+            Check(plainOnFrail > 0 && plainOnGuard == 0,
+                  "control: with nothing applied the foe hits the front body only (frail " + plainOnFrail
+                  + ", guardian " + plainOnGuard + ")");
+
+            int coveredFrail = DamageTakenBy(RunRedirectArena("cover"), "rd_frail");
+            int coveredGuard = DamageTakenBy(RunRedirectArena("cover"), "rd_guardian");
+            Check(coveredGuard > 0,
+                  "Covered moves a share of the hit onto the protector (" + coveredGuard + " taken)");
+            Check(coveredFrail < plainOnFrail,
+                  "and the covered body takes correspondingly less (" + plainOnFrail + " -> " + coveredFrail + ")");
+
+            int provokedFrail = DamageTakenBy(RunRedirectArena("provoke"), "rd_frail");
+            int provokedGuard = DamageTakenBy(RunRedirectArena("provoke"), "rd_guardian");
+            Check(provokedGuard > 0 && provokedFrail == 0,
+                  "Provoked pulls that one attacker onto the provoker entirely (guardian "
+                  + provokedGuard + ", frail " + provokedFrail + ") - a single-target provoke, "
+                  + "not Taunt on Self, which would have redirected every other enemy too");
+
+            Check(FingerprintOf(RunRedirectArena("cover")) == FingerprintOf(RunRedirectArena("cover")),
+                  "and both resolve the same way twice on the same seed");
+        }
+
+        private static int DamageTakenBy(BattleResult r, string defId)
+        {
+            if (r == null) return 0;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return 0;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].TargetId == id)
+                    total += r.Events[i].Value;
+            return total;
+        }
+
+        private static BattleResult RunRedirectArena(string mode)
+        {
+            string apply = "";
+            if (mode == "cover")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Covered\", \"magnitude\": 0.5, \"duration\": 9, \"chance\": 1 }";
+            else if (mode == "provoke")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Provoked\", \"duration\": 9, \"chance\": 1 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""rd_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""rdf_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""rd_guardian"", ""name"": ""Guardian"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""rdg_basic"", ""name"": ""Shield them"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + apply + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""rd_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""rdfoe"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""rd_ch"", ""name"": ""Redirect"", ""stages"": [
+    { ""id"": ""rd_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""rd_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "Redirect");
+            if (db == null) return null;
+            string[] ids = { "rd_frail", "rd_guardian" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("rd_arena"), 9191, team);
+        }
+
+        /// <summary>
+        /// Guard is spent by USE rather than by time, and target-HP scaling reads the body being
+        /// hit rather than the one swinging.
+        /// </summary>
+        private static void CheckChargesAndTargetHp()
+        {
+            // Two charges: the first two hits are reduced, the third is not.
+            List<int> guarded = HitsTakenBy(RunChargeArena(2), "cg_frail");
+            List<int> plain = HitsTakenBy(RunChargeArena(0), "cg_frail");
+            Check(plain.Count >= 3 && guarded.Count >= 3,
+                  "charge arena landed enough hits to see the charges run out (" + plain.Count + ")");
+            if (plain.Count >= 3 && guarded.Count >= 3)
+            {
+                Check(guarded[0] < plain[0] && guarded[1] < plain[1],
+                      "Guard reduces the first two hits (" + plain[0] + "," + plain[1] + " -> "
+                      + guarded[0] + "," + guarded[1] + ")");
+                Check(guarded[2] == plain[2],
+                      "and the third is unreduced, because the charges are spent - a use count, not a "
+                      + "duration (" + guarded[2] + " against " + plain[2] + ")");
+            }
+
+            // Target-HP scaling: the same effect against a fat body and a thin one.
+            int onFat = DamageTakenBy(RunTargetHpArena(true), "thp_fat");
+            int onThin = DamageTakenBy(RunTargetHpArena(false), "thp_thin");
+            Check(onFat > 0 && onThin > 0, "both target-HP arenas landed a hit (" + onFat + ", " + onThin + ")");
+            Check(onFat > onThin * 2,
+                  "damage scaled off the TARGET's max HP is far larger against the fatter body ("
+                  + onThin + " -> " + onFat + ") - selfHpRatio reads the caster and could not say this");
+        }
+
+        private static List<int> HitsTakenBy(BattleResult r, string defId)
+        {
+            List<int> hits = new List<int>();
+            if (r == null) return hits;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].TargetId == id)
+                    hits.Add(r.Events[i].Value);
+            return hits;
+        }
+
+        private static BattleResult RunChargeArena(int charges)
+        {
+            string guard = charges > 0
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"Guard\", \"magnitude\": 0.5, \"charges\": "
+                  + charges + ", \"duration\": 99, \"chance\": 1 }"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""cg_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Bulwark"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""cgf_basic"", ""name"": ""Brace"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""cg_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + guard + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""cg_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""cgfoe"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""cg_ch"", ""name"": ""Charges"", ""stages"": [
+    { ""id"": ""cg_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""cg_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "Charges");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("cg_frail");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("cg_arena"), 3838, team);
+        }
+
+        private static BattleResult RunTargetHpArena(bool fat)
+        {
+            string foe = fat ? "thp_fat" : "thp_thin";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""thp_hero"", ""name"": ""Thp"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""thp_basic"", ""name"": ""Weigh"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0, ""targetMaxHpRatio"": 0.02 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""thp_fat"", ""name"": ""Fat"", ""aspect"": ""Ember"", ""hp"": 200000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""thpf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""thp_thin"", ""name"": ""Thin"", ""aspect"": ""Ember"", ""hp"": 20000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""thpt"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""thp_ch"", ""name"": ""TargetHp"", ""stages"": [
+    { ""id"": ""thp_arena"", ""index"": 1, ""enemies"": [ { ""id"": """ + foe + @""", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(2), "TargetHp");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("thp_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("thp_arena"), 1616, team);
+        }
+
+
+        /// <summary>
+        /// Vulnerable is SOURCE-KEYED, which is the whole of what makes it different from
+        /// DefenseDown. Measured as the same foe hitting the same body, with and without having
+        /// applied it, and with a THIRD attacker present that applied nothing - so the check
+        /// separates "this target is softer" from "this target is softer to me".
+        /// </summary>
+        private static void CheckVulnerable()
+        {
+            BattleResult plain = RunVulnerableArena(false);
+            BattleResult marked = RunVulnerableArena(true);
+
+            int applierPlain = DamageDealtBy(plain, "vu_applier");
+            int applierMarked = DamageDealtBy(marked, "vu_applier");
+            int bystanderPlain = DamageDealtBy(plain, "vu_bystander");
+            int bystanderMarked = DamageDealtBy(marked, "vu_bystander");
+
+            Check(applierPlain > 0 && bystanderPlain > 0,
+                  "control: both attackers connect with nothing applied (applier " + applierPlain
+                  + ", bystander " + bystanderPlain + ")");
+            Check(applierMarked > applierPlain,
+                  "Vulnerable makes the target take more from the hero that applied it ("
+                  + applierPlain + " -> " + applierMarked + ")");
+            Check(bystanderMarked == bystanderPlain,
+                  "and NOT from anybody else (" + bystanderPlain + " -> " + bystanderMarked
+                  + ") - DefenseDown is the unconditional near-miss and would have softened it "
+                  + "against the whole field");
+        }
+
+        private static int DamageDealtBy(BattleResult r, string defId)
+        {
+            if (r == null) return 0;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return 0;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].SourceId == id)
+                    total += r.Events[i].Value;
+            return total;
+        }
+
+        private static BattleResult RunVulnerableArena(bool armed)
+        {
+            string apply = armed
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Vulnerable\", \"magnitude\": 1.0, \"duration\": 9, \"chance\": 1 }"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""vu_applier"", ""name"": ""Applier"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""vua_basic"", ""name"": ""Mark and hit"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }" + apply + @" ] } },
+    { ""id"": ""vu_bystander"", ""name"": ""Bystander"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""vub_basic"", ""name"": ""Hit"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""vu_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""vufoe"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""vu_ch"", ""name"": ""Vulnerable"", ""stages"": [
+    { ""id"": ""vu_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""vu_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "Vulnerable");
+            if (db == null) return null;
+            string[] ids = { "vu_applier", "vu_bystander" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("vu_arena"), 2424, team);
+        }
 
         // ---------------------------------------------------------------- marks, limits, ledger
 
