@@ -56,6 +56,7 @@ namespace Emberfall.DevHarness
             CheckPassivesAndTalents(content);
             CheckEffectConditions(content);
             CheckStatStatusesAndTargetModes(content);
+            CheckTurnStatusAndEnemyTriggers(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -95,6 +96,517 @@ namespace Emberfall.DevHarness
         // ---------------------------------------------------------------- helpers
 
 
+
+
+        // ---------------------------------------------------------------- turn order, status ops, enemy triggers
+
+        private static readonly EffectKind[] NewEffectKinds =
+        {
+            EffectKind.TurnShift, EffectKind.SwapTurnOrder, EffectKind.RemoveStatus,
+            EffectKind.MoveDebuffs, EffectKind.MoveBuffs, EffectKind.InvertStatus
+        };
+
+        private static readonly PassiveTrigger[] NewTriggers =
+        {
+            PassiveTrigger.OnEnemyActive, PassiveTrigger.OnEnemyBuffGained,
+            PassiveTrigger.OnEnemyDamagedAlly, PassiveTrigger.OnTurnDelayed
+        };
+
+        private static void CheckTurnStatusAndEnemyTriggers(ContentDatabase live)
+        {
+            Line("TURN ORDER, STATUS OPERATIONS, ENEMY TRIGGERS");
+            CheckNoShippedContentUsesTheseEither(live);
+            CheckMoreEnumOrdinalPins();
+            CheckOppositeTable();
+            CheckTurnShift();
+            CheckStatusOperations();
+            CheckEnemyTriggers();
+            Line("");
+        }
+
+        /// <summary>The standing guards for this pass, in the shape the last three use.</summary>
+        private static void CheckNoShippedContentUsesTheseEither(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int effects = 0, newKind = 0, secondary = 0, newTrigger = 0;
+            string firstKind = "", firstTrigger = "";
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    all.AddRange(def.Passives[pi].Effects);
+                    for (int t = 0; t < NewTriggers.Length; t++)
+                        if (def.Passives[pi].Trigger == NewTriggers[t])
+                        {
+                            newTrigger++;
+                            if (firstTrigger.Length == 0) firstTrigger = def.Id + "/" + def.Passives[pi].Trigger;
+                        }
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    effects++;
+                    for (int k = 0; k < NewEffectKinds.Length; k++)
+                        if (all[e].Kind == NewEffectKinds[k])
+                        {
+                            newKind++;
+                            if (firstKind.Length == 0) firstKind = def.Id + "/" + all[e].Kind;
+                        }
+                    if (all[e].SecondaryTarget != TargetMode.Self) secondary++;
+                }
+            }
+
+            Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
+            Check(newKind == 0,
+                  "no shipped effect authors one of the " + NewEffectKinds.Length + " new effect kinds ("
+                  + newKind + (firstKind.Length > 0 ? ", first " + firstKind : "") + ")");
+            Check(newTrigger == 0,
+                  "no shipped passive listens on one of the " + NewTriggers.Length + " new triggers ("
+                  + newTrigger + (firstTrigger.Length > 0 ? ", first " + firstTrigger : "")
+                  + ") - so no broadcast ever reaches a passive and no existing battle can move");
+            Check(secondary == 0, "and no shipped effect sets secondaryTarget (" + secondary + ")");
+        }
+
+        /// <summary>
+        /// The ordinal pins, extended to the two enums this pass appends to plus the one it
+        /// reuses an event from. BattleEventType matters most of the three: (int)Type is the
+        /// first field of every fingerprint, so a member inserted anywhere but the end rewrites
+        /// the record of every battle ever resolved.
+        /// </summary>
+        private static void CheckMoreEnumOrdinalPins()
+        {
+            Check((int)EffectKind.Damage == 0 && (int)EffectKind.ApplyStatus == 3
+                  && (int)EffectKind.SwapPositions == 7 && (int)EffectKind.GainResolve == 8,
+                  "every EffectKind that predates this pass keeps its ordinal");
+            Check((int)EffectKind.TurnShift == 9, "and the first new kind sits immediately after it ("
+                  + (int)EffectKind.TurnShift + ")");
+
+            Check((int)PassiveTrigger.None == 0 && (int)PassiveTrigger.OnKill == 5
+                  && (int)PassiveTrigger.OnDamaged == 7 && (int)PassiveTrigger.OnBlock == 8,
+                  "every PassiveTrigger that predates this pass keeps its ordinal");
+            Check((int)PassiveTrigger.OnEnemyActive == 9, "and the first new trigger sits immediately after it ("
+                  + (int)PassiveTrigger.OnEnemyActive + ")");
+
+            Check((int)BattleEventType.BattleStart == 0 && (int)BattleEventType.Damage == 6
+                  && (int)BattleEventType.TurnOrderShift == 16 && (int)BattleEventType.StatusSpread == 19
+                  && (int)BattleEventType.BattleEnd == 20,
+                  "every BattleEventType keeps its ordinal - this pass adds none, and reuses "
+                  + "TurnOrderShift for an authored shift rather than inventing a second event for it");
+        }
+
+        private static void CheckOppositeTable()
+        {
+            Check(StatusInfo.Opposite(StatusKind.AttackUp) == StatusKind.AttackDown
+                  && StatusInfo.Opposite(StatusKind.BlockUp) == StatusKind.BlockDown
+                  && StatusInfo.Opposite(StatusKind.CritDamageUp) == StatusKind.CritDamageDown,
+                  "Opposite pairs each stat buff with its own debuff");
+            Check(StatusInfo.Opposite(StatusKind.SpeedUp) == StatusKind.Slow,
+                  "SpeedUp pairs with Slow, since Slow is the speed debuff and there is no SpeedDown");
+            Check(StatusInfo.Opposite(StatusKind.Regen) == StatusKind.Burn,
+                  "Regen pairs with Burn - the same per-tick magnitude, read in the other direction");
+            Check(StatusInfo.Opposite(StatusKind.Shield) == StatusKind.None
+                  && StatusInfo.Opposite(StatusKind.Taunt) == StatusKind.None
+                  && StatusInfo.Opposite(StatusKind.Focus) == StatusKind.None,
+                  "and a buff with no counterpart pairs with nothing, so InvertStatus cannot quietly become a Dispel");
+
+            int unpaired = 0;
+            for (int i = 0; i < NewStatStatuses.Length; i++)
+            {
+                StatusKind k = NewStatStatuses[i];
+                if (StatusInfo.IsHarmful(k)) continue;
+                if (StatusInfo.Opposite(k) == StatusKind.None) unpaired++;
+            }
+            Check(unpaired == 0, "every stat UP added by the previous pass has an Opposite (" + unpaired + " did not)");
+        }
+
+
+        // ---- turn order
+
+        /// <summary>
+        /// A shift moves a unit inside the round it is cast in, in the direction and by the
+        /// number of places the fraction names.
+        ///
+        /// Read off the round-1 TurnStart sequence rather than off the shift event alone, so
+        /// what is asserted is that the unit actually ACTED later, not merely that an event said
+        /// it would. The arena gives the caster a speed nothing else comes near, so it always
+        /// acts first and the whole rest of the round is still ahead of it when it casts.
+        /// </summary>
+        private static void CheckTurnShift()
+        {
+            List<string> plain = TurnArenaOrder("", 0f);
+            Check(plain.Count > 3 && plain[0] == "t_caster",
+                  "turn arena: the caster acts first, so the whole round is still ahead of it (order "
+                  + string.Join(" ", plain.ToArray()) + ")");
+            int foeAt = plain.IndexOf("t_foe0");
+            Check(foeAt == 1, "and the front enemy acts second with no shift (index " + foeAt + ")");
+
+            // ---- delay: negative fraction, target moves later
+            List<string> delayed = TurnArenaOrder("TurnShift", -0.5f);
+                        int delayedAt = delayed.IndexOf("t_foe0");
+            Check(delayedAt > foeAt,
+                  "a delay of -0.5 moves the front enemy later inside the same round (" + foeAt + " -> "
+                  + delayedAt + ")");
+            Check(delayed.Count == plain.Count,
+                  "and nobody loses a turn to it - a shift reorders the round, it does not remove anyone ("
+                  + plain.Count + " -> " + delayed.Count + ")");
+
+            // ---- the size of the move is the fraction of the remaining order, ceiled
+            List<string> small = TurnArenaOrder("TurnShift", -0.1f);
+            int smallAt = small.IndexOf("t_foe0");
+            Check(smallAt > foeAt && smallAt < delayedAt,
+                  "a smaller delay moves it a shorter distance, so the fraction is a magnitude rather than a flag ("
+                  + smallAt + " against " + delayedAt + ")");
+
+            // ---- advance: positive fraction, target moves earlier
+            List<string> advanced = TurnArenaOrder("TurnShiftAlly", 0.5f);
+            int allyPlain = plain.IndexOf("t_ally_last");
+            int allyAdvanced = advanced.IndexOf("t_ally_last");
+            Check(allyPlain > 0 && allyAdvanced > 0 && allyAdvanced < allyPlain,
+                  "an advance of +0.5 moves the slowest ally earlier inside the same round (" + allyPlain
+                  + " -> " + allyAdvanced + ")");
+
+            // ---- the honest bound: a unit that has already acted has no position left to move
+            List<string> selfShift = TurnArenaOrder("TurnShiftSelf", 0.5f);
+            Check(string.Join(" ", selfShift.ToArray()) == string.Join(" ", plain.ToArray()),
+                  "advancing the CASTER does nothing, because it has already acted and is no longer in the "
+                  + "remaining order - which is why the roster's \"advances my next turn\" family is a Speed "
+                  + "buff rather than a shift");
+
+            // ---- swap
+            List<string> swapped = TurnArenaOrder("SwapTurnOrder", 0f);
+            int firstFoePlain = -1, lastFoePlain = -1, firstFoeSwap = -1, lastFoeSwap = -1;
+            for (int i = 0; i < plain.Count; i++)
+                if (plain[i].StartsWith("t_foe")) { if (firstFoePlain < 0) firstFoePlain = i; lastFoePlain = i; }
+            for (int i = 0; i < swapped.Count; i++)
+                if (swapped[i].StartsWith("t_foe")) { if (firstFoeSwap < 0) firstFoeSwap = i; lastFoeSwap = i; }
+            Check(firstFoePlain >= 0 && plain[firstFoePlain] == swapped[lastFoeSwap]
+                  && plain[lastFoePlain] == swapped[firstFoeSwap],
+                  "SwapTurnOrder exchanges the enemy closest to acting with the one furthest from it ("
+                  + plain[firstFoePlain] + "/" + plain[lastFoePlain] + " -> " + swapped[firstFoeSwap]
+                  + "/" + swapped[lastFoeSwap] + ")");
+
+            // ---- determinism and the no-op control
+            Check(string.Join(" ", TurnArenaOrder("TurnShift", -0.5f).ToArray()) == string.Join(" ", delayed.ToArray()),
+                  "a shift resolves the same way twice on the same seed - it draws nothing from the RNG");
+            Check(string.Join(" ", TurnArenaOrder("", 0f).ToArray()) == string.Join(" ", plain.ToArray()),
+                  "and an arena with no shift at all is unchanged, so the comparisons above measure the shift");
+        }
+
+        /// <summary>The DefIds that took a turn in round 1, in the order they took it.</summary>
+        private static List<string> TurnArenaOrder(string mode, float fraction)
+        {
+            List<string> order = new List<string>();
+            BattleResult r = RunTurnArena(mode, fraction);
+            if (r == null) return order;
+            Dictionary<int, string> byId = new Dictionary<int, string>();
+            for (int i = 0; i < r.Units.Count; i++) byId[r.Units[i].Id] = r.Units[i].DefId;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.RoundStart && e.Value > 1) break;
+                if (e.Type != BattleEventType.TurnStart) continue;
+                string id;
+                if (byId.TryGetValue(e.SourceId, out id)) order.Add(id);
+            }
+            return order;
+        }
+
+        /// <summary>
+        /// One caster fast enough to always act first, four slower enemies and four slower
+        /// allies, so a shift cast on the caster's own turn has the entire rest of the round to
+        /// move somebody through. Nothing dies: every body carries a million HP and hits for
+        /// almost nothing, so the round always runs its full length and a unit missing from the
+        /// order means the shift removed it rather than that it was killed.
+        /// </summary>
+        private static BattleResult RunTurnArena(string mode, float fraction)
+        {
+            string f = fraction.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            string shift = "";
+            if (mode == "TurnShift")
+                shift = ", { \"kind\": \"TurnShift\", \"target\": \"FrontEnemy\", \"magnitude\": " + f + " }";
+            else if (mode == "TurnShiftAlly")
+                shift = ", { \"kind\": \"TurnShift\", \"target\": \"LowestHpAlly\", \"magnitude\": " + f + " }";
+            else if (mode == "TurnShiftSelf")
+                shift = ", { \"kind\": \"TurnShift\", \"target\": \"Self\", \"magnitude\": " + f + " }";
+            else if (mode == "SwapTurnOrder")
+                shift = ", { \"kind\": \"SwapTurnOrder\", \"target\": \"FrontEnemy\" }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""t_caster"", ""name"": ""Caster"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 5000, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tc_basic"", ""name"": ""Point"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + shift + @" ] } },
+    { ""id"": ""t_ally_a"", ""name"": ""AllyA"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 40, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ta_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_ally_b"", ""name"": ""AllyB"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 30, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tb_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_ally_c"", ""name"": ""AllyC"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tcc_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_ally_last"", ""name"": ""AllyLast"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tl_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""tl_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0, ""flat"": 500000 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""t_foe0"", ""name"": ""F0"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""f0"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_foe1"", ""name"": ""F1"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""f1"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_foe2"", ""name"": ""F2"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 700, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""f2"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t_foe3"", ""name"": ""F3"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 600, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""f3"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""t_ch"", ""name"": ""Turn"", ""stages"": [
+    { ""id"": ""t_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""t_foe0"", ""level"": 1 }, { ""id"": ""t_foe1"", ""level"": 1 },
+        { ""id"": ""t_foe2"", ""level"": 1 }, { ""id"": ""t_foe3"", ""level"": 1 } ] } ] } ]
+}";
+            string balance = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, balance, "TurnOrder");
+            if (db == null) return null;
+            string[] ids = { "t_caster", "t_ally_a", "t_ally_b", "t_ally_c", "t_ally_last" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("t_arena"), 5150, team);
+        }
+
+
+        // ---- status operations and enemy triggers
+
+        /// <summary>
+        /// The four status operations, each proved to do its thing and proved not to when the
+        /// status it names is not there. Every one is read off the event list, which is where a
+        /// status operation is visible at all: StatusExpired for a removal, StatusSpread for a
+        /// move, an Expired/Applied pair for an inversion.
+        /// </summary>
+        private static void CheckStatusOperations()
+        {
+            // RemoveStatus takes the NAMED status and only that one.
+            BattleResult removed = RunOpsArena("RemoveStatus", "Burn");
+            Check(CountEvent(removed, BattleEventType.StatusExpired, StatusKind.Burn) > 0,
+                  "RemoveStatus takes the status it names off the target");
+            BattleResult missed = RunOpsArena("RemoveStatus", "Stun");
+            Check(CountEvent(missed, BattleEventType.StatusExpired, StatusKind.Stun) == 0,
+                  "and naming a status the target does not carry removes nothing");
+            Check(CountEvent(missed, BattleEventType.StatusExpired, StatusKind.Burn) == 0,
+                  "and does NOT fall through to some other status - a removal is by name, not by class");
+
+            // MoveDebuffs relocates rather than copies, through the one mover Umbra already used.
+            BattleResult movedDown = RunOpsArena("MoveDebuffs", "");
+            Check(CountEvent(movedDown, BattleEventType.StatusSpread, StatusKind.Burn) > 0,
+                  "MoveDebuffs relocates a harmful status and reports it as a spread, through the same "
+                  + "mover Umbra's death-jump uses");
+
+            // MoveBuffs is the same machinery pointed at the other class.
+            BattleResult movedUp = RunOpsArena("MoveBuffs", "");
+            Check(CountEvent(movedUp, BattleEventType.StatusSpread, StatusKind.AttackUp) > 0,
+                  "MoveBuffs relocates a beneficial status the same way");
+            Check(CountEvent(movedUp, BattleEventType.StatusSpread, StatusKind.Burn) == 0,
+                  "and leaves the harmful ones where they are - the two kinds do not overlap");
+            Check(CountEvent(movedDown, BattleEventType.StatusSpread, StatusKind.AttackUp) == 0,
+                  "nor the other way round");
+
+            // InvertStatus turns a buff into its pair and leaves an unpaired one alone.
+            BattleResult inverted = RunOpsArena("InvertStatus", "");
+            Check(CountEvent(inverted, BattleEventType.StatusApplied, StatusKind.AttackDown) > 0,
+                  "InvertStatus turns a buff into its paired debuff");
+            Check(CountEvent(inverted, BattleEventType.StatusExpired, StatusKind.AttackUp) > 0,
+                  "and takes the buff away as it does, rather than leaving both standing");
+            Check(CountEvent(inverted, BattleEventType.StatusExpired, StatusKind.Taunt) == 0,
+                  "and an unpaired buff is left alone rather than removed, so it cannot act as a Dispel");
+
+            // Determinism across the set.
+            Check(FingerprintOf(RunOpsArena("MoveDebuffs", "")) == FingerprintOf(movedDown)
+                  && FingerprintOf(RunOpsArena("InvertStatus", "")) == FingerprintOf(inverted),
+                  "every status operation resolves the same way twice on the same seed");
+
+            // And the control: with no operation authored, none of these events appear at all.
+            BattleResult none = RunOpsArena("", "");
+            Check(CountEvent(none, BattleEventType.StatusSpread, StatusKind.Burn) == 0
+                  && CountEvent(none, BattleEventType.StatusApplied, StatusKind.AttackDown) == 0,
+                  "and an arena authoring no operation produces none of them, so the assertions above "
+                  + "are measuring the operations rather than the arena");
+        }
+
+        /// <summary>
+        /// The three broadcast triggers, each proved to fire on the right side and proved not to
+        /// fire when the thing it watches for does not happen.
+        /// </summary>
+        private static void CheckEnemyTriggers()
+        {
+            // OnEnemyActive: the foe holds a full bar and casts on its first turn.
+            Check(CountPassiveFires(RunTriggerArena("OnEnemyActive", true), "watcher_passive") > 0,
+                  "OnEnemyActive fires on the watching side when an enemy casts its Active");
+            Check(CountPassiveFires(RunTriggerArena("OnEnemyActive", false), "watcher_passive") == 0,
+                  "and does not fire when the enemy has no Active to cast");
+
+            // OnEnemyBuffGained: the foe buffs itself at BattleStart.
+            Check(CountPassiveFires(RunTriggerArena("OnEnemyBuffGained", true), "watcher_passive") > 0,
+                  "OnEnemyBuffGained fires on the watching side when an enemy gains a beneficial status");
+            Check(CountPassiveFires(RunTriggerArena("OnEnemyBuffGained", false), "watcher_passive") == 0,
+                  "and does not fire when the enemy gains nothing");
+
+            // OnEnemyDamagedAlly: fires on the victim's ALLIES, never on the victim.
+            BattleResult hit = RunTriggerArena("OnEnemyDamagedAlly", true);
+            Check(CountPassiveFires(hit, "watcher_passive") > 0,
+                  "OnEnemyDamagedAlly fires on an ally of the unit that was damaged");
+            Check(CountPassiveFires(hit, "victim_passive") == 0,
+                  "and never on the victim itself, which already has OnDamaged of its own");
+
+            Check(FingerprintOf(RunTriggerArena("OnEnemyActive", true))
+                  == FingerprintOf(RunTriggerArena("OnEnemyActive", true)),
+                  "a broadcast trigger resolves the same way twice on the same seed");
+        }
+
+        private static int CountEvent(BattleResult r, BattleEventType type, StatusKind status)
+        {
+            if (r == null) return 0;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == type && r.Events[i].Status == status) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// One caster, one foe primed at BattleStart with a Burn (harmful), an AttackUp
+        /// (beneficial and paired) and a Taunt (beneficial and deliberately unpaired, so the
+        /// inversion has something it must leave alone). The caster's basic then performs one
+        /// operation on it.
+        /// </summary>
+        private static BattleResult RunOpsArena(string op, string named)
+        {
+            string effect = "";
+            if (op == "RemoveStatus")
+                effect = ", { \"kind\": \"RemoveStatus\", \"target\": \"FrontEnemy\", \"status\": \"" + named + "\" }";
+            else if (op == "MoveDebuffs")
+                effect = ", { \"kind\": \"MoveDebuffs\", \"target\": \"FrontEnemy\", \"secondaryTarget\": \"Self\", \"hits\": 3 }";
+            else if (op == "MoveBuffs")
+                effect = ", { \"kind\": \"MoveBuffs\", \"target\": \"FrontEnemy\", \"secondaryTarget\": \"Self\", \"hits\": 3 }";
+            else if (op == "InvertStatus")
+                effect = ", { \"kind\": \"InvertStatus\", \"target\": \"FrontEnemy\", \"hits\": 3 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ops_caster"", ""name"": ""Ops"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ops_basic"", ""name"": ""Work"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + effect + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ops_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ops_foe_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""ops_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"", ""magnitude"": 0.0001, ""duration"": 99, ""chance"": 1 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""magnitude"": 0.05, ""duration"": 99, ""chance"": 1 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"", ""duration"": 99, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ops_ch"", ""name"": ""Ops"", ""stages"": [
+    { ""id"": ""ops_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""ops_foe"", ""level"": 1 } ] } ] } ]
+}";
+            string balance = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, balance, "StatusOps");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("ops_caster");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("ops_arena"), 616, team);
+        }
+
+        /// <summary>
+        /// A watcher and a victim on the player side, and one foe that either does the thing the
+        /// trigger watches for or does not. `armed` is the ONLY difference between the two runs
+        /// each trigger is measured across.
+        /// </summary>
+        private static BattleResult RunTriggerArena(string trigger, bool armed)
+        {
+            string foeActive = (trigger == "OnEnemyActive" && armed)
+                ? @", ""active"": { ""id"": ""tg_foe_active"", ""name"": ""Cast"", ""energyCost"": 0,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }"
+                : "";
+            string foePrime = (trigger == "OnEnemyBuffGained" && armed)
+                ? @", ""passive"": { ""id"": ""tg_foe_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""magnitude"": 0.05, ""duration"": 9, ""chance"": 1 } ] }"
+                : "";
+            // The damage trigger needs no arming switch on the foe - it attacks either way - so
+            // its unarmed control simply watches for a trigger nothing in the arena raises.
+            string watched = (trigger == "OnEnemyDamagedAlly" && !armed) ? "OnBlock" : trigger;
+            string foeStart = (trigger == "OnEnemyActive" && armed) ? "100" : "0";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""tg_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tg_w_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""watcher_passive"", ""name"": ""Watch"", ""trigger"": """ + watched + @""", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tg_victim"", ""name"": ""Victim"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""tg_v_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""victim_passive"", ""name"": ""Feel"", ""trigger"": """ + watched + @""", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""tg_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": " + foeStart + @",
+      ""basic"": { ""id"": ""tg_foe_basic"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] }" + foeActive + foePrime + @" }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""tg_ch"", ""name"": ""Triggers"", ""stages"": [
+    { ""id"": ""tg_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""tg_foe"", ""level"": 1 } ] } ] } ]
+}";
+            string balance = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, balance, "EnemyTriggers");
+            if (db == null) return null;
+            // The VICTIM stands in front, because the foe's basic aims at FrontEnemy and the front
+            // slot is whichever body the team list puts first. With the watcher there instead, the
+            // watcher is the one being hit - and a unit is excluded from its own side's
+            // OnEnemyDamagedAlly broadcast, so the trigger under test would never reach it.
+            string[] ids = { "tg_victim", "tg_watcher" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("tg_arena"), 717, team);
+        }
 
         // ---------------------------------------------------------------- stat statuses, target modes
 

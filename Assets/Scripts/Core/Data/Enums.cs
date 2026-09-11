@@ -104,7 +104,38 @@ namespace Emberfall.Core.Data
         EnergyGain,
         Dispel,
         SwapPositions,
-        GainResolve
+        GainResolve,
+
+        // ---------- appended, never inserted ----------
+
+        /// <summary>
+        /// Moves the target earlier or later inside the CURRENT round's remaining turn order.
+        /// Magnitude is signed and is a fraction of the remaining order: positive advances,
+        /// negative delays. See CombatSimulation.ApplyTurnShift, which is where the whole of the
+        /// "there is no ATB" argument lives.
+        /// </summary>
+        TurnShift,
+
+        /// <summary>
+        /// Swaps the unit closest to acting with the unit furthest from acting, among the target's
+        /// own side and among the turns that have not happened yet. Needs no second target selector
+        /// because both ends are derived from the order itself.
+        /// </summary>
+        SwapTurnOrder,
+
+        /// <summary>Removes up to Hits instances of the NAMED Status from the target. Cleanse and
+        /// Dispel remove by class and recency; this removes by name.</summary>
+        RemoveStatus,
+
+        /// <summary>Moves up to Hits harmful statuses from the target to SecondaryTarget.</summary>
+        MoveDebuffs,
+
+        /// <summary>Moves up to Hits beneficial statuses from the target to SecondaryTarget.</summary>
+        MoveBuffs,
+
+        /// <summary>Turns up to Hits beneficial statuses on the target into their paired harmful
+        /// opposite, via StatusInfo.Opposite. A buff with no pairing is skipped, not removed.</summary>
+        InvertStatus
     }
 
     /// <summary>
@@ -262,7 +293,42 @@ namespace Emberfall.Core.Data
         OnKill,
         OnHpBelowThreshold,
         OnDamaged,
-        OnBlock
+        OnBlock,
+
+        // ---------- appended, never inserted ----------
+        //
+        // THE FIRST TRIGGERS THAT ARE NOT OWNER-CENTRIC. Every member above fires on the unit the
+        // thing happened TO, or that did it; the three below fire on every living unit of a whole
+        // side because something the OTHER side did is what they are watching for. That is a new
+        // dispatch shape - CombatSimulation.BroadcastPassive - and not new state: each one is
+        // raised at a point the simulation already reaches and already knows everything about.
+        //
+        // Recursion is bounded by the existing MaxPassiveDepth, because the broadcast is handed the
+        // depth of whatever raised it. A buff-gained passive that itself applies a buff therefore
+        // cascades at most as far as a passive calling a passive already could.
+
+        /// <summary>An enemy of the owner cast its Active. Raised in TakeTurn, where the cast
+        /// already emits AbilityCast.</summary>
+        OnEnemyActive,
+
+        /// <summary>An enemy of the owner gained a beneficial status. Raised in the ApplyStatus
+        /// branch, on the side opposite the unit that gained it.</summary>
+        OnEnemyBuffGained,
+
+        /// <summary>An enemy damaged one of the owner's allies. Raised in DealRawDamage on the
+        /// victim's own side, excluding the victim - which already has OnDamaged of its own.
+        ///
+        /// This is "damaged an ally", not the "targets an ally" several descriptions ask for, and
+        /// the difference is real: a heal, a debuff or a miss all target without damaging. Damage
+        /// is the half the simulation has a single funnel for, so it is the half that can be raised
+        /// once and correctly rather than at four call sites with four meanings.</summary>
+        OnEnemyDamagedAlly,
+
+        /// <summary>The owner delayed somebody's turn. Fires on the SOURCE of the shift rather than
+        /// on the unit delayed, because "when Jax delays an enemy, Jax gains Speed" is the shape
+        /// the descriptions use; an ability that wants the DELAYED unit to suffer something can
+        /// simply carry that as another effect beside the shift.</summary>
+        OnTurnDelayed
     }
 
     /// <summary>
@@ -729,6 +795,38 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.CritDamageDown
                 || kind == StatusKind.SkillDamageDown
                 || kind == StatusKind.ArmorBreakDown;
+        }
+
+        /// <summary>
+        /// The harmful counterpart of a beneficial status, or None where there is not one.
+        ///
+        /// The table is what EffectKind.InvertStatus means by "its matching debuff", and it is
+        /// deliberately partial: Shield, Taunt and Focus have no opposite in this engine, and
+        /// inverting them would mean inventing one. A buff with no pairing is skipped rather than
+        /// removed, so an inversion never doubles as a stealth Dispel.
+        ///
+        /// SpeedUp pairs with Slow rather than with a SpeedDown, because Slow IS the speed debuff -
+        /// the same asymmetry EffectiveSpeed reads and Gale's turn-order shift keys on.
+        /// Regen pairs with Burn: both are per-tick magnitudes read by TickDamageOverTime, so the
+        /// pairing swaps which direction the tick runs and nothing else.
+        /// </summary>
+        public static StatusKind Opposite(StatusKind kind)
+        {
+            switch (kind)
+            {
+                case StatusKind.AttackUp: return StatusKind.AttackDown;
+                case StatusKind.DefenseUp: return StatusKind.DefenseDown;
+                case StatusKind.SpeedUp: return StatusKind.Slow;
+                case StatusKind.Regen: return StatusKind.Burn;
+                case StatusKind.BlockUp: return StatusKind.BlockDown;
+                case StatusKind.DamageReductionUp: return StatusKind.DamageReductionDown;
+                case StatusKind.EffectHitUp: return StatusKind.EffectHitDown;
+                case StatusKind.EffectResistUp: return StatusKind.EffectResistDown;
+                case StatusKind.CritDamageUp: return StatusKind.CritDamageDown;
+                case StatusKind.SkillDamageUp: return StatusKind.SkillDamageDown;
+                case StatusKind.ArmorBreakUp: return StatusKind.ArmorBreakDown;
+            }
+            return StatusKind.None;
         }
 
         public static string DisplayName(StatusKind kind)

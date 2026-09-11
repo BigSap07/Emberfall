@@ -533,6 +533,14 @@ namespace Emberfall.Core.Combat
                     cast.AbilityName = unit.Active.Name;
                     cast.Vfx = unit.Active.Vfx;
                     EmitEnergy(unit);
+
+                    // Raised BEFORE the cast resolves, so a passive that answers an enemy active
+                    // acts on the board the caster is about to hit rather than on the wreckage
+                    // afterwards. That is what "when an Anticipated enemy uses an active skill"
+                    // asks for, and it is also the only ordering that lets an answer matter.
+                    BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActive, 0, null);
+                    if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
+
                     ResolveAbility(unit, unit.Active, 0);
                 }
                 else
@@ -822,6 +830,13 @@ namespace Emberfall.Core.Combat
                         // StatusApplied so the record reads in causal order: the Slow landed, then
                         // the order moved because of it.
                         if (effect.Status == StatusKind.Slow) TryGaleSlowShift(source, target);
+
+                        // A buff landing is news to the other side. Raised after the status is on
+                        // the unit, so a passive answering it sees the board it is answering; and
+                        // handed `depth`, so a buff-gained passive that itself buffs somebody
+                        // cascades no further than MaxPassiveDepth already allows.
+                        if (!StatusInfo.IsHarmful(effect.Status))
+                            BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyBuffGained, depth, null);
                         break;
                     }
                     case EffectKind.Cleanse:
@@ -897,6 +912,100 @@ namespace Emberfall.Core.Combat
                         }
                         break;
                     }
+                    case EffectKind.TurnShift:
+                    {
+                        if (!target.Alive) break;
+                        ApplyTurnShift(source, target, effect.Magnitude);
+                        break;
+                    }
+
+                    case EffectKind.SwapTurnOrder:
+                    {
+                        if (!target.Alive) break;
+                        ApplySwapTurnOrder(source, target);
+                        break;
+                    }
+
+                    case EffectKind.RemoveStatus:
+                    {
+                        // By NAME, where Cleanse and Dispel remove by class and recency. Walked
+                        // backwards for the same reason those two are: removing shifts every later
+                        // entry down one, and a forward walk steps over the next match.
+                        if (!target.Alive || effect.Status == StatusKind.None) break;
+                        int removed = 0;
+                        for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
+                        {
+                            if (target.Statuses[i].Kind != effect.Status) continue;
+                            // Umbra's uncleansable rule is deliberately NOT consulted here. That
+                            // rule is about a Cleanse trying to shrug a mark off its own carrier;
+                            // this is an attacker naming a status and stripping it, which is the
+                            // opposite direction and a different question.
+                            BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
+                            e.Status = target.Statuses[i].Kind;
+                            target.Statuses.RemoveAt(i);
+                            removed++;
+                        }
+                        break;
+                    }
+
+                    case EffectKind.MoveDebuffs:
+                    case EffectKind.MoveBuffs:
+                    {
+                        if (!target.Alive) break;
+                        bool wantHarmful = effect.Kind == EffectKind.MoveDebuffs;
+
+                        List<CombatUnit> destination = ResolveTargets(source, effect.SecondaryTarget, target,
+                                                                      effect.TargetStatus);
+                        // `target` is passed as the exclusion, so a move can never resolve onto the
+                        // unit it is taking from - that would be a no-op wearing the costume of an
+                        // effect, and it would still cost the event.
+                        if (destination.Count == 0) break;
+                        CombatUnit to = destination[0];
+                        if (to == null || !to.Alive) break;
+
+                        int moved = 0;
+                        for (int i = target.Statuses.Count - 1; i >= 0 && moved < effect.Hits; i--)
+                        {
+                            StatusInstance entry = target.Statuses[i];
+                            if (StatusInfo.IsHarmful(entry.Kind) != wantHarmful) continue;
+                            // Shield is skipped by construction rather than by a special case: the
+                            // absorbing pool is a float on the unit and does not travel with the
+                            // status row, so moving the entry alone would hand the recipient a
+                            // marker with nothing behind it.
+                            if (entry.Kind == StatusKind.Shield) continue;
+                            MoveStatus(target, to, entry, true);
+                            moved++;
+                        }
+                        break;
+                    }
+
+                    case EffectKind.InvertStatus:
+                    {
+                        if (!target.Alive) break;
+                        int flipped = 0;
+                        for (int i = target.Statuses.Count - 1; i >= 0 && flipped < effect.Hits; i--)
+                        {
+                            StatusInstance entry = target.Statuses[i];
+                            if (StatusInfo.IsHarmful(entry.Kind)) continue;
+                            StatusKind opposite = StatusInfo.Opposite(entry.Kind);
+                            // A buff with no pairing is left alone rather than removed, so an
+                            // inversion can never double as a stealth Dispel.
+                            if (opposite == StatusKind.None) continue;
+
+                            target.Statuses.RemoveAt(i);
+                            BattleEvent gone = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
+                            gone.Status = entry.Kind;
+
+                            target.AddOrRefresh(opposite, entry.RoundsLeft, entry.Magnitude, source.Id);
+                            BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
+                            e.Status = opposite;
+                            e.Duration = entry.RoundsLeft;
+                            e.Value = target.CountOf(opposite);
+                            flipped++;
+                        }
+                        break;
+                    }
+
                     case EffectKind.SwapPositions:
                     {
                         // target is one unit drawn by ResolveTargets (authored as RandomEnemy).
@@ -1103,6 +1212,13 @@ namespace Emberfall.Core.Combat
                 // granted. A Tide attacker must not redirect its victim's line's energy.
                 AddEnergy(target, _cfg.EnergyOnDamaged, -1);
                 TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+
+                // The victim's own allies hear about it; the victim does not, because OnDamaged
+                // one line up is already its own version of this news. Raised only for damage that
+                // came from somewhere - a Burn tick whose source is long dead still counts, a
+                // sourceless one does not.
+                if (sourceId >= 0)
+                    BroadcastPassive(target.IsPlayer, PassiveTrigger.OnEnemyDamagedAlly, 0, target);
 
                 // Mirrored Wound shares this dispatch point with the OnDamaged passive above and
                 // deliberately runs AFTER it. That trigger is not free real estate - Backwash
@@ -1445,6 +1561,134 @@ namespace Emberfall.Core.Combat
                     wrapper.Effects = passive.Effects;
                     ResolveAbility(owner, wrapper, depth + 1);
                 }
+            }
+
+            /// <summary>
+            /// Fires one trigger on every living unit of a side, rather than on one owner.
+            ///
+            /// The three OnEnemy* triggers need this and nothing else does: they are about
+            /// something the OTHER side did, so the unit that acts and the units that care are
+            /// different units. Everything past this point is the ordinary TriggerPassive path, so
+            /// a broadcast passive answers the same oncePerBattle allowance, the same threshold and
+            /// the same MaxPassiveDepth as any other.
+            ///
+            /// `depth` is threaded from whatever raised the broadcast rather than restarting at 0,
+            /// which is what bounds the cascade: a buff-gained passive that itself applies a buff
+            /// raises the broadcast again one level deeper, and the existing cap stops it at the
+            /// same place it stops a passive calling a passive.
+            ///
+            /// `except` skips one unit - the damage victim, which has OnDamaged of its own and does
+            /// not also need to hear that one of its allies was hit. Null for every other caller.
+            ///
+            /// Walks a snapshot, because a passive firing inside the loop can kill somebody and
+            /// _units is not safe to index live across that.
+            /// </summary>
+            private void BroadcastPassive(bool playerSide, PassiveTrigger trigger, int depth, CombatUnit except)
+            {
+                List<CombatUnit> side = new List<CombatUnit>();
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u.IsPlayer != playerSide || u == except) continue;
+                    side.Add(u);
+                }
+                for (int i = 0; i < side.Count; i++)
+                {
+                    if (IsBattleOver()) return;
+                    TriggerPassive(side[i], trigger, depth);
+                }
+            }
+
+            // ------------------------------------------------------------------ turn order effects
+
+            /// <summary>
+            /// Moves a unit earlier or later inside the CURRENT round's remaining turn order.
+            ///
+            /// **There is no ATB, and this does not pretend there is one.** A round is a speed sort
+            /// walked once, so a unit has no continuous gauge to move a percentage of - it has a
+            /// POSITION among the turns that have not happened yet. So an authored "delay by 25%"
+            /// is read as a fraction of that remaining order and applied as a move of that many
+            /// places. The translation is lossy in one direction and honest about it: on a short
+            /// tail every nonzero shift is one place, so 5% and 30% are the same thing late in a
+            /// round and differ only when there is enough order left to tell them apart.
+            ///
+            /// Ceil rather than round, so a nonzero shift always moves at least one place. A tempo
+            /// ability that silently did nothing would be worse than one that is coarse, and
+            /// several kits in the incoming roster are built on the delay actually landing.
+            ///
+            /// **This is the Gale rule generalised, not a new concept.** TryGaleSlowShift already
+            /// moves a unit later in the round a Slow lands in, and TryGaleReentry already splices
+            /// a unit into the remaining tail at a chosen position. Both of those are this
+            /// operation with the decision made elsewhere; this one lets an effect make it.
+            ///
+            /// A unit that has already acted is not in the tail and is not moved - the same natural
+            /// bound TryGaleSlowShift records, and the reason the "advances my own next turn"
+            /// family in the roster is a Speed buff rather than this.
+            ///
+            /// Draws nothing from _rng, so a shift cannot desync a seeded replay.
+            /// </summary>
+            private void ApplyTurnShift(CombatUnit source, CombatUnit target, float fraction)
+            {
+                if (_order == null || target == null || !target.Alive || fraction == 0f) return;
+
+                int first = _orderIndex + 1;
+                if (first >= _order.Count) return;
+
+                int at = _order.IndexOf(target, first);
+                if (at < 0) return;
+
+                int tail = _order.Count - first;
+                float magnitude = fraction < 0f ? -fraction : fraction;
+                int places = (int)Math.Ceiling(magnitude * tail);
+                if (places < 1) places = 1;
+
+                int destination = fraction > 0f ? at - places : at + places;
+                if (destination < first) destination = first;
+                if (destination > _order.Count - 1) destination = _order.Count - 1;
+                if (destination == at) return;
+
+                _order.RemoveAt(at);
+                _order.Insert(destination, target);
+
+                BattleEvent e = Emit(BattleEventType.TurnOrderShift, source != null ? source.Id : -1, target.Id);
+                e.Status = StatusKind.None;   // None distinguishes an authored shift from Gale's Slow shift
+                e.Value = destination - at;   // signed: negative advanced, positive delayed
+
+                if (destination > at && source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+            }
+
+            /// <summary>
+            /// Swaps the unit closest to acting with the unit furthest from acting, among the
+            /// target's own side and among the turns not yet taken. Both ends come from the order
+            /// itself, so this needs no second target selector.
+            ///
+            /// A no-op when fewer than two of that side are still waiting, which is the same
+            /// natural bound ApplyTurnShift has: there is no ordering left to change.
+            /// </summary>
+            private void ApplySwapTurnOrder(CombatUnit source, CombatUnit target)
+            {
+                if (_order == null || target == null || !target.Alive) return;
+
+                int first = _orderIndex + 1;
+                int earliest = -1, latest = -1;
+                for (int i = first; i < _order.Count; i++)
+                {
+                    if (!_order[i].Alive || _order[i].IsPlayer != target.IsPlayer) continue;
+                    if (earliest < 0) earliest = i;
+                    latest = i;
+                }
+                if (earliest < 0 || latest <= earliest) return;
+
+                CombatUnit a = _order[earliest];
+                CombatUnit b = _order[latest];
+                _order[earliest] = b;
+                _order[latest] = a;
+
+                BattleEvent e = Emit(BattleEventType.TurnOrderShift, source != null ? source.Id : -1, b.Id);
+                e.Status = StatusKind.None;
+                e.Value = earliest - latest;
+
+                if (source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
             }
 
             // ------------------------------------------------------------------ targeting
@@ -1817,16 +2061,41 @@ namespace Emberfall.Core.Combat
                 CombatUnit heir = FindMarkHeir(dying);
                 if (heir == null) return;
 
-                for (int i = 0; i < marks.Count; i++)
-                {
-                    StatusInstance s = marks[i];
-                    heir.AddOrRefresh(s.Kind, s.RoundsLeft, s.Magnitude, s.SourceId);
+                for (int i = 0; i < marks.Count; i++) MoveStatus(dying, heir, marks[i], false);
+            }
 
-                    BattleEvent e = Emit(BattleEventType.StatusSpread, dying.Id, heir.Id);
-                    e.Status = s.Kind;
-                    e.Duration = s.RoundsLeft;
-                    e.Value = s.SourceId;
-                }
+            /// <summary>
+            /// Lands one status entry on a new carrier and records it, with its remaining duration,
+            /// its magnitude and its original applier all carried across unchanged.
+            ///
+            /// THE ONE MOVER. Umbra's death-jump wrote this inline and was the only transfer in the
+            /// game; MoveDebuffs and MoveBuffs need exactly the same operation, so they call this
+            /// rather than growing a second one beside it. That matters for more than tidiness: the
+            /// jump's guarantee is that a move CREATES NO VALUE - RoundsLeft and Magnitude cross
+            /// untouched and the entry is added with AddOrRefresh, so a transfer relocates a
+            /// subtraction that already existed and never deepens one - and a second mover would be
+            /// a second place for that guarantee to quietly stop holding.
+            ///
+            /// `removeFromSource` is false for the death-jump, whose carrier is being cleared
+            /// anyway, and true for an authored move, which has to take the status off the unit it
+            /// came from or the move would be a copy.
+            ///
+            /// Reported as StatusSpread rather than StatusApplied for the reason that event's own
+            /// note gives: nobody applied this. Value carries the original applier's id, which is
+            /// otherwise unrecoverable once the source's list is gone.
+            /// </summary>
+            private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status, bool removeFromSource)
+            {
+                if (to == null || status == null) return;
+
+                if (removeFromSource && from != null) from.Statuses.Remove(status);
+
+                to.AddOrRefresh(status.Kind, status.RoundsLeft, status.Magnitude, status.SourceId);
+
+                BattleEvent e = Emit(BattleEventType.StatusSpread, from != null ? from.Id : -1, to.Id);
+                e.Status = status.Kind;
+                e.Duration = status.RoundsLeft;
+                e.Value = status.SourceId;
             }
 
             /// <summary>
