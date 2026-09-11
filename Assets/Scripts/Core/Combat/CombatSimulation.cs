@@ -52,13 +52,6 @@ namespace Emberfall.Core.Combat
 
         private const int MaxPassiveDepth = 2;
 
-        /// <summary>
-        /// Rounds a Verdant overflow bank is spread across. Two, not one: a status decrements at the
-        /// end of its carrier's own turn, so a bank applied during the carrier's own turn - a Verdant
-        /// unit overhealing itself - would expire at the end of that same turn having never reached a
-        /// TickDamageOverTime. Two rounds guarantees at least one tick from either side of the turn.
-        /// </summary>
-        private const int VerdantBankRounds = 2;
 
         private const float MinEffectLanding = 0.05f;
         private const float MaxEffectLanding = 1f;
@@ -227,20 +220,6 @@ namespace Emberfall.Core.Combat
             private readonly BattleResult _result = new BattleResult();
             private int _round;
 
-            /// <summary>
-            /// True while a Tide hand-off is being delivered. Bounds the redirect to one hop even if
-            /// the hand-off is ever routed back through AddEnergy.
-            ///
-            /// Measured, not assumed: with the hand-off deliberately rewritten to recurse, removing
-            /// this guard changes nothing in shipped content - the recipient is chosen as the
-            /// largest gap on the line, and no grant today (8 and 25, from Rising Chorus and Tidal
-            /// Cadence) is big enough to overflow it. So the cascade is currently unreachable and
-            /// this guard is latent. It stops being latent the moment grants get bigger, which
-            /// DESIGN-ASPECTS section 8 says is coming ("her numbers get retuned regardless of this
-            /// document"): at 4x grants the same rewrite cascades to 6 hand-offs inside one grant,
-            /// and with this guard in place it stays at 4.
-            /// </summary>
-            private bool _inRedirect;
 
             /// <summary>
             /// True while a Mirrored Wound reflect is being delivered, bounding it to one hop.
@@ -267,8 +246,9 @@ namespace Emberfall.Core.Combat
             /// <summary>
             /// The round's live initiative list, and the index of the turn being taken out of it.
             /// Null outside the round loop - Execute() fires the BattleStart passives before any
-            /// round exists, and a kill there has no round order to re-enter. Both Gale hooks check
-            /// for that rather than assuming a round is in progress.
+            /// round exists, and an effect that fires there has no round order to reorder. Both
+            /// ApplyTurnShift and ApplySwapTurnOrder check for that rather than assuming a round is
+            /// in progress.
             /// </summary>
             private List<CombatUnit> _order;
             private int _orderIndex;
@@ -301,16 +281,15 @@ namespace Emberfall.Core.Combat
 
                     for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
 
-                    // Gale (DESIGN-ASPECTS section 2): this was a plain `for` over a snapshot, which
-                    // is exactly what had to change. The list is now live and the cursor is a field,
-                    // so TryGaleReentry can splice the round's own initiative list while it is being
-                    // walked and TryGaleSlowShift can re-sort the part of it that has not happened
-                    // yet. Count is re-read every iteration on purpose - `order.Count` grows.
+                    // The list is live and the cursor is a field rather than a loop local, so an
+                    // effect resolving mid-round can move the part of the order that has not
+                    // happened yet - that is what TurnShift and SwapTurnOrder do. Count is re-read
+                    // every iteration on purpose.
                     //
-                    // Termination does not rest on the cap. Every insertion requires a kill and
-                    // there are only ever _units.Count units to kill, so the list is finite even if
-                    // GaleExtraTurnsPerRound is misconfigured upward. The cap is a balance bound
-                    // (section 8), not a hang guard, and the harness proves it by removing it.
+                    // Termination is structural. Both of those operations REORDER the tail; neither
+                    // adds an entry, so the list cannot grow while it is being walked and the walk
+                    // is bounded by _units.Count. Gale's kill-driven re-entry, which did splice new
+                    // entries in and needed a cap to bound it, is gone.
                     _order = TurnOrder();
                     for (_orderIndex = 0; _orderIndex < _order.Count; _orderIndex++)
                     {
@@ -451,105 +430,6 @@ namespace Emberfall.Core.Combat
                 return a.Id.CompareTo(b.Id);
             }
 
-            // ------------------------------------------------------------------ Gale
-
-            /// <summary>
-            /// Gale, half one (DESIGN-ASPECTS section 1): a Gale unit that lands a kill re-enters
-            /// the current round's turn order.
-            ///
-            /// Keyed on the killer's own aspect, the same way Ember keys on the Burn's source, Tide
-            /// on the energy's granter, Verdant on the healer and Umbra on the applier. No content
-            /// authors this and no content can: there is no EffectKind that grants a turn, so the
-            /// rule is a property of being Gale rather than a passive anyone could write. That is
-            /// also why section 2's "the kill hook already exists and is already fired" is about the
-            /// call site, not about PassiveTrigger.OnKill - the trigger above fires whatever passive
-            /// the killer authored, and this fires regardless of whether it authored one.
-            ///
-            /// Re-entry position uses CompareTurnOrder, which is why section 2 names it and
-            /// TurnOrderSpeed, RoundSpeedJitter and EffectiveSpeed as the sort inputs: the unit
-            /// slots back in where its speed says it belongs among the turns that have not happened
-            /// yet, so a fast Gale finisher acts again almost immediately and a slow one waits. The
-            /// round's jitter is deliberately not re-rolled - it is a per-round value, and drawing
-            /// again here would consume from _rng and desync every seeded replay.
-            ///
-            /// **The bound (DESIGN-ASPECTS section 8, DESIGN-BUILD-ORDER known trap 3).** At 5v5 an
-            /// unbounded re-entry lets one Gale unit chain four kills and resolve the round on its
-            /// own, which is the failure MaxPassiveDepth prevents one level down in passive
-            /// recursion. GaleExtraTurnsPerRound is the equivalent guard and it is enforced here,
-            /// per unit per round. It ships in the same change as the mechanic, never after.
-            /// </summary>
-            private void TryGaleReentry(CombatUnit killer)
-            {
-                if (_order == null) return;
-                if (killer == null || !killer.Alive) return;
-                if (killer.Aspect != Aspect.Gale) return;
-                if (killer.ExtraTurnsThisRound >= _cfg.GaleExtraTurnsPerRound) return;
-                if (IsBattleOver()) return;
-
-                killer.ExtraTurnsThisRound++;
-
-                int at = _order.Count;
-                for (int i = _orderIndex + 1; i < _order.Count; i++)
-                {
-                    if (CompareTurnOrder(killer, _order[i]) >= 0) continue;
-                    at = i;
-                    break;
-                }
-                _order.Insert(at, killer);
-
-                BattleEvent e = Emit(BattleEventType.ExtraTurn, killer.Id, killer.Id);
-                e.Value = killer.ExtraTurnsThisRound;
-            }
-
-            /// <summary>
-            /// Gale, half two (DESIGN-ASPECTS section 1): a Slow applied by a Gale source pushes the
-            /// target's turn later inside the round it is applied in, not merely the next one.
-            ///
-            /// Without this the Slow is inert for the current round no matter how early it lands,
-            /// because the order was sorted before it existed. The shift is done by re-sorting only
-            /// the turns that have not been taken yet, with the same comparator that built the list:
-            /// EffectiveSpeed already folds in the new Slow, so the target falls to wherever its
-            /// reduced speed puts it and nothing else moves. Re-sorting an already-sorted tail with
-            /// a total-ordering comparator cannot reorder anything whose sort key did not change,
-            /// which is what keeps this from being a general shuffle. CompareTurnOrder breaks every
-            /// tie on Id, so the result does not depend on List.Sort being stable, and nothing here
-            /// draws from _rng.
-            ///
-            /// A target that has already acted this round is not in the tail and so is not moved -
-            /// there is no turn left to push. That is a natural bound, not an omission: "later in
-            /// this round" has no meaning once the turn is spent.
-            ///
-            /// **Unreachable in shipped content today, and deliberately not fixed here.** The only
-            /// unit in the game that applies Slow is the Sundered Colossus, which is Umbra, and
-            /// neither Gale unit (Ryn Solvarr, Grave Moth) applies it. Section 7's content list does
-            /// not add one. The harness proves this half against a constructed Gale slower and
-            /// asserts the shipped-content gap separately, so the day a Gale unit is authored with a
-            /// Slow, the rule is already correct rather than newly written.
-            /// </summary>
-            private void TryGaleSlowShift(CombatUnit source, CombatUnit target)
-            {
-                if (_order == null) return;
-                if (source == null || source.Aspect != Aspect.Gale) return;
-                if (target == null || !target.Alive) return;
-
-                int first = _orderIndex + 1;
-                if (first >= _order.Count) return;
-
-                int before = _order.IndexOf(target, first);
-                if (before < 0) return;
-
-                List<CombatUnit> tail = _order.GetRange(first, _order.Count - first);
-                tail.Sort(CompareTurnOrder);
-                for (int i = 0; i < tail.Count; i++) _order[first + i] = tail[i];
-
-                int after = _order.IndexOf(target, first);
-                if (after <= before) return;
-
-                BattleEvent e = Emit(BattleEventType.TurnOrderShift, source.Id, target.Id);
-                e.Status = StatusKind.Slow;
-                e.Value = after - before;
-            }
-
             private void TakeTurn(CombatUnit unit)
             {
                 Emit(BattleEventType.TurnStart, unit.Id, unit.Id);
@@ -569,18 +449,15 @@ namespace Emberfall.Core.Combat
                 // Cleared by the ExpireStatuses() decrement below, the same RoundsLeft clock every
                 // other status uses; there is no separate timer to keep in sync.
                 //
-                // Re-entry, re-stated for Gale. The previous version of this comment argued that a
-                // skipped turn could not become a second turn because `order` was built once per
-                // round and never mutated, so there was no call path back into TakeTurn to bound.
-                // Gale makes the premise false: `_order` is now spliced mid-walk by TryGaleReentry,
-                // and TakeTurn can be entered twice in one round for the same unit.
+                // A skipped turn cannot become a second turn. `_order` is mutated mid-walk by
+                // ApplyTurnShift and ApplySwapTurnOrder, but both REORDER the tail and neither
+                // inserts, so no unit gains an entry it did not already have and there is no call
+                // path back into TakeTurn to bound. A unit moved backwards past the cursor after it
+                // has acted is the one way a second entry could be reached, and both operations
+                // work on `_orderIndex + 1` onward for exactly that reason.
                 //
-                // The conclusion survives, on a different argument. Re-entry is granted only in
-                // DealRawDamage's death branch, to the unit credited with the kill, and a stunned
-                // unit returns from here having dealt no damage at all - it cannot have killed
-                // anything on this turn, so nothing requeues it. What does need bounding is the
-                // path that exists now, and that bound is GaleExtraTurnsPerRound in TryGaleReentry,
-                // the turn-order equivalent of MaxPassiveDepth one level down.
+                // Gale's kill-driven re-entry, which did splice entries in and needed a cap, has
+                // been removed along with the rest of the engine-owned aspect rules.
                 if (unit.Has(StatusKind.Stun))
                 {
                     ExpireStatuses(unit);
@@ -647,10 +524,10 @@ namespace Emberfall.Core.Combat
             ///
             /// Latent, not observed: reverting this method to the indexed walk produces byte-identical
             /// harness output across all twelve stages, so the ordering needed to trigger it does not
-            /// occur in shipped content today. It is guarded rather than left alone because Ember's
-            /// stacking raises the number of DoT entries a single unit can sit behind one ward, which
-            /// moves the case from unreachable toward merely rare. Any behavioural change here would
-            /// therefore be a regression, not a fix - the identical output is the point.
+            /// occur in shipped content today. It is guarded rather than left alone because any
+            /// content that lands two DoTs on one unit behind a ward reaches it, which moves the case
+            /// from unreachable toward merely rare. Any behavioural change here would therefore be a
+            /// regression, not a fix - the identical output is the point.
             ///
             /// The Contains guard stops an entry that was removed mid-walk from ticking after the
             /// fact. StatusInstance is a reference type with no Equals override, so that is identity
@@ -685,18 +562,16 @@ namespace Emberfall.Core.Combat
             /// <summary>
             /// Once per round per carrier, not once per turn taken.
             ///
-            /// Gale's re-entry is the reason this needs saying. RoundsLeft is a round counter that
-            /// happens to be decremented at the end of the carrier's turn, which was the same thing
-            /// right up until a unit could take two turns in one round. Left ungated, a Gale unit
-            /// that kills would shed its own Slow, Silence, Stun, DefenseDown and buffs at double
-            /// rate as a side effect of the extra turn - a second, undesigned reward riding on the
-            /// first, and one that would quietly break CheckStatusExpiry's "expires exactly on
-            /// schedule" rule for any Gale carrier. Gale's rule is that it acts out of order, not
-            /// that it ages faster.
+            /// RoundsLeft is a round counter that happens to be decremented at the end of the
+            /// carrier's turn, which is the same thing only while a unit takes exactly one turn per
+            /// round. The turn-order operations make that assumption worth stating: a unit moved
+            /// backwards past the cursor after it has acted would otherwise shed its own Slow,
+            /// Silence, Stun, DefenseDown and buffs at double rate, and break CheckStatusExpiry's
+            /// "expires exactly on schedule" rule for that carrier.
             ///
-            /// The flag is reset at the top of each round alongside ExtraTurnsThisRound. No unit
-            /// could take two turns in a round before this pass, so this gate is a no-op for every
-            /// battle that contains no Gale re-entry.
+            /// The flag is reset in CombatUnit.BeginRound. Both movers work on the not-yet-acted
+            /// tail, so nothing reaches here twice today and the gate is a no-op for every battle
+            /// in shipped content - it is the guarantee that keeps it one.
             /// </summary>
             private void ExpireStatuses(CombatUnit unit)
             {
@@ -918,15 +793,12 @@ namespace Emberfall.Core.Combat
                             magnitude = source.EffectiveAttack * effect.Magnitude;
                         int duration = Math.Max(1, effect.Duration);
 
-                        // Ember (DESIGN-ASPECTS section 1): a Burn from an Ember source stacks as
-                        // its own entry instead of folding into the one already there, so a second
-                        // Ember deepens the same fire rather than replacing it. The magnitude was
-                        // snapshotted off this source's own EffectiveAttack just above, so a strong
-                        // Ember's stack and a weak Ember's are already correctly different sizes.
-                        if (effect.Status == StatusKind.Burn && source.Aspect == Aspect.Ember)
-                            target.AddStack(effect.Status, duration, magnitude, source.Id, _cfg.EmberBurnStackCap);
-                        else
-                            target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
+                        // One rule for every source. Ember's Burn used to stack as its own entry
+                        // while everybody else's folded into the one already there; a status now
+                        // behaves the same way whoever applied it. AddStack is still here and still
+                        // used - GainResolve stacks through it - but nothing reaches it because of
+                        // an aspect any more, and the emberBurnStackCap that bounded it is gone.
+                        target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
 
                         // A Ledger's cap belongs to the mark that is counting, so it is stamped on
                         // the entry as it lands rather than being looked up by whatever pays it
@@ -968,11 +840,6 @@ namespace Emberfall.Core.Combat
                         // five-deep Guard Down that the simulation never created.
                         e.Value = target.CountOf(effect.Status);
 
-                        // Gale (DESIGN-ASPECTS section 1): a Slow from a Gale source takes effect in
-                        // the round it lands in, not only in the next one's sort. Emitted after
-                        // StatusApplied so the record reads in causal order: the Slow landed, then
-                        // the order moved because of it.
-                        if (effect.Status == StatusKind.Slow) TryGaleSlowShift(source, target);
 
                         // A buff landing is news to the other side. Raised after the status is on
                         // the unit, so a passive answering it sees the board it is answering; and
@@ -989,17 +856,6 @@ namespace Emberfall.Core.Combat
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (!StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
-                            // Umbra (DESIGN-ASPECTS section 1, as corrected by DESIGN-WORLD section
-                            // 1): a harmful status from an Umbra source cannot be cleansed. Only the
-                            // uncleansable half of the original rule is built. The other half - "does
-                            // not tick down while the applier lives" - is persistence, which is
-                            // Verdant's belief, not Umbra's, so ExpireStatuses is deliberately left
-                            // alone and these entries still expire on schedule.
-                            //
-                            // Skipping rather than counting: an uncleansable status does not consume
-                            // one of the cleanse's Hits, so a Cleanse still clears what it legitimately
-                            // can instead of being absorbed by the entry it was never allowed to take.
-                            if (IsUmbraSourced(target.Statuses[i])) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
                             target.Statuses.RemoveAt(i);
@@ -1028,7 +884,8 @@ namespace Emberfall.Core.Combat
                         if (!target.Alive) break;
                         int amount = (int)Math.Round(effect.Flat + effect.Power * 100f, MidpointRounding.AwayFromZero);
                         if (amount == 0) break;
-                        // The one granting site: source handed this out, so Tide's redirect applies.
+                        // The one granting site: source handed this out, so the granter is recorded
+                        // on the event rather than the recipient being credited with its own gain.
                         AddEnergy(target, amount, source.Id);
                         break;
                     }
@@ -1172,8 +1029,8 @@ namespace Emberfall.Core.Combat
                         int payout = (int)Math.Round(stored * effect.Power, MidpointRounding.AwayFromZero);
                         if (payout <= 0) break;
                         // Through the same funnel as every other point of damage, so a release that
-                        // kills fires the death, the killer's OnKill and Gale re-entry exactly as
-                        // any hit would - and banks into anybody else's ledger on the way.
+                        // kills fires the death and the killer's OnKill exactly as any hit would -
+                        // and banks into anybody else's ledger on the way.
                         DealRawDamage(source.Id, target, payout, false, "burst", StatusKind.None, 1f,
                                       ability != null ? ability.Name : "");
                         break;
@@ -1379,10 +1236,9 @@ namespace Emberfall.Core.Combat
                 // meets only the remainder - which is what "25% of damage they take is redirected
                 // to Rovan before Shields are checked" says.
                 //
-                // Bounded by _inRedirect's sibling guard: the redirected part goes through this
-                // same funnel, so a protector who is itself Covered would otherwise pass its share
-                // on again. One hop, the same rule Tide's energy redirect and Mirrored Wound both
-                // hold to.
+                // Bounded by _inCover: the redirected part goes through this same funnel, so a
+                // protector who is itself Covered would otherwise pass its share on again. One hop,
+                // the same rule Mirrored Wound holds to.
                 if (!_inCover)
                 {
                     int protectorId;
@@ -1493,23 +1349,12 @@ namespace Emberfall.Core.Combat
                     target.Hp = 0f;
                     target.Alive = false;
 
-                    // Umbra's spread rule reads the dying unit's own list, so the marks have to be
-                    // taken before the clear below empties it - the clear is precisely what they
-                    // are escaping. Null when this unit carried none, which is the common case.
-                    List<StatusInstance> marks = CollectUmbraMarks(target);
-
                     target.Statuses.Clear();
                     target.Shield = 0f;
                     Emit(BattleEventType.Death, sourceId, target.Id);
 
-                    // Before OnKill and Gale re-entry, so the record reads in causal order: the unit
-                    // died, its mark moved, and only then does anything act on the new state. A Gale
-                    // killer that re-enters immediately finds the jumped debuff already standing.
-                    TryUmbraSpread(target, marks);
-
                     CombatUnit killer = FindUnit(sourceId);
                     if (killer != null && killer.Alive) TriggerPassive(killer, PassiveTrigger.OnKill, 0);
-                    TryGaleReentry(killer);
                     return;
                 }
 
@@ -1545,11 +1390,11 @@ namespace Emberfall.Core.Combat
             }
 
             /// <summary>
-            /// allowBank is Verdant's gate and is never defaulted, because the one call site that
-            /// must pass false is the Regen tick itself. Banking a Regen tick's own overflow would
-            /// re-apply Regen to a full-health carrier every turn, refreshing the status off its own
-            /// output and leaving it on the unit permanently - a self-feeding loop. Verdant's rule is
-            /// about healing *output* finding somewhere to go, not about a bank recycling itself.
+            /// `allowBank` outlived the Verdant overheal bank it was named for and is kept because
+            /// it still does the other half of its old job: it is false for a Regen tick, and that
+            /// is what stops a heal-over-time from re-raising its caster's OnHealApplied and its
+            /// allies' OnAllyHealed once a round for the rest of the battle. Renaming it is a
+            /// separate, cosmetic change and is not made here.
             /// </summary>
             private void ApplyHealValue(int sourceId, CombatUnit target, int amount, string vfx, bool allowBank)
             {
@@ -1580,72 +1425,20 @@ namespace Emberfall.Core.Combat
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
                     }
                 }
-
-                // Verdant (DESIGN-ASPECTS section 1): healing with nowhere to go is banked onto the
-                // recipient as Regen instead of being clamped away. Split across VerdantBankRounds
-                // so the bank pays out at most what overflowed and never more - Magnitude on a Regen
-                // entry is a flat per-tick heal, so handing it the whole overflow with a duration
-                // above 1 would pay the overflow out once per round and create value.
-                int overflow = amount - healed;
-                if (!allowBank || overflow <= 0) return;
-
-                CombatUnit source = FindUnit(sourceId);
-                if (source == null || source.Aspect != Aspect.Verdant) return;
-
-                float perTick = overflow / (float)VerdantBankRounds;
-                if (perTick < 1f) return;
-
-                target.AddOrRefresh(StatusKind.Regen, VerdantBankRounds, perTick, sourceId);
-                BattleEvent banked = Emit(BattleEventType.StatusApplied, sourceId, target.Id);
-                banked.Status = StatusKind.Regen;
-                banked.Duration = VerdantBankRounds;
-                // Carried here too, so every StatusApplied in the list answers the same question.
-                // Always 1 - the bank uses AddOrRefresh and never stacks - but a screen that has to
-                // ask which emit site produced an event is a screen that recomputes.
-                banked.Value = target.CountOf(StatusKind.Regen);
             }
 
             /// <summary>
-            /// Tide (DESIGN-ASPECTS section 1): energy granted by a Tide source is never discarded.
-            /// Overflow past EnergyMax is handed to the living ally furthest from casting.
+            /// Adds energy and discards the overflow.
             ///
-            /// sourceId is the unit that *granted* this energy, or -1 where there is no granter.
-            /// That distinction is the one DESIGN-HOOK-CONFLICT section 1 flags as missing from the
-            /// rule's wording: two of the three call sites are a unit's own regen (its own basic
-            /// attack, and being hit), which nobody hands out, and "Tide never discards energy" read
-            /// literally would redirect those too. Keying on the granter matches how Ember and
-            /// Verdant already key on source.Aspect, and matches the rule's own justification in
-            /// DESIGN-ASPECTS section 3 - "a line sitting near 100 energy throws away most of what
-            /// she produces" is about Maeve's output, not about other units' self-regen.
-            ///
-            /// One hop, no chaining, per section 2's explicit hazard. Two things enforce it, and the
-            /// second exists because the first is easy to undo by accident. Structurally, the
-            /// hand-off goes through AddEnergyClamped, which has no redirect branch, so there is no
-            /// code path from the hand-off back into this method. _inRedirect then holds the bound
-            /// even if someone later routes the hand-off through AddEnergy instead - the obvious,
-            /// tempting refactor, and silently a cascade. The cost of the bound is that a recipient
-            /// which also caps out discards its own remainder; that is what "one hop" means.
-            ///
-            /// Chain depth is deliberately guarded here rather than checked in the event list,
-            /// because it is not observable there: a recipient filled to the cap emits nothing for
-            /// its own next grant, so a genuine chain and two consecutive one-hop redirects produce
-            /// byte-identical events. The harness bounds hand-offs per grant instead.
+            /// `sourceId` is the unit that GRANTED this energy, or -1 where there is no granter.
+            /// Tide used to read it: energy granted by a Tide source was handed to the ally furthest
+            /// from casting rather than being thrown away. That rule is gone, so the parameter is
+            /// now carried only so the granter is still recorded in the event the clamp emits, and
+            /// _inRedirect went with it.
             /// </summary>
             private void AddEnergy(CombatUnit unit, int amount, int sourceId)
             {
-                int overflow = AddEnergyClamped(unit, amount);
-                if (overflow <= 0) return;
-                if (_inRedirect) return;
-
-                CombatUnit source = FindUnit(sourceId);
-                if (source == null || source.Aspect != Aspect.Tide) return;
-
-                CombatUnit recipient = FurthestFromCasting(unit);
-                if (recipient == null) return;
-
-                _inRedirect = true;
-                AddEnergyClamped(recipient, overflow, unit.Id);
-                _inRedirect = false;
+                AddEnergyClamped(unit, amount);
             }
 
             /// <summary>
@@ -1673,39 +1466,6 @@ namespace Emberfall.Core.Combat
             private int AddEnergyClamped(CombatUnit unit, int amount)
             {
                 return AddEnergyClamped(unit, amount, -1);
-            }
-
-            /// <summary>
-            /// Tide's recipient: the living ally with the most energy still to find before its own
-            /// active can fire. Excludes the unit that just overflowed, which is at cap by
-            /// definition, and excludes units with no active, since energy handed to a unit that can
-            /// never spend it is the same discard Tide exists to prevent. Side is taken from the
-            /// unit that overflowed rather than from the granter, so overflow stays on the line it
-            /// landed on even if some future ability grants energy across the field.
-            ///
-            /// Ties break on Id, and nothing here draws from _rng: this runs inside a seeded
-            /// simulation, and consuming a draw would shift the stream and desync replays.
-            /// </summary>
-            private CombatUnit FurthestFromCasting(CombatUnit overflowed)
-            {
-                CombatUnit best = null;
-                int bestGap = 0;
-                for (int i = 0; i < _units.Count; i++)
-                {
-                    CombatUnit u = _units[i];
-                    if (!u.Alive || u == overflowed) continue;
-                    if (u.IsPlayer != overflowed.IsPlayer) continue;
-                    if (u.Active == null) continue;
-
-                    int gap = u.Active.EnergyCost - u.Energy;
-                    if (gap <= 0) continue;
-                    if (best == null || gap > bestGap || (gap == bestGap && u.Id < best.Id))
-                    {
-                        best = u;
-                        bestGap = gap;
-                    }
-                }
-                return best;
             }
 
             private void EmitEnergy(CombatUnit unit)
@@ -1778,14 +1538,14 @@ namespace Emberfall.Core.Combat
             ///
             /// Routed through DealRawDamage like every other point of damage in the game, so the
             /// reflected hit is shielded, banked, killed off and reported by exactly the same code
-            /// as any other - a reflect that kills its attacker fires their death, their killer's
-            /// OnKill and Gale re-entry, because it went through the funnel rather than around it.
+            /// as any other - a reflect that kills its attacker fires their death and their
+            /// killer's OnKill, because it went through the funnel rather than around it.
             ///
             /// Bounded by _inReflect rather than by MaxPassiveDepth, and it has to be: the reflect
             /// is not a passive and never enters TriggerPassive, so the depth argument that bounds
             /// passive recursion never sees it. Two Mirrored Wound wearers hitting each other would
-            /// otherwise reflect into each other without limit. Same shape as the _inRedirect guard
-            /// Tide uses one method over, for the same reason.
+            /// otherwise reflect into each other without limit. Same shape as the _inCover guard
+            /// one method over, for the same reason.
             ///
             /// Self-damage cannot start a loop either: sourceId is the attacker's, and an attacker
             /// who is also the target is skipped outright.
@@ -1983,14 +1743,14 @@ namespace Emberfall.Core.Combat
             /// ability that silently did nothing would be worse than one that is coarse, and
             /// several kits in the incoming roster are built on the delay actually landing.
             ///
-            /// **This is the Gale rule generalised, not a new concept.** TryGaleSlowShift already
-            /// moves a unit later in the round a Slow lands in, and TryGaleReentry already splices
-            /// a unit into the remaining tail at a chosen position. Both of those are this
-            /// operation with the decision made elsewhere; this one lets an effect make it.
+            /// **This is the only way an effect moves a turn.** Gale used to move a unit later in
+            /// the round a Slow landed in, and to splice a killer back into the remaining tail;
+            /// both were this operation with the decision made by the engine. They are gone, and
+            /// this is the authored version - the effect makes the decision.
             ///
-            /// A unit that has already acted is not in the tail and is not moved - the same natural
-            /// bound TryGaleSlowShift records, and the reason the "advances my own next turn"
-            /// family in the roster is a Speed buff rather than this.
+            /// A unit that has already acted is not in the tail and is not moved, which is both the
+            /// termination argument for the round loop and the reason the "advances my own next
+            /// turn" family in the roster is a Speed buff rather than this.
             ///
             /// Draws nothing from _rng, so a shift cannot desync a seeded replay.
             /// </summary>
@@ -2018,7 +1778,7 @@ namespace Emberfall.Core.Combat
                 _order.Insert(destination, target);
 
                 BattleEvent e = Emit(BattleEventType.TurnOrderShift, source != null ? source.Id : -1, target.Id);
-                e.Status = StatusKind.None;   // None distinguishes an authored shift from Gale's Slow shift
+                e.Status = StatusKind.None;   // no status caused this; an authored effect did
                 e.Value = destination - at;   // signed: negative advanced, positive delayed
 
                 if (destination > at && source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
@@ -2188,8 +1948,8 @@ namespace Emberfall.Core.Combat
                 // name for StatusKind.Taunt and had outlived it.)
                 //
                 // Note for anyone reading the RNG stream: returning here short-circuits the switch
-                // below, so RandomEnemy does not draw when a side has an anchor. That was already
-                // true for Taunt; Lumen simply makes it true far more often.
+                // below, so RandomEnemy does not draw when a side has an anchor. Only a Taunt
+                // holder is an anchor now, so that is as rare as Taunt is.
                 // PROVOKED, checked before the anchor and after every ally mode has returned.
                 //
                 // The opposite direction to Taunt, and its own rule rather than a variant: Taunt
@@ -2201,11 +1961,11 @@ namespace Emberfall.Core.Combat
                 // too narrow, because it says nothing about what that one enemy does when the
                 // caster is not its side's anchor.
                 //
-                // The ANCHOR STILL WINS where both apply. A living Lumen unit answers every
-                // single-enemy question aimed at its side, and DESIGN-WORLD makes that determinism
-                // the whole of the identity - so a provoke that outranked it would be an aspect
-                // change wearing a targeting change's clothes. Unreachable today either way, since
-                // nothing in content applies Provoked.
+                // The ANCHOR STILL WINS where both apply. A Taunt is a deliberate, visible claim
+                // on every single-enemy question aimed at that side, and a provoke that outranked
+                // it would make a protector's own ability conditional on what the attacker happens
+                // to be carrying. Unreachable today either way, since nothing in content applies
+                // Provoked.
                 for (int i = 0; i < caster.Statuses.Count; i++)
                 {
                     StatusInstance p = caster.Statuses[i];
@@ -2222,17 +1982,15 @@ namespace Emberfall.Core.Combat
                 if (anchor == excluded) anchor = null;
                 if (anchor != null)
                 {
-                    // Recorded only where the Lumen rule is what produced the answer and Taunt does
-                    // not already explain it on the target's own status bar. The redirect is
-                    // otherwise unreadable rather than merely unread: the Damage event shows the hit
-                    // landing on the Lumen unit, and nothing in the record distinguishes "it
-                    // answered for its side" from "it was genuinely the lowest-HP or front-most
-                    // pick". Emitting costs no RNG draw, so it cannot desync a seeded battle.
-                    if (anchor.Aspect == Aspect.Lumen && !anchor.HasTaunt)
-                    {
-                        BattleEvent anchored = Emit(BattleEventType.TargetAnchored, caster.Id, anchor.Id);
-                        anchored.Value = (int)mode;
-                    }
+                    // No TargetAnchored event any more. It existed for the Lumen rule alone: a
+                    // Taunt holder wears its own status tag, so the redirect explains itself on the
+                    // target's bar, and Lumen answering silently was the case the record could not
+                    // otherwise tell from a genuine lowest-HP pick. With Lumen gone there is nothing
+                    // left that the status row does not already say.
+                    //
+                    // BattleEventType.TargetAnchored is deliberately NOT removed from the enum. It
+                    // is in the permanent record of every battle resolved before this change, and
+                    // deleting a member would renumber every event after it.
                     result.Add(anchor);
                     return result;
                 }
@@ -2381,97 +2139,31 @@ namespace Emberfall.Core.Combat
 
             /// <summary>
             /// The unit that answers every single-enemy targeting question aimed at `playerSide`, or
-            /// null when the question resolves by its own TargetMode. Was `FindTaunter`; renamed
-            /// because Taunt is no longer the only way to qualify.
+            /// null when the question resolves by its own TargetMode.
             ///
-            /// **Lumen (DESIGN-ASPECTS section 1, re-weighted by DESIGN-WORLD section 1).** A living
-            /// Lumen unit answers unconditionally, carrying Taunt or not. That unconditional is the
-            /// whole rule. DESIGN-ASPECTS wrote Lumen as "Lumen intercepts", absorption first;
-            /// DESIGN-WORLD overrides that ordering and says the identity is that targeting becomes
-            /// deterministic - "a description of a function that returns the same answer no matter
-            /// what was asked of it", and "absorption is not the identity, it is what happens when
-            /// the answer is always you". A rule that only held while a duration-2 Taunt was up
-            /// would be a function whose answer changes every other round, which is the opposite of
-            /// the belief it is supposed to be. So this method is the identity, and DealRawDamage's
-            /// shield-absorb block - which section 2 also names - gets no new code at all: it
-            /// already absorbs unconditionally, and absorption is the consequence of being the
-            /// answer, not a second co-equal rule.
+            /// TAUNT, AND ONLY TAUNT. A living Lumen unit used to answer here unconditionally, which
+            /// made targeting deterministic for its whole side; that rule is removed, and the aspect
+            /// is now the damage chart and nothing else. What is left is the mechanic that was here
+            /// before Lumen arrived: a unit carrying StatusKind.Taunt answers for its side while the
+            /// status is up, and stops when it expires.
             ///
-            /// **Lumen outranks Taunt, and the order matters.** If a non-Lumen ally's Taunt could
-            /// displace a Lumen unit, the answer would change whenever anyone else taunted - again
-            /// the non-determinism the aspect exists to remove. Both tiers break ties on Slot, and
-            /// nothing here draws from _rng, so the answer is stable within a fight and across
-            /// replays of it.
+            /// Ties break on Slot and nothing here draws from _rng, so the answer is stable within a
+            /// fight and across replays of it. A dead taunter stops answering immediately.
             ///
-            /// **No aliveness question beyond the loop's own.** A dead Lumen unit stops answering
-            /// and targeting immediately reverts to normal, which is the cost the rule carries: the
-            /// line has exactly one knowable place until it doesn't.
+            /// Still serves Provoked as well, one caller up: ResolveTargets checks a provoke first
+            /// and yields to this when a side has an anchor, so removing Lumen narrows what this
+            /// returns without changing who consults it.
             /// </summary>
             private CombatUnit FindTargetAnchor(bool playerSide)
             {
-                CombatUnit lumen = null;
                 CombatUnit taunter = null;
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
                     if (!u.Alive || u.IsPlayer != playerSide) continue;
-                    if (u.Aspect == Aspect.Lumen && (lumen == null || u.Slot < lumen.Slot)) lumen = u;
                     if (u.HasTaunt && (taunter == null || u.Slot < taunter.Slot)) taunter = u;
                 }
-                return lumen != null ? lumen : taunter;
-            }
-
-            /// <summary>
-            /// Umbra, the team-size-5 half (DESIGN-ASPECTS section 8): the mark jumps on the marked
-            /// unit's death, so Umbra's single-target subtraction keeps covering a line that got
-            /// wider instead of being diluted by it.
-            ///
-            /// Section 8 leaves this as one of two open options - build a spread rule, or accept
-            /// Umbra as a boss-stage specialist - and the spread rule is the one that is built. The
-            /// dilution it answers is real and runs one way only: at team size 3 a permanent debuff
-            /// on the enemy that matters removes a third of the opposing offence, at 5 it removes a
-            /// fifth, and Umbra is the only one of the six identities that gets quietly worse as the
-            /// game grows. Every other identity in section 8 holds steady or improves at 5.
-            ///
-            /// Harmful and Umbra-sourced, using exactly the predicate the Cleanse branch uses. The
-            /// jump and the uncleansable rule are two halves of one belief - what Umbra marks stays
-            /// marked - and they must not disagree about what counts as a mark.
-            ///
-            /// No aliveness test on the applier, for the same reason IsUmbraSourced has none: the
-            /// persistence half of the original rule was cut (DESIGN-WORLD section 1), so a mark is
-            /// bounded by its own duration whether its author still stands or not.
-            ///
-            /// **Creates no value.** RoundsLeft and Magnitude cross unchanged and the entry is added
-            /// with AddOrRefresh, so a jump moves a subtraction that already existed onto a unit
-            /// that is still standing - it never deepens one. A chain across a five-enemy line is
-            /// the intended behaviour and is what answers the dilution, and it needs no cap the way
-            /// Gale's re-entry does: every hop costs a death, there are only ever as many deaths as
-            /// units, and unlike an extra turn a hop hands out nothing that was not already on the
-            /// board. AddOrRefresh rather than AddStack is also deliberate - Ember's stacking keys
-            /// on an Ember source, and an Umbra-sourced Burn is not an Ember Burn.
-            /// </summary>
-            private List<StatusInstance> CollectUmbraMarks(CombatUnit dying)
-            {
-                List<StatusInstance> marks = null;
-                for (int i = 0; i < dying.Statuses.Count; i++)
-                {
-                    StatusInstance s = dying.Statuses[i];
-                    if (!StatusInfo.IsHarmful(s.Kind)) continue;
-                    if (!IsUmbraSourced(s)) continue;
-                    if (marks == null) marks = new List<StatusInstance>();
-                    marks.Add(s);
-                }
-                return marks;
-            }
-
-            private void TryUmbraSpread(CombatUnit dying, List<StatusInstance> marks)
-            {
-                if (marks == null || marks.Count == 0) return;
-
-                CombatUnit heir = FindMarkHeir(dying);
-                if (heir == null) return;
-
-                for (int i = 0; i < marks.Count; i++) MoveStatus(dying, heir, marks[i], false);
+                return taunter;
             }
 
             /// <summary>
@@ -2506,59 +2198,6 @@ namespace Emberfall.Core.Combat
                 e.Status = status.Kind;
                 e.Duration = status.RoundsLeft;
                 e.Value = status.SourceId;
-            }
-
-            /// <summary>
-            /// Which unit a mark jumps to: the living enemy that matters most, by attack. That is
-            /// Umbra's own targeting verb rather than a fresh rule invented for the jump - Nyx aims
-            /// HighestAttackEnemy with every ability she has, and section 1's identity is "pick the
-            /// enemy that matters and subtract it", so the mark lands where she would have aimed it
-            /// next.
-            ///
-            /// The heir is drawn from the dying unit's own side, which is the side the mark was
-            /// always pointed at: a harmful status reached its carrier by being aimed across the
-            /// line, so "another living enemy" is another unit standing where that one stood. It is
-            /// deliberately not keyed on the applier's side - the applier may be dead, and reading
-            /// its side would make the rule silently depend on a unit no longer in the fight.
-            ///
-            /// Deterministic without touching _rng: EffectiveAttack, then the lower Slot, then the
-            /// lower Id. Slot and Id cannot both tie between two distinct units, so the ordering is
-            /// total and the answer does not depend on _units' iteration order. Drawing here would
-            /// consume from the stream and desync every seeded replay whose fight contains an Umbra
-            /// death - the same reason Gale's re-entry does not re-roll the round's jitter.
-            /// </summary>
-            private CombatUnit FindMarkHeir(CombatUnit dying)
-            {
-                CombatUnit best = null;
-                for (int i = 0; i < _units.Count; i++)
-                {
-                    CombatUnit u = _units[i];
-                    if (!u.Alive || u == dying) continue;
-                    if (u.IsPlayer != dying.IsPlayer) continue;
-                    if (best == null) { best = u; continue; }
-
-                    float mine = u.EffectiveAttack;
-                    float theirs = best.EffectiveAttack;
-                    if (mine > theirs) { best = u; continue; }
-                    if (mine < theirs) continue;
-                    if (u.Slot < best.Slot) { best = u; continue; }
-                    if (u.Slot > best.Slot) continue;
-                    if (u.Id < best.Id) best = u;
-                }
-                return best;
-            }
-
-            /// <summary>
-            /// Whether a status entry was applied by an Umbra source. No aliveness test on the
-            /// applier: DESIGN-ASPECTS section 2 attached "while the applier lives" specifically to
-            /// the non-expiry rule, and DESIGN-WORLD section 1 cuts that rule. What is left is
-            /// bounded by the status's own duration either way, so a dead Umbra's debuff runs out on
-            /// schedule rather than lasting forever.
-            /// </summary>
-            private bool IsUmbraSourced(StatusInstance status)
-            {
-                CombatUnit applier = FindUnit(status.SourceId);
-                return applier != null && applier.Aspect == Aspect.Umbra;
             }
 
             private CombatUnit FindUnit(int id)

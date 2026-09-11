@@ -35,44 +35,50 @@ namespace Emberfall.Core.Combat
         Death,
 
         /// <summary>
-        /// Gale (DESIGN-ASPECTS section 1): the unit named by SourceId killed something and has been
-        /// put back into the current round's turn order. Emitted at the moment of re-entry, which is
-        /// inside the victim's death, not at the extra turn itself - the extra turn emits its own
-        /// TurnStart later, exactly like a scheduled one.
+        /// NO LONGER EMITTED. Gale's kill-driven turn re-entry was the only thing that produced it,
+        /// and that rule has been removed along with the rest of the engine-owned aspect rules; the
+        /// aspect is the damage chart, armor attunement and flavour now.
         ///
-        /// This exists because the re-entry is otherwise unreadable, not merely unread. A second
-        /// TurnStart for the same unit in the same round is the only trace it leaves, and that is
-        /// indistinguishable from a screen bug without a record saying it was deliberate.
-        /// Value carries how many extra turns that unit has taken this round, so the screen can say
-        /// which one of a bounded sequence this is.
+        /// The member stays. It is in the permanent record of every battle resolved before the
+        /// removal, the member's ORDINAL is what a saved event carries, and deleting it would
+        /// renumber every type declared after it. Anything that grants a unit a second turn in a
+        /// round in future should re-use this rather than appending a synonym.
+        ///
+        /// When it was emitted: SourceId killed something and was put back into the current round's
+        /// order, emitted inside the victim's death rather than at the extra turn itself, with
+        /// Value carrying how many extra turns that unit had taken this round.
         /// </summary>
         ExtraTurn,
 
         /// <summary>
-        /// Gale (DESIGN-ASPECTS section 1): a Slow from a Gale source moved TargetId's turn later
-        /// inside the round it was applied in, rather than only affecting the next round's sort.
-        /// Value is how many places later it moved among the units that have not acted yet.
+        /// TargetId's turn moved inside the round now being walked, among the units that have not
+        /// acted yet. Value is signed - negative advanced, positive delayed - and SourceId is the
+        /// caster whose effect moved it, or -1 where there is none. Status is None: no status
+        /// caused this, an authored TurnShift or SwapTurnOrder effect did.
         ///
-        /// Also genuinely absent rather than unread: the resulting turn sequence is a valid sequence
-        /// on its own, so nothing in the event list distinguishes "Gale pushed this unit back" from
-        /// "this unit was simply slower this round" unless the shift is recorded when it happens.
+        /// Genuinely absent rather than unread: the resulting turn sequence is a valid sequence on
+        /// its own, so nothing in the event list distinguishes "something pushed this unit back"
+        /// from "this unit was simply slower this round" unless the shift is recorded when it
+        /// happens.
+        ///
+        /// Introduced for Gale's intra-round Slow shift, which is gone. The event is not: authored
+        /// turn manipulation emits it, and reusing it keeps one vocabulary for one idea.
         /// </summary>
         TurnOrderShift,
 
         /// <summary>
-        /// Lumen (DESIGN-ASPECTS section 1, as re-weighted by DESIGN-WORLD section 1): SourceId's
-        /// single-enemy ability was resolved onto TargetId because TargetId is Lumen and answers for
-        /// its whole side, not because the ability's own TargetMode picked it. Value carries that
-        /// TargetMode, so the screen can say what the ability was aiming at before the answer
-        /// overrode it.
+        /// NO LONGER EMITTED. It existed for the Lumen targeting anchor alone - a redirect onto a
+        /// unit whose only claim was its aspect, which the record could not otherwise tell from a
+        /// genuine lowest-HP or front-most pick. That rule has been removed. The anchor that
+        /// remains is Taunt, and a Taunt holder wears its own status tag, so the redirect explains
+        /// itself on the target's bar and this would be a second, redundant telling of it.
         ///
-        /// Emitted only where the Lumen rule alone caused the redirect. When the anchor is also
-        /// carrying Taunt, the status tag on its bar already explains the hit and this would be a
-        /// second, redundant telling of it.
+        /// The member stays for the same reason ExtraTurn's does: it is in the permanent record of
+        /// every battle resolved before the removal, and deleting it would renumber every type
+        /// declared after it.
         ///
-        /// Genuinely absent from the record rather than unread: the Damage event that follows shows
-        /// the hit landing on the Lumen unit, and nothing else distinguishes "it answered for its
-        /// side" from "it really was the lowest-HP or front-most pick".
+        /// When it was emitted: SourceId's single-enemy ability resolved onto TargetId because
+        /// TargetId was Lumen, with Value carrying the TargetMode the ability had been aiming at.
         /// </summary>
         TargetAnchored,
 
@@ -86,20 +92,21 @@ namespace Emberfall.Core.Combat
         PositionSwapped,
 
         /// <summary>
-        /// Umbra, the team-size-5 half (DESIGN-ASPECTS section 8): the unit named by SourceId died
-        /// carrying a harmful status from an Umbra source, and that status has jumped to TargetId
-        /// rather than dying with its carrier. Status and Duration are the mark as it landed;
-        /// Value carries the Id of the Umbra unit that originally applied it, which is otherwise
-        /// unrecoverable from the event alone once the dead unit's list has been cleared.
+        /// A status entry moved from one carrier to another. SourceId is the unit it came from,
+        /// TargetId the unit it landed on; Status and Duration are the entry as it crossed, and
+        /// Value carries the Id of whoever originally applied it, which is otherwise unrecoverable
+        /// from the event alone once the old carrier's list has been cleared.
         ///
-        /// Genuinely absent from the record rather than unread, on the same standard ExtraTurn and
-        /// TargetAnchored are held to. A debuff appearing on a fresh unit during someone else's
-        /// death, with no attack and no cast anywhere near it, is indistinguishable from a screen
-        /// bug unless something in the list says it was deliberate and says where it came from.
+        /// Genuinely absent from the record rather than unread. A debuff appearing on a fresh unit
+        /// with no attack and no cast anywhere near it is indistinguishable from a screen bug
+        /// unless something in the list says it was deliberate and says where it came from.
         ///
-        /// Distinct from StatusApplied on purpose: nobody applied this. Reporting a jump as an
-        /// application would make Debrief's status clause count it as an Umbra unit landing a
-        /// second debuff it never cast, and would put a cause in the record that did not happen.
+        /// Distinct from StatusApplied on purpose: nobody applied this. Reporting a move as an
+        /// application would make Debrief's status clause count it as a second debuff somebody
+        /// landed and never cast, and would put a cause in the record that did not happen.
+        ///
+        /// Introduced for Umbra's mark jumping off a dying carrier, which is gone. The authored
+        /// MoveDebuffs and MoveBuffs operations emit it now, through the one MoveStatus mover.
         /// </summary>
         StatusSpread,
 

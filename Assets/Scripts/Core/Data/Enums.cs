@@ -50,15 +50,15 @@ namespace Emberfall.Core.Data
         // ---------- appended, never inserted ----------
         //
         // Same rule as StatusKind above, and the same reason with one extra edge: ResolveTargets
-        // writes (int)mode into a TargetAnchored event's Value, so renumbering an existing mode
-        // rewrites what every anchored battle recorded about why it was anchored.
+        // wrote (int)mode into a TargetAnchored event's Value while the Lumen anchor existed, so
+        // renumbering an existing mode rewrites what every anchored battle already recorded about
+        // why it was anchored. TargetAnchored is no longer emitted; the records are permanent.
         //
-        // THE ANCHOR APPLIES TO EVERY SINGLE-ENEMY MODE BELOW, unchanged by this pass. A living
-        // Lumen unit, or failing that a Taunt holder, answers every single-enemy targeting question
-        // aimed at its side, so EnemyWithStatus and the three stat picks collapse onto it whenever
-        // one exists. That is the Lumen identity working as designed rather than an oversight, and
-        // it is deliberately NOT altered here - see DESIGN-BUILD-ORDER's entry for this branch,
-        // which flags the one case where it reads badly and leaves the decision to a human.
+        // THE ANCHOR APPLIES TO EVERY SINGLE-ENEMY MODE BELOW. A living Taunt holder answers every
+        // single-enemy targeting question aimed at its side, so EnemyWithStatus and the three stat
+        // picks collapse onto it whenever one exists. The Lumen half of that rule - an aspect
+        // answering unconditionally, with no status and no ability behind it - has been removed;
+        // what is left is the protector mechanic, which says so on the target's own status bar.
         //
         // The four ALLY modes are unaffected, because the anchor only ever answers for the enemy
         // side: they return from the first switch in ResolveTargets, above the anchor lookup,
@@ -650,8 +650,8 @@ namespace Emberfall.Core.Data
         /// <summary>
         /// Mirrored Wound. When the wearer takes damage, a fraction of it returns to whoever dealt
         /// it. The fraction lives in balance.json (MirroredWoundReflectFraction), never in the
-        /// relic's text, exactly as emberBurnStackCap and galeExtraTurnsPerRound do for aspects -
-        /// which is how a legendary relic states itself with no number and still has a magnitude.
+        /// relic's text - which is how a legendary relic states itself with no number and still
+        /// has a magnitude.
         ///
         /// Shares PassiveTrigger.OnDamaged's dispatch point but not its mechanism, and that trigger
         /// is NOT unused: tideturned_passive ("Backwash") already listens on it in enemies.json.

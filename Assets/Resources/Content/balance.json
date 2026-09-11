@@ -11,11 +11,6 @@
   "speedVariance": 0.08,
   // gates both player deploys and enemy spawns; keep equal to PlayerProfile.TeamSize
   "maxTeamSize": 5,
-  // cap on Gale kill re-entry turns per round; the mechanic (task 11) must read this
-  "galeExtraTurnsPerRound": 1,
-  // most simultaneous Burn entries one unit can carry from Ember stacking; at the cap a further
-  // application refreshes an existing entry instead of adding a new one
-  "emberBurnStackCap": 3,
   // relic slots on one hero; more than one stacks rule changes into a build, and a team-wide slot
   // would be an aura, which is a global multiplier. DESIGN-RELICS' relicEnergyBankMax is absent on
   // purpose: it bounded the Tidewrought Metronome's carry, and that relic is cut.
@@ -23,7 +18,7 @@
   // Fraction of a hit that Mirrored Wound returns to the attacker. The relic's RULE text says
   // "part of that damage returns" and never a number - a mythic relic's Rule contains none, even
   // though (unlike when this relic shipped) a mythic relic's stat block now can - so the magnitude
-  // lives here, exactly as emberBurnStackCap does for Ember. Placeholder; task 13's retune owns it.
+  // lives here. Placeholder; task 13's retune owns it.
   "mirroredWoundReflectFraction": 0.25,
 
   // hero level up cost = A + B*level + C*level^2

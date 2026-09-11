@@ -76,20 +76,9 @@ namespace Emberfall.Core.Combat
         public float RoundSpeedJitter;
 
         /// <summary>
-        /// Gale (DESIGN-ASPECTS section 1 and 8): extra turns this unit has been granted by its own
-        /// kills in the current round. Reset by the sim at the top of every round, and bounded there
-        /// by BalanceConfig.GaleExtraTurnsPerRound.
-        ///
-        /// Per unit, not per side and not per battle, because section 8's stated failure is per
-        /// unit: "a single Gale unit can resolve a round unilaterally". Two Gale units each taking
-        /// one extra turn is the mechanic working; one unit taking four is the failure.
-        /// </summary>
-        public int ExtraTurnsThisRound;
-
-        /// <summary>
         /// Whether this unit's statuses have already had their once-per-round RoundsLeft decrement.
-        /// Set by Sim.ExpireStatuses, cleared at the top of every round. Only Gale's extra turn can
-        /// make a unit reach ExpireStatuses twice in one round; see the comment there.
+        /// Set by Sim.ExpireStatuses, cleared at the top of every round. Nothing reaches
+        /// ExpireStatuses twice in one round today; see the comment there for why the gate stays.
         /// </summary>
         public bool StatusesExpiredThisRound;
 
@@ -161,8 +150,8 @@ namespace Emberfall.Core.Combat
         /// answered from it alone - by the time anything asks, it already names the new target.</summary>
         public int PreviousTargetId = -1;
 
-        /// <summary>Whether this unit has taken its turn in the round now being walked. Reset with
-        /// ExtraTurnsThisRound at the top of each round.</summary>
+        /// <summary>Whether this unit has taken its turn in the round now being walked. Reset in
+        /// BeginRound with everything else the round clears.</summary>
         public bool ActedThisRound;
 
         /// <summary>The round this unit last took a turn in, and the round it was last damaged in.
@@ -192,7 +181,6 @@ namespace Emberfall.Core.Combat
         /// of it and leave the rest reading last round's answers.</summary>
         public void BeginRound()
         {
-            ExtraTurnsThisRound = 0;
             StatusesExpiredThisRound = false;
             ActedThisRound = false;
             DamagedThisRound.Clear();
@@ -261,9 +249,8 @@ namespace Emberfall.Core.Combat
         /// scales it rather than adding to it - the AttackUp/AttackDown shape, not the Focus shape.
         ///
         /// SpeedUp joins Slow's existing term instead of bringing a SpeedDown mirror with it. Slow
-        /// already IS the speed debuff, and Gale's intra-round turn-order shift keys on
-        /// StatusKind.Slow specifically, so a second speed debuff would be a duplicate mechanism
-        /// that silently bypassed that rule.
+        /// already IS the speed debuff, and a second speed debuff would be a duplicate mechanism
+        /// that every predicate reading StatusKind.Slow would silently miss.
         ///
         /// Identical to the pre-SpeedUp expression when nothing carries SpeedUp: SumMagnitude
         /// returns 0f, and `1f + 0f - x` is exactly `1f - x` in IEEE 754 for every finite x.
@@ -379,7 +366,7 @@ namespace Emberfall.Core.Combat
 
         /// <summary>
         /// How many harmful statuses this unit carries, counted with the same StatusInfo.IsHarmful
-        /// predicate Cleanse, Dispel and the Umbra rules read - so TargetMode.AllyWithMostDebuffs
+        /// predicate Cleanse and Dispel read - so TargetMode.AllyWithMostDebuffs
         /// picks the ally a Cleanse would do the most for, rather than answering a subtly different
         /// question about what counts as a debuff. Stacks count individually, as CountOf does.
         /// </summary>
@@ -439,14 +426,15 @@ namespace Emberfall.Core.Combat
         }
 
         /// <summary>
-        /// Ember's rule (DESIGN-ASPECTS section 1): add a second entry of the same kind instead of
-        /// folding it into the first, so two sources deepen the same fire rather than one silently
-        /// discarding the other. Bounded by cap; at the cap this degrades to AddOrRefresh, which
-        /// keeps the stronger magnitude and longer duration on an existing entry. Returns true if a
-        /// genuinely new entry was added.
+        /// Add a second entry of the same kind instead of folding it into the first, so two
+        /// applications deepen a counter rather than one silently discarding the other. Bounded by
+        /// cap; at the cap this degrades to AddOrRefresh, which keeps the stronger magnitude and
+        /// longer duration on an existing entry. Returns true if a genuinely new entry was added.
         ///
-        /// Deliberately a separate method rather than a flag on AddOrRefresh: every other status in
-        /// the game wants refresh semantics, and this keeps those call sites provably unchanged.
+        /// Written for Ember's Burn stacking, which is gone; GainResolve is what uses it now, and
+        /// it is the only caller. Deliberately a separate method rather than a flag on
+        /// AddOrRefresh: every other status in the game wants refresh semantics, and this keeps
+        /// those call sites provably unchanged.
         /// SumMagnitude already totals across duplicate entries, so nothing downstream needs to know
         /// which of the two paths produced the list.
         /// </summary>

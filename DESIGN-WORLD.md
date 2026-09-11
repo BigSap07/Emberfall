@@ -4,6 +4,27 @@ The fiction, and only the parts of it that are decided. This document reconciles
 DESIGN-ASPECTS.md; where the two disagree, the disagreement is named and one side is called wrong.
 Nothing here changes a number, and nothing here is implemented.
 
+**THE MECHANICS THIS DOCUMENT RECONCILES AGAINST NO LONGER EXIST, 2026-09-11.** All six
+engine-owned aspect rules have been removed from `CombatSimulation`. An Aspect is the damage chart,
+armor attunement and flavour; nothing in the engine branches on one, and a standing guard in the
+harness asserts it.
+
+**The fiction is unaffected. The reconciliation is void.** The six beliefs below - Ember escalates,
+Tide redirects, Verdant persists, Gale disrupts, Umbra conceals, Lumen defines - are what this
+document actually decides, and they stand exactly as written. What is void is §1, which grades each
+belief against a mechanic that has been deleted, and the second half of §3, which credits Lumen's
+targeting interception for stage 1-12 becoming easier. Read §1 as the record of an argument that
+was had, not as a claim about the engine.
+
+**§3's relabel of Orrin stands, and its verdict on the cost does not.** Orrin Kaal is still Lumen,
+for the reason §3 gives, which was always a reading of his lore rather than a claim about a rule.
+But §3 closes by reporting that the feared difficulty spike "did not arrive" because the relabel
+routed every single-target enemy hit onto the tank. That routing is gone. The multiplier half -
+every Umbra enemy holding live advantage against the player's only tank - is all that remains of
+the relabel's mechanical consequence, and it is the unmitigated version §3 originally warned about.
+Stage 1-12 now blocks on a geared line. That is not a reason to relabel him back; it is the retune
+that DESIGN-BUILD-ORDER's Now / Next records as owed and deliberately not done in the same change.
+
 ## The name
 
 Ember is an old word for a remaining spark, not for flame. The Emberfall is the event in which one
