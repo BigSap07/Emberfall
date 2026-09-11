@@ -2618,3 +2618,66 @@ line each stage actually spawns, `recommendedPower` before the re-base ranged fr
 line's power on 1-1 down to 0.70x on 1-10, with the break falling exactly where spawn counts go
 from three to four. **Five weak enemies lose to five strong heroes**, so enemy count alone will not
 restore the curve. Enemy levels are task 13's first lever, not its last.
+
+### Sprite rendering fixes
+
+Three bugs fixed in one pass. All are rendering-only; no gameplay, balance or save
+changes.
+
+**1. Flash fringe (shader).** `EmberfallFx.shader`'s `_Flash` lerp pushed all pixels
+toward white, including DXT5-compressed transparent-region artifacts (alpha 1–100 of 255)
+that are invisible at Flash=0 but become a visible black border at Flash>0. Fixed by
+gating: `_Flash * step(0.5, c.a)` — pixels below 50% alpha never receive flash. Every
+other material using this shader (`Emberfall/Lit` for procedural rigs, FX effects that
+leave `_Flash` at its 0 default) is unaffected.
+
+**2. Missing-clip fallback (SpriteAnimator).** `PlayOnce` previously returned silently
+when `GetOrLoad` found no clip, leaving the renderer on whatever texture/UV it held.
+Now falls back to `PlayLoop("idle")`, keeping the unit visually present on the correct
+frame rather than stuck on a stale rect.
+
+**3. Per-clip foot fractions (sidecars + SpriteAnimator).** `footFraction` was a single
+hero-level value derived from the idle clip. Clips whose content extends to a different
+vertical position in the frame (Sylven's hit_reaction/death/skill all have
+footFraction=0.000 vs idle's 0.227) inherited idle's margin and appeared to float or
+sink. Each clip's sidecar now carries its own `footFraction`, and `SpriteAnimator`
+repositions the quad on every clip switch.
+
+#### Clip coverage (30 heroes with sprite sheets)
+
+Every hero ships idle, basic, hit_reaction and death. Optional clips vary:
+
+| Hero | basic2 | skill | controlled |
+|---|---|---|---|
+| Aeron | — | ✓ | — |
+| Altheon | ✓ | ✓ | ✓ |
+| Aminah | ✓ | ✓ | ✓ |
+| Arden | ✓ | ✓ | ✓ |
+| Brenna | ✓ | ✓ | ✓ |
+| Caldus | ✓ | ✓ | ✓ |
+| Celen | ✓ | ✓ | ✓ |
+| Cyrra | ✓ | ✓ | ✓ |
+| Dahlia | — | ✓ | — |
+| Darian | ✓ | ✓ | ✓ |
+| Edrin | ✓ | ✓ | ✓ |
+| Elyra | ✓ | ✓ | ✓ |
+| Isara | ✓ | ✓ | ✓ |
+| Isolde | ✓ | ✓ | ✓ |
+| Kael | — | ✓ | — |
+| Marrow | — | ✓ | — |
+| Merek | — | ✓ | — |
+| Mireth | ✓ | ✓ | — |
+| Nysera | ✓ | ✓ | ✓ |
+| Oris | — | ✓ | — |
+| Orren | — | ✓ | — |
+| Rheia | ✓ | — | ✓ |
+| Rovan | ✓ | ✓ | ✓ |
+| Seraphine | — | ✓ | — |
+| Sylven | ✓ | ✓ | ✓ |
+| Talren | — | ✓ | ✓ |
+| Vaelis | — | ✓ | ✓ |
+| Velis | ✓ | ✓ | ✓ |
+| Veska | — | ✓ | — |
+| Zella | — | ✓ | — |
+
+Rheia is the only hero missing `skill`. All 30 have the four required clips.

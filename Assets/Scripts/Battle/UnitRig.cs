@@ -412,29 +412,15 @@ namespace Emberfall.Battle
             Primary = Secondary = Accent = material;
             Materials.Add(material);
 
-            // Bind after the material exists, not before: Bind's first ApplyFrame writes into it
-            // immediately, landing the idle clip's first frame's UV rect rather than the whole
-            // sheet the quad was about to render un-cropped.
-            if (animator != null)
-            {
-                animator.Bind(material);
-                Animation = animator;
-            }
-
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Sprite";
             StripCollider(quad);
             Transform t = quad.transform;
             t.SetParent(Body, false);
-            // Bottom edge of the quad sits at y (-footFraction * canvasHeight), not always y 0:
-            // footFraction is exactly how much of the canvas, below the character's own feet, is
-            // empty margin. Shifting the whole quad DOWN by that amount pushes the transparent
-            // margin below ground (hidden - there is nothing there to hide) so the ACTUAL feet,
-            // not the canvas edge, land at y 0. Centring on half of canvasHeight (as before)
-            // still lets a raised weapon's reserved headroom (SpriteBodyFraction < 1) extend
-            // upward past the feet-to-head span, never downward past it. footFraction defaults
-            // to 0 for every hero that doesn't set it, so this is an exact no-op there:
-            // canvasHeight * 0.5f - 0f * canvasHeight is algebraically identical to the old line.
+            // Initial position from the hero-level footFraction. If the idle clip's sidecar
+            // carries its own footFraction, Bind below will immediately reposition - and every
+            // subsequent clip switch repositions again from its own value - so this line only
+            // survives for a static sprite (no animator) or a clip whose sidecar omits the field.
             float footShift = footFraction * canvasHeight;
             t.localPosition = new Vector3(0f, canvasHeight * 0.5f - footShift, 0f);
             // Cull is off in EmberfallFx (see the shader), so a negative X scale flips the quad's
@@ -467,6 +453,15 @@ namespace Emberfall.Battle
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+
+            // Bind after both the material and the quad exist: Bind's first ApplyFrame writes
+            // the idle frame's UV rect into the material, and ApplyFootPosition repositions
+            // the quad using the clip's own footFraction rather than the hero-level one above.
+            if (animator != null)
+            {
+                animator.Bind(material, t, canvasHeight);
+                Animation = animator;
+            }
         }
 
         // ------------------------------------------------------------------ weapons

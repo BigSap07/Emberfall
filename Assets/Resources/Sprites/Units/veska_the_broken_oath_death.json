@@ -1,33 +1,34 @@
 {
-    "generatedBy":  "Sorceress Sprite Analyzer",
-    "importedBy":  "Tools/import-sprite-sheets.ps1",
-    "sprite":  "veska_the_broken_oath_death",
-    "image":  "veska_the_broken_oath_death.png",
-    "frameWidth":  288,
-    "frameHeight":  512,
-    "sheet":  {
-                  "cols":  9,
-                  "rows":  8,
-                  "frames":  66,
-                  "imageWidth":  2592,
-                  "imageHeight":  4096
-              },
-    "defaultAnimation":  {
-                             "start":  0,
-                             "end":  62,
-                             "fps":  30,
-                             "loop":  true,
-                             "impactFraction":  0.5,
-                             "playbackSpeed":  1.3
-                         },
-    "sourceSheet":  "veska_death_mp4_sheet.png",
-    "downscaleNote":  "Frames resampled 720x1280 -\u003e 288x512, one frame at a time. The source sheet was 6480x10240, past the 8192 maxTextureSize Kael\u0027s sheets import at; Unity would have rescaled it non-uniformly and sheared the frame grid.",
-    "contentBox":  {
-                       "topPx":  129,
-                       "bottomPx":  416,
-                       "footFraction":  0.1855,
-                       "bodyFraction":  0.5605
-                   },
-    "correctionNote":  "end corrected from the exported 65 to 62: frames above that are fully transparent (verified by alpha), and playing through them flashes the unit invisible before the fallback to idle. Same defect Kael\u0027s basic sheet had.",
-    "tuningNote":  "impactFraction and playbackSpeed are NOT in the export and are not derived from anything - they are seeded starting values, exactly as Kael\u0027s were. Eyeball them in Play mode and retune."
+  "generatedBy": "Sorceress Sprite Analyzer",
+  "importedBy": "Tools/import-sprite-sheets.ps1",
+  "sprite": "veska_the_broken_oath_death",
+  "image": "veska_the_broken_oath_death.png",
+  "frameWidth": 288,
+  "frameHeight": 512,
+  "sheet": {
+    "cols": 9,
+    "rows": 8,
+    "frames": 66,
+    "imageWidth": 2592,
+    "imageHeight": 4096
+  },
+  "defaultAnimation": {
+    "start": 0,
+    "end": 62,
+    "fps": 30,
+    "loop": true,
+    "impactFraction": 0.5,
+    "playbackSpeed": 1.3,
+    "footFraction": 0.24
+  },
+  "sourceSheet": "veska_death_mp4_sheet.png",
+  "downscaleNote": "Frames resampled 720x1280 -> 288x512, one frame at a time. The source sheet was 6480x10240, past the 8192 maxTextureSize Kael's sheets import at; Unity would have rescaled it non-uniformly and sheared the frame grid.",
+  "contentBox": {
+    "topPx": 129,
+    "bottomPx": 416,
+    "footFraction": 0.1855,
+    "bodyFraction": 0.5605
+  },
+  "correctionNote": "end corrected from the exported 65 to 62: frames above that are fully transparent (verified by alpha), and playing through them flashes the unit invisible before the fallback to idle. Same defect Kael's basic sheet had.",
+  "tuningNote": "impactFraction and playbackSpeed are NOT in the export and are not derived from anything - they are seeded starting values, exactly as Kael's were. Eyeball them in Play mode and retune."
 }

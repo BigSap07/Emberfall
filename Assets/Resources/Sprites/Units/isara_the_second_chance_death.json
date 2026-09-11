@@ -9,6 +9,7 @@
     "start": 0,
     "end": 65,
     "fps": 30,
-    "loop": true
+    "loop": true,
+    "footFraction": 0.142
   }
 }
