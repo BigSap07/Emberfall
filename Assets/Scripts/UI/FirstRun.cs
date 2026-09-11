@@ -454,6 +454,7 @@ namespace Emberfall.UI
                 app.Router.Show(ScreenId.HeroDetail, false);
                 return;
             }
+            Debug.LogError("FirstRun.ShowHero: \"" + defId + "\" is not in the prologue squad");
         }
 
         private static void RunStep(GameApp app, PrologueScript.Step step,
