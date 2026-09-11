@@ -666,7 +666,7 @@ namespace Emberfall.Core.Combat
                     // target exactly as an unconditional one does, whether or not the condition
                     // then holds: the draw belongs to targeting, not to the test, and moving the
                     // test in front of it would make a condition consume or skip an RNG draw.
-                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null);
+                    List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null, effect.TargetStatus);
 
                     // Per target, not per effect. A conditional AoE asks about each enemy on its
                     // own, so "deal damage to all enemies below 40% HP" is one effect rather than a
@@ -975,7 +975,10 @@ namespace Emberfall.Core.Combat
 
                 // 3. Crit
                 bool critical = _rng.Chance(source.EffectiveCritChance);
-                if (critical) raw *= source.CritDamage;
+                // EffectiveCritDamage, not the raw field: Crit Damage was the one stat in this
+                // pipeline still read straight off the unit, which is why no status could move it.
+                // Exactly equal to the raw field until content authors a Crit Damage status.
+                if (critical) raw *= source.EffectiveCritDamage;
 
                 // 4. Skill Damage - Active and passive-sourced Damage effects only. Gated on
                 // ability.Kind rather than on the stat being non-zero, so a Basic Attack is provably
@@ -1448,7 +1451,12 @@ namespace Emberfall.Core.Combat
 
             private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode)
             {
-                return ResolveTargets(caster, mode, null);
+                return ResolveTargets(caster, mode, null, StatusKind.None);
+            }
+
+            private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded)
+            {
+                return ResolveTargets(caster, mode, excluded, StatusKind.None);
             }
 
             /// <summary>
@@ -1462,7 +1470,15 @@ namespace Emberfall.Core.Combat
             /// draw site in here (RandomAlly / RandomEnemy) only sees a shortened candidate list
             /// when a relic is actually excluding somebody from it.
             /// </summary>
-            private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded)
+            /// <summary>
+            /// `targetStatus` is read by TargetMode.EnemyWithStatus and by nothing else, and is
+            /// StatusKind.None for every caller that does not use that mode - which is the two
+            /// overloads above and therefore every relic and every internal lookup. It comes from
+            /// EffectDef.TargetStatus, threaded rather than looked up, so this method stays a
+            /// function of its arguments instead of reaching back into the effect.
+            /// </summary>
+            private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded,
+                                                    StatusKind targetStatus)
             {
                 List<CombatUnit> result = new List<CombatUnit>();
                 switch (mode)
@@ -1497,6 +1513,59 @@ namespace Emberfall.Core.Combat
                         List<CombatUnit> allies = new List<CombatUnit>();
                         CollectSide(allies, caster.IsPlayer, excluded);
                         if (allies.Count > 0) result.Add(allies[_rng.Range(0, allies.Count)]);
+                        return result;
+                    }
+
+                    // The four ally modes below return from HERE, above the anchor lookup, exactly
+                    // as LowestHpAlly and RandomAlly already do. The anchor answers single-enemy
+                    // questions aimed at one side; it has nothing to say about which of the
+                    // caster's own allies an effect lands on.
+
+                    case TargetMode.LowestEnergyAlly:
+                    {
+                        CombatUnit best = null;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                            if (best == null || u.Energy < best.Energy
+                                || (u.Energy == best.Energy && u.Slot < best.Slot)) best = u;
+                        }
+                        if (best != null) result.Add(best);
+                        return result;
+                    }
+
+                    case TargetMode.TwoLowestHpAllies:
+                    {
+                        List<CombatUnit> ranked = AlliesByHp(caster, excluded);
+                        for (int i = 0; i < ranked.Count && i < 2; i++) result.Add(ranked[i]);
+                        return result;
+                    }
+
+                    case TargetMode.SecondLowestHpAlly:
+                    {
+                        List<CombatUnit> ranked = AlliesByHp(caster, excluded);
+                        // Empty on a line of one, rather than falling back to the lowest. An
+                        // effect that names the second-lowest ally is asking for a specific body,
+                        // and silently retargeting it onto the first would be a different ability.
+                        if (ranked.Count >= 2) result.Add(ranked[1]);
+                        return result;
+                    }
+
+                    case TargetMode.AllyWithMostDebuffs:
+                    {
+                        CombatUnit best = null;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                            if (best == null || u.DebuffCount > best.DebuffCount
+                                || (u.DebuffCount == best.DebuffCount && u.Slot < best.Slot)) best = u;
+                        }
+                        // Deliberately still answers when nobody is debuffed at all: the effect is
+                        // a heal or a cleanse aimed at whoever needs it most, and "most" of zero is
+                        // the front-most ally rather than nobody.
+                        if (best != null) result.Add(best);
                         return result;
                     }
 
@@ -1566,6 +1635,25 @@ namespace Emberfall.Core.Combat
                         if (enemies.Count > 0) picked = enemies[_rng.Range(0, enemies.Count)];
                         break;
                     }
+
+                    // Its own case rather than a line in the loop below, because it FILTERS where
+                    // the others COMPARE: that loop takes the first living enemy unconditionally
+                    // and then improves on it, which would hand back an unmarked enemy whenever the
+                    // first one it saw was unmarked. Front-most among the marked wins, and a mode
+                    // naming no status matches nobody rather than everybody.
+                    case TargetMode.EnemyWithStatus:
+                    {
+                        if (targetStatus == StatusKind.None) break;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
+                            if (!u.Has(targetStatus)) continue;
+                            if (picked == null || u.Slot < picked.Slot) picked = u;
+                        }
+                        break;
+                    }
+
                     default:
                     {
                         for (int i = 0; i < _units.Count; i++)
@@ -1577,12 +1665,50 @@ namespace Emberfall.Core.Combat
                             else if (mode == TargetMode.HighestHpEnemy && u.Hp > picked.Hp) picked = u;
                             else if (mode == TargetMode.HighestAttackEnemy && u.EffectiveAttack > picked.EffectiveAttack) picked = u;
                             else if (mode == TargetMode.FrontEnemy && u.Slot < picked.Slot) picked = u;
+                            // Speed is read through EffectiveSpeed, so a Slow already standing
+                            // counts - "the slowest enemy" means the one acting last, not the one
+                            // with the lowest number on its card. Energy is raw: nothing modifies
+                            // it, and it is already the number the player watches fill.
+                            else if (mode == TargetMode.HighestEnergyEnemy && u.Energy > picked.Energy) picked = u;
+                            else if (mode == TargetMode.HighestSpeedEnemy && u.EffectiveSpeed > picked.EffectiveSpeed) picked = u;
+                            else if (mode == TargetMode.LowestSpeedEnemy && u.EffectiveSpeed < picked.EffectiveSpeed) picked = u;
                         }
                         break;
                     }
                 }
                 if (picked != null) result.Add(picked);
                 return result;
+            }
+
+            /// <summary>
+            /// The caster's living allies, lowest HP ratio first - the one ordering both
+            /// TwoLowestHpAllies and SecondLowestHpAlly read, so the pair cannot disagree about who
+            /// is second.
+            ///
+            /// Ratio, not absolute HP, matching LowestHpAlly: a 400/2600 tank is worse off than a
+            /// 500/1450 mage even though it has more HP left. Ties break on Slot and then Id, which
+            /// cannot both tie between two distinct units, so the ordering is total and nothing
+            /// here draws from _rng - the same determinism rule FindMarkHeir follows.
+            /// </summary>
+            private List<CombatUnit> AlliesByHp(CombatUnit caster, CombatUnit excluded)
+            {
+                List<CombatUnit> allies = new List<CombatUnit>();
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                    allies.Add(u);
+                }
+                allies.Sort(CompareByHpRatio);
+                return allies;
+            }
+
+            private static int CompareByHpRatio(CombatUnit a, CombatUnit b)
+            {
+                int byHp = a.HpRatio.CompareTo(b.HpRatio);
+                if (byHp != 0) return byHp;
+                if (a.Slot != b.Slot) return a.Slot.CompareTo(b.Slot);
+                return a.Id.CompareTo(b.Id);
             }
 
             private void CollectSide(List<CombatUnit> into, bool playerSide)

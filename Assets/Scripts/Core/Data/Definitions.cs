@@ -132,6 +132,17 @@ namespace Emberfall.Core.Data
         public StatusKind ConditionStatus = StatusKind.None;  // for HasStatus/LacksStatus/StatusStacksAtLeast
         public float ConditionValue;  // HP ratio for HpBelow/HpAbove; stack count for StatusStacksAtLeast
 
+        /// <summary>
+        /// The status TargetMode.EnemyWithStatus looks for, and read by nothing else.
+        ///
+        /// Separate from ConditionStatus on purpose, even though both name a StatusKind: a
+        /// condition decides whether an effect resolves against a target already chosen, while this
+        /// decides WHICH target is chosen. An effect can legitimately want both - "hit a Forsaken
+        /// enemy, but only if it is below 35% HP" is this field plus a condition, and folding them
+        /// into one would make that ability unauthorable.
+        /// </summary>
+        public StatusKind TargetStatus = StatusKind.None;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -152,6 +163,7 @@ namespace Emberfall.Core.Data
             e.ConditionOn = EnumUtil.Parse(j.GetString("conditionOn", "Target"), ConditionSubject.Target);
             e.ConditionStatus = EnumUtil.Parse(j.GetString("conditionStatus", "None"), StatusKind.None);
             e.ConditionValue = j.GetFloat("conditionValue", 0f);
+            e.TargetStatus = EnumUtil.Parse(j.GetString("targetStatus", "None"), StatusKind.None);
             return e;
         }
 
@@ -182,6 +194,7 @@ namespace Emberfall.Core.Data
             c.ConditionOn = ConditionOn;
             c.ConditionStatus = ConditionStatus;
             c.ConditionValue = ConditionValue;
+            c.TargetStatus = TargetStatus;
             return c;
         }
     }

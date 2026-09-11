@@ -148,11 +148,23 @@ namespace Emberfall.Core.Combat
             }
         }
 
+        /// <summary>
+        /// Speed is the one MULTIPLY-shaped stat among the ones a status can now move, so SpeedUp
+        /// scales it rather than adding to it - the AttackUp/AttackDown shape, not the Focus shape.
+        ///
+        /// SpeedUp joins Slow's existing term instead of bringing a SpeedDown mirror with it. Slow
+        /// already IS the speed debuff, and Gale's intra-round turn-order shift keys on
+        /// StatusKind.Slow specifically, so a second speed debuff would be a duplicate mechanism
+        /// that silently bypassed that rule.
+        ///
+        /// Identical to the pre-SpeedUp expression when nothing carries SpeedUp: SumMagnitude
+        /// returns 0f, and `1f + 0f - x` is exactly `1f - x` in IEEE 754 for every finite x.
+        /// </summary>
         public float EffectiveSpeed
         {
             get
             {
-                float m = 1f - SumMagnitude(StatusKind.Slow);
+                float m = 1f + SumMagnitude(StatusKind.SpeedUp) - SumMagnitude(StatusKind.Slow);
                 if (m < 0.3f) m = 0.3f;
                 return Speed * m;
             }
@@ -175,24 +187,103 @@ namespace Emberfall.Core.Combat
             }
         }
 
-        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
+        // ---------- ADD-shaped stats ----------
+        //
+        // Every getter below is `raw + up - down`, which is the Focus shape (Crit Chance) rather
+        // than the AttackUp shape (Attack). These stats are small fractions, or in Crit Damage's
+        // case a multiplier, and none of them is scaled by level or star rarity - so multiplying
+        // does nothing useful and, on a stat sitting at 0, does nothing at all. RelicStatMode and
+        // ArmorStatMode already split the stat table this exact way.
+        //
+        // ALL OF THEM ARE EXACT NO-OPS UNTIL CONTENT AUTHORS ONE. Both SumMagnitude calls return
+        // 0f when no unit carries the status, and `x + 0f - 0f` is exactly `x` in IEEE 754 for
+        // every finite x, so no battle can move on the arithmetic alone.
+
         public float EffectiveEffectHit
         {
-            get { return EffectHit; }
+            get { return EffectHit + SumMagnitude(StatusKind.EffectHitUp) - SumMagnitude(StatusKind.EffectHitDown); }
         }
 
-        /// <summary>No status modifies this yet - shaped like EffectiveAttack for when one does.</summary>
         public float EffectiveEffectResist
         {
-            get { return EffectResist; }
+            get { return EffectResist + SumMagnitude(StatusKind.EffectResistUp) - SumMagnitude(StatusKind.EffectResistDown); }
         }
 
-        public float EffectiveSkillDamage { get { return SkillDamage; } }
-        public float EffectiveBlock { get { return Block; } }
-        public float EffectiveArmorBreak { get { return ArmorBreak; } }
+        /// <summary>
+        /// Floored at -0.9 rather than at 0, because ApplyDamageEffect uses this as `raw *= 1f + x`
+        /// and an x at or below -1 would zero or invert a hit. The floor is unreachable with
+        /// today's content - nothing authors SkillDamageDown and the raw stat is never negative -
+        /// so it cannot change an existing battle; it exists because the moment content CAN author
+        /// a Skill Damage debuff, a deep enough stack of them would otherwise heal the target.
+        /// </summary>
+        public float EffectiveSkillDamage
+        {
+            get
+            {
+                float v = SkillDamage + SumMagnitude(StatusKind.SkillDamageUp) - SumMagnitude(StatusKind.SkillDamageDown);
+                if (v < -0.9f) v = -0.9f;
+                return v;
+            }
+        }
+
+        public float EffectiveBlock
+        {
+            get { return Block + SumMagnitude(StatusKind.BlockUp) - SumMagnitude(StatusKind.BlockDown); }
+        }
+
+        public float EffectiveArmorBreak
+        {
+            get { return ArmorBreak + SumMagnitude(StatusKind.ArmorBreakUp) - SumMagnitude(StatusKind.ArmorBreakDown); }
+        }
+
         public float EffectiveControlImmunity { get { return ControlImmunity; } }
-        public float EffectiveDamageReduction { get { return DamageReduction; } }
+
+        public float EffectiveDamageReduction
+        {
+            get
+            {
+                return DamageReduction
+                     + SumMagnitude(StatusKind.DamageReductionUp)
+                     - SumMagnitude(StatusKind.DamageReductionDown);
+            }
+        }
+
+        /// <summary>
+        /// New getter, not a new field. ApplyDamageEffect multiplied by the raw CritDamage - the
+        /// only stat in the damage pipeline still read straight off the unit - so a Crit Damage
+        /// status needed a getter to exist before it could be read at all.
+        ///
+        /// Floored at 0 so a deep enough debuff stack cannot turn a critical hit into healing.
+        /// Unreachable today: nothing authors CritDamageDown and every shipped Crit Damage sits
+        /// near 1.5, so this is `CritDamage + 0f - 0f`, which is exactly CritDamage.
+        /// </summary>
+        public float EffectiveCritDamage
+        {
+            get
+            {
+                float v = CritDamage + SumMagnitude(StatusKind.CritDamageUp) - SumMagnitude(StatusKind.CritDamageDown);
+                if (v < 0f) v = 0f;
+                return v;
+            }
+        }
+
         public float EffectiveHolyDamage { get { return HolyDamage; } }
+
+        /// <summary>
+        /// How many harmful statuses this unit carries, counted with the same StatusInfo.IsHarmful
+        /// predicate Cleanse, Dispel and the Umbra rules read - so TargetMode.AllyWithMostDebuffs
+        /// picks the ally a Cleanse would do the most for, rather than answering a subtly different
+        /// question about what counts as a debuff. Stacks count individually, as CountOf does.
+        /// </summary>
+        public int DebuffCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Statuses.Count; i++) if (StatusInfo.IsHarmful(Statuses[i].Kind)) n++;
+                return n;
+            }
+        }
 
         public bool HasTaunt
         {

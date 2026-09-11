@@ -4,6 +4,48 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
+- **Open: `feat/stat-buffs-and-target-modes`** - unmerged, based on `feat/effect-conditionals`
+  and so carrying the multi-passive work under that. Two additive gaps from the inventory, no
+  structural change to anything.
+  - **15 new stat statuses, in TWO shapes, not one.** The eight stats asked for split along the
+    line `RelicStatMode` and `ArmorStatMode` already draw. **Speed is the only MULTIPLY stat**:
+    `Speed * (1 + SpeedUp - Slow)`, the AttackUp shape. The other seven - Block, Damage Reduction,
+    Effect Hit, Effect Resist, Crit Damage, Skill Damage, Armor Break - are **ADD**:
+    `raw + Up - Down`, the Focus shape, because they are small fractions never scaled by level or
+    rarity and a multiplicative bonus on a stat sitting at 0 is exactly 0.
+  - **There is no SpeedDown, deliberately.** Slow already is the speed debuff, it is the term
+    `EffectiveSpeed` subtracts, and Gale's intra-round turn-order shift keys on `StatusKind.Slow`
+    specifically. A second speed debuff would be a duplicate mechanism silently bypassing that
+    rule, so SpeedUp joins Slow's term instead of bringing a mirror.
+  - **Crit Damage needed a getter before it could be buffed at all.** It was the one stat in the
+    damage pipeline still read straight off the unit (`raw *= source.CritDamage`), which is why no
+    status could move it. `EffectiveCritDamage` now exists and the pipeline reads it.
+  - **8 new target modes**, all appended: `EnemyWithStatus` (plus `EffectDef.TargetStatus`),
+    `HighestEnergyEnemy`, `HighestSpeedEnemy`, `LowestSpeedEnemy`, `LowestEnergyAlly`,
+    `TwoLowestHpAllies`, `SecondLowestHpAlly`, `AllyWithMostDebuffs`.
+  - **There is deliberately no `AllEnemiesWithStatus`.** `AllEnemies` plus an `EffectCondition` of
+    `HasStatus` already does exactly that, per target, from the branch below. Only the
+    single-target half needed a mode.
+  - **Deferred: "the enemy that last damaged an ally"** (1 ability) - it needs a side-level memory
+    the Sim does not keep; `LastAttackerId` is per unit, so this is new state rather than a new
+    pick rule. **Deferred: "adjacent enemies"** (3 abilities) - adjacency is relative to a primary
+    target the effect does not know, so it is the splash mechanic rather than a target mode.
+  - **THE ANCHOR, reported and NOT changed.** Every single-enemy mode is overridden by the side's
+    anchor - a living Lumen unit, else a Taunt holder - and the four new enemy-side modes inherit
+    that, while the four ally-side modes are untouched because the anchor only answers for the
+    enemy side. The harness proves both halves: with no anchor `EnemyWithStatus` picks the marked
+    body, and with a Lumen unit standing the same mode collapses onto it. **This reads badly for
+    `EnemyWithStatus` specifically** - "deal 245% to a Forsaken enemy" hitting an unmarked Lumen
+    tank is an ability doing something other than what it says - and that is a decision for a
+    human, not this branch. DESIGN-WORLD makes deterministic targeting the whole of the Lumen
+    identity, so an exemption is a change to an aspect rule, not a targeting tweak.
+  - **Enum ordinals are pinned by a check.** Both enums were appended to, never inserted into,
+    because `BattleEvent.Status` and the `(int)mode` a `TargetAnchored` event carries are in the
+    permanent record of every battle. A renumbering would rewrite what past battles said with no
+    simulation change at all, so the pre-existing ordinals are now asserted.
+  - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
+    and the whole harness report a strict superset with no existing line changed. 77 new checks,
+    including both standing guards.
 - **Open: `feat/effect-conditionals`** - unmerged, and based on `feat/multi-passive-and-talents`
   rather than on `main`: both touch `CombatSimulation` and `Definitions`, and the multi-passive
   branch is verified and unmerged, so stacking avoids a conflict resolution nobody would enjoy.

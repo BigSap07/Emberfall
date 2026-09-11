@@ -55,6 +55,7 @@ namespace Emberfall.DevHarness
             CheckResolveCounter(content);
             CheckPassivesAndTalents(content);
             CheckEffectConditions(content);
+            CheckStatStatusesAndTargetModes(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -92,6 +93,600 @@ namespace Emberfall.DevHarness
         }
 
         // ---------------------------------------------------------------- helpers
+
+
+
+        // ---------------------------------------------------------------- stat statuses, target modes
+
+        private static readonly StatusKind[] NewStatStatuses =
+        {
+            StatusKind.SpeedUp,
+            StatusKind.BlockUp, StatusKind.BlockDown,
+            StatusKind.DamageReductionUp, StatusKind.DamageReductionDown,
+            StatusKind.EffectHitUp, StatusKind.EffectHitDown,
+            StatusKind.EffectResistUp, StatusKind.EffectResistDown,
+            StatusKind.CritDamageUp, StatusKind.CritDamageDown,
+            StatusKind.SkillDamageUp, StatusKind.SkillDamageDown,
+            StatusKind.ArmorBreakUp, StatusKind.ArmorBreakDown
+        };
+
+        private static readonly TargetMode[] NewTargetModes =
+        {
+            TargetMode.EnemyWithStatus,
+            TargetMode.HighestEnergyEnemy, TargetMode.HighestSpeedEnemy, TargetMode.LowestSpeedEnemy,
+            TargetMode.LowestEnergyAlly, TargetMode.TwoLowestHpAllies,
+            TargetMode.SecondLowestHpAlly, TargetMode.AllyWithMostDebuffs
+        };
+
+        private static void CheckStatStatusesAndTargetModes(ContentDatabase live)
+        {
+            Line("STAT STATUSES AND TARGET MODES");
+
+            CheckNoShippedContentUsesTheNewKinds(live);
+            CheckEnumsWereAppendedNotInserted();
+            CheckStatStatusArithmetic();
+            CheckStatStatusesReachTheSimulation();
+            CheckStatStatusesExpire();
+            CheckNewTargetModesSelect();
+            CheckAnchorStillOverridesNewModes();
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The two standing guards, in the shape the earlier passes use. Shipped content authors
+        /// none of this, which is the whole basis of the no-battles-move claim - and the day it
+        /// does, that claim stops being inherited and has to be re-measured.
+        /// </summary>
+        private static void CheckNoShippedContentUsesTheNewKinds(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int effects = 0, newStatus = 0, newMode = 0, targetStatusSet = 0;
+            string firstStatus = "", firstMode = "";
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++) all.AddRange(def.Passives[pi].Effects);
+
+                for (int e = 0; e < all.Count; e++)
+                {
+                    effects++;
+                    for (int k = 0; k < NewStatStatuses.Length; k++)
+                        if (all[e].Status == NewStatStatuses[k])
+                        {
+                            newStatus++;
+                            if (firstStatus.Length == 0) firstStatus = def.Id + "/" + all[e].Status;
+                        }
+                    for (int m = 0; m < NewTargetModes.Length; m++)
+                        if (all[e].Target == NewTargetModes[m])
+                        {
+                            newMode++;
+                            if (firstMode.Length == 0) firstMode = def.Id + "/" + all[e].Target;
+                        }
+                    if (all[e].TargetStatus != StatusKind.None) targetStatusSet++;
+                }
+            }
+
+            Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
+            Check(newStatus == 0,
+                  "no shipped effect authors one of the " + NewStatStatuses.Length + " new stat statuses ("
+                  + newStatus + (firstStatus.Length > 0 ? ", first " + firstStatus : "")
+                  + ") - so every Effective* getter sums zero and no existing battle can move");
+            Check(newMode == 0,
+                  "no shipped effect authors one of the " + NewTargetModes.Length + " new target modes ("
+                  + newMode + (firstMode.Length > 0 ? ", first " + firstMode : "") + ")");
+            Check(targetStatusSet == 0,
+                  "and no shipped effect sets targetStatus (" + targetStatusSet + ")");
+        }
+
+        /// <summary>
+        /// Both enums were APPENDED to, not inserted into, and this is the check that says so.
+        ///
+        /// BattleEvent.Status is written as a StatusKind and ResolveTargets writes (int)mode into a
+        /// TargetAnchored event's Value, so both ordinals are in the permanent record of every
+        /// battle. Renumbering an existing member would silently rewrite what past battles said
+        /// without changing a line of simulation code - a fingerprint sweep run after the fact
+        /// would catch it, but only if somebody thought to run one. Pinning the ordinals of the
+        /// members that existed before this pass makes the mistake impossible to make quietly.
+        /// </summary>
+        private static void CheckEnumsWereAppendedNotInserted()
+        {
+            Check((int)StatusKind.None == 0 && (int)StatusKind.AttackUp == 1 && (int)StatusKind.Burn == 5
+                  && (int)StatusKind.Slow == 10 && (int)StatusKind.Stun == 12 && (int)StatusKind.Resolve == 14,
+                  "every StatusKind that predates this pass keeps its ordinal, so no past battle's event record moves");
+            Check((int)StatusKind.SpeedUp == 15,
+                  "and the first new stat status sits immediately after it (" + (int)StatusKind.SpeedUp + ")");
+
+            Check((int)TargetMode.Self == 0 && (int)TargetMode.LowestHpEnemy == 1 && (int)TargetMode.RandomEnemy == 5
+                  && (int)TargetMode.RandomAlly == 9 && (int)TargetMode.LastTarget == 11,
+                  "every TargetMode that predates this pass keeps its ordinal, so no TargetAnchored Value moves");
+            Check((int)TargetMode.EnemyWithStatus == 12,
+                  "and the first new mode sits immediately after it (" + (int)TargetMode.EnemyWithStatus + ")");
+        }
+
+        /// <summary>
+        /// The arithmetic, per kind, read straight off the getters. Two shapes are asserted
+        /// separately because they ARE two shapes: Speed multiplies, everything else adds.
+        /// </summary>
+        private static void CheckStatStatusArithmetic()
+        {
+            // ---- Speed: the one MULTIPLY stat, and the one with no Down of its own.
+            CombatUnit fast = NewStatUnit();
+            fast.Speed = 100f;
+            Check(Math.Abs(fast.EffectiveSpeed - 100f) < 0.001f, "Speed with no status is the raw stat");
+            fast.AddOrRefresh(StatusKind.SpeedUp, 9, 0.25f, -1);
+            Check(Math.Abs(fast.EffectiveSpeed - 125f) < 0.001f,
+                  "SpeedUp 0.25 MULTIPLIES: 100 -> " + Fmt(fast.EffectiveSpeed) + ", expected 125 (the AttackUp shape, "
+                  + "because Speed is a scaled stat)");
+            fast.AddOrRefresh(StatusKind.Slow, 9, 0.10f, -1);
+            Check(Math.Abs(fast.EffectiveSpeed - 115f) < 0.001f,
+                  "and Slow subtracts from the same term rather than from a SpeedDown of its own: 100 * (1 + 0.25 - 0.10) = "
+                  + Fmt(fast.EffectiveSpeed));
+
+            // ---- the seven ADD stats, each up and down, against a non-zero base so a
+            //      multiplicative implementation would give a visibly different answer.
+            CheckAddStat("Block", StatusKind.BlockUp, StatusKind.BlockDown, 0.10f);
+            CheckAddStat("Damage Reduction", StatusKind.DamageReductionUp, StatusKind.DamageReductionDown, 0.10f);
+            CheckAddStat("Effect Hit", StatusKind.EffectHitUp, StatusKind.EffectHitDown, 0.10f);
+            CheckAddStat("Effect Resist", StatusKind.EffectResistUp, StatusKind.EffectResistDown, 0.10f);
+            CheckAddStat("Skill Damage", StatusKind.SkillDamageUp, StatusKind.SkillDamageDown, 0.10f);
+            CheckAddStat("Armor Break", StatusKind.ArmorBreakUp, StatusKind.ArmorBreakDown, 0.10f);
+            CheckAddStat("Crit Damage", StatusKind.CritDamageUp, StatusKind.CritDamageDown, 1.50f);
+
+            // ---- the two floors, each unreachable with today's content and each there for the
+            //      moment a debuff stack gets deep enough to invert its own stat.
+            CombatUnit floored = NewStatUnit();
+            floored.SkillDamage = 0f;
+            floored.AddOrRefresh(StatusKind.SkillDamageDown, 9, 5f, -1);
+            Check(Math.Abs(floored.EffectiveSkillDamage + 0.9f) < 0.001f,
+                  "Skill Damage floors at -0.9, so a deep debuff stack cannot make a hit heal (got "
+                  + Fmt(floored.EffectiveSkillDamage) + ")");
+
+            CombatUnit critFloored = NewStatUnit();
+            critFloored.CritDamage = 1.5f;
+            critFloored.AddOrRefresh(StatusKind.CritDamageDown, 9, 5f, -1);
+            Check(critFloored.EffectiveCritDamage >= 0f,
+                  "Crit Damage floors at 0 for the same reason (got " + Fmt(critFloored.EffectiveCritDamage) + ")");
+
+            // ---- every Down is harmful, every Up is not: the predicate Cleanse, Dispel and the
+            //      Umbra rules all read.
+            int harmfulDowns = 0, harmfulUps = 0;
+            for (int i = 0; i < NewStatStatuses.Length; i++)
+            {
+                string name = NewStatStatuses[i].ToString();
+                if (name.EndsWith("Down") && StatusInfo.IsHarmful(NewStatStatuses[i])) harmfulDowns++;
+                if (name.EndsWith("Up") && StatusInfo.IsHarmful(NewStatStatuses[i])) harmfulUps++;
+            }
+            Check(harmfulDowns == 7, "all seven stat DOWNs are harmful, so Cleanse can take them (" + harmfulDowns + ")");
+            Check(harmfulUps == 0, "and no stat UP is, so Dispel keeps them its own business (" + harmfulUps + ")");
+        }
+
+        private static CombatUnit NewStatUnit()
+        {
+            CombatUnit u = new CombatUnit();
+            u.MaxHp = 1000f; u.Hp = 1000f; u.Alive = true;
+            return u;
+        }
+
+        /// <summary>
+        /// One ADD-shaped stat, proved additive rather than multiplicative. The base is deliberately
+        /// non-zero: on a stat sitting at 0 an additive and a multiplicative implementation are
+        /// indistinguishable, which is exactly the trap RelicStatMode's own note records.
+        /// </summary>
+        private static void CheckAddStat(string label, StatusKind up, StatusKind down, float baseValue)
+        {
+            CombatUnit u = NewStatUnit();
+            SetRawStat(u, up, baseValue);
+
+            float before = ReadStat(u, up);
+            u.AddOrRefresh(up, 9, 0.20f, -1);
+            float after = ReadStat(u, up);
+            Check(Math.Abs(after - (baseValue + 0.20f)) < 0.001f,
+                  label + " ADDS: " + Fmt(before) + " + 0.20 -> " + Fmt(after) + ", expected " + Fmt(baseValue + 0.20f)
+                  + " (a multiplicative +20% would give " + Fmt(baseValue * 1.20f) + ")");
+
+            CombatUnit d = NewStatUnit();
+            SetRawStat(d, up, baseValue);
+            d.AddOrRefresh(down, 9, 0.05f, -1);
+            Check(Math.Abs(ReadStat(d, up) - (baseValue - 0.05f)) < 0.001f,
+                  label + " Down subtracts the same way (" + Fmt(ReadStat(d, up)) + ")");
+        }
+
+        private static void SetRawStat(CombatUnit u, StatusKind up, float v)
+        {
+            if (up == StatusKind.BlockUp) u.Block = v;
+            else if (up == StatusKind.DamageReductionUp) u.DamageReduction = v;
+            else if (up == StatusKind.EffectHitUp) u.EffectHit = v;
+            else if (up == StatusKind.EffectResistUp) u.EffectResist = v;
+            else if (up == StatusKind.SkillDamageUp) u.SkillDamage = v;
+            else if (up == StatusKind.ArmorBreakUp) u.ArmorBreak = v;
+            else if (up == StatusKind.CritDamageUp) u.CritDamage = v;
+        }
+
+        private static float ReadStat(CombatUnit u, StatusKind up)
+        {
+            if (up == StatusKind.BlockUp) return u.EffectiveBlock;
+            if (up == StatusKind.DamageReductionUp) return u.EffectiveDamageReduction;
+            if (up == StatusKind.EffectHitUp) return u.EffectiveEffectHit;
+            if (up == StatusKind.EffectResistUp) return u.EffectiveEffectResist;
+            if (up == StatusKind.SkillDamageUp) return u.EffectiveSkillDamage;
+            if (up == StatusKind.ArmorBreakUp) return u.EffectiveArmorBreak;
+            if (up == StatusKind.CritDamageUp) return u.EffectiveCritDamage;
+            return 0f;
+        }
+
+        /// <summary>
+        /// The getters are not the simulation. Each stat status is applied for real in a running
+        /// battle and the battle is required to come out differently from the same battle without
+        /// it - which is what proves the value is READ at its own site in the damage pipeline
+        /// rather than merely computed correctly and ignored.
+        /// </summary>
+        private static void CheckStatStatusesReachTheSimulation()
+        {
+            for (int i = 0; i < NewStatStatuses.Length; i++)
+            {
+                StatusKind kind = NewStatStatuses[i];
+                string with = StatArenaFingerprint(kind, 0.40f);
+                string without = StatArenaFingerprint(StatusKind.None, 0f);
+                Check(with.Length > 0 && with != without,
+                      "a " + kind + " applied in a real battle changes how that battle resolves");
+                Check(with == StatArenaFingerprint(kind, 0.40f),
+                      "and the same seed resolves it the same way twice (" + kind + ")");
+            }
+        }
+
+        /// <summary>
+        /// Each stat status expires on its own authored schedule, through the same RoundsLeft clock
+        /// every other status uses - so none of them is accidentally permanent.
+        /// </summary>
+        private static void CheckStatStatusesExpire()
+        {
+            int applied = 0, expired = 0, offSchedule = 0;
+            for (int i = 0; i < NewStatStatuses.Length; i++)
+            {
+                StatusKind kind = NewStatStatuses[i];
+                BattleResult r = RunStatArena(kind, 0.40f);
+                if (r == null) continue;
+
+                int applyRound = -1;
+                for (int e = 0; e < r.Events.Count; e++)
+                {
+                    BattleEvent ev = r.Events[e];
+                    if (ev.Type == BattleEventType.StatusApplied && ev.Status == kind && applyRound < 0)
+                    {
+                        applied++;
+                        applyRound = ev.Round;
+                    }
+                    else if (ev.Type == BattleEventType.StatusExpired && ev.Status == kind && applyRound >= 0)
+                    {
+                        expired++;
+                        // Applied at BattleStart, which emits at round 0 - BEFORE any turn, so
+                        // unlike a self-cast during the holder's own turn it does not lose a
+                        // round to that turn's own ExpireStatuses. Duration 2 therefore
+                        // decrements at the end of the holder's turn in round 1 and again in
+                        // round 2, expiring exactly `duration` rounds after it landed.
+                        if (ev.Round != applyRound + 2) offSchedule++;
+                        break;
+                    }
+                }
+            }
+            Check(applied == NewStatStatuses.Length,
+                  "all " + NewStatStatuses.Length + " stat statuses actually land in a battle (" + applied + ")");
+            Check(expired == NewStatStatuses.Length,
+                  "and all of them expire rather than lasting the whole fight (" + expired + ")");
+            Check(offSchedule == 0,
+                  "and each expires exactly on its authored schedule (" + offSchedule + " did not)");
+        }
+
+        private static BattleResult RunStatArena(StatusKind kind, float magnitude)
+        {
+            // Applied by a BattleStart passive rather than by the basic attack, and that is
+            // what makes the expiry check mean anything: AddOrRefresh pushes RoundsLeft back
+            // up every time a status is re-applied, so a buff the hero renews on every one of
+            // its own turns never reaches zero and "does it expire" has no answer. Once,
+            // before round 1, does.
+            string primer = kind == StatusKind.None
+                ? ""
+                : @", ""passive"": { ""id"": ""stat_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": """ + kind
+                  + @""", ""magnitude"": " + magnitude.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                  + @", ""duration"": 2, ""chance"": 1 } ] }";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_stat"", ""name"": ""Stat"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 40000, ""attack"": 200, ""defense"": 60, ""speed"": 100, ""critChance"": 0.5, ""critDamage"": 1.5,
+      ""startEnergy"": 100, ""effectHit"": 0.1, ""effectResist"": 0.1, ""skillDamage"": 0.1, ""block"": 0.1,
+      ""armorBreak"": 0.1, ""damageReduction"": 0.1,
+      ""basic"": { ""id"": ""stat_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""AttackDown"", ""magnitude"": 0.1, ""duration"": 2, ""chance"": 0.5 } ] },
+      ""active"": { ""id"": ""stat_active"", ""name"": ""Burst"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] }" + primer + @" }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_stat_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"",
+      ""hp"": 40000, ""attack"": 200, ""defense"": 60, ""speed"": 90, ""critChance"": 0.5, ""critDamage"": 1.5,
+      ""effectHit"": 0.1, ""effectResist"": 0.1, ""block"": 0.1, ""damageReduction"": 0.1,
+      ""basic"": { ""id"": ""stat_foe_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""DefenseDown"", ""magnitude"": 0.1, ""duration"": 2, ""chance"": 0.5 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_stat_ch"", ""name"": ""Test Stats"", ""stages"": [
+        { ""id"": ""test_stat_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_stat_foe"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            // Variance stays ON here, unlike the condition arena: these statuses are read at RNG
+            // sites (Block rolls, crit rolls, landing rolls), so a battle with the draws switched
+            // off could not show that they reach those sites at all.
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0.1, ""speedVariance"": 0.05,
+  ""minDamage"": 1, ""maxRounds"": 14, ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 5, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "StatStatus");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("test_stat");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 10));
+            return RunWith(db, db.GetStage("test_stat_arena"), 4242, team);
+        }
+
+        private static string StatArenaFingerprint(StatusKind kind, float magnitude)
+        {
+            BattleResult r = RunStatArena(kind, magnitude);
+            return r == null ? "" : FingerprintOf(r);
+        }
+
+        /// <summary>
+        /// Every new target mode, proved to select the body it claims and proved to select a
+        /// DIFFERENT body from the closest existing mode - the second half being what stops a new
+        /// mode from being an alias nobody needed.
+        ///
+        /// The arena is built so no two answers coincide by accident: the highest-Attack enemy and
+        /// the highest-Energy enemy are deliberately different units, and so are the fastest, the
+        /// slowest, the front-most and the marked one.
+        /// </summary>
+        private static void CheckNewTargetModesSelect()
+        {
+            CheckModeSelects(TargetMode.FrontEnemy, StatusKind.None, "e0_energy", "the existing front-most pick still answers the front slot");
+            CheckModeSelects(TargetMode.HighestAttackEnemy, StatusKind.None, "e1_attack", "the existing highest-Attack pick still answers the biggest Attack");
+
+            CheckModeSelects(TargetMode.HighestEnergyEnemy, StatusKind.None, "e0_energy",
+                             "HighestEnergyEnemy picks the fullest bar, not the biggest Attack");
+            CheckModeSelects(TargetMode.HighestSpeedEnemy, StatusKind.None, "e2_fast", "HighestSpeedEnemy picks the fastest body");
+            CheckModeSelects(TargetMode.LowestSpeedEnemy, StatusKind.None, "e3_slow", "LowestSpeedEnemy picks the slowest body");
+            CheckModeSelects(TargetMode.EnemyWithStatus, StatusKind.Burn, "e4_marked",
+                             "EnemyWithStatus picks the one carrying the named status and ignores the front-most");
+            CheckModeSelects(TargetMode.EnemyWithStatus, StatusKind.Stun, "",
+                             "and a status nobody carries selects nobody, rather than falling back to an unmarked body");
+
+            CheckModeSelects(TargetMode.LowestHpAlly, StatusKind.None, "h_d", "the existing lowest-HP ally pick answers h_d at 10%");
+            CheckModeSelects(TargetMode.SecondLowestHpAlly, StatusKind.None, "h_b",
+                             "SecondLowestHpAlly answers the NEXT one up at 20%, not the lowest");
+            CheckModeSelects(TargetMode.LowestEnergyAlly, StatusKind.None, "h_a", "LowestEnergyAlly answers the emptiest bar");
+            CheckModeSelects(TargetMode.AllyWithMostDebuffs, StatusKind.None, "h_c",
+                             "AllyWithMostDebuffs answers the one carrying two, not the one carrying one");
+
+            // The one mode that returns more than a single body.
+            List<string> two = ModeTargets(TargetMode.TwoLowestHpAllies, StatusKind.None);
+            Check(two.Count == 2 && two.Contains("h_d") && two.Contains("h_b"),
+                  "TwoLowestHpAllies lands on BOTH of the two lowest, h_d and h_b (got "
+                  + (two.Count == 0 ? "nobody" : string.Join(", ", two.ToArray())) + ")");
+
+            // Determinism, once over the whole set: nothing in the new picks draws from the RNG.
+            bool stable = true;
+            for (int i = 0; i < NewTargetModes.Length; i++)
+            {
+                StatusKind s = NewTargetModes[i] == TargetMode.EnemyWithStatus ? StatusKind.Burn : StatusKind.None;
+                List<string> a = ModeTargets(NewTargetModes[i], s);
+                List<string> b = ModeTargets(NewTargetModes[i], s);
+                if (string.Join(",", a.ToArray()) != string.Join(",", b.ToArray())) stable = false;
+            }
+            Check(stable, "every new mode answers identically on a re-run - the picks break ties on Slot and Id and draw nothing");
+        }
+
+        private static void CheckModeSelects(TargetMode mode, StatusKind targetStatus, string expected, string label)
+        {
+            List<string> hit = ModeTargets(mode, targetStatus);
+            string got = hit.Count == 0 ? "" : hit[0];
+            Check(got == expected && hit.Count <= 1,
+                  label + " (got " + (got.Length == 0 ? "nobody" : got) + ", expected "
+                  + (expected.Length == 0 ? "nobody" : expected) + ")");
+        }
+
+        /// <summary>
+        /// Which bodies one effect authored with this mode actually landed on, by def id. Read off
+        /// the caster's own StatusApplied events, so the answer is what the simulation did rather
+        /// than what a re-implementation of the pick rule here would have said.
+        /// </summary>
+        private static List<string> ModeTargets(TargetMode mode, StatusKind targetStatus)
+        {
+            List<string> hit = new List<string>();
+            BattleResult r = RunTargetArena(mode, targetStatus, false);
+            if (r == null) return hit;
+
+            int casterId = -1;
+            Dictionary<int, string> byId = new Dictionary<int, string>();
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                byId[r.Units[i].Id] = r.Units[i].DefId;
+                if (r.Units[i].DefId == "h_caster") casterId = r.Units[i].Id;
+            }
+            if (casterId < 0) return hit;
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusApplied) continue;
+                if (e.SourceId != casterId || e.Status != StatusKind.Focus) continue;
+                string id;
+                if (byId.TryGetValue(e.TargetId, out id) && !hit.Contains(id)) hit.Add(id);
+                // Only the caster's FIRST turn is read: later turns see a board that its own
+                // earlier hits have already changed, and the question here is what the mode picks,
+                // not how the board evolves.
+                if (i + 1 < r.Events.Count && r.Events[i + 1].Type == BattleEventType.TurnStart) break;
+            }
+            return hit;
+        }
+
+        /// <summary>
+        /// The anchor rule, unchanged by this pass and shown to be unchanged.
+        ///
+        /// A living Lumen unit answers every single-enemy targeting question aimed at its side, so a
+        /// NEW single-enemy mode collapses onto it exactly as the old ones do. That is the Lumen
+        /// identity working as designed - DESIGN-WORLD makes deterministic targeting the whole of
+        /// it - and this branch deliberately does not touch it. The check exists so the behaviour
+        /// is recorded rather than discovered later by a content author wondering why their marked
+        /// enemy was not the one that got hit.
+        /// </summary>
+        private static void CheckAnchorStillOverridesNewModes()
+        {
+            List<string> free = ModeTargets(TargetMode.EnemyWithStatus, StatusKind.Burn);
+            Check(free.Count == 1 && free[0] == "e4_marked",
+                  "with no anchor on the far side, EnemyWithStatus picks the marked body");
+
+            BattleResult r = RunTargetArena(TargetMode.EnemyWithStatus, StatusKind.Burn, true);
+            List<string> anchored = new List<string>();
+            if (r != null)
+            {
+                int casterId = -1;
+                Dictionary<int, string> byId = new Dictionary<int, string>();
+                for (int i = 0; i < r.Units.Count; i++)
+                {
+                    byId[r.Units[i].Id] = r.Units[i].DefId;
+                    if (r.Units[i].DefId == "h_caster") casterId = r.Units[i].Id;
+                }
+                for (int i = 0; i < r.Events.Count && anchored.Count == 0; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type != BattleEventType.StatusApplied || e.SourceId != casterId
+                        || e.Status != StatusKind.Focus) continue;
+                    string id;
+                    if (byId.TryGetValue(e.TargetId, out id)) anchored.Add(id);
+                }
+            }
+            Check(anchored.Count == 1 && anchored[0] == "e2_fast",
+                  "and with a Lumen unit standing, the SAME mode collapses onto the anchor instead (got "
+                  + (anchored.Count == 0 ? "nobody" : anchored[0]) + ") - unchanged from how every "
+                  + "pre-existing single-enemy mode already behaves, and deliberately not altered here");
+        }
+
+        /// <summary>
+        /// Five distinguishable bodies a side, so no two modes can agree by accident.
+        ///
+        /// Enemies: e0 holds the fullest Energy bar AND the front slot, e1 the biggest Attack, e2
+        /// the highest Speed, e3 the lowest, e4 the Burn. Attack is separated from Energy on
+        /// purpose - if one body held both, HighestEnergyEnemy would be indistinguishable from the
+        /// HighestAttackEnemy that already exists.
+        ///
+        /// Allies reach different HP RATIOS through a BattleStart self-hit each, since every unit
+        /// starts a fight full and a ratio nobody has moved cannot be ranked. h_d sits at 10%, h_b
+        /// at 20%, h_a at 50%, h_c at 80%, the caster at 100%; h_a carries one debuff and h_c two.
+        ///
+        /// `lumenAnchor` turns e2 Lumen, which is the only difference between the two runs
+        /// CheckAnchorStillOverridesNewModes compares.
+        /// </summary>
+        private static BattleResult RunTargetArena(TargetMode mode, StatusKind targetStatus, bool lumenAnchor)
+        {
+            string ts = targetStatus == StatusKind.None ? "" : ", \"targetStatus\": \"" + targetStatus + "\"";
+            string e2Aspect = lumenAnchor ? "Lumen" : "Ember";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""h_caster"", ""name"": ""Caster"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 10000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 50,
+      ""basic"": { ""id"": ""caster_basic"", ""name"": ""Point"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": """ + mode + @""", ""status"": ""Focus"",
+                         ""magnitude"": 0.01, ""duration"": 2, ""chance"": 1" + ts + @" } ] } },
+
+    { ""id"": ""h_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 10000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 10,
+      ""basic"": { ""id"": ""a_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""a_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0, ""flat"": 5000 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackDown"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 } ] } },
+
+    { ""id"": ""h_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 10000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 90,
+      ""basic"": { ""id"": ""b_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""b_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0, ""flat"": 8000 } ] } },
+
+    { ""id"": ""h_c"", ""name"": ""C"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 10000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 30,
+      ""basic"": { ""id"": ""c_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""c_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0, ""flat"": 2000 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackDown"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseDown"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 } ] } },
+
+    { ""id"": ""h_d"", ""name"": ""D"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 10000, ""attack"": 1, ""defense"": 0, ""speed"": 7, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 70,
+      ""basic"": { ""id"": ""d_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""d_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0, ""flat"": 9000 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""e0_energy"", ""name"": ""E0"", ""aspect"": ""Ember"",
+      ""hp"": 10000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 90,
+      ""basic"": { ""id"": ""e0_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""e1_attack"", ""name"": ""E1"", ""aspect"": ""Ember"",
+      ""hp"": 10000, ""attack"": 900, ""defense"": 0, ""speed"": 60, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 10,
+      ""basic"": { ""id"": ""e1_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""e2_fast"", ""name"": ""E2"", ""aspect"": """ + e2Aspect + @""",
+      ""hp"": 10000, ""attack"": 100, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 20,
+      ""basic"": { ""id"": ""e2_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""e3_slow"", ""name"": ""E3"", ""aspect"": ""Ember"",
+      ""hp"": 10000, ""attack"": 100, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 30,
+      ""basic"": { ""id"": ""e3_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""e4_marked"", ""name"": ""E4"", ""aspect"": ""Ember"",
+      ""hp"": 10000, ""attack"": 100, ""defense"": 0, ""speed"": 40, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 40,
+      ""basic"": { ""id"": ""e4_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""e4_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"", ""magnitude"": 0.0001, ""duration"": 99, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_mode_ch"", ""name"": ""Test Modes"", ""stages"": [
+        { ""id"": ""test_mode_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""e0_energy"", ""level"": 1 }, { ""id"": ""e1_attack"", ""level"": 1 },
+            { ""id"": ""e2_fast"", ""level"": 1 }, { ""id"": ""e3_slow"", ""level"": 1 },
+            { ""id"": ""e4_marked"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 6, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "TargetMode");
+            if (db == null) return null;
+
+            string[] ids = { "h_caster", "h_a", "h_b", "h_c", "h_d" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("test_mode_arena"), 909, team);
+        }
 
 
         // ---------------------------------------------------------------- effect conditions
