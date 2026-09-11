@@ -467,7 +467,11 @@ namespace Emberfall.UI.Screens
 
             if (def.BasicAttack != null) { names.Add(def.BasicAttack.Name); kinds.Add("BASIC"); tints.Add(UITheme.TextMuted); }
             if (def.Active != null) { names.Add(def.Active.Name); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
-            if (def.Passive != null) { names.Add(def.Passive.Name); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
+            // One card per passive rather than one card for "the passive": a hero can now carry
+            // more than one, and the row already sizes itself from names.Count. No talent card -
+            // talents are selected, not innate, and the screen that picks them does not exist yet.
+            for (int i = 0; i < def.Passives.Count; i++)
+            { names.Add(def.Passives[i].Name); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
             if (names.Count == 0) return;
 
             float width = PanelWidth - UITheme.Space48;

@@ -42,6 +42,28 @@ namespace Emberfall.Core.Model
         /// </summary>
         public readonly string[] EquippedArmor = new string[ArmorInfo.AllSlots.Length];
 
+        /// <summary>
+        /// Which of the hero's talents this player has chosen: 1, 2 or 3, or 0 for none. Per owned
+        /// hero, not per def, because the def is shared by every unit in every battle and two
+        /// players owning the same hero must be able to run different talents.
+        ///
+        /// Zero is the default and means exactly what it says - no talent is live, the hero fights
+        /// on its authored passives alone. That is the state every hero in every save written
+        /// before version 12 is in, and it needs no migration for the same reason the version 10
+        /// avatar bump needed none: absent reads as 0, and 0 is precisely true of a player who was
+        /// never offered the choice rather than a synthesised value.
+        ///
+        /// An INDEX, not an id. A talent has no identity outside the hero that authors it, so the
+        /// save names the slot and HeroDef.TalentAt resolves it - which also means a content edit
+        /// that renames a talent does not orphan a selection. A selection naming a slot the hero no
+        /// longer authors resolves to null and is kept rather than cleared, exactly as an
+        /// unresolvable EquippedRelicId is kept.
+        ///
+        /// Freely changeable, with no cost and no cooldown: GameSession.SelectTalent is the whole
+        /// of the rule, and it writes this field.
+        /// </summary>
+        public int SelectedTalent;
+
         [NonSerialized] public HeroDef Def;
 
         public UnitStats Stats

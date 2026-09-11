@@ -150,7 +150,25 @@ namespace Emberfall.Core.Save
         /// needed, no synthesised value. Downgrade is guarded the same way every bump above is:
         /// version 11 code reads no `coda` key, so it would silently drop a player's Coda balance,
         /// and the check below refuses that instead.
-        public const int CurrentVersion = 12;
+        ///
+        /// 13: which talent each owned hero has selected (HeroInstance.SelectedTalent). Same shape
+        /// as the version 9 -> 10 avatar bump and for the same reason: a version 12 save has no
+        /// selectedTalent key on any hero, which reads as 0, and 0 IS the migration - "no talent is
+        /// live" is precisely true of a player who was never offered the choice rather than a
+        /// synthesised value. Nothing is defaulted to a talent, because a talent that switched
+        /// itself on during an upgrade would silently change how a player's existing team fights.
+        ///
+        /// Written per hero and only when non-zero, the way equippedRelicId and equippedArmor
+        /// already are, so a profile where nobody has picked a talent serialises byte for byte the
+        /// way it did before talents existed apart from the version number.
+        ///
+        /// A SLOT INDEX, not a talent id - see HeroInstance.SelectedTalent for why, and for why an
+        /// index naming a talent that content no longer authors is kept rather than cleared.
+        ///
+        /// Downgrade is guarded the same way every bump above is: version 12 code reads no
+        /// selectedTalent key, so it would silently drop every talent every hero is running - a
+        /// whole layer of a team's behaviour - and the check below refuses that instead.
+        public const int CurrentVersion = 13;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -378,6 +396,13 @@ namespace Emberfall.Core.Save
                         worn.Add(new JsonValue(h.EquippedArmor[s] != null ? h.EquippedArmor[s] : ""));
                     hj.Set("equippedArmor", worn);
                 }
+
+                // Written only when a talent is actually selected, same reasoning as
+                // equippedRelicId and equippedArmor above: 0 is "none", absent reads back as 0, and
+                // a profile where nobody has chosen one serialises exactly as it did before talents
+                // existed. Version 13.
+                if (h.SelectedTalent > 0) hj.Set("selectedTalent", h.SelectedTalent);
+
                 heroes.Add(hj);
             }
             root.Set("heroes", heroes);
@@ -554,6 +579,19 @@ namespace Emberfall.Core.Save
                 List<JsonValue> worn = hj.GetList("equippedArmor");
                 for (int s = 0; s < worn.Count && s < h.EquippedArmor.Length; s++)
                     h.EquippedArmor[s] = worn[s].AsString("");
+
+                // THE VERSION 12 -> 13 MIGRATION, which is the absence of one. A pre-talent save
+                // has no selectedTalent key, GetInt returns the 0 fallback, and 0 is "no talent
+                // selected" - the correct upgrade value rather than a synthesised one.
+                //
+                // Clamped to the range a hero could ever author, not to the range THIS hero
+                // authors: a selection past the end resolves to null through HeroDef.TalentAt and
+                // is kept, so a talent temporarily removed from content and put back restores the
+                // selection instead of having silently wiped it. Negative and absurd values are
+                // corrupt rather than stale, and read as none.
+                int selectedTalent = hj.GetInt("selectedTalent", 0);
+                if (selectedTalent < 0 || selectedTalent > HeroDef.MaxTalents) selectedTalent = 0;
+                h.SelectedTalent = selectedTalent;
 
                 profile.Heroes.Add(h);
             }
