@@ -52,10 +52,18 @@ Current state, checked against the repo on 2026-09-09, not against the rest of t
   death empty it. **Measured in shipped content: 26 absorptions across 16 of 144 battles happen
   after the status is already gone, soaking 2673 damage the player cannot see being soaked.** The
   fix makes the status the authority - when it goes, the pool goes - which is already how the
-  absorption path works in reverse. **Delta: 78 of 714 fingerprints, all in chapter 1 stages 1-4
-  plus an Orrin solo case, 72 of them only in event count, 2 in round count, and ONE victory flip
-  which is in a synthetic solo sweep rather than any campaign line.** Zero campaign outcomes flip.
-  Needs a human decision before it lands.
+  absorption path works in reverse.
+  - **Fingerprints: 78 of 714**, in chapter 1 stages 1-4 plus an Orrin solo case. 72 change only
+    event count, 2 change round count, one victory flips and that one is a synthetic solo sweep
+    rather than a campaign line.
+  - **The fingerprint count understates it. The balance instruments are where the cost is:** 11 of
+    24 geared-curve rows move, all downward, across late chapter 2 - the Tide chapter, where
+    Orrin's ward was quietly carrying the fights. 2-8's FLOOR drops 84% to 60%; 2-11's CEIL drops
+    96.5% to 84%; three stages become flagged under 90% floor; and **2-7's CEIL falls outside its
+    tuned [78%, 92%] band, which fails `build-check.ps1`.** That failure is left standing on the
+    branch rather than papered over.
+  - **So it is a balance change wearing a bug fix's clothes.** Landing it means retuning late
+    chapter 2, which is a content decision rather than an engine one. Needs a human.
 - **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
   `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
   inventory work: turn order, status operations, and the first triggers that are not owner-centric.
