@@ -63,7 +63,7 @@ namespace Emberfall.Battle
             // Kael today: Rig.Animation is null for every other rig (see UnitRig.Animation).
             if (Rig.Animation != null) Rig.Animation.Update(Time.deltaTime);
 
-            if (Alive)
+            if (Alive && Rig.Animation == null)
             {
                 _idlePhase += Time.deltaTime * _bobSpeed;
                 float bob = Mathf.Sin(_idlePhase) * _bobHeight;
