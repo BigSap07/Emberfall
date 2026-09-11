@@ -237,6 +237,21 @@ namespace Emberfall.Core.Combat
                     UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic, armor, armorConfig);
                     CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
                     if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
+
+                    // The selected talent, resolved here and then forgotten, exactly the way a
+                    // relic id is resolved one block up: the selection is save state, the talent it
+                    // names is content, and only this line knows that. Below it the talent is one
+                    // more entry in CombatUnit.Passives and nothing in the simulation asks whether
+                    // a passive came from the def or from a selection.
+                    //
+                    // Appended AFTER the def's own passives, so a talent resolves last on a shared
+                    // trigger. A selection of 0 - which is every hero in every save that predates
+                    // this, and the default for every hero summoned after it - resolves to null and
+                    // adds nothing, which is what makes the talent path unreachable until a player
+                    // picks one.
+                    PassiveDef talent = hero.Def.TalentAt(hero.SelectedTalent);
+                    if (talent != null) unit.AddPassive(talent);
+
                     _units.Add(unit);
                 }
 
@@ -1278,29 +1293,63 @@ namespace Emberfall.Core.Combat
 
             // ------------------------------------------------------------------ passives
 
+            /// <summary>
+            /// Fires every passive on this unit that listens on this trigger, in the order the
+            /// unit carries them - authored passives first, the selected talent last.
+            ///
+            /// A loop where there was a single read, and each of the four gates below moved inside
+            /// it rather than staying above it, which is the whole of the multi-passive change.
+            /// Each passive answers the trigger, the threshold, the empty-effects test and its own
+            /// oncePerBattle allowance for itself: two passives on one unit are two abilities that
+            /// happen to share an owner, and one of them being spent says nothing about the other.
+            /// MaxPassiveDepth is unchanged and still bounds recursion, and it bounds it per
+            /// passive: each fires at `depth`, each resolves at `depth + 1`, so a unit with three
+            /// passives recurses no deeper than a unit with one - it merely does so three times.
+            /// Nothing here can recurse more times than the effects content authored, and content
+            /// cannot author a passive that retriggers its own trigger without hitting the same
+            /// cap it hit before.
+            ///
+            /// **Identical for one passive, provably.** Every unit in shipped content authors
+            /// exactly one, so this walks a one-element list, and the only statement that is not
+            /// the old body verbatim is the continuation guard at the top of the loop, which is
+            /// gated on `i > 0` and therefore cannot execute at all. That guard is deliberately
+            /// NOT hoisted above the loop: TriggerPassive is called for a killer whose kill ended
+            /// the fight (DealRawDamage's death branch) and for a unit that is already dead in no
+            /// path at all, so an IsBattleOver test before the first passive would suppress an
+            /// OnKill passive that fires today and move every fingerprint containing one.
+            /// </summary>
             private void TriggerPassive(CombatUnit owner, PassiveTrigger trigger, int depth)
             {
                 if (owner == null || !owner.Alive) return;
-                PassiveDef passive = owner.Passive;
-                if (passive == null || passive.Trigger != trigger) return;
-                if (passive.OncePerBattle && owner.PassiveFired) return;
-                if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) return;
-                if (passive.Effects.Count == 0) return;
-                if (depth >= MaxPassiveDepth) return;
 
-                if (passive.OncePerBattle) owner.PassiveFired = true;
+                for (int i = 0; i < owner.Passives.Count; i++)
+                {
+                    // Between passives only. A passive that killed its owner, or ended the fight,
+                    // stops the ones behind it rather than resolving into a decided battle - the
+                    // same rule ResolveAbility already applies between an effect's own targets.
+                    if (i > 0 && (!owner.Alive || IsBattleOver())) return;
 
-                BattleEvent e = Emit(BattleEventType.PassiveTrigger, owner.Id, owner.Id);
-                e.AbilityId = passive.Id;
-                e.AbilityName = passive.Name;
-                e.Vfx = passive.Vfx;
+                    PassiveDef passive = owner.Passives[i];
+                    if (passive == null || passive.Trigger != trigger) continue;
+                    if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
+                    if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
+                    if (passive.Effects.Count == 0) continue;
+                    if (depth >= MaxPassiveDepth) continue;
 
-                AbilityDef wrapper = new AbilityDef();
-                wrapper.Id = passive.Id;
-                wrapper.Name = passive.Name;
-                wrapper.Vfx = passive.Vfx;
-                wrapper.Effects = passive.Effects;
-                ResolveAbility(owner, wrapper, depth + 1);
+                    if (passive.OncePerBattle) owner.MarkPassiveFired(i);
+
+                    BattleEvent e = Emit(BattleEventType.PassiveTrigger, owner.Id, owner.Id);
+                    e.AbilityId = passive.Id;
+                    e.AbilityName = passive.Name;
+                    e.Vfx = passive.Vfx;
+
+                    AbilityDef wrapper = new AbilityDef();
+                    wrapper.Id = passive.Id;
+                    wrapper.Name = passive.Name;
+                    wrapper.Vfx = passive.Vfx;
+                    wrapper.Effects = passive.Effects;
+                    ResolveAbility(owner, wrapper, depth + 1);
+                }
             }
 
             // ------------------------------------------------------------------ targeting

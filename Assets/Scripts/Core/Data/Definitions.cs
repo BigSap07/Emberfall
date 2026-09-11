@@ -245,7 +245,20 @@ namespace Emberfall.Core.Data
         public VisualDef Visual = new VisualDef();
         public AbilityDef BasicAttack;
         public AbilityDef Active;
-        public PassiveDef Passive;
+
+        /// <summary>
+        /// Every passive this unit carries, in the order they resolve. A list rather than the
+        /// single PassiveDef that stood here because the incoming roster authors passive1 AND
+        /// passive2 on every 5-star, and one field per passive would have meant the simulation
+        /// learning how many there are - see CombatSimulation.TriggerPassive, which now walks this
+        /// list and is the only thing that decides what fires.
+        ///
+        /// Order is authoring order and is load bearing: two passives on the same trigger resolve
+        /// first-authored-first, so the record reads the way the hero card does. Every unit in
+        /// shipped content authors exactly one, which makes this a one-element list and every walk
+        /// over it identical to the single-field read it replaces.
+        /// </summary>
+        public readonly List<PassiveDef> Passives = new List<PassiveDef>();
 
         protected void ReadCommon(JsonValue j)
         {
@@ -271,8 +284,45 @@ namespace Emberfall.Core.Data
             Visual = VisualDef.FromJson(j["visual"]);
             BasicAttack = AbilityDef.FromJson(j["basic"], AbilityKind.BasicAttack);
             Active = AbilityDef.FromJson(j["active"], AbilityKind.Active);
-            Passive = PassiveDef.FromJson(j["passive"]);
+            ReadPassives(j);
             if (BasicAttack == null) BasicAttack = DefaultBasicAttack();
+        }
+
+        /// <summary>
+        /// Every passive this unit authors, from every shape content has ever used, in one fixed
+        /// order. Three shapes are read, not one, because the incoming roster is nested and the
+        /// shipped files are flat, and both have to keep loading out of the same parser:
+        ///
+        ///   "passive":  { ... }                          - the single flat key, every shipped unit
+        ///   "passive1": { ... }, "passive2": { ... }      - flat, two named slots
+        ///   "skills": { "passive1": ..., "passive2": ... } - nested, as the new roster authors it
+        ///
+        /// A unit authoring only the first - which is every hero and every enemy in content today -
+        /// gets a one-element list, so nothing about how its passive resolves changes.
+        ///
+        /// The duplicate-id guard is for the migration specifically: a file half-converted to the
+        /// nested shape can name the same passive twice, and a passive resolving twice per trigger
+        /// is a doubled effect rather than a parse error anyone would notice. Only non-empty ids
+        /// are compared - an unnamed passive is not evidence of anything.
+        /// </summary>
+        private void ReadPassives(JsonValue j)
+        {
+            AddPassive(PassiveDef.FromJson(j["passive"]));
+            AddPassive(PassiveDef.FromJson(j["passive1"]));
+            AddPassive(PassiveDef.FromJson(j["passive2"]));
+
+            JsonValue skills = j["skills"];
+            AddPassive(PassiveDef.FromJson(skills["passive1"]));
+            AddPassive(PassiveDef.FromJson(skills["passive2"]));
+        }
+
+        private void AddPassive(PassiveDef passive)
+        {
+            if (passive == null) return;
+            if (!string.IsNullOrEmpty(passive.Id))
+                for (int i = 0; i < Passives.Count; i++)
+                    if (Passives[i].Id == passive.Id) return;
+            Passives.Add(passive);
         }
 
         public static AbilityDef DefaultBasicAttack()
@@ -302,6 +352,59 @@ namespace Emberfall.Core.Data
         public bool Fusable = true;
         public bool StartingHero;
 
+        /// <summary>
+        /// How many talents a hero may author. Three, per the incoming roster, and a hard ceiling
+        /// rather than a convention: the parser stops reading at this many and
+        /// HeroInstance.SelectedTalent is validated against it, so a fourth authored talent is
+        /// ignored instead of becoming a slot no save can name.
+        /// </summary>
+        public const int MaxTalents = 3;
+
+        /// <summary>
+        /// The three talents this hero offers, in authoring order. A talent is a PassiveDef and
+        /// nothing else - the same fields, the same triggers, the same effects - because a selected
+        /// talent IS an additional passive on the unit and giving it its own type would mean a
+        /// second thing for the simulation to learn (DESIGN-BUILD-ORDER: one hook, configured by
+        /// content, beats one-off code per owner).
+        ///
+        /// Authored, not selected. Which one is live is per-player state and lives on
+        /// HeroInstance.SelectedTalent, because two players owning the same hero must be able to
+        /// run different talents - a def is shared by every unit in every battle for the life of
+        /// the process, exactly as EffectDef.Clone's own comment records.
+        ///
+        /// An empty list is the norm today: no shipped hero authors a talent, so nothing in
+        /// content can reach the talent path at all.
+        /// </summary>
+        public readonly List<PassiveDef> Talents = new List<PassiveDef>();
+
+        /// <summary>
+        /// The talent a 1-based selection names, or null for "none" (0) and for any index this hero
+        /// does not actually author. Null is the whole of what an unselected talent does: the
+        /// simulation appends nothing, so there is no talent-shaped branch anywhere below it.
+        ///
+        /// Tolerant of an out-of-range index on purpose. A save can name talent 3 for a hero whose
+        /// third talent was later removed from content, which is the same situation as a save
+        /// naming a relic that no longer exists - the id is kept, the resolve returns nothing, and
+        /// re-adding the content restores the selection rather than having silently wiped it.
+        /// </summary>
+        public PassiveDef TalentAt(int selection)
+        {
+            if (selection < 1 || selection > Talents.Count) return null;
+            return Talents[selection - 1];
+        }
+
+        /// <summary>
+        /// The key spellings one talent slot answers to, most-specific first. Roman numerals are
+        /// what the incoming roster authors (talentI, talentII, talentIII); the arabic aliases are
+        /// read too so a hand-written test fixture does not have to guess which the parser wants.
+        /// </summary>
+        private static readonly string[][] TalentKeys = new string[][]
+        {
+            new string[] { "talentI", "talent1" },
+            new string[] { "talentII", "talent2" },
+            new string[] { "talentIII", "talent3" }
+        };
+
         public static HeroDef FromJson(JsonValue j)
         {
             HeroDef h = new HeroDef();
@@ -312,7 +415,75 @@ namespace Emberfall.Core.Data
             h.Stars = Math.Max(1, Math.Min(5, j.GetInt("stars", 5)));
             h.Fusable = j.GetBool("fusable", true);
             h.StartingHero = j.GetBool("startingHero", false);
+            h.ReadTalents(j);
             return h;
+        }
+
+        /// <summary>
+        /// Reads the talents block, in either shape content might carry it: an object of named
+        /// slots, which is how the incoming roster authors it, or a plain array.
+        ///
+        /// A null entry is a hero who has not been given that talent yet - the incoming file has 64
+        /// of them - and it is skipped rather than being stored as a hole, so Talents.Count is the
+        /// count of talents that actually exist and TalentAt's range check is the only bounds test
+        /// anything needs. That does mean a hero authoring only talentIII would have it selectable
+        /// as talent 1; a hero authoring a gap is a content bug, and ContentDatabase warns about it
+        /// rather than this silently inventing a position for it.
+        /// </summary>
+        private void ReadTalents(JsonValue j)
+        {
+            JsonValue block = j["talents"];
+            if (block.IsNull) return;
+
+            if (block.IsArray)
+            {
+                List<JsonValue> list = block.AsList();
+                for (int i = 0; i < list.Count && Talents.Count < MaxTalents; i++)
+                    AddTalent(PassiveDef.FromJson(list[i]));
+                return;
+            }
+
+            for (int slot = 0; slot < TalentKeys.Length && Talents.Count < MaxTalents; slot++)
+            {
+                string[] spellings = TalentKeys[slot];
+                for (int k = 0; k < spellings.Length; k++)
+                {
+                    PassiveDef talent = PassiveDef.FromJson(block[spellings[k]]);
+                    if (talent == null) continue;
+                    AddTalent(talent);
+                    break;
+                }
+            }
+        }
+
+        private void AddTalent(PassiveDef talent)
+        {
+            if (talent == null || Talents.Count >= MaxTalents) return;
+            Talents.Add(talent);
+        }
+
+        /// <summary>
+        /// Which authored talent slots this hero left empty below a filled one - the content bug
+        /// ReadTalents deliberately does not paper over. Empty for every hero that authors a
+        /// contiguous run of talents from the first slot, which is every well-formed hero.
+        /// </summary>
+        public static List<string> TalentGaps(JsonValue j)
+        {
+            List<string> gaps = new List<string>();
+            JsonValue block = j["talents"];
+            if (block.IsNull || block.IsArray) return gaps;
+
+            bool seenFilled = false;
+            for (int slot = TalentKeys.Length - 1; slot >= 0; slot--)
+            {
+                bool filled = false;
+                for (int k = 0; k < TalentKeys[slot].Length; k++)
+                    if (PassiveDef.FromJson(block[TalentKeys[slot][k]]) != null) filled = true;
+
+                if (filled) { seenFilled = true; continue; }
+                if (seenFilled) gaps.Add(TalentKeys[slot][0]);
+            }
+            return gaps;
         }
     }
 

@@ -53,6 +53,7 @@ namespace Emberfall.DevHarness
             CheckStatusAndStatBehavior(content);
             CheckHolyBlockControlImmunity(content);
             CheckResolveCounter(content);
+            CheckPassivesAndTalents(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -90,6 +91,515 @@ namespace Emberfall.DevHarness
         }
 
         // ---------------------------------------------------------------- helpers
+
+        // ---------------------------------------------------------------- passives and talents
+
+        /// <summary>
+        /// Multiple passives per unit and the talent layer that rides on them.
+        ///
+        /// Two properties are being defended here and they pull in opposite directions. The new
+        /// one is that a unit can carry more than one passive and that each keeps its own
+        /// oncePerBattle allowance. The old one is that NOTHING about a unit carrying exactly one
+        /// changed - which is every hero and every enemy in shipped content, so a regression here
+        /// would move every battle in the game rather than some new corner of it. The shipped-
+        /// content half is asserted first and against live content; the new half is asserted
+        /// against synthetic content, because no shipped unit can reach it.
+        /// </summary>
+        private static void CheckPassivesAndTalents(ContentDatabase live)
+        {
+            Line("PASSIVES (multiple per unit) AND TALENTS");
+
+            CheckShippedContentIsSinglePassive(live);
+            CheckTwoPassivesBothFire();
+            CheckOncePerBattleIsPerPassive();
+            CheckPassiveDepthStillBoundedWithTwo();
+            CheckTalentSelection();
+            CheckUnselectedTalentIsInert();
+            CheckTalentSavesAndLoads(live);
+
+            Line("");
+        }
+
+        /// <summary>
+        /// The honest statement of why the refactor cannot have moved a battle, as a check rather
+        /// than a comment so it cannot drift: every unit in shipped content authors exactly one
+        /// passive and no talent at all, so TriggerPassive's walk is a one-element walk and the
+        /// talent branch in BuildUnits is unreachable from content.
+        ///
+        /// The day this fails is the day a shipped hero gains a second passive, and on that day the
+        /// claim "no existing fingerprint can move" stops being true and has to be re-earned rather
+        /// than assumed. That is the point of asserting it.
+        /// </summary>
+        private static void CheckShippedContentIsSinglePassive(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int mostPassives = 0;
+            string widest = "";
+            for (int i = 0; i < units.Count; i++)
+                if (units[i].Passives.Count > mostPassives)
+                {
+                    mostPassives = units[i].Passives.Count;
+                    widest = units[i].Id;
+                }
+
+            Check(mostPassives <= 1,
+                  "no unit in shipped content carries more than one passive (widest is " + widest + " at "
+                  + mostPassives + ") - so the passive walk is a one-element walk and no existing battle can move");
+
+            int withTalents = 0;
+            for (int i = 0; i < db.Heroes.Count; i++) if (db.Heroes[i].Talents.Count > 0) withTalents++;
+            Check(withTalents == 0,
+                  "no shipped hero authors a talent yet (" + withTalents + "), so nothing in content can reach the "
+                  + "talent path - this branch is the model and the engine, and the roster that uses it comes later");
+
+            int gaps = 0;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.Talents.Count == 0) continue;
+                for (int t = 1; t <= h.Talents.Count; t++) if (h.TalentAt(t) == null) gaps++;
+            }
+            Check(gaps == 0, "every authored talent resolves through TalentAt at its own index (" + gaps + " did not)");
+        }
+
+        /// <summary>
+        /// Both passives on a two-passive hero fire in a real battle. They share a trigger here on
+        /// purpose: under the single per-unit PassiveFired bool this replaces, the first to fire set
+        /// the flag and the second could never fire again for the rest of the battle, so a shared
+        /// trigger is the case that was outright broken rather than merely narrow.
+        /// </summary>
+        private static void CheckTwoPassivesBothFire()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef twin = db.GetHero("test_twin");
+            Check(twin != null && twin.Passives.Count == 2,
+                  "the synthetic two-passive hero parses BOTH passives out of the nested skills block ("
+                  + (twin == null ? "missing" : twin.Passives.Count + " parsed") + ")");
+            if (twin == null) return;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(twin, 10));
+            BattleResult r = RunWith(db, db.GetStage("test_passive_arena"), 31, team);
+
+            int firedA = CountPassiveFires(r, "twin_a");
+            int firedB = CountPassiveFires(r, "twin_b");
+            Check(firedA > 0 && firedB > 0,
+                  "both passives on a two-passive hero fire in a real battle (twin_a " + firedA
+                  + ", twin_b " + firedB + ")");
+        }
+
+        /// <summary>
+        /// oncePerBattle is tracked per passive, not per unit. Both passives below are
+        /// oncePerBattle and both listen on AfterBasicAttack, so each must fire exactly once across
+        /// a battle with many basic attacks in it: once proves the allowance is still enforced,
+        /// and both proves it is not shared.
+        ///
+        /// The old behaviour this replaces gives firedA == 1 and firedB == 0, which is what makes
+        /// this two assertions rather than one - "both fired" alone would also pass if the
+        /// allowance had been dropped entirely and each fired on every attack.
+        /// </summary>
+        private static void CheckOncePerBattleIsPerPassive()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef twin = db.GetHero("test_twin");
+            if (twin == null) return;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(twin, 10));
+            BattleResult r = RunWith(db, db.GetStage("test_passive_arena"), 31, team);
+
+            int attacks = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.BasicAttack) attacks++;
+
+            int firedA = CountPassiveFires(r, "twin_a");
+            int firedB = CountPassiveFires(r, "twin_b");
+
+            Check(attacks > 1, "the arena ran long enough for the allowance to matter (" + attacks + " basic attacks)");
+            Check(firedA == 1 && firedB == 1,
+                  "each oncePerBattle passive spends its OWN allowance exactly once (twin_a " + firedA
+                  + ", twin_b " + firedB + ") - one firing does not suppress the other, and neither fires twice");
+
+            // A different trigger each, same battle: the case where the first passive to fire is on
+            // a trigger the second never listens to at all. Under a shared flag the BattleStart
+            // passive silences the AfterBasicAttack one before it is ever reached.
+            HeroDef split = db.GetHero("test_split");
+            if (split == null) return;
+            List<HeroInstance> splitTeam = new List<HeroInstance>();
+            splitTeam.Add(MakeInstance(split, 10));
+            BattleResult sr = RunWith(db, db.GetStage("test_passive_arena"), 31, splitTeam);
+
+            int onStart = CountPassiveFires(sr, "split_start");
+            int onAttack = CountPassiveFires(sr, "split_attack");
+            Check(onStart == 1 && onAttack == 1,
+                  "a BattleStart passive firing does not spend an AfterBasicAttack passive's allowance on the same "
+                  + "hero (split_start " + onStart + ", split_attack " + onAttack + ")");
+        }
+
+        /// <summary>
+        /// MaxPassiveDepth still bounds recursion when a unit carries two recursive passives.
+        ///
+        /// Both passives below listen on OnCriticalHit and both deal damage that can itself crit,
+        /// which is the one trigger in the engine that threads `depth` through rather than
+        /// restarting it at 0. The bound is structural, so it can be stated exactly: a top-level
+        /// crit fires both passives at depth 0; each resolves at depth 1, where a crit fires both
+        /// again; those resolve at depth 2, where `depth >= MaxPassiveDepth` stops them. So at most
+        /// 2 + 2*2 = 6 fires can hang off one attack, against 1 + 1 = 2 for a single passive.
+        ///
+        /// Measured per attack rather than per battle, because the number of attacks in a battle is
+        /// not the thing being bounded. Crit is clamped to 0.95 by EffectiveCritChance, so not every
+        /// chain runs to its full depth - the ceiling is what matters, and the floor assertion
+        /// (some chain got past the first level) is what stops this passing vacuously if recursion
+        /// silently stopped happening at all.
+        /// </summary>
+        private static void CheckPassiveDepthStillBoundedWithTwo()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef recursive = db.GetHero("test_recursive");
+            if (recursive == null) return;
+
+            int worst = 0;
+            int deepest = 0;
+            for (int seed = 1; seed <= 40; seed++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                team.Add(MakeInstance(recursive, 10));
+                BattleResult r = RunWith(db, db.GetStage("test_passive_arena"), seed, team);
+
+                int inThisAttack = 0;
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.BasicAttack) { inThisAttack = 0; continue; }
+                    if (e.Type != BattleEventType.PassiveTrigger) continue;
+                    if (e.AbilityId != "rec_a" && e.AbilityId != "rec_b") continue;
+                    inThisAttack++;
+                    if (inThisAttack > worst) worst = inThisAttack;
+                }
+                if (worst > deepest) deepest = worst;
+            }
+
+            Check(worst > 0, "the recursive passives fire at all (" + worst + ") - the bound is not passing vacuously");
+            Check(worst > 2,
+                  "recursion really does go past the first level with two passives present (deepest chain " + worst
+                  + " fires on one attack) - so the cap below is bounding something");
+            Check(worst <= 6,
+                  "and MaxPassiveDepth still caps it at 2 + 2*2 = 6 fires per attack (deepest chain " + worst
+                  + ") - two passives recurse no deeper than one, they merely each do it");
+        }
+
+        /// <summary>
+        /// The selected talent resolves as one more passive, and the selection is what picks it.
+        /// Three talents are authored; each run below changes nothing except which index the
+        /// HeroInstance names, so the talent that fires is the selection and nothing else.
+        /// </summary>
+        private static void CheckTalentSelection()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef talented = db.GetHero("test_talented");
+            Check(talented != null && talented.Talents.Count == 3,
+                  "the synthetic hero parses all three talents out of its talents block ("
+                  + (talented == null ? "missing" : talented.Talents.Count + " parsed") + ")");
+            if (talented == null) return;
+
+            Check(talented.TalentAt(1) != null && talented.TalentAt(1).Id == "talent_one"
+               && talented.TalentAt(3) != null && talented.TalentAt(3).Id == "talent_three",
+                  "TalentAt resolves a 1-based selection to the talent authored in that slot");
+            Check(talented.TalentAt(0) == null && talented.TalentAt(4) == null,
+                  "TalentAt resolves 0 (none) and an out-of-range slot to null rather than to a talent");
+
+            int[] fires = new int[4];
+            for (int selection = 0; selection <= 3; selection++)
+            {
+                BattleResult r = RunWithTalent(db, talented, selection);
+                fires[selection] = CountPassiveFires(r, TalentIdFor(selection));
+
+                // Whatever else happened, the hero's own authored passive is untouched by the
+                // selection - a talent is an ADDITIONAL passive, never a replacement for one.
+                Check(CountPassiveFires(r, "talented_own") > 0,
+                      "the hero's own passive still fires with talent " + selection + " selected");
+            }
+
+            Check(fires[1] > 0 && fires[2] > 0 && fires[3] > 0,
+                  "each talent fires when it is the one selected (1:" + fires[1] + " 2:" + fires[2]
+                  + " 3:" + fires[3] + ")");
+
+            // Changing the selection changes which one fires, stated as the exclusion rather than
+            // as three separate positives: with talent 2 selected, talents 1 and 3 must be silent.
+            BattleResult two = RunWithTalent(db, talented, 2);
+            Check(CountPassiveFires(two, "talent_one") == 0 && CountPassiveFires(two, "talent_three") == 0,
+                  "and only that one - selecting talent 2 leaves talents 1 and 3 completely silent");
+        }
+
+        /// <summary>
+        /// An unselected talent does nothing AT ALL, which is stronger than "does not fire": with no
+        /// talent selected the battle must be identical to the same battle against a hero that
+        /// authors no talents whatsoever, event for event.
+        ///
+        /// This is the shipped-content guarantee in miniature. Every hero in every save that
+        /// predates this branch has SelectedTalent 0, so if authoring a talent could perturb a
+        /// battle merely by existing - one extra list entry, one extra RNG draw - the whole roster
+        /// would shift the day talents were authored rather than the day a player picked one.
+        /// </summary>
+        private static void CheckUnselectedTalentIsInert()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef talented = db.GetHero("test_talented");
+            HeroDef plain = db.GetHero("test_untalented");
+            if (talented == null || plain == null) return;
+
+            Check(plain.Talents.Count == 0 && talented.Talents.Count == 3,
+                  "the control hero authors no talents and is otherwise the same kit");
+
+            string withTalents = FingerprintOf(RunWithTalent(db, talented, 0));
+            string withNone = FingerprintOf(RunWithTalent(db, plain, 0));
+
+            Check(withTalents == withNone,
+                  "a hero with three talents authored and NONE selected resolves a battle byte-identically to a "
+                  + "hero with no talents at all - an unselected talent is not merely quiet, it is absent");
+
+            for (int selection = 1; selection <= 3; selection++)
+                Check(FingerprintOf(RunWithTalent(db, talented, selection)) != withNone,
+                      "and selecting talent " + selection + " does change the battle, so the comparison above is "
+                      + "measuring inertness rather than a talent layer that never works");
+        }
+
+        /// <summary>
+        /// The selection is save state: it survives a round trip, an upgrading save reads as none,
+        /// and the downgrade guard still refuses a save from a newer build.
+        ///
+        /// The version numbers here are deliberately written BOTH ways. CurrentVersion - 1 and
+        /// CurrentVersion + 1 are the upgrade and the downgrade as every earlier bump asserts them,
+        /// and never go stale; the literal 12 and 14 alongside them are the specific numbers this
+        /// bump was commissioned against, and they stay true as long as this build reads 13.
+        /// </summary>
+        private static void CheckTalentSavesAndLoads(ContentDatabase db)
+        {
+            Check(SaveSerializer.CurrentVersion >= 13,
+                  "save version is at least 13, where the talent selection bumped it ("
+                  + SaveSerializer.CurrentVersion + ")");
+
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            GameSession session = new GameSession(db, profile);
+            if (profile.Heroes.Count == 0) { Check(false, "the fresh profile owns a hero to select a talent on"); return; }
+
+            HeroInstance hero = profile.Heroes[0];
+
+            // No shipped hero authors a talent, so a real selection is refused - which is itself
+            // the rule, not an obstacle: a selection is a promise that something resolves.
+            Check(!session.SelectTalent(hero, 1),
+                  "SelectTalent refuses a slot the hero does not author (no shipped hero authors one yet)");
+            Check(session.SelectTalent(hero, 0), "and clearing to none always succeeds");
+
+            // Written straight onto the instance for the round trip, because the serializer's job is
+            // to carry whatever is there and this check is about the serializer rather than the
+            // selection rule above.
+            hero.SelectedTalent = 2;
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile reloaded = SaveSerializer.Deserialize(json, db, out error);
+            Check(reloaded != null && error == null,
+                  "a save carrying a talent selection loads without error" + (error != null ? " (" + error + ")" : ""));
+            if (reloaded != null && reloaded.Heroes.Count > 0)
+                Check(reloaded.Heroes[0].SelectedTalent == 2,
+                      "and the selection survives the round trip (got "
+                      + reloaded.Heroes[0].SelectedTalent + ", expected 2)");
+
+            // Absent means none, and absent is what every hero with no selection writes - the key is
+            // not written at all, so a profile where nobody has chosen one is byte-identical to one
+            // from before talents existed apart from the version stamp.
+            hero.SelectedTalent = 0;
+            string cleanJson = SaveSerializer.Serialize(profile);
+            Check(cleanJson.IndexOf("selectedTalent", StringComparison.Ordinal) < 0,
+                  "a profile with no talent selected writes no selectedTalent key at all");
+
+            // ---- upgrade: the zero-default migration, at the version that predates the key and at
+            // the version that carries it but happens not to have used it.
+            int previousVersion = SaveSerializer.CurrentVersion - 1;
+            string previous = cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+                                                "\"version\": " + previousVersion);
+            string previousError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(previous, db, out previousError);
+            Check(upgraded != null && previousError == null,
+                  "a version " + previousVersion + " save (CurrentVersion - 1, and the literal 12 this bump was "
+                  + "commissioned against - no selectedTalent key anywhere) loads"
+                  + (previousError != null ? " (" + previousError + ")" : ""));
+            Check(previousVersion == 12,
+                  "and that IS version 12, so the relative form above and the number the bump was specified with "
+                  + "are the same save (got " + previousVersion + ")");
+            if (upgraded != null)
+            {
+                int selected = 0;
+                for (int i = 0; i < upgraded.Heroes.Count; i++) if (upgraded.Heroes[i].SelectedTalent != 0) selected++;
+                Check(selected == 0,
+                      "and every hero in it reads as no talent selected (" + selected
+                      + " did not) - the zero default is the whole migration, nothing is synthesised");
+            }
+
+            // ---- a selection naming a talent content no longer authors is KEPT, not cleared.
+            string orphanJson = json.Replace("\"selectedTalent\": 2", "\"selectedTalent\": 3");
+            string orphanError;
+            PlayerProfile orphan = SaveSerializer.Deserialize(orphanJson, db, out orphanError);
+            Check(orphan != null && orphan.Heroes.Count > 0 && orphan.Heroes[0].SelectedTalent == 3,
+                  "a selection naming a slot no hero currently authors is kept rather than wiped, so re-adding the "
+                  + "talent restores it - the same rule an unresolvable relic id already follows");
+
+            // ---- and a selection outside the range any hero could ever author is corrupt, not stale.
+            string absurdError;
+            PlayerProfile absurd = SaveSerializer.Deserialize(
+                json.Replace("\"selectedTalent\": 2", "\"selectedTalent\": 99"), db, out absurdError);
+            Check(absurd != null && absurd.Heroes.Count > 0 && absurd.Heroes[0].SelectedTalent == 0,
+                  "a selection past HeroDef.MaxTalents reads as none rather than as a slot that can never resolve");
+
+            // ---- downgrade, both spellings.
+            int nextVersion = SaveSerializer.CurrentVersion + 1;
+            string nextError;
+            PlayerProfile next = SaveSerializer.Deserialize(cleanJson.Replace(
+                "\"version\": " + SaveSerializer.CurrentVersion,
+                "\"version\": " + nextVersion), db, out nextError);
+            Check(next == null && nextError != null
+                  && nextError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
+                  "a version " + nextVersion + " save (CurrentVersion + 1, and the literal 14 this bump was "
+                  + "commissioned against) is refused with the same message every earlier bump uses (\""
+                  + nextError + "\")");
+            Check(nextVersion == 14,
+                  "and that IS version 14, so the guard and the number the bump was specified with are the same "
+                  + "save (got " + nextVersion + ")");
+        }
+
+        private static string TalentIdFor(int selection)
+        {
+            if (selection == 1) return "talent_one";
+            if (selection == 2) return "talent_two";
+            if (selection == 3) return "talent_three";
+            return "";
+        }
+
+        /// <summary>One battle with exactly one hero, carrying exactly one talent selection.</summary>
+        private static BattleResult RunWithTalent(ContentDatabase db, HeroDef def, int selection)
+        {
+            HeroInstance hero = MakeInstance(def, 10);
+            hero.SelectedTalent = selection;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(hero);
+            return RunWith(db, db.GetStage("test_passive_arena"), 31, team);
+        }
+
+        private static int CountPassiveFires(BattleResult r, string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return 0;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityId == abilityId) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// One arena covering every shape this pass added. Zero damage variance and zero speed
+        /// variance, the same convention the stat checks use, so the only RNG left in it is the crit
+        /// roll the recursion check deliberately wants.
+        ///
+        /// Every hero here is authored in the NESTED shape - skills.passive1 / skills.passive2 and a
+        /// talents block - because that is the shape the incoming roster arrives in and parsing it is
+        /// half of what this pass built. The shipped flat shape is not re-tested here; it is tested
+        /// by every other check in this harness continuing to pass against live content.
+        ///
+        /// None of them authors an active, so every turn is a basic attack and no energy threshold
+        /// can change what a hero does partway through a run.
+        /// </summary>
+        private static ContentDatabase BuildPassiveTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_twin"", ""name"": ""Twin"", ""aspect"": ""Tide"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""twin_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""twin_a"", ""name"": ""First"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": true,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] },
+        ""passive2"": { ""id"": ""twin_b"", ""name"": ""Second"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": true,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } } },
+
+    { ""id"": ""test_split"", ""name"": ""Split"", ""aspect"": ""Tide"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""split_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""split_start"", ""name"": ""Opening"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] },
+        ""passive2"": { ""id"": ""split_attack"", ""name"": ""Follow"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": true,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } } },
+
+    { ""id"": ""test_recursive"", ""name"": ""Recursive"", ""aspect"": ""Tide"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 1.0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rec_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""rec_a"", ""name"": ""Echo A"", ""trigger"": ""OnCriticalHit"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+        ""passive2"": { ""id"": ""rec_b"", ""name"": ""Echo B"", ""trigger"": ""OnCriticalHit"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } } },
+
+    { ""id"": ""test_talented"", ""name"": ""Talented"", ""aspect"": ""Tide"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""talented_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""talented_own"", ""name"": ""Innate"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+      ""talents"": {
+        ""talentI"": { ""id"": ""talent_one"", ""name"": ""One"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.02 } ] },
+        ""talentII"": { ""id"": ""talent_two"", ""name"": ""Two"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.03 } ] },
+        ""talentIII"": { ""id"": ""talent_three"", ""name"": ""Three"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.04 } ] } } },
+
+    { ""id"": ""test_untalented"", ""name"": ""Untalented"", ""aspect"": ""Tide"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""talented_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""talented_own"", ""name"": ""Innate"", ""trigger"": ""AfterBasicAttack"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_dummy"", ""name"": ""Dummy"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dummy_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_passive_ch"", ""name"": ""Test Passives"", ""stages"": [
+        { ""id"": ""test_passive_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""test_dummy"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Passives/Talents");
+        }
+
 
         private static void Line(string text) { Console.WriteLine(text); }
 
@@ -180,7 +690,7 @@ namespace Emberfall.DevHarness
                     abilitiesOk = false;
                     Line("  hero " + h.Id + " is missing a basic attack or an active");
                 }
-                if (h.Passive == null)
+                if (h.Passives.Count == 0)
                 {
                     passiveless++;
                     Line("  hero " + h.Id + " has no passive (identity comes from its Aspect rule)");
@@ -240,11 +750,11 @@ namespace Emberfall.DevHarness
                 UnitDef def = units[u];
                 if (CheckAbilityEffects(def.BasicAttack, def.Name, "basic")) zeroFound = true;
                 if (CheckAbilityEffects(def.Active, def.Name, "active")) zeroFound = true;
-                if (def.Passive != null)
+                for (int p = 0; p < def.Passives.Count; p++)
                 {
                     AbilityDef wrapper = new AbilityDef();
-                    wrapper.Name = def.Passive.Name;
-                    wrapper.Effects = def.Passive.Effects;
+                    wrapper.Name = def.Passives[p].Name;
+                    wrapper.Effects = def.Passives[p].Effects;
                     if (CheckAbilityEffects(wrapper, def.Name, "passive")) zeroFound = true;
                 }
             }
@@ -708,10 +1218,13 @@ namespace Emberfall.DevHarness
             List<string> lethal = new List<string>();
             for (int i = 0; i < units.Count; i++)
             {
-                PassiveDef p = units[i].Passive;
-                if (p == null || p.Trigger != PassiveTrigger.OnKill) continue;
-                onKill.Add(units[i].Id + "/" + p.Name);
-                if (PassiveCanKill(p)) lethal.Add(units[i].Id + "/" + p.Name);
+                for (int k = 0; k < units[i].Passives.Count; k++)
+                {
+                    PassiveDef p = units[i].Passives[k];
+                    if (p == null || p.Trigger != PassiveTrigger.OnKill) continue;
+                    onKill.Add(units[i].Id + "/" + p.Name);
+                    if (PassiveCanKill(p)) lethal.Add(units[i].Id + "/" + p.Name);
+                }
             }
 
             Check(onKill.Count > 0,
@@ -723,8 +1236,9 @@ namespace Emberfall.DevHarness
                   + " and the recursion is kept unreachable by content rather than by that guard");
 
             HeroDef ryn = db.GetHero("ryn_solvarr");
-            if (ryn == null || ryn.Passive == null) return;
-            Check(ryn.Passive.Trigger == PassiveTrigger.OnKill,
+            if (ryn == null || ryn.Passives.Count == 0) return;
+            PassiveDef rynPassive = ryn.Passives[0];
+            Check(rynPassive.Trigger == PassiveTrigger.OnKill,
                   "Ryn's Follow-Through triggers on OnKill, not OnCriticalHit (section 3's one clear cross-wiring)");
 
             string[] others = { "orrin_kaal", "kalyx_emberwright", "wren_ilyra", "maeve_corrin" };
@@ -740,7 +1254,7 @@ namespace Emberfall.DevHarness
                     {
                         BattleEvent e = r.Events[i];
                         if (e.Type != BattleEventType.PassiveTrigger) continue;
-                        if (e.AbilityId != ryn.Passive.Id) continue;
+                        if (e.AbilityId != rynPassive.Id) continue;
                         fired++;
                         // TriggerPassive is called immediately after Emit(Death) in the death
                         // branch, so the event directly before this one is that Death.
@@ -1515,7 +2029,7 @@ namespace Emberfall.DevHarness
                 bool kitIntact = orrin.Title == "Bulwark of Ash"
                               && orrin.Visual != null && orrin.Visual.Primary == "C2502F"
                               && orrin.Active != null && orrin.Active.Name == "Cinderguard"
-                              && orrin.Passive != null && orrin.Passive.Name == "Emberskin"
+                              && orrin.Passives.Count == 1 && orrin.Passives[0].Name == "Emberskin"
                               && orrin.BasicAttack != null && orrin.BasicAttack.Name == "Ashen Cleave";
                 Check(kitIntact,
                       "and only the aspect string moved - title, visual.primary C2502F, Cinderguard, Emberskin and"
@@ -1667,8 +2181,10 @@ namespace Emberfall.DevHarness
             AbilityDef ability = null;
             if (def.BasicAttack != null && def.BasicAttack.Id == abilityId) ability = def.BasicAttack;
             else if (def.Active != null && def.Active.Id == abilityId) ability = def.Active;
-            else if (def.Passive != null && def.Passive.Id == abilityId)
-                return EffectsAreSingleTargetDamage(def.Passive.Effects);
+            else
+                for (int p = 0; p < def.Passives.Count; p++)
+                    if (def.Passives[p].Id == abilityId)
+                        return EffectsAreSingleTargetDamage(def.Passives[p].Effects);
 
             return ability != null && EffectsAreSingleTargetDamage(ability.Effects);
         }
@@ -2283,7 +2799,7 @@ namespace Emberfall.DevHarness
             clone.Visual        = src.Visual;
             clone.BasicAttack   = src.BasicAttack;
             clone.Active        = active;
-            clone.Passive       = null;
+            // No passives carried over: this clone exists to isolate one active.
             clone.Role          = src.Role;
             clone.Stars         = src.Stars;
             return clone;
@@ -2403,7 +2919,8 @@ namespace Emberfall.DevHarness
             clone.Visual = src.Visual;
             clone.BasicAttack = src.BasicAttack;
             clone.Active = src.Active;
-            clone.Passive = src.Passive;
+            clone.Passives.AddRange(src.Passives);
+            clone.Talents.AddRange(src.Talents);
             clone.Title = src.Title;
             clone.Lore = src.Lore;
             clone.Role = src.Role;
@@ -2414,8 +2931,10 @@ namespace Emberfall.DevHarness
 
         private static bool HasHealEffect(UnitDef def)
         {
-            return AbilityHeals(def.BasicAttack) || AbilityHeals(def.Active)
-                || (def.Passive != null && EffectsHeal(def.Passive.Effects));
+            if (AbilityHeals(def.BasicAttack) || AbilityHeals(def.Active)) return true;
+            for (int i = 0; i < def.Passives.Count; i++)
+                if (EffectsHeal(def.Passives[i].Effects)) return true;
+            return false;
         }
 
         private static bool AbilityHeals(AbilityDef a)
@@ -2894,7 +3413,8 @@ namespace Emberfall.DevHarness
         {
             if (AbilityAppliesStatus(def.BasicAttack, kind)) return true;
             if (AbilityAppliesStatus(def.Active, kind)) return true;
-            if (def.Passive != null && EffectsApplyStatus(def.Passive.Effects, kind)) return true;
+            for (int i = 0; i < def.Passives.Count; i++)
+                if (EffectsApplyStatus(def.Passives[i].Effects, kind)) return true;
             return false;
         }
 
@@ -3265,12 +3785,11 @@ namespace Emberfall.DevHarness
                     if (db.Heroes[j].Id == ember[i]) { def = db.Heroes[j]; break; }
                 if (def == null) { Check(false, ember[i] + " is missing from shipped content"); continue; }
 
-                bool hasPassive = def.Passive != null;
-                Check(hasPassive, ember[i] + " ships a passive at all");
-                if (hasPassive)
-                    Check(passiveFired.ContainsKey(def.Passive.Id),
-                          ember[i] + " fires its passive in a real battle (" + def.Passive.Id
-                          + ", trigger " + def.Passive.Trigger + ")");
+                Check(def.Passives.Count > 0, ember[i] + " ships a passive at all");
+                for (int p = 0; p < def.Passives.Count; p++)
+                    Check(passiveFired.ContainsKey(def.Passives[p].Id),
+                          ember[i] + " fires its passive in a real battle (" + def.Passives[p].Id
+                          + ", trigger " + def.Passives[p].Trigger + ")");
 
                 Check(def.Active != null, ember[i] + " ships an active at all");
                 if (def.Active != null)
@@ -3361,9 +3880,11 @@ namespace Emberfall.DevHarness
                 for (int i = 0; i < live.Heroes.Count; i++)
                 {
                     HeroDef h = live.Heroes[i];
-                    if (h.Passive == null) continue;
-                    for (int e = 0; e < h.Passive.Effects.Count; e++)
-                        if (h.Passive.Effects[e].Kind == EffectKind.GainResolve) { carriers++; break; }
+                    bool carries = false;
+                    for (int p = 0; p < h.Passives.Count && !carries; p++)
+                        for (int e = 0; e < h.Passives[p].Effects.Count; e++)
+                            if (h.Passives[p].Effects[e].Kind == EffectKind.GainResolve) { carries = true; break; }
+                    if (carries) carriers++;
                 }
                 Check(carriers == 4,
                       "four shipped heroes carry a GainResolve passive (got " + carriers + ")");
@@ -9720,7 +10241,8 @@ namespace Emberfall.DevHarness
             clone.StartEnergy = src.StartEnergy;
             clone.Visual = src.Visual;
             clone.BasicAttack = src.BasicAttack;
-            clone.Passive = src.Passive;
+            clone.Passives.AddRange(src.Passives);
+            clone.Talents.AddRange(src.Talents);
             clone.Title = src.Title;
             clone.Lore = src.Lore;
             clone.Role = src.Role;

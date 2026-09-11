@@ -73,8 +73,34 @@ namespace Emberfall.Core.Combat
 
         public AbilityDef Basic;
         public AbilityDef Active;
-        public PassiveDef Passive;
-        public bool PassiveFired;
+        /// <summary>
+        /// Every passive on this unit, in resolution order: the def's own, then the selected
+        /// talent if the hero has one. Appended through AddPassive so the fired-flags below cannot
+        /// drift out of step with it.
+        ///
+        /// A talent is not distinguished from a passive here, and that is the point - the engine
+        /// has no talent branch at all. CombatSimulation.BuildUnits resolves the selection once,
+        /// during setup, exactly as it resolves a relic id, and hands the result over as one more
+        /// passive. An unselected talent resolves to null and is never added, so it does nothing.
+        /// </summary>
+        public readonly List<PassiveDef> Passives = new List<PassiveDef>();
+
+        /// <summary>
+        /// Whether each passive's oncePerBattle allowance is spent, indexed in step with Passives.
+        ///
+        /// Per passive, not per unit - which is the change, and it is a behaviour change for any
+        /// unit carrying more than one. The single `PassiveFired` bool that stood here was written
+        /// when a unit had exactly one passive, so "this unit's passive has fired" and "this
+        /// passive has fired" were the same sentence. With two, the bool means the first passive to
+        /// fire silences the second for the rest of the battle even though they are unrelated
+        /// abilities on different triggers, which is not a rule anyone authored. A hero with a
+        /// BattleStart buff and a once-per-battle OnHpBelowThreshold save would lose the save
+        /// outright.
+        ///
+        /// No unit in shipped content carries two passives, so every flag list here has length one
+        /// and behaves exactly as the bool did.
+        /// </summary>
+        private readonly List<bool> _passiveFired = new List<bool>();
 
         /// <summary>
         /// The equipped relic, resolved from HeroInstance.EquippedRelicId during setup, or null. Only ever
@@ -242,6 +268,29 @@ namespace Emberfall.Core.Combat
             return true;
         }
 
+        /// <summary>
+        /// Adds one passive and its own fired flag. The only way a passive reaches a unit, so
+        /// Passives and _passiveFired are the same length by construction rather than by a
+        /// convention someone has to remember.
+        /// </summary>
+        public void AddPassive(PassiveDef passive)
+        {
+            if (passive == null) return;
+            Passives.Add(passive);
+            _passiveFired.Add(false);
+        }
+
+        /// <summary>Whether the passive at this index has spent its oncePerBattle allowance.</summary>
+        public bool PassiveHasFired(int index)
+        {
+            return index >= 0 && index < _passiveFired.Count && _passiveFired[index];
+        }
+
+        public void MarkPassiveFired(int index)
+        {
+            if (index >= 0 && index < _passiveFired.Count) _passiveFired[index] = true;
+        }
+
         public void Remove(StatusKind kind)
         {
             for (int i = Statuses.Count - 1; i >= 0; i--) if (Statuses[i].Kind == kind) Statuses.RemoveAt(i);
@@ -309,7 +358,7 @@ namespace Emberfall.Core.Combat
             u.Energy = Math.Min(energyMax, def.StartEnergy);
             u.Basic = def.BasicAttack != null ? def.BasicAttack : UnitDef.DefaultBasicAttack();
             u.Active = def.Active;
-            u.Passive = def.Passive;
+            for (int i = 0; i < def.Passives.Count; i++) u.AddPassive(def.Passives[i]);
 
             HeroDef hero = def as HeroDef;
             if (hero != null)

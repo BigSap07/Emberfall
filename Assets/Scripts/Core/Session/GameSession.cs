@@ -996,6 +996,34 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
+        /// Chooses which of a hero's talents is live, or 0 to run none. Freely changeable and free
+        /// of charge: there is no cost, no cooldown and no confirmation, so this is the whole rule
+        /// and a screen calling it needs no other API.
+        ///
+        /// Returns false for a hero this profile does not own, and for a slot the hero does not
+        /// author - a selection is a promise that something resolves, so this refuses rather than
+        /// storing an index that silently does nothing. Clearing to 0 always succeeds, including
+        /// for a hero with no talents at all, because "none" is always a reachable state.
+        ///
+        /// Deliberately no "only out of battle" guard. A battle resolves from a BattleRequest built
+        /// at the moment it starts (BuildBattleRequest), and CombatSimulation.BuildUnits reads the
+        /// selection once during setup, so a change made mid-replay cannot reach a fight already
+        /// resolved - there is no live state for a guard here to protect.
+        /// </summary>
+        public bool SelectTalent(HeroInstance hero, int selection)
+        {
+            if (hero == null) return false;
+            if (Profile.FindHeroByUid(hero.Uid) != hero) return false;
+
+            if (selection == 0) { hero.SelectedTalent = 0; return true; }
+            if (selection < 0 || selection > HeroDef.MaxTalents) return false;
+            if (hero.Def == null || hero.Def.TalentAt(selection) == null) return false;
+
+            hero.SelectedTalent = selection;
+            return true;
+        }
+
+        /// <summary>
         /// The Relic Dust cost to buy one relic from the shop, by its grade. The single source both
         /// BuyRelic and the shop screen read, so a displayed price and a charged price cannot drift
         /// apart. A legendary (stat-only) relic prices at RelicShopPrice, unchanged from before the

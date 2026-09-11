@@ -4,6 +4,49 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
+- **Open: `feat/multi-passive-and-talents`** - unmerged. Removes the structural gate in front of
+  the 94-hero roster: a unit held exactly one passive and the engine had no talent concept at all,
+  which blocked 120 of that roster's abilities (30 second passives, 90 talents) before any new
+  combat mechanic was even considered. It adds **no new combat mechanic** - a talent is an
+  additional passive and nothing else, so everything a talent can express today is what a passive
+  could already express.
+  - **`UnitDef.Passives` is a list**, and the single `PassiveDef` field is gone. Parsing reads the
+    flat `passive` key every shipped unit uses, flat `passive1`/`passive2`, and the nested
+    `skills.passive1`/`skills.passive2` the new roster authors, so current content loads
+    unchanged. `CombatSimulation.TriggerPassive` walks the list; every gate that used to sit above
+    the single read (trigger, threshold, empty effects, `oncePerBattle`) moved inside the walk.
+  - **`oncePerBattle` is now per passive, not per unit.** `CombatUnit.PassiveFired` was one bool,
+    written when a unit had one passive, so "this unit's passive has fired" and "this passive has
+    fired" were the same sentence. With two they are not: the first to fire would have silenced
+    the second for the rest of the battle even on an unrelated trigger, so a hero with a
+    `BattleStart` buff and a once-per-battle survival passive would lose the save outright. It is
+    a parallel flag list now, appended in step with the passive list by `CombatUnit.AddPassive`.
+  - **`HeroDef.Talents`**, up to `HeroDef.MaxTalents` (3), authored in the same shape as a passive
+    because a selected talent IS a passive. Which one is live is per-owned-hero save state
+    (`HeroInstance.SelectedTalent`, 0 for none), resolved once in `BuildUnits` exactly where a
+    relic id is resolved and appended as one more passive. An unselected talent is not merely
+    quiet: the harness proves a hero with three talents authored and none selected fingerprints
+    byte-identically to a hero authoring no talents at all.
+  - **Save version 13**, zero-default migration, `selectedTalent` written per hero only when
+    non-zero. `GameSession.SelectTalent` is the whole selection rule - free, no cooldown, refuses
+    a slot the hero does not author, and clearing to none always succeeds.
+  - **No existing battle moved, measured rather than asserted.** Every one of the 24 stages
+    resolved to nine real positions on its wave ladder (first, middle and last battle of the
+    first, middle and last wave) at 3 seeds each, plus every hero in content fought solo across 6
+    stages: 714 fingerprints over event type, source, target, value, crit, status, duration,
+    ability id and round, all byte-identical to `main`. The full harness report is identical line
+    for line apart from the 17 lines that print a save version number. 38 new checks cover the new
+    behaviour, and one of them is the standing guard: no shipped unit carries more than one
+    passive and no shipped hero authors a talent, so the day either stops being true the
+    no-fingerprints-move claim has to be re-earned rather than assumed.
+  - **`Tools/doc-lint.ps1` gained `EMBERFALL_SKIP_DOC_LINT`.** Both of its git-backed classes ask
+    what resolves, so a `--depth 1` clone reports every hash and every branch in the docs as dead.
+    The variable says "this clone cannot answer that", prints it and exits 0. CI checks out at
+    full depth and sets no environment, so it never fires there - and a baseline must still never
+    be regenerated from a clone that needed it.
+  - **Not in this branch, deliberately:** the talent selection UI, and carrying a talent selection
+    into a Proving opponent snapshot (`BattleLoadout` holds a relic and armor but not a talent, so
+    a snapshot opponent currently fights without one).
 - **Both balance-instrument branches have landed on `main`.** They were written from the same base
   and merged economy-first, ladder-second. Between them they close the last of the floor-pinned
   instruments and re-run the retune against what those instruments now actually measure.

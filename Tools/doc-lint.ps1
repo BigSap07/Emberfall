@@ -9,6 +9,9 @@
 #   pwsh Tools/doc-lint.ps1                  # lint, exit 1 on any NEW violation
 #   pwsh Tools/doc-lint.ps1 -WriteBaseline   # re-record the baseline from what is there now
 #
+#   EMBERFALL_SKIP_DOC_LINT=1                # skip entirely, exit 0 - for a shallow clone that
+#                                            # cannot resolve hashes or branches. Never set in CI.
+#
 # THREE CLASSES:
 #
 #   line-number  a C# filename followed by a colon and digits, e.g. Foo.cs:120. Always a
@@ -59,6 +62,35 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ---- the shallow-clone escape hatch.
+#
+# Both the dead-hash and the dead-branch class ask git what exists, so both are only as correct as
+# the refs the running clone happens to hold. A clone made with --depth 1 holds one commit and no
+# remote branch refs at all, so Test-CommitResolves says no to every hash in the docs and
+# Test-BranchLive says no to every branch - including the live ones this lint exists to permit.
+# Every entry it then reports is a false positive about the clone rather than a fact about the
+# documentation, and a wall of them buries whatever the run was actually meant to surface.
+#
+# Setting EMBERFALL_SKIP_DOC_LINT to anything non-empty says "this clone cannot answer those two
+# questions, do not pretend it can". It is an admission of the clone's limits, not a way to land a
+# citation violation: on any clone that CAN resolve refs the lint still runs and still fails.
+#
+# It never fires in CI. .github/workflows/build-check.yml checks out with actions/checkout@v4 and
+# sets no fetch-depth override, and it sets no environment either, so CI runs a full clone with
+# every origin ref present and this variable unset - which is exactly the view -WriteBaseline is
+# supposed to be recorded against (see REGENERATE IT AGAINST ORIGIN'S VIEW above). For the same
+# reason, do not regenerate the baseline from a clone that needed this flag: it would record fewer
+# violations than CI finds, which is the failure that caught the first baseline written for this
+# file.
+if ($env:EMBERFALL_SKIP_DOC_LINT) {
+    Write-Host ""
+    Write-Host "[doc-lint] SKIPPED - EMBERFALL_SKIP_DOC_LINT is set." -ForegroundColor DarkYellow
+    Write-Host "[doc-lint] A shallow clone resolves no hashes and no remote branches, so every"
+    Write-Host "[doc-lint] hash and branch in the docs would report as dead. CI runs a full clone"
+    Write-Host "[doc-lint] with this unset, so the lint is enforced there."
+    exit 0
+}
 
 # Resolved in the BODY, not as a param default. Windows PowerShell 5.1 does not populate
 # $PSScriptRoot while it is binding parameters, so a default of Split-Path -Parent $PSScriptRoot
