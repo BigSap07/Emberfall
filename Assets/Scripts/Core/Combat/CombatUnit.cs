@@ -34,6 +34,48 @@ namespace Emberfall.Core.Combat
         /// unauthorable and would make either meaning ambiguous on a status carrying the other.
         /// </summary>
         public int Charges;
+
+        // ---------------------------------------------------------------- the non-numeric ledger
+        //
+        // Four TYPED fields rather than four conventions packed into Stored. Stored is a float: it
+        // can hold "247 damage" and cannot hold "the buff was AttackUp", "the last action was an
+        // Active", "the ally was a Mender" or "the lowest this ever went was 38%". Ten abilities in
+        // the incoming roster want exactly those four, and encoding an enum's ordinal into a float
+        // would be a convention nothing enforces and every future reader has to be told about.
+        //
+        // All four travel with the entry through MoveStatus, for the same reason Stored does: a
+        // record that loses what it recorded when it changes carrier is not a record.
+
+        /// <summary>A status identity this entry has recorded, or None.</summary>
+        public StatusKind StoredStatus = StatusKind.None;
+
+        /// <summary>What the recorded unit last did: 0 nothing yet, 1 a Basic, 2 an Active. An int
+        /// rather than a bool because "has not acted" is a third answer and the abilities that read
+        /// this ask whether the action type CHANGED, which needs to know there was a previous.</summary>
+        public int StoredAction;
+
+        /// <summary>A HeroRole this entry has recorded. Meaningless unless StoredRoleSet.</summary>
+        public HeroRole StoredRole;
+        public bool StoredRoleSet;
+
+        /// <summary>The lowest HP ratio the recorded unit has been seen at while this entry lived.
+        /// A running minimum, not a snapshot, which is the distinction Arden's kit turns on.
+        /// Negative means nothing has been recorded yet, so 0% is distinguishable from unset.</summary>
+        public float StoredMin = -1f;
+
+        // ---------------------------------------------------------------- per-round uses
+        //
+        // "The first area hit each round", "the first time that enemy damages an ally each round",
+        // "the first positive status it gains each round". That is an ordinal on the STATUS, not on
+        // the passive: PassiveLimit.OncePerRound already answers "this passive fires once a round",
+        // and it is the wrong instrument here because the thing being counted happens to a status's
+        // carrier and the status can move, expire or be dispelled mid-round.
+        //
+        // Counts UP and is reset in BeginRound, unlike Charges which counts DOWN to removal and
+        // never resets. A status with UsesPerRound 0 is unlimited, which is every status in
+        // shipped content.
+        public int UsesThisRound;
+        public int UsesPerRound;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -184,6 +226,44 @@ namespace Emberfall.Core.Combat
             StatusesExpiredThisRound = false;
             ActedThisRound = false;
             DamagedThisRound.Clear();
+
+            // Per-round status uses, and the per-round half of the per-target limits. Both are
+            // "how many times has this already happened THIS round", so both belong to the one
+            // place a round is declared to have started.
+            for (int i = 0; i < Statuses.Count; i++) Statuses[i].UsesThisRound = 0;
+            _passiveTargetsThisRound.Clear();
+        }
+
+        // ---------------------------------------------------------------- per-target limits
+        //
+        // PassiveLimit answers a question about the OWNER's clock: has this passive fired yet this
+        // round, this battle, since N rounds ago. Four abilities need a different question - has
+        // this passive fired against THIS TARGET - and no amount of owner-side bookkeeping answers
+        // it, because the count is per (passive, target) pair and the target's identity is only
+        // known once an effect has resolved its targets.
+        //
+        // Keyed "passiveIndex:targetId" rather than by a nested dictionary: the count is tiny (a
+        // passive fires at most a handful of times a battle against at most five bodies), and a
+        // flat string key keeps the reset in BeginRound a single Clear.
+        private readonly Dictionary<string, int> _passiveTargetsBattle = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _passiveTargetsThisRound = new Dictionary<string, int>();
+
+        /// <summary>How many times passive `index` has already fired against `targetId`, over the
+        /// whole battle or within this round.</summary>
+        public int PassiveFiresAgainst(int index, int targetId, bool thisRoundOnly)
+        {
+            Dictionary<string, int> book = thisRoundOnly ? _passiveTargetsThisRound : _passiveTargetsBattle;
+            int n;
+            return book.TryGetValue(index + ":" + targetId, out n) ? n : 0;
+        }
+
+        /// <summary>Records one firing of passive `index` against `targetId`, in both books.</summary>
+        public void NotePassiveFireAgainst(int index, int targetId)
+        {
+            string key = index + ":" + targetId;
+            int n;
+            _passiveTargetsBattle[key] = _passiveTargetsBattle.TryGetValue(key, out n) ? n + 1 : 1;
+            _passiveTargetsThisRound[key] = _passiveTargetsThisRound.TryGetValue(key, out n) ? n + 1 : 1;
         }
 
         /// <summary>The share of one hit a protector takes for this unit, and who takes it.

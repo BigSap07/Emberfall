@@ -193,12 +193,92 @@ namespace Emberfall.Core.Combat
 
                 case EffectCondition.AlreadyDamagedSubjectThisRound:
                     return caster != null && caster.TimesDamagedThisRound(subject.Id) > 0;
+
+                // ---------- the non-numeric ledger, read back ----------
+                //
+                // Each of these finds the CASTER'S OWN entry of the named kind on the subject and
+                // asks what it recorded. Source-keyed like every other mark question here, so two
+                // heroes running the same mark on the same body read their own record and not each
+                // other's.
+                case EffectCondition.StoredStatusMatches:
+                {
+                    // "Gains a positive effect MATCHING the recorded effect": the comparison is
+                    // between what the record remembers and what the subject is carrying NOW, not
+                    // between the record and a constant. A constant would be a condition whose
+                    // answer the author already knew, and would make the record decorative.
+                    StatusInstance rec = FindRecord(subject, effect.ConditionStatus, caster);
+                    return rec != null && rec.StoredStatus != StatusKind.None
+                           && subject.Has(rec.StoredStatus);
+                }
+
+                case EffectCondition.StoredActionMatches:
+                {
+                    StatusInstance rec = FindRecord(subject, effect.ConditionStatus, caster);
+                    if (rec == null || rec.StoredAction == 0) return false;
+                    // ConditionValue is the action being asked about: 1 a Basic, 2 an Active.
+                    return rec.StoredAction == (int)effect.ConditionValue;
+                }
+
+                case EffectCondition.StoredRoleMatches:
+                {
+                    StatusInstance rec = FindRecord(subject, effect.ConditionStatus, caster);
+                    return rec != null && rec.StoredRoleSet && rec.StoredRole == (HeroRole)(int)effect.ConditionValue;
+                }
+
+                // A running minimum is only meaningful once something has been recorded, and the
+                // unset sentinel is negative precisely so "never recorded" and "recorded 0%" are
+                // different answers rather than the same one.
+                case EffectCondition.SubjectAboveStoredMin:
+                {
+                    StatusInstance rec = FindRecord(subject, effect.ConditionStatus, caster);
+                    return rec != null && rec.StoredMin >= 0f && subject.HpRatio > rec.StoredMin;
+                }
+
+                case EffectCondition.StatusUseAvailable:
+                {
+                    StatusInstance rec = FindRecord(subject, effect.ConditionStatus, caster);
+                    if (rec == null) return false;
+                    return rec.UsesPerRound <= 0 || rec.UsesThisRound < rec.UsesPerRound;
+                }
+
+                // ---------- answered by the Sim, not here ----------
+                //
+                // Turn progress is a property of the round's live order, which a static function
+                // has no access to. Returning false rather than throwing keeps this usable as the
+                // pure arithmetic half the harness tests directly, and the Sim's own gate answers
+                // these three before it ever reaches this switch - so the only way to land here
+                // with one of them is to call this function from outside a battle, where "false"
+                // is the honest answer.
+                case EffectCondition.TurnProgressAbove:
+                case EffectCondition.TurnProgressBelow:
+                case EffectCondition.CasterActsBeforeSubject:
+                    return false;
             }
 
             // An unknown member is refused rather than waved through. A condition nobody has taught
             // this method about must not silently become "always fires" - that turns a content typo
             // into a hero doing more than it says, which is the harder direction to notice.
             return false;
+        }
+
+        /// <summary>
+        /// The caster's own entry of `kind` on `holder`, or null. A record belongs to whoever wrote
+        /// it: two heroes running the same mark on one body each read their own.
+        ///
+        /// A null caster matches any source, which is the path a condition authored on a unit-less
+        /// context takes; it is not reachable from an ability, since every ability has a caster.
+        /// </summary>
+        private static StatusInstance FindRecord(CombatUnit holder, StatusKind kind, CombatUnit caster)
+        {
+            if (holder == null || kind == StatusKind.None) return null;
+            for (int i = 0; i < holder.Statuses.Count; i++)
+            {
+                StatusInstance s = holder.Statuses[i];
+                if (s.Kind != kind) continue;
+                if (caster != null && s.SourceId != caster.Id) continue;
+                return s;
+            }
+            return null;
         }
 
         /// <summary>
@@ -252,6 +332,29 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private List<CombatUnit> _order;
             private int _orderIndex;
+
+            /// <summary>
+            /// The unit whose death is being dispatched, non-null only while OnEnemyDefeated /
+            /// OnAllyDefeated are being broadcast. TargetMode.DefeatedUnit and
+            /// ConditionSubject.Defeated both resolve through this and to nobody outside the
+            /// window, which is why neither is reachable on an ordinary turn.
+            /// </summary>
+            private CombatUnit _defeated;
+            private bool _inDefeatDispatch;
+
+            /// <summary>
+            /// The per-target budget of the passive currently resolving, or null. Set by
+            /// TriggerPassive around its ResolveAbility call and restored afterwards, so a passive
+            /// that fires inside another passive does not inherit or clobber its budget.
+            ///
+            /// It lives here rather than as a ResolveAbility parameter because ResolveAbility is
+            /// also the path every Basic and Active takes, and threading a passive-only concept
+            /// through both would put it in the signature of everything.
+            /// </summary>
+            private CombatUnit _perTargetOwner;
+            private int _perTargetIndex;
+            private int _perTargetLimit;
+            private bool _perTargetPerRound;
 
             public Sim(BattleRequest request)
             {
@@ -442,6 +545,9 @@ namespace Emberfall.Core.Combat
                 TickDamageOverTime(unit);
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
+                RepayTurnDebt(unit);
+                if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
+
                 TriggerPassive(unit, PassiveTrigger.TurnStart, 0);
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
@@ -612,6 +718,153 @@ namespace Emberfall.Core.Combat
 
             // ------------------------------------------------------------------ abilities
 
+            /// <summary>
+            /// ConditionMet plus the three conditions that need the round's live turn order.
+            ///
+            /// The split is deliberate rather than awkward. `ConditionMet` is public, static and
+            /// pure, which is what lets the harness test its arithmetic without building a battle,
+            /// and turn progress is the first condition in the enum that is not a property of two
+            /// units alone - it is a property of where they sit in a list the Sim owns. Rather than
+            /// hand the Sim's internals to a static function, the contextual three are answered
+            /// here and everything else falls through unchanged.
+            ///
+            /// ConditionSubject.Defeated is resolved here too, for the same reason: the corpse is
+            /// Sim state, not something a caller could pass in.
+            /// </summary>
+            private bool ConditionMetHere(EffectDef effect, CombatUnit caster, CombatUnit target)
+            {
+                if (effect == null || effect.Condition == EffectCondition.None) return true;
+
+                CombatUnit subject = effect.ConditionOn == ConditionSubject.Caster ? caster
+                                   : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                   : target;
+                if (subject == null) return false;
+
+                switch (effect.Condition)
+                {
+                    // Inclusive at the boundary, matching HpBelow / HpAbove one file over: two
+                    // meanings of "above" in one engine is a worse trap than the lost precision.
+                    case EffectCondition.TurnProgressAbove:
+                        return TurnProgressOf(subject) >= effect.ConditionValue;
+
+                    case EffectCondition.TurnProgressBelow:
+                        return TurnProgressOf(subject) <= effect.ConditionValue;
+
+                    // Position, not progress, and the two disagree: a unit that has already acted
+                    // reads 0 progress but is not "after" anybody, it is out of the round. Both
+                    // sides must still be waiting for this to mean anything.
+                    case EffectCondition.CasterActsBeforeSubject:
+                    {
+                        int mine = PendingPositionOf(caster);
+                        int theirs = PendingPositionOf(subject);
+                        return mine >= 0 && theirs >= 0 && mine < theirs;
+                    }
+                }
+
+                // Everything else, including a Defeated subject asking an ordinary question, is
+                // answered by the pure function - with the resolved subject substituted in, so
+                // "did the unit that just died carry my mark" reaches the same HasMyMark code every
+                // other subject does.
+                if (effect.ConditionOn == ConditionSubject.Defeated)
+                {
+                    EffectDef asTarget = effect.Clone();
+                    asTarget.ConditionOn = ConditionSubject.Target;
+                    return ConditionMet(asTarget, caster, subject);
+                }
+                return ConditionMet(effect, caster, target);
+            }
+
+            /// <summary>
+            /// How far through the round a unit is, as a fraction from 0 to 1. DERIVED FROM
+            /// POSITION - there is no gauge, and this pass deliberately did not add one.
+            ///
+            /// WHY NOT A GAUGE. An ATB gauge is a per-unit float that fills with Speed and empties
+            /// on a turn, and it is the natural home for "50% turn progress". Adding one means the
+            /// round stops being a sort walked once and becomes a scheduler: turn order stops being
+            /// a pure function of Speed, every existing fingerprint moves, and the balance table
+            /// that 24 stages are tuned against is measured against a different game. That is a
+            /// larger change than all six mechanics in this pass put together, and nothing in the
+            /// roster needs the resolution it would buy.
+            ///
+            /// WHAT IT COSTS INSTEAD. Progress is quantised to the number of turns left in the
+            /// round: with four units still to act, the only readable values are 1, 0.75, 0.5, 0.25
+            /// and 0. "Above 50%" means "in the front half of what is left", which is what the two
+            /// abilities asking for it actually want, and 51% and 74% are indistinguishable. A unit
+            /// that has already acted reads 0, because its next turn is a whole round away rather
+            /// than imminent. Outside the round loop, and at BattleStart, everything reads 0.
+            ///
+            /// Draws nothing from _rng, so reading progress cannot desync a seeded replay.
+            /// </summary>
+            private float TurnProgressOf(CombatUnit unit)
+            {
+                int at = PendingPositionOf(unit);
+                if (at < 0) return 0f;
+
+                int first = _orderIndex + 1;
+                int tail = _order.Count - first;
+                if (tail <= 1) return 1f;
+                return 1f - (at - first) / (float)(tail - 1);
+            }
+
+            /// <summary>
+            /// A unit's index in the part of the round that has not happened yet, or -1 if it has
+            /// already acted, is not in the order, or there is no round in progress.
+            /// </summary>
+            private int PendingPositionOf(CombatUnit unit)
+            {
+                if (_order == null || unit == null) return -1;
+                int first = _orderIndex + 1;
+                if (first >= _order.Count) return -1;
+                return _order.IndexOf(unit, first);
+            }
+
+            /// <summary>
+            /// A debtor pays at its own turn start: Energy in proportion to what it owes, and the
+            /// debt is gone.
+            ///
+            /// The engine reads this status directly, the way it already reads Burn, Regen and
+            /// Shield, rather than leaving repayment to a passive. A passive would have to sit on
+            /// the DEBTOR, and the debtor is an enemy that knows nothing about the hero who pushed
+            /// it - the ability describing the debt belongs to the pusher, so the rule has to live
+            /// where the clock is.
+            ///
+            /// Fires after the damage-over-time tick and before TurnStart passives, so a hero
+            /// answering a repayment acts on a board where the Energy has already moved.
+            /// Magnitude is the exchange rate, Energy per full round of debt, stamped when the
+            /// debt was banked. Stored is a fraction of a round.
+            ///
+            /// Unreachable in shipped content: nothing applies TurnDebt, so this returns on the
+            /// first line of every battle in the game today.
+            /// </summary>
+            private void RepayTurnDebt(CombatUnit unit)
+            {
+                if (unit == null || !unit.Alive || !unit.Has(StatusKind.TurnDebt)) return;
+
+                float owed = 0f;
+                float rate = 0f;
+                int creditor = -1;
+                for (int i = unit.Statuses.Count - 1; i >= 0; i--)
+                {
+                    StatusInstance d = unit.Statuses[i];
+                    if (d.Kind != StatusKind.TurnDebt) continue;
+                    owed += d.Stored;
+                    if (d.Magnitude > rate) rate = d.Magnitude;
+                    if (creditor < 0) creditor = d.SourceId;
+                    unit.Statuses.RemoveAt(i);
+
+                    BattleEvent gone = Emit(BattleEventType.StatusExpired, d.SourceId, unit.Id);
+                    gone.Status = StatusKind.TurnDebt;
+                }
+                if (owed <= 0f || rate <= 0f) return;
+
+                int cost = (int)Math.Round(owed * rate, MidpointRounding.AwayFromZero);
+                if (cost > 0) AddEnergy(unit, -cost, -1);
+
+                // Broadcast to the side that did NOT pay, which is always the side the debt came
+                // from: an ability watching a repayment is the ability that applied the debt.
+                BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnTurnDebtRepaid, 0, null);
+            }
+
             private void ResolveAbility(CombatUnit caster, AbilityDef ability, int depth)
             {
                 if (ability == null) return;
@@ -664,8 +917,22 @@ namespace Emberfall.Core.Combat
                     {
                         CombatUnit target = targets[t];
                         if (target == null) continue;
-                        if (!ConditionMet(effect, caster, target)) continue;
+                        if (!ConditionMetHere(effect, caster, target)) continue;
                         anyTargetPassed = true;
+
+                        // A use is SPENT by the effect that read it, not by the round. Without this
+                        // StatusUseAvailable would be a condition that is true every time it is
+                        // asked, which is a rider with no ordinal rather than a first-each-round
+                        // one. Spent here, after the test and before the effect, so an effect that
+                        // kills its own target has still consumed the use it claimed.
+                        if (effect.Condition == EffectCondition.StatusUseAvailable)
+                        {
+                            CombatUnit holder = effect.ConditionOn == ConditionSubject.Caster ? caster
+                                              : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                              : target;
+                            StatusInstance used = FindRecord(holder, effect.ConditionStatus, caster);
+                            if (used != null) used.UsesThisRound++;
+                        }
 
                         // The per-TARGET half, which cannot be snapshotted: the count is a property
                         // of each target, so it is read here and the clone is per target. Only an
@@ -681,6 +948,25 @@ namespace Emberfall.Core.Combat
                                 scaled.Power = effect.Power * (1f + effect.PerStack * targetStacks);
                                 landed = scaled;
                             }
+                        }
+
+                        // THE PER-TARGET BUDGET, spent here rather than at the trigger.
+                        //
+                        // PassiveLimit is answered from the owner's clock before a passive fires;
+                        // this is answered once targeting has run, because it is a limit on where
+                        // an effect LANDS and the target's identity does not exist any earlier. A
+                        // passive whose budget is spent against one enemy still resolves normally
+                        // against another, which is the shape all four descriptions have and the
+                        // reason this could not be folded into PassiveLimit.
+                        //
+                        // Null owner is every Basic and every Active, which take this branch as a
+                        // single null test and are unchanged by it.
+                        if (_perTargetOwner != null && _perTargetLimit > 0)
+                        {
+                            if (_perTargetOwner.PassiveFiresAgainst(_perTargetIndex, target.Id,
+                                                                    _perTargetPerRound) >= _perTargetLimit)
+                                continue;
+                            _perTargetOwner.NotePassiveFireAgainst(_perTargetIndex, target.Id);
                         }
 
                         ApplyEffect(caster, target, landed, ability, depth);
@@ -827,6 +1113,21 @@ namespace Emberfall.Core.Combat
                                     ch.Charges = effect.Charges;
                             }
 
+                        // Per-round uses, stamped the same way and for the same reason. Zero on
+                        // every status in shipped content, so no entry gains a per-round budget
+                        // nobody authored - and a budget of zero means unlimited, which is what
+                        // every existing status already had.
+                        if (effect.UsesPerRound > 0)
+                            for (int ui = 0; ui < target.Statuses.Count; ui++)
+                            {
+                                StatusInstance us = target.Statuses[ui];
+                                if (us.Kind == effect.Status && us.SourceId == source.Id)
+                                {
+                                    us.UsesPerRound = effect.UsesPerRound;
+                                    us.UsesThisRound = 0;
+                                }
+                            }
+
                         if (effect.Status == StatusKind.Ledger)
                             for (int li = 0; li < target.Statuses.Count; li++)
                             {
@@ -934,7 +1235,18 @@ namespace Emberfall.Core.Combat
                     case EffectKind.TurnShift:
                     {
                         if (!target.Alive) break;
-                        ApplyTurnShift(source, target, effect.Magnitude);
+                        // ShiftBanksAs is None for every shift in shipped content and for every
+                        // shift authored before this pass, so the three-argument call below is the
+                        // one-argument call it replaced.
+                        ApplyTurnShift(source, target, effect.Magnitude,
+                                       effect.ShiftBanksAs, effect.StoredCap, effect.Magnitude == 0f ? 0f : effect.Power);
+                        break;
+                    }
+
+                    case EffectKind.RecordFact:
+                    {
+                        if (!target.Alive) break;
+                        RecordFact(source, target, effect);
                         break;
                     }
 
@@ -975,7 +1287,12 @@ namespace Emberfall.Core.Combat
                     case EffectKind.MoveDebuffs:
                     case EffectKind.MoveBuffs:
                     {
-                        if (!target.Alive) break;
+                        // THE ONE EFFECT THAT MAY READ A CORPSE. Every other kind refuses a dead
+                        // target because acting on one is meaningless; taking a status OFF one is
+                        // the entire point of the defeat window, and that window is the only place
+                        // a dead unit still has statuses to take. Outside it _defeated is null and
+                        // this is the Alive gate it has always been.
+                        if (!target.Alive && target != _defeated) break;
                         bool wantHarmful = effect.Kind == EffectKind.MoveDebuffs;
 
                         List<CombatUnit> destination = ResolveTargets(source, effect.SecondaryTarget, target,
@@ -1365,10 +1682,56 @@ namespace Emberfall.Core.Combat
 
                     target.Hp = 0f;
                     target.Alive = false;
-
-                    target.Statuses.Clear();
                     target.Shield = 0f;
                     Emit(BattleEventType.Death, sourceId, target.Id);
+
+                    // THE PRE-CLEAR WINDOW, and the reason this pass is three times the work the
+                    // same feature was before the aspect rules came out.
+                    //
+                    // Umbra's mark-jump used to live here: the death branch snapshotted the dying
+                    // unit's harmful statuses before emptying the list, moved the Umbra-sourced
+                    // ones, and cleared. Removing the rule took the snapshot AND the dispatch point
+                    // with it, so `Statuses.Clear()` ran with nothing having read the list. Six
+                    // abilities in the incoming roster want a status to survive its carrier's
+                    // death, so both have to come back - and not in the shape they left in.
+                    //
+                    // What changed, and why the old shape would not have served: the old rule moved
+                    // marks to the highest-ATTACK unit on the dead unit's own side, and every one
+                    // of the six wants the highest-HP or the lowest-HP enemy instead. None of the
+                    // six is Umbra. So the selector could not be reused either; what comes back is
+                    // a dispatch point and a way to name the corpse, with the choice of heir left
+                    // to content.
+                    //
+                    // The list is cleared AFTER the broadcast rather than before it. Nothing else
+                    // in the engine reads a dead unit's statuses - every accessor that could is
+                    // gated on Alive - so the window is observable only to a passive that asked to
+                    // be in it. _defeated is what makes the corpse nameable while it lasts, and is
+                    // nulled on the way out so TargetMode.DefeatedUnit resolves to nobody the
+                    // moment the window closes.
+                    //
+                    // Re-entrant deaths are bounded by _inDefeatDispatch rather than by depth: a
+                    // passive answering one death can kill somebody else, and the second corpse
+                    // would otherwise overwrite _defeated while the first broadcast is still
+                    // walking units. The inner death still resolves - it emits, it clears, it
+                    // fires OnKill - it simply does not raise a second defeat broadcast.
+                    if (!_inDefeatDispatch)
+                    {
+                        _inDefeatDispatch = true;
+                        CombatUnit previous = _defeated;
+                        _defeated = target;
+
+                        // The dead unit's OWN side hears OnAllyDefeated; the other side hears
+                        // OnEnemyDefeated. Split rather than one trigger with a condition, because
+                        // the two cases in the roster are opposite and a passive that had to test
+                        // which one it got would be answering a question content already knows.
+                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyDefeated, 0, target);
+                        BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyDefeated, 0, null);
+
+                        _defeated = previous;
+                        _inDefeatDispatch = false;
+                    }
+
+                    target.Statuses.Clear();
 
                     CombatUnit killer = FindUnit(sourceId);
                     if (killer != null && killer.Alive) TriggerPassive(killer, PassiveTrigger.OnKill, 0);
@@ -1666,7 +2029,25 @@ namespace Emberfall.Core.Combat
                     wrapper.Name = passive.Name;
                     wrapper.Vfx = passive.Vfx;
                     wrapper.Effects = passive.Effects;
+
+                    // Saved and restored rather than set and cleared, so a passive that fires
+                    // inside this one neither inherits this budget nor destroys it on the way out.
+                    CombatUnit prevOwner = _perTargetOwner;
+                    int prevIndex = _perTargetIndex;
+                    int prevLimit = _perTargetLimit;
+                    bool prevPerRound = _perTargetPerRound;
+
+                    _perTargetOwner = passive.PerTargetLimit > 0 ? owner : null;
+                    _perTargetIndex = i;
+                    _perTargetLimit = passive.PerTargetLimit;
+                    _perTargetPerRound = passive.PerTargetPerRound;
+
                     ResolveAbility(owner, wrapper, depth + 1);
+
+                    _perTargetOwner = prevOwner;
+                    _perTargetIndex = prevIndex;
+                    _perTargetLimit = prevLimit;
+                    _perTargetPerRound = prevPerRound;
                 }
             }
 
@@ -1773,6 +2154,12 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private void ApplyTurnShift(CombatUnit source, CombatUnit target, float fraction)
             {
+                ApplyTurnShift(source, target, fraction, StatusKind.None, 0f, 0f);
+            }
+
+            private void ApplyTurnShift(CombatUnit source, CombatUnit target, float fraction,
+                                        StatusKind banksAs, float cap, float rate)
+            {
                 if (_order == null || target == null || !target.Alive || fraction == 0f) return;
 
                 int first = _orderIndex + 1;
@@ -1798,7 +2185,59 @@ namespace Emberfall.Core.Combat
                 e.Status = StatusKind.None;   // no status caused this; an authored effect did
                 e.Value = destination - at;   // signed: negative advanced, positive delayed
 
+                // The REALISED shift, banked as a debt, which is the only way "Turn Debt equal to
+                // the progress removed" can be one effect. The number is not the authored fraction:
+                // it is what the move actually cost, measured in places over the tail, after the
+                // ceil and after both clamps. An effect that asked for 12% on a two-unit tail moved
+                // one place and took 50%, and the debt has to say 50% or it is describing a
+                // different event than the one that happened.
+                if (banksAs != StatusKind.None && destination > at)
+                {
+                    float realised = (destination - at) / (float)tail;
+                    BankTurnDebt(source, target, banksAs, realised, cap, rate);
+                }
+
                 if (destination > at && source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+            }
+
+            /// <summary>
+            /// Accumulates a debt on the target and stamps the rate it will be repaid at.
+            ///
+            /// Accumulates rather than refreshes: two delays land two debts, and a debtor that was
+            /// pushed twice owes for both. Capped at `cap` where one is authored, so "up to 30%"
+            /// is a property of the debt rather than of how many times it was applied.
+            /// </summary>
+            private void BankTurnDebt(CombatUnit source, CombatUnit target, StatusKind kind,
+                                      float amount, float cap, float rate)
+            {
+                if (target == null || !target.Alive || amount <= 0f) return;
+
+                int sourceId = source != null ? source.Id : -1;
+                StatusInstance entry = null;
+                for (int i = 0; i < target.Statuses.Count; i++)
+                {
+                    if (target.Statuses[i].Kind != kind) continue;
+                    if (target.Statuses[i].SourceId != sourceId) continue;
+                    entry = target.Statuses[i];
+                    break;
+                }
+
+                if (entry == null)
+                {
+                    target.AddOrRefresh(kind, 2, rate, sourceId);
+                    for (int i = 0; i < target.Statuses.Count; i++)
+                        if (target.Statuses[i].Kind == kind && target.Statuses[i].SourceId == sourceId)
+                            entry = target.Statuses[i];
+                    if (entry == null) return;
+                    entry.StoredCap = cap;
+
+                    BattleEvent applied = Emit(BattleEventType.StatusApplied, sourceId, target.Id);
+                    applied.Status = kind;
+                    applied.Duration = entry.RoundsLeft;
+                }
+
+                entry.Stored += amount;
+                if (entry.StoredCap > 0f && entry.Stored > entry.StoredCap) entry.Stored = entry.StoredCap;
             }
 
             /// <summary>
@@ -1889,7 +2328,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (best == null || u.HpRatio < best.HpRatio) best = u;
                         }
                         if (best != null) result.Add(best);
@@ -1915,7 +2354,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (best == null || u.Energy < best.Energy
                                 || (u.Energy == best.Energy && u.Slot < best.Slot)) best = u;
                         }
@@ -1946,7 +2385,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (best == null || u.DebuffCount > best.DebuffCount
                                 || (u.DebuffCount == best.DebuffCount && u.Slot < best.Slot)) best = u;
                         }
@@ -1995,6 +2434,19 @@ namespace Emberfall.Core.Combat
                     return result;
                 }
 
+                // CONCEALMENT, applied once and before the anchor, so a Concealed taunter stops
+                // answering for its side rather than becoming an unhittable wall.
+                //
+                // StatusKind.Stealth was declared for this and left inert; it costs no ordinal and
+                // no save byte. The rule is narrow on purpose: a Concealed unit is skipped by every
+                // SINGLE-TARGET pick and is not skipped by AllEnemies or AllAllies, which is what
+                // "cannot be targeted directly" says and what keeps concealment from being immunity.
+                //
+                // THE LAST BODY IS ALWAYS TARGETABLE. A side whose every living unit is Concealed
+                // would make single-target attacks resolve onto nobody, and a fight where one side
+                // cannot be hit does not end - it runs to maxRounds and reports a loss that no
+                // decision produced. So the exclusion is dropped when it would empty a side, which
+                // costs the last concealed unit its hiding place and is the correct trade.
                 CombatUnit anchor = FindTargetAnchor(!caster.IsPlayer);
                 if (anchor == excluded) anchor = null;
                 if (anchor != null)
@@ -2045,7 +2497,7 @@ namespace Emberfall.Core.Combat
                     case TargetMode.RandomEnemy:
                     {
                         List<CombatUnit> enemies = new List<CombatUnit>();
-                        CollectSide(enemies, !caster.IsPlayer, excluded);
+                        CollectSide(enemies, !caster.IsPlayer, excluded, true);
                         if (enemies.Count > 0) picked = enemies[_rng.Range(0, enemies.Count)];
                         break;
                     }
@@ -2063,12 +2515,25 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (!u.HasMarkFrom(markKind, caster.Id)) continue;
                             if (picked == null || u.Slot < picked.Slot) picked = u;
                         }
                         break;
                     }
+
+                    // THE ONE MODE THAT CAN NAME A DEAD UNIT, and only inside the window where
+                    // that means something. Outside a defeat broadcast _defeated is null and this
+                    // resolves to nobody, which is the honest answer rather than a fallback.
+                    //
+                    // The Alive gate every other mode applies is deliberately NOT applied: the
+                    // whole point is to reach a corpse whose statuses have not been cleared yet.
+                    // Effects that cannot act on a corpse refuse it themselves - ApplyHealValue
+                    // returns on a dead target, DealRawDamage on a dead target does nothing - so a
+                    // mis-authored effect aimed here is inert rather than wrong.
+                    case TargetMode.DefeatedUnit:
+                        picked = _defeated != null && _defeated != excluded ? _defeated : null;
+                        break;
 
                     case TargetMode.EnemyWithStatus:
                     {
@@ -2076,7 +2541,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (!u.Has(targetStatus)) continue;
                             if (picked == null || u.Slot < picked.Slot) picked = u;
                         }
@@ -2088,7 +2553,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (picked == null) { picked = u; continue; }
                             if (mode == TargetMode.LowestHpEnemy && u.Hp < picked.Hp) picked = u;
                             else if (mode == TargetMode.HighestHpEnemy && u.Hp > picked.Hp) picked = u;
@@ -2125,7 +2590,7 @@ namespace Emberfall.Core.Combat
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded) continue;
+                    if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
                     allies.Add(u);
                 }
                 allies.Sort(CompareByHpRatio);
@@ -2147,10 +2612,22 @@ namespace Emberfall.Core.Combat
 
             private void CollectSide(List<CombatUnit> into, bool playerSide, CombatUnit excluded)
             {
+                CollectSide(into, playerSide, excluded, false);
+            }
+
+            /// <summary>
+            /// `skipConcealed` is set by the SINGLE-TARGET callers and left false by the wide ones,
+            /// which is the whole of the concealment rule: "cannot be targeted directly" hides a
+            /// unit from a pick and not from an area hit.
+            /// </summary>
+            private void CollectSide(List<CombatUnit> into, bool playerSide, CombatUnit excluded, bool skipConcealed)
+            {
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (u.Alive && u.IsPlayer == playerSide && u != excluded) into.Add(u);
+                    if (!u.Alive || u.IsPlayer != playerSide || u == excluded) continue;
+                    if (skipConcealed && Concealed(u)) continue;
+                    into.Add(u);
                 }
             }
 
@@ -2178,6 +2655,7 @@ namespace Emberfall.Core.Combat
                 {
                     CombatUnit u = _units[i];
                     if (!u.Alive || u.IsPlayer != playerSide) continue;
+                    if (Concealed(u)) continue;   // a hidden protector is not answering for anybody
                     if (u.HasTaunt && (taunter == null || u.Slot < taunter.Slot)) taunter = u;
                 }
                 return taunter;
@@ -2203,6 +2681,68 @@ namespace Emberfall.Core.Combat
             /// note gives: nobody applied this. Value carries the original applier's id, which is
             /// otherwise unrecoverable once the source's list is gone.
             /// </summary>
+            /// <summary>
+            /// Writes a non-numeric fact onto the caster's own entry of `effect.Status` on the
+            /// target. No entry, no record - this never creates a status, because the record is a
+            /// property OF a mark rather than a mark of its own, and creating one silently would
+            /// make a mistyped `status` field look like it worked.
+            ///
+            /// Emits nothing. A record is not an outcome the screen has to explain: what the player
+            /// sees is the mark, which already has its own StatusApplied, and the detonation later,
+            /// which has its own event. An event per record would narrate bookkeeping.
+            /// </summary>
+            private void RecordFact(CombatUnit source, CombatUnit target, EffectDef effect)
+            {
+                if (source == null || target == null || effect.Record == RecordKind.None) return;
+
+                StatusInstance entry = null;
+                for (int i = 0; i < target.Statuses.Count; i++)
+                {
+                    if (target.Statuses[i].Kind != effect.Status) continue;
+                    if (target.Statuses[i].SourceId != source.Id) continue;
+                    entry = target.Statuses[i];
+                    break;
+                }
+                if (entry == null) return;
+
+                switch (effect.Record)
+                {
+                    case RecordKind.LastPositiveStatus:
+                    {
+                        // The most recent beneficial entry, walked backwards because AddOrRefresh
+                        // appends: the last match is the newest. Nothing is written when the target
+                        // carries no buff at all, so a record keeps the last thing it saw rather
+                        // than being wiped by a moment of having nothing.
+                        for (int i = target.Statuses.Count - 1; i >= 0; i--)
+                        {
+                            StatusKind k = target.Statuses[i].Kind;
+                            if (k == effect.Status || StatusInfo.IsHarmful(k)) continue;
+                            entry.StoredStatus = k;
+                            break;
+                        }
+                        break;
+                    }
+
+                    case RecordKind.LastActionType:
+                        // 0 stays 0 until the subject has actually acted, so "changed its action
+                        // type" is false on a unit that has taken one turn rather than true.
+                        if (target.ActionsTaken > 0) entry.StoredAction = target.LastActionWasActive ? 2 : 1;
+                        break;
+
+                    case RecordKind.SubjectRole:
+                        entry.StoredRole = target.Role;
+                        entry.StoredRoleSet = true;
+                        break;
+
+                    case RecordKind.MinHpRatio:
+                        // A running minimum: it only ever moves down while the entry lives, which
+                        // is the difference between "the lowest it went" and "where it is now".
+                        if (entry.StoredMin < 0f || target.HpRatio < entry.StoredMin)
+                            entry.StoredMin = target.HpRatio;
+                        break;
+                }
+            }
+
             private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status, bool removeFromSource)
             {
                 if (to == null || status == null) return;
@@ -2211,10 +2751,61 @@ namespace Emberfall.Core.Combat
 
                 to.AddOrRefresh(status.Kind, status.RoundsLeft, status.Magnitude, status.SourceId);
 
+                // EVERYTHING THE ENTRY RECORDED TRAVELS WITH IT. A ledger that forgets its balance
+                // when it changes carrier is not a ledger, and a record that forgets what it
+                // recorded is not a record - which is precisely what the four abilities moving a
+                // Scar Record or a Residue off a corpse are asking to keep. AddOrRefresh created
+                // or refreshed a bare entry, so the carried fields are copied onto it here.
+                //
+                // This creates no value, the same guarantee the rest of MoveStatus holds to:
+                // every field is copied across unchanged, never combined with what was already
+                // there, so a move relocates a record rather than deepening one.
+                for (int i = 0; i < to.Statuses.Count; i++)
+                {
+                    StatusInstance landed = to.Statuses[i];
+                    if (landed.Kind != status.Kind || landed.SourceId != status.SourceId) continue;
+                    landed.Stored = status.Stored;
+                    landed.StoredCap = status.StoredCap;
+                    landed.Charges = status.Charges;
+                    landed.StoredStatus = status.StoredStatus;
+                    landed.StoredAction = status.StoredAction;
+                    landed.StoredRole = status.StoredRole;
+                    landed.StoredRoleSet = status.StoredRoleSet;
+                    landed.StoredMin = status.StoredMin;
+                    landed.UsesPerRound = status.UsesPerRound;
+                    landed.UsesThisRound = status.UsesThisRound;
+                    break;
+                }
+
                 BattleEvent e = Emit(BattleEventType.StatusSpread, from != null ? from.Id : -1, to.Id);
                 e.Status = status.Kind;
                 e.Duration = status.RoundsLeft;
                 e.Value = status.SourceId;
+            }
+
+            /// <summary>
+            /// Whether this unit is hidden from single-target picks right now.
+            ///
+            /// THE LAST BODY IS NEVER CONCEALED. A side whose every living unit carried Stealth
+            /// would make single-target attacks resolve onto nobody, and a fight where one side
+            /// cannot be hit does not end: it runs to maxRounds and reports a loss no decision
+            /// produced. So the answer is false whenever saying true would empty a side. That costs
+            /// the last hidden unit its hiding place, which is the correct trade and is also the
+            /// only way concealment stays a tempo tool rather than immunity.
+            ///
+            /// StatusKind.Stealth was declared for this in an earlier pass and left inert, so it
+            /// costs no ordinal and no save byte.
+            /// </summary>
+            private bool Concealed(CombatUnit unit)
+            {
+                if (unit == null || !unit.Alive || !unit.Has(StatusKind.Stealth)) return false;
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u.IsPlayer != unit.IsPlayer) continue;
+                    if (!u.Has(StatusKind.Stealth)) return true;   // somebody else can be hit
+                }
+                return false;
             }
 
             private CombatUnit FindUnit(int id)

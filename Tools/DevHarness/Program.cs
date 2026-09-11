@@ -36,6 +36,7 @@ namespace Emberfall.DevHarness
 
             CheckContent(content);
             CheckHeroRoleOrdinals(content);
+            CheckTierFiveMechanics(content);
             CheckAspectDirection(content);
             CheckNoAspectKeyedBehaviour(content);
             CheckOnKillPassive(content);
@@ -3373,6 +3374,737 @@ namespace Emberfall.DevHarness
             int close = line.IndexOf('"', open + 1);
             if (close < 0) return null;
             return line.Substring(open + 1, close - open - 1);
+        }
+
+
+        // ---------------------------------------------------------------- tier five
+
+        /// <summary>
+        /// The six mechanics of the tier-five pass, each proved to fire and each guarded against
+        /// shipped content reaching it.
+        ///
+        /// The guards come FIRST and are the half that matters. Every check below builds synthetic
+        /// content to make a mechanic happen, which proves the code works and proves nothing about
+        /// whether the game changed; the claim that no existing battle moved rests on the content
+        /// guards plus the 678-fingerprint sweep, not on any arena.
+        /// </summary>
+        private static void CheckTierFiveMechanics(ContentDatabase live)
+        {
+            Line("TIER FIVE (turn progress, round ordinals, concealment, per-target limits, records, defeat)");
+
+            CheckNoShippedContentReachesTierFive(live);
+            CheckTierFiveOrdinals();
+            CheckTurnProgressQuantity();
+            CheckPerRoundStatusUses();
+            CheckConcealment();
+            CheckPerTargetLimits();
+            CheckNonNumericLedger();
+            CheckDefeatDispatch();
+
+            Line("");
+        }
+
+        /// <summary>
+        /// SIX STANDING GUARDS IN ONE SWEEP: no unit in shipped content authors any of the six
+        /// mechanics this pass added.
+        ///
+        /// One walk over every ability of every hero and enemy, asking six questions rather than
+        /// six walks asking one each, because the thing being asserted is a single property of the
+        /// content - that none of it reaches the new code - and splitting it into six would let
+        /// five pass while the sixth quietly stopped being checked.
+        ///
+        /// The day any of these stops being true, the "no existing battle moved" claim this pass
+        /// makes has to be re-earned by measurement rather than inherited.
+        /// </summary>
+        private static void CheckNoShippedContentReachesTierFive(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            List<string> progress = new List<string>(), uses = new List<string>(), conceal = new List<string>();
+            List<string> perTarget = new List<string>(), records = new List<string>(), defeat = new List<string>();
+
+            for (int u = 0; u < units.Count; u++)
+            {
+                UnitDef def = units[u];
+                for (int p = 0; p < def.Passives.Count; p++)
+                {
+                    PassiveDef passive = def.Passives[p];
+                    if (passive == null) continue;
+                    if (passive.PerTargetLimit > 0) perTarget.Add(def.Id + "/" + passive.Name);
+                    if (passive.Trigger == PassiveTrigger.OnEnemyDefeated
+                        || passive.Trigger == PassiveTrigger.OnAllyDefeated
+                        || passive.Trigger == PassiveTrigger.OnTurnDebtRepaid)
+                        defeat.Add(def.Id + "/" + passive.Name + " (" + passive.Trigger + ")");
+                }
+
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                {
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                    {
+                        EffectDef eff = abilities[a].Effects[e];
+                        string where = def.Id + "/" + abilities[a].Name;
+
+                        if (eff.Condition == EffectCondition.TurnProgressAbove
+                            || eff.Condition == EffectCondition.TurnProgressBelow
+                            || eff.Condition == EffectCondition.CasterActsBeforeSubject
+                            || eff.ShiftBanksAs != StatusKind.None
+                            || eff.Status == StatusKind.TurnDebt)
+                            progress.Add(where);
+
+                        if (eff.UsesPerRound > 0 || eff.Condition == EffectCondition.StatusUseAvailable)
+                            uses.Add(where);
+
+                        if (eff.Status == StatusKind.Stealth || eff.ConditionStatus == StatusKind.Stealth)
+                            conceal.Add(where);
+
+                        if (eff.Kind == EffectKind.RecordFact || eff.Record != RecordKind.None
+                            || eff.Condition == EffectCondition.StoredStatusMatches
+                            || eff.Condition == EffectCondition.StoredActionMatches
+                            || eff.Condition == EffectCondition.StoredRoleMatches
+                            || eff.Condition == EffectCondition.SubjectAboveStoredMin)
+                            records.Add(where);
+
+                        if (eff.Target == TargetMode.DefeatedUnit
+                            || eff.SecondaryTarget == TargetMode.DefeatedUnit
+                            || eff.ConditionOn == ConditionSubject.Defeated)
+                            defeat.Add(where);
+                    }
+                }
+            }
+
+            Check(progress.Count == 0, "no shipped content reads turn progress as a quantity or banks a Turn Debt"
+                  + Detail(progress));
+            Check(uses.Count == 0, "no shipped status carries a per-round use budget" + Detail(uses));
+            Check(conceal.Count == 0, "no shipped content applies or reads Stealth, so concealment is unreachable"
+                  + Detail(conceal));
+            Check(perTarget.Count == 0, "no shipped passive sets a per-target limit" + Detail(perTarget));
+            Check(records.Count == 0, "no shipped content writes or reads a non-numeric record" + Detail(records));
+            Check(defeat.Count == 0, "no shipped content listens for a defeat or names the defeated unit"
+                  + Detail(defeat));
+        }
+
+        private static string Detail(List<string> offenders)
+        {
+            return offenders.Count == 0 ? "" : " - FOUND: " + string.Join(", ", offenders.ToArray());
+        }
+
+        /// <summary>Basic, active and every passive of a unit, as one list.</summary>
+        private static List<AbilityDef> AllAbilitiesOf(UnitDef def)
+        {
+            List<AbilityDef> list = new List<AbilityDef>();
+            if (def.BasicAttack != null) list.Add(def.BasicAttack);
+            if (def.Active != null) list.Add(def.Active);
+            for (int p = 0; p < def.Passives.Count; p++)
+            {
+                if (def.Passives[p] == null) continue;
+                AbilityDef wrapper = new AbilityDef();
+                wrapper.Name = def.Passives[p].Name;
+                wrapper.Effects = def.Passives[p].Effects;
+                list.Add(wrapper);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// The ordinal pins, extended to the five enums this pass appends to.
+        ///
+        /// Same standard every earlier pass held: `BattleEvent.Status` carries a StatusKind ordinal
+        /// into the permanent record of every battle, so renumbering one rewrites what a past
+        /// battle said with no simulation change at all. TargetMode, EffectKind, EffectCondition
+        /// and PassiveTrigger are pinned for the weaker reason that content names them by string
+        /// and an insertion would silently re-point every authored value.
+        /// </summary>
+        private static void CheckTierFiveOrdinals()
+        {
+            Check((int)StatusKind.Vulnerable == 36 && (int)StatusKind.TurnDebt == 37,
+                  "StatusKind keeps its ordinals and TurnDebt is appended at " + (int)StatusKind.TurnDebt);
+            Check((int)EffectKind.LedgerRelease == 15 && (int)EffectKind.RecordFact == 16,
+                  "EffectKind keeps its ordinals and RecordFact is appended at " + (int)EffectKind.RecordFact);
+            Check((int)TargetMode.EnemyWithMyMark == 20 && (int)TargetMode.DefeatedUnit == 21,
+                  "TargetMode keeps its ordinals and DefeatedUnit is appended at " + (int)TargetMode.DefeatedUnit);
+            Check((int)ConditionSubject.Target == 0 && (int)ConditionSubject.Caster == 1
+                  && (int)ConditionSubject.Defeated == 2,
+                  "ConditionSubject keeps Target and Caster and appends Defeated");
+            Check((int)EffectCondition.AlreadyDamagedSubjectThisRound == 17
+                  && (int)EffectCondition.TurnProgressAbove == 18
+                  && (int)EffectCondition.StatusUseAvailable == 25,
+                  "EffectCondition keeps its ordinals and the eight new members are appended at 18-25");
+            Check((int)PassiveTrigger.OnAllyWouldDie == 19 && (int)PassiveTrigger.OnEnemyDefeated == 20
+                  && (int)PassiveTrigger.OnTurnDebtRepaid == 22,
+                  "PassiveTrigger keeps its ordinals and the three new triggers are appended at 20-22");
+        }
+
+
+        /// <summary>
+        /// Turn progress, read as a quantity, and the Turn Debt that banks it.
+        ///
+        /// The arena is a five-body line at flat, separated speeds so the round's order is exact
+        /// arithmetic rather than a seeded draw. A caster reads progress on two enemies at opposite
+        /// ends of the remaining order and must answer differently for them; the same ability at
+        /// the same threshold must therefore hit one and not the other, which is the whole claim.
+        ///
+        /// The debt half is measured as Energy, not as a status row: a debt that lands and is never
+        /// repaid would pass a "status was applied" check and do nothing a player could feel.
+        /// </summary>
+        private static void CheckTurnProgressQuantity()
+        {
+            BattleResult hi = RunProgressArena("TurnProgressAbove", 0.99f, StatusKind.None, 0);
+            BattleResult lo = RunProgressArena("TurnProgressBelow", 0.01f, StatusKind.None, 0);
+            if (hi == null || lo == null) { Check(false, "the turn-progress arena builds"); return; }
+
+            List<string> front = FocusedNames(hi);
+            List<string> back = FocusedNames(lo);
+            Check(front.Count > 0 && back.Count > 0 && front[0] != back[0],
+                  "progress above and below pick DIFFERENT bodies from the same order (above -> "
+                  + (front.Count == 0 ? "nobody" : front[0]) + ", below -> "
+                  + (back.Count == 0 ? "nobody" : back[0]) + ")");
+            Check(front.Count > 0 && front[0] == "p_fast",
+                  "the unit closest to acting reads the HIGHEST progress (got "
+                  + (front.Count == 0 ? "nobody" : front[0]) + ")");
+            Check(back.Count > 0 && back[0] == "p_slow",
+                  "the unit furthest from acting reads the LOWEST progress (got "
+                  + (back.Count == 0 ? "nobody" : back[0]) + ")");
+
+            // A threshold nothing can satisfy must land on nobody rather than defaulting to
+            // somebody: a quantity that is read wrong is worse than one that is not read.
+            BattleResult none = RunProgressArena("TurnProgressAbove", 1.5f, StatusKind.None, 0);
+            Check(none != null && FocusedNames(none).Count == 0,
+                  "a threshold above 1.0 matches nobody rather than falling back to a default pick");
+
+            // ---- Turn Debt ----
+            BattleResult debt = RunProgressArena("None", 0f, StatusKind.TurnDebt, 40);
+            BattleResult control = RunProgressArena("None", 0f, StatusKind.None, 40);
+            if (debt == null || control == null) { Check(false, "the Turn Debt arena builds"); return; }
+
+            Check(CountStatus(debt, StatusKind.TurnDebt, BattleEventType.StatusApplied) > 0,
+                  "a delay banks a Turn Debt on the unit it delayed");
+            Check(CountStatus(debt, StatusKind.TurnDebt, BattleEventType.StatusExpired) > 0,
+                  "the debtor repays at its own turn start and the debt is gone");
+            Check(LowestEnergySeen(debt) < LowestEnergySeen(control),
+                  "repaying costs the debtor Energy the control never loses (" + LowestEnergySeen(debt)
+                  + " vs " + LowestEnergySeen(control) + ")");
+            Check(CountStatus(control, StatusKind.TurnDebt, BattleEventType.StatusApplied) == 0,
+                  "the control delays identically and banks nothing, so the debt is the shiftBanksAs field"
+                  + " and not a property of delaying");
+        }
+
+        /// <summary>Ids of the units a Focus landed on, in order. Focus is the arena's marker: it
+        /// is beneficial, so it is never resisted, and nothing else in these arenas applies it.</summary>
+        private static List<string> FocusedNames(BattleResult r)
+        {
+            List<string> names = new List<string>();
+            Dictionary<int, string> byId = new Dictionary<int, string>();
+            for (int i = 0; i < r.Units.Count; i++) byId[r.Units[i].Id] = r.Units[i].DefId;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusApplied || e.Status != StatusKind.Focus) continue;
+                string id;
+                if (byId.TryGetValue(e.TargetId, out id)) names.Add(id);
+            }
+            return names;
+        }
+
+        private static int CountStatus(BattleResult r, StatusKind kind, BattleEventType type)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == type && r.Events[i].Status == kind) n++;
+            return n;
+        }
+
+        private static int LowestEnergySeen(BattleResult r)
+        {
+            int low = int.MaxValue;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.EnergyChanged) continue;
+                UnitSnapshot u = r.FindUnit(e.TargetId);
+                if (u == null || u.IsPlayer) continue;      // the debtor is always an enemy here
+                if (e.Value < low) low = e.Value;
+            }
+            return low == int.MaxValue ? -1 : low;
+        }
+
+        /// <summary>
+        /// One caster against four enemies whose speeds bracket its own, so the round's order is
+        /// fixed and every enemy sits at a different, known distance from acting.
+        ///
+        /// The caster is SLOWEST on purpose. It acts last, so by the time it reads progress every
+        /// other unit's position is settled and the tail it measures against is the four enemies
+        /// rather than a moving target.
+        /// </summary>
+        private static BattleResult RunProgressArena(string condition, float value, StatusKind banks, int rate)
+        {
+            string cond = condition == "None" ? ""
+                : ", \"condition\": \"" + condition + "\", \"conditionValue\": " + Fmt(value);
+            string shift = banks == StatusKind.None
+                ? ""
+                : ", { \"kind\": \"TurnShift\", \"target\": \"FrontEnemy\", \"magnitude\": -0.5, \"power\": "
+                  + rate + ", \"shiftBanksAs\": \"TurnDebt\", \"storedCap\": 0.3 }";
+            string plainShift = banks == StatusKind.None && rate > 0
+                ? ", { \"kind\": \"TurnShift\", \"target\": \"FrontEnemy\", \"magnitude\": -0.5 }"
+                : "";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""p_caster"", ""name"": ""Reader"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""p_basic"", ""name"": ""Read"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Focus"", ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1" + cond + @" }" + shift + plainShift + @" ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""p_fast"", ""name"": ""Fast"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""pf_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""p_mid"", ""name"": ""Mid"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""pm_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""p_low"", ""name"": ""Low"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""pl_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""p_slow"", ""name"": ""Slow"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ps_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t5_progress_ch"", ""name"": ""Progress"", ""stages"": [
+    { ""id"": ""t5_progress"", ""index"": 1, ""enemies"": [
+      { ""id"": ""p_fast"", ""level"": 1 }, { ""id"": ""p_mid"", ""level"": 1 },
+      { ""id"": ""p_low"", ""level"": 1 }, { ""id"": ""p_slow"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 30, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "turn progress");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef caster = db.GetHero("p_caster");
+            if (caster != null) team.Add(MakeInstance(caster, 1));
+            return RunWith(db, db.GetStage("t5_progress"), 1717, team);
+        }
+
+
+        /// <summary>
+        /// The remaining four mechanics, all against one arena shape so the differences between
+        /// them are the authored fields rather than four unrelated boards.
+        ///
+        /// Each is measured against a CONTROL that changes exactly one thing, because every one of
+        /// these is a claim that something happened a bounded number of times, and "it happened"
+        /// alone cannot tell a working limit from an absent one.
+        /// </summary>
+        private static void CheckPerRoundStatusUses()
+        {
+            BattleResult limited = RunRiderArena("uses", 1);
+            BattleResult unlimited = RunRiderArena("uses", 0);
+            if (limited == null || unlimited == null) { Check(false, "the per-round use arena builds"); return; }
+
+            int limitedHits = CountEvents(limited, BattleEventType.Damage);
+            int unlimitedHits = CountEvents(unlimited, BattleEventType.Damage);
+            Check(limitedHits > 0, "a per-round rider fires at all (" + limitedHits + ")");
+            Check(limitedHits < unlimitedHits,
+                  "a budget of one per round fires FEWER times than the same rider with no budget ("
+                  + limitedHits + " vs " + unlimitedHits + ") - the count is the proof, not the firing");
+            // The rider's OWN output, separated from the enemies' attacks that share the Damage
+            // event type. Two enemies carry the mark, so an unbudgeted rider answering two hits a
+            // round lands four; a budget of one lands two.
+            int limitedRider = DamageFrom(limited, "r_watcher");
+            int unlimitedRider = DamageFrom(unlimited, "r_watcher");
+            Check(limitedRider < unlimitedRider,
+                  "a budget of one cuts the rider's own output across the fight (" + limitedRider
+                  + " vs " + unlimitedRider + ") - counted as the rider's damage rather than as its"
+                  + " firings, since a budget gates where an effect lands and not whether it fires");
+        }
+
+        /// <summary>
+        /// Concealment, and the one case that would hang a fight.
+        ///
+        /// Two claims, opposite in direction. A Concealed body is skipped by a single-target pick
+        /// while somebody else is standing, and a Concealed body is NOT skipped when it is the last
+        /// one, because a side nobody can hit produces a battle that runs to maxRounds and reports
+        /// a defeat no decision caused.
+        /// </summary>
+        private static void CheckConcealment()
+        {
+            BattleResult hidden = RunConcealArena(true, false);
+            BattleResult open = RunConcealArena(false, false);
+            if (hidden == null || open == null) { Check(false, "the concealment arena builds"); return; }
+
+            Check(DamagedNames(open).Contains("c_front"),
+                  "the control hits the front body, so the pick would land there if nothing hid it");
+            Check(!DamagedNames(hidden).Contains("c_front"),
+                  "a Concealed body is skipped by a single-target pick while another body stands");
+            Check(DamagedNames(hidden).Contains("c_other"),
+                  "and the hit lands on the body that is not hiding rather than on nobody");
+
+            BattleResult lastOne = RunConcealArena(true, true);
+            Check(lastOne != null && DamagedNames(lastOne).Contains("c_front"),
+                  "the LAST living body is targetable even while Concealed - a side nobody can hit"
+                  + " would run the fight to maxRounds and call it a loss");
+        }
+
+        /// <summary>
+        /// Per-target limits: a passive whose budget is spent against one body still fires against
+        /// another, which is the property that distinguishes this from PassiveLimit.
+        /// </summary>
+        private static void CheckPerTargetLimits()
+        {
+            BattleResult capped = RunRiderArena("pertarget", 1);
+            BattleResult uncapped = RunRiderArena("pertarget", 0);
+            if (capped == null || uncapped == null) { Check(false, "the per-target arena builds"); return; }
+
+            List<string> hit = DamagedNames(capped);
+            // Counted as damage LANDED, not as passive firings. The budget gates where an effect
+            // lands, so the passive still fires either way and a count of triggers would read
+            // identical for a working limit and an absent one.
+            int cappedHits = CountEvents(capped, BattleEventType.Damage);
+            int uncappedHits = CountEvents(uncapped, BattleEventType.Damage);
+            Check(cappedHits < uncappedHits,
+                  "a per-target budget of one lands fewer hits than the same passive uncapped ("
+                  + cappedHits + " vs " + uncappedHits + ")");
+            Check(hit.Contains("r_front") && hit.Contains("r_second"),
+                  "and it still reaches a SECOND target after its budget against the first is spent,"
+                  + " which is what PassiveLimit cannot express");
+        }
+
+        /// <summary>
+        /// The non-numeric ledger. Proved by detonation rather than by inspection: a record nothing
+        /// can read back is indistinguishable from no record at all, so the check makes the engine
+        /// answer a question that only a correct record could answer.
+        /// </summary>
+        private static void CheckNonNumericLedger()
+        {
+            BattleResult match = RunRecordArena(StatusKind.AttackUp);
+            BattleResult miss = RunRecordArena(StatusKind.DefenseUp);
+            if (match == null || miss == null) { Check(false, "the record arena builds"); return; }
+
+            // Counted as damage LANDED, not as the passive firing. A conditional effect emits its
+            // PassiveTrigger either way and then skips; measuring the trigger would report a
+            // working condition and a broken one as the same number, which is the trap the first
+            // version of this check fell into.
+            Check(DamageByAbility(match, "Payoff") > 0,
+                  "a recorded status identity is read back and the payoff lands when it matches");
+            // Compared as counts rather than against zero, and the reason is worth stating: the
+            // opening buff is still standing on the round the record is written, so the payoff
+            // matches once in BOTH runs before anything expires. What separates them is every
+            // round after that, where only the run whose target regains the RECORDED buff keeps
+            // matching. A zero-versus-nonzero assertion here would be measuring the first round
+            // and calling it the mechanic.
+            Check(DamageByAbility(match, "Payoff") > DamageByAbility(miss, "Payoff"),
+                  "and LANDS fewer times when the target regains a different buff ("
+                  + DamageByAbility(match, "Payoff") + " vs " + DamageByAbility(miss, "Payoff")
+                  + ") - the record carries WHICH status, which is the thing a float cannot say");
+        }
+
+        /// <summary>
+        /// The defeat window: a status survives its carrier's death because something read the list
+        /// before it was cleared.
+        ///
+        /// The control is the same battle with the watcher's trigger changed to OnKill, which is
+        /// the trigger that already existed. It fires on the killer and therefore reaches nobody
+        /// here, and that is the point: OnKill is why this mechanic needed building at all.
+        /// </summary>
+        private static void CheckDefeatDispatch()
+        {
+            BattleResult watched = RunDefeatArena("OnEnemyDefeated");
+            BattleResult control = RunDefeatArena("OnKill");
+            if (watched == null || control == null) { Check(false, "the defeat arena builds"); return; }
+
+            Check(CountEvents(watched, BattleEventType.Death) > 0, "the arena actually kills somebody");
+            Check(CountEvents(watched, BattleEventType.StatusSpread) > 0,
+                  "a mark moves OFF the corpse, so the status list was still readable when the"
+                  + " broadcast ran (" + CountEvents(watched, BattleEventType.StatusSpread) + ")");
+            Check(CountEvents(control, BattleEventType.StatusSpread) == 0,
+                  "the same battle on OnKill moves nothing - the killer is not the mark's owner,"
+                  + " which is exactly why OnKill could not serve these abilities");
+
+            // The corpse must stop being nameable the moment the window closes, or DefeatedUnit
+            // becomes a stale pointer at every later effect in the battle.
+            Check(SpreadAllLandOnLiving(watched),
+                  "every moved status landed on a LIVING unit rather than on another corpse");
+        }
+
+        private static bool SpreadAllLandOnLiving(BattleResult r)
+        {
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                if (r.Events[i].Type != BattleEventType.StatusSpread) continue;
+                UnitSnapshot to = r.FindUnit(r.Events[i].TargetId);
+                if (to == null) return false;
+                // A unit that dies later is fine; what must not happen is a move onto a unit that
+                // was already dead when the move ran, which shows as a Death for it earlier.
+                for (int j = 0; j < i; j++)
+                    if (r.Events[j].Type == BattleEventType.Death && r.Events[j].TargetId == to.Id) return false;
+            }
+            return true;
+        }
+
+        private static int CountAbility(BattleResult r, string abilityId)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityId == abilityId) n++;
+            return n;
+        }
+
+        /// <summary>Damage events sourced from one named unit, so a rider's own output can be
+        /// told apart from everything else sharing the Damage event type.</summary>
+        private static int DamageFrom(BattleResult r, string defId)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return 0;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].SourceId == id) n++;
+            return n;
+        }
+
+        /// <summary>Damage events an ability actually landed, by name. The counterpart to
+        /// CountAbility, which counts a passive FIRING - a conditional effect fires and then skips,
+        /// so the two numbers answer different questions and only this one answers "did it do
+        /// something".</summary>
+        private static int DamageByAbility(BattleResult r, string abilityName)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].AbilityName == abilityName) n++;
+            return n;
+        }
+
+        private static int CountEvents(BattleResult r, BattleEventType type)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++) if (r.Events[i].Type == type) n++;
+            return n;
+        }
+
+        private static List<string> DamagedNames(BattleResult r)
+        {
+            List<string> names = new List<string>();
+            Dictionary<int, string> byId = new Dictionary<int, string>();
+            for (int i = 0; i < r.Units.Count; i++) byId[r.Units[i].Id] = r.Units[i].DefId;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.Status != StatusKind.None) continue;
+                string id;
+                if (byId.TryGetValue(e.TargetId, out id) && !names.Contains(id)) names.Add(id);
+            }
+            return names;
+        }
+
+
+        /// <summary>
+        /// One watcher and two enemies, with a passive whose budget is the variable.
+        ///
+        /// `mode` picks which budget: "uses" puts a per-round budget on the STATUS the rider reads,
+        /// "pertarget" puts a per-target budget on the PASSIVE. Both arenas are otherwise identical,
+        /// which is what makes the two counts comparable and the two mechanics distinguishable.
+        /// </summary>
+        private static BattleResult RunRiderArena(string mode, int budget)
+        {
+            bool uses = mode == "uses";
+            string markUses = uses && budget > 0 ? ", \"usesPerRound\": " + budget : "";
+            string riderCond = uses
+                ? ", \"condition\": \"StatusUseAvailable\", \"conditionStatus\": \"Mark\""
+                : "";
+            string perTarget = !uses && budget > 0 ? ", \"perTargetLimit\": " + budget : "";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""r_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""r_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""r_open"", ""name"": ""Open"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Mark"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1" + markUses + @" } ] },
+      ""passive2"": { ""id"": ""r_rider"", ""name"": ""Rider"", ""trigger"": """ + (uses ? "OnDamaged" : "AfterBasicAttack") + @"""" + perTarget + @",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 0.01" + riderCond + @" } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""r_front"", ""name"": ""Front"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""rf_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""r_second"", ""name"": ""Second"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""rs_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t5_rider_ch"", ""name"": ""Rider"", ""stages"": [
+    { ""id"": ""t5_rider"", ""index"": 1, ""enemies"": [
+      { ""id"": ""r_front"", ""level"": 1 }, { ""id"": ""r_second"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 4, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "rider");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef w = db.GetHero("r_watcher");
+            if (w != null) team.Add(MakeInstance(w, 1));
+            return RunWith(db, db.GetStage("t5_rider"), 313, team);
+        }
+
+        /// <summary>
+        /// A hero whose basic hits FrontEnemy, against a front body that may be Concealed.
+        ///
+        /// `alone` drops the second enemy, which is the case that proves the last-body escape: with
+        /// nobody else to hit, the Concealed body has to become targetable or the fight resolves
+        /// nothing for four rounds.
+        /// </summary>
+        private static BattleResult RunConcealArena(bool conceal, bool alone)
+        {
+            string hide = conceal
+                ? @",
+      ""passive"": { ""id"": ""c_hide"", ""name"": ""Hide"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Stealth"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 } ] }"
+                : "";
+            string second = alone ? "" : @",
+    { ""id"": ""c_other"", ""name"": ""Other"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""co_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }";
+            string secondSpawn = alone ? "" : @", { ""id"": ""c_other"", ""level"": 1 }";
+
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""c_hunter"", ""name"": ""Hunter"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""c_basic"", ""name"": ""Aim"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""c_front"", ""name"": ""Front"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""cf_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + hide + @" }" + second + @"
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t5_conceal_ch"", ""name"": ""Conceal"", ""stages"": [
+    { ""id"": ""t5_conceal"", ""index"": 1, ""enemies"": [ { ""id"": ""c_front"", ""level"": 1 }" + secondSpawn + @" ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "conceal");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("c_hunter");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t5_conceal"), 515, team);
+        }
+
+        /// <summary>
+        /// A mark that records the buff its carrier holds, and a payoff that fires only when the
+        /// carrier later regains THAT buff. `regain` is the buff the enemy grants itself on the
+        /// second round, so the two runs differ in one status name and nothing else.
+        /// </summary>
+        private static BattleResult RunRecordArena(StatusKind regain)
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""k_scribe"", ""name"": ""Scribe"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""k_basic"", ""name"": ""Note"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""k_open"", ""name"": ""Open the File"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""AttackUp"", ""magnitude"": 0.05, ""duration"": 1, ""chance"": 1 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Mark"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 },
+                       { ""kind"": ""RecordFact"", ""target"": ""FrontEnemy"", ""status"": ""Mark"", ""record"": ""LastPositiveStatus"" } ] },
+      ""passive2"": { ""id"": ""k_payoff"", ""name"": ""Payoff"", ""trigger"": ""AfterBasicAttack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01,
+                         ""condition"": ""StoredStatusMatches"", ""conditionStatus"": ""Mark"", ""targetStatus"": ""AttackUp"" } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""k_holder"", ""name"": ""Holder"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""kh_basic"", ""name"": ""Boast"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": """ + regain + @""", ""magnitude"": 0.05, ""duration"": 99, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t5_record_ch"", ""name"": ""Record"", ""stages"": [
+    { ""id"": ""t5_record"", ""index"": 1, ""enemies"": [ { ""id"": ""k_holder"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 4, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "record");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef k = db.GetHero("k_scribe");
+            if (k != null) team.Add(MakeInstance(k, 1));
+            return RunWith(db, db.GetStage("t5_record"), 717, team);
+        }
+
+        /// <summary>
+        /// A watcher that marks an enemy, a second enemy to inherit the mark, and a paper body that
+        /// dies. `trigger` is the variable: OnEnemyDefeated reaches the mark's owner, OnKill reaches
+        /// only the killer and therefore nobody, which is the comparison the whole mechanic exists
+        /// to make.
+        /// </summary>
+        private static BattleResult RunDefeatArena(string trigger)
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""d_marker"", ""name"": ""Marker"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""d_basic"", ""name"": ""Mark"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""DefenseDown"", ""magnitude"": 0.01, ""duration"": 99, ""chance"": 1 } ] },
+      ""passive"": { ""id"": ""d_inherit"", ""name"": ""Inherit"", ""trigger"": """ + trigger + @""",
+        ""effects"": [ { ""kind"": ""MoveDebuffs"", ""target"": ""DefeatedUnit"", ""secondaryTarget"": ""HighestHpEnemy"", ""hits"": 3 } ] } },
+    { ""id"": ""d_killer"", ""name"": ""Killer"", ""aspect"": ""Ember"", ""role"": ""Breaker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 500, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dk_basic"", ""name"": ""Finish"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 0, ""flat"": 100000 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""d_paper"", ""name"": ""Paper"", ""aspect"": ""Ember"",
+      ""hp"": 1, ""attack"": 1, ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dp_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""d_bulk"", ""name"": ""Bulk"", ""aspect"": ""Ember"",
+      ""hp"": 5000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""db_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t5_defeat_ch"", ""name"": ""Defeat"", ""stages"": [
+    { ""id"": ""t5_defeat"", ""index"": 1, ""enemies"": [
+      { ""id"": ""d_paper"", ""level"": 1 }, { ""id"": ""d_bulk"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "defeat");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            string[] ids = { "d_marker", "d_killer" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("t5_defeat"), 919, team);
         }
 
         /// <summary>Pure data check against AspectChart - no battle needed. Ember>Verdant>Tide>Gale>Ember, Lumen&lt;-&gt;Umbra.</summary>
