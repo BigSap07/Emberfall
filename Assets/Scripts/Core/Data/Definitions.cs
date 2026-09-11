@@ -143,6 +143,17 @@ namespace Emberfall.Core.Data
         /// </summary>
         public StatusKind TargetStatus = StatusKind.None;
 
+        /// <summary>
+        /// Where MoveDebuffs and MoveBuffs send what they take, resolved against the CASTER exactly
+        /// as Target is. Read by nothing else.
+        ///
+        /// A second TargetMode rather than a second status field, because the descriptions choose
+        /// the destination the same way they choose any target - "moves its debuffs to the
+        /// highest-HP enemy", "transfers its buffs to the lowest-HP enemy". Defaults to Self, which
+        /// is the one destination that always exists.
+        /// </summary>
+        public TargetMode SecondaryTarget = TargetMode.Self;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -164,6 +175,7 @@ namespace Emberfall.Core.Data
             e.ConditionStatus = EnumUtil.Parse(j.GetString("conditionStatus", "None"), StatusKind.None);
             e.ConditionValue = j.GetFloat("conditionValue", 0f);
             e.TargetStatus = EnumUtil.Parse(j.GetString("targetStatus", "None"), StatusKind.None);
+            e.SecondaryTarget = EnumUtil.Parse(j.GetString("secondaryTarget", "Self"), TargetMode.Self);
             return e;
         }
 
@@ -195,6 +207,7 @@ namespace Emberfall.Core.Data
             c.ConditionStatus = ConditionStatus;
             c.ConditionValue = ConditionValue;
             c.TargetStatus = TargetStatus;
+            c.SecondaryTarget = SecondaryTarget;
             return c;
         }
     }

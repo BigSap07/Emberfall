@@ -4,6 +4,57 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
+- **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
+  `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
+  inventory work: turn order, status operations, and the first triggers that are not owner-centric.
+  - **Turn progress, and the honest account of it.** There is no ATB. A round is a speed sort
+    walked once, so a unit has no continuous gauge to move a percentage of - it has a POSITION
+    among the turns not yet taken. `EffectKind.TurnShift` reads a signed fraction as a fraction of
+    that remaining order and moves the unit that many places, ceiled so a nonzero shift always
+    moves at least one. **This is the Gale rule generalised, not a new concept:**
+    `TryGaleSlowShift` already moves a unit later inside the round a Slow lands in, and
+    `TryGaleReentry` already splices a unit into the tail. `EffectKind.SwapTurnOrder` exchanges
+    the side's earliest and latest remaining turns, which is what Merek's active asks for.
+  - **Of the 34 turn-progress abilities, roughly 19 are a shift, 6 are a Speed buff, and 9 need
+    something this branch does not build.** The 6 are the "advances my own NEXT turn" family: the
+    caster has already acted, so it has no position left to move, and a round-scoped `SpeedUp`
+    from the branch below is what "my next turn comes sooner" actually means. The 9 that do not
+    fit are Aeron's Turn Debt (5), which is a stored quantity with a turn-start payout hook and
+    therefore the ledger mechanic rather than turn progress; and reading progress as a QUANTITY
+    (2: "targets above 50% turn progress", "acts before the slowest enemy"), which needs a gauge
+    that does not exist. The remaining 2 record how much progress was lost, which is again a
+    ledger. **The translation is lossy in one direction and says so:** on a short remaining order
+    every nonzero shift is one place, so 5% and 30% differ only when there is enough round left
+    to tell them apart.
+  - **Status operations reuse Umbra's mover rather than adding a second one.** `MoveStatus` is
+    extracted from `TryUmbraSpread`, and both the death-jump and the new `MoveDebuffs` /
+    `MoveBuffs` go through it. That preserves the jump's guarantee that a move CREATES NO VALUE -
+    duration and magnitude cross untouched - in one place instead of two. Also
+    `EffectKind.RemoveStatus` (by name, where Cleanse and Dispel remove by class and recency; 28
+    abilities, the largest group here) and `EffectKind.InvertStatus`, which flips a buff into its
+    pair through a new `StatusInfo.Opposite` table. A buff with no pairing is skipped, never
+    removed, so an inversion cannot quietly act as a Dispel. **Deferred: swapping two units'
+    statuses** (1 ability), which is a compound of moves.
+  - **Three broadcast triggers, none of which needs new state.** `OnEnemyActive`,
+    `OnEnemyBuffGained` and `OnEnemyDamagedAlly` fire on every living unit of a side rather than
+    on one owner - a new dispatch shape, `BroadcastPassive`, at points the simulation already
+    reaches. Depth is threaded from whatever raised the broadcast, so the existing
+    `MaxPassiveDepth` bounds the cascade. `OnTurnDelayed` fires on the source of a shift.
+  - **Deferred, with counts, rather than inventing state:** "an enemy misses" (2 abilities) needs
+    an accuracy system that does not exist at all - Block is the only avoidance and it is not a
+    miss. "An enemy changes target" (5) needs the previous target compared before
+    `ApplyDamageEffect` overwrites `LastTargetId`, which is the history mechanic rather than a
+    trigger. "An enemy loses a buff" (2) would need a hook in every removal path - Cleanse,
+    Dispel, expiry and the new RemoveStatus - with different meanings in each.
+  - **`OnEnemyDamagedAlly` is "damaged", not "targets".** Six abilities say targets; a heal, a
+    debuff or a miss all target without damaging. Damage is the half with a single funnel, so it
+    is the half that can be raised once and correctly rather than at four call sites with four
+    meanings.
+  - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge
+    base, and the whole harness report a strict superset with no existing line changed. 43 new
+    checks, both standing guards, and the ordinal pins extended to `EffectKind`, `PassiveTrigger`
+    and `BattleEventType`. This pass adds **no** new `BattleEventType`: an authored shift reuses
+    `TurnOrderShift` and is told apart from Gale's by carrying `Status` None.
 - **Open: `feat/stat-buffs-and-target-modes`** - unmerged, based on `feat/effect-conditionals`
   and so carrying the multi-passive work under that. Two additive gaps from the inventory, no
   structural change to anything.
