@@ -49,10 +49,12 @@ Current state, checked against the repo on 2026-09-11, not against the rest of t
     `[note]` when the source is not found next to the binary; invariance does not degrade.
   - **Measured cost, and it is severe. 675 of 714 fingerprints move** (94.5%): every one of the
     648 campaign fingerprints, and 27 of the 66 solo-hero ones. 21 battles flip outcome, all of
-    them win-to-loss. On the geared curve, **20 of 24 stages get harder and two now BLOCK** -
-    1-12 at battle 41 and 2-5 at battle 46 - which violates the standing "no stage may BLOCK"
-    requirement. Chapter 1 CEILs fall from a 64.5-90% band to 0-49%; 2-2 goes 89% to 3%, 2-5 goes
-    90.5% to 0%. Eleven stages now open below a 90% FLOOR, against zero before. **The harness is
+    them win-to-loss. On the geared curve, **19 of 24 stages get harder, none gets easier, and two
+    now BLOCK** - 1-12 at battle 41 and 2-5 at battle 46 - which violates the standing "no stage
+    may BLOCK" requirement. The five unchanged rows are 1-1 to 1-5, which are over-geared enough to
+    sit at 100% either way. Chapter 1 CEILs fall from a 64.5-90% band to 0-49%; 2-2 goes 89% to 3%,
+    2-5 goes 90.5% to 0%; the smallest move is 2-7 at -2.5 points. Eleven stages now open below a
+    90% FLOOR, against zero before. **The harness is
     committed red on exactly one check** - the CEIL band - and the retune is deliberately NOT in
     this branch, so the cost is legible as one number rather than smeared across a tuning pass.
   - **The Lumen anchor is the bulk of it**, and that was visible before the change: across the 144
