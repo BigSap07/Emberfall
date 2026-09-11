@@ -154,6 +154,31 @@ namespace Emberfall.Core.Data
         /// </summary>
         public TargetMode SecondaryTarget = TargetMode.Self;
 
+        /// <summary>
+        /// Which counter PerStack reads, and on whom.
+        ///
+        /// PerStack shipped able to scale Power by the CASTER's Resolve and nothing else. These two
+        /// widen it to any stacking status on either unit, which is what "each Record increases his
+        /// damage against marked enemies by 4%" and "each Absence increases her damage by 5%" need.
+        /// Both default to what PerStack already did, so an effect that sets neither is unchanged.
+        ///
+        /// PerStackOn Caster keeps the snapshot-once-per-effect behaviour PerStack has always had -
+        /// every enemy in an AoE is scaled by the same count no matter what dies partway through.
+        /// PerStackOn Target cannot: the count is a property of each target, so it is read per
+        /// target. That is a real difference in meaning, not an implementation detail, and it is
+        /// why Caster stays the default.
+        /// </summary>
+        public StatusKind PerStackStatus = StatusKind.Resolve;
+        public ConditionSubject PerStackOn = ConditionSubject.Caster;
+
+        /// <summary>
+        /// The ceiling on what one Ledger entry may bank, as a multiple of the caster's Attack.
+        /// Read when an ApplyStatus creates a Ledger and stored on the entry itself, because the
+        /// cap belongs to the mark that is counting rather than to whatever later pays it out.
+        /// Zero means uncapped.
+        /// </summary>
+        public float StoredCap;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -176,6 +201,9 @@ namespace Emberfall.Core.Data
             e.ConditionValue = j.GetFloat("conditionValue", 0f);
             e.TargetStatus = EnumUtil.Parse(j.GetString("targetStatus", "None"), StatusKind.None);
             e.SecondaryTarget = EnumUtil.Parse(j.GetString("secondaryTarget", "Self"), TargetMode.Self);
+            e.PerStackStatus = EnumUtil.Parse(j.GetString("perStackStatus", "Resolve"), StatusKind.Resolve);
+            e.PerStackOn = EnumUtil.Parse(j.GetString("perStackOn", "Caster"), ConditionSubject.Caster);
+            e.StoredCap = j.GetFloat("storedCap", 0f);
             return e;
         }
 
@@ -208,6 +236,9 @@ namespace Emberfall.Core.Data
             c.ConditionValue = ConditionValue;
             c.TargetStatus = TargetStatus;
             c.SecondaryTarget = SecondaryTarget;
+            c.PerStackStatus = PerStackStatus;
+            c.PerStackOn = PerStackOn;
+            c.StoredCap = StoredCap;
             return c;
         }
     }
@@ -246,6 +277,19 @@ namespace Emberfall.Core.Data
         public PassiveTrigger Trigger = PassiveTrigger.None;
         public float Threshold = 0.5f;        // for OnHpBelowThreshold
         public bool OncePerBattle = true;     // for threshold style passives
+
+        /// <summary>
+        /// A finer limit than OncePerBattle, and layered ON it rather than replacing it.
+        ///
+        /// OncePerBattle keeps its trigger-dependent default and keeps being checked, because every
+        /// piece of shipped content relies on that default and on nothing else. Limit is consulted
+        /// afterwards and is Unlimited unless content says otherwise, so an unchanged passive
+        /// answers exactly the question it always did.
+        ///
+        /// LimitRounds is the N in EveryNRounds and is ignored by every other member.
+        /// </summary>
+        public PassiveLimit Limit = PassiveLimit.Unlimited;
+        public int LimitRounds = 2;
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -259,6 +303,8 @@ namespace Emberfall.Core.Data
             p.Trigger = EnumUtil.Parse(j.GetString("trigger", "None"), PassiveTrigger.None);
             p.Threshold = j.GetFloat("threshold", 0.5f);
             p.OncePerBattle = j.GetBool("oncePerBattle", p.Trigger == PassiveTrigger.OnHpBelowThreshold || p.Trigger == PassiveTrigger.BattleStart);
+            p.Limit = EnumUtil.Parse(j.GetString("limit", "Unlimited"), PassiveLimit.Unlimited);
+            p.LimitRounds = Math.Max(1, j.GetInt("limitRounds", 2));
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));

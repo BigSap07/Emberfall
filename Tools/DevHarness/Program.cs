@@ -57,6 +57,7 @@ namespace Emberfall.DevHarness
             CheckEffectConditions(content);
             CheckStatStatusesAndTargetModes(content);
             CheckTurnStatusAndEnemyTriggers(content);
+            CheckMarksLimitsAndLedger(content);
             CheckEmberHeroKits();
             CheckDebrief();
             CheckRelics(content);
@@ -97,6 +98,499 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+        // ---------------------------------------------------------------- marks, limits, ledger
+
+        private static readonly StatusKind[] NewMarkStatuses =
+            { StatusKind.Mark, StatusKind.MarkAlt, StatusKind.Ledger };
+
+        private static readonly PassiveTrigger[] OwnOutcomeTriggers =
+            { PassiveTrigger.OnHealApplied, PassiveTrigger.OnStatusRemoved, PassiveTrigger.OnStatusExpired };
+
+        private static void CheckMarksLimitsAndLedger(ContentDatabase live)
+        {
+            Line("MARKS, TRIGGER LIMITS, LEDGER");
+            CheckNothingShippedUsesTheThirdTier(live);
+            CheckThirdTierOrdinalPins();
+            CheckNamedMarks();
+            CheckPassiveLimits();
+            CheckLedger();
+            CheckPerStackWidening();
+            CheckOwnOutcomeTriggers();
+            Line("");
+        }
+
+        private static void CheckNothingShippedUsesTheThirdTier(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int markStatus = 0, ledgerRelease = 0, markMode = 0, markCond = 0, limits = 0, ownTrig = 0, perStack = 0;
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    all.AddRange(def.Passives[pi].Effects);
+                    if (def.Passives[pi].Limit != PassiveLimit.Unlimited) limits++;
+                    for (int t = 0; t < OwnOutcomeTriggers.Length; t++)
+                        if (def.Passives[pi].Trigger == OwnOutcomeTriggers[t]) ownTrig++;
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef ef = all[e];
+                    for (int k = 0; k < NewMarkStatuses.Length; k++)
+                        if (ef.Status == NewMarkStatuses[k] || ef.ConditionStatus == NewMarkStatuses[k]
+                            || ef.TargetStatus == NewMarkStatuses[k]) markStatus++;
+                    if (ef.Kind == EffectKind.LedgerRelease) ledgerRelease++;
+                    if (ef.Target == TargetMode.EnemyWithMyMark || ef.SecondaryTarget == TargetMode.EnemyWithMyMark) markMode++;
+                    if (ef.Condition == EffectCondition.HasMyMark || ef.Condition == EffectCondition.LacksMyMark
+                        || ef.Condition == EffectCondition.LedgerAtLeast) markCond++;
+                    if (ef.PerStackStatus != StatusKind.Resolve || ef.PerStackOn != ConditionSubject.Caster
+                        || ef.StoredCap != 0f) perStack++;
+                }
+            }
+
+            Check(markStatus == 0, "no shipped effect names Mark, MarkAlt or Ledger (" + markStatus + ")");
+            Check(ledgerRelease == 0, "no shipped effect releases a ledger (" + ledgerRelease + ")");
+            Check(markMode == 0, "no shipped effect targets EnemyWithMyMark (" + markMode + ")");
+            Check(markCond == 0, "no shipped effect uses a mark or ledger condition (" + markCond + ")");
+            Check(limits == 0,
+                  "no shipped passive sets a PassiveLimit (" + limits + ") - so LimitAllows returns true on its "
+                  + "first line for every passive the game fires, and no existing battle can move");
+            Check(ownTrig == 0, "no shipped passive listens on an own-outcome trigger (" + ownTrig + ")");
+            Check(perStack == 0,
+                  "and no shipped effect widens PerStack or sets a stored cap (" + perStack
+                  + ") - so the counter read is still CountOf(Resolve) on the caster, snapshotted once");
+        }
+
+        private static void CheckThirdTierOrdinalPins()
+        {
+            Check((int)StatusKind.Resolve == 14 && (int)StatusKind.SpeedUp == 15
+                  && (int)StatusKind.ArmorBreakDown == 29,
+                  "every StatusKind from the earlier passes keeps its ordinal");
+            Check((int)StatusKind.Mark == 30 && (int)StatusKind.Ledger == 32,
+                  "and the mark and ledger kinds are appended after them (" + (int)StatusKind.Mark
+                  + ".." + (int)StatusKind.Ledger + ")");
+            Check((int)EffectKind.GainResolve == 8 && (int)EffectKind.InvertStatus == 14
+                  && (int)EffectKind.LedgerRelease == 15,
+                  "EffectKind keeps its ordinals and LedgerRelease is appended (" + (int)EffectKind.LedgerRelease + ")");
+            Check((int)PassiveTrigger.OnBlock == 8 && (int)PassiveTrigger.OnTurnDelayed == 12
+                  && (int)PassiveTrigger.OnHealApplied == 13,
+                  "PassiveTrigger keeps its ordinals and the own-outcome triggers are appended");
+            Check((int)TargetMode.AllyWithMostDebuffs == 19 && (int)TargetMode.EnemyWithMyMark == 20,
+                  "TargetMode keeps its ordinals and EnemyWithMyMark is appended");
+            Check((int)BattleEventType.BattleEnd == 20,
+                  "and BattleEventType is untouched again this pass - no new event type, so no fingerprint field moves");
+        }
+
+        /// <summary>
+        /// A mark is one StatusKind told apart by who applied it, so two heroes marking the same
+        /// line must not answer each other's targeting. The arena has B mark one enemy and A mark
+        /// another, with B acting first so its mark is already standing when A aims.
+        /// </summary>
+        private static void CheckNamedMarks()
+        {
+            BattleResult r = RunMarkArena(true);
+            if (r == null) { Check(false, "mark arena built"); return; }
+
+            Dictionary<int, string> byId = new Dictionary<int, string>();
+            int aId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                byId[r.Units[i].Id] = r.Units[i].DefId;
+                if (r.Units[i].DefId == "mk_a") aId = r.Units[i].Id;
+            }
+
+            string firstHit = "";
+            for (int i = 0; i < r.Events.Count && firstHit.Length == 0; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.SourceId != aId) continue;
+                byId.TryGetValue(e.TargetId, out firstHit);
+            }
+            Check(firstHit == "mk_fat",
+                  "EnemyWithMyMark lands on the enemy THIS hero marked (got " + firstHit + ", expected mk_fat)");
+            Check(firstHit != "mk_thin",
+                  "and not on the one the other hero marked, even though both carry a Mark");
+
+            BattleResult solo = RunMarkArena(false);
+            int soloHits = 0;
+            if (solo != null)
+            {
+                int soloA = -1;
+                for (int i = 0; i < solo.Units.Count; i++) if (solo.Units[i].DefId == "mk_a") soloA = solo.Units[i].Id;
+                for (int i = 0; i < solo.Events.Count; i++)
+                    if (solo.Events[i].Type == BattleEventType.Damage && solo.Events[i].SourceId == soloA) soloHits++;
+            }
+            Check(soloHits > 0,
+                  "with the other marker gone the same ability still finds its own mark (" + soloHits + " hit(s))");
+            Check(FingerprintOf(RunMarkArena(true)) == FingerprintOf(r),
+                  "and the mark arena resolves the same way twice on the same seed");
+        }
+
+
+        /// <summary>Two markers and two enemies. `withSecondMarker` drops hero B, to show the
+        /// pick is not merely finding the only marked body on the board.</summary>
+        private static BattleResult RunMarkArena(bool withSecondMarker)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""mk_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""mk_a_basic"", ""name"": ""Hunt"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""HighestHpEnemy"", ""status"": ""Mark"", ""duration"": 9, ""chance"": 1 },
+                       { ""kind"": ""Damage"", ""target"": ""EnemyWithMyMark"", ""power"": 0.01 } ] } },
+    { ""id"": ""mk_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""mk_b_basic"", ""name"": ""Tag"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""Mark"", ""duration"": 9, ""chance"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""mk_fat"", ""name"": ""Fat"", ""aspect"": ""Ember"", ""hp"": 2000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""mkf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""mk_thin"", ""name"": ""Thin"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""mkt"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""mk_ch"", ""name"": ""Marks"", ""stages"": [
+    { ""id"": ""mk_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""mk_fat"", ""level"": 1 }, { ""id"": ""mk_thin"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "Marks");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef a = db.GetHero("mk_a");
+            if (a != null) team.Add(MakeInstance(a, 1));
+            if (withSecondMarker) { HeroDef b = db.GetHero("mk_b"); if (b != null) team.Add(MakeInstance(b, 1)); }
+            return RunWith(db, db.GetStage("mk_arena"), 8080, team);
+        }
+
+        /// <summary>
+        /// The three limits, counted per round. Three enemies hit the holder each round, so an
+        /// OnDamaged passive has three chances a round and the limit is what decides how many it
+        /// takes - a distinction one attack a round could not show.
+        /// </summary>
+        private static void CheckPassiveLimits()
+        {
+            int[] unlimited = LimitFiresPerRound("Unlimited", 2);
+            int[] perRound = LimitFiresPerRound("OncePerRound", 2);
+            int[] everyTwo = LimitFiresPerRound("EveryNRounds", 2);
+
+            Check(unlimited[1] > 1,
+                  "with no limit the passive answers every hit in a round (" + unlimited[1] + " in round 1)");
+            Check(perRound[1] == 1 && perRound[2] == 1,
+                  "OncePerRound takes exactly one a round, and refreshes next round (" + perRound[1]
+                  + ", " + perRound[2] + ")");
+            Check(perRound[1] < unlimited[1], "so it is strictly tighter than no limit at all");
+            Check(everyTwo[1] == 1 && everyTwo[2] == 0 && everyTwo[3] == 1,
+                  "EveryNRounds(2) fires, sits out the next round and fires again (" + everyTwo[1]
+                  + ", " + everyTwo[2] + ", " + everyTwo[3] + ")");
+        }
+
+        /// <summary>Fires of the limited passive, indexed by round.</summary>
+        private static int[] LimitFiresPerRound(string limit, int rounds)
+        {
+            int[] perRound = new int[8];
+            BattleResult r = RunLimitArena(limit, rounds);
+            if (r == null) return perRound;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.PassiveTrigger || e.AbilityId != "lim_passive") continue;
+                if (e.Round >= 0 && e.Round < perRound.Length) perRound[e.Round]++;
+            }
+            return perRound;
+        }
+
+        private static BattleResult RunLimitArena(string limit, int limitRounds)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lim_hero"", ""name"": ""Lim"", ""aspect"": ""Ember"", ""role"": ""Bulwark"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""lim_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""lim_passive"", ""name"": ""Answer"", ""trigger"": ""OnDamaged"", ""oncePerBattle"": false,
+        ""limit"": """ + limit + @""", ""limitRounds"": " + limitRounds + @",
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lim_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 50, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""limf"", ""name"": ""Hit"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lim_ch"", ""name"": ""Limits"", ""stages"": [
+    { ""id"": ""lim_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lim_foe"", ""level"": 1 }, { ""id"": ""lim_foe"", ""level"": 1 },
+        { ""id"": ""lim_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "Limits");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("lim_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("lim_arena"), 3131, team);
+        }
+
+        /// <summary>One balance block every arena in this pass shares.</summary>
+        private static string ZeroVarianceBalance(int maxRounds)
+        {
+            return "{ \"defenseConstant\": 300, \"defensePerLevel\": 0, \"damageVariance\": 0, \"speedVariance\": 0,"
+                 + " \"minDamage\": 1, \"maxRounds\": " + maxRounds + ", \"energyMax\": 100,"
+                 + " \"energyPerBasicAttack\": 100, \"energyOnDamaged\": 0, \"maxTeamSize\": 5 }";
+        }
+
+
+        /// <summary>
+        /// The ledger records a fraction of what the holder takes, caps where it is told to, and
+        /// pays out what it banked. Measured as arithmetic on real events rather than as "a
+        /// number appeared": the payout has to equal the fraction of the damage that went in.
+        /// </summary>
+        private static void CheckLedger()
+        {
+            BattleResult r = RunLedgerArena(0.5f, 0f);
+            if (r == null) { Check(false, "ledger arena built"); return; }
+
+            int banked = 0, payout = 0;
+            bool released = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                // The release is the only "burst" hit in the arena; everything else is the poke.
+                if (e.Vfx == "burst") { payout = e.Value; released = true; }
+                else if (!released) banked += e.Value;
+            }
+            Check(banked > 0, "the ledger holder actually took damage to record (" + banked + ")");
+            Check(released, "and LedgerRelease paid out at all");
+            int expected = (int)Math.Round(banked * 0.5f, MidpointRounding.AwayFromZero);
+            Check(Math.Abs(payout - expected) <= 1,
+                  "the payout is the recorded fraction of what went in (banked " + banked + " x0.5 -> expected ~"
+                  + expected + ", got " + payout + ")");
+
+            // A second release with nothing left pays nothing, so the store is spent not saved.
+            int secondBurst = 0;
+            bool seenFirst = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.Vfx != "burst") continue;
+                if (!seenFirst) { seenFirst = true; continue; }
+                secondBurst++;
+            }
+            Check(secondBurst == 0 || payout > 0,
+                  "a release zeroes the store, so it cannot pay the same bank out twice");
+
+            // The cap, measured against the same arena with a cap small enough to bite.
+            BattleResult capped = RunLedgerArena(0.5f, 0.02f);
+            int cappedPayout = 0;
+            if (capped != null)
+                for (int i = 0; i < capped.Events.Count; i++)
+                    if (capped.Events[i].Type == BattleEventType.Damage && capped.Events[i].Vfx == "burst")
+                    { cappedPayout = capped.Events[i].Value; break; }
+            Check(cappedPayout > 0 && cappedPayout < payout,
+                  "storedCap bounds what one ledger may bank (uncapped " + payout + " -> capped " + cappedPayout + ")");
+
+            // And a ledger that records nothing banks nothing.
+            BattleResult inert = RunLedgerArena(0f, 0f);
+            int inertPayout = 0;
+            if (inert != null)
+                for (int i = 0; i < inert.Events.Count; i++)
+                    if (inert.Events[i].Type == BattleEventType.Damage && inert.Events[i].Vfx == "burst")
+                    { inertPayout = inert.Events[i].Value; break; }
+            Check(inertPayout == 0,
+                  "a ledger with a zero fraction records nothing and pays nothing (" + inertPayout + ")");
+
+            Check(FingerprintOf(RunLedgerArena(0.5f, 0f)) == FingerprintOf(r),
+                  "and the ledger arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// The hero marks the foe with a Ledger and pokes it; the foe pokes back; the hero then
+        /// casts a release. Energy is a full bar per basic attack, so the release lands on turn 2.
+        /// </summary>
+        private static BattleResult RunLedgerArena(float fraction, float cap)
+        {
+            string fr = fraction.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            string cp = cap.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lg_hero"", ""name"": ""Lg"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 200, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lg_basic"", ""name"": ""Mark and poke"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Ledger"", ""magnitude"": " + fr + @",
+                         ""storedCap"": " + cp + @", ""duration"": 9, ""chance"": 1 },
+                       { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lg_active"", ""name"": ""Collect"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""LedgerRelease"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lg_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""lgf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lg_ch"", ""name"": ""Ledger"", ""stages"": [
+    { ""id"": ""lg_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lg_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "Ledger");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("lg_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("lg_arena"), 4949, team);
+        }
+
+        /// <summary>
+        /// PerStack can now read a counter on the TARGET, not only on the caster. Measured as a
+        /// damage ratio against a control identical but for perStackOn, so the difference is the
+        /// widening and nothing else.
+        /// </summary>
+        private static void CheckPerStackWidening()
+        {
+            int onTarget = FirstPokeDamage(RunPerStackArena("Target"));
+            int onCaster = FirstPokeDamage(RunPerStackArena("Caster"));
+            Check(onCaster > 0 && onTarget > 0, "both per-stack arenas landed a hit (" + onCaster + ", " + onTarget + ")");
+            // The foe banks 3 Resolve at BattleStart and the caster banks none, so reading the
+            // target scales by (1 + 1.0*3) = 4 and reading the caster scales by nothing.
+            if (onCaster > 0)
+            {
+                float ratio = onTarget / (float)onCaster;
+                Check(ratio > 3.5f && ratio < 4.5f,
+                      "PerStackOn Target reads the target's counter - 3 stacks at 1.0 gave x"
+                      + ratio.ToString("0.00") + " (" + onCaster + " -> " + onTarget + ", expected ~x4)");
+            }
+        }
+
+        private static int FirstPokeDamage(BattleResult r)
+        {
+            if (r == null) return 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].Value > 1) return r.Events[i].Value;
+            return 0;
+        }
+
+        private static BattleResult RunPerStackArena(string on)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ps_hero"", ""name"": ""Ps"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ps_basic"", ""name"": ""Scale"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""perStack"": 1.0,
+                         ""perStackStatus"": ""Resolve"", ""perStackOn"": """ + on + @""" } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ps_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""psf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""ps_prime"", ""name"": ""Bank"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""hits"": 3, ""maxStacks"": 3, ""duration"": 99 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ps_ch"", ""name"": ""PerStack"", ""stages"": [
+    { ""id"": ""ps_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""ps_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(2), "PerStack");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("ps_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("ps_arena"), 2727, team);
+        }
+
+        /// <summary>The three own-outcome triggers, each fired and each withheld.</summary>
+        private static void CheckOwnOutcomeTriggers()
+        {
+            Check(CountPassiveFires(RunOutcomeArena("OnHealApplied", true), "out_passive") > 0,
+                  "OnHealApplied fires on the healer when a heal actually lands");
+            Check(CountPassiveFires(RunOutcomeArena("OnHealApplied", false), "out_passive") == 0,
+                  "and does not fire for a hero that heals nobody");
+
+            Check(CountPassiveFires(RunOutcomeArena("OnStatusRemoved", true), "out_passive") > 0,
+                  "OnStatusRemoved fires on the remover when a cleanse actually takes something");
+            Check(CountPassiveFires(RunOutcomeArena("OnStatusRemoved", false), "out_passive") == 0,
+                  "and does not fire when there was nothing to take");
+
+            Check(CountPassiveFires(RunOutcomeArena("OnStatusExpired", true), "out_passive") > 0,
+                  "OnStatusExpired fires on the carrier when a status runs out its clock");
+            Check(CountPassiveFires(RunOutcomeArena("OnStatusExpired", false), "out_passive") == 0,
+                  "and does not fire for a carrier holding nothing");
+        }
+
+        /// <summary>
+        /// One hero whose passive listens on the trigger under test, and whose basic either does
+        /// the thing that raises it or does not. `armed` is the only difference between the pair.
+        /// </summary>
+        private static BattleResult RunOutcomeArena(string trigger, bool armed)
+        {
+            string act = "";
+            if (trigger == "OnHealApplied" && armed)
+                act = ", { \"kind\": \"Heal\", \"target\": \"LowestHpAlly\", \"power\": 0.5 }";
+            else if (trigger == "OnStatusRemoved" && armed)
+                act = ", { \"kind\": \"Cleanse\", \"target\": \"Self\", \"hits\": 1 }";
+
+            // The expiry case needs a status with a clock rather than an action, so it is primed
+            // at BattleStart and left to run out.
+            string prime = (trigger == "OnStatusExpired" && armed)
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"Focus\", \"magnitude\": 0.01, \"duration\": 2, \"chance\": 1 }"
+                : "";
+            // The removal case needs something on the hero to remove, and it must be there before
+            // the cleanse: a self-applied debuff at BattleStart does both.
+            string debuff = (trigger == "OnStatusRemoved" && armed)
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"AttackDown\", \"magnitude\": 0.01, \"duration\": 9, \"chance\": 1 }"
+                : "";
+            // And the heal case needs a hole to heal into.
+            string wound = (trigger == "OnHealApplied" && armed)
+                ? ", { \"kind\": \"Damage\", \"target\": \"Self\", \"power\": 0, \"flat\": 500000 }"
+                : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""out_hero"", ""name"": ""Out"", ""aspect"": ""Ember"", ""role"": ""Mender"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""out_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] },
+      ""passive"": { ""id"": ""out_passive"", ""name"": ""Answer"", ""trigger"": """ + trigger + @""", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive2"": { ""id"": ""out_prime"", ""name"": ""Prime"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + prime + debuff + wound + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""out_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""outf"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""out_ch"", ""name"": ""Outcomes"", ""stages"": [
+    { ""id"": ""out_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""out_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "Outcomes");
+            if (db == null) return null;
+            HeroDef hero = db.GetHero("out_hero");
+            if (hero == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(hero, 1));
+            return RunWith(db, db.GetStage("out_arena"), 6363, team);
+        }
 
         // ---------------------------------------------------------------- turn order, status ops, enemy triggers
 

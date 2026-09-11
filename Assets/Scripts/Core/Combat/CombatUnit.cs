@@ -12,6 +12,17 @@ namespace Emberfall.Core.Combat
         /// <summary>Fraction for stat modifiers, flat per-tick value for Burn / Regen.</summary>
         public float Magnitude;
         public int SourceId = -1;
+
+        /// <summary>
+        /// What a StatusKind.Ledger entry has banked so far, and 0 on every other kind.
+        ///
+        /// On the entry rather than on the unit, because a ledger in the roster is always a mark
+        /// that happens to be counting: it expires, moves and gets dispelled with the status that
+        /// carries it, and a parallel per-unit store would need its own lifetime rules kept in
+        /// step with it by hand. StoredCap of 0 means uncapped.
+        /// </summary>
+        public float Stored;
+        public float StoredCap;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -101,6 +112,13 @@ namespace Emberfall.Core.Combat
         /// and behaves exactly as the bool did.
         /// </summary>
         private readonly List<bool> _passiveFired = new List<bool>();
+
+        /// <summary>
+        /// The round each passive last fired in, indexed in step with Passives, or 0 for one that
+        /// has not fired. Read only by PassiveLimit.OncePerRound and EveryNRounds; a passive with
+        /// no Limit never consults it, which is every passive in shipped content.
+        /// </summary>
+        private readonly List<int> _passiveLastRound = new List<int>();
 
         /// <summary>
         /// The equipped relic, resolved from HeroInstance.EquippedRelicId during setup, or null. Only ever
@@ -369,6 +387,7 @@ namespace Emberfall.Core.Combat
             if (passive == null) return;
             Passives.Add(passive);
             _passiveFired.Add(false);
+            _passiveLastRound.Add(0);
         }
 
         /// <summary>Whether the passive at this index has spent its oncePerBattle allowance.</summary>
@@ -380,6 +399,40 @@ namespace Emberfall.Core.Combat
         public void MarkPassiveFired(int index)
         {
             if (index >= 0 && index < _passiveFired.Count) _passiveFired[index] = true;
+        }
+
+        public int PassiveLastRound(int index)
+        {
+            return index >= 0 && index < _passiveLastRound.Count ? _passiveLastRound[index] : 0;
+        }
+
+        public void MarkPassiveRound(int index, int round)
+        {
+            if (index >= 0 && index < _passiveLastRound.Count) _passiveLastRound[index] = round;
+        }
+
+        /// <summary>
+        /// Whether this unit carries a mark of the given kind applied by that specific unit. The
+        /// whole of what makes one hero's mark its own: the kind says "a mark", SourceId says whose.
+        /// </summary>
+        public bool HasMarkFrom(StatusKind kind, int sourceId)
+        {
+            if (sourceId < 0) return false;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == kind && Statuses[i].SourceId == sourceId) return true;
+            return false;
+        }
+
+        /// <summary>Everything this unit's Ledger entries from one applier have banked between
+        /// them. Summed rather than taking the first, so two ledgers from the same hero read as one
+        /// number - which is what "the stored amount" means in every description that uses it.</summary>
+        public float LedgerTotalFrom(int sourceId)
+        {
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == StatusKind.Ledger && Statuses[i].SourceId == sourceId)
+                    total += Statuses[i].Stored;
+            return total;
         }
 
         public void Remove(StatusKind kind)

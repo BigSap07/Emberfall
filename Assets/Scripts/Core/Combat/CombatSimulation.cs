@@ -155,12 +155,33 @@ namespace Emberfall.Core.Combat
                     if (needed < 1) needed = 1;
                     return subject.CountOf(effect.ConditionStatus) >= needed;
                 }
+
+                // The mark conditions read the CASTER's identity, never the subject's, which is the
+                // whole point of a mark being one kind told apart by who applied it.
+                case EffectCondition.HasMyMark:
+                    return caster != null && subject.HasMarkFrom(MarkKindOf(effect.ConditionStatus), caster.Id);
+
+                case EffectCondition.LacksMyMark:
+                    return caster != null && !subject.HasMarkFrom(MarkKindOf(effect.ConditionStatus), caster.Id);
+
+                case EffectCondition.LedgerAtLeast:
+                    return caster != null && subject.LedgerTotalFrom(caster.Id) >= effect.ConditionValue;
             }
 
             // An unknown member is refused rather than waved through. A condition nobody has taught
             // this method about must not silently become "always fires" - that turns a content typo
             // into a hero doing more than it says, which is the harder direction to notice.
             return false;
+        }
+
+        /// <summary>
+        /// Which mark kind a field naming a status means. Mark unless it explicitly says MarkAlt,
+        /// so an effect that does not care about the distinction gets the common one and a typo
+        /// naming some unrelated status cannot silently point a mark rule at a Burn.
+        /// </summary>
+        public static StatusKind MarkKindOf(StatusKind named)
+        {
+            return named == StatusKind.MarkAlt ? StatusKind.MarkAlt : StatusKind.Mark;
         }
 
         private sealed class Sim
@@ -628,6 +649,7 @@ namespace Emberfall.Core.Combat
                 if (unit.StatusesExpiredThisRound) return;
                 unit.StatusesExpiredThisRound = true;
 
+                bool expired = false;
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
                     StatusInstance s = unit.Statuses[i];
@@ -636,7 +658,14 @@ namespace Emberfall.Core.Combat
                     unit.Statuses.RemoveAt(i);
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
+                    expired = true;
                 }
+
+                // Raised once after the whole sweep rather than per status, so a unit shedding
+                // three at once answers the trigger once. Only a genuine duration expiry reaches
+                // here: a cleanse, a dispel, an absorbed ward and a death each remove statuses by
+                // their own path and are each a different thing happening.
+                if (expired) TriggerPassive(unit, PassiveTrigger.OnStatusExpired, 0);
             }
 
             // ------------------------------------------------------------------ abilities
@@ -660,12 +689,21 @@ namespace Emberfall.Core.Combat
                     // the ContentDatabase and is shared by every unit in every battle for the life
                     // of the process, which is the same trap EffectDef.Clone's own comment records
                     // for relics.
-                    int resolveStacks = caster.CountOf(StatusKind.Resolve);
-                    if (effect.PerStack != 0f && resolveStacks > 0)
+                    // PerStackOn Caster keeps the snapshot this always had: counted once, before
+                    // targeting, so every enemy in an AoE is scaled by the same number no matter
+                    // what dies partway through. PerStackStatus widens WHICH counter is read and
+                    // defaults to Resolve, so an effect that names neither field is unchanged -
+                    // CountOf(Resolve) is exactly the call that stood here.
+                    bool perStackOnTarget = effect.PerStackOn == ConditionSubject.Target;
+                    if (!perStackOnTarget)
                     {
-                        EffectDef scaled = effect.Clone();
-                        scaled.Power = effect.Power * (1f + effect.PerStack * resolveStacks);
-                        effect = scaled;
+                        int casterStacks = caster.CountOf(effect.PerStackStatus);
+                        if (effect.PerStack != 0f && casterStacks > 0)
+                        {
+                            EffectDef scaled = effect.Clone();
+                            scaled.Power = effect.Power * (1f + effect.PerStack * casterStacks);
+                            effect = scaled;
+                        }
                     }
 
                     // Targeting runs FIRST and the condition is tested against what it picked,
@@ -686,7 +724,24 @@ namespace Emberfall.Core.Combat
                         if (target == null) continue;
                         if (!ConditionMet(effect, caster, target)) continue;
                         anyTargetPassed = true;
-                        ApplyEffect(caster, target, effect, ability, depth);
+
+                        // The per-TARGET half, which cannot be snapshotted: the count is a property
+                        // of each target, so it is read here and the clone is per target. Only an
+                        // effect that explicitly says PerStackOn Target reaches this, so the
+                        // snapshot guarantee above is untouched for everything else.
+                        EffectDef landed = effect;
+                        if (perStackOnTarget && effect.PerStack != 0f)
+                        {
+                            int targetStacks = target.CountOf(effect.PerStackStatus);
+                            if (targetStacks > 0)
+                            {
+                                EffectDef scaled = effect.Clone();
+                                scaled.Power = effect.Power * (1f + effect.PerStack * targetStacks);
+                                landed = scaled;
+                            }
+                        }
+
+                        ApplyEffect(caster, target, landed, ability, depth);
                         if (IsBattleOver()) return;
                     }
 
@@ -808,6 +863,19 @@ namespace Emberfall.Core.Combat
                         else
                             target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
 
+                        // A Ledger's cap belongs to the mark that is counting, so it is stamped on
+                        // the entry as it lands rather than being looked up by whatever pays it
+                        // out. Scaled off the applier's Attack, like every other authored
+                        // magnitude, so a cap means the same thing at every level.
+                        if (effect.Status == StatusKind.Ledger)
+                            for (int li = 0; li < target.Statuses.Count; li++)
+                            {
+                                StatusInstance led = target.Statuses[li];
+                                if (led.Kind != StatusKind.Ledger || led.SourceId != source.Id) continue;
+                                led.StoredCap = effect.StoredCap > 0f
+                                    ? source.EffectiveAttack * effect.StoredCap : 0f;
+                            }
+
                         BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                         e.Status = effect.Status;
                         e.Duration = duration;
@@ -862,6 +930,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
+                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
                         break;
                     }
                     case EffectKind.Dispel:
@@ -876,6 +945,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
+                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -945,6 +1015,11 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
+                        // Raised once per effect rather than once per entry, so a removal that
+                        // takes three stacks answers the trigger once. Handed `depth`, so a
+                        // removal passive that itself removes something is bounded by the same
+                        // MaxPassiveDepth as any other passive calling a passive.
+                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
                         break;
                     }
 
@@ -1003,6 +1078,29 @@ namespace Emberfall.Core.Combat
                             e.Value = target.CountOf(opposite);
                             flipped++;
                         }
+                        break;
+                    }
+
+                    case EffectKind.LedgerRelease:
+                    {
+                        if (!target.Alive) break;
+                        float stored = target.LedgerTotalFrom(source.Id);
+                        // Zeroed whether or not it paid out, so a release against an empty ledger
+                        // is spent rather than saved up - the descriptions all read "consume".
+                        for (int li = 0; li < target.Statuses.Count; li++)
+                        {
+                            StatusInstance led = target.Statuses[li];
+                            if (led.Kind == StatusKind.Ledger && led.SourceId == source.Id) led.Stored = 0f;
+                        }
+                        if (stored <= 0f) break;
+
+                        int payout = (int)Math.Round(stored * effect.Power, MidpointRounding.AwayFromZero);
+                        if (payout <= 0) break;
+                        // Through the same funnel as every other point of damage, so a release that
+                        // kills fires the death, the killer's OnKill and Gale re-entry exactly as
+                        // any hit would - and banks into anybody else's ledger on the way.
+                        DealRawDamage(source.Id, target, payout, false, "burst", StatusKind.None, 1f,
+                                      ability != null ? ability.Name : "");
                         break;
                     }
 
@@ -1172,6 +1270,23 @@ namespace Emberfall.Core.Combat
 
                 if (damage <= 0) return;
 
+                // Ledger accrual, at the one funnel every point of damage in the game passes
+                // through. Each Ledger entry on the victim banks its own Magnitude fraction of the
+                // hit, up to its own cap, so two ledgers from two heroes count the same hit
+                // independently. Walks the live list without mutating it - banking changes a float
+                // on an entry and never adds or removes one - so it needs none of the snapshot
+                // care TickDamageOverTime documents.
+                for (int li = 0; li < target.Statuses.Count; li++)
+                {
+                    StatusInstance led = target.Statuses[li];
+                    if (led.Kind != StatusKind.Ledger || led.Magnitude <= 0f) continue;
+                    float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                    if (room <= 0f) continue;
+                    float banked = damage * led.Magnitude;
+                    if (banked > room) banked = room;
+                    led.Stored += banked;
+                }
+
                 target.Hp -= damage;
                 BattleEvent e = Emit(BattleEventType.Damage, sourceId, target.Id);
                 e.Value = damage;
@@ -1251,6 +1366,17 @@ namespace Emberfall.Core.Combat
                     BattleEvent e = Emit(BattleEventType.Heal, sourceId, target.Id);
                     e.Value = healed;
                     e.Vfx = vfx;
+
+                    // On the HEALER, and only when healing actually landed - a heal into a full
+                    // bar restores nothing and is not an outcome to answer. Skipped for a Regen
+                    // tick, whose allowBank is false, so a heal-over-time does not re-raise its
+                    // caster's trigger once per round for the rest of the battle.
+                    if (allowBank)
+                    {
+                        CombatUnit healer = FindUnit(sourceId);
+                        if (healer != null && healer.Alive)
+                            TriggerPassive(healer, PassiveTrigger.OnHealApplied, 0);
+                    }
                 }
 
                 // Verdant (DESIGN-ASPECTS section 1): healing with nowhere to go is banked onto the
@@ -1543,11 +1669,13 @@ namespace Emberfall.Core.Combat
                     PassiveDef passive = owner.Passives[i];
                     if (passive == null || passive.Trigger != trigger) continue;
                     if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
+                    if (!LimitAllows(owner, i, passive)) continue;
                     if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
 
                     if (passive.OncePerBattle) owner.MarkPassiveFired(i);
+                    if (passive.Limit != PassiveLimit.Unlimited) owner.MarkPassiveRound(i, _round);
 
                     BattleEvent e = Emit(BattleEventType.PassiveTrigger, owner.Id, owner.Id);
                     e.AbilityId = passive.Id;
@@ -1561,6 +1689,43 @@ namespace Emberfall.Core.Combat
                     wrapper.Effects = passive.Effects;
                     ResolveAbility(owner, wrapper, depth + 1);
                 }
+            }
+
+            /// <summary>
+            /// Whether a passive's own PassiveLimit lets it fire right now.
+            ///
+            /// Layered ON OncePerBattle rather than replacing it - the caller checks that first and
+            /// this second - so a passive that sets no limit answers exactly the question it always
+            /// did. Unlimited returns true before reading anything, which is every passive in
+            /// shipped content, so no existing battle reaches the clock below.
+            ///
+            /// Rounds are compared against _round, the live round counter. A passive that fires at
+            /// BattleStart records round 0, which is genuinely "before round 1" and therefore
+            /// correctly lets a OncePerRound passive fire again in round 1.
+            /// </summary>
+            private bool LimitAllows(CombatUnit owner, int index, PassiveDef passive)
+            {
+                switch (passive.Limit)
+                {
+                    case PassiveLimit.Unlimited:
+                        return true;
+
+                    case PassiveLimit.OncePerBattle:
+                        // Reads the same flag the bool does, so saying it explicitly in content and
+                        // relying on the default cannot disagree.
+                        return !owner.PassiveHasFired(index);
+
+                    case PassiveLimit.OncePerRound:
+                        return owner.PassiveLastRound(index) != _round;
+
+                    case PassiveLimit.EveryNRounds:
+                    {
+                        int last = owner.PassiveLastRound(index);
+                        if (last == 0) return true;   // never fired
+                        return _round - last >= Math.Max(1, passive.LimitRounds);
+                    }
+                }
+                return true;
             }
 
             /// <summary>
@@ -1885,6 +2050,21 @@ namespace Emberfall.Core.Combat
                     // and then improves on it, which would hand back an unmarked enemy whenever the
                     // first one it saw was unmarked. Front-most among the marked wins, and a mode
                     // naming no status matches nobody rather than everybody.
+                    // The mark half of EnemyWithStatus: same shape, but the entry has to have been
+                    // applied by THIS caster, which is what makes one hero's mark its own.
+                    case TargetMode.EnemyWithMyMark:
+                    {
+                        StatusKind markKind = MarkKindOf(targetStatus);
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded) continue;
+                            if (!u.HasMarkFrom(markKind, caster.Id)) continue;
+                            if (picked == null || u.Slot < picked.Slot) picked = u;
+                        }
+                        break;
+                    }
+
                     case TargetMode.EnemyWithStatus:
                     {
                         if (targetStatus == StatusKind.None) break;
