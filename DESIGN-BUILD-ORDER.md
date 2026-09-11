@@ -2,7 +2,7 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-12, not against the rest of this document.
+Current state, checked against the repo on 2026-09-13, not against the rest of this document.
 
 ### `main`'s harness is DELIBERATELY RED on exactly three checks
 
@@ -38,8 +38,8 @@ whole of the expected red.
 - The pinned five-body line is all-Ember, because the roster is, so its FLOOR/CEIL/BLOCK numbers
   are not a statement about the game until the roster lands and the line is re-picked.
 
-- **Open: `feat/ten-hero-roles`** - unmerged. `HeroRole` widened from seven members to the ten the
-  incoming 94-hero roster is authored against, in five pairs: Bulwark/Vanguard, Binder/Breaker,
+- **Shipped: `HeroRole` widened from seven members to ten.** The taxonomy the incoming 94-hero
+  roster is authored against, in five pairs: Bulwark/Vanguard, Binder/Breaker,
   Warden/Mender, Marksman/Tinkerer, Striker/Stalker. Verified against the roster itself, which
   uses exactly those ten and no others (Bulwark 14, Vanguard 14, Mender 13, Tinkerer 13,
   Marksman 12, Breaker 9, Stalker 6, Striker 5, Binder 5, Warden 3).
@@ -81,6 +81,78 @@ whole of the expected red.
     It was not weakened and must not be: the two new empties are roles the taxonomy added that no
     current hero fills, which is the same gap the import closes. Summon pity and the CEIL band are
     unchanged.
+- **Open: `feat/tier-five-mechanics`** - unmerged. The six mechanics the read-only pass scoped,
+  and nothing else. All six are a no-op against shipped content: **0 of 678 fingerprints move**,
+  and the harness report is a strict superset with no existing line changed. 35 new checks,
+  six standing guards, ordinal pins extended to five enums.
+  - **Turn progress is a DERIVED POSITION, not a gauge, and that was the decision worth making.**
+    `Sim.TurnProgressOf` reads a unit's place in the round's live order: the unit about to act is
+    1, the one at the back of the remaining tail is 0, and a unit that has already acted is 0
+    because its next turn is a round away. **An ATB gauge was rejected**, and the cost of rejecting
+    it is stated rather than hidden: a gauge is a per-unit float filling with Speed, which turns
+    the round from a sort walked once into a scheduler, moves every existing fingerprint, and
+    invalidates the 24-stage balance table outright. That is a larger change than all six
+    mechanics together. **What the derivation costs instead:** progress is quantised to the turns
+    left, so with four still to act the only readable values are 1, 0.75, 0.5, 0.25 and 0, and
+    51% is indistinguishable from 74%. "Above 50% turn progress" becomes "in the front half of
+    what is left", which is what the two abilities asking for it want.
+  - **Turn Debt is a status the engine reads**, like Burn and Regen, not a passive. `StatusKind.
+    TurnDebt` carries the debt in `Stored` and the exchange rate in `Magnitude`; the debtor pays
+    Energy at its own turn start and the entry clears. It has to be an engine rule because the
+    repayment happens on the DEBTOR, an enemy that knows nothing about the hero who pushed it.
+    `EffectDef.ShiftBanksAs` is what makes "delays by 12%, applies Turn Debt equal to the progress
+    removed" one effect: the debt is the REALISED shift after the ceil and both clamps, not the
+    authored fraction, because an effect that asked for 12% on a two-unit tail moved one place and
+    took 50%.
+  - **The round ordinal is a counter on the STATUS, not on the passive.** `PassiveLimit.
+    OncePerRound` already answers "this passive fires once a round" and is the wrong instrument:
+    the thing being counted happens to a status's carrier, and the status can move, expire or be
+    dispelled mid-round. `StatusInstance.UsesThisRound` counts up and resets in `BeginRound`,
+    against `EffectDef.UsesPerRound`; `EffectCondition.StatusUseAvailable` reads it and SPENDS it,
+    because a condition that is true every time it is asked is not an ordinal.
+  - **Concealment reuses `StatusKind.Stealth`**, declared inert in an earlier pass, so it costs no
+    ordinal and no save byte. A Concealed unit is skipped by every single-target pick and by the
+    Taunt anchor, and is NOT skipped by `AllEnemies` - which is what "cannot be targeted directly"
+    says and what keeps concealment from being immunity. **The last living body is never
+    concealed:** a side nobody can hit produces a battle that runs to maxRounds and reports a
+    defeat no decision caused, so the exclusion is dropped when it would empty a side.
+  - **Per-target limits gate where an effect LANDS.** `PassiveDef.PerTargetLimit` with
+    `PerTargetPerRound` for the window. It could not be folded into `PassiveLimit` because that is
+    answered from the owner's clock before a passive fires, and this needs the target's identity,
+    which does not exist until targeting has run. A passive whose budget is spent against one body
+    still resolves normally against another, which is the shape all four descriptions have.
+    **Caldus's identity condition was already expressible** and is not part of this: `HasMyMark`
+    on a `LastAttacker` target is "whenever the Declared Target attacks me".
+  - **The non-numeric ledger is four TYPED fields, not four conventions on one float.** `Stored`
+    can say "247 damage" and cannot say "the buff was AttackUp", "the last action was an Active",
+    "the ally was a Mender" or "the lowest this ever went was 38%". `EffectKind.RecordFact` plus
+    `RecordKind` writes them; four conditions read them back. `StoredStatusMatches` compares the
+    record against what the subject holds NOW rather than against a constant - a constant would be
+    a condition whose answer the author already knew, and would make the record decorative.
+    Everything recorded travels through `MoveStatus`, because a record that forgets what it
+    recorded when it changes carrier is not a record.
+  - **Mark-jump-on-death cost what the read-only pass said it would, and the shortcut it offered
+    does not exist.** The suggestion was that a non-death trigger might serve five of the six.
+    **It serves one.** Only Rovan's says "when Covered expires OR its bearer is defeated"; the
+    other five say defeated and nothing else. So the death path was built. What it took: the
+    `Statuses.Clear()` moved after a new dispatch point, two broadcast triggers
+    (`OnEnemyDefeated`, `OnAllyDefeated` - split because four abilities watch an enemy die and one
+    watches an ally), `TargetMode.DefeatedUnit` and `ConditionSubject.Defeated` to name the corpse,
+    a re-entrancy guard so a death inside a death does not overwrite the corpse being dispatched,
+    and the one Alive gate in the engine that a corpse may pass - `MoveDebuffs`/`MoveBuffs`, since
+    taking a status off a dead unit is the entire point. `OnKill` could not serve any of them: it
+    reaches the killer, and the mark's owner is usually not the unit that landed the blow.
+  - **Measured expressibility: 277 of 374 before, 353 after (74.1% to 94.4%).** Re-derived against
+    this branch rather than carried over. The 21 that remain are 17 the read-only pass put out of
+    scope as description changes at import time - adjacency, accuracy, guaranteed crit, buff
+    suppression, interrupt, cross-unit stat comparison and Edrin's four marks - and **4 genuinely
+    blocked**: intercepting a would-be event before it resolves (2, Oris and Aeron), and extending
+    a live status's duration (2, Demos and Celen). Counterattack is not among them:
+    `OnDamaged` plus `TargetMode.LastAttacker` is a counterattack today.
+  - **Note on the earlier estimate.** The read-only pass reported 287 expressible and an 87-ability
+    gap. Re-measuring with the same method against this branch gives 277 and 97. The difference is
+    tighter matching on the round-ordinal and record families, not work that went missing; the
+    earlier number was the estimate, this one is the measurement.
 - **Shipped: the first half of the roster swap.** Six placeholder heroes are deleted from
   `heroes.json` - `orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`,
   `ryn_solvarr`, `maeve_corrin`, `nyx_serrow`. Five remain: Kael, Seraphine, Marrow, Veska, Orren.

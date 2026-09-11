@@ -128,7 +128,22 @@ namespace Emberfall.Core.Data
         /// Which mark is read comes from EffectDef.TargetStatus, so a hero carrying two says which.
         /// Defaults to Mark when TargetStatus names neither Mark nor MarkAlt.
         /// </summary>
-        EnemyWithMyMark
+        EnemyWithMyMark,
+
+        /// <summary>
+        /// The unit whose death is being dispatched right now, and NOTHING outside that window.
+        ///
+        /// It resolves only while `OnEnemyDefeated` / `OnAllyDefeated` are being broadcast, because
+        /// that is the only moment a dead unit still has a status list to read: the death branch
+        /// holds its `Statuses.Clear()` until the broadcast returns. Outside that window it
+        /// resolves to nobody, which is correct rather than merely safe - "the unit that just died"
+        /// has no referent on an ordinary turn.
+        ///
+        /// The one TargetMode that can name a unit with `Alive == false`, so every effect reading
+        /// it has to be one that makes sense against a corpse. Moving a status off it does; healing
+        /// it does not, and `ApplyHealValue` already refuses a dead target.
+        /// </summary>
+        DefeatedUnit
     }
 
     public enum EffectKind
@@ -180,7 +195,15 @@ namespace Emberfall.Core.Data
         /// on the holder; a Heal-shaped release is authored by pointing SecondaryTarget at an ally
         /// and is deliberately not a second kind.
         /// </summary>
-        LedgerRelease
+        LedgerRelease,
+
+        /// <summary>
+        /// Write a NON-NUMERIC fact onto a status entry: a status identity, an action type, a role,
+        /// or the running minimum of an HP series. `EffectDef.Record` picks which, and
+        /// `EffectDef.Status` picks which entry on the target carries it. `Stored` is a float and
+        /// can say none of those, which is the whole reason this exists - see RecordKind.
+        /// </summary>
+        RecordFact
     }
 
     /// <summary>
@@ -294,7 +317,33 @@ namespace Emberfall.Core.Data
         CasterRepeatedActionType,
 
         /// <summary>The caster has already damaged this subject at least once this round.</summary>
-        AlreadyDamagedSubjectThisRound
+        AlreadyDamagedSubjectThisRound,
+
+        // ---------- appended: turn progress read as a QUANTITY ----------
+        //
+        // Progress is DERIVED FROM POSITION, not held in a gauge - see Sim.TurnProgressOf. A unit
+        // about to act reads near 1, a unit at the back of the remaining order reads near 0, and a
+        // unit that has already acted reads 0, because its next turn is a whole round away. These
+        // are the first conditions in this enum that the pure static ConditionMet cannot answer:
+        // they need the round's live order, so the Sim answers them and the static function returns
+        // false rather than guessing.
+        TurnProgressAbove,
+        TurnProgressBelow,
+
+        /// <summary>The CASTER reaches its turn before the subject does, this round. "Acts before
+        /// the slowest enemy", with the effect aimed at LowestSpeedEnemy.</summary>
+        CasterActsBeforeSubject,
+
+        // ---------- appended: reading a non-numeric ledger back out ----------
+        StoredStatusMatches,
+        StoredActionMatches,
+        StoredRoleMatches,
+        SubjectAboveStoredMin,
+
+        /// <summary>The subject's named status still has a use left THIS ROUND: the "first X each
+        /// round" family, counted on the entry rather than on the passive. See
+        /// StatusInstance.UsesThisRound.</summary>
+        StatusUseAvailable
     }
 
     /// <summary>
@@ -314,7 +363,49 @@ namespace Emberfall.Core.Data
     public enum ConditionSubject
     {
         Target,
-        Caster
+        Caster,
+
+        /// <summary>
+        /// The unit whose death is being dispatched, for a passive that has to ask something about
+        /// the corpse rather than about who it is now acting on: "did the enemy that just died
+        /// carry MY mark". Resolves to nobody outside a death broadcast, and a condition with no
+        /// subject reads false, so an effect authored with this subject is inert elsewhere rather
+        /// than wrong.
+        /// </summary>
+        Defeated
+    }
+
+    /// <summary>
+    /// What `EffectKind.RecordFact` writes onto a status entry.
+    ///
+    /// Every one of these is a fact `StatusInstance.Stored` cannot hold. Stored is a float: it can
+    /// say "247 damage", and it cannot say "the buff was AttackUp", "the last action was an
+    /// Active", "the ally was a Mender", or "the lowest this ever went was 38%". Ten abilities in
+    /// the incoming roster ask for exactly those four shapes, so they get four typed fields on the
+    /// entry rather than four bit-packing conventions on one float.
+    /// </summary>
+    public enum RecordKind
+    {
+        None,
+
+        /// <summary>The most recent BENEFICIAL status on the subject, into
+        /// `StatusInstance.StoredStatus`. Sylven's Scar Record, which detonates when the target
+        /// regains the same one.</summary>
+        LastPositiveStatus,
+
+        /// <summary>Whether the subject's last turn was an Active or a Basic, into
+        /// `StatusInstance.StoredAction`. Zella's Residue, which reads whether the action type
+        /// changed.</summary>
+        LastActionType,
+
+        /// <summary>The subject's `HeroRole`, into `StatusInstance.StoredRole`. Vaelis records the
+        /// role of whoever triggered Departure.</summary>
+        SubjectRole,
+
+        /// <summary>The LOWEST HP ratio the subject has been seen at while the entry lived, into
+        /// `StatusInstance.StoredMin`. A running minimum rather than a snapshot, which is the
+        /// distinction Arden's Everything Has a Limit turns on.</summary>
+        MinHpRatio
     }
 
     public enum StatusKind
@@ -452,7 +543,20 @@ namespace Emberfall.Core.Data
         /// everybody else. Source-keyed, which is the whole point: DefenseDown is the unconditional
         /// near-miss and makes a target softer to the entire field.
         /// </summary>
-        Vulnerable
+        Vulnerable,
+
+        /// <summary>
+        /// Turn progress taken from a unit and owed back, carried in `StatusInstance.Stored` as a
+        /// fraction of a round rather than in Magnitude. The engine reads this one, the way it
+        /// already reads Burn, Regen and Shield: at the debtor's own turn start it pays Energy in
+        /// proportion to the debt and the entry is removed, which is the "repay" half every Turn
+        /// Debt description names. Magnitude is the exchange rate, Energy lost per full round of
+        /// debt.
+        ///
+        /// Harmful, and deliberately cleansable: nothing in the roster says otherwise, and a debt a
+        /// Mender can wipe is what makes it a tempo tool rather than a tax.
+        /// </summary>
+        TurnDebt
     }
 
     /// <summary>
@@ -575,7 +679,24 @@ namespace Emberfall.Core.Data
         /// resolve exactly as it did before. No new effect kind was needed for that - an ordinary
         /// Heal lands because the unit is still flagged alive at the moment the trigger runs.
         /// </summary>
-        OnAllyWouldDie
+        OnAllyWouldDie,
+
+        // ---------- appended: a unit died and somebody other than its killer cares ----------
+        //
+        // OnKill reaches the killer and nobody else, which is the wrong shape for every ability
+        // that watches its own mark rather than its own kills: the mark's owner is usually not the
+        // unit that landed the blow. These two broadcast instead, split by side because the two
+        // cases in the roster are opposite - four abilities watch an ENEMY die carrying their mark,
+        // one watches an ALLY die carrying its ward.
+        //
+        // Both fire inside a window where the dead unit still has its statuses; see
+        // TargetMode.DefeatedUnit.
+        OnEnemyDefeated,
+        OnAllyDefeated,
+
+        /// <summary>A unit paid off a TurnDebt at its own turn start. Broadcast to the other side,
+        /// since the ability watching a debt is always the one that applied it.</summary>
+        OnTurnDebtRepaid
     }
 
     /// <summary>
@@ -1046,7 +1167,8 @@ namespace Emberfall.Core.Data
                 // an Umbra source makes them stick. Covered and Guard are protections and are
                 // Dispel's business instead.
                 || kind == StatusKind.Provoked
-                || kind == StatusKind.Vulnerable;
+                || kind == StatusKind.Vulnerable
+                || kind == StatusKind.TurnDebt;
         }
 
         /// <summary>
@@ -1121,6 +1243,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Provoked: return "Provoked";
                 case StatusKind.Guard: return "Guard";
                 case StatusKind.Vulnerable: return "Vulnerable";
+                case StatusKind.TurnDebt: return "Turn Debt";
             }
             return kind.ToString();
         }
@@ -1166,6 +1289,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Provoked: return "PRV!";
                 case StatusKind.Guard: return "GRD";
                 case StatusKind.Vulnerable: return "VUL";
+                case StatusKind.TurnDebt: return "DEBT";
             }
             return "?";
         }

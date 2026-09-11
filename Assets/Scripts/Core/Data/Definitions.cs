@@ -198,6 +198,28 @@ namespace Emberfall.Core.Data
         public float TargetCurrentHpRatio;
         public float TargetMissingHpRatio;
 
+        /// <summary>
+        /// Which non-numeric fact `EffectKind.RecordFact` writes. `Status` names the entry on the
+        /// target that carries it, so a kit can keep two records side by side on two marks.
+        /// </summary>
+        public RecordKind Record = RecordKind.None;
+
+        /// <summary>
+        /// Uses per round stamped onto a status as it lands, 0 for unlimited. The "first X each
+        /// round" rider: the status stays, its counter resets every round, and
+        /// `EffectCondition.StatusUseAvailable` is what reads it.
+        /// </summary>
+        public int UsesPerRound;
+
+        /// <summary>
+        /// A TurnShift's realised magnitude is banked onto the target as this status when it is not
+        /// None, which is how "delays by 12% turn progress, then applies Turn Debt equal to the
+        /// progress removed" is one effect rather than two that have to agree about a number
+        /// neither of them computed. `StoredCap` caps the debt; `Magnitude` is the exchange rate
+        /// the status is repaid at.
+        /// </summary>
+        public StatusKind ShiftBanksAs = StatusKind.None;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -227,6 +249,9 @@ namespace Emberfall.Core.Data
             e.TargetMaxHpRatio = j.GetFloat("targetMaxHpRatio", 0f);
             e.TargetCurrentHpRatio = j.GetFloat("targetCurrentHpRatio", 0f);
             e.TargetMissingHpRatio = j.GetFloat("targetMissingHpRatio", 0f);
+            e.Record = EnumUtil.Parse(j.GetString("record", "None"), RecordKind.None);
+            e.UsesPerRound = Math.Max(0, j.GetInt("usesPerRound", 0));
+            e.ShiftBanksAs = EnumUtil.Parse(j.GetString("shiftBanksAs", "None"), StatusKind.None);
             return e;
         }
 
@@ -266,6 +291,9 @@ namespace Emberfall.Core.Data
             c.TargetMaxHpRatio = TargetMaxHpRatio;
             c.TargetCurrentHpRatio = TargetCurrentHpRatio;
             c.TargetMissingHpRatio = TargetMissingHpRatio;
+            c.Record = Record;
+            c.UsesPerRound = UsesPerRound;
+            c.ShiftBanksAs = ShiftBanksAs;
             return c;
         }
     }
@@ -317,6 +345,24 @@ namespace Emberfall.Core.Data
         /// </summary>
         public PassiveLimit Limit = PassiveLimit.Unlimited;
         public int LimitRounds = 2;
+
+        /// <summary>
+        /// How many times this passive may fire AGAINST ONE TARGET, 0 for unlimited. A different
+        /// question from `Limit`, and not expressible through it: Limit is answered from the
+        /// owner's own clock when the passive FIRES, while this is answered once an effect has
+        /// resolved its targets and needs the target's identity carried into the check.
+        ///
+        /// `PerTargetPerRound` picks the window. False counts over the whole battle ("once per
+        /// target each battle", three of the four abilities that want this); true resets every
+        /// round ("once per enemy each round", Rheia's).
+        ///
+        /// The limit gates the EFFECT, not the trigger, so a passive whose per-target budget is
+        /// spent against one enemy still fires normally against another. That is the shape all
+        /// four descriptions have, and it is why this could not be folded into PassiveLimit.
+        /// </summary>
+        public int PerTargetLimit;
+        public bool PerTargetPerRound;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -332,6 +378,8 @@ namespace Emberfall.Core.Data
             p.OncePerBattle = j.GetBool("oncePerBattle", p.Trigger == PassiveTrigger.OnHpBelowThreshold || p.Trigger == PassiveTrigger.BattleStart);
             p.Limit = EnumUtil.Parse(j.GetString("limit", "Unlimited"), PassiveLimit.Unlimited);
             p.LimitRounds = Math.Max(1, j.GetInt("limitRounds", 2));
+            p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
+            p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));
