@@ -4,7 +4,42 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
-- **Open: `feat/multi-passive-and-talents`** - unmerged. Removes the structural gate in front of
+- **Open: `feat/effect-conditionals`** - unmerged, and based on `feat/multi-passive-and-talents`
+  rather than on `main`: both touch `CombatSimulation` and `Definitions`, and the multi-passive
+  branch is verified and unmerged, so stacking avoids a conflict resolution nobody would enjoy.
+  Adds a condition to `EffectDef` and nothing else. 111 of the incoming roster's 374 abilities
+  carry a conditional clause, the single largest gap in the inventory, and the only conditional
+  the engine had was `PassiveTrigger.OnHpBelowThreshold` reading the passive owner's own HP.
+  - **Seven condition kinds, one shape.** `EffectCondition` is `HasStatus`, `LacksStatus`,
+    `HpBelow`, `HpAbove`, `HasShield`, `LacksShield`, `StatusStacksAtLeast`, plus `None`. Every one
+    is one subject, one property, one comparison against an authored constant, and
+    `ConditionSubject` picks whether the subject is the effect's target or its caster - so "if it
+    is below 35% HP" and "while Hale is below 50% HP" are the same kind with a different subject.
+  - **Evaluated after targeting, before the effect.** `CombatSimulation.ConditionMet` is public and
+    static like `ResolveLandingChance`, reads no RNG and mutates nothing, and is asked once per
+    target, so a conditional AoE tests each enemy on its own. A failing condition skips the effect
+    whole: no hit loop, no landing roll, no Block, crit or variance draw, and no `ConsumesResolve`,
+    since spending the counter emits a `StatusExpired` and a skipped effect must not move the
+    status row.
+  - **Two boundary decisions worth knowing.** `HpBelow` and `HpAbove` are INCLUSIVE at the
+    threshold, matching `PassiveTrigger.OnHpBelowThreshold`, because two meanings of "below" in one
+    engine is a worse trap than the expressive difference. `HasShield` reads the absorbing POOL,
+    not `StatusKind.Shield` on the status row; the two genuinely disagree, since the status expires
+    on a round clock while the pool is only emptied by absorption or death, and the pool is what
+    stops damage. A kit wanting the status row authors `HasStatus` with `conditionStatus` Shield.
+  - **Deferred: cross-unit stat comparison** ("the target has more Attack than the caster"). It
+    needs a stat selector and a two-sided operand model rather than a subject and a constant, and
+    it is 2 of the 374 incoming abilities - Dahlia reading Energy and Oris reading Speed - against
+    dozens for every kind above. Also deferred, and for the same
+    proportionality reason: composing two conditions on one effect. Every conditional clause in the
+    roster is a single clause, and a kit that needs two tests can carry two effects.
+  - **No existing battle moved, measured against the merge base.** The same sweep the multi-passive
+    branch used - 24 stages at nine resolved ladder positions each at 3 seeds, plus every hero
+    fought solo across 6 stages, 714 fingerprints - all byte-identical. The whole harness report is
+    a strict superset of the base's: not one existing line changed, because no save version moved
+    this time either. 71 new checks, including the standing guard that no shipped effect carries a
+    condition.
+- **Open: `feat/multi-passive-and-talents`** - unmerged, and the base of the branch above. Removes the structural gate in front of
   the 94-hero roster: a unit held exactly one passive and the engine had no talent concept at all,
   which blocked 120 of that roster's abilities (30 second passives, 90 talents) before any new
   combat mechanic was even considered. It adds **no new combat mechanic** - a talent is an

@@ -96,6 +96,73 @@ namespace Emberfall.Core.Combat
             return landing;
         }
 
+        /// <summary>
+        /// Whether an effect's authored condition holds right now, for this caster and this target.
+        ///
+        /// Public and static for the same reason ResolveLandingChance is: it is a pure function of
+        /// its arguments, and the harness tests the arithmetic directly rather than only inferring
+        /// it from a battle.
+        ///
+        /// PURE, in the two senses that matter to a seeded simulation. It draws nothing from the
+        /// RNG, so a conditional effect cannot shift the stream relative to an unconditional one
+        /// that resolves the same way; and it mutates nothing, so evaluating it twice is the same
+        /// as evaluating it once. Both are load bearing: the condition is asked once per target per
+        /// effect, and a battle that replayed differently because a test had been asked would not
+        /// be a replay.
+        ///
+        /// An effect with no condition returns true before anything else is read, which is the
+        /// whole of why this pass cannot move an existing battle - every effect in shipped content
+        /// takes that first line and nothing below it runs.
+        ///
+        /// A null subject is false rather than true: a condition is a statement that something is
+        /// the case, and about a unit that is not there nothing is the case.
+        /// </summary>
+        public static bool ConditionMet(EffectDef effect, CombatUnit caster, CombatUnit target)
+        {
+            if (effect == null || effect.Condition == EffectCondition.None) return true;
+
+            CombatUnit subject = effect.ConditionOn == ConditionSubject.Caster ? caster : target;
+            if (subject == null) return false;
+
+            switch (effect.Condition)
+            {
+                case EffectCondition.HasStatus:
+                    return effect.ConditionStatus != StatusKind.None && subject.Has(effect.ConditionStatus);
+
+                case EffectCondition.LacksStatus:
+                    return effect.ConditionStatus != StatusKind.None && !subject.Has(effect.ConditionStatus);
+
+                // Inclusive at the boundary, matching PassiveTrigger.OnHpBelowThreshold - see
+                // EffectCondition.HpBelow for why the newer conditional adopts the older one's edge.
+                case EffectCondition.HpBelow:
+                    return subject.HpRatio <= effect.ConditionValue;
+
+                case EffectCondition.HpAbove:
+                    return subject.HpRatio >= effect.ConditionValue;
+
+                // The absorbing pool, not the status row. They can disagree, and the pool is what
+                // stops damage - see EffectCondition.HasShield.
+                case EffectCondition.HasShield:
+                    return subject.Shield > 0f;
+
+                case EffectCondition.LacksShield:
+                    return subject.Shield <= 0f;
+
+                case EffectCondition.StatusStacksAtLeast:
+                {
+                    if (effect.ConditionStatus == StatusKind.None) return false;
+                    int needed = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                    if (needed < 1) needed = 1;
+                    return subject.CountOf(effect.ConditionStatus) >= needed;
+                }
+            }
+
+            // An unknown member is refused rather than waved through. A condition nobody has taught
+            // this method about must not silently become "always fires" - that turns a content typo
+            // into a hero doing more than it says, which is the harder direction to notice.
+            return false;
+        }
+
         private sealed class Sim
         {
             private readonly BattleRequest _request;
@@ -593,19 +660,44 @@ namespace Emberfall.Core.Combat
                         effect = scaled;
                     }
 
+                    // Targeting runs FIRST and the condition is tested against what it picked,
+                    // which is the only order that can answer "is the unit this is landing on
+                    // below 35% HP". It also means a conditional RandomEnemy effect draws for its
+                    // target exactly as an unconditional one does, whether or not the condition
+                    // then holds: the draw belongs to targeting, not to the test, and moving the
+                    // test in front of it would make a condition consume or skip an RNG draw.
                     List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null);
+
+                    // Per target, not per effect. A conditional AoE asks about each enemy on its
+                    // own, so "deal damage to all enemies below 40% HP" is one effect rather than a
+                    // targeting mode nobody has to invent.
+                    bool anyTargetPassed = false;
                     for (int t = 0; t < targets.Count; t++)
                     {
                         CombatUnit target = targets[t];
                         if (target == null) continue;
+                        if (!ConditionMet(effect, caster, target)) continue;
+                        anyTargetPassed = true;
                         ApplyEffect(caster, target, effect, ability, depth);
                         if (IsBattleOver()) return;
                     }
 
+                    // An effect whose condition held for nobody did not happen, so it does not pay
+                    // its Resolve either - spending the counter emits a StatusExpired, and a
+                    // skipped effect that still moved the status row would be observable, which is
+                    // exactly what "skipped entirely" is supposed to rule out.
+                    //
+                    // Gated on the effect carrying a condition at all, not on anyTargetPassed
+                    // alone, and that is deliberate rather than defensive: an UNCONDITIONAL effect
+                    // that resolves against an empty target list spends its Resolve today, and
+                    // making that case stop spending would be a behaviour change to shipped
+                    // content wearing the costume of a new feature.
+                    bool suppressed = effect.Condition != EffectCondition.None && !anyTargetPassed;
+
                     // Spent after the effect has finished with every target, so an AoE pays the
                     // stack once. Emitted as StatusExpired for the same reason Cleanse does: the
                     // status row has to stop showing a counter the unit no longer holds.
-                    if (effect.ConsumesResolve && caster.CountOf(StatusKind.Resolve) > 0)
+                    if (!suppressed && effect.ConsumesResolve && caster.CountOf(StatusKind.Resolve) > 0)
                     {
                         caster.Remove(StatusKind.Resolve);
                         BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
