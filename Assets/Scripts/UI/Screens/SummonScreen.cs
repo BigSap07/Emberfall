@@ -515,8 +515,10 @@ namespace Emberfall.UI.Screens
         /// player - which is the least misleading thing an undefined banner can be.
         ///
         /// The art check is the whole point of the two passes. Ranking on stars alone selected
-        /// Orrin Kaal, who is one of the heroes still awaiting art, so the single dominant image
-        /// this screen is built around rendered as the procedural placeholder blob. A banner face
+        /// Orrin Kaal, who was awaiting art, so the single dominant image this screen is built
+        /// around rendered as the procedural placeholder blob. Orrin has since been deleted and
+        /// every current hero has a portrait, so the art pass changes nothing today - it is kept
+        /// because a 94-hero roster will not arrive fully drawn either. A banner face
         /// with no face is worse than a lower-rarity hero, so heroes with art are preferred and
         /// rarity only breaks the tie among them. The fallback still returns SOMETHING if no hero
         /// has art at all, because a screen with no subject is worse than a placeholder one.

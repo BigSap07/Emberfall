@@ -14,8 +14,11 @@ Four decisions are made in this document and treated as decided. None of them lo
 
 ## 1. What a hero actually is, read off the six that exist
 
-Every hero in `heroes.json` (`orrin_kaal`, `kalyx_emberwright`, `wren_ilyra`, `ryn_solvarr`,
-`maeve_corrin`, `nyx_serrow`) has the same shape:
+This section was written against the six original placeholder heroes - `orrin_kaal`,
+`kalyx_emberwright`, `wren_ilyra`, `ryn_solvarr`, `maeve_corrin`, `nyx_serrow` - all six of which
+have since been deleted ahead of the roster import. **The shape below is unchanged and is still
+what `heroes.json` holds**; only the names it was read off are gone. Every hero in `heroes.json`
+has the same shape:
 
 - One `id`, `name`, `title`, `lore` string, `role`, `aspect`, `rarity`, an optional
   `startingHero` flag.
