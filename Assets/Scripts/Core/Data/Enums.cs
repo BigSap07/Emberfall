@@ -91,7 +91,17 @@ namespace Emberfall.Core.Data
 
         /// <summary>The ally carrying the most harmful statuses, counted with StatusInfo.IsHarmful
         /// so it agrees with what Cleanse would remove.</summary>
-        AllyWithMostDebuffs
+        AllyWithMostDebuffs,
+
+        /// <summary>
+        /// The enemy carrying a Mark applied by the CASTER, front-most first. The targeting half of
+        /// the named-mark concept: "deals 220% to the enemy with Quarry" is this, and it cannot be
+        /// EnemyWithStatus because that would also answer an enemy some other hero had marked.
+        ///
+        /// Which mark is read comes from EffectDef.TargetStatus, so a hero carrying two says which.
+        /// Defaults to Mark when TargetStatus names neither Mark nor MarkAlt.
+        /// </summary>
+        EnemyWithMyMark
     }
 
     public enum EffectKind
@@ -135,7 +145,15 @@ namespace Emberfall.Core.Data
 
         /// <summary>Turns up to Hits beneficial statuses on the target into their paired harmful
         /// opposite, via StatusInfo.Opposite. A buff with no pairing is skipped, not removed.</summary>
-        InvertStatus
+        InvertStatus,
+
+        /// <summary>
+        /// Pays out the caster's Ledger entries on the target and zeroes them. Power scales the
+        /// stored amount, so 1.0 pays it in full and 0.5 pays half. Positive payouts land as damage
+        /// on the holder; a Heal-shaped release is authored by pointing SecondaryTarget at an ally
+        /// and is deliberately not a second kind.
+        /// </summary>
+        LedgerRelease
     }
 
     /// <summary>
@@ -200,7 +218,18 @@ namespace Emberfall.Core.Data
         /// one entry per stack. ConditionValue is rounded away from zero to an integer, because a
         /// stack count is a count.
         /// </summary>
-        StatusStacksAtLeast
+        StatusStacksAtLeast,
+
+        /// <summary>The subject carries a Mark (or MarkAlt, per ConditionStatus) applied by the
+        /// CASTER specifically - "if it is Quarry" rather than "if anything has marked it".</summary>
+        HasMyMark,
+
+        /// <summary>The mirror of HasMyMark.</summary>
+        LacksMyMark,
+
+        /// <summary>The subject's Ledger entries applied by the caster hold at least
+        /// ConditionValue between them.</summary>
+        LedgerAtLeast
     }
 
     /// <summary>
@@ -280,7 +309,75 @@ namespace Emberfall.Core.Data
         SkillDamageUp,
         SkillDamageDown,
         ArmorBreakUp,
-        ArmorBreakDown
+        ArmorBreakDown,
+
+        // ---------- marks and the ledger ----------
+
+        /// <summary>
+        /// A hero's own mark on a unit. INERT: nothing in the engine reads it except the targeting
+        /// and condition members that ask about it by name.
+        ///
+        /// ONE KIND FOR EVERY HERO'S MARK, told apart by StatusInstance.SourceId. Hale's Quarry and
+        /// Kael's Fault Line are both a Mark; they coexist as two entries with different appliers,
+        /// and "the enemy carrying MY mark" is Mark plus a source test. That is why there is no
+        /// MarkA..MarkH bank: 48 abilities across 36 heroes need marks that must not collide, any 5
+        /// of 94 heroes can stand on one team, and a fixed slot pool would need 94 members and a
+        /// global assignment nobody could keep unique. Source identity is already carried on every
+        /// status entry and is already unique per hero.
+        ///
+        /// The cost is real and worth stating: every mark renders as "Mark" on a status bar,
+        /// because a StatusKind has no per-instance display name. That is a UI problem for the day
+        /// a screen wants to print "Quarry", and it does not change what the simulation can do.
+        /// </summary>
+        Mark,
+
+        /// <summary>A second mark for a hero that carries two at once - Nysera's Vanishing Mark
+        /// alongside her Linked, say. Two is what the roster actually uses; a third would be
+        /// another member here rather than a redesign.</summary>
+        MarkAlt,
+
+        /// <summary>
+        /// A running numeric store attached to a status entry rather than to a unit.
+        ///
+        /// Its Magnitude is the FRACTION of incoming damage the holder banks into
+        /// StatusInstance.Stored, capped by StoredCap - see CombatSimulation.DealRawDamage, the one
+        /// funnel every point of damage in the game already passes through. EffectKind.LedgerRelease
+        /// pays it out, and EffectCondition.LedgerAtLeast asks how deep it is.
+        ///
+        /// On the status rather than on the unit because that is what the descriptions describe:
+        /// a Footnote, a Watcher's Ledger, a Scar Record and an Immaculate Record are all a mark
+        /// that happens to be counting, and they expire, move and get dispelled exactly as any
+        /// other status does. A parallel per-unit store would need its own lifetime rules and would
+        /// then have to be kept in step with the status that represents it.
+        /// </summary>
+        Ledger
+    }
+
+    /// <summary>
+    /// How often a passive may fire. Sits alongside PassiveDef.OncePerBattle rather than replacing
+    /// it: that bool has a trigger-dependent default that every piece of shipped content relies on,
+    /// so it stays the authority and this refines it only where content asks.
+    ///
+    /// Deliberately does NOT include "once per target". That reads like a sibling of these but is
+    /// not one: these are all answered when the passive FIRES, from the owner's own clock, while a
+    /// per-target limit is answered when an effect LANDS and needs the target's identity carried
+    /// into the check. It is a limit on an effect, not on a trigger, and inventing it here would
+    /// put it in the wrong place.
+    /// </summary>
+    public enum PassiveLimit
+    {
+        /// <summary>No limit of its own - PassiveDef.OncePerBattle still applies.</summary>
+        Unlimited,
+
+        /// <summary>Once for the whole battle. What OncePerBattle already means, named here so a
+        /// content author can say it explicitly.</summary>
+        OncePerBattle,
+
+        /// <summary>Once in any given round, and again next round.</summary>
+        OncePerRound,
+
+        /// <summary>Once, then not again for PassiveDef.LimitRounds rounds.</summary>
+        EveryNRounds
     }
 
     public enum PassiveTrigger
@@ -328,7 +425,26 @@ namespace Emberfall.Core.Data
         /// on the unit delayed, because "when Jax delays an enemy, Jax gains Speed" is the shape
         /// the descriptions use; an ability that wants the DELAYED unit to suffer something can
         /// simply carry that as another effect beside the shift.</summary>
-        OnTurnDelayed
+        OnTurnDelayed,
+
+        // ---------- own-outcome triggers ----------
+        //
+        // AfterBasicAttack, OnCriticalHit and OnKill were the only hooks that fired on a unit
+        // because of something IT had just done. These three widen that set, and all three fire on
+        // the ACTOR: "whenever Cyrra removes Burden", "whenever she heals an ally below 40%".
+
+        /// <summary>The owner healed somebody. Raised in ApplyHealValue, on the healer.</summary>
+        OnHealApplied,
+
+        /// <summary>The owner removed a status from somebody - a Cleanse, a Dispel or a
+        /// RemoveStatus. Raised on the remover, once per removal.</summary>
+        OnStatusRemoved,
+
+        /// <summary>A status on the OWNER ran out its clock. Raised in ExpireStatuses, on the unit
+        /// that was carrying it, and only for a genuine duration expiry - not for a status that was
+        /// cleansed, dispelled, absorbed away or cleared by death, each of which is a different
+        /// thing happening and has its own path.</summary>
+        OnStatusExpired
     }
 
     /// <summary>

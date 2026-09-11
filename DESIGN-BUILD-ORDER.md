@@ -4,6 +4,58 @@
 
 Current state, checked against the repo on 2026-09-09, not against the rest of this document.
 
+- **Open: `feat/marks-limits-and-ledger`** - unmerged, based on
+  `feat/turn-status-and-enemy-triggers` and carrying the four branches under it. Third-tier
+  inventory work, all of it a no-op against shipped content.
+  - **Named marks: one kind, told apart by who applied it.** `StatusKind.Mark` and `MarkAlt` are
+    inert, and "my mark" is the kind plus `StatusInstance.SourceId`, which every status entry
+    already carries. **`StatusKind.Stealth` was NOT used and no MarkA..MarkH bank was added:**
+    Stealth gives exactly one anonymous mark, and 48 abilities across 36 heroes need marks that
+    must not collide, with any 5 of 94 heroes able to stand on one team. A fixed slot pool would
+    need ~94 members and a global assignment nobody could keep unique; source identity is already
+    unique per hero and costs nothing. `TargetMode.EnemyWithMyMark` and the `HasMyMark` /
+    `LacksMyMark` conditions are the targeting half. The cost, stated plainly: every mark renders
+    as "Mark" on a status bar, because a StatusKind has no per-instance display name. That is a UI
+    problem for the day a screen wants to print "Quarry".
+  - **Trigger limits: `PassiveLimit` layered on `OncePerBattle`, not replacing it.** Unlimited,
+    OncePerBattle, OncePerRound, EveryNRounds, with the bool keeping its trigger-dependent default
+    and still being checked first. **Deferred: "once per target"** - it reads like a sibling of
+    these but is not one. These are answered when a passive FIRES, from the owner's own clock; a
+    per-target limit is answered when an effect LANDS and needs the target's identity carried into
+    the check. It is a limit on an effect, not on a trigger.
+  - **The ledger lives on the status, not on the unit.** `StatusKind.Ledger` banks its Magnitude
+    fraction of every hit its holder takes, into `StatusInstance.Stored`, capped by `StoredCap`,
+    accrued at the single damage funnel. `EffectKind.LedgerRelease` pays it out through that same
+    funnel and zeroes it; `EffectCondition.LedgerAtLeast` thresholds on it. On the status because
+    that is what the descriptions describe - a Footnote, a Watcher's Ledger and a Scar Record are
+    all a mark that happens to be counting, and they expire, move and get dispelled exactly as any
+    status does. A parallel per-unit store would need its own lifetime rules kept in step by hand.
+  - **Stacking counters: `PerStack` widened, not replaced.** `PerStackStatus` picks which counter
+    and `PerStackOn` picks whose. Caster keeps the snapshot-once-per-effect behaviour PerStack
+    always had; Target cannot and is read per target, which is a real difference in meaning and why
+    Caster stays the default. Threshold payoffs were already reachable through
+    `StatusStacksAtLeast` from the conditionals branch.
+  - **Own-outcome triggers:** `OnHealApplied`, `OnStatusRemoved` and `OnStatusExpired`, all firing
+    on the actor. The heal trigger is skipped for a Regen tick, so a heal-over-time does not
+    re-raise its caster's trigger every round; the expiry trigger fires only for a genuine duration
+    expiry, since a cleanse, a dispel, an absorbed ward and a death are each a different thing
+    happening on their own path.
+  - **Expire hooks: the expiry half only.** `OnStatusExpired` is built. The "or breaks" half of
+    those 33 abilities waits on the Shield decision below, because a break hook on a pool that
+    outlives its own status would fire while the ward is still absorbing.
+  - **No existing battle moved:** the same 714-fingerprint sweep, byte-identical to the merge base,
+    and the whole harness report a strict superset with no existing line changed. 36 new checks,
+    seven standing guards, and the ordinal pins extended again. No new `BattleEventType`.
+- **Open: `fix/shield-pool-coherence`** - unmerged, and deliberately NOT folded into the branch
+  above, because it is the one change in this group that is not a no-op. Today a Shield status
+  removed by duration expiry or by Dispel leaves the absorbing pool behind; only absorption and
+  death empty it. **Measured in shipped content: 26 absorptions across 16 of 144 battles happen
+  after the status is already gone, soaking 2673 damage the player cannot see being soaked.** The
+  fix makes the status the authority - when it goes, the pool goes - which is already how the
+  absorption path works in reverse. **Delta: 78 of 714 fingerprints, all in chapter 1 stages 1-4
+  plus an Orrin solo case, 72 of them only in event count, 2 in round count, and ONE victory flip
+  which is in a synthetic solo sweep rather than any campaign line.** Zero campaign outcomes flip.
+  Needs a human decision before it lands.
 - **Open: `feat/turn-status-and-enemy-triggers`** - unmerged, based on
   `feat/stat-buffs-and-target-modes` and so carrying the three branches under it. Second-tier
   inventory work: turn order, status operations, and the first triggers that are not owner-centric.
