@@ -10,12 +10,43 @@ import sys
 
 # ---------------------------------------------------------------------------
 # Ground truth from Assets/Scripts/Core/Data/Enums.cs
+# If a member is added or removed in Enums.cs, update the matching set here.
+# The DevHarness CheckEnumParity test asserts these two sources agree.
 # ---------------------------------------------------------------------------
-EFFECT_KINDS = {"Damage", "Heal", "Shield", "ApplyStatus", "Cleanse", "EnergyGain", "Dispel"}
+EFFECT_KINDS = {
+    "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
+    "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
+    "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
+    "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
+}
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
     "Burn", "Regen", "Shield", "Taunt", "Focus", "Slow",
-    "Silence", "Stun", "Stealth",
+    "Silence", "Stun", "Stealth", "Resolve",
+    "SpeedUp", "BlockUp", "BlockDown",
+    "DamageReductionUp", "DamageReductionDown",
+    "EffectHitUp", "EffectHitDown",
+    "EffectResistUp", "EffectResistDown",
+    "CritDamageUp", "CritDamageDown",
+    "SkillDamageUp", "SkillDamageDown",
+    "ArmorBreakUp", "ArmorBreakDown",
+    "Mark", "MarkAlt", "Ledger",
+    "Covered", "Provoked", "Guard",
+    "Vulnerable", "TurnDebt",
+}
+ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
+HERO_ROLES = {
+    "Bulwark", "Striker", "Breaker", "Mender", "Warden", "Stalker",
+    "Vanguard", "Binder", "Marksman", "Tinkerer",
+}
+TARGET_MODES = {
+    "Self", "LowestHpEnemy", "HighestHpEnemy", "HighestAttackEnemy",
+    "FrontEnemy", "RandomEnemy", "AllEnemies", "LowestHpAlly",
+    "AllAllies", "RandomAlly", "LastAttacker", "LastTarget",
+    "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
+    "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
+    "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
+    "DefeatedUnit",
 }
 
 # ---------------------------------------------------------------------------
@@ -139,6 +170,44 @@ def talents_all_three_set(hero):
 # Per-hero checks
 # ---------------------------------------------------------------------------
 
+def check_required_fields(hero):
+    """Fail on missing required fields. The engine silently defaults every one of
+    these (verified against HeroDef.FromJson / UnitDef.ReadCommon), but a hero
+    import that omits them is almost certainly a mistake rather than an intentional
+    use of the default.
+
+    Engine optionality (all have fallbacks):
+      basicAttack — engine creates DefaultBasicAttack() if absent.
+      growth      — defaults to 0.11.
+      startEnergy — defaults to 0.
+      visual      — VisualDef.FromJson handles null with defaults.
+      aspect/role/stars/id/name — all default silently.
+    """
+    findings = []
+    for key in ("id", "name", "aspect", "role", "stars"):
+        if key not in hero or hero[key] is None:
+            findings.append({"severity": "fail", "message": f"missing required field '{key}'"})
+
+    if not isinstance(hero.get("visual"), dict):
+        findings.append({"severity": "fail", "message": "missing required field 'visual'"})
+
+    stats = hero.get("stats")
+    has_stats_block = isinstance(stats, dict)
+    if not has_stats_block and "hp" not in hero:
+        findings.append({"severity": "fail", "message": "missing 'stats' block (or flat stat keys)"})
+
+    stat_source = stats if has_stats_block else hero
+    for key in ("growth", "startEnergy"):
+        if key not in stat_source:
+            findings.append({"severity": "fail", "message": f"missing required stat '{key}'"})
+
+    skills = _get_skills(hero)
+    if not is_set(skills.get("basicAttack")):
+        findings.append({"severity": "fail", "message": "missing required 'basicAttack'"})
+
+    return findings
+
+
 def check_stats(hero):
     findings = []
     stats = hero.get("stats")
@@ -154,6 +223,51 @@ def check_stats(hero):
                 msg = f"stats.{key} — unknown stat key (not in UnitDef)"
             findings.append({"severity": "fail", "message": msg})
     return findings
+
+
+def check_stat_values(hero):
+    """Sanity bands on stat values. Fail on negatives and zeroes for core stats;
+    warn on rate stats outside [0, 1] since a legitimate outlier is possible."""
+    findings = []
+    stats = hero.get("stats")
+    if not isinstance(stats, dict):
+        stats = hero
+
+    for key in ("hp", "attack", "defense", "speed"):
+        val = stats.get(key)
+        if val is not None and val <= 0:
+            findings.append({"severity": "fail",
+                              "message": f"stats.{key} must be positive (got {val})"})
+
+    for key in ("critChance", "effectHit", "effectResist"):
+        val = stats.get(key)
+        if val is not None:
+            if val < 0:
+                findings.append({"severity": "fail",
+                                  "message": f"stats.{key} is negative ({val})"})
+            elif val > 1:
+                findings.append({"severity": "warn",
+                                  "message": f"stats.{key} is above 1.0 ({val})"})
+
+    return findings
+
+
+def check_aspect(hero):
+    """Aspect must be a member of the Aspect enum in Enums.cs."""
+    aspect = hero.get("aspect")
+    if aspect is not None and aspect not in ASPECTS:
+        return [{"severity": "fail",
+                 "message": f"aspect '{aspect}' is not a valid Aspect (Enums.cs)"}]
+    return []
+
+
+def check_role(hero):
+    """Role must be a member of the HeroRole enum in Enums.cs."""
+    role = hero.get("role")
+    if role is not None and role not in HERO_ROLES:
+        return [{"severity": "fail",
+                 "message": f"role '{role}' is not a valid HeroRole (Enums.cs)"}]
+    return []
 
 
 def check_effect_kinds(hero):
@@ -188,8 +302,22 @@ def check_status_kinds(hero):
     return findings
 
 
+def check_target_modes(hero):
+    """Every effect target must be a member of the TargetMode enum in Enums.cs."""
+    findings = []
+    for slot, eff in collect_all_effects(hero):
+        target = eff.get("target")
+        if target is not None and target not in TARGET_MODES:
+            findings.append({"severity": "fail",
+                              "message": f"{slot}: target '{target}' is not a valid TargetMode (Enums.cs)"})
+    return findings
+
+
 def check_star_shape(hero):
-    """Design rules — severity warn."""
+    """Star-tier kit contract — severity fail.
+    The star contract is authoritative: 1-star is basicAttack only; 2 adds
+    passive1; 3 adds activeSkill; 4 makes passive2 optional; 5 requires
+    passive2 and all three talents."""
     findings = []
     stars = hero.get("stars")
     if stars is None:
@@ -204,23 +332,23 @@ def check_star_shape(hero):
 
     if stars == 1:
         if active or p1 or p2 or not t_null:
-            findings.append({"severity": "warn",
+            findings.append({"severity": "fail",
                               "message": "stars 1: should have activeSkill null, passive1 null, passive2 null, talents all null"})
     elif stars == 2:
         if active or not p1 or p2 or not t_null:
-            findings.append({"severity": "warn",
+            findings.append({"severity": "fail",
                               "message": "stars 2: should have activeSkill null, exactly passive1 set, passive2 null, talents null"})
     elif stars == 3:
         if not active or not p1 or p2 or not t_null:
-            findings.append({"severity": "warn",
+            findings.append({"severity": "fail",
                               "message": "stars 3: should have activeSkill set, exactly passive1 set, passive2 null, talents null"})
     elif stars == 4:
         if not active or not p1 or not t_null:
-            findings.append({"severity": "warn",
+            findings.append({"severity": "fail",
                               "message": "stars 4: should have activeSkill set, passive1 set, passive2 optional, talents null"})
     elif stars == 5:
         if not active or not p1 or not p2 or not t_full:
-            findings.append({"severity": "warn",
+            findings.append({"severity": "fail",
                               "message": "stars 5: should have activeSkill set, passive1 set, passive2 set, all three talents set"})
 
     return findings
@@ -261,9 +389,14 @@ _SEV_ORDER = {"fail": 0, "warn": 1, "info": 2}
 
 def validate_hero(hero):
     findings = []
+    findings += check_required_fields(hero)
     findings += check_stats(hero)
+    findings += check_stat_values(hero)
+    findings += check_aspect(hero)
+    findings += check_role(hero)
     findings += check_effect_kinds(hero)
     findings += check_status_kinds(hero)
+    findings += check_target_modes(hero)
     findings += check_star_shape(hero)
     findings += check_rarity(hero)
     findings += check_sigil(hero)
@@ -312,6 +445,19 @@ def main():
                     any_fail = True
         else:
             print(f"\n{hid}  OK")
+
+    # Cross-hero: duplicate id check
+    id_counts = {}
+    for hero in heroes:
+        hid = hero_id(hero)
+        id_counts[hid] = id_counts.get(hid, 0) + 1
+    dupes = {k: v for k, v in id_counts.items() if v > 1}
+    if dupes:
+        print("\nDUPLICATE IDS")
+        for hid, count in sorted(dupes.items()):
+            print(f"  [FAIL] '{hid}' appears {count} times")
+            totals["fail"] += 1
+            any_fail = True
 
     print()
     print(f"Summary: {totals['fail']} fail  {totals['warn']} warn  {totals['info']} info")

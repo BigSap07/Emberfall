@@ -81,7 +81,7 @@ whole of the expected red.
     It was not weakened and must not be: the two new empties are roles the taxonomy added that no
     current hero fills, which is the same gap the import closes. Summon pity and the CEIL band are
     unchanged.
-- **Open: `feat/tier-five-mechanics`** - unmerged. The six mechanics the read-only pass scoped,
+- **Shipped: tier-five ability mechanics.** The six mechanics the read-only pass scoped,
   and nothing else. All six are a no-op against shipped content: **0 of 678 fingerprints move**,
   and the harness report is a strict superset with no existing line changed. 35 new checks,
   six standing guards, ordinal pins extended to five enums.
@@ -719,6 +719,22 @@ correction (allies were rendering with their backs to the camera after the rearr
 late), and a battle background loader that did not exist in the plan at all. See task 9 below for
 the full account. None of this changes what shipped structurally for task 8 or the content shipped
 for task 10; it is scoped to presentation.
+
+- **Star contract (the authoritative kit rule).** Heroes have 1 to 5 stars. Kit completeness
+  varies by tier:
+
+  | Stars | Kit |
+  |-------|-----|
+  | 1 | basicAttack only. No active, no passive, no talents. |
+  | 2 | Adds passive1. No active, no talents. |
+  | 3 | Adds activeSkill. passive1 required. No passive2, no talents. |
+  | 4 | activeSkill and passive1 required. passive2 optional. No talents. |
+  | 5 | Full kit: activeSkill, passive1, passive2, all three talents. |
+
+  `validate_heroes.py` enforces this at import time (severity fail). The DevHarness enforces what
+  the engine model can see (basicAttack always present, active at 3+, passive at 2+; passive2 and
+  talents are import-format fields not yet in `HeroDef`). `CheckEnumParity` keeps the Python and
+  C# enum sets in sync.
 
 - **Recital Guardians and Coda: shipped.** Two additions to The Deep Recital.
   - **Guardians** — every 10th floor (`recitalGuardianInterval` in `balance.json`) is a
