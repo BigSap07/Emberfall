@@ -4,39 +4,50 @@
 
 Current state, checked against the repo on 2026-09-13, not against the rest of this document.
 
-### `main`'s harness is DELIBERATELY RED on exactly three checks
+### `main`'s harness is DELIBERATELY RED on exactly one check
 
-Not a broken build, and not debt anyone is expected to pay down opportunistically. Each of the
-three is a consequence of finished work whose other half has not landed yet, and each has one
-closing condition and no other.
-
-1. **`every combat role has a hero`.** Five of the ten roles have no hero at all: Bulwark,
-   Warden, Stalker, Binder and Tinkerer. The six placeholder heroes held the first three, and
-   deleting them emptied those; `HeroRole` was then widened from seven members to the ten the
-   incoming roster is authored against, which added the other two as empty from birth. The gap
-   got wider on purpose, and that is the honest reading of a taxonomy that grew while the roster
-   did not. **Closes when the 94-hero roster is imported.** Nothing else closes it - re-roling one
-   of the five remaining Ember heroes would paper over the gap the import exists to fill.
-2. **Summon pity is unsatisfiable.** Pity guarantees three distinct UNOWNED heroes, and five
-   heroes minus three starters leaves two. It is arithmetic, not a pity bug, which is why the
-   precondition is asserted separately from the mechanic. **Closes with the same import.**
-3. **The CEIL band check.** Removing the six engine-owned aspect rules moved every difficulty
+1. **The CEIL band check.** Removing the six engine-owned aspect rules moved every difficulty
    number in the game, and the retune is deliberately deferred rather than smeared across the
-   change that caused it. **Closes at a single retune after the roster lands AND its abilities
-   are authored** - not before. Retuning against five mono-aspect heroes with placeholder kits
-   would bake a measurement of the wrong game into `campaign.json`.
+   change that caused it. **Closes at a single retune after the roster's abilities are
+   authored** - not before. Retuning against placeholder kits would bake a measurement of the
+   wrong game into `campaign.json`.
 
-**A fourth failure is a regression, and so is any of these three changing shape.** If the count
-goes to four, or a message here stops matching what the harness prints, something broke - treat
-it as a real finding and diagnose it rather than adding it to this list. These three are the
-whole of the expected red.
+**A second failure is a regression.** If the count goes to two, something broke - treat it as a
+real finding and diagnose it rather than adding it to this list.
 
-**Two open items, recorded so they are not rediscovered:**
+Previously three checks were red (role coverage, summon pity, CEIL). The 94-hero import closed
+the first two: all ten roles are now filled, and 91 non-starter heroes satisfy the pity
+guarantee.
+
+### Placeholder-period notes (until abilities are authored)
+
+- **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is
+  missing passives and/or talents the star contract requires. This is the expected state while
+  abilities are placeholders and closes when real kits are authored.
+- **Twelve 2-star heroes carry neither an active nor a passive.** The star contract says 2-star
+  heroes should have passive1; placeholder bodies have no passive at all. These twelve are a
+  subset of the 86 violations above.
+- **Two heroes carry weapon `"spellbook"` which is not in `UnitRig.BuildWeapon`'s switch.**
+  `AttacksAtRange` recognises spellbook for range detection, but `BuildWeapon` does not build a
+  visual for it — they fall through to the default. Either add a spellbook case to `BuildWeapon`
+  or remap them to `staff` in the content.
+- **OnKill, Dispel and Resolve** are proven synthetically. Shipped content does not reach them
+  (no hero authors OnKill, no hero applies a beneficial status, no hero uses GainResolve). Each
+  harness section prints a `[note]` for the gap. The checks resume against shipped content when
+  abilities land.
+- **Resolve counter independence** (two carriers on one line, each starting at stack 1) was
+  covered by CheckEmberHeroKits, now deleted. The synthetic Resolve arena proves the mechanic
+  for one carrier; independence resumes when authored kits put two carriers on the same line.
+- **CheckEmberHeroKits is deleted.** Its five named subjects were the old Ember kits. The
+  equivalent for 94 heroes is a different check written after abilities are authored.
+
+**Open items, recorded so they are not rediscovered:**
 
 - Six orphaned sprite PNGs remain under `Assets/Resources/Sprites/Units` for the deleted heroes,
   referenced by nothing now that their `visual.sprite` entries are gone.
-- The pinned five-body line is all-Ember, because the roster is, so its FLOOR/CEIL/BLOCK numbers
-  are not a statement about the game until the roster lands and the line is re-picked.
+- The pinned five-body line spans five aspects (Ember, Gale, Tide, Lumen, Ember) and five roles
+  (Bulwark, Vanguard, Mender, Breaker, Stalker). Its FLOOR/CEIL/BLOCK numbers are a real
+  measurement now, unlike the all-Ember line it replaced.
 
 - **Shipped: `HeroRole` widened from seven members to ten.** The taxonomy the incoming 94-hero
   roster is authored against, in five pairs: Bulwark/Vanguard, Binder/Breaker,

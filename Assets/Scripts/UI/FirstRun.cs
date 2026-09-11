@@ -202,7 +202,7 @@ namespace Emberfall.UI
         /// </summary>
         private static void BeforeSkills(GameApp app)
         {
-            ShowHero(app, "seraphine_the_last_ember");
+            ShowHero(app, "seraphine_the_closed_volume");
             app.Modal.ShowConfirm(
                 "STEP THREE - WHAT THEY CAN DO",
                 "Behind this: Seraphine's two abilities.\n\n"
@@ -242,12 +242,12 @@ namespace Emberfall.UI
         /// </summary>
         private static void ShowRoles(GameApp app)
         {
-            ShowHero(app, "marrow_the_burning_vow");
+            ShowHero(app, "nereia_the_field_medic");
             app.Modal.ShowConfirm(
                 "STEP FOUR - WHAT THEY ARE FOR",
-                "Marrow is a MENDER. The chip behind this says so.\n\n"
-                + "Kael holds the front. Seraphine breaks a line.\n"
-                + "Veska finishes. Orren shoots from the back.\n"
+                "Nereia is a MENDER. The chip behind this says so.\n\n"
+                + "Aeron holds the front. Seraphine breaks a line.\n"
+                + "Isolde stalks. Hale shoots from the back.\n"
                 + "Five heroes, five jobs. A line wants more than one.",
                 "GO ON", "SKIP",
                 delegate { ShowEquipment(app); },
@@ -269,7 +269,7 @@ namespace Emberfall.UI
         /// </summary>
         private static void ShowEquipment(GameApp app)
         {
-            ShowHero(app, "kael_the_ashbound");
+            ShowHero(app, "kael_the_unyielding");
             app.Modal.ShowConfirm(
                 "STEP FIVE - WHAT THEY CARRY",
                 "Kael is carrying nothing. Behind this, five empty slots.\n\n"

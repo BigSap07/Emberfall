@@ -71,11 +71,11 @@ namespace Emberfall.Core.Progression
         {
             string[] ids =
             {
-                "kael_the_ashbound",
-                "seraphine_the_last_ember",
-                "veska_the_broken_oath",
-                "marrow_the_burning_vow",
-                "orren_the_cinder_hunter"
+                "seraphine_the_closed_volume",
+                "aeron_the_unbroken_stride",
+                "nereia_the_field_medic",
+                "isolde_the_slow_fading",
+                "hale_the_relentless_hunter"
             };
 
             List<HeroInstance> squad = new List<HeroInstance>();

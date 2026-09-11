@@ -77,14 +77,28 @@ def collect_effects(ability):
 
 
 def _get_skills(hero):
-    """Return the dict containing ability slots.
-    Generator format nests them under 'skills'; fall back to the hero dict
-    itself so the flat synthetic fixture (regression-batch-1.json) works too.
+    """Return a dict keyed by import-format slot names (basicAttack, activeSkill,
+    passive1, passive2).  Accepts three shapes:
+      - Generator format: skills block with those keys directly.
+      - Engine format: flat keys basic, active, passive at the hero root.
+      - Synthetic fixture format: flat keys basicAttack/activeSkill at root.
     """
     skills = hero.get("skills")
     if isinstance(skills, dict):
         return skills
-    return hero
+    # Engine format uses basic/active/passive; map to import-format keys so
+    # every downstream check uses one vocabulary.
+    result = {}
+    for import_key, engine_key in (("basicAttack", "basic"),
+                                    ("activeSkill", "active"),
+                                    ("passive1", "passive")):
+        val = hero.get(import_key) or hero.get(engine_key)
+        if val is not None:
+            result[import_key] = val
+    val = hero.get("passive2")
+    if val is not None:
+        result["passive2"] = val
+    return result
 
 
 def _get_talent_slots(hero):

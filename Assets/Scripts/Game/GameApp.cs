@@ -120,7 +120,7 @@ namespace Emberfall.Game
             // and an opt-in switch says so out loud where a silently-removed one says nothing.
             if (UnityEditor.EditorPrefs.GetBool(GrantKaelOnBootKey, false))
             {
-                HeroDef kael = Content.GetHero("kael_the_ashbound");
+                HeroDef kael = Content.GetHero("kael_the_unyielding");
                 if (kael != null && !Session.Profile.Owns(kael.Id))
                     Session.GrantHeroDirect(kael, TimeUtil.NowUnix());
             }

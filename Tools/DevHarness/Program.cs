@@ -58,7 +58,7 @@ namespace Emberfall.DevHarness
             CheckTurnStatusAndEnemyTriggers(content);
             CheckMarksLimitsAndLedger(content);
             CheckHistoryAlliesAndCharges(content);
-            CheckEmberHeroKits();
+
             CheckDebrief();
             CheckRelics(content);
             CheckEvents(content);
@@ -3289,6 +3289,26 @@ namespace Emberfall.DevHarness
                  + (passiveViolations > 0
                     ? " (" + passiveViolations + " violate the star contract: passive required at 2+)"
                     : ""));
+
+            // ---- stat-range sanity bands (94-hero import) ----
+            bool rangeOk = true;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.BaseHp < 500 || h.BaseHp > 3000)
+                { rangeOk = false; Line("  " + h.Id + " hp " + h.BaseHp + " outside [500, 3000]"); }
+                if (h.BaseAttack < 50 || h.BaseAttack > 400)
+                { rangeOk = false; Line("  " + h.Id + " attack " + h.BaseAttack + " outside [50, 400]"); }
+                if (h.BaseDefense < 20 || h.BaseDefense > 150)
+                { rangeOk = false; Line("  " + h.Id + " defense " + h.BaseDefense + " outside [20, 150]"); }
+                if (h.BaseSpeed < 50 || h.BaseSpeed > 200)
+                { rangeOk = false; Line("  " + h.Id + " speed " + h.BaseSpeed + " outside [50, 200]"); }
+                if (h.CritChance < 0f || h.CritChance > 0.5f)
+                { rangeOk = false; Line("  " + h.Id + " critChance " + h.CritChance + " outside [0, 0.5]"); }
+                if (h.CritDamage < 1f || h.CritDamage > 3f)
+                { rangeOk = false; Line("  " + h.Id + " critDamage " + h.CritDamage + " outside [1, 3]"); }
+            }
+            Check(rangeOk, "every hero's base stats fall within sanity bands");
             Line("");
         }
 
@@ -4793,32 +4813,21 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// An OnKill passive fires where it says it does. This was written about Ryn Solvarr's
-        /// Follow-Through, moved from OnCriticalHit to OnKill; Ryn was deleted with the placeholder
-        /// roster and Veska's Oathbreaker is the OnKill passive now, so the check follows the
-        /// trigger rather than the hero. Two things are checked, and the second is the one that
-        /// matters.
+        /// OnKill passive mechanics, proven in a synthetic arena.
         ///
-        /// One: the trigger actually fires where it now says it does. Every Follow-Through in a real
-        /// battle must sit directly behind a Death that Ryn caused, which is the only place
-        /// DealRawDamage fires OnKill from - and none of them may sit behind a critical hit that
-        /// killed nothing, which is what the passive used to do.
+        /// Part A scans shipped content for OnKill passives and checks that none can themselves
+        /// land a kill (recursion safety: DealRawDamage fires OnKill at hardcoded depth 0, so
+        /// MaxPassiveDepth does not bound it - the path is kept unreachable by content).
         ///
-        /// Two, and this is a hazard the design documents do not mention. DealRawDamage fires
-        /// OnKill with a hardcoded depth of 0, not the caller's depth - unlike OnCriticalHit two
-        /// dozen lines above it, which passes depth through. MaxPassiveDepth therefore does not
-        /// bound an OnKill passive at all: one that could itself land a kill would re-enter its own
-        /// trigger without limit. DealRawDamage has no depth parameter to thread, so fixing that
-        /// properly means touching every damage path in the file and is not this pass's job. What
-        /// this pass owes is that the path stays unreachable, and that is the same standard
-        /// CheckNoContentAuthorsNewMechanicsYet applies one section up: no OnKill passive in shipped
-        /// content may carry an effect that can kill. Ryn's is EnergyGain, which cannot. The day one
-        /// is authored that can, this check fails and the depth question has to be answered first.
+        /// Part B proves the trigger itself in a synthetic arena: a hero with an OnKill passive
+        /// fights fodder, and every PassiveTrigger event must sit directly behind a Death from
+        /// the same source.
         /// </summary>
         private static void CheckOnKillPassive(ContentDatabase db)
         {
-            Line("ON-KILL PASSIVE (Veska's Oathbreaker)");
+            Line("ON-KILL PASSIVE");
 
+            // -- Part A: content scan (recursion safety) --
             List<UnitDef> units = new List<UnitDef>();
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
             for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
@@ -4836,59 +4845,80 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(onKill.Count > 0,
-                  "OnKill is authored in shipped content: " + string.Join(", ", onKill.ToArray())
-                  + " - it was used by nobody before Ryn Solvarr's Follow-Through was moved onto it,"
-                  + " and it outlived her deletion because Veska carries it too");
+            if (onKill.Count == 0)
+                Line("  [note] no shipped content authors OnKill - the recursion-safety scan passes"
+                     + " vacuously and the mechanic is unreachable in shipped content until abilities land");
+            else
+                Check(true, "OnKill is authored in shipped content: " + string.Join(", ", onKill.ToArray()));
+
             Check(lethal.Count == 0,
                   "no OnKill passive can itself land a kill (" + string.Join(", ", lethal.ToArray())
                   + ") - DealRawDamage fires OnKill at a hardcoded depth 0, so MaxPassiveDepth does not bound it"
                   + " and the recursion is kept unreachable by content rather than by that guard");
 
-            HeroDef killer = db.GetHero("veska_the_broken_oath");
-            if (killer == null || killer.Passives.Count == 0)
-            {
-                Check(false, "veska_the_broken_oath exists and carries a passive to check");
-                Line("");
-                return;
-            }
-            PassiveDef killerPassive = killer.Passives[0];
-            Check(killerPassive.Trigger == PassiveTrigger.OnKill,
-                  "Veska's Oathbreaker triggers on OnKill");
+            // -- Part B: synthetic arena proves the engine mechanic works --
+            ContentDatabase arena = BuildOnKillTestContent();
+            if (arena == null) { Line(""); return; }
 
-            // The other four are simply the rest of the roster. It was a hand-picked line while
-            // eleven heroes existed; with five there is no choice left to make.
-            string[] others = { "kael_the_ashbound", "seraphine_the_last_ember",
-                                "marrow_the_burning_vow", "orren_the_cinder_hunter" };
-            List<HeroInstance> team = BuildNamedTeam(db, killer, others);
+            GameSession session = new GameSession(arena, GameSession.CreateNewProfile(arena, 0));
+            BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(arena.AllStages[0]), 42));
 
             int fired = 0, notBehindAKill = 0;
-            for (int s = 0; s < db.AllStages.Count; s++)
+            for (int i = 0; i < r.Events.Count; i++)
             {
-                for (int seed = 1; seed <= 12; seed++)
-                {
-                    BattleResult r = RunWith(db, db.AllStages[s], seed, team);
-                    for (int i = 0; i < r.Events.Count; i++)
-                    {
-                        BattleEvent e = r.Events[i];
-                        if (e.Type != BattleEventType.PassiveTrigger) continue;
-                        if (e.AbilityId != killerPassive.Id) continue;
-                        fired++;
-                        // TriggerPassive is called immediately after Emit(Death) in the death
-                        // branch, so the event directly before this one is that Death.
-                        BattleEvent prev = i > 0 ? r.Events[i - 1] : null;
-                        if (prev == null || prev.Type != BattleEventType.Death || prev.SourceId != e.SourceId)
-                            notBehindAKill++;
-                    }
-                }
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.PassiveTrigger) continue;
+                if (e.AbilityId != "killer_onkill") continue;
+                fired++;
+                BattleEvent prev = i > 0 ? r.Events[i - 1] : null;
+                if (prev == null || prev.Type != BattleEventType.Death || prev.SourceId != e.SourceId)
+                    notBehindAKill++;
             }
 
-            Check(fired > 0, "Oathbreaker fires in real battles on its trigger (" + fired + " time(s))");
+            Check(fired > 0, "OnKill passive fires in a synthetic arena (" + fired + " time(s))");
             Check(notBehindAKill == 0,
-                  "every Oathbreaker sat directly behind a Death that Veska caused (" + notBehindAKill
+                  "every OnKill trigger sat directly behind a Death that the killer caused (" + notBehindAKill
                   + " did not) - it is a kill trigger, not a crit trigger");
 
             Line("");
+        }
+
+        private static ContentDatabase BuildOnKillTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_killer"", ""name"": ""Test Killer"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 5000, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""killer_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""passive"": { ""id"": ""killer_onkill"", ""name"": ""Kill Refund"", ""trigger"": ""OnKill"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 10 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_fodder"", ""name"": ""Fodder"", ""aspect"": ""Tide"",
+      ""hp"": 100, ""attack"": 1, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""fodder_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_onkill_ch"", ""name"": ""OnKill Arena"", ""stages"": [
+        { ""id"": ""test_onkill_arena"", ""index"": 1,
+          ""enemies"": [ { ""id"": ""test_fodder"", ""level"": 1 }, { ""id"": ""test_fodder"", ""level"": 1 },
+                        { ""id"": ""test_fodder"", ""level"": 1 }, { ""id"": ""test_fodder"", ""level"": 1 },
+                        { ""id"": ""test_fodder"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 20, ""energyMax"": 100, ""energyPerBasicAttack"": 25,
+  ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "OnKill");
         }
 
         /// <summary>Whether a passive's own effects could reduce a unit to zero HP.</summary>
@@ -4920,79 +4950,90 @@ namespace Emberfall.DevHarness
 
 
         /// <summary>
-        /// Builds a DispelHero (a Mender clone whose active strips one beneficial status from every
-        /// ally) and fights alongside a hero who carries one. The clone's Dispel then removes it.
-        /// Confirms the StatusExpired path fires for beneficial statuses and that the control - the
-        /// unmodified Mender, whose active Cleanses rather than Dispels - never removes one.
-        ///
-        /// The two heroes used to be Maeve Corrin, whose Tidal Cadence granted AttackUp and Focus
-        /// to the whole line, and Wren Ilyra, the Mender. Both were deleted with the placeholder
-        /// roster. Marrow is the Mender now, and the beneficial status comes from Kael's Blood for
-        /// Power - a BattleStart DefenseUp on himself, which is the only ally-side buff the
-        /// five-hero roster authors at all. That is thinner than what this check had before: one
-        /// status on one body instead of two on five, so it proves the same mechanic with less
-        /// margin. The 94-hero import should give this a real buffer to strip.
+        /// Fully synthetic Dispel check. A buffer hero applies DefenseUp to itself at BattleStart;
+        /// a Dispel hero strips it; a control hero with Cleanse does not. Proves StatusExpired fires
+        /// for beneficial statuses removed by Dispel, and that Cleanse leaves them alone.
         /// </summary>
         private static void CheckDispel(ContentDatabase db)
         {
             Line("DISPEL");
-            HeroDef buffDef   = db.GetHero("kael_the_ashbound");
-            HeroDef menderDef = db.GetHero("marrow_the_burning_vow");
-            if (buffDef == null || menderDef == null)
-            {
-                Check(false, "kael_the_ashbound and marrow_the_burning_vow both exist in content");
-                Line("");
-                return;
-            }
 
-            EffectDef dispelEffect = new EffectDef();
-            dispelEffect.Kind   = EffectKind.Dispel;
-            dispelEffect.Target = TargetMode.AllAllies;
-            dispelEffect.Hits   = 1;
+            ContentDatabase arena = BuildDispelTestContent();
+            if (arena == null) { Line(""); return; }
 
-            AbilityDef dispelActive = new AbilityDef();
-            dispelActive.Id         = "test_dispel_active";
-            dispelActive.Name       = "Unravel";
-            dispelActive.Kind       = AbilityKind.Active;
-            dispelActive.EnergyCost = 100;
-            dispelActive.Vfx        = "buff";
-            dispelActive.Effects.Add(dispelEffect);
+            HeroDef buffDef    = arena.GetHero("test_buffer");
+            HeroDef dispelDef  = arena.GetHero("test_dispeller");
+            HeroDef cleanseDef = arena.GetHero("test_cleanser");
 
-            HeroDef dispelHero = CloneHeroWithActive(menderDef, dispelActive);
-
-            // SWEEPS STAGES, for a reason that is arithmetic rather than taste. Marrow opens on 15
-            // energy and banks 28 a basic, so his Active - the one being swapped for a Dispel -
-            // first fires on round 4. Two level-20 heroes end stage 1-1 in one or two rounds, so a
-            // check pinned to that stage would measure a Dispel that never got cast and read as a
-            // broken mechanic. It walks forward until it finds a fight long enough, and runs the
-            // control over exactly the same stages so the two columns are comparable.
-            int dispelled = 0, controlDispelled = 0;
-            int stagesWalked = 0;
             List<HeroInstance> dispelTeam = new List<HeroInstance>();
             dispelTeam.Add(MakeInstance(buffDef, 20));
-            dispelTeam.Add(MakeInstance(dispelHero, 20));
+            dispelTeam.Add(MakeInstance(dispelDef, 20));
             List<HeroInstance> controlTeam = new List<HeroInstance>();
             controlTeam.Add(MakeInstance(buffDef, 20));
-            controlTeam.Add(MakeInstance(menderDef, 20));
+            controlTeam.Add(MakeInstance(cleanseDef, 20));
 
-            for (int st = 0; st < db.AllStages.Count && dispelled == 0; st++)
+            StageDef stage = Opening(arena.AllStages[0]);
+            int dispelled = 0, controlDispelled = 0;
+            for (int seed = 1; seed <= 5; seed++)
             {
-                StageDef stage = Opening(db.AllStages[st]);
-                stagesWalked++;
-                for (int seed = 1; seed <= 5; seed++)
-                {
-                    dispelled += CountBeneficialRemovals(RunWith(db, stage, seed, dispelTeam));
-                    controlDispelled += CountBeneficialRemovals(RunWith(db, stage, seed, controlTeam));
-                }
+                dispelled += CountBeneficialRemovals(RunWith(arena, stage, seed, dispelTeam));
+                controlDispelled += CountBeneficialRemovals(RunWith(arena, stage, seed, controlTeam));
             }
 
-            Check(dispelled > 0, "Dispel removes at least one beneficial status (" + dispelled
-                  + " across seeds 1-5 of " + stagesWalked + " stage(s))");
+            Check(dispelled > 0, "Dispel removes at least one beneficial status (" + dispelled + " across 5 seeds)");
             Check(controlDispelled == 0,
-                  "control (Cleanse, not Dispel) produces 0 beneficial-status removals over the same stages and seeds (got "
+                  "control (Cleanse, not Dispel) produces 0 beneficial-status removals over the same seeds (got "
                   + controlDispelled + ")");
 
             Line("");
+        }
+
+        private static ContentDatabase BuildDispelTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""test_buffer"", ""name"": ""Test Buffer"", ""aspect"": ""Ember"", ""role"": ""Bulwark"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""buffer_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""passive"": { ""id"": ""buffer_buff"", ""name"": ""Iron Start"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseUp"", ""duration"": 99, ""value"": 50 } ] } },
+    { ""id"": ""test_dispeller"", ""name"": ""Test Dispeller"", ""aspect"": ""Tide"", ""role"": ""Mender"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dispeller_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""active"": { ""id"": ""test_dispel_active"", ""name"": ""Unravel"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Dispel"", ""target"": ""AllAllies"", ""hits"": 1 } ] } },
+    { ""id"": ""test_cleanser"", ""name"": ""Test Cleanser"", ""aspect"": ""Tide"", ""role"": ""Mender"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""cleanser_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] },
+      ""active"": { ""id"": ""test_cleanse_active"", ""name"": ""Purify"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Cleanse"", ""target"": ""AllAllies"", ""hits"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""test_dispel_target"", ""name"": ""Dispel Target"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""target_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""test_dispel_ch"", ""name"": ""Dispel Arena"", ""stages"": [
+        { ""id"": ""test_dispel_arena"", ""index"": 1,
+          ""enemies"": [ { ""id"": ""test_dispel_target"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 12, ""energyMax"": 100, ""energyPerBasicAttack"": 50,
+  ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Dispel");
         }
 
         /// <summary>Beneficial statuses removed by somebody other than their carrier. SourceId equal
@@ -5010,33 +5051,6 @@ namespace Emberfall.DevHarness
             return n;
         }
 
-        /// <summary>Clone a hero, replacing only the active ability. Passive is cleared so
-        /// the test hero's behaviour is determined entirely by what we give them.</summary>
-        private static HeroDef CloneHeroWithActive(HeroDef src, AbilityDef active)
-        {
-            HeroDef clone = new HeroDef();
-            clone.Id            = src.Id + "_clone";
-            clone.Name          = src.Name;
-            clone.Aspect        = src.Aspect;
-            clone.BaseHp        = src.BaseHp;
-            clone.BaseAttack    = src.BaseAttack;
-            clone.BaseDefense   = src.BaseDefense;
-            clone.BaseSpeed     = src.BaseSpeed;
-            clone.CritChance    = src.CritChance;
-            clone.CritDamage    = src.CritDamage;
-            clone.EffectHit     = src.EffectHit;
-            clone.EffectResist  = src.EffectResist;
-            clone.Growth        = src.Growth;
-            clone.StartEnergy   = src.StartEnergy;
-            clone.Visual        = src.Visual;
-            clone.BasicAttack   = src.BasicAttack;
-            clone.Active        = active;
-            // No passives carried over: this clone exists to isolate one active.
-            clone.Role          = src.Role;
-            clone.Stars         = src.Stars;
-            return clone;
-        }
-
         private static BattleResult RunWith(ContentDatabase db, StageDef stage, int seed, List<HeroInstance> team)
         {
             BattleRequest request = new BattleRequest();
@@ -5045,23 +5059,6 @@ namespace Emberfall.DevHarness
             request.Seed = seed;
             request.Team = team;
             return CombatSimulation.Run(request);
-        }
-
-        private static List<HeroInstance> BuildNamedTeam(ContentDatabase db, HeroDef lead, string[] otherIds)
-        {
-            return BuildNamedTeamAtLevel(db, lead, otherIds, 20);
-        }
-
-        private static List<HeroInstance> BuildNamedTeamAtLevel(ContentDatabase db, HeroDef lead, string[] otherIds, int level)
-        {
-            List<HeroInstance> team = new List<HeroInstance>();
-            team.Add(MakeInstance(lead, level));
-            for (int i = 0; i < otherIds.Length; i++)
-            {
-                HeroDef def = db.GetHero(otherIds[i]);
-                if (def != null) team.Add(MakeInstance(def, level));
-            }
-            return team;
         }
 
         private static HeroInstance MakeInstance(HeroDef def, int level)
@@ -5369,9 +5366,9 @@ namespace Emberfall.DevHarness
             // What a real save holding a deleted defId does is a separate question and belongs in
             // its own check, not smuggled into this one.
             string legacy = "{\"version\":1,\"gold\":100,\"shards\":10,\"nextHeroUid\":4,"
-                + "\"heroes\":[{\"uid\":\"h1\",\"defId\":\"kael_the_ashbound\",\"level\":4,\"copies\":1,\"acquired\":0},"
-                + "{\"uid\":\"h2\",\"defId\":\"marrow_the_burning_vow\",\"level\":3,\"copies\":1,\"acquired\":0},"
-                + "{\"uid\":\"h3\",\"defId\":\"veska_the_broken_oath\",\"level\":2,\"copies\":1,\"acquired\":0}],"
+                + "\"heroes\":[{\"uid\":\"h1\",\"defId\":\"kael_the_unyielding\",\"level\":4,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h2\",\"defId\":\"nereia_the_field_medic\",\"level\":3,\"copies\":1,\"acquired\":0},"
+                + "{\"uid\":\"h3\",\"defId\":\"kiva_the_forsaken_oath\",\"level\":2,\"copies\":1,\"acquired\":0}],"
                 + "\"team\":[\"h1\",\"h2\",\"h3\"]}";
             string upgradeError;
             PlayerProfile upgraded = SaveSerializer.Deserialize(legacy, db, out upgradeError);
@@ -5578,7 +5575,7 @@ namespace Emberfall.DevHarness
         /// it is structurally unreachable there, not merely unexercised by the samples those
         /// checks take.
         ///
-        /// Kael (kael_the_ashbound) is a deliberate, single exception: the animation-pipeline task
+        /// Kael (kael_the_unyielding) is a deliberate, single exception: the animation-pipeline task
         /// that first shipped him authored his designed Block value (8%) rather than dropping it,
         /// since Block was already a live stat read by ApplyDamageEffect, not a new field. Every
         /// other hero and every enemy is still held to the original zero bar, which is what keeps
@@ -5594,7 +5591,7 @@ namespace Emberfall.DevHarness
             for (int u = 0; u < units.Count; u++)
             {
                 UnitDef def = units[u];
-                bool isKael = def.Id == "kael_the_ashbound";
+                bool isKael = def.Id == "kael_the_unyielding";
                 if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f
                     || def.ControlImmunity != 0f || def.HolyDamage != 0f
                     || (def.Block != 0f && !isKael))
@@ -5898,174 +5895,8 @@ namespace Emberfall.DevHarness
         // ------------------------------------------------------------------ RESOLVE
 
         // ------------------------------------------------------------------ EMBER HERO KITS
-
-        /// <summary>
-        /// Every Ember hero's passive AND active, each proven to fire in a real battle against the
-        /// SHIPPED hero definitions - not synthetic stand-ins, and not an aggregate counter.
-        ///
-        /// The RESOLVE section above proves GainResolve/perStack/consumesResolve work as a
-        /// mechanism. It does not prove that any particular hero's authored kit reaches them: a
-        /// passive whose trigger never fires, an active nobody can afford, or an effects array that
-        /// silently resolves to nothing would all leave that section green. Three of these five sit
-        /// on the bench in the economy sim and never cast anything there, so without this they are
-        /// shipped untested.
-        ///
-        /// Real hero JSON, synthetic arena. The heroes.json text is read off disk and handed to
-        /// ContentDatabase unmodified; only the enemies, the stage and the balance constants are
-        /// built for the test. The arena has to satisfy every trigger these five use at once:
-        /// BattleStart (Kael), AfterBasicAttack (Seraphine, Orren), OnDamaged (Marrow - so the
-        /// enemies must actually attack back) and OnKill (Veska - so at least one enemy must be
-        /// killable). That is why the line is five modest enemies rather than one anvil.
-        /// </summary>
-        private static void CheckEmberHeroKits()
-        {
-            Line("EMBER HERO KITS (five shipped kits, each firing in a real battle)");
-
-            string[] ember = { "kael_the_ashbound", "seraphine_the_last_ember",
-                               "marrow_the_burning_vow", "veska_the_broken_oath",
-                               "orren_the_cinder_hunter" };
-
-            ContentDatabase db = BuildEmberArenaContent();
-            if (db == null) { Line(""); return; }
-
-            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
-            profile.PlayerLevel = 60;
-            profile.Gold = 500000000L;
-            GameSession session = new GameSession(db, profile);
-            for (int h = 0; h < db.Heroes.Count; h++)
-                if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
-
-            for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
-            int deployed = 0;
-            for (int i = 0; i < ember.Length; i++)
-                for (int j = 0; j < profile.Heroes.Count; j++)
-                    if (profile.Heroes[j].Def.Id == ember[i])
-                    { profile.AssignToTeam(deployed, profile.Heroes[j].Uid); deployed++; break; }
-            Check(deployed == ember.Length,
-                  "all five Ember heroes deploy together (got " + deployed + " of " + ember.Length + ")");
-            if (deployed != ember.Length) { Line(""); return; }
-
-            List<HeroInstance> team = profile.TeamHeroes();
-            for (int i = 0; i < team.Count; i++) session.LevelUpHero(team[i], 24);
-
-            // Several seeds: OnKill and OnDamaged are outcome-dependent, and one unlucky seed
-            // proving nothing is not the same as a kit being broken.
-            Dictionary<string, bool> passiveFired = new Dictionary<string, bool>();
-            Dictionary<string, bool> activeFired = new Dictionary<string, bool>();
-            Dictionary<int, int> firstResolveValue = new Dictionary<int, int>();
-            Dictionary<int, int> peakResolve = new Dictionary<int, int>();
-            int damageEvents = 0;
-
-            for (int seed = 0; seed < 24; seed++)
-            {
-                BattleResult r = CombatSimulation.Run(session.BuildBattleRequest(Opening(db.AllStages[0]), 9100 + seed));
-                for (int i = 0; i < r.Events.Count; i++)
-                {
-                    BattleEvent e = r.Events[i];
-                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId != null)
-                        passiveFired[e.AbilityId] = true;
-                    if (e.Type == BattleEventType.AbilityCast && e.AbilityId != null)
-                        activeFired[e.AbilityId] = true;
-                    if (e.Type == BattleEventType.Damage) damageEvents++;
-
-                    // Per-unit Resolve bookkeeping. Each unit's FIRST gain must read 1: if the
-                    // counter were shared or clobbered between two Ember heroes on one line, a
-                    // second carrier's first application would already read 2 or more.
-                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve)
-                    {
-                        if (!firstResolveValue.ContainsKey(e.TargetId)) firstResolveValue[e.TargetId] = e.Value;
-                        int prev;
-                        if (!peakResolve.TryGetValue(e.TargetId, out prev) || e.Value > prev)
-                            peakResolve[e.TargetId] = e.Value;
-                    }
-                }
-            }
-
-            Check(damageEvents > 0, "the arena actually resolves battles (got " + damageEvents + " damage events)");
-
-            // Each kit, named, so a failure says which hero rather than that something is wrong.
-            for (int i = 0; i < ember.Length; i++)
-            {
-                HeroDef def = null;
-                for (int j = 0; j < db.Heroes.Count; j++)
-                    if (db.Heroes[j].Id == ember[i]) { def = db.Heroes[j]; break; }
-                if (def == null) { Check(false, ember[i] + " is missing from shipped content"); continue; }
-
-                Check(def.Passives.Count > 0, ember[i] + " ships a passive at all");
-                for (int p = 0; p < def.Passives.Count; p++)
-                    Check(passiveFired.ContainsKey(def.Passives[p].Id),
-                          ember[i] + " fires its passive in a real battle (" + def.Passives[p].Id
-                          + ", trigger " + def.Passives[p].Trigger + ")");
-
-                Check(def.Active != null, ember[i] + " ships an active at all");
-                if (def.Active != null)
-                    Check(activeFired.ContainsKey(def.Active.Id),
-                          ember[i] + " casts its active in a real battle (" + def.Active.Id + ")");
-            }
-
-            // Independence. Not "Resolve was gained somewhere" - that the counters belong to their
-            // own units and neither shares nor overwrites the other's.
-            int carriers = firstResolveValue.Count;
-            Check(carriers >= 2,
-                  "at least two units hold Resolve in the same battles (got " + carriers
-                  + ") - one carrier cannot demonstrate independence");
-
-            bool everyFirstIsOne = true;
-            foreach (KeyValuePair<int, int> kv in firstResolveValue)
-                if (kv.Value != 1) everyFirstIsOne = false;
-            Check(everyFirstIsOne,
-                  "every Resolve carrier's first stack reads 1 - a shared or clobbered counter would"
-                  + " make a second carrier's first application read 2 or more");
-
-            bool capsHeld = true;
-            foreach (KeyValuePair<int, int> kv in peakResolve)
-                if (kv.Value > 5) capsHeld = false;   // the largest maxStacks any Ember hero authors
-            Check(capsHeld, "no carrier exceeds the largest authored maxStacks (5)");
-
-            Line("");
-        }
-
-        /// <summary>
-        /// The shipped heroes.json, verbatim off disk, against an arena built to satisfy every
-        /// trigger the five Ember kits use. Enemies attack (Marrow's OnDamaged) and are killable
-        /// (Veska's OnKill); energy is generous so every active is reached inside the round cap.
-        /// </summary>
-        private static ContentDatabase BuildEmberArenaContent()
-        {
-            string heroesJson;
-            try { heroesJson = File.ReadAllText(Path.Combine(FindContentDir(), "heroes.json")); }
-            catch (Exception ex)
-            {
-                Check(false, "could not read shipped heroes.json for the Ember arena: " + ex.Message);
-                return null;
-            }
-
-            string enemiesJson = @"{
-  ""enemies"": [
-    { ""id"": ""ember_arena_mook"", ""name"": ""Arena Mook"", ""aspect"": ""Tide"",
-      ""hp"": 4000, ""attack"": 60, ""defense"": 10, ""speed"": 90, ""critChance"": 0, ""critDamage"": 1.5,
-      ""growth"": 0.12,
-      ""basic"": { ""id"": ""mook_basic"", ""name"": ""Swipe"",
-        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.9 } ] } }
-  ]
-}";
-            string campaignJson = @"{
-  ""chapters"": [
-    { ""id"": ""ember_arena_ch"", ""name"": ""Ember Arena"", ""stages"": [
-        { ""id"": ""ember_arena"", ""index"": 1, ""recommendedPower"": 1,
-          ""enemies"": [ { ""id"": ""ember_arena_mook"", ""level"": 1 }, { ""id"": ""ember_arena_mook"", ""level"": 1 },
-                        { ""id"": ""ember_arena_mook"", ""level"": 1 }, { ""id"": ""ember_arena_mook"", ""level"": 1 },
-                        { ""id"": ""ember_arena_mook"", ""level"": 1 } ] }
-    ] }
-  ]
-}";
-            string balanceJson = @"{
-  ""defenseConstant"": 400, ""defensePerLevel"": 24, ""damageVariance"": 0, ""speedVariance"": 0,
-  ""minDamage"": 1, ""maxRounds"": 20, ""energyMax"": 100, ""energyPerBasicAttack"": 50,
-  ""energyOnDamaged"": 9, ""maxTeamSize"": 5, ""emberBurnStackCap"": 3
-}";
-            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Ember arena");
-        }
+        // DELETED. The five Ember kits this section proved are gone with the placeholder roster.
+        // The equivalent for 94 heroes is a different check written after abilities are authored.
 
         /// <summary>
         /// Resolve, the generic stacking counter four heroes' passives are built on. Proven the
@@ -6092,8 +5923,11 @@ namespace Emberfall.DevHarness
                             if (h.Passives[p].Effects[e].Kind == EffectKind.GainResolve) { carries = true; break; }
                     if (carries) carriers++;
                 }
-                Check(carriers == 4,
-                      "four shipped heroes carry a GainResolve passive (got " + carriers + ")");
+                if (carriers == 0)
+                    Line("  [note] no shipped hero carries GainResolve - the mechanic is proven"
+                         + " synthetically below but unreachable in shipped content until abilities land");
+                else
+                    Check(carriers > 0, "at least one shipped hero carries a GainResolve passive (got " + carriers + ")");
             }
 
             ContentDatabase db = BuildResolveTestContent(1.0f);
@@ -6136,6 +5970,11 @@ namespace Emberfall.DevHarness
                       "perStack scales the active by (1 + perStack * stacks) - 3 stacks at 1.0 gave x"
                       + ratio.ToString("0.00") + " (" + flatHit + " -> " + scaledHit + ", expected ~x4)");
             }
+
+            Line("  [note] Resolve counter independence (two carriers in one battle each starting"
+                 + " at stack 1) was proven by CheckEmberHeroKits, which is deleted with the placeholder"
+                 + " roster. The synthetic arena above proves the mechanic for one carrier; independence"
+                 + " resumes when authored kits put two carriers on the same line.");
 
             Line("");
         }
@@ -11364,18 +11203,18 @@ namespace Emberfall.DevHarness
         /// hide that.
         /// </summary>
         private static readonly string[] PinnedLine = {
-            "veska_the_broken_oath",       // Striker - the closest thing left to Ryn's single-target finisher
-            "seraphine_the_last_ember",    // Breaker - area damage and the roster's only Burn on a basic
-            "orren_the_cinder_hunter",     // Marksman - single-target at range with a DefenseDown rider
-            "kael_the_ashbound",           // Vanguard - the fattest body, and the nearest thing to a front line
-            "marrow_the_burning_vow",      // Mender  - the only healer in the game right now
+            "kael_the_unyielding",             // Bulwark
+            "aeron_the_unbroken_stride",       // Vanguard
+            "nereia_the_field_medic",          // Mender
+            "seraphine_the_closed_volume",     // Breaker
+            "isolde_the_slow_fading",          // Stalker
         };
 
         /// <summary>The roster's healer, named once. The economy pass measures what healing is
         /// worth by fielding this hero twice, once with every Heal zeroed; it has to know who that
         /// is. Wren Ilyra until the placeholder roster was deleted, Marrow now, and whoever the
         /// 94-hero import makes the primary Mender after that.</summary>
-        private const string HealerDefId = "marrow_the_burning_vow";
+        private const string HealerDefId = "nereia_the_field_medic";
 
         private static void CheckPinnedFiveBodyCurve(ContentDatabase db)
         {

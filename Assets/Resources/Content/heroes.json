@@ -1,193 +1,5403 @@
 {
-  // Emberfall roster, mid-swap. The six original placeholder heroes - one per combat role - have
-  // been deleted; these five are the first arrivals of the 94-hero roster that replaces them.
-  // ALL FIVE ARE EMBER, and three combat roles (Bulwark, Warden, Stalker) currently have no hero
-  // at all. Both are temporary states of a half-finished import, not design. Base stats are
-  // role-comparable; star tier is applied as a multiplier in StatMath.
   "heroes": [
     {
-      "id": "kael_the_ashbound",
-      "name": "Kael",
-      "title": "The Ashbound",
-      "role": "Vanguard",
-      "aspect": "Ember",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Kael was once the commander of a fortress that could no longer be defended. Rather than retreat when defeat became inevitable, he ordered its gates opened and destroyed the fortress himself, denying the enemy everything they came to claim. He came to believe that destruction is not failure when it creates the chance for something stronger to follow.",
-      "hp": 1850, "attack": 165, "defense": 75, "speed": 82,
-      "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.00, "effectResist": 0.10,
-      "skillDamage": 0, "block": 0.08, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "5A3030", "secondary": "2A2523", "accent": "C08A5A", "silhouette": "brute", "weapon": "greatsword", "scale": 1.08, "sigil": 6, "sprite": "kael_the_ashbound", "spriteBodyFraction": 0.555, "spriteFootFraction": 0.222, "spriteMirror": true },
-      "basic": {
-        "id": "kael_heavy_cleave", "name": "Heavy Cleave", "vfx": "slash",
-        "description": "A crushing two-handed blow at the enemy directly in front of him.",
-        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.10 } ]
-      },
-      "active": {
-        "id": "kael_breaking_point", "name": "Breaking Point", "energyCost": 100, "vfx": "burst",
-        "description": "Kael brings his axe down in a shockwave that tears through the whole enemy line, banking one Ruin as he goes and striking hardest at whoever is already closest to falling. Ruin is kept, not spent - the line gets heavier every time he swings.",
-        "effects": [
-          { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 },
-          { "kind": "Damage", "target": "AllEnemies", "power": 2.20, "perStack": 0.17 },
-          { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.55 }
-        ]
-      },
-      "passive": {
-        "id": "kael_blood_for_power", "name": "Blood for Power", "trigger": "BattleStart",
-        "oncePerBattle": true, "vfx": "buff",
-        "description": "Kael sets his guard before the first blow lands: +12% Guard for the rest of the battle. His Block is authored into his base stats rather than granted here.",
-        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.12, "duration": 99 } ]
-      }
-    },
-    {
-      "id": "seraphine_the_last_ember",
-      "name": "Seraphine",
-      "title": "The Last Ember",
-      "role": "Breaker",
-      "aspect": "Ember",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": false,
-      "lore": "Seraphine was a scholar who spent decades documenting civilizations that collapsed under their own contradictions. She eventually abandoned the belief that preservation was always virtuous. She joined the Ember philosophy because she learned to see endings as the beginning of transformation.",
-      "hp": 1350, "attack": 210, "defense": 58, "speed": 112,
-      "critChance": 0.12, "critDamage": 1.60, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.15, "effectResist": 0.05,
-      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "6B3430", "secondary": "29282D", "accent": "D39A62", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.02, "sigil": null, "sprite": "seraphine_the_last_ember", "spriteBodyFraction": 0.529, "spriteFootFraction": 0.234, "spriteMirror": true },
-      "basic": {
-        "id": "seraphine_ember_script", "name": "Ember Script", "vfx": "bolt",
-        "description": "A line of fire written straight into the nearest foe.",
-        "effects": [
-          { "kind": "Damage", "target": "FrontEnemy", "power": 1.10 },
-          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.25, "duration": 2, "chance": 0.85 }
-        ]
-      },
-      "active": {
-        "id": "seraphine_final_chapter", "name": "Final Chapter", "energyCost": 100, "vfx": "burst",
-        "description": "Every page burns at once.",
-        "effects": [
-          { "kind": "Damage", "target": "AllEnemies", "power": 1.85, "perStack": 0.18, "consumesResolve": true },
-          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Burn", "magnitude": 0.25, "duration": 2, "chance": 0.75 }
-        ]
-      },
-      "passive": {
-        "id": "seraphine_kindling_script", "name": "Kindling Script", "trigger": "AfterBasicAttack",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "Every line she writes feeds the next: each basic attack banks one Ember, to a maximum of five. Final Chapter burns the whole page at once and spends them.",
-        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 5, "duration": 99 } ]
-      }
-    },
-    {
-      "id": "marrow_the_burning_vow",
-      "name": "Marrow",
-      "title": "The Burning Vow",
-      "role": "Mender",
-      "aspect": "Ember",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Marrow served as a battlefield priest who refused to let the wounded cling forever to battles already lost. To him, sacrifice was not suffering for its own sake, but the deliberate destruction of what must be given up so something else can endure.",
-      "hp": 1700, "attack": 120, "defense": 75, "speed": 95,
-      "critChance": 0.05, "critDamage": 1.50, "growth": 0.115, "startEnergy": 15,
-      "effectHit": 0.05, "effectResist": 0.15,
-      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "583B36", "secondary": "25272A", "accent": "C99A6B", "silhouette": "humanoid", "weapon": "warhammer", "scale": 1.05, "sigil": null, "sprite": "marrow_the_burning_vow", "spriteBodyFraction": 0.535, "spriteFootFraction": 0.23, "spriteMirror": true },
-      "basic": {
-        "id": "marrow_burning_prayer", "name": "Burning Prayer", "vfx": "slash",
-        "description": "A blow that costs him as much as it costs his enemy.",
-        "effects": [
-          { "kind": "Damage", "target": "FrontEnemy", "power": 1.00 },
-          { "kind": "Heal", "target": "AllAllies", "power": 0.30 }
-        ]
-      },
-      "active": {
-        "id": "marrow_final_offering", "name": "Final Offering", "energyCost": 100, "vfx": "heal",
-        "description": "Gives everything he has left to the line still standing.",
-        "effects": [
-          { "kind": "Heal", "target": "AllAllies", "power": 0.90, "selfHpRatio": 0.06, "perStack": 0.22, "consumesResolve": true },
-          { "kind": "Cleanse", "target": "AllAllies", "hits": 1 }
-        ]
-      },
-      "passive": {
-        "id": "marrow_burning_vow", "name": "The Burning Vow", "trigger": "OnDamaged",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "Every wound he takes is kept as a promise, to a maximum of four. Final Offering pays all of them out at once.",
-        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 } ]
-      }
-    },
-    {
-      "id": "veska_the_broken_oath",
-      "name": "Veska",
-      "title": "The Broken Oath",
-      "role": "Striker",
-      "aspect": "Ember",
-      "stars": 5,
-      "fusable": true,
-      "startingHero": true,
-      "lore": "Veska was once sworn to protect a ruler she discovered was sacrificing entire villages to preserve his reign. She broke her oath and accepted the ruin that followed. Some promises deserve to be broken before they destroy everyone bound by them.",
-      "hp": 1300, "attack": 220, "defense": 55, "speed": 122,
-      "critChance": 0.22, "critDamage": 1.75, "growth": 0.115, "startEnergy": 0,
-      "effectHit": 0.08, "effectResist": 0.02,
-      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "34282A", "secondary": "6A3933", "accent": "B98A62", "silhouette": "humanoid", "weapon": "hookblades", "scale": 0.98, "sigil": null, "sprite": "veska_the_broken_oath", "spriteBodyFraction": 0.508, "spriteFootFraction": 0.24, "spriteMirror": true },
-      "basic": {
-        "id": "veska_broken_edge", "name": "Broken Edge", "vfx": "slash",
-        "description": "Aims for whoever is closest to falling.",
-        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.20 } ]
-      },
-      "active": {
-        "id": "veska_cut_the_ties", "name": "Cut the Ties", "energyCost": 100, "vfx": "slash",
-        "description": "One cut meant to end things.",
-        "effects": [
-          { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.50, "perStack": 0.35, "consumesResolve": true },
-          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "DefenseDown", "magnitude": 0.25, "duration": 2, "chance": 0.85 }
-        ]
-      },
-      "passive": {
-        "id": "veska_oathbreaker", "name": "Oathbreaker", "trigger": "OnKill",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "Every ending sharpens the next: each kill banks one cut, to a maximum of three. Cut the Ties spends them all on one blow.",
-        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 3, "duration": 99 } ]
-      }
-    },
-    {
-      "id": "orren_the_cinder_hunter",
-      "name": "Orren",
-      "title": "The Cinder Hunter",
+      "id": "hale_the_relentless_hunter",
+      "name": "Hale",
       "role": "Marksman",
       "aspect": "Ember",
       "stars": 5,
-      "fusable": true,
       "startingHero": false,
-      "lore": "Orren spent years hunting creatures that threatened isolated settlements, until he realized the greatest threats were often what people refused to abandon. Destruction is sometimes an act of mercy: remove the source, and everything around it gets a chance to survive.",
-      "hp": 1400, "attack": 195, "defense": 60, "speed": 115,
-      "critChance": 0.15, "critDamage": 1.65, "growth": 0.115, "startEnergy": 5,
-      "effectHit": 0.10, "effectResist": 0.05,
-      "skillDamage": 0, "block": 0, "armorBreak": 0, "controlImmunity": 0, "damageReduction": 0, "holyDamage": 0,
-      "visual": { "primary": "49322E", "secondary": "25282A", "accent": "B8895E", "silhouette": "humanoid", "weapon": "bow", "scale": 1.01, "sigil": null, "sprite": "orren_the_cinder_hunter", "spriteBodyFraction": 0.553, "spriteFootFraction": 0.221, "spriteMirror": true },
+      "hp": 1365,
+      "attack": 190,
+      "defense": 59,
+      "speed": 114,
+      "critChance": 0.1,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "hale_the_relentless_hunter",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
       "basic": {
-        "id": "orren_marked_shot", "name": "Marked Shot", "vfx": "bolt",
-        "description": "A shot aimed to open the wound wider.",
+        "id": "hale_the_relentless_hunter_placeholder_basic",
+        "name": "Strike (placeholder)",
         "effects": [
-          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.15 },
-          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "DefenseDown", "magnitude": 0.15, "duration": 2, "chance": 0.6 }
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
         ]
       },
       "active": {
-        "id": "orren_final_quarry", "name": "Final Quarry", "energyCost": 100, "vfx": "burst",
-        "description": "One shot for the kill, one volley for the rest.",
+        "id": "hale_the_relentless_hunter_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
         "effects": [
-          { "kind": "Damage", "target": "LowestHpEnemy", "power": 2.20, "perStack": 0.25, "consumesResolve": true },
-          { "kind": "Damage", "target": "AllEnemies", "power": 0.60 }
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "kael_the_unyielding",
+      "name": "Kael",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 5,
+      "startingHero": true,
+      "hp": 1872,
+      "attack": 165,
+      "defense": 74,
+      "speed": 81,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "greatsword",
+        "scale": 1.08,
+        "sigil": null,
+        "sprite": "kael_the_unyielding",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "kael_the_unyielding_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
         ]
       },
-      "passive": {
-        "id": "orren_marked_quarry", "name": "Marked Quarry", "trigger": "AfterBasicAttack",
-        "oncePerBattle": false, "vfx": "buff",
-        "description": "Every marked shot is remembered, to a maximum of four. Final Quarry collects on the mark before the volley goes wide.",
-        "effects": [ { "kind": "GainResolve", "target": "Self", "maxStacks": 4, "duration": 99 } ]
+      "active": {
+        "id": "kael_the_unyielding_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "kiva_the_forsaken_oath",
+      "name": "Kiva",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stars": 5,
+      "startingHero": true,
+      "hp": 1268,
+      "attack": 195,
+      "defense": 56,
+      "speed": 121,
+      "critChance": 0.12,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "kiva_the_forsaken_oath",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "kiva_the_forsaken_oath_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "kiva_the_forsaken_oath_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "marrow_the_irrevocable_vow",
+      "name": "Marrow",
+      "role": "Mender",
+      "aspect": "Ember",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1736,
+      "attack": 160,
+      "defense": 68,
+      "speed": 94,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.0,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 1.05,
+        "sigil": null,
+        "sprite": "marrow_the_irrevocable_vow",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "marrow_the_irrevocable_vow_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "marrow_the_irrevocable_vow_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "seraphine_the_closed_volume",
+      "name": "Seraphine",
+      "role": "Breaker",
+      "aspect": "Ember",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1443,
+      "attack": 190,
+      "defense": 62,
+      "speed": 107,
+      "critChance": 0.08,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.12,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "spellbook",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "seraphine_the_closed_volume",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "seraphine_the_closed_volume_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "seraphine_the_closed_volume_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "branik_the_siege_mason",
+      "name": "Branik",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1736,
+      "attack": 145,
+      "defense": 78,
+      "speed": 79,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 1.06,
+        "sigil": null,
+        "sprite": "branik_the_siege_mason",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "branik_the_siege_mason_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "branik_the_siege_mason_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "demos_the_debt_collector",
+      "name": "Demos",
+      "role": "Binder",
+      "aspect": "Ember",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1373,
+      "attack": 165,
+      "defense": 62,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "demos_the_debt_collector",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "demos_the_debt_collector_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "demos_the_debt_collector_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "kest_the_bridgebreaker",
+      "name": "Kest",
+      "role": "Striker",
+      "aspect": "Ember",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1306,
+      "attack": 195,
+      "defense": 56,
+      "speed": 115,
+      "critChance": 0.13,
+      "critDamage": 1.65,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "kest_the_bridgebreaker",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "kest_the_bridgebreaker_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "kest_the_bridgebreaker_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "orelle_the_fever_warden",
+      "name": "Orelle",
+      "role": "Mender",
+      "aspect": "Ember",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1591,
+      "attack": 135,
+      "defense": 68,
+      "speed": 91,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "orelle_the_fever_warden",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "orelle_the_fever_warden_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "orelle_the_fever_warden_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "tavia_the_signal_huntress",
+      "name": "Tavia",
+      "role": "Marksman",
+      "aspect": "Ember",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 190,
+      "defense": 53,
+      "speed": 110,
+      "critChance": 0.13,
+      "critDamage": 1.65,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "tavia_the_signal_huntress",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "tavia_the_signal_huntress_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "tavia_the_signal_huntress_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "adric_the_blank_map",
+      "name": "Adric",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1638,
+      "attack": 140,
+      "defense": 71,
+      "speed": 80,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.05,
+        "sigil": null,
+        "sprite": "adric_the_blank_map",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "adric_the_blank_map_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "adric_the_blank_map_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "aster_the_glassblower",
+      "name": "Aster",
+      "role": "Breaker",
+      "aspect": "Ember",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1287,
+      "attack": 180,
+      "defense": 56,
+      "speed": 105,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "aster_the_glassblower",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "aster_the_glassblower_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "aster_the_glassblower_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "quin_the_sealed_dispatch",
+      "name": "Quin",
+      "role": "Tinkerer",
+      "aspect": "Ember",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1232,
+      "attack": 175,
+      "defense": 50,
+      "speed": 108,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.16,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "quin_the_sealed_dispatch",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "quin_the_sealed_dispatch_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "quin_the_sealed_dispatch_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "selka_the_unheard_appeal",
+      "name": "Selka",
+      "role": "Stalker",
+      "aspect": "Ember",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1240,
+      "attack": 170,
+      "defense": 53,
+      "speed": 110,
+      "critChance": 0.11,
+      "critDamage": 1.6,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.16,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "selka_the_unheard_appeal",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "selka_the_unheard_appeal_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "selka_the_unheard_appeal_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "arno_the_unfinished_mason",
+      "name": "Arno",
+      "role": "Vanguard",
+      "aspect": "Ember",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 155,
+      "defense": 56,
+      "speed": 94,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "arno_the_unfinished_mason",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "arno_the_unfinished_mason_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "barr_the_splintered_door",
+      "name": "Barr",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1365,
+      "attack": 125,
+      "defense": 62,
+      "speed": 79,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "brute",
+        "weapon": "hammer",
+        "scale": 1.04,
+        "sigil": null,
+        "sprite": "barr_the_splintered_door",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "barr_the_splintered_door_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "piri_the_match_seller",
+      "name": "Piri",
+      "role": "Tinkerer",
+      "aspect": "Ember",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1139,
+      "attack": 160,
+      "defense": 46,
+      "speed": 104,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.1,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "piri_the_match_seller",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "piri_the_match_seller_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "fenn_the_parcel_runner",
+      "name": "Fenn",
+      "role": "Tinkerer",
+      "aspect": "Ember",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 897,
+      "attack": 130,
+      "defense": 40,
+      "speed": 101,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.06,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "fenn_the_parcel_runner",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "fenn_the_parcel_runner_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "ulric_the_fallen_sign",
+      "name": "Ulric",
+      "role": "Bulwark",
+      "aspect": "Ember",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 1053,
+      "attack": 100,
+      "defense": 53,
+      "speed": 78,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.06,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "8B3A20",
+        "secondary": "2A2020",
+        "accent": "D09060",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.03,
+        "sigil": null,
+        "sprite": "ulric_the_fallen_sign",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "ulric_the_fallen_sign_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "nereia_the_field_medic",
+      "name": "Nereia",
+      "role": "Mender",
+      "aspect": "Tide",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1774,
+      "attack": 160,
+      "defense": 65,
+      "speed": 98,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.0,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "nereia_the_field_medic",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "nereia_the_field_medic_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "nereia_the_field_medic_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "rheia_the_revision_scribe",
+      "name": "Rheia",
+      "role": "Breaker",
+      "aspect": "Tide",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1424,
+      "attack": 190,
+      "defense": 62,
+      "speed": 109,
+      "critChance": 0.07,
+      "critDamage": 1.52,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.12,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "orb",
+        "scale": 1,
+        "sigil": null,
+        "sprite": "rheia_the_revision_scribe",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "rheia_the_revision_scribe_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "rheia_the_revision_scribe_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "rovan_the_adaptive_commander",
+      "name": "Rovan",
+      "role": "Bulwark",
+      "aspect": "Tide",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1833,
+      "attack": 160,
+      "defense": 74,
+      "speed": 84,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.07,
+        "sigil": null,
+        "sprite": "rovan_the_adaptive_commander",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "rovan_the_adaptive_commander_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "rovan_the_adaptive_commander_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "talren_the_wayfinder",
+      "name": "Talren",
+      "role": "Marksman",
+      "aspect": "Tide",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1384,
+      "attack": 190,
+      "defense": 59,
+      "speed": 116,
+      "critChance": 0.1,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "talren_the_wayfinder",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "talren_the_wayfinder_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "talren_the_wayfinder_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "vaelis_the_unfixed_blade",
+      "name": "Vaelis",
+      "role": "Striker",
+      "aspect": "Tide",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1228,
+      "attack": 200,
+      "defense": 56,
+      "speed": 124,
+      "critChance": 0.12,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.06,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "vaelis_the_unfixed_blade",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "vaelis_the_unfixed_blade_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "vaelis_the_unfixed_blade_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "celen_the_open_hand",
+      "name": "Celen",
+      "role": "Warden",
+      "aspect": "Tide",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1622,
+      "attack": 140,
+      "defense": 68,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "celen_the_open_hand",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "celen_the_open_hand_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "celen_the_open_hand_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "mika_the_salvage_pilot",
+      "name": "Mika",
+      "role": "Tinkerer",
+      "aspect": "Tide",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1260,
+      "attack": 185,
+      "defense": 53,
+      "speed": 111,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "mika_the_salvage_pilot",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "mika_the_salvage_pilot_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "mika_the_salvage_pilot_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "rhys_the_fence_walker",
+      "name": "Rhys",
+      "role": "Vanguard",
+      "aspect": "Tide",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1560,
+      "attack": 180,
+      "defense": 65,
+      "speed": 95,
+      "critChance": 0.08,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "rhys_the_fence_walker",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "rhys_the_fence_walker_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "rhys_the_fence_walker_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "siofra_the_turncoat_oracle",
+      "name": "Siofra",
+      "role": "Breaker",
+      "aspect": "Tide",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1334,
+      "attack": 190,
+      "defense": 56,
+      "speed": 106,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "siofra_the_turncoat_oracle",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "siofra_the_turncoat_oracle_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "siofra_the_turncoat_oracle_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "vanno_the_detour_king",
+      "name": "Vanno",
+      "role": "Stalker",
+      "aspect": "Tide",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1283,
+      "attack": 180,
+      "defense": 56,
+      "speed": 114,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "vanno_the_detour_king",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "vanno_the_detour_king_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "vanno_the_detour_king_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "bren_the_extra_measure",
+      "name": "Bren",
+      "role": "Vanguard",
+      "aspect": "Tide",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1482,
+      "attack": 170,
+      "defense": 62,
+      "speed": 96,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "bren_the_extra_measure",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "bren_the_extra_measure_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "bren_the_extra_measure_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "cal_the_alternate_angle",
+      "name": "Cal",
+      "role": "Marksman",
+      "aspect": "Tide",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1228,
+      "attack": 175,
+      "defense": 50,
+      "speed": 108,
+      "critChance": 0.11,
+      "critDamage": 1.6,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "cal_the_alternate_angle",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "cal_the_alternate_angle_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "cal_the_alternate_angle_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "linnet_the_misdialed",
+      "name": "Linnet",
+      "role": "Binder",
+      "aspect": "Tide",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1326,
+      "attack": 155,
+      "defense": 59,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.16,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "linnet_the_misdialed",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "linnet_the_misdialed_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "linnet_the_misdialed_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "oswin_the_refit_surgeon",
+      "name": "Oswin",
+      "role": "Mender",
+      "aspect": "Tide",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1521,
+      "attack": 130,
+      "defense": 65,
+      "speed": 90,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "oswin_the_refit_surgeon",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "oswin_the_refit_surgeon_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "oswin_the_refit_surgeon_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "dett_the_untied_knot",
+      "name": "Dett",
+      "role": "Vanguard",
+      "aspect": "Tide",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 155,
+      "defense": 56,
+      "speed": 94,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "dett_the_untied_knot",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "dett_the_untied_knot_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hod_the_redirected_load",
+      "name": "Hod",
+      "role": "Tinkerer",
+      "aspect": "Tide",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1139,
+      "attack": 160,
+      "defense": 46,
+      "speed": 104,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.1,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "hod_the_redirected_load",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "hod_the_redirected_load_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "yara_the_spare_compass",
+      "name": "Yara",
+      "role": "Marksman",
+      "aspect": "Tide",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1131,
+      "attack": 160,
+      "defense": 46,
+      "speed": 105,
+      "critChance": 0.09,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "yara_the_spare_compass",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "yara_the_spare_compass_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "moss_the_side_route",
+      "name": "Moss",
+      "role": "Marksman",
+      "aspect": "Tide",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 897,
+      "attack": 130,
+      "defense": 40,
+      "speed": 102,
+      "critChance": 0.07,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "moss_the_side_route",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "moss_the_side_route_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "orenna_the_turning_wheel",
+      "name": "Orenna",
+      "role": "Vanguard",
+      "aspect": "Tide",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 975,
+      "attack": 125,
+      "defense": 46,
+      "speed": 92,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "2A5A80",
+        "secondary": "1A2530",
+        "accent": "70B0D0",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "orenna_the_turning_wheel",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "orenna_the_turning_wheel_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "brenna_the_remaining_wall",
+      "name": "Brenna",
+      "role": "Bulwark",
+      "aspect": "Verdant",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1930,
+      "attack": 155,
+      "defense": 78,
+      "speed": 79,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "brute",
+        "weapon": "hammer",
+        "scale": 1.1,
+        "sigil": null,
+        "sprite": "brenna_the_remaining_wall",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "brenna_the_remaining_wall_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "brenna_the_remaining_wall_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "edrin_the_distant_bell",
+      "name": "Edrin",
+      "role": "Marksman",
+      "aspect": "Verdant",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1424,
+      "attack": 190,
+      "defense": 62,
+      "speed": 109,
+      "critChance": 0.1,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.06,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "edrin_the_distant_bell",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "edrin_the_distant_bell_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "edrin_the_distant_bell_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "elyra_the_patient_warden",
+      "name": "Elyra",
+      "role": "Binder",
+      "aspect": "Verdant",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1482,
+      "attack": 185,
+      "defense": 62,
+      "speed": 104,
+      "critChance": 0.06,
+      "critDamage": 1.52,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.14,
+      "effectResist": 0.05,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "elyra_the_patient_warden",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "elyra_the_patient_warden_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "elyra_the_patient_warden_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "isara_the_second_chance",
+      "name": "Isara",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 5,
+      "startingHero": true,
+      "hp": 1774,
+      "attack": 165,
+      "defense": 68,
+      "speed": 92,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.0,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.03,
+        "sigil": null,
+        "sprite": "isara_the_second_chance",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "isara_the_second_chance_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "isara_the_second_chance_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "sylven_the_unfading_blade",
+      "name": "Sylven",
+      "role": "Striker",
+      "aspect": "Verdant",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1248,
+      "attack": 200,
+      "defense": 56,
+      "speed": 123,
+      "critChance": 0.11,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "greatsword",
+        "scale": 1,
+        "sigil": null,
+        "sprite": "sylven_the_unfading_blade",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "sylven_the_unfading_blade_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "sylven_the_unfading_blade_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "corin_the_patience_engineer",
+      "name": "Corin",
+      "role": "Binder",
+      "aspect": "Verdant",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1373,
+      "attack": 165,
+      "defense": 62,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "corin_the_patience_engineer",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "corin_the_patience_engineer_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "corin_the_patience_engineer_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "halwen_the_reserve_keeper",
+      "name": "Halwen",
+      "role": "Bulwark",
+      "aspect": "Verdant",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1736,
+      "attack": 145,
+      "defense": 78,
+      "speed": 79,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 1.06,
+        "sigil": null,
+        "sprite": "halwen_the_reserve_keeper",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "halwen_the_reserve_keeper_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "halwen_the_reserve_keeper_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "jory_the_old_gate",
+      "name": "Jory",
+      "role": "Vanguard",
+      "aspect": "Verdant",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1560,
+      "attack": 180,
+      "defense": 65,
+      "speed": 95,
+      "critChance": 0.08,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "jory_the_old_gate",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "jory_the_old_gate_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "jory_the_old_gate_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "maera_the_harbor_eye",
+      "name": "Maera",
+      "role": "Marksman",
+      "aspect": "Verdant",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 190,
+      "defense": 53,
+      "speed": 110,
+      "critChance": 0.13,
+      "critDamage": 1.65,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "maera_the_harbor_eye",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "maera_the_harbor_eye_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "maera_the_harbor_eye_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "maren_the_long_sleeper",
+      "name": "Maren",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1591,
+      "attack": 135,
+      "defense": 68,
+      "speed": 91,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "maren_the_long_sleeper",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "maren_the_long_sleeper_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "maren_the_long_sleeper_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "brio_the_patient_record",
+      "name": "Brio",
+      "role": "Marksman",
+      "aspect": "Verdant",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1228,
+      "attack": 175,
+      "defense": 50,
+      "speed": 108,
+      "critChance": 0.11,
+      "critDamage": 1.6,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "brio_the_patient_record",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "brio_the_patient_record_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "brio_the_patient_record_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "elin_the_second_stitch",
+      "name": "Elin",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1521,
+      "attack": 130,
+      "defense": 65,
+      "speed": 90,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "elin_the_second_stitch",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "elin_the_second_stitch_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "elin_the_second_stitch_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "marn_the_holding_wall",
+      "name": "Marn",
+      "role": "Bulwark",
+      "aspect": "Verdant",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1638,
+      "attack": 140,
+      "defense": 71,
+      "speed": 80,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "brute",
+        "weapon": "claws",
+        "scale": 1.05,
+        "sigil": null,
+        "sprite": "marn_the_holding_wall",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "marn_the_holding_wall_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "marn_the_holding_wall_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "rusk_the_patchmaker",
+      "name": "Rusk",
+      "role": "Tinkerer",
+      "aspect": "Verdant",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1232,
+      "attack": 175,
+      "defense": 50,
+      "speed": 108,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.16,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "rusk_the_patchmaker",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "rusk_the_patchmaker_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "rusk_the_patchmaker_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "garron_the_stout_frame",
+      "name": "Garron",
+      "role": "Bulwark",
+      "aspect": "Verdant",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1365,
+      "attack": 125,
+      "defense": 62,
+      "speed": 79,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "brute",
+        "weapon": "staff",
+        "scale": 1.04,
+        "sigil": null,
+        "sprite": "garron_the_stout_frame",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "garron_the_stout_frame_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "nara_the_road_nurse",
+      "name": "Nara",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1326,
+      "attack": 120,
+      "defense": 59,
+      "speed": 89,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.04,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "nara_the_road_nurse",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "nara_the_road_nurse_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "wynn_the_hand_me_down",
+      "name": "Wynn",
+      "role": "Tinkerer",
+      "aspect": "Verdant",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1139,
+      "attack": 160,
+      "defense": 46,
+      "speed": 104,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.1,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "wynn_the_hand_me_down",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "wynn_the_hand_me_down_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hal_the_stone_cache",
+      "name": "Hal",
+      "role": "Bulwark",
+      "aspect": "Verdant",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 1053,
+      "attack": 100,
+      "defense": 53,
+      "speed": 78,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.06,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.03,
+        "sigil": null,
+        "sprite": "hal_the_stone_cache",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "hal_the_stone_cache_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "iri_the_kept_token",
+      "name": "Iri",
+      "role": "Mender",
+      "aspect": "Verdant",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 1014,
+      "attack": 95,
+      "defense": 50,
+      "speed": 88,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.0,
+      "effectResist": 0.06,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "306040",
+        "secondary": "1A2A1E",
+        "accent": "80C888",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "iri_the_kept_token",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "iri_the_kept_token_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "aeron_the_unbroken_stride",
+      "name": "Aeron",
+      "role": "Vanguard",
+      "aspect": "Gale",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1872,
+      "attack": 165,
+      "defense": 74,
+      "speed": 87,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.08,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 1.06,
+        "sigil": null,
+        "sprite": "aeron_the_unbroken_stride",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "aeron_the_unbroken_stride_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "aeron_the_unbroken_stride_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "dahlia_the_wayward_hymn",
+      "name": "Dahlia",
+      "role": "Warden",
+      "aspect": "Gale",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1736,
+      "attack": 160,
+      "defense": 65,
+      "speed": 99,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.12,
+      "effectResist": 0.08,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.03,
+        "sigil": null,
+        "sprite": "dahlia_the_wayward_hymn",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "dahlia_the_wayward_hymn_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "dahlia_the_wayward_hymn_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "merek_the_sequence_thief",
+      "name": "Merek",
+      "role": "Breaker",
+      "aspect": "Gale",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1443,
+      "attack": 200,
+      "defense": 59,
+      "speed": 112,
+      "critChance": 0.07,
+      "critDamage": 1.52,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.14,
+      "effectResist": 0.05,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "orb",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "merek_the_sequence_thief",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "merek_the_sequence_thief_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "merek_the_sequence_thief_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "oris_the_unwritten_path",
+      "name": "Oris",
+      "role": "Tinkerer",
+      "aspect": "Gale",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1424,
+      "attack": 190,
+      "defense": 59,
+      "speed": 118,
+      "critChance": 0.09,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.12,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "oris_the_unwritten_path",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "oris_the_unwritten_path_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "oris_the_unwritten_path_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "zella_the_slow_argument",
+      "name": "Zella",
+      "role": "Stalker",
+      "aspect": "Gale",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 205,
+      "defense": 56,
+      "speed": 122,
+      "critChance": 0.12,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.15,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.99,
+        "sigil": null,
+        "sprite": "zella_the_slow_argument",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "zella_the_slow_argument_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "zella_the_slow_argument_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "eira_the_rolling_barricade",
+      "name": "Eira",
+      "role": "Warden",
+      "aspect": "Gale",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1622,
+      "attack": 140,
+      "defense": 68,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "hammer",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "eira_the_rolling_barricade",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "eira_the_rolling_barricade_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "eira_the_rolling_barricade_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "finn_the_bellmaker",
+      "name": "Finn",
+      "role": "Tinkerer",
+      "aspect": "Gale",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1260,
+      "attack": 185,
+      "defense": 53,
+      "speed": 111,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "finn_the_bellmaker",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "finn_the_bellmaker_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "finn_the_bellmaker_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "niko_the_uninvited_guest",
+      "name": "Niko",
+      "role": "Stalker",
+      "aspect": "Gale",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1283,
+      "attack": 180,
+      "defense": 56,
+      "speed": 114,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "niko_the_uninvited_guest",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "niko_the_uninvited_guest_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "niko_the_uninvited_guest_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "sable_the_queue_cutter",
+      "name": "Sable",
+      "role": "Vanguard",
+      "aspect": "Gale",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1560,
+      "attack": 180,
+      "defense": 65,
+      "speed": 95,
+      "critChance": 0.08,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "sable_the_queue_cutter",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "sable_the_queue_cutter_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "sable_the_queue_cutter_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "tamsin_the_loose_thread",
+      "name": "Tamsin",
+      "role": "Breaker",
+      "aspect": "Gale",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1334,
+      "attack": 190,
+      "defense": 56,
+      "speed": 106,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "tamsin_the_loose_thread",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "tamsin_the_loose_thread_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "tamsin_the_loose_thread_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "avera_the_interrupter",
+      "name": "Avera",
+      "role": "Breaker",
+      "aspect": "Gale",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1287,
+      "attack": 180,
+      "defense": 56,
+      "speed": 105,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "avera_the_interrupter",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "avera_the_interrupter_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "avera_the_interrupter_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "lydia_the_unscheduled",
+      "name": "Lydia",
+      "role": "Vanguard",
+      "aspect": "Gale",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1482,
+      "attack": 170,
+      "defense": 62,
+      "speed": 96,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "lydia_the_unscheduled",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "lydia_the_unscheduled_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "lydia_the_unscheduled_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "roan_the_side_door",
+      "name": "Roan",
+      "role": "Stalker",
+      "aspect": "Gale",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1240,
+      "attack": 170,
+      "defense": 53,
+      "speed": 110,
+      "critChance": 0.11,
+      "critDamage": 1.6,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.16,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "roan_the_side_door",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "roan_the_side_door_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "roan_the_side_door_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "tomas_the_door_jammer",
+      "name": "Tomas",
+      "role": "Bulwark",
+      "aspect": "Gale",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1638,
+      "attack": 140,
+      "defense": 71,
+      "speed": 80,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "brute",
+        "weapon": "sword",
+        "scale": 1.05,
+        "sigil": null,
+        "sprite": "tomas_the_door_jammer",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "tomas_the_door_jammer_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "tomas_the_door_jammer_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "jax_the_clockwork_rat",
+      "name": "Jax",
+      "role": "Tinkerer",
+      "aspect": "Gale",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1139,
+      "attack": 160,
+      "defense": 46,
+      "speed": 104,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.1,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "jax_the_clockwork_rat",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "jax_the_clockwork_rat_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "kora_the_interrupted_queue",
+      "name": "Kora",
+      "role": "Vanguard",
+      "aspect": "Gale",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 155,
+      "defense": 56,
+      "speed": 94,
+      "critChance": 0.03,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "kora_the_interrupted_queue",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "kora_the_interrupted_queue_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "sena_the_empty_chair",
+      "name": "Sena",
+      "role": "Marksman",
+      "aspect": "Gale",
+      "stars": 2,
+      "startingHero": false,
+      "hp": 1131,
+      "attack": 160,
+      "defense": 46,
+      "speed": 105,
+      "critChance": 0.09,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.04,
+      "effectResist": 0.02,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.97,
+        "sigil": null,
+        "sprite": "sena_the_empty_chair",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "sena_the_empty_chair_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bex_the_unlatched",
+      "name": "Bex",
+      "role": "Vanguard",
+      "aspect": "Gale",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 975,
+      "attack": 125,
+      "defense": 46,
+      "speed": 92,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "bex_the_unlatched",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "bex_the_unlatched_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "till_the_shifting_target",
+      "name": "Till",
+      "role": "Tinkerer",
+      "aspect": "Gale",
+      "stars": 1,
+      "startingHero": false,
+      "hp": 897,
+      "attack": 130,
+      "defense": 40,
+      "speed": 101,
+      "critChance": 0.02,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.06,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "3A8090",
+        "secondary": "1A2A2E",
+        "accent": "90D8E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.96,
+        "sigil": null,
+        "sprite": "till_the_shifting_target",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "till_the_shifting_target_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "cyrra_the_burden_bearer",
+      "name": "Cyrra",
+      "role": "Mender",
+      "aspect": "Umbra",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1755,
+      "attack": 160,
+      "defense": 68,
+      "speed": 94,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.03,
+        "sigil": null,
+        "sprite": "cyrra_the_burden_bearer",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "cyrra_the_burden_bearer_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "cyrra_the_burden_bearer_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "darian_the_hidden_bulwark",
+      "name": "Darian",
+      "role": "Vanguard",
+      "aspect": "Umbra",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1911,
+      "attack": 155,
+      "defense": 78,
+      "speed": 81,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.0,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 1.08,
+        "sigil": null,
+        "sprite": "darian_the_hidden_bulwark",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "darian_the_hidden_bulwark_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "darian_the_hidden_bulwark_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "mireth_the_erased_name",
+      "name": "Mireth",
+      "role": "Breaker",
+      "aspect": "Umbra",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1424,
+      "attack": 190,
+      "defense": 62,
+      "speed": 107,
+      "critChance": 0.07,
+      "critDamage": 1.52,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.14,
+      "effectResist": 0.05,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "spellbook",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "mireth_the_erased_name",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "mireth_the_erased_name_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "mireth_the_erased_name_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "nysera_the_missing_arrow",
+      "name": "Nysera",
+      "role": "Marksman",
+      "aspect": "Umbra",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1365,
+      "attack": 190,
+      "defense": 59,
+      "speed": 113,
+      "critChance": 0.11,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.1,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 1,
+        "sigil": null,
+        "sprite": "nysera_the_missing_arrow",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "nysera_the_missing_arrow_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "nysera_the_missing_arrow_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "velis_the_hollow_vow",
+      "name": "Velis",
+      "role": "Striker",
+      "aspect": "Umbra",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1248,
+      "attack": 200,
+      "defense": 56,
+      "speed": 124,
+      "critChance": 0.12,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.14,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 0.99,
+        "sigil": null,
+        "sprite": "velis_the_hollow_vow",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "velis_the_hollow_vow_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "velis_the_hollow_vow_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "iolan_the_redacted_judge",
+      "name": "Iolan",
+      "role": "Binder",
+      "aspect": "Umbra",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1373,
+      "attack": 165,
+      "defense": 62,
+      "speed": 100,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "iolan_the_redacted_judge",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "iolan_the_redacted_judge_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "iolan_the_redacted_judge_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "ruma_the_false_trail",
+      "name": "Ruma",
+      "role": "Tinkerer",
+      "aspect": "Umbra",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1260,
+      "attack": 185,
+      "defense": 53,
+      "speed": 111,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.18,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "ruma_the_false_trail",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "ruma_the_false_trail_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "ruma_the_false_trail_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "toren_the_closed_door",
+      "name": "Toren",
+      "role": "Bulwark",
+      "aspect": "Umbra",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1736,
+      "attack": 145,
+      "defense": 78,
+      "speed": 79,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "claws",
+        "scale": 1.06,
+        "sigil": null,
+        "sprite": "toren_the_closed_door",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "toren_the_closed_door_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "toren_the_closed_door_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "petra_the_unsent_letter",
+      "name": "Petra",
+      "role": "Bulwark",
+      "aspect": "Umbra",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1638,
+      "attack": 140,
+      "defense": 71,
+      "speed": 80,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "503080",
+        "secondary": "201828",
+        "accent": "A880D0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.05,
+        "sigil": null,
+        "sprite": "petra_the_unsent_letter",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "petra_the_unsent_letter_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "petra_the_unsent_letter_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "altheon_the_first_witness",
+      "name": "Altheon",
+      "role": "Breaker",
+      "aspect": "Lumen",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1462,
+      "attack": 195,
+      "defense": 62,
+      "speed": 109,
+      "critChance": 0.07,
+      "critDamage": 1.52,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.12,
+      "effectResist": 0.05,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "altheon_the_first_witness",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "altheon_the_first_witness_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "altheon_the_first_witness_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "aminah_the_true_measure",
+      "name": "Aminah",
+      "role": "Mender",
+      "aspect": "Lumen",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1774,
+      "attack": 160,
+      "defense": 68,
+      "speed": 97,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.08,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 1.02,
+        "sigil": null,
+        "sprite": "aminah_the_true_measure",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "aminah_the_true_measure_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "aminah_the_true_measure_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "arden_the_precise_measure",
+      "name": "Arden",
+      "role": "Tinkerer",
+      "aspect": "Lumen",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1365,
+      "attack": 190,
+      "defense": 59,
+      "speed": 114,
+      "critChance": 0.1,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 1.01,
+        "sigil": null,
+        "sprite": "arden_the_precise_measure",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "arden_the_precise_measure_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "arden_the_precise_measure_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "caldus_the_appointed_guard",
+      "name": "Caldus",
+      "role": "Vanguard",
+      "aspect": "Lumen",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1892,
+      "attack": 165,
+      "defense": 78,
+      "speed": 84,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.1,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "sword",
+        "scale": 1.07,
+        "sigil": null,
+        "sprite": "caldus_the_appointed_guard",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "caldus_the_appointed_guard_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "caldus_the_appointed_guard_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "isolde_the_slow_fading",
+      "name": "Isolde",
+      "role": "Stalker",
+      "aspect": "Lumen",
+      "stars": 5,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 200,
+      "defense": 56,
+      "speed": 121,
+      "critChance": 0.12,
+      "critDamage": 1.55,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.14,
+      "effectResist": 0.0,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "dagger",
+        "scale": 0.99,
+        "sigil": null,
+        "sprite": "isolde_the_slow_fading",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "isolde_the_slow_fading_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "isolde_the_slow_fading_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "leon_the_numbered_arrow",
+      "name": "Leon",
+      "role": "Marksman",
+      "aspect": "Lumen",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1268,
+      "attack": 190,
+      "defense": 53,
+      "speed": 110,
+      "critChance": 0.13,
+      "critDamage": 1.65,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "bow",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "leon_the_numbered_arrow",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "leon_the_numbered_arrow_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "leon_the_numbered_arrow_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "lio_the_clear_diagnosis",
+      "name": "Lio",
+      "role": "Mender",
+      "aspect": "Lumen",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1591,
+      "attack": 135,
+      "defense": 68,
+      "speed": 91,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.08,
+      "effectResist": 0.14,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "lio_the_clear_diagnosis",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "lio_the_clear_diagnosis_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "lio_the_clear_diagnosis_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "nadine_the_border_clerk",
+      "name": "Nadine",
+      "role": "Vanguard",
+      "aspect": "Lumen",
+      "stars": 4,
+      "startingHero": false,
+      "hp": 1560,
+      "attack": 180,
+      "defense": 65,
+      "speed": 95,
+      "critChance": 0.08,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 0,
+      "effectHit": 0.08,
+      "effectResist": 0.03,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "spear",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "nadine_the_border_clerk",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "nadine_the_border_clerk_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "nadine_the_border_clerk_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "clara_the_named_remedy",
+      "name": "Clara",
+      "role": "Mender",
+      "aspect": "Lumen",
+      "stars": 3,
+      "startingHero": false,
+      "hp": 1521,
+      "attack": 130,
+      "defense": 65,
+      "speed": 90,
+      "critChance": 0.04,
+      "critDamage": 1.5,
+      "growth": 0.115,
+      "startEnergy": 15,
+      "effectHit": 0.07,
+      "effectResist": 0.12,
+      "skillDamage": 0,
+      "block": 0,
+      "armorBreak": 0,
+      "controlImmunity": 0,
+      "damageReduction": 0,
+      "holyDamage": 0,
+      "visual": {
+        "primary": "203870",
+        "secondary": "181A28",
+        "accent": "6090E0",
+        "silhouette": "humanoid",
+        "weapon": "staff",
+        "scale": 0.98,
+        "sigil": null,
+        "sprite": "clara_the_named_remedy",
+        "spriteBodyFraction": 0.53,
+        "spriteFootFraction": 0.23,
+        "spriteMirror": true
+      },
+      "basic": {
+        "id": "clara_the_named_remedy_placeholder_basic",
+        "name": "Strike (placeholder)",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 1.0
+          }
+        ]
+      },
+      "active": {
+        "id": "clara_the_named_remedy_placeholder_active",
+        "name": "Sweep (placeholder)",
+        "energyCost": 100,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 1.5
+          }
+        ]
       }
     }
   ]
