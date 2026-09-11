@@ -43,6 +43,19 @@ guarantee.
 
 **Open items, recorded so they are not rediscovered:**
 
+- **25 heroes have animated sprites; Nereia does not.** The sprite delivery covered 24 non-Ember
+  5-stars plus Celen (4-star Tide). `nereia_the_field_medic` (5-star Tide Mender) was not in the
+  delivery and remains procedural. She is in the prologue squad, so the prologue's step-1 battle
+  shows a procedural body alongside four sprite-based allies. Pinoy: Nereia needs a sprite
+  delivery or a placeholder sheet before the prologue can ship.
+- **All 25 sprite heroes need `spriteBodyFraction`, `spriteFootFraction` and `spriteMirror`
+  hand-measured.** They currently share Aeron's placeholder values (0.53 / 0.23 / true), which
+  means every hero whose proportions or facing differ from Aeron will float, sink, or face
+  backward. Per-clip `impactFraction` is also unset (defaulting to 0.5). This is a separate
+  art-measurement pass, not a code task.
+- **Rheia has no skill clip.** Her delivery included `idle2` where `skill` should be. The game
+  requests `"skill"` for active abilities — Rheia's active will play with no animation (silent
+  no-op, idle continues) until a replacement clip is delivered.
 - Six orphaned sprite PNGs remain under `Assets/Resources/Sprites/Units` for the deleted heroes,
   referenced by nothing now that their `visual.sprite` entries are gone.
 - The pinned five-body line spans five aspects (Ember, Gale, Tide, Lumen, Ember) and five roles
