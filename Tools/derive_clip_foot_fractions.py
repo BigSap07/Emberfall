@@ -34,10 +34,51 @@ def compute_foot_fraction(png_path, frame_w, frame_h, cols, start_frame):
     frame = img.crop((x0, y0, x0 + frame_w, y0 + frame_h))
     pixels = frame.load()
 
-    empty_rows = 0
-    for row in range(frame_h - 1, -1, -1):
-        has_content = False
+    # --- border detection ---
+    # A row/column where every pixel has alpha above threshold is a uniform
+    # border stroke, not character content.  Detect from each edge inward so
+    # the side strokes don't masquerade as foot content on interior rows.
+    def row_uniform(r):
         for x in range(frame_w):
+            if pixels[x, r][3] <= ALPHA_THRESHOLD:
+                return False
+        return True
+
+    def col_uniform(c):
+        for y in range(frame_h):
+            if pixels[c, y][3] <= ALPHA_THRESHOLD:
+                return False
+        return True
+
+    border_bottom = 0
+    for r in range(frame_h - 1, -1, -1):
+        if row_uniform(r):
+            border_bottom += 1
+        else:
+            break
+
+    border_left = 0
+    border_right = 0
+    if border_bottom > 0:
+        for c in range(frame_w):
+            if col_uniform(c):
+                border_left += 1
+            else:
+                break
+        for c in range(frame_w - 1, -1, -1):
+            if col_uniform(c):
+                border_right += 1
+            else:
+                break
+
+    x_start = border_left
+    x_end = frame_w - border_right
+
+    # --- foot-fraction scan ---
+    empty_rows = border_bottom
+    for row in range(frame_h - 1 - border_bottom, -1, -1):
+        has_content = False
+        for x in range(x_start, x_end):
             if pixels[x, row][3] > ALPHA_THRESHOLD:
                 has_content = True
                 break
