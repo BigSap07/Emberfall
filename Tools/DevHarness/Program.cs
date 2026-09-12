@@ -5020,7 +5020,7 @@ namespace Emberfall.DevHarness
                                "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
                                "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
                                "HpTransfer", "ShieldTransfer", "LedgerIncrement",
-                               "RedirectLethal" },
+                               "RedirectLethal", "SnapshotEnergy", "TransferStatus" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -13507,6 +13507,16 @@ namespace Emberfall.DevHarness
                   "PassiveTrigger.OnAllyTurnEnd at 27 (got " + (int)PassiveTrigger.OnAllyTurnEnd + ")");
             Check((int)PassiveTrigger.OnEnemyTurnEnd == 28,
                   "PassiveTrigger.OnEnemyTurnEnd at 28 (got " + (int)PassiveTrigger.OnEnemyTurnEnd + ")");
+
+            // tier nine: parameterisation gaps
+            Check((int)EffectKind.SnapshotEnergy == 24,
+                  "EffectKind.SnapshotEnergy at 24 (got " + (int)EffectKind.SnapshotEnergy + ")");
+            Check((int)EffectKind.TransferStatus == 25,
+                  "EffectKind.TransferStatus at 25 (got " + (int)EffectKind.TransferStatus + ")");
+            Check((int)PassiveTrigger.OnLedgerCapped == 29,
+                  "PassiveTrigger.OnLedgerCapped at 29 (got " + (int)PassiveTrigger.OnLedgerCapped + ")");
+            Check((int)PassiveTrigger.OnTurnDebtThreshold == 30,
+                  "PassiveTrigger.OnTurnDebtThreshold at 30 (got " + (int)PassiveTrigger.OnTurnDebtThreshold + ")");
         }
     }
 }

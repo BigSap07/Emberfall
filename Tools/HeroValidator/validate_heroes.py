@@ -20,6 +20,7 @@ EFFECT_KINDS = {
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
     "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
     "HpTransfer", "ShieldTransfer", "LedgerIncrement", "RedirectLethal",
+    "SnapshotEnergy", "TransferStatus",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
