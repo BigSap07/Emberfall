@@ -220,6 +220,20 @@ namespace Emberfall.Core.Data
         /// </summary>
         public StatusKind ShiftBanksAs = StatusKind.None;
 
+        /// <summary>
+        /// When true, a single-enemy target pick expands to include the living enemies in the
+        /// primary target's adjacent slots (Slot ± 1). The adjacency concept: units carry a Slot
+        /// (0-4), and neighbours are one slot apart. The primary target is always included; the
+        /// splash adds up to two more. Works with any single-enemy TargetMode.
+        /// </summary>
+        public bool Splash;
+
+        /// <summary>
+        /// Which stat `CasterStatAboveTarget` / `CasterStatBelowTarget` compares. Defaults to
+        /// Speed because it is the stat the first ability to use this was built for.
+        /// </summary>
+        public ComparedStat ComparedStat = ComparedStat.Speed;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -252,6 +266,8 @@ namespace Emberfall.Core.Data
             e.Record = EnumUtil.Parse(j.GetString("record", "None"), RecordKind.None);
             e.UsesPerRound = Math.Max(0, j.GetInt("usesPerRound", 0));
             e.ShiftBanksAs = EnumUtil.Parse(j.GetString("shiftBanksAs", "None"), StatusKind.None);
+            e.Splash = j.GetBool("splash", false);
+            e.ComparedStat = EnumUtil.Parse(j.GetString("comparedStat", "Speed"), ComparedStat.Speed);
             return e;
         }
 
@@ -294,6 +310,8 @@ namespace Emberfall.Core.Data
             c.Record = Record;
             c.UsesPerRound = UsesPerRound;
             c.ShiftBanksAs = ShiftBanksAs;
+            c.Splash = Splash;
+            c.ComparedStat = ComparedStat;
             return c;
         }
     }
