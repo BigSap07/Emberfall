@@ -18,7 +18,7 @@ EFFECT_KINDS = {
     "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
     "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
-    "Interrupt", "ExtendStatus",
+    "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -36,6 +36,7 @@ STATUS_KINDS = {
     "Vulnerable", "TurnDebt",
     "EvasionUp", "AccuracyDown",
     "GuaranteedCrit", "BuffSuppression",
+    "Disrupted",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {
@@ -49,7 +50,7 @@ TARGET_MODES = {
     "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
     "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
     "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
-    "DefeatedUnit",
+    "DefeatedUnit", "ThresholdUnit",
 }
 
 # ---------------------------------------------------------------------------
