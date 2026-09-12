@@ -247,7 +247,38 @@ namespace Emberfall.Core.Data
         /// number that no longer exists once RemoveStatus has taken it. Packaging them lets the
         /// calculation happen between the removal and the grant, which is the only order that works.
         /// </summary>
-        ConsumeTurnDebt     // 19
+        ConsumeTurnDebt,    // 19
+
+        // ---------- tier eight: transfers, ledger increment, lethal redirect ----------
+
+        /// <summary>
+        /// Moves HP from the source to the target. The source loses min(Power * Attack, Hp - 1)
+        /// HP and the target is healed for the same amount. Self-damage, not through DealRawDamage,
+        /// so Guard/Cover/Shield/Ledger are not involved and the source cannot die from it.
+        /// </summary>
+        HpTransfer,         // 20
+
+        /// <summary>
+        /// Moves a fraction (Magnitude) of the source's Shield pool to the target. The source's
+        /// pool is reduced and the target's is increased; if the source's pool empties, the Shield
+        /// status is removed. The target receives a Shield status if it does not already have one.
+        /// </summary>
+        ShieldTransfer,     // 21
+
+        /// <summary>
+        /// Adds Power * Attack directly to the caster's Ledger Stored on the target, capped by
+        /// StoredCap. The banking half of a Ledger that is filled by an explicit effect rather
+        /// than by damage accrual.
+        /// </summary>
+        LedgerIncrement,    // 22
+
+        /// <summary>
+        /// Intercepts lethal damage on the target (whose Hp is at or below zero during an
+        /// OnAllyWouldDie broadcast). Sets the target's Hp to 1, then deals the overkill as
+        /// damage to the source (passive owner) through DealRawDamage, so the redirect itself
+        /// can kill the saviour and triggers cascade normally.
+        /// </summary>
+        RedirectLethal      // 23
     }
 
     /// <summary>
@@ -418,7 +449,17 @@ namespace Emberfall.Core.Data
 
         /// <summary>The subject used the SAME action type on its last two turns. The Subject
         /// mirror of CasterRepeatedActionType.</summary>
-        SubjectRepeatedActionType
+        SubjectRepeatedActionType,
+
+        // ---------- tier eight: AND conditions and ledger-at-cap ----------
+
+        /// <summary>
+        /// The caster's Ledger on the subject has reached its StoredCap. Checks every Ledger entry
+        /// whose SourceId matches the caster; true if any has Stored >= StoredCap with StoredCap > 0.
+        /// The complement of LedgerAtLeast, which checks an absolute threshold; this checks the
+        /// variable, Attack-scaled cap that was set when the Ledger was applied.
+        /// </summary>
+        LedgerAtCap
     }
 
     /// <summary>
@@ -690,7 +731,23 @@ namespace Emberfall.Core.Data
         /// and the interceptor fires inside AddEnergy before AddEnergyClamped touches the unit's
         /// energy. Harmful, so Cleanse can remove it.
         /// </summary>
-        Disrupted
+        Disrupted,
+
+        // ---------- tier eight: max HP and holy damage ----------
+
+        /// <summary>
+        /// MULTIPLY-shaped max-HP buff, the same shape AttackUp is. EffectiveMaxHp reads it:
+        /// MaxHp * (1 + SumMagnitude(MaxHpUp)). HpRatio and the healing cap both use
+        /// EffectiveMaxHp, so the buff genuinely expands the bar rather than just raising a
+        /// number nothing reads.
+        /// </summary>
+        MaxHpUp,
+
+        /// <summary>
+        /// ADD-shaped holy-damage buff. EffectiveHolyDamage reads it: HolyDamage +
+        /// SumMagnitude(HolyDamageUp). The same shape Focus uses for Crit Chance.
+        /// </summary>
+        HolyDamageUp
     }
 
     /// <summary>
@@ -868,7 +925,24 @@ namespace Emberfall.Core.Data
         /// <summary>A Burn the owner applied to a unit on the OTHER side ticked. Broadcast to the
         /// applier's side after the tick's damage has been dealt. _broadcastSubject is the unit
         /// that took the tick.</summary>
-        OnAppliedDoTTick
+        OnAppliedDoTTick,
+
+        // ---------- tier eight: turn-end triggers ----------
+
+        /// <summary>
+        /// An ally of the owner finished its turn. Broadcast to the acting unit's own side after
+        /// ability resolution and before ExpireStatuses, with _broadcastSubject set to the acting
+        /// unit. The acting unit is EXCLUDED (except parameter), since it already has TurnStart
+        /// and AfterBasicAttack of its own.
+        /// </summary>
+        OnAllyTurnEnd,
+
+        /// <summary>
+        /// An enemy of the owner finished its turn. Broadcast to the OTHER side after ability
+        /// resolution and before ExpireStatuses, with _broadcastSubject set to the acting enemy.
+        /// The natural home for "when an enemy finishes its turn while carrying TurnDebt".
+        /// </summary>
+        OnEnemyTurnEnd
     }
 
     /// <summary>
@@ -1426,6 +1500,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.AccuracyDown: return "Accuracy Down";
                 case StatusKind.GuaranteedCrit: return "Guaranteed Crit";
                 case StatusKind.BuffSuppression: return "Nullify";
+                case StatusKind.Disrupted: return "Disrupted";
+                case StatusKind.MaxHpUp: return "Max HP Up";
+                case StatusKind.HolyDamageUp: return "Holy Damage Up";
             }
             return kind.ToString();
         }
@@ -1476,6 +1553,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.AccuracyDown: return "ACC-";
                 case StatusKind.GuaranteedCrit: return "CRIT!";
                 case StatusKind.BuffSuppression: return "NULL";
+                case StatusKind.Disrupted: return "DIS";
+                case StatusKind.MaxHpUp: return "HP+";
+                case StatusKind.HolyDamageUp: return "HLY+";
             }
             return "?";
         }

@@ -234,6 +234,42 @@ namespace Emberfall.Core.Data
         /// </summary>
         public ComparedStat ComparedStat = ComparedStat.Speed;
 
+        // ---------- tier eight: AND conditions ----------
+        //
+        // Two conditions gating one effect. Both must pass. Condition is the first gate, Condition2
+        // is the second. When Condition2 is None (the default), the effect is single-conditioned
+        // exactly as before. When Condition2 is not None, both must hold for the effect to resolve.
+
+        public EffectCondition Condition2 = EffectCondition.None;
+        public ConditionSubject ConditionOn2 = ConditionSubject.Target;
+        public StatusKind ConditionStatus2 = StatusKind.None;
+        public float ConditionValue2;
+        public ComparedStat ComparedStat2 = ComparedStat.Speed;
+
+        // ---------- tier eight: ledger extensions ----------
+
+        /// <summary>When true, LedgerRelease heals the target instead of damaging it.</summary>
+        public bool ReleaseAsHeal;
+
+        /// <summary>When true, a Ledger status auto-releases its Stored as damage to the holder
+        /// when its duration expires, at Power multiplier. Stored on the StatusInstance.</summary>
+        public bool LedgerAutoRelease;
+
+        /// <summary>When true, the Ledger entry mitigates incoming damage by spending Stored
+        /// instead of banking into it. Stored on the StatusInstance.</summary>
+        public bool LedgerMitigates;
+
+        /// <summary>Max number of times the Ledger entry may bank per round, 0 for unlimited.
+        /// Stored on the StatusInstance.</summary>
+        public int LedgerBankLimit;
+
+        // ---------- tier eight: per-AoE-target ----------
+
+        /// <summary>When true, this effect's Hits are multiplied by the number of targets the
+        /// previous effect in the same ability resolved against. Used for "gain 1 Resolve per
+        /// enemy hit".</summary>
+        public bool PerTarget;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -268,6 +304,16 @@ namespace Emberfall.Core.Data
             e.ShiftBanksAs = EnumUtil.Parse(j.GetString("shiftBanksAs", "None"), StatusKind.None);
             e.Splash = j.GetBool("splash", false);
             e.ComparedStat = EnumUtil.Parse(j.GetString("comparedStat", "Speed"), ComparedStat.Speed);
+            e.Condition2 = EnumUtil.Parse(j.GetString("condition2", "None"), EffectCondition.None);
+            e.ConditionOn2 = EnumUtil.Parse(j.GetString("conditionOn2", "Target"), ConditionSubject.Target);
+            e.ConditionStatus2 = EnumUtil.Parse(j.GetString("conditionStatus2", "None"), StatusKind.None);
+            e.ConditionValue2 = j.GetFloat("conditionValue2", 0f);
+            e.ComparedStat2 = EnumUtil.Parse(j.GetString("comparedStat2", "Speed"), ComparedStat.Speed);
+            e.ReleaseAsHeal = j.GetBool("releaseAsHeal", false);
+            e.LedgerAutoRelease = j.GetBool("ledgerAutoRelease", false);
+            e.LedgerMitigates = j.GetBool("ledgerMitigates", false);
+            e.LedgerBankLimit = Math.Max(0, j.GetInt("ledgerBankLimit", 0));
+            e.PerTarget = j.GetBool("perTarget", false);
             return e;
         }
 
@@ -312,6 +358,16 @@ namespace Emberfall.Core.Data
             c.ShiftBanksAs = ShiftBanksAs;
             c.Splash = Splash;
             c.ComparedStat = ComparedStat;
+            c.Condition2 = Condition2;
+            c.ConditionOn2 = ConditionOn2;
+            c.ConditionStatus2 = ConditionStatus2;
+            c.ConditionValue2 = ConditionValue2;
+            c.ComparedStat2 = ComparedStat2;
+            c.ReleaseAsHeal = ReleaseAsHeal;
+            c.LedgerAutoRelease = LedgerAutoRelease;
+            c.LedgerMitigates = LedgerMitigates;
+            c.LedgerBankLimit = LedgerBankLimit;
+            c.PerTarget = PerTarget;
             return c;
         }
     }
@@ -432,6 +488,12 @@ namespace Emberfall.Core.Data
         /// </summary>
         public readonly List<TalentOverrideDef> Overrides = new List<TalentOverrideDef>();
 
+        /// <summary>
+        /// Filters OnStatusExpired to fire only when the specific status named here expired.
+        /// None means no filter — the trigger fires for any expiry, which is the existing behaviour.
+        /// </summary>
+        public StatusKind TriggerStatus = StatusKind.None;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -449,6 +511,7 @@ namespace Emberfall.Core.Data
             p.LimitRounds = Math.Max(1, j.GetInt("limitRounds", 2));
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
+            p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));

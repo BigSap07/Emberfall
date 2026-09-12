@@ -19,6 +19,7 @@ EFFECT_KINDS = {
     "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
     "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
+    "HpTransfer", "ShieldTransfer", "LedgerIncrement", "RedirectLethal",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -36,7 +37,7 @@ STATUS_KINDS = {
     "Vulnerable", "TurnDebt",
     "EvasionUp", "AccuracyDown",
     "GuaranteedCrit", "BuffSuppression",
-    "Disrupted",
+    "Disrupted", "MaxHpUp", "HolyDamageUp",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {

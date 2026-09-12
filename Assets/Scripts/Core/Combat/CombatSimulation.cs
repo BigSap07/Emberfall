@@ -270,6 +270,19 @@ namespace Emberfall.Core.Combat
                     return subject.ActionsTaken >= 2
                         && subject.LastActionWasActive == subject.PreviousActionWasActive;
 
+                case EffectCondition.LedgerAtCap:
+                {
+                    if (caster == null) return false;
+                    for (int i = 0; i < subject.Statuses.Count; i++)
+                    {
+                        StatusInstance s = subject.Statuses[i];
+                        if (s.Kind == StatusKind.Ledger && s.SourceId == caster.Id
+                            && s.StoredCap > 0f && s.Stored >= s.StoredCap)
+                            return true;
+                    }
+                    return false;
+                }
+
                 // ---------- answered by the Sim, not here ----------
                 //
                 // Turn progress is a property of the round's live order, which a static function
@@ -417,6 +430,14 @@ namespace Emberfall.Core.Combat
             private int _perTargetIndex;
             private int _perTargetLimit;
             private bool _perTargetPerRound;
+
+            /// <summary>StatusKinds that expired in the current ExpireStatuses sweep. Set before
+            /// TriggerPassive(OnStatusExpired) so a passive with TriggerStatus can filter.</summary>
+            private readonly List<StatusKind> _expiredKinds = new List<StatusKind>();
+
+            /// <summary>How many targets the previous effect in the current ability resolved
+            /// against. Read by PerTarget to scale Hits.</summary>
+            private int _lastEffectTargetCount;
 
             public Sim(BattleRequest request)
             {
@@ -668,6 +689,7 @@ namespace Emberfall.Core.Combat
                 p.LimitRounds = src.LimitRounds;
                 p.PerTargetLimit = src.PerTargetLimit;
                 p.PerTargetPerRound = src.PerTargetPerRound;
+                p.TriggerStatus = src.TriggerStatus;
                 p.Vfx = src.Vfx;
                 p.Effects = new List<EffectDef>();
                 for (int i = 0; i < src.Effects.Count; i++) p.Effects.Add(src.Effects[i].Clone());
@@ -805,6 +827,20 @@ namespace Emberfall.Core.Combat
                     }
                 }
 
+                // Turn-end broadcasts. No shipped passive uses OnAllyTurnEnd or OnEnemyTurnEnd,
+                // so these broadcasts walk empty listener sets and are pure no-ops for every
+                // existing battle. Placed after ability resolution and before ExpireStatuses,
+                // which is the natural "end of the turn" insertion point.
+                if (unit.Alive && !IsBattleOver())
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    _broadcastSubject = unit;
+                    BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAllyTurnEnd, 0, unit);
+                    if (unit.Alive && !IsBattleOver())
+                        BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyTurnEnd, 0, null);
+                    _broadcastSubject = prevSubject;
+                }
+
                 ExpireStatuses(unit);
             }
 
@@ -890,11 +926,30 @@ namespace Emberfall.Core.Combat
                 bool expired = false;
                 bool expiredFromPlayer = false;
                 bool expiredFromEnemy = false;
+                _expiredKinds.Clear();
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
                     StatusInstance s = unit.Statuses[i];
                     s.RoundsLeft--;
                     if (s.RoundsLeft > 0) continue;
+
+                    // Ledger auto-release: pay out Stored as damage to the holder before the entry
+                    // is removed. Power is baked into StoredCap at apply-time, so the full Stored
+                    // amount is the payout. Only fires when the Ledger duration genuinely expires;
+                    // a cleanse, a dispel and a death each remove statuses by their own path and
+                    // none of them should auto-release.
+                    if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
+                    {
+                        int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
+                        s.Stored = 0f;
+                        if (payout > 0 && unit.Alive)
+                        {
+                            DealRawDamage(s.SourceId, unit, payout, false, "burst",
+                                          StatusKind.None, 1f, "Ledger");
+                            if (!unit.Alive) return;
+                        }
+                    }
+
                     unit.Statuses.RemoveAt(i);
 
                     // THE SHIELD POOL FOLLOWS ITS OWN STATUS. Without this the entry is removed and
@@ -912,6 +967,7 @@ namespace Emberfall.Core.Combat
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
                     expired = true;
+                    if (!_expiredKinds.Contains(s.Kind)) _expiredKinds.Add(s.Kind);
 
                     // Track which side the expired status was applied FROM, for the applier-side
                     // lifecycle broadcast below. Only statuses applied by the OTHER side matter:
@@ -967,7 +1023,8 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private bool ConditionMetHere(EffectDef effect, CombatUnit caster, CombatUnit target)
             {
-                if (effect == null || effect.Condition == EffectCondition.None) return true;
+                if (effect == null || effect.Condition == EffectCondition.None)
+                    return Condition2MetHere(effect, caster, target);
 
                 CombatUnit subject = effect.ConditionOn == ConditionSubject.Caster ? caster
                                    : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
@@ -975,15 +1032,16 @@ namespace Emberfall.Core.Combat
                                    : target;
                 if (subject == null) return false;
 
+                bool first;
                 switch (effect.Condition)
                 {
                     // Inclusive at the boundary, matching HpBelow / HpAbove one file over: two
                     // meanings of "above" in one engine is a worse trap than the lost precision.
                     case EffectCondition.TurnProgressAbove:
-                        return TurnProgressOf(subject) >= effect.ConditionValue;
+                        first = TurnProgressOf(subject) >= effect.ConditionValue; break;
 
                     case EffectCondition.TurnProgressBelow:
-                        return TurnProgressOf(subject) <= effect.ConditionValue;
+                        first = TurnProgressOf(subject) <= effect.ConditionValue; break;
 
                     // Position, not progress, and the two disagree: a unit that has already acted
                     // reads 0 progress but is not "after" anybody, it is out of the round. Both
@@ -992,23 +1050,81 @@ namespace Emberfall.Core.Combat
                     {
                         int mine = PendingPositionOf(caster);
                         int theirs = PendingPositionOf(subject);
+                        first = mine >= 0 && theirs >= 0 && mine < theirs;
+                        break;
+                    }
+
+                    default:
+                    {
+                        // Everything else, including a Defeated or BroadcastSubject asking an ordinary
+                        // question, is answered by the pure function - with the resolved subject
+                        // substituted in.
+                        if (effect.ConditionOn == ConditionSubject.Defeated
+                            || effect.ConditionOn == ConditionSubject.BroadcastSubject)
+                        {
+                            EffectDef asTarget = effect.Clone();
+                            asTarget.ConditionOn = ConditionSubject.Target;
+                            first = ConditionMet(asTarget, caster, subject);
+                        }
+                        else
+                        {
+                            first = ConditionMet(effect, caster, target);
+                        }
+                        break;
+                    }
+                }
+
+                if (!first) return false;
+                return Condition2MetHere(effect, caster, target);
+            }
+
+            /// <summary>
+            /// The second gate of an AND-conditioned effect. When Condition2 is None (the default),
+            /// returns true without reading anything, so every single-conditioned effect is unchanged.
+            /// Follows the same subject-resolution and pure/contextual split as the first gate.
+            /// </summary>
+            private bool Condition2MetHere(EffectDef effect, CombatUnit caster, CombatUnit target)
+            {
+                if (effect == null || effect.Condition2 == EffectCondition.None) return true;
+
+                // Build a synthetic EffectDef carrying Condition2 in the Condition slot, so both
+                // ConditionMet and the three contextual cases above can answer it unchanged. Reuses
+                // Clone so the synthesis cannot diverge from the fields ConditionMet reads.
+                EffectDef gate2 = effect.Clone();
+                gate2.Condition = effect.Condition2;
+                gate2.ConditionOn = effect.ConditionOn2;
+                gate2.ConditionStatus = effect.ConditionStatus2;
+                gate2.ConditionValue = effect.ConditionValue2;
+                gate2.ComparedStat = effect.ComparedStat2;
+                gate2.Condition2 = EffectCondition.None; // prevent infinite recursion
+
+                CombatUnit subject2 = gate2.ConditionOn == ConditionSubject.Caster ? caster
+                                    : gate2.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                    : gate2.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
+                                    : target;
+                if (subject2 == null) return false;
+
+                switch (gate2.Condition)
+                {
+                    case EffectCondition.TurnProgressAbove:
+                        return TurnProgressOf(subject2) >= gate2.ConditionValue;
+                    case EffectCondition.TurnProgressBelow:
+                        return TurnProgressOf(subject2) <= gate2.ConditionValue;
+                    case EffectCondition.CasterActsBeforeSubject:
+                    {
+                        int mine = PendingPositionOf(caster);
+                        int theirs = PendingPositionOf(subject2);
                         return mine >= 0 && theirs >= 0 && mine < theirs;
                     }
                 }
 
-                // Everything else, including a Defeated or BroadcastSubject asking an ordinary
-                // question, is answered by the pure function - with the resolved subject
-                // substituted in, so "did the unit that just died carry my mark" and "is the
-                // unit whose DoT ticked below 30%" reach the same condition code every other
-                // subject does.
-                if (effect.ConditionOn == ConditionSubject.Defeated
-                    || effect.ConditionOn == ConditionSubject.BroadcastSubject)
+                if (gate2.ConditionOn == ConditionSubject.Defeated
+                    || gate2.ConditionOn == ConditionSubject.BroadcastSubject)
                 {
-                    EffectDef asTarget = effect.Clone();
-                    asTarget.ConditionOn = ConditionSubject.Target;
-                    return ConditionMet(asTarget, caster, subject);
+                    gate2.ConditionOn = ConditionSubject.Target;
+                    return ConditionMet(gate2, caster, subject2);
                 }
-                return ConditionMet(effect, caster, target);
+                return ConditionMet(gate2, caster, target);
             }
 
             /// <summary>
@@ -1131,6 +1247,16 @@ namespace Emberfall.Core.Combat
                     // what dies partway through. PerStackStatus widens WHICH counter is read and
                     // defaults to Resolve, so an effect that names neither field is unchanged -
                     // CountOf(Resolve) is exactly the call that stood here.
+                    // PerTarget: if this effect says "once per target from the previous effect",
+                    // multiply Hits by the count the previous effect resolved against. Inert when
+                    // PerTarget is false (the default) or when _lastEffectTargetCount is <= 1.
+                    if (effect.PerTarget && _lastEffectTargetCount > 1)
+                    {
+                        EffectDef perT = effect.Clone();
+                        perT.Hits = effect.Hits * _lastEffectTargetCount;
+                        effect = perT;
+                    }
+
                     bool perStackOnTarget = effect.PerStackOn == ConditionSubject.Target;
                     if (!perStackOnTarget)
                     {
@@ -1138,7 +1264,12 @@ namespace Emberfall.Core.Combat
                         if (effect.PerStack != 0f && casterStacks > 0)
                         {
                             EffectDef scaled = effect.Clone();
-                            scaled.Power = effect.Power * (1f + effect.PerStack * casterStacks);
+                            float factor = 1f + effect.PerStack * casterStacks;
+                            scaled.Power = effect.Power * factor;
+                            scaled.Magnitude = effect.Magnitude * factor;
+                            if (effect.Kind == EffectKind.GainResolve)
+                                scaled.Hits = Math.Max(1, (int)Math.Round(effect.Hits * factor,
+                                              MidpointRounding.AwayFromZero));
                             effect = scaled;
                         }
                     }
@@ -1210,7 +1341,12 @@ namespace Emberfall.Core.Combat
                             if (targetStacks > 0)
                             {
                                 EffectDef scaled = effect.Clone();
-                                scaled.Power = effect.Power * (1f + effect.PerStack * targetStacks);
+                                float factor = 1f + effect.PerStack * targetStacks;
+                                scaled.Power = effect.Power * factor;
+                                scaled.Magnitude = effect.Magnitude * factor;
+                                if (effect.Kind == EffectKind.GainResolve)
+                                    scaled.Hits = Math.Max(1, (int)Math.Round(effect.Hits * factor,
+                                                  MidpointRounding.AwayFromZero));
                                 landed = scaled;
                             }
                         }
@@ -1248,6 +1384,13 @@ namespace Emberfall.Core.Combat
                     // that resolves against an empty target list spends its Resolve today, and
                     // making that case stop spending would be a behaviour change to shipped
                     // content wearing the costume of a new feature.
+                    // Track how many targets this effect resolved against, for the next effect's
+                    // PerTarget. Only counts targets that passed the condition, so a conditional
+                    // AoE that hit 2 of 5 enemies reports 2.
+                    _lastEffectTargetCount = 0;
+                    for (int tc = 0; tc < targets.Count; tc++)
+                        if (targets[tc] != null) _lastEffectTargetCount++;
+
                     bool suppressed = effect.Condition != EffectCondition.None && !anyTargetPassed;
 
                     // Spent after the effect has finished with every target, so an AoE pays the
@@ -1412,6 +1555,9 @@ namespace Emberfall.Core.Combat
                                 if (led.Kind != StatusKind.Ledger || led.SourceId != source.Id) continue;
                                 led.StoredCap = effect.StoredCap > 0f
                                     ? source.EffectiveAttack * effect.StoredCap : 0f;
+                                led.AutoRelease = effect.LedgerAutoRelease;
+                                led.Mitigates = effect.LedgerMitigates;
+                                led.BankLimit = effect.LedgerBankLimit;
                             }
 
                         // Disrupted: StoredCap carries the turn shift fraction, raw rather than
@@ -1655,11 +1801,21 @@ namespace Emberfall.Core.Combat
 
                         int payout = (int)Math.Round(stored * effect.Power, MidpointRounding.AwayFromZero);
                         if (payout <= 0) break;
-                        // Through the same funnel as every other point of damage, so a release that
-                        // kills fires the death and the killer's OnKill exactly as any hit would -
-                        // and banks into anybody else's ledger on the way.
-                        DealRawDamage(source.Id, target, payout, false, "burst", StatusKind.None, 1f,
-                                      ability != null ? ability.Name : "");
+                        if (effect.ReleaseAsHeal)
+                        {
+                            // Heal-shaped release: heals the target (or a secondary target) instead
+                            // of damaging it. The same stored amount, the same Power scaling, a
+                            // different funnel.
+                            ApplyHealValue(source.Id, target, payout, "heal", true);
+                        }
+                        else
+                        {
+                            // Through the same funnel as every other point of damage, so a release that
+                            // kills fires the death and the killer's OnKill exactly as any hit would -
+                            // and banks into anybody else's ledger on the way.
+                            DealRawDamage(source.Id, target, payout, false, "burst", StatusKind.None, 1f,
+                                          ability != null ? ability.Name : "");
+                        }
                         break;
                     }
 
@@ -1781,6 +1937,94 @@ namespace Emberfall.Core.Combat
                                 }
                             }
                         }
+                        break;
+                    }
+
+                    // ---------- tier eight: transfers, ledger increment, lethal redirect ----------
+
+                    case EffectKind.HpTransfer:
+                    {
+                        // Moves HP from source to target. Self-damage, not through DealRawDamage,
+                        // so Guard/Cover/Shield/Ledger/death cascade are not involved and the
+                        // source cannot die from it (clamped to Hp - 1).
+                        if (!source.Alive || !target.Alive) break;
+                        int amount = (int)Math.Round(
+                            source.EffectiveAttack * effect.Power + effect.Flat
+                            + TargetHpTerm(effect, target),
+                            MidpointRounding.AwayFromZero);
+                        if (amount <= 0) break;
+                        int available = (int)Math.Max(0f, source.Hp - 1f);
+                        if (amount > available) amount = available;
+                        if (amount <= 0) break;
+                        source.Hp -= amount;
+                        BattleEvent dmg = Emit(BattleEventType.Damage, source.Id, source.Id);
+                        dmg.Value = amount;
+                        dmg.Vfx = "transfer";
+                        ApplyHealValue(source.Id, target, amount, "heal", true);
+                        break;
+                    }
+
+                    case EffectKind.ShieldTransfer:
+                    {
+                        // Moves Magnitude fraction of the source's Shield pool to the target.
+                        if (!source.Alive || !target.Alive) break;
+                        float pool = source.Shield;
+                        if (pool <= 0f) break;
+                        float frac = effect.Magnitude > 0f ? effect.Magnitude : 1f;
+                        if (frac > 1f) frac = 1f;
+                        float moved = pool * frac;
+                        if (moved < 0.5f) break;
+                        source.Shield -= moved;
+                        if (source.Shield < 0.5f)
+                        {
+                            source.Shield = 0f;
+                            source.Remove(StatusKind.Shield);
+                            BattleEvent gone = Emit(BattleEventType.StatusExpired, source.Id, source.Id);
+                            gone.Status = StatusKind.Shield;
+                        }
+                        target.Shield += moved;
+                        if (!target.Has(StatusKind.Shield))
+                            target.AddOrRefresh(StatusKind.Shield, 99, 0f, source.Id);
+                        BattleEvent se = Emit(BattleEventType.ShieldGain, source.Id, target.Id);
+                        se.Value = (int)Math.Round(moved, MidpointRounding.AwayFromZero);
+                        break;
+                    }
+
+                    case EffectKind.LedgerIncrement:
+                    {
+                        // Adds Power * Attack directly to the caster's Ledger Stored on the target.
+                        if (!target.Alive) break;
+                        float add = source.EffectiveAttack * effect.Power + effect.Flat;
+                        if (add <= 0f) break;
+                        for (int li = 0; li < target.Statuses.Count; li++)
+                        {
+                            StatusInstance led = target.Statuses[li];
+                            if (led.Kind != StatusKind.Ledger || led.SourceId != source.Id) continue;
+                            float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                            if (room <= 0f) continue;
+                            float banked = add > room ? room : add;
+                            led.Stored += banked;
+                        }
+                        break;
+                    }
+
+                    case EffectKind.RedirectLethal:
+                    {
+                        // Only meaningful inside an OnAllyWouldDie broadcast, where target.Hp <= 0
+                        // but target.Alive is still true. Saves the target at 1 HP and deals the
+                        // overkill to the source (passive owner).
+                        if (!target.Alive || target.Hp > 0f) break;
+                        float overkill = -target.Hp;
+                        target.Hp = 1f;
+                        BattleEvent saveEvt = Emit(BattleEventType.Heal, source.Id, target.Id);
+                        saveEvt.Value = 1 + (int)Math.Round(overkill, MidpointRounding.AwayFromZero);
+                        saveEvt.Vfx = "redirect";
+                        int redirected = (int)Math.Round(overkill * effect.Power,
+                                                         MidpointRounding.AwayFromZero);
+                        if (redirected > 0 && source.Alive)
+                            DealRawDamage(-1, source, redirected, false, "redirect",
+                                          StatusKind.None, 1f,
+                                          ability != null ? ability.Name : "");
                         break;
                     }
                 }
@@ -1958,9 +2202,10 @@ namespace Emberfall.Core.Combat
             private static float TargetHpTerm(EffectDef effect, CombatUnit target)
             {
                 if (target == null) return 0f;
-                return target.MaxHp * effect.TargetMaxHpRatio
+                float maxHp = target.EffectiveMaxHp;
+                return maxHp * effect.TargetMaxHpRatio
                      + target.Hp * effect.TargetCurrentHpRatio
-                     + (target.MaxHp - target.Hp) * effect.TargetMissingHpRatio;
+                     + (maxHp - target.Hp) * effect.TargetMissingHpRatio;
             }
 
             /// <summary>Single funnel for every point of damage in the game.</summary>
@@ -2039,21 +2284,41 @@ namespace Emberfall.Core.Combat
 
                 if (damage <= 0) return;
 
-                // Ledger accrual, at the one funnel every point of damage in the game passes
-                // through. Each Ledger entry on the victim banks its own Magnitude fraction of the
-                // hit, up to its own cap, so two ledgers from two heroes count the same hit
-                // independently. Walks the live list without mutating it - banking changes a float
-                // on an entry and never adds or removes one - so it needs none of the snapshot
-                // care TickDamageOverTime documents.
+                // Ledger accrual and mitigation, at the one funnel every point of damage in the
+                // game passes through. Each Ledger entry on the victim either BANKS (the original
+                // behaviour) or MITIGATES (tier eight), depending on the Mitigates flag copied from
+                // the effect that applied it. Walks the live list without mutating structure - both
+                // paths change a float on an entry and never add or remove one - so it needs none of
+                // the snapshot care TickDamageOverTime documents.
                 for (int li = 0; li < target.Statuses.Count; li++)
                 {
                     StatusInstance led = target.Statuses[li];
-                    if (led.Kind != StatusKind.Ledger || led.Magnitude <= 0f) continue;
-                    float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
-                    if (room <= 0f) continue;
-                    float banked = damage * led.Magnitude;
-                    if (banked > room) banked = room;
-                    led.Stored += banked;
+                    if (led.Kind != StatusKind.Ledger) continue;
+
+                    if (led.Mitigates)
+                    {
+                        // Mitigation: spend Stored to absorb incoming damage, the same direction a
+                        // Shield pool works but on the Ledger rather than on the unit.
+                        if (led.Stored > 0f && damage > 0)
+                        {
+                            float absorbed = Math.Min(led.Stored, (float)damage);
+                            led.Stored -= absorbed;
+                            damage -= (int)Math.Round(absorbed, MidpointRounding.AwayFromZero);
+                            if (damage <= 0) return;
+                        }
+                    }
+                    else
+                    {
+                        // Banking: the original behaviour. Banks Magnitude fraction of the hit.
+                        if (led.Magnitude <= 0f) continue;
+                        if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+                        float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                        if (room <= 0f) continue;
+                        float banked = damage * led.Magnitude;
+                        if (banked > room) banked = room;
+                        led.Stored += banked;
+                        if (led.BankLimit > 0) led.BankUsesThisRound++;
+                    }
                 }
 
                 target.Hp -= damage;
@@ -2220,7 +2485,7 @@ namespace Emberfall.Core.Combat
             {
                 if (!target.Alive || amount <= 0) return;
 
-                float missing = target.MaxHp - target.Hp;
+                float missing = target.EffectiveMaxHp - target.Hp;
                 int healed = missing > 0f ? (int)Math.Min(missing, amount) : 0;
                 if (healed > 0)
                 {
@@ -2566,6 +2831,12 @@ namespace Emberfall.Core.Combat
                     if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
                     if (!LimitAllows(owner, i, passive)) continue;
                     if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
+                    // TriggerStatus filter: when a passive names a specific status, the trigger
+                    // fires only if that status was among the ones that expired. No shipped content
+                    // sets TriggerStatus, so this check never fires for existing battles.
+                    if (trigger == PassiveTrigger.OnStatusExpired
+                        && passive.TriggerStatus != StatusKind.None
+                        && !_expiredKinds.Contains(passive.TriggerStatus)) continue;
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
 

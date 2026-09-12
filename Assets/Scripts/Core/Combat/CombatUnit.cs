@@ -76,6 +76,23 @@ namespace Emberfall.Core.Combat
         // shipped content.
         public int UsesThisRound;
         public int UsesPerRound;
+
+        // ---------------------------------------------------------------- tier eight: ledger extensions
+        //
+        // Carried on the Ledger entry alongside Stored and StoredCap, because they are properties
+        // of the individual mark rather than of the unit or the kind.
+
+        /// <summary>When true, the Ledger auto-releases its Stored as damage to the holder when
+        /// its duration expires.</summary>
+        public bool AutoRelease;
+
+        /// <summary>When true, the Ledger mitigates incoming damage by spending Stored instead
+        /// of banking into it.</summary>
+        public bool Mitigates;
+
+        /// <summary>Max banking events per round, 0 for unlimited. Reset in BeginRound.</summary>
+        public int BankLimit;
+        public int BankUsesThisRound;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -230,7 +247,11 @@ namespace Emberfall.Core.Combat
             // Per-round status uses, and the per-round half of the per-target limits. Both are
             // "how many times has this already happened THIS round", so both belong to the one
             // place a round is declared to have started.
-            for (int i = 0; i < Statuses.Count; i++) Statuses[i].UsesThisRound = 0;
+            for (int i = 0; i < Statuses.Count; i++)
+            {
+                Statuses[i].UsesThisRound = 0;
+                Statuses[i].BankUsesThisRound = 0;
+            }
             _passiveTargetsThisRound.Clear();
         }
 
@@ -297,9 +318,24 @@ namespace Emberfall.Core.Combat
 
         public readonly List<StatusInstance> Statuses = new List<StatusInstance>();
 
+        /// <summary>
+        /// MaxHp expanded by MaxHpUp, the same MULTIPLY shape AttackUp uses. Identical to MaxHp
+        /// when no unit carries MaxHpUp: SumMagnitude returns 0f, and MaxHp * 1f is MaxHp exactly
+        /// in IEEE 754 for every finite float.
+        /// </summary>
+        public float EffectiveMaxHp
+        {
+            get
+            {
+                float m = 1f + SumMagnitude(StatusKind.MaxHpUp);
+                if (m < 0.2f) m = 0.2f;
+                return MaxHp * m;
+            }
+        }
+
         public float HpRatio
         {
-            get { return MaxHp <= 0f ? 0f : Hp / MaxHp; }
+            get { return EffectiveMaxHp <= 0f ? 0f : Hp / EffectiveMaxHp; }
         }
 
         // ---------- derived combat values ----------
@@ -442,7 +478,7 @@ namespace Emberfall.Core.Combat
             }
         }
 
-        public float EffectiveHolyDamage { get { return HolyDamage; } }
+        public float EffectiveHolyDamage { get { return HolyDamage + SumMagnitude(StatusKind.HolyDamageUp); } }
 
         /// <summary>
         /// How many harmful statuses this unit carries, counted with the same StatusInfo.IsHarmful

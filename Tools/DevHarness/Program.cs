@@ -40,6 +40,7 @@ namespace Emberfall.DevHarness
             CheckTierFiveMechanics(content);
             CheckTierSixMechanics(content);
             CheckTierSevenMechanics(content);
+            CheckTierEightMechanics(content);
             CheckAspectDirection(content);
             CheckNoAspectKeyedBehaviour(content);
             CheckOnKillPassive(content);
@@ -5017,7 +5018,9 @@ namespace Emberfall.DevHarness
                                "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
                                "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
                                "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
-                               "Interrupt", "ExtendStatus", "ConsumeTurnDebt" },
+                               "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
+                               "HpTransfer", "ShieldTransfer", "LedgerIncrement",
+                               "RedirectLethal" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -5035,7 +5038,7 @@ namespace Emberfall.DevHarness
                                "Vulnerable", "TurnDebt",
                                "EvasionUp", "AccuracyDown",
                                "GuaranteedCrit", "BuffSuppression",
-                               "Disrupted" },
+                               "Disrupted", "MaxHpUp", "HolyDamageUp" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
             Line("");
@@ -13366,6 +13369,144 @@ namespace Emberfall.DevHarness
                   + (int)PassiveTrigger.OnAppliedStatusExpired + ", " + (int)PassiveTrigger.OnAppliedDoTTick + ")");
             Check((int)TargetMode.BroadcastSubject == 23,
                   "TargetMode.BroadcastSubject at 23 (got " + (int)TargetMode.BroadcastSubject + ")");
+        }
+
+        // =====================================================================
+        // TIER EIGHT — all remaining authoring gaps
+        // =====================================================================
+
+        private static void CheckTierEightMechanics(ContentDatabase live)
+        {
+            Line("TIER EIGHT (AND conditions, filtered expiry, MaxHpUp, HolyDamageUp, PerStack DoT,"
+                 + " Ledger extensions, transfers, turn-end triggers, PerTarget, RedirectLethal)");
+
+            CheckNoShippedContentReachesTierEight(live);
+            CheckTierEightOrdinals();
+        }
+
+        private static void CheckNoShippedContentReachesTierEight(ContentDatabase live)
+        {
+            List<string> andConditions = new List<string>();
+            List<string> triggerStatus = new List<string>();
+            List<string> maxHpUp = new List<string>();
+            List<string> holyDmgUp = new List<string>();
+            List<string> perTarget = new List<string>();
+            List<string> releaseAsHeal = new List<string>();
+            List<string> autoRelease = new List<string>();
+            List<string> mitigates = new List<string>();
+            List<string> bankLimit = new List<string>();
+            List<string> hpTransfer = new List<string>();
+            List<string> shieldTransfer = new List<string>();
+            List<string> ledgerIncrement = new List<string>();
+            List<string> redirectLethal = new List<string>();
+            List<string> ledgerAtCap = new List<string>();
+            List<string> turnEndTriggers = new List<string>();
+
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+
+                // Passive-level checks
+                List<PassiveDef> allPassives = new List<PassiveDef>(def.Passives);
+                for (int t = 0; t < def.Talents.Count; t++) allPassives.Add(def.Talents[t]);
+
+                for (int p = 0; p < allPassives.Count; p++)
+                {
+                    PassiveDef passive = allPassives[p];
+                    if (passive.TriggerStatus != StatusKind.None)
+                        triggerStatus.Add(def.Id + "/" + passive.Name);
+                    if (passive.Trigger == PassiveTrigger.OnAllyTurnEnd
+                        || passive.Trigger == PassiveTrigger.OnEnemyTurnEnd)
+                        turnEndTriggers.Add(def.Id + "/" + passive.Name + " (" + passive.Trigger + ")");
+                }
+
+                // Effect-level checks across all abilities and passives
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                    CheckTierEightEffects(def.Id + "/" + abilities[a].Id, abilities[a].Effects,
+                        andConditions, maxHpUp, holyDmgUp, perTarget, releaseAsHeal,
+                        autoRelease, mitigates, bankLimit, hpTransfer, shieldTransfer,
+                        ledgerIncrement, redirectLethal, ledgerAtCap);
+
+                for (int p = 0; p < allPassives.Count; p++)
+                    CheckTierEightEffects(def.Id + "/" + allPassives[p].Id, allPassives[p].Effects,
+                        andConditions, maxHpUp, holyDmgUp, perTarget, releaseAsHeal,
+                        autoRelease, mitigates, bankLimit, hpTransfer, shieldTransfer,
+                        ledgerIncrement, redirectLethal, ledgerAtCap);
+            }
+
+            Check(andConditions.Count == 0, "no shipped effect uses AND conditions (Condition2)" + Detail(andConditions));
+            Check(triggerStatus.Count == 0, "no shipped passive uses TriggerStatus filter" + Detail(triggerStatus));
+            Check(maxHpUp.Count == 0, "no shipped effect applies MaxHpUp" + Detail(maxHpUp));
+            Check(holyDmgUp.Count == 0, "no shipped effect applies HolyDamageUp" + Detail(holyDmgUp));
+            Check(perTarget.Count == 0, "no shipped effect uses PerTarget" + Detail(perTarget));
+            Check(releaseAsHeal.Count == 0, "no shipped effect uses ReleaseAsHeal" + Detail(releaseAsHeal));
+            Check(autoRelease.Count == 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
+            Check(mitigates.Count == 0, "no shipped effect uses LedgerMitigates" + Detail(mitigates));
+            Check(bankLimit.Count == 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
+            Check(hpTransfer.Count == 0, "no shipped effect uses HpTransfer" + Detail(hpTransfer));
+            Check(shieldTransfer.Count == 0, "no shipped effect uses ShieldTransfer" + Detail(shieldTransfer));
+            Check(ledgerIncrement.Count == 0, "no shipped effect uses LedgerIncrement" + Detail(ledgerIncrement));
+            Check(redirectLethal.Count == 0, "no shipped effect uses RedirectLethal" + Detail(redirectLethal));
+            Check(ledgerAtCap.Count == 0, "no shipped effect conditions on LedgerAtCap" + Detail(ledgerAtCap));
+            Check(turnEndTriggers.Count == 0, "no shipped passive triggers on OnAllyTurnEnd/OnEnemyTurnEnd" + Detail(turnEndTriggers));
+        }
+
+        private static void CheckTierEightEffects(string prefix, List<EffectDef> effects,
+            List<string> andConditions, List<string> maxHpUp, List<string> holyDmgUp,
+            List<string> perTarget, List<string> releaseAsHeal, List<string> autoRelease,
+            List<string> mitigates, List<string> bankLimit, List<string> hpTransfer,
+            List<string> shieldTransfer, List<string> ledgerIncrement,
+            List<string> redirectLethal, List<string> ledgerAtCap)
+        {
+            for (int e = 0; e < effects.Count; e++)
+            {
+                EffectDef ef = effects[e];
+                string tag = prefix + "[" + e + "]";
+                if (ef.Condition2 != EffectCondition.None) andConditions.Add(tag);
+                if (ef.Status == StatusKind.MaxHpUp) maxHpUp.Add(tag);
+                if (ef.Status == StatusKind.HolyDamageUp) holyDmgUp.Add(tag);
+                if (ef.PerTarget) perTarget.Add(tag);
+                if (ef.ReleaseAsHeal) releaseAsHeal.Add(tag);
+                if (ef.LedgerAutoRelease) autoRelease.Add(tag);
+                if (ef.LedgerMitigates) mitigates.Add(tag);
+                if (ef.LedgerBankLimit > 0) bankLimit.Add(tag);
+                if (ef.Kind == EffectKind.HpTransfer) hpTransfer.Add(tag);
+                if (ef.Kind == EffectKind.ShieldTransfer) shieldTransfer.Add(tag);
+                if (ef.Kind == EffectKind.LedgerIncrement) ledgerIncrement.Add(tag);
+                if (ef.Kind == EffectKind.RedirectLethal) redirectLethal.Add(tag);
+                if (ef.Condition == EffectCondition.LedgerAtCap
+                    || ef.Condition2 == EffectCondition.LedgerAtCap) ledgerAtCap.Add(tag);
+            }
+        }
+
+        private static void CheckTierEightOrdinals()
+        {
+            // StatusKind: MaxHpUp and HolyDamageUp appended after Disrupted (42)
+            Check((int)StatusKind.MaxHpUp == 43,
+                  "StatusKind.MaxHpUp at 43 (got " + (int)StatusKind.MaxHpUp + ")");
+            Check((int)StatusKind.HolyDamageUp == 44,
+                  "StatusKind.HolyDamageUp at 44 (got " + (int)StatusKind.HolyDamageUp + ")");
+
+            // EffectKind: four new members after ConsumeTurnDebt (19)
+            Check((int)EffectKind.HpTransfer == 20,
+                  "EffectKind.HpTransfer at 20 (got " + (int)EffectKind.HpTransfer + ")");
+            Check((int)EffectKind.ShieldTransfer == 21,
+                  "EffectKind.ShieldTransfer at 21 (got " + (int)EffectKind.ShieldTransfer + ")");
+            Check((int)EffectKind.LedgerIncrement == 22,
+                  "EffectKind.LedgerIncrement at 22 (got " + (int)EffectKind.LedgerIncrement + ")");
+            Check((int)EffectKind.RedirectLethal == 23,
+                  "EffectKind.RedirectLethal at 23 (got " + (int)EffectKind.RedirectLethal + ")");
+
+            // EffectCondition: LedgerAtCap appended after SubjectRepeatedActionType (31)
+            Check((int)EffectCondition.LedgerAtCap == 32,
+                  "EffectCondition.LedgerAtCap at 32 (got " + (int)EffectCondition.LedgerAtCap + ")");
+
+            // PassiveTrigger: two new members after OnAppliedDoTTick (26)
+            Check((int)PassiveTrigger.OnAllyTurnEnd == 27,
+                  "PassiveTrigger.OnAllyTurnEnd at 27 (got " + (int)PassiveTrigger.OnAllyTurnEnd + ")");
+            Check((int)PassiveTrigger.OnEnemyTurnEnd == 28,
+                  "PassiveTrigger.OnEnemyTurnEnd at 28 (got " + (int)PassiveTrigger.OnEnemyTurnEnd + ")");
         }
     }
 }
