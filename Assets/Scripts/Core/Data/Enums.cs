@@ -143,7 +143,14 @@ namespace Emberfall.Core.Data
         /// it has to be one that makes sense against a corpse. Moving a status off it does; healing
         /// it does not, and `ApplyHealValue` already refuses a dead target.
         /// </summary>
-        DefeatedUnit
+        DefeatedUnit,
+
+        /// <summary>
+        /// The enemy that just crossed the active-skill energy threshold while carrying TurnDebt.
+        /// Resolves only while `OnEnemyEnergyThreshold` is being broadcast, via `_thresholdUnit`;
+        /// outside that window it resolves to nobody, following the same pattern as DefeatedUnit.
+        /// </summary>
+        ThresholdUnit
     }
 
     public enum EffectKind
@@ -214,7 +221,19 @@ namespace Emberfall.Core.Data
         /// by harmful/beneficial (via effect.Status == None) or by a named StatusKind (via
         /// effect.Status != None). Does not apply a new status — only extends one already
         /// there.</summary>
-        ExtendStatus        // 18
+        ExtendStatus,       // 18
+
+        /// <summary>
+        /// Consumes all TurnDebt on the target, calculates the repayment cost (owed * rate),
+        /// delays the target by Magnitude fraction, and grants the calculated energy to the
+        /// SecondaryTarget (typically LowestEnergyAlly).
+        ///
+        /// The three operations are one effect rather than three because the energy amount is
+        /// derived from the TurnDebt being consumed: a separate EnergyGain would need to know a
+        /// number that no longer exists once RemoveStatus has taken it. Packaging them lets the
+        /// calculation happen between the removal and the grant, which is the only order that works.
+        /// </summary>
+        ConsumeTurnDebt     // 19
     }
 
     /// <summary>
@@ -635,7 +654,19 @@ namespace Emberfall.Core.Data
         /// <summary>Prevents beneficial status application on the holder. A status that lands
         /// on the target is not applied if the target carries BuffSuppression and the incoming
         /// status is not harmful.</summary>
-        BuffSuppression
+        BuffSuppression,
+
+        /// <summary>
+        /// Energy-gain interceptor. While on a unit, the first energy gain each round (per
+        /// UsesPerRound) is reversed: the unit loses Magnitude energy instead of gaining, its
+        /// turn is delayed by StoredCap fraction, and the disruptor's next ally in turn order
+        /// is advanced by the same fraction.
+        ///
+        /// Engine-read, the same pattern as Burn/Regen/TurnDebt: the status sits on the target
+        /// and the interceptor fires inside AddEnergy before AddEnergyClamped touches the unit's
+        /// energy. Harmful, so Cleanse can remove it.
+        /// </summary>
+        Disrupted
     }
 
     /// <summary>
@@ -779,7 +810,19 @@ namespace Emberfall.Core.Data
 
         /// <summary>The owner dodged an attack (the accuracy/evasion miss check triggered).
         /// Fires on the DODGER, not on the attacker.</summary>
-        OnDodge
+        OnDodge,
+
+        /// <summary>
+        /// An enemy with TurnDebt gained enough energy to use its active skill. Broadcast to the
+        /// opposing side after the energy has been added, with `_thresholdUnit` set to the enemy.
+        /// TargetMode.ThresholdUnit resolves to that enemy during the broadcast and to nobody
+        /// outside it.
+        ///
+        /// The trigger fires ONCE per crossing: the before-energy was below the active's cost and
+        /// the after-energy is at or above it. A per-target limit on the passive handles the
+        /// "once per enemy each battle" rider.
+        /// </summary>
+        OnEnemyEnergyThreshold
     }
 
     /// <summary>
@@ -1255,7 +1298,9 @@ namespace Emberfall.Core.Data
                 // AccuracyDown lowers the holder's hit chance; BuffSuppression prevents buff
                 // application. Both are debuffs — cleansable, and Umbra locks them.
                 || kind == StatusKind.AccuracyDown
-                || kind == StatusKind.BuffSuppression;
+                || kind == StatusKind.BuffSuppression
+                // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
+                || kind == StatusKind.Disrupted;
         }
 
         /// <summary>

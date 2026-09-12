@@ -3613,7 +3613,7 @@ namespace Emberfall.DevHarness
 
         private static void CheckTierSixMechanics(ContentDatabase live)
         {
-            Line("TIER SIX (accuracy/miss, splash, guaranteed crit, buff suppression, interrupt, stat comparison, action-type history)");
+            Line("TIER SIX (accuracy/miss, splash, guaranteed crit, buff suppression, interrupt, stat comparison, action-type history, extend, energy intercept)");
 
             CheckNoShippedContentReachesTierSix(live);
             CheckTierSixOrdinals();
@@ -3625,6 +3625,8 @@ namespace Emberfall.DevHarness
             CheckCrossUnitStatComparison();
             CheckActionTypeHistory();
             CheckExtendStatus();
+            CheckDisruptedIntercept();
+            CheckMomentumBreaker();
 
             Line("");
         }
@@ -3644,6 +3646,8 @@ namespace Emberfall.DevHarness
             List<string> interrupt = new List<string>(), splash = new List<string>();
             List<string> statCmp = new List<string>(), actionHist = new List<string>();
             List<string> dodge = new List<string>(), extend = new List<string>();
+            List<string> disrupted = new List<string>(), consumeDebt = new List<string>();
+            List<string> thresholdTrig = new List<string>(), thresholdTarget = new List<string>();
 
             for (int u = 0; u < units.Count; u++)
             {
@@ -3654,6 +3658,8 @@ namespace Emberfall.DevHarness
                     if (passive == null) continue;
                     if (passive.Trigger == PassiveTrigger.OnDodge)
                         dodge.Add(def.Id + "/" + passive.Name);
+                    if (passive.Trigger == PassiveTrigger.OnEnemyEnergyThreshold)
+                        thresholdTrig.Add(def.Id + "/" + passive.Name);
                 }
 
                 List<AbilityDef> abilities = AllAbilitiesOf(def);
@@ -3676,8 +3682,14 @@ namespace Emberfall.DevHarness
                             interrupt.Add(where);
                         if (eff.Kind == EffectKind.ExtendStatus)
                             extend.Add(where);
+                        if (eff.Kind == EffectKind.ConsumeTurnDebt)
+                            consumeDebt.Add(where);
                         if (eff.Splash)
                             splash.Add(where);
+                        if (eff.Status == StatusKind.Disrupted || eff.ConditionStatus == StatusKind.Disrupted)
+                            disrupted.Add(where);
+                        if (eff.Target == TargetMode.ThresholdUnit || eff.SecondaryTarget == TargetMode.ThresholdUnit)
+                            thresholdTarget.Add(where);
 
                         if (eff.Condition == EffectCondition.CasterStatAboveTarget
                             || eff.Condition == EffectCondition.CasterStatBelowTarget)
@@ -3701,24 +3713,33 @@ namespace Emberfall.DevHarness
             Check(actionHist.Count == 0, "no shipped content reads action-type history" + Detail(actionHist));
             Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
             Check(extend.Count == 0, "no shipped content uses ExtendStatus" + Detail(extend));
+            Check(disrupted.Count == 0, "no shipped content applies or reads Disrupted" + Detail(disrupted));
+            Check(consumeDebt.Count == 0, "no shipped content uses ConsumeTurnDebt" + Detail(consumeDebt));
+            Check(thresholdTrig.Count == 0, "no shipped passive triggers on OnEnemyEnergyThreshold" + Detail(thresholdTrig));
+            Check(thresholdTarget.Count == 0, "no shipped content targets ThresholdUnit" + Detail(thresholdTarget));
         }
 
         private static void CheckTierSixOrdinals()
         {
             Check((int)StatusKind.EvasionUp == 38 && (int)StatusKind.AccuracyDown == 39
-                  && (int)StatusKind.GuaranteedCrit == 40 && (int)StatusKind.BuffSuppression == 41,
-                  "StatusKind tier-six members keep ordinals 38-41 (got "
+                  && (int)StatusKind.GuaranteedCrit == 40 && (int)StatusKind.BuffSuppression == 41
+                  && (int)StatusKind.Disrupted == 42,
+                  "StatusKind tier-six members keep ordinals 38-42 (got "
                   + (int)StatusKind.EvasionUp + ", " + (int)StatusKind.AccuracyDown + ", "
-                  + (int)StatusKind.GuaranteedCrit + ", " + (int)StatusKind.BuffSuppression + ")");
-            Check((int)EffectKind.Interrupt == 17 && (int)EffectKind.ExtendStatus == 18,
-                  "EffectKind tier-six members are appended at 17-18 (got "
-                  + (int)EffectKind.Interrupt + ", " + (int)EffectKind.ExtendStatus + ")");
+                  + (int)StatusKind.GuaranteedCrit + ", " + (int)StatusKind.BuffSuppression
+                  + ", " + (int)StatusKind.Disrupted + ")");
+            Check((int)EffectKind.Interrupt == 17 && (int)EffectKind.ExtendStatus == 18
+                  && (int)EffectKind.ConsumeTurnDebt == 19,
+                  "EffectKind tier-six members are appended at 17-19 (got "
+                  + (int)EffectKind.Interrupt + ", " + (int)EffectKind.ExtendStatus
+                  + ", " + (int)EffectKind.ConsumeTurnDebt + ")");
             Check((int)EffectCondition.CasterStatAboveTarget == 26
                   && (int)EffectCondition.SubjectRepeatedActionType == 31,
                   "EffectCondition tier-six members are appended at 26-31 (got "
                   + (int)EffectCondition.CasterStatAboveTarget + ".." + (int)EffectCondition.SubjectRepeatedActionType + ")");
-            Check((int)PassiveTrigger.OnDodge == 23,
-                  "PassiveTrigger.OnDodge is appended at 23 (got " + (int)PassiveTrigger.OnDodge + ")");
+            Check((int)PassiveTrigger.OnDodge == 23 && (int)PassiveTrigger.OnEnemyEnergyThreshold == 24,
+                  "PassiveTrigger.OnDodge at 23, OnEnemyEnergyThreshold at 24 (got "
+                  + (int)PassiveTrigger.OnDodge + ", " + (int)PassiveTrigger.OnEnemyEnergyThreshold + ")");
         }
 
         // ---- Accuracy / Miss ----
@@ -4169,6 +4190,226 @@ namespace Emberfall.DevHarness
             return RunWith(db, db.GetStage("t6_ext"), 42, team);
         }
 
+        // ---- Disrupted (energy-gain interception) ----
+
+        /// <summary>
+        /// A hero applies Disrupted to all enemies at BattleStart, then the enemy gains energy
+        /// from its basic attacks. Without Disrupted the enemy charges normally; with Disrupted
+        /// the first energy gain each round is reversed into a drain. Measured as the enemy's
+        /// peak energy: it should be lower with Disrupted because the gains are reversed.
+        /// </summary>
+        /// <summary>
+        /// Two heroes and one enemy. Hero1 goes first (fastest), hits the enemy and triggers
+        /// energyOnDamaged → InterceptDisrupted fires: drains energy, delays the enemy (it is
+        /// in the remaining order), and advances the next ally. Hero2 is slower than the enemy
+        /// but gets advanced past it.
+        ///
+        /// Measured as TurnOrderShift events (should be > 0 with Disrupted) and enemy energy
+        /// at the end of the first EnergyChanged sequence (should be lower because the first
+        /// gain each round is reversed into a drain).
+        /// </summary>
+        private static void CheckDisruptedIntercept()
+        {
+            BattleResult disrupted = RunDisruptedArena(true);
+            BattleResult control = RunDisruptedArena(false);
+            if (disrupted == null || control == null) { Check(false, "the disrupted arena builds"); return; }
+
+            // The turn shift should be observable as TurnOrderShift events
+            int shiftsCtl = CountEvents(control, BattleEventType.TurnOrderShift);
+            int shiftsDis = CountEvents(disrupted, BattleEventType.TurnOrderShift);
+            Check(shiftsCtl == 0, "control has no turn order shifts (" + shiftsCtl + ")");
+            Check(shiftsDis > 0, "Disrupted causes turn order shifts (" + shiftsDis + " observed)");
+
+            // Count enemy active casts. In control the enemy charges faster, so it should use
+            // its active more often than in the disrupted case where energy gains are intercepted.
+            int activesCtl = CountEnemyActives(control);
+            int activesDis = CountEnemyActives(disrupted);
+            Check(activesCtl > 0, "control enemy uses its active (" + activesCtl + " casts)");
+            Check(activesDis <= activesCtl,
+                  "Disrupted slows enemy charging (" + activesDis + " active casts vs " + activesCtl + " control)");
+        }
+
+        private static BattleResult RunDisruptedArena(bool applyDisrupted)
+        {
+            string disruptedPassive = applyDisrupted
+                ? @", ""passive"": { ""id"": ""dis_starter"", ""name"": ""Disrupt"", ""trigger"": ""BattleStart"",
+                    ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Disrupted"", ""magnitude"": 20, ""duration"": 99, ""chance"": 1, ""usesPerRound"": 1, ""storedCap"": 0.15 } ] }"
+                : "";
+            // Hero1 goes first (speed 150), Hero2 goes last (speed 80). Enemy at 130.
+            // After Hero1 acts, remaining order is [Enemy, Hero2]. The shift can move
+            // the enemy behind Hero2 and advance Hero2 ahead of the enemy.
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""dis_hero"", ""name"": ""Disruptor"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 150, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dis_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + disruptedPassive + @" },
+    { ""id"": ""dis_buddy"", ""name"": ""Buddy"", ""aspect"": ""Gale"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 80, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dis_b_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""dis_enemy"", ""name"": ""Charger"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 130, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dis_e_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""dis_e_active"", ""name"": ""Blast"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.002 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""dis_ch"", ""name"": ""Dis"", ""stages"": [
+    { ""id"": ""dis_stage"", ""index"": 1, ""enemies"": [ { ""id"": ""dis_enemy"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 10, ""energyMax"": 100, ""energyPerBasicAttack"": 20, ""energyOnDamaged"": 30, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "disrupted");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h1 = db.GetHero("dis_hero");
+            HeroDef h2 = db.GetHero("dis_buddy");
+            if (h1 != null) team.Add(MakeInstance(h1, 1));
+            if (h2 != null) team.Add(MakeInstance(h2, 1));
+            return RunWith(db, db.GetStage("dis_stage"), 42, team);
+        }
+
+        /// <summary>Count AbilityCast events from non-player units.</summary>
+        private static int CountEnemyActives(BattleResult result)
+        {
+            int count = 0;
+            for (int i = 0; i < result.Events.Count; i++)
+            {
+                BattleEvent e = result.Events[i];
+                if (e.Type != BattleEventType.AbilityCast) continue;
+                UnitSnapshot u = result.FindUnit(e.SourceId);
+                if (u != null && !u.IsPlayer) count++;
+            }
+            return count;
+        }
+
+        // ---- Momentum Breaker (threshold-crossing + ConsumeTurnDebt) ----
+
+        /// <summary>
+        /// Two heroes: one applies TurnDebt to the enemy (via TurnShift with shiftBanksAs),
+        /// the other carries an OnEnemyEnergyThreshold passive with ConsumeTurnDebt.
+        ///
+        /// The enemy charges up via basic attacks. Once its energy crosses the active cost
+        /// while still carrying TurnDebt, the passive fires: TurnDebt is consumed, the enemy
+        /// is delayed, and the lowest-energy ally gains the debt's energy cost.
+        ///
+        /// Measured as: (a) TurnDebt is applied then consumed before the enemy's turn-start
+        /// repayment, (b) the ally gains energy from the redistribution, (c) the enemy is
+        /// delayed (TurnOrderShift events).
+        /// </summary>
+        private static void CheckMomentumBreaker()
+        {
+            BattleResult withBreaker = RunMomentumArena(true);
+            BattleResult control = RunMomentumArena(false);
+            if (withBreaker == null || control == null) { Check(false, "the momentum-breaker arena builds"); return; }
+
+            // TurnDebt should appear in both runs (applied by the debtor hero)
+            int debtAppliedCtl = CountStatus(control, StatusKind.TurnDebt, BattleEventType.StatusApplied);
+            int debtAppliedMb = CountStatus(withBreaker, StatusKind.TurnDebt, BattleEventType.StatusApplied);
+            Check(debtAppliedCtl > 0, "control applies TurnDebt (" + debtAppliedCtl + ")");
+            Check(debtAppliedMb > 0, "momentum-breaker run applies TurnDebt (" + debtAppliedMb + ")");
+
+            // With the breaker, TurnDebt should be consumed (expired) by the passive, producing
+            // more StatusExpired events for TurnDebt than the control where it is only repaid at
+            // the enemy's turn start.
+            int debtExpiredCtl = CountStatus(control, StatusKind.TurnDebt, BattleEventType.StatusExpired);
+            int debtExpiredMb = CountStatus(withBreaker, StatusKind.TurnDebt, BattleEventType.StatusExpired);
+            Check(debtExpiredMb > 0, "momentum-breaker consumes TurnDebt (" + debtExpiredMb + " expired events)");
+
+            // The passive should fire (PassiveTrigger event for the breaker)
+            int passiveFires = 0;
+            for (int i = 0; i < withBreaker.Events.Count; i++)
+            {
+                BattleEvent e = withBreaker.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "mb_watcher") passiveFires++;
+            }
+            Check(passiveFires > 0, "OnEnemyEnergyThreshold passive fires (" + passiveFires + " times)");
+
+            // The ally should have gained energy from redistribution
+            // In the breaker run, the watcher hero (who starts at 0 energy and has no basic
+            // refill) should gain energy from the ConsumeTurnDebt redistribution
+            int watcherPeakCtl = 0;
+            int watcherPeakMb = 0;
+            for (int i = 0; i < control.Events.Count; i++)
+            {
+                BattleEvent e = control.Events[i];
+                if (e.Type != BattleEventType.EnergyChanged) continue;
+                for (int u = 0; u < control.Units.Count; u++)
+                    if (control.Units[u].Id == e.TargetId && control.Units[u].DefId == "mb_watcher_hero")
+                        if (e.Value > watcherPeakCtl) watcherPeakCtl = e.Value;
+            }
+            for (int i = 0; i < withBreaker.Events.Count; i++)
+            {
+                BattleEvent e = withBreaker.Events[i];
+                if (e.Type != BattleEventType.EnergyChanged) continue;
+                for (int u = 0; u < withBreaker.Units.Count; u++)
+                    if (withBreaker.Units[u].Id == e.TargetId && withBreaker.Units[u].DefId == "mb_watcher_hero")
+                        if (e.Value > watcherPeakMb) watcherPeakMb = e.Value;
+            }
+            Check(watcherPeakMb > watcherPeakCtl,
+                  "ConsumeTurnDebt redistributes energy to lowest-energy ally ("
+                  + watcherPeakMb + " vs " + watcherPeakCtl + " control)");
+        }
+
+        private static BattleResult RunMomentumArena(bool withBreaker)
+        {
+            // The watcher hero: in the breaker run, has a passive on OnEnemyEnergyThreshold.
+            // In the control run, just a do-nothing unit with no passive.
+            string watcherPassive = withBreaker
+                ? @", ""passive"": { ""id"": ""mb_watcher"", ""name"": ""Momentum Breaker"", ""trigger"": ""OnEnemyEnergyThreshold"",
+                    ""perTargetLimit"": 1,
+                    ""effects"": [ { ""kind"": ""ConsumeTurnDebt"", ""target"": ""ThresholdUnit"", ""magnitude"": 0.1, ""secondaryTarget"": ""LowestEnergyAlly"" } ] }"
+                : "";
+            // The debtor hero: applies TurnDebt via TurnShift with shiftBanksAs
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""mb_debtor_hero"", ""name"": ""Debtor"", ""aspect"": ""Ember"", ""role"": ""Binder"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 150, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""mb_d_basic"", ""name"": ""Push"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""TurnShift"", ""target"": ""FrontEnemy"", ""magnitude"": -0.15, ""shiftBanksAs"": ""TurnDebt"", ""storedCap"": 1.0, ""power"": 50 } ] } },
+    { ""id"": ""mb_watcher_hero"", ""name"": ""Watcher"", ""aspect"": ""Gale"", ""role"": ""Vanguard"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 80, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""mb_w_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + watcherPassive + @" }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""mb_enemy"", ""name"": ""Target"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 130, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""mb_e_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""mb_e_active"", ""name"": ""Blast"", ""energyCost"": 50,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.002 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""mb_ch"", ""name"": ""MB"", ""stages"": [
+    { ""id"": ""mb_stage"", ""index"": 1, ""enemies"": [ { ""id"": ""mb_enemy"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 10, ""energyMax"": 1000, ""energyPerBasicAttack"": 20, ""energyOnDamaged"": 30, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "momentum");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h1 = db.GetHero("mb_debtor_hero");
+            HeroDef h2 = db.GetHero("mb_watcher_hero");
+            if (h1 != null) team.Add(MakeInstance(h1, 1));
+            if (h2 != null) team.Add(MakeInstance(h2, 1));
+            return RunWith(db, db.GetStage("mb_stage"), 42, team);
+        }
 
         /// <summary>
         /// Turn progress, read as a quantity, and the Turn Debt that banks it.
@@ -4768,14 +5009,14 @@ namespace Emberfall.DevHarness
                                "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
-                               "DefeatedUnit" },
+                               "DefeatedUnit", "ThresholdUnit" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
                                "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
                                "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
                                "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
-                               "Interrupt", "ExtendStatus" },
+                               "Interrupt", "ExtendStatus", "ConsumeTurnDebt" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -4792,7 +5033,8 @@ namespace Emberfall.DevHarness
                                "Covered", "Provoked", "Guard",
                                "Vulnerable", "TurnDebt",
                                "EvasionUp", "AccuracyDown",
-                               "GuaranteedCrit", "BuffSuppression" },
+                               "GuaranteedCrit", "BuffSuppression",
+                               "Disrupted" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
             Line("");

@@ -389,6 +389,14 @@ namespace Emberfall.Core.Combat
             private bool _inDefeatDispatch;
 
             /// <summary>
+            /// The enemy that just crossed the active-skill energy threshold while carrying
+            /// TurnDebt. Non-null only while OnEnemyEnergyThreshold is being broadcast.
+            /// TargetMode.ThresholdUnit resolves through this and to nobody outside the window,
+            /// the same pattern _defeated / DefeatedUnit uses.
+            /// </summary>
+            private CombatUnit _thresholdUnit;
+
+            /// <summary>
             /// The per-target budget of the passive currently resolving, or null. Set by
             /// TriggerPassive around its ResolveAbility call and restored afterwards, so a passive
             /// that fires inside another passive does not inherit or clobber its budget.
@@ -1212,6 +1220,17 @@ namespace Emberfall.Core.Combat
                                     ? source.EffectiveAttack * effect.StoredCap : 0f;
                             }
 
+                        // Disrupted: StoredCap carries the turn shift fraction, raw rather than
+                        // Attack-scaled. Zero means no shift, so an effect that does not set it
+                        // is a drain-only Disrupted.
+                        if (effect.Status == StatusKind.Disrupted && effect.StoredCap > 0f)
+                            for (int di = 0; di < target.Statuses.Count; di++)
+                            {
+                                StatusInstance ds = target.Statuses[di];
+                                if (ds.Kind != StatusKind.Disrupted || ds.SourceId != source.Id) continue;
+                                ds.StoredCap = effect.StoredCap;
+                            }
+
                         BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                         e.Status = effect.Status;
                         e.Duration = duration;
@@ -1513,6 +1532,55 @@ namespace Emberfall.Core.Combat
                             ext.Status = namedKind ? effect.Status : StatusKind.None;
                             ext.Duration = added;
                             ext.Value = extended;
+                        }
+                        break;
+                    }
+
+                    case EffectKind.ConsumeTurnDebt:
+                    {
+                        // Consumes all TurnDebt on the target, delays it, and grants the energy
+                        // the debt would have cost to the SecondaryTarget.
+                        //
+                        // The three pieces are one effect because the energy amount is derived
+                        // from the TurnDebt being consumed: it ceases to exist once removed, so
+                        // calculating first and removing second is the only order that works.
+                        //
+                        // Unreachable in shipped content: nothing applies TurnDebt.
+                        if (!target.Alive) break;
+                        if (!target.Has(StatusKind.TurnDebt)) break;
+
+                        // Calculate repayment cost, then remove all TurnDebt entries
+                        float owed = 0f;
+                        float rate = 0f;
+                        for (int td = target.Statuses.Count - 1; td >= 0; td--)
+                        {
+                            StatusInstance d = target.Statuses[td];
+                            if (d.Kind != StatusKind.TurnDebt) continue;
+                            owed += d.Stored;
+                            if (d.Magnitude > rate) rate = d.Magnitude;
+                            target.Statuses.RemoveAt(td);
+                            BattleEvent gone = Emit(BattleEventType.StatusExpired, d.SourceId, target.Id);
+                            gone.Status = StatusKind.TurnDebt;
+                        }
+                        int lostEnergy = owed > 0f && rate > 0f
+                            ? (int)Math.Round(owed * rate, MidpointRounding.AwayFromZero) : 0;
+
+                        // Delay the target
+                        if (effect.Magnitude != 0f)
+                            ApplyTurnShift(source, target, -Math.Abs(effect.Magnitude));
+
+                        // Redistribute the calculated energy to the secondary target
+                        if (lostEnergy > 0)
+                        {
+                            List<CombatUnit> secondaries = ResolveTargets(source, effect.SecondaryTarget);
+                            for (int si = 0; si < secondaries.Count; si++)
+                            {
+                                if (secondaries[si].Alive)
+                                {
+                                    AddEnergy(secondaries[si], lostEnergy, source.Id);
+                                    break;
+                                }
+                            }
                         }
                         break;
                     }
@@ -1975,7 +2043,24 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private void AddEnergy(CombatUnit unit, int amount, int sourceId)
             {
+                // --- Disrupted: intercept the first energy gain each round ---
+                // Checked before AddEnergyClamped so the gain never reaches the unit. The drain
+                // that replaces it calls AddEnergyClamped directly, bypassing this method, so
+                // the interceptor cannot re-enter itself. No shipped content applies Disrupted,
+                // so this branch is unreachable in every existing battle.
+                if (amount > 0 && InterceptDisrupted(unit, amount))
+                    return;
+
+                int energyBefore = unit.Alive ? unit.Energy : -1;
                 AddEnergyClamped(unit, amount);
+
+                // --- Momentum Breaker: threshold-crossing on TurnDebt carriers ---
+                // Checked after AddEnergyClamped so the energy has already moved. The broadcast
+                // that follows can grant energy to an ally, which re-enters AddEnergy, but the
+                // ally carries no TurnDebt, so CheckEnergyThreshold returns immediately. No
+                // shipped content applies TurnDebt, so this branch is unreachable today.
+                if (amount > 0 && energyBefore >= 0)
+                    CheckEnergyThreshold(unit, energyBefore);
             }
 
             /// <summary>
@@ -2027,6 +2112,90 @@ namespace Emberfall.Core.Combat
                 int from = handedFromId >= 0 ? handedFromId : unit.Id;
                 BattleEvent e = Emit(BattleEventType.EnergyChanged, from, unit.Id);
                 e.Value = unit.Energy;
+            }
+
+            // ------------------------------------------------------------------ energy-gain interception
+
+            /// <summary>
+            /// Disrupted: the first energy gain each round is reversed into a drain, the target
+            /// is delayed, and the disruptor's next ally is advanced.
+            ///
+            /// Returns true if the gain was intercepted, in which case AddEnergy must not call
+            /// AddEnergyClamped for the original amount. False if no Disrupted entry with uses
+            /// remaining was found, letting the gain through unchanged.
+            ///
+            /// Unreachable in shipped content: nothing applies Disrupted.
+            /// </summary>
+            private bool InterceptDisrupted(CombatUnit unit, int amount)
+            {
+                if (!unit.Alive || !unit.Has(StatusKind.Disrupted)) return false;
+
+                for (int i = 0; i < unit.Statuses.Count; i++)
+                {
+                    StatusInstance d = unit.Statuses[i];
+                    if (d.Kind != StatusKind.Disrupted) continue;
+                    if (d.UsesPerRound > 0 && d.UsesThisRound >= d.UsesPerRound) continue;
+
+                    d.UsesThisRound++;
+
+                    // Drain: lose Magnitude energy instead of gaining
+                    int drain = (int)Math.Round(d.Magnitude, MidpointRounding.AwayFromZero);
+                    if (drain > 0) AddEnergyClamped(unit, -drain);
+
+                    // Delay the disrupted enemy and advance the disruptor's next ally
+                    float shiftFrac = d.StoredCap;
+                    CombatUnit disruptor = FindUnit(d.SourceId);
+                    if (shiftFrac > 0f)
+                    {
+                        ApplyTurnShift(disruptor, unit, -shiftFrac);
+
+                        if (disruptor != null && disruptor.Alive)
+                        {
+                            CombatUnit nextAlly = NextAllyInOrder(disruptor);
+                            if (nextAlly != null)
+                                ApplyTurnShift(disruptor, nextAlly, shiftFrac);
+                        }
+                    }
+
+                    return true;
+                }
+                return false;
+            }
+
+            /// <summary>
+            /// Momentum Breaker: if the energy that was just added pushed the unit past its
+            /// active skill's energy cost, and the unit carries TurnDebt, broadcast
+            /// OnEnemyEnergyThreshold to the opposing side.
+            ///
+            /// Unreachable in shipped content: nothing applies TurnDebt.
+            /// </summary>
+            private void CheckEnergyThreshold(CombatUnit unit, int energyBefore)
+            {
+                if (!unit.Alive || unit.Active == null) return;
+                int cost = unit.Active.EnergyCost;
+                if (energyBefore >= cost || unit.Energy < cost) return;
+                if (!unit.Has(StatusKind.TurnDebt)) return;
+
+                CombatUnit prev = _thresholdUnit;
+                _thresholdUnit = unit;
+                BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyEnergyThreshold, 0, null);
+                _thresholdUnit = prev;
+            }
+
+            /// <summary>
+            /// The next unit on `source`'s own side in the remaining turn order, excluding
+            /// source itself. Null if none remain or the order is not being walked.
+            /// </summary>
+            private CombatUnit NextAllyInOrder(CombatUnit source)
+            {
+                if (_order == null || source == null) return null;
+                int first = _orderIndex + 1;
+                for (int i = first; i < _order.Count; i++)
+                {
+                    CombatUnit u = _order[i];
+                    if (u.Alive && u.IsPlayer == source.IsPlayer && u != source) return u;
+                }
+                return null;
             }
 
             // ------------------------------------------------------------------ relics
@@ -2690,6 +2859,11 @@ namespace Emberfall.Core.Combat
                     // mis-authored effect aimed here is inert rather than wrong.
                     case TargetMode.DefeatedUnit:
                         picked = _defeated != null && _defeated != excluded ? _defeated : null;
+                        break;
+
+                    case TargetMode.ThresholdUnit:
+                        picked = _thresholdUnit != null && _thresholdUnit.Alive && _thresholdUnit != excluded
+                            ? _thresholdUnit : null;
                         break;
 
                     case TargetMode.EnemyWithStatus:
