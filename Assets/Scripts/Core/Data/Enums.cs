@@ -278,7 +278,25 @@ namespace Emberfall.Core.Data
         /// damage to the source (passive owner) through DealRawDamage, so the redirect itself
         /// can kill the saviour and triggers cascade normally.
         /// </summary>
-        RedirectLethal      // 23
+        RedirectLethal,     // 23
+
+        // ---------- tier nine: parameterisation gaps ----------
+
+        /// <summary>
+        /// Records the target's current energy as the stack count of a status on the target.
+        /// Status names the entry, Duration its lifetime. If the status already exists it is
+        /// refreshed; if it does not, it is created. The stack count is clamped to [0, 99].
+        /// </summary>
+        SnapshotEnergy,     // 24
+
+        /// <summary>
+        /// Moves a status entry from the target to SecondaryTarget. Status names the kind to
+        /// move; only the first matching entry is transferred. Stored, StoredCap, Magnitude,
+        /// Charges, BankHeals, BankOnlyFrom, AutoRelease, AutoReleaseAsHeal and every other
+        /// field travel with it. A no-op when the target does not carry the named status or
+        /// SecondaryTarget resolves to nobody alive.
+        /// </summary>
+        TransferStatus      // 25
     }
 
     /// <summary>
@@ -942,7 +960,24 @@ namespace Emberfall.Core.Data
         /// resolution and before ExpireStatuses, with _broadcastSubject set to the acting enemy.
         /// The natural home for "when an enemy finishes its turn while carrying TurnDebt".
         /// </summary>
-        OnEnemyTurnEnd
+        OnEnemyTurnEnd,
+
+        // ---------- tier nine: parameterisation gaps ----------
+
+        /// <summary>
+        /// A Ledger entry the owner applied to an enemy just reached its StoredCap. Broadcast
+        /// to the applier's side after the banking completes, with _broadcastSubject set to the
+        /// unit carrying the Ledger. Fires once per cap event, not once per hit that happens to
+        /// push past it.
+        /// </summary>
+        OnLedgerCapped,
+
+        /// <summary>
+        /// A TurnDebt entry the owner applied to an enemy accumulated Stored past the passive's
+        /// Threshold. Broadcast to the applier's side, with _thresholdUnit set to the debtor.
+        /// Per-target limits on the passive handle "once per enemy".
+        /// </summary>
+        OnTurnDebtThreshold
     }
 
     /// <summary>

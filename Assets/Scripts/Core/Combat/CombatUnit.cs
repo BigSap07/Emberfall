@@ -93,6 +93,21 @@ namespace Emberfall.Core.Combat
         /// <summary>Max banking events per round, 0 for unlimited. Reset in BeginRound.</summary>
         public int BankLimit;
         public int BankUsesThisRound;
+
+        // ---------------------------------------------------------------- tier nine: ledger parameterisation
+
+        /// <summary>When true, this Ledger banks overheal instead of incoming damage.</summary>
+        public bool BankHeals;
+
+        /// <summary>Only bank when the incoming damage's dotKind matches this status. None means
+        /// bank everything. Ignored when BankHeals is true.</summary>
+        public StatusKind BankOnlyFrom = StatusKind.None;
+
+        /// <summary>When true, auto-release on expiry heals instead of dealing damage.</summary>
+        public bool AutoReleaseAsHeal;
+
+        /// <summary>Who receives the auto-release payout. Self (default) means the holder.</summary>
+        public TargetMode AutoReleaseTarget = TargetMode.Self;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>

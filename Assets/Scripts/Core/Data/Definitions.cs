@@ -270,6 +270,43 @@ namespace Emberfall.Core.Data
         /// enemy hit".</summary>
         public bool PerTarget;
 
+        // ---------- tier nine: parameterisation gaps ----------
+
+        /// <summary>When true, Dispel only removes beneficial statuses whose SourceId matches the
+        /// caster's Id. False (default) removes any beneficial status, the existing behaviour.</summary>
+        public bool DispelOwnOnly;
+
+        /// <summary>When true, ShieldTransfer and HpTransfer read the TARGET's pool instead of the
+        /// caster's. False (default) keeps the existing caster-as-donor behaviour.</summary>
+        public bool TransferFromTarget;
+
+        /// <summary>When true, a Ledger entry banks OVERHEAL (the part of a heal above max HP)
+        /// instead of incoming damage. The damage-side banking loop skips entries with this flag,
+        /// and a mirrored loop in ApplyHealValue handles them. Stored on the StatusInstance.</summary>
+        public bool LedgerBankHeals;
+
+        /// <summary>"attack" (default) or "maxHp". Picks the basis for StoredCap scaling at Ledger
+        /// apply time: source.EffectiveAttack * StoredCap vs source.MaxHp * StoredCap.</summary>
+        public string StoredCapBasis = "attack";
+
+        /// <summary>When true, a Ledger's auto-release on expiry heals the holder (or the
+        /// AutoReleaseTarget) instead of damaging it. Stored on the StatusInstance.</summary>
+        public bool LedgerAutoReleaseAsHeal;
+
+        /// <summary>Who receives the auto-release payout on expiry. Self (default) means the holder.
+        /// Any other TargetMode resolves against the applier at expiry time. Stored on the
+        /// StatusInstance as a TargetMode ordinal.</summary>
+        public TargetMode LedgerAutoReleaseTarget = TargetMode.Self;
+
+        /// <summary>Only bank into this Ledger when the incoming damage's dotKind matches this
+        /// status. None (default) means bank everything, the existing behaviour. Stored on the
+        /// StatusInstance.</summary>
+        public StatusKind LedgerBankOnlyFrom = StatusKind.None;
+
+        /// <summary>Fraction of the Ledger's Stored that LedgerRelease pays out. 1.0 (default)
+        /// pays the full amount, 0.5 pays half. Clamped to [0, 1].</summary>
+        public float ReleaseFraction = 1f;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -314,6 +351,14 @@ namespace Emberfall.Core.Data
             e.LedgerMitigates = j.GetBool("ledgerMitigates", false);
             e.LedgerBankLimit = Math.Max(0, j.GetInt("ledgerBankLimit", 0));
             e.PerTarget = j.GetBool("perTarget", false);
+            e.DispelOwnOnly = j.GetBool("dispelOwnOnly", false);
+            e.TransferFromTarget = j.GetBool("transferFromTarget", false);
+            e.LedgerBankHeals = j.GetBool("ledgerBankHeals", false);
+            e.StoredCapBasis = j.GetString("storedCapBasis", "attack");
+            e.LedgerAutoReleaseAsHeal = j.GetBool("ledgerAutoReleaseAsHeal", false);
+            e.LedgerAutoReleaseTarget = EnumUtil.Parse(j.GetString("ledgerAutoReleaseTarget", "Self"), TargetMode.Self);
+            e.LedgerBankOnlyFrom = EnumUtil.Parse(j.GetString("ledgerBankOnlyFrom", "None"), StatusKind.None);
+            e.ReleaseFraction = j.GetFloat("releaseFraction", 1f);
             return e;
         }
 
@@ -368,6 +413,14 @@ namespace Emberfall.Core.Data
             c.LedgerMitigates = LedgerMitigates;
             c.LedgerBankLimit = LedgerBankLimit;
             c.PerTarget = PerTarget;
+            c.DispelOwnOnly = DispelOwnOnly;
+            c.TransferFromTarget = TransferFromTarget;
+            c.LedgerBankHeals = LedgerBankHeals;
+            c.StoredCapBasis = StoredCapBasis;
+            c.LedgerAutoReleaseAsHeal = LedgerAutoReleaseAsHeal;
+            c.LedgerAutoReleaseTarget = LedgerAutoReleaseTarget;
+            c.LedgerBankOnlyFrom = LedgerBankOnlyFrom;
+            c.ReleaseFraction = ReleaseFraction;
             return c;
         }
     }
