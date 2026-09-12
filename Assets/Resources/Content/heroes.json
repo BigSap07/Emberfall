@@ -1112,8 +1112,8 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "nereia_the_field_medic",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.669,
+        "spriteFootFraction": 0.165,
         "spriteMirror": true
       },
       "basic": {
@@ -2432,7 +2432,7 @@
         "scale": 1,
         "sigil": null,
         "sprite": "sylven_the_unfading_blade",
-        "spriteBodyFraction": 0.546,
+        "spriteBodyFraction": 0.542,
         "spriteFootFraction": 0.227,
         "spriteMirror": true
       },
@@ -4472,7 +4472,7 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "mireth_the_erased_name",
-        "spriteBodyFraction": 0.735,
+        "spriteBodyFraction": 0.731,
         "spriteFootFraction": 0.146,
         "spriteMirror": true
       },
