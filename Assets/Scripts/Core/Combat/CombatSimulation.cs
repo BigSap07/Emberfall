@@ -241,6 +241,35 @@ namespace Emberfall.Core.Combat
                     return rec.UsesPerRound <= 0 || rec.UsesThisRound < rec.UsesPerRound;
                 }
 
+                // ---------- cross-unit stat comparison ----------
+                //
+                // ConditionValue is unused; the test is whether the caster's stat is strictly
+                // above/below the target's. ComparedStat on the effect names which stat.
+                case EffectCondition.CasterStatAboveTarget:
+                    return caster != null && StatValue(caster, effect.ComparedStat) > StatValue(target, effect.ComparedStat);
+
+                case EffectCondition.CasterStatBelowTarget:
+                    return caster != null && StatValue(caster, effect.ComparedStat) < StatValue(target, effect.ComparedStat);
+
+                // ---------- action-type history (Zella) ----------
+                //
+                // These read LastActionWasActive, which is set at the START of the unit's own
+                // turn. ActionsTaken >= 1 guards the "never acted" case so a hero's opening
+                // turn does not claim it knows what kind its last turn was.
+                case EffectCondition.SubjectLastActionWasBasic:
+                    return subject.ActionsTaken >= 1 && !subject.LastActionWasActive;
+
+                case EffectCondition.SubjectLastActionWasActive:
+                    return subject.ActionsTaken >= 1 && subject.LastActionWasActive;
+
+                case EffectCondition.SubjectChangedActionType:
+                    return subject.ActionsTaken >= 2
+                        && subject.LastActionWasActive != subject.PreviousActionWasActive;
+
+                case EffectCondition.SubjectRepeatedActionType:
+                    return subject.ActionsTaken >= 2
+                        && subject.LastActionWasActive == subject.PreviousActionWasActive;
+
                 // ---------- answered by the Sim, not here ----------
                 //
                 // Turn progress is a property of the round's live order, which a static function
@@ -289,6 +318,23 @@ namespace Emberfall.Core.Combat
         public static StatusKind MarkKindOf(StatusKind named)
         {
             return named == StatusKind.MarkAlt ? StatusKind.MarkAlt : StatusKind.Mark;
+        }
+
+        /// <summary>
+        /// Read one of the four comparable stats from a unit. Used by CasterStatAboveTarget /
+        /// CasterStatBelowTarget to answer cross-unit comparisons without branching in the
+        /// condition switch.
+        /// </summary>
+        private static float StatValue(CombatUnit unit, ComparedStat stat)
+        {
+            switch (stat)
+            {
+                case ComparedStat.Speed:   return unit.EffectiveSpeed;
+                case ComparedStat.Energy:  return unit.Energy;
+                case ComparedStat.Attack:  return unit.EffectiveAttack;
+                case ComparedStat.Hp:      return unit.Hp;
+                default:                   return 0f;
+            }
         }
 
         private sealed class Sim
@@ -909,6 +955,28 @@ namespace Emberfall.Core.Combat
                     // test in front of it would make a condition consume or skip an RNG draw.
                     List<CombatUnit> targets = ResolveTargets(caster, effect.Target, null, effect.TargetStatus);
 
+                    // Splash: if the effect is marked Splash, add alive neighbours (slot ± 1)
+                    // of every originally-resolved target. Deduplicated so a target adjacent to
+                    // two resolved targets is not struck twice.  No RNG draw: adjacency is
+                    // deterministic state.  Empty when Splash is false — the loop never fires —
+                    // so no existing battle is changed.
+                    if (effect.Splash && targets.Count > 0)
+                    {
+                        List<CombatUnit> extras = new List<CombatUnit>();
+                        for (int si = 0; si < targets.Count; si++)
+                        {
+                            CombatUnit primary = targets[si];
+                            if (primary == null) continue;
+                            for (int d = -1; d <= 1; d += 2)
+                            {
+                                CombatUnit neighbour = FindAliveInSlot(primary.IsPlayer, primary.Slot + d);
+                                if (neighbour != null && !targets.Contains(neighbour) && !extras.Contains(neighbour))
+                                    extras.Add(neighbour);
+                            }
+                        }
+                        targets.AddRange(extras);
+                    }
+
                     // Per target, not per effect. A conditional AoE asks about each enemy on its
                     // own, so "deal damage to all enemies below 40% HP" is one effect rather than a
                     // targeting mode nobody has to invent.
@@ -1087,6 +1155,13 @@ namespace Emberfall.Core.Combat
                             }
                             break;
                         }
+                        // Buff Suppression: if the target carries BuffSuppression and the
+                        // incoming status is beneficial, the application is silently prevented.
+                        // Checked AFTER the landing roll succeeds so the RNG draw that tested
+                        // landing still fires - no stream shift when BuffSuppression is absent.
+                        if (!StatusInfo.IsHarmful(effect.Status) && target.Has(StatusKind.BuffSuppression))
+                            break;
+
                         float magnitude = effect.Magnitude;
                         if (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen)
                             magnitude = source.EffectiveAttack * effect.Magnitude;
@@ -1392,6 +1467,19 @@ namespace Emberfall.Core.Combat
                         swapEvent.Value = other.Id;
                         break;
                     }
+
+                    case EffectKind.Interrupt:
+                    {
+                        // Resets the target's energy to 0, stopping an active mid-charge.
+                        // Distinct from energy drain: this is an all-or-nothing reset, not a
+                        // subtraction, and the event is typed so the UI can show the interruption.
+                        // No RNG draw: energy is deterministic state, not a roll.
+                        if (!target.Alive) break;
+                        if (target.Energy <= 0) break;
+                        target.Energy = 0;
+                        EmitEnergy(target);
+                        break;
+                    }
                 }
             }
 
@@ -1425,6 +1513,19 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private void ApplyDamageEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
             {
+                // -1. Accuracy / Evasion - a miss check before anything else. EvasionUp on the
+                // defender and AccuracyDown on the attacker both contribute to the miss chance.
+                // Both default to 0, so hitChance is 1.0f and Chance(1f) returns true on line 41
+                // of DeterministicRng without calling NextFloat — zero RNG draws consumed when
+                // neither status exists, which is every battle until content authors one.
+                float hitChance = 1f - target.SumMagnitude(StatusKind.EvasionUp)
+                                     - source.SumMagnitude(StatusKind.AccuracyDown);
+                if (!_rng.Chance(hitChance))
+                {
+                    TriggerPassive(target, PassiveTrigger.OnDodge, depth);
+                    return;
+                }
+
                 // 0. Block - a distinct RNG draw from the crit roll below, resolved on the
                 // defender before anything else runs. Success negates the whole hit: no damage, no
                 // crit (never rolled), no OnCriticalHit, nothing rides along - "zero effects from
@@ -1448,8 +1549,28 @@ namespace Emberfall.Core.Combat
                 float aspectFactor = AspectChart.Multiplier(source.Aspect, target.Aspect);
                 raw *= aspectFactor;
 
-                // 3. Crit
-                bool critical = _rng.Chance(source.EffectiveCritChance);
+                // 3. Crit — GuaranteedCrit forces the outcome and skips the RNG draw, so no
+                // existing battle can be shifted by a draw that never fires. Consumed on use:
+                // one instance is removed and its StatusExpired emitted.
+                bool critical;
+                if (source.Has(StatusKind.GuaranteedCrit))
+                {
+                    critical = true;
+                    for (int gc = source.Statuses.Count - 1; gc >= 0; gc--)
+                    {
+                        if (source.Statuses[gc].Kind == StatusKind.GuaranteedCrit)
+                        {
+                            source.Statuses.RemoveAt(gc);
+                            BattleEvent gcEvt = Emit(BattleEventType.StatusExpired, source.Id, source.Id);
+                            gcEvt.Status = StatusKind.GuaranteedCrit;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    critical = _rng.Chance(source.EffectiveCritChance);
+                }
                 // EffectiveCritDamage, not the raw field: Crit Damage was the one stat in this
                 // pipeline still read straight off the unit, which is why no status could move it.
                 // Exactly equal to the raw field until content authors a Crit Damage status.
@@ -2603,6 +2724,20 @@ namespace Emberfall.Core.Combat
                 if (byHp != 0) return byHp;
                 if (a.Slot != b.Slot) return a.Slot.CompareTo(b.Slot);
                 return a.Id.CompareTo(b.Id);
+            }
+
+            /// <summary>
+            /// The living unit occupying `slot` on the given side, or null. Used by Splash to
+            /// find neighbours at slot ± 1. No RNG draw: slot identity is deterministic.
+            /// </summary>
+            private CombatUnit FindAliveInSlot(bool playerSide, int slot)
+            {
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (u.Alive && u.IsPlayer == playerSide && u.Slot == slot) return u;
+                }
+                return null;
             }
 
             private void CollectSide(List<CombatUnit> into, bool playerSide)

@@ -38,6 +38,7 @@ namespace Emberfall.DevHarness
             CheckHeroRoleOrdinals(content);
             CheckEnumParity(content);
             CheckTierFiveMechanics(content);
+            CheckTierSixMechanics(content);
             CheckAspectDirection(content);
             CheckNoAspectKeyedBehaviour(content);
             CheckOnKillPassive(content);
@@ -3606,6 +3607,494 @@ namespace Emberfall.DevHarness
                   "PassiveTrigger keeps its ordinals and the three new triggers are appended at 20-22");
         }
 
+        // =====================================================================
+        // TIER SIX
+        // =====================================================================
+
+        private static void CheckTierSixMechanics(ContentDatabase live)
+        {
+            Line("TIER SIX (accuracy/miss, splash, guaranteed crit, buff suppression, interrupt, stat comparison, action-type history)");
+
+            CheckNoShippedContentReachesTierSix(live);
+            CheckTierSixOrdinals();
+            CheckAccuracyAndMiss();
+            CheckSplash();
+            CheckGuaranteedCrit();
+            CheckBuffSuppression();
+            CheckInterrupt();
+            CheckCrossUnitStatComparison();
+            CheckActionTypeHistory();
+
+            Line("");
+        }
+
+        /// <summary>
+        /// EIGHT STANDING GUARDS: no unit in shipped content authors any of the eight mechanics
+        /// tier six adds. One walk, eight questions.
+        /// </summary>
+        private static void CheckNoShippedContentReachesTierSix(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            List<string> evasion = new List<string>(), accuracy = new List<string>();
+            List<string> gcrit = new List<string>(), suppress = new List<string>();
+            List<string> interrupt = new List<string>(), splash = new List<string>();
+            List<string> statCmp = new List<string>(), actionHist = new List<string>();
+            List<string> dodge = new List<string>();
+
+            for (int u = 0; u < units.Count; u++)
+            {
+                UnitDef def = units[u];
+                for (int p = 0; p < def.Passives.Count; p++)
+                {
+                    PassiveDef passive = def.Passives[p];
+                    if (passive == null) continue;
+                    if (passive.Trigger == PassiveTrigger.OnDodge)
+                        dodge.Add(def.Id + "/" + passive.Name);
+                }
+
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                {
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                    {
+                        EffectDef eff = abilities[a].Effects[e];
+                        string where = def.Id + "/" + abilities[a].Name;
+
+                        if (eff.Status == StatusKind.EvasionUp || eff.ConditionStatus == StatusKind.EvasionUp)
+                            evasion.Add(where);
+                        if (eff.Status == StatusKind.AccuracyDown || eff.ConditionStatus == StatusKind.AccuracyDown)
+                            accuracy.Add(where);
+                        if (eff.Status == StatusKind.GuaranteedCrit || eff.ConditionStatus == StatusKind.GuaranteedCrit)
+                            gcrit.Add(where);
+                        if (eff.Status == StatusKind.BuffSuppression || eff.ConditionStatus == StatusKind.BuffSuppression)
+                            suppress.Add(where);
+                        if (eff.Kind == EffectKind.Interrupt)
+                            interrupt.Add(where);
+                        if (eff.Splash)
+                            splash.Add(where);
+
+                        if (eff.Condition == EffectCondition.CasterStatAboveTarget
+                            || eff.Condition == EffectCondition.CasterStatBelowTarget)
+                            statCmp.Add(where);
+                        if (eff.Condition == EffectCondition.SubjectLastActionWasBasic
+                            || eff.Condition == EffectCondition.SubjectLastActionWasActive
+                            || eff.Condition == EffectCondition.SubjectChangedActionType
+                            || eff.Condition == EffectCondition.SubjectRepeatedActionType)
+                            actionHist.Add(where);
+                    }
+                }
+            }
+
+            Check(evasion.Count == 0, "no shipped content applies or reads EvasionUp" + Detail(evasion));
+            Check(accuracy.Count == 0, "no shipped content applies or reads AccuracyDown" + Detail(accuracy));
+            Check(gcrit.Count == 0, "no shipped content applies or reads GuaranteedCrit" + Detail(gcrit));
+            Check(suppress.Count == 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
+            Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
+            Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
+            Check(statCmp.Count == 0, "no shipped content compares stats across units" + Detail(statCmp));
+            Check(actionHist.Count == 0, "no shipped content reads action-type history" + Detail(actionHist));
+            Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
+        }
+
+        private static void CheckTierSixOrdinals()
+        {
+            Check((int)StatusKind.EvasionUp == 38 && (int)StatusKind.AccuracyDown == 39
+                  && (int)StatusKind.GuaranteedCrit == 40 && (int)StatusKind.BuffSuppression == 41,
+                  "StatusKind tier-six members keep ordinals 38-41 (got "
+                  + (int)StatusKind.EvasionUp + ", " + (int)StatusKind.AccuracyDown + ", "
+                  + (int)StatusKind.GuaranteedCrit + ", " + (int)StatusKind.BuffSuppression + ")");
+            Check((int)EffectKind.Interrupt == 17,
+                  "EffectKind.Interrupt is appended at 17 (got " + (int)EffectKind.Interrupt + ")");
+            Check((int)EffectCondition.CasterStatAboveTarget == 26
+                  && (int)EffectCondition.SubjectRepeatedActionType == 31,
+                  "EffectCondition tier-six members are appended at 26-31 (got "
+                  + (int)EffectCondition.CasterStatAboveTarget + ".." + (int)EffectCondition.SubjectRepeatedActionType + ")");
+            Check((int)PassiveTrigger.OnDodge == 23,
+                  "PassiveTrigger.OnDodge is appended at 23 (got " + (int)PassiveTrigger.OnDodge + ")");
+        }
+
+        // ---- Accuracy / Miss ----
+
+        private static void CheckAccuracyAndMiss()
+        {
+            BattleResult withEvasion = RunAccuracyArena(true);
+            BattleResult without = RunAccuracyArena(false);
+            if (withEvasion == null || without == null) { Check(false, "the accuracy arena builds"); return; }
+
+            int hitsWith = CountEvents(withEvasion, BattleEventType.Damage);
+            int hitsWithout = CountEvents(without, BattleEventType.Damage);
+            Check(hitsWithout > 0, "the control lands damage (" + hitsWithout + ")");
+            Check(hitsWith < hitsWithout,
+                  "EvasionUp causes some attacks to miss (" + hitsWith + " vs " + hitsWithout + " hits)");
+        }
+
+        /// <summary>
+        /// A hero with high EvasionUp attacked by an enemy. With evasion, fewer hits land.
+        /// </summary>
+        private static BattleResult RunAccuracyArena(bool giveEvasion)
+        {
+            string evasionEffect = giveEvasion
+                ? @", { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""EvasionUp"", ""magnitude"": 0.9, ""duration"": 99, ""chance"": 1 }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_hero"", ""name"": ""Dodger"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6_basic"", ""name"": ""Hit"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + evasionEffect + @" ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_enemy"", ""name"": ""Swinger"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6e_basic"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_acc_ch"", ""name"": ""Acc"", ""stages"": [
+    { ""id"": ""t6_acc"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_enemy"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 10, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "accuracy");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_hero");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_acc"), 42, team);
+        }
+
+        // ---- Splash ----
+
+        private static void CheckSplash()
+        {
+            BattleResult withSplash = RunSplashArena(true);
+            BattleResult without = RunSplashArena(false);
+            if (withSplash == null || without == null) { Check(false, "the splash arena builds"); return; }
+
+            List<string> hitSplash = DamagedNames(withSplash);
+            List<string> hitNoSplash = DamagedNames(without);
+            Check(hitSplash.Count > hitNoSplash.Count,
+                  "splash hits MORE distinct enemies than the same effect without splash ("
+                  + hitSplash.Count + " vs " + hitNoSplash.Count + ")");
+        }
+
+        private static BattleResult RunSplashArena(bool splash)
+        {
+            string splashField = splash ? @", ""splash"": true" : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_splasher"", ""name"": ""Splasher"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6s_basic"", ""name"": ""Splash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001" + splashField + @" } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_e0"", ""name"": ""E0"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6e0_b"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t6_e1"", ""name"": ""E1"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 99, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6e1_b"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""t6_e2"", ""name"": ""E2"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 98, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6e2_b"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_sp_ch"", ""name"": ""Splash"", ""stages"": [
+    { ""id"": ""t6_sp"", ""index"": 1, ""enemies"": [
+      { ""id"": ""t6_e0"", ""level"": 1 }, { ""id"": ""t6_e1"", ""level"": 1 }, { ""id"": ""t6_e2"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 2, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "splash");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_splasher");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_sp"), 42, team);
+        }
+
+        // ---- Guaranteed Crit ----
+
+        private static void CheckGuaranteedCrit()
+        {
+            BattleResult withCrit = RunGuaranteedCritArena(true);
+            BattleResult without = RunGuaranteedCritArena(false);
+            if (withCrit == null || without == null) { Check(false, "the guaranteed crit arena builds"); return; }
+
+            int critsW = CountCriticalHits(withCrit);
+            int critsWo = CountCriticalHits(without);
+            Check(critsW > critsWo,
+                  "GuaranteedCrit forces more crits than a unit with 0% base crit chance ("
+                  + critsW + " vs " + critsWo + ")");
+
+            int consumed = CountStatus(withCrit, StatusKind.GuaranteedCrit, BattleEventType.StatusExpired);
+            Check(consumed > 0, "GuaranteedCrit is consumed on use (StatusExpired count: " + consumed + ")");
+        }
+
+        private static BattleResult RunGuaranteedCritArena(bool grantCrit)
+        {
+            string critEffect = grantCrit
+                ? @", { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""GuaranteedCrit"", ""magnitude"": 1, ""duration"": 99, ""chance"": 1 }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_critter"", ""name"": ""Critter"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 2.0, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6c_basic"", ""name"": ""Bash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 }" + critEffect + @" ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_dummy"", ""name"": ""Dummy"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6d_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_gc_ch"", ""name"": ""GC"", ""stages"": [
+    { ""id"": ""t6_gc"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_dummy"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "gcrit");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_critter");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_gc"), 42, team);
+        }
+
+        // ---- Buff Suppression ----
+
+        private static void CheckBuffSuppression()
+        {
+            BattleResult suppressed = RunBuffSuppressionArena(true);
+            BattleResult free = RunBuffSuppressionArena(false);
+            if (suppressed == null || free == null) { Check(false, "the buff suppression arena builds"); return; }
+
+            int buffsS = CountStatus(suppressed, StatusKind.AttackUp, BattleEventType.StatusApplied);
+            int buffsF = CountStatus(free, StatusKind.AttackUp, BattleEventType.StatusApplied);
+            Check(buffsF > 0, "without BuffSuppression, AttackUp lands (" + buffsF + ")");
+            Check(buffsS < buffsF,
+                  "BuffSuppression prevents beneficial statuses from landing ("
+                  + buffsS + " vs " + buffsF + " AttackUp applications)");
+        }
+
+        private static BattleResult RunBuffSuppressionArena(bool applySuppression)
+        {
+            // Enemy applies BuffSuppression on the hero, then hero tries to self-buff with AttackUp.
+            string suppressEffect = applySuppression
+                ? @", { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""BuffSuppression"", ""magnitude"": 1, ""duration"": 99, ""chance"": 1 }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_buffer"", ""name"": ""Buffer"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6b_basic"", ""name"": ""Buff"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_suppressor"", ""name"": ""Suppressor"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6s_basic"", ""name"": ""Null"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + suppressEffect + @" ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_bs_ch"", ""name"": ""BS"", ""stages"": [
+    { ""id"": ""t6_bs"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_suppressor"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "bsup");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_buffer");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_bs"), 42, team);
+        }
+
+        // ---- Interrupt ----
+
+        private static void CheckInterrupt()
+        {
+            BattleResult interrupted = RunInterruptArena(true);
+            BattleResult control = RunInterruptArena(false);
+            if (interrupted == null || control == null) { Check(false, "the interrupt arena builds"); return; }
+
+            int activesI = CountEvents(interrupted, BattleEventType.AbilityCast);
+            int activesC = CountEvents(control, BattleEventType.AbilityCast);
+            Check(activesC > 0, "the control fires an active (" + activesC + ")");
+            Check(activesI < activesC,
+                  "Interrupt prevents the enemy from reaching its active ("
+                  + activesI + " casts vs " + activesC + " in control)");
+        }
+
+        private static BattleResult RunInterruptArena(bool doInterrupt)
+        {
+            string interruptEffect = doInterrupt
+                ? @", { ""kind"": ""Interrupt"", ""target"": ""FrontEnemy"" }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_interrupter"", ""name"": ""Interrupter"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6i_basic"", ""name"": ""Stop"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + interruptEffect + @" ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_charger"", ""name"": ""Charger"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 50,
+      ""basic"": { ""id"": ""t6ch_basic"", ""name"": ""Charge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""t6ch_active"", ""name"": ""Blast"", ""energyCost"": 50,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_int_ch"", ""name"": ""Int"", ""stages"": [
+    { ""id"": ""t6_int"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_charger"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 50, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "interrupt");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_interrupter");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_int"), 42, team);
+        }
+
+        // ---- Cross-Unit Stat Comparison ----
+
+        private static void CheckCrossUnitStatComparison()
+        {
+            BattleResult faster = RunStatCompareArena(true);
+            BattleResult slower = RunStatCompareArena(false);
+            if (faster == null || slower == null) { Check(false, "the stat-compare arena builds"); return; }
+
+            int hitsFaster = CountStatus(faster, StatusKind.Focus, BattleEventType.StatusApplied);
+            int hitsSlower = CountStatus(slower, StatusKind.Focus, BattleEventType.StatusApplied);
+            Check(hitsFaster > 0, "CasterStatAboveTarget fires when caster is faster (" + hitsFaster + ")");
+            Check(hitsSlower == 0, "CasterStatAboveTarget does NOT fire when caster is slower (" + hitsSlower + ")");
+        }
+
+        /// <summary>
+        /// A hero applies Focus to the enemy, conditioned on CasterStatAboveTarget Speed.
+        /// When the hero's speed is higher, the condition passes; when lower, it does not.
+        /// </summary>
+        private static BattleResult RunStatCompareArena(bool heroFaster)
+        {
+            int heroSpeed = heroFaster ? 300 : 50;
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_compare"", ""name"": ""Comparer"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": " + heroSpeed + @", ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6cmp_basic"", ""name"": ""Compare"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Focus"", ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1,
+                         ""condition"": ""CasterStatAboveTarget"", ""conditionOn"": ""Target"", ""comparedStat"": ""Speed"" },
+                       { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_ref"", ""name"": ""Ref"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6r_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_sc_ch"", ""name"": ""SC"", ""stages"": [
+    { ""id"": ""t6_sc"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_ref"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "statcmp");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_compare");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_sc"), 42, team);
+        }
+
+        // ---- Action-Type History ----
+
+        private static void CheckActionTypeHistory()
+        {
+            BattleResult result = RunActionTypeArena();
+            if (result == null) { Check(false, "the action-type history arena builds"); return; }
+
+            // The hero's passive fires on SubjectLastActionWasBasic, applying Focus to self.
+            // Since the hero starts with 0 energy and never gets any, it always does a basic,
+            // so after the first turn the passive should fire every turn.
+            int focusApps = CountStatus(result, StatusKind.Focus, BattleEventType.StatusApplied);
+            Check(focusApps > 0,
+                  "SubjectLastActionWasBasic fires when the subject did a basic last turn (" + focusApps + ")");
+        }
+
+        private static BattleResult RunActionTypeArena()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_historian"", ""name"": ""Historian"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6h_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""t6h_passive"", ""name"": ""HistoryRead"", ""trigger"": ""TurnStart"",
+          ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Focus"", ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1,
+                           ""condition"": ""SubjectLastActionWasBasic"", ""conditionOn"": ""Caster"" } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_target"", ""name"": ""Target"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6t_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_ah_ch"", ""name"": ""AH"", ""stages"": [
+    { ""id"": ""t6_ah"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_target"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "actiontype");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_historian");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_ah"), 42, team);
+        }
+
 
         /// <summary>
         /// Turn progress, read as a quantity, and the Turn Debt that banks it.
@@ -3956,6 +4445,14 @@ namespace Emberfall.DevHarness
             return n;
         }
 
+        private static int CountCriticalHits(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].Critical) n++;
+            return n;
+        }
+
         private static List<string> DamagedNames(BattleResult r)
         {
             List<string> names = new List<string>();
@@ -4203,7 +4700,8 @@ namespace Emberfall.DevHarness
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
                                "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
                                "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
-                               "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact" },
+                               "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
+                               "Interrupt" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -4218,7 +4716,9 @@ namespace Emberfall.DevHarness
                                "ArmorBreakUp", "ArmorBreakDown",
                                "Mark", "MarkAlt", "Ledger",
                                "Covered", "Provoked", "Guard",
-                               "Vulnerable", "TurnDebt" },
+                               "Vulnerable", "TurnDebt",
+                               "EvasionUp", "AccuracyDown",
+                               "GuaranteedCrit", "BuffSuppression" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
             Line("");

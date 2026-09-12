@@ -18,6 +18,7 @@ EFFECT_KINDS = {
     "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
     "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
+    "Interrupt",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -33,6 +34,8 @@ STATUS_KINDS = {
     "Mark", "MarkAlt", "Ledger",
     "Covered", "Provoked", "Guard",
     "Vulnerable", "TurnDebt",
+    "EvasionUp", "AccuracyDown",
+    "GuaranteedCrit", "BuffSuppression",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {

@@ -203,7 +203,12 @@ namespace Emberfall.Core.Data
         /// `EffectDef.Status` picks which entry on the target carries it. `Stored` is a float and
         /// can say none of those, which is the whole reason this exists - see RecordKind.
         /// </summary>
-        RecordFact
+        RecordFact,
+
+        /// <summary>Sets the target's energy to zero. Distinct from a negative EnergyGain in
+        /// two ways: it is all-or-nothing (no partial drain), and it is a no-op when the target
+        /// has no energy to lose.</summary>
+        Interrupt
     }
 
     /// <summary>
@@ -343,7 +348,38 @@ namespace Emberfall.Core.Data
         /// <summary>The subject's named status still has a use left THIS ROUND: the "first X each
         /// round" family, counted on the entry rather than on the passive. See
         /// StatusInstance.UsesThisRound.</summary>
-        StatusUseAvailable
+        StatusUseAvailable,
+
+        // ---------- cross-unit stat comparison ----------
+        //
+        // The two-sided comparison DESIGN-BUILD-ORDER deferred: "the target has more Attack than
+        // the caster". ConditionValue is unused; ComparedStat names the stat. Strict inequality
+        // so a tie is false, which is the only reading that makes "has more" unambiguous.
+
+        /// <summary>The caster's named stat is strictly above the target's.</summary>
+        CasterStatAboveTarget,
+
+        /// <summary>The caster's named stat is strictly below the target's.</summary>
+        CasterStatBelowTarget,
+
+        // ---------- action-type history on the subject ----------
+        //
+        // Reading WHAT a unit did, not just THAT it did. CasterRepeatedActionType already exists
+        // but is pinned to the caster; these four ask the same family of questions about the
+        // subject, which is what Zella's kit needs.
+
+        /// <summary>The subject's most recent turn was a basic attack.</summary>
+        SubjectLastActionWasBasic,
+
+        /// <summary>The subject's most recent turn was an active.</summary>
+        SubjectLastActionWasActive,
+
+        /// <summary>The subject used a DIFFERENT action type on its last two turns.</summary>
+        SubjectChangedActionType,
+
+        /// <summary>The subject used the SAME action type on its last two turns. The Subject
+        /// mirror of CasterRepeatedActionType.</summary>
+        SubjectRepeatedActionType
     }
 
     /// <summary>
@@ -406,6 +442,19 @@ namespace Emberfall.Core.Data
         /// `StatusInstance.StoredMin`. A running minimum rather than a snapshot, which is the
         /// distinction Arden's Everything Has a Limit turns on.</summary>
         MinHpRatio
+    }
+
+    /// <summary>
+    /// Which stat a cross-unit comparison reads. Used by `EffectCondition.CasterStatAboveTarget`
+    /// and `CasterStatBelowTarget`. A small closed set matching the stats the incoming roster
+    /// actually compares: Speed (Oris, Talren), Energy (Dahlia), Attack and Hp.
+    /// </summary>
+    public enum ComparedStat
+    {
+        Speed,
+        Energy,
+        Attack,
+        Hp
     }
 
     public enum StatusKind
@@ -556,7 +605,31 @@ namespace Emberfall.Core.Data
         /// Harmful, and deliberately cleansable: nothing in the roster says otherwise, and a debt a
         /// Mender can wipe is what makes it a tempo tool rather than a tax.
         /// </summary>
-        TurnDebt
+        TurnDebt,
+
+        // ---------- accuracy and crit override ----------
+        //
+        // APPENDED, never inserted, for the same reason every member above is. EvasionUp and
+        // AccuracyDown together form the miss check in ApplyDamageEffect step -1: hitChance =
+        // 1 - evasion - accuracyLoss, and Chance(1f) returns true without drawing, so no battle
+        // without these statuses consumes an RNG draw.
+
+        /// <summary>Target-side dodge chance. ADD-shaped: sum of EvasionUp magnitudes on the
+        /// defender is the raw miss chance the attacker faces.</summary>
+        EvasionUp,
+
+        /// <summary>Source-side accuracy penalty. ADD-shaped: sum of AccuracyDown magnitudes on
+        /// the attacker further reduces hit chance.</summary>
+        AccuracyDown,
+
+        /// <summary>Forces the next hit from this unit to crit. Consumed on the first damage
+        /// effect that checks crit, skipping the RNG draw entirely.</summary>
+        GuaranteedCrit,
+
+        /// <summary>Prevents beneficial status application on the holder. A status that lands
+        /// on the target is not applied if the target carries BuffSuppression and the incoming
+        /// status is not harmful.</summary>
+        BuffSuppression
     }
 
     /// <summary>
@@ -696,7 +769,11 @@ namespace Emberfall.Core.Data
 
         /// <summary>A unit paid off a TurnDebt at its own turn start. Broadcast to the other side,
         /// since the ability watching a debt is always the one that applied it.</summary>
-        OnTurnDebtRepaid
+        OnTurnDebtRepaid,
+
+        /// <summary>The owner dodged an attack (the accuracy/evasion miss check triggered).
+        /// Fires on the DODGER, not on the attacker.</summary>
+        OnDodge
     }
 
     /// <summary>
@@ -1168,7 +1245,11 @@ namespace Emberfall.Core.Data
                 // Dispel's business instead.
                 || kind == StatusKind.Provoked
                 || kind == StatusKind.Vulnerable
-                || kind == StatusKind.TurnDebt;
+                || kind == StatusKind.TurnDebt
+                // AccuracyDown lowers the holder's hit chance; BuffSuppression prevents buff
+                // application. Both are debuffs — cleansable, and Umbra locks them.
+                || kind == StatusKind.AccuracyDown
+                || kind == StatusKind.BuffSuppression;
         }
 
         /// <summary>
@@ -1244,6 +1325,10 @@ namespace Emberfall.Core.Data
                 case StatusKind.Guard: return "Guard";
                 case StatusKind.Vulnerable: return "Vulnerable";
                 case StatusKind.TurnDebt: return "Turn Debt";
+                case StatusKind.EvasionUp: return "Evasion";
+                case StatusKind.AccuracyDown: return "Accuracy Down";
+                case StatusKind.GuaranteedCrit: return "Guaranteed Crit";
+                case StatusKind.BuffSuppression: return "Nullify";
             }
             return kind.ToString();
         }
@@ -1290,6 +1375,10 @@ namespace Emberfall.Core.Data
                 case StatusKind.Guard: return "GRD";
                 case StatusKind.Vulnerable: return "VUL";
                 case StatusKind.TurnDebt: return "DEBT";
+                case StatusKind.EvasionUp: return "EVA";
+                case StatusKind.AccuracyDown: return "ACC-";
+                case StatusKind.GuaranteedCrit: return "CRIT!";
+                case StatusKind.BuffSuppression: return "NULL";
             }
             return "?";
         }
