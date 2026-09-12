@@ -3624,6 +3624,7 @@ namespace Emberfall.DevHarness
             CheckInterrupt();
             CheckCrossUnitStatComparison();
             CheckActionTypeHistory();
+            CheckExtendStatus();
 
             Line("");
         }
@@ -3642,7 +3643,7 @@ namespace Emberfall.DevHarness
             List<string> gcrit = new List<string>(), suppress = new List<string>();
             List<string> interrupt = new List<string>(), splash = new List<string>();
             List<string> statCmp = new List<string>(), actionHist = new List<string>();
-            List<string> dodge = new List<string>();
+            List<string> dodge = new List<string>(), extend = new List<string>();
 
             for (int u = 0; u < units.Count; u++)
             {
@@ -3673,6 +3674,8 @@ namespace Emberfall.DevHarness
                             suppress.Add(where);
                         if (eff.Kind == EffectKind.Interrupt)
                             interrupt.Add(where);
+                        if (eff.Kind == EffectKind.ExtendStatus)
+                            extend.Add(where);
                         if (eff.Splash)
                             splash.Add(where);
 
@@ -3697,6 +3700,7 @@ namespace Emberfall.DevHarness
             Check(statCmp.Count == 0, "no shipped content compares stats across units" + Detail(statCmp));
             Check(actionHist.Count == 0, "no shipped content reads action-type history" + Detail(actionHist));
             Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
+            Check(extend.Count == 0, "no shipped content uses ExtendStatus" + Detail(extend));
         }
 
         private static void CheckTierSixOrdinals()
@@ -3706,8 +3710,9 @@ namespace Emberfall.DevHarness
                   "StatusKind tier-six members keep ordinals 38-41 (got "
                   + (int)StatusKind.EvasionUp + ", " + (int)StatusKind.AccuracyDown + ", "
                   + (int)StatusKind.GuaranteedCrit + ", " + (int)StatusKind.BuffSuppression + ")");
-            Check((int)EffectKind.Interrupt == 17,
-                  "EffectKind.Interrupt is appended at 17 (got " + (int)EffectKind.Interrupt + ")");
+            Check((int)EffectKind.Interrupt == 17 && (int)EffectKind.ExtendStatus == 18,
+                  "EffectKind tier-six members are appended at 17-18 (got "
+                  + (int)EffectKind.Interrupt + ", " + (int)EffectKind.ExtendStatus + ")");
             Check((int)EffectCondition.CasterStatAboveTarget == 26
                   && (int)EffectCondition.SubjectRepeatedActionType == 31,
                   "EffectCondition tier-six members are appended at 26-31 (got "
@@ -4093,6 +4098,75 @@ namespace Emberfall.DevHarness
             HeroDef h = db.GetHero("t6_historian");
             if (h != null) team.Add(MakeInstance(h, 1));
             return RunWith(db, db.GetStage("t6_ah"), 42, team);
+        }
+
+
+        // ---- Extend Status ----
+
+        private static void CheckExtendStatus()
+        {
+            BattleResult extended = RunExtendArena(true);
+            BattleResult control = RunExtendArena(false);
+            if (extended == null || control == null) { Check(false, "the extend-status arena builds"); return; }
+
+            // Without extension, Slow (duration 2) expires during the fight. With extension
+            // (+3 rounds every hero turn), Slow never expires. Measured as StatusExpired for
+            // Slow: the control should show at least one expiry, the extended should show zero.
+            int expiresCtl = CountStatus(control, StatusKind.Slow, BattleEventType.StatusExpired);
+            int expiresExt = CountStatus(extended, StatusKind.Slow, BattleEventType.StatusExpired);
+            Check(expiresCtl > 0, "without ExtendStatus, Slow expires (" + expiresCtl + " expiry events)");
+            Check(expiresExt < expiresCtl,
+                  "ExtendStatus keeps Slow alive longer ("
+                  + expiresExt + " expiry events vs " + expiresCtl + " in control)");
+        }
+
+        /// <summary>
+        /// The hero applies Slow to the enemy at BattleStart (once), then each basic only
+        /// extends harmful statuses on the enemy. Without extension, Slow (2 rounds) expires
+        /// after 2 rounds. With extension (+3 each turn), Slow persists far longer, producing
+        /// measurably more Slow-related StatusExpired events at different timings and therefore
+        /// different total damage from the speed change.
+        ///
+        /// Measured as StatusExpired count for Slow: without extension it expires once after
+        /// round 2; with extension it never expires in 5 rounds and no StatusExpired fires.
+        /// </summary>
+        private static BattleResult RunExtendArena(bool doExtend)
+        {
+            string extendEffect = doExtend
+                ? @", { ""kind"": ""ExtendStatus"", ""target"": ""FrontEnemy"", ""duration"": 3 }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""t6_extender"", ""name"": ""Extender"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6x_basic"", ""name"": ""Extend"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + extendEffect + @" ] },
+      ""passive"": { ""id"": ""t6x_starter"", ""name"": ""Starter"", ""trigger"": ""BattleStart"",
+          ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""Slow"", ""magnitude"": 0.3, ""duration"": 2, ""chance"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""t6_target"", ""name"": ""Target"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""t6t_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [ { ""id"": ""t6_ext_ch"", ""name"": ""Ext"", ""stages"": [
+    { ""id"": ""t6_ext"", ""index"": 1, ""enemies"": [ { ""id"": ""t6_target"", ""level"": 1 } ] } ] } ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 5, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "extend");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef h = db.GetHero("t6_extender");
+            if (h != null) team.Add(MakeInstance(h, 1));
+            return RunWith(db, db.GetStage("t6_ext"), 42, team);
         }
 
 
@@ -4701,7 +4775,7 @@ namespace Emberfall.DevHarness
                                "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
                                "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
                                "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
-                               "Interrupt" },
+                               "Interrupt", "ExtendStatus" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",

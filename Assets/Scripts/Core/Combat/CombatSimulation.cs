@@ -1480,6 +1480,42 @@ namespace Emberfall.Core.Combat
                         EmitEnergy(target);
                         break;
                     }
+
+                    case EffectKind.ExtendStatus:
+                    {
+                        // Adds effect.Duration rounds to every matching status on the target.
+                        // When effect.Status is None, extends ALL harmful statuses (the Demos/
+                        // Celen shape: "extend all debuffs by N rounds"). When effect.Status
+                        // names a specific kind, extends only that kind. No RNG draw: duration
+                        // is deterministic state. Does not apply a new status — a target with
+                        // nothing to extend sees nothing happen.
+                        if (!target.Alive) break;
+                        int added = Math.Max(1, effect.Duration);
+                        bool namedKind = effect.Status != StatusKind.None;
+                        int extended = 0;
+                        for (int ei = 0; ei < target.Statuses.Count; ei++)
+                        {
+                            StatusInstance entry = target.Statuses[ei];
+                            if (namedKind)
+                            {
+                                if (entry.Kind != effect.Status) continue;
+                            }
+                            else
+                            {
+                                if (!StatusInfo.IsHarmful(entry.Kind)) continue;
+                            }
+                            entry.RoundsLeft += added;
+                            extended++;
+                        }
+                        if (extended > 0)
+                        {
+                            BattleEvent ext = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
+                            ext.Status = namedKind ? effect.Status : StatusKind.None;
+                            ext.Duration = added;
+                            ext.Value = extended;
+                        }
+                        break;
+                    }
                 }
             }
 

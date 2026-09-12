@@ -208,7 +208,13 @@ namespace Emberfall.Core.Data
         /// <summary>Sets the target's energy to zero. Distinct from a negative EnergyGain in
         /// two ways: it is all-or-nothing (no partial drain), and it is a no-op when the target
         /// has no energy to lose.</summary>
-        Interrupt
+        Interrupt,
+
+        /// <summary>Adds effect.Duration rounds to every matching status on the target. Filters
+        /// by harmful/beneficial (via effect.Status == None) or by a named StatusKind (via
+        /// effect.Status != None). Does not apply a new status — only extends one already
+        /// there.</summary>
+        ExtendStatus        // 18
     }
 
     /// <summary>
