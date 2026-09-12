@@ -18,7 +18,7 @@ EFFECT_KINDS = {
     "EnergyGain", "Dispel", "SwapPositions", "GainResolve",
     "TurnShift", "SwapTurnOrder", "RemoveStatus", "MoveDebuffs",
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
-    "Interrupt",
+    "Interrupt", "ExtendStatus",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
