@@ -270,6 +270,9 @@ namespace Emberfall.Core.Combat
                     return subject.ActionsTaken >= 2
                         && subject.LastActionWasActive == subject.PreviousActionWasActive;
 
+                case EffectCondition.HpAboveSnapshot:
+                    return subject.SnapshotHp > 0 && subject.Hp > subject.SnapshotHp;
+
                 case EffectCondition.LedgerAtCap:
                 {
                     if (caster == null) return false;
@@ -416,6 +419,15 @@ namespace Emberfall.Core.Combat
             /// window, the same pattern _defeated and _thresholdUnit use.
             /// </summary>
             private CombatUnit _broadcastSubject;
+
+            /// <summary>The source unit id of the current broadcast (e.g. healer for OnAllyHealed),
+            /// or -1 outside a broadcast that carries source identity.</summary>
+            private int _broadcastSourceId = -1;
+
+            // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
+            private float _lastLedgerRelease;
+            private float _lastRedirectAmount;
+            private float _lastRemovedStacks;
 
             /// <summary>
             /// The per-target budget of the passive currently resolving, or null. Set by
@@ -877,7 +889,10 @@ namespace Emberfall.Core.Combat
 
                     if (s.Kind == StatusKind.Burn)
                     {
-                        int damage = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
+                        float burnDmg = s.Magnitude;
+                        CombatUnit dotSource = s.SourceId >= 0 ? FindUnit(s.SourceId) : null;
+                        burnDmg *= OutputModMultiplier(dotSource, unit, OutputModScope.DoTOnly);
+                        int damage = (int)Math.Round(burnDmg, MidpointRounding.AwayFromZero);
                         if (damage < 1) damage = 1;
                         // named for what it actually is - not whatever the source last cast, so the
                         // Debrief and any on-screen attribution can't misname a burn tick as a fresh hit
@@ -946,6 +961,7 @@ namespace Emberfall.Core.Combat
                     if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
                     {
                         int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
+                        _lastLedgerRelease = s.Stored;
                         s.Stored = 0f;
                         if (payout > 0 && unit.Alive)
                         {
@@ -1053,6 +1069,7 @@ namespace Emberfall.Core.Combat
                 CombatUnit subject = effect.ConditionOn == ConditionSubject.Caster ? caster
                                    : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
                                    : effect.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
+                                   : effect.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
                                    : target;
                 if (subject == null) return false;
 
@@ -1084,7 +1101,8 @@ namespace Emberfall.Core.Combat
                         // question, is answered by the pure function - with the resolved subject
                         // substituted in.
                         if (effect.ConditionOn == ConditionSubject.Defeated
-                            || effect.ConditionOn == ConditionSubject.BroadcastSubject)
+                            || effect.ConditionOn == ConditionSubject.BroadcastSubject
+                            || effect.ConditionOn == ConditionSubject.LastAttacker)
                         {
                             EffectDef asTarget = effect.Clone();
                             asTarget.ConditionOn = ConditionSubject.Target;
@@ -1098,8 +1116,9 @@ namespace Emberfall.Core.Combat
                     }
                 }
 
-                if (!first) return false;
-                return Condition2MetHere(effect, caster, target);
+                bool andResult = first && Condition2MetHere(effect, caster, target);
+                if (andResult) return true;
+                return Condition3MetHere(effect, caster, target);
             }
 
             /// <summary>
@@ -1125,6 +1144,7 @@ namespace Emberfall.Core.Combat
                 CombatUnit subject2 = gate2.ConditionOn == ConditionSubject.Caster ? caster
                                     : gate2.ConditionOn == ConditionSubject.Defeated ? _defeated
                                     : gate2.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
+                                    : gate2.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
                                     : target;
                 if (subject2 == null) return false;
 
@@ -1143,12 +1163,62 @@ namespace Emberfall.Core.Combat
                 }
 
                 if (gate2.ConditionOn == ConditionSubject.Defeated
-                    || gate2.ConditionOn == ConditionSubject.BroadcastSubject)
+                    || gate2.ConditionOn == ConditionSubject.BroadcastSubject
+                    || gate2.ConditionOn == ConditionSubject.LastAttacker)
                 {
                     gate2.ConditionOn = ConditionSubject.Target;
                     return ConditionMet(gate2, caster, subject2);
                 }
                 return ConditionMet(gate2, caster, target);
+            }
+
+            /// <summary>
+            /// OR branch: when Condition3 is not None, this is an independent second chance for
+            /// the effect to resolve. Evaluation is (C1 AND C2) OR C3. Follows the same
+            /// subject-resolution and pure/contextual split as the first two gates.
+            /// </summary>
+            private bool Condition3MetHere(EffectDef effect, CombatUnit caster, CombatUnit target)
+            {
+                if (effect == null || effect.Condition3 == EffectCondition.None) return false;
+
+                EffectDef gate3 = effect.Clone();
+                gate3.Condition = effect.Condition3;
+                gate3.ConditionOn = effect.ConditionOn3;
+                gate3.ConditionStatus = effect.ConditionStatus3;
+                gate3.ConditionValue = effect.ConditionValue3;
+                gate3.ComparedStat = effect.ComparedStat3;
+                gate3.Condition2 = EffectCondition.None;
+                gate3.Condition3 = EffectCondition.None;
+
+                CombatUnit subject3 = gate3.ConditionOn == ConditionSubject.Caster ? caster
+                                    : gate3.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                    : gate3.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
+                                    : gate3.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
+                                    : target;
+                if (subject3 == null) return false;
+
+                switch (gate3.Condition)
+                {
+                    case EffectCondition.TurnProgressAbove:
+                        return TurnProgressOf(subject3) >= gate3.ConditionValue;
+                    case EffectCondition.TurnProgressBelow:
+                        return TurnProgressOf(subject3) <= gate3.ConditionValue;
+                    case EffectCondition.CasterActsBeforeSubject:
+                    {
+                        int mine = PendingPositionOf(caster);
+                        int theirs = PendingPositionOf(subject3);
+                        return mine >= 0 && theirs >= 0 && mine < theirs;
+                    }
+                }
+
+                if (gate3.ConditionOn == ConditionSubject.Defeated
+                    || gate3.ConditionOn == ConditionSubject.BroadcastSubject
+                    || gate3.ConditionOn == ConditionSubject.LastAttacker)
+                {
+                    gate3.ConditionOn = ConditionSubject.Target;
+                    return ConditionMet(gate3, caster, subject3);
+                }
+                return ConditionMet(gate3, caster, target);
             }
 
             /// <summary>
@@ -1589,6 +1659,7 @@ namespace Emberfall.Core.Combat
                                 led.BankLimit = effect.LedgerBankLimit;
                                 led.BankHeals = effect.LedgerBankHeals;
                                 led.BankOnlyFrom = effect.LedgerBankOnlyFrom;
+                                led.BankFromCaster = effect.LedgerBankFromCaster;
                                 led.AutoReleaseAsHeal = effect.LedgerAutoReleaseAsHeal;
                                 led.AutoReleaseTarget = effect.LedgerAutoReleaseTarget;
                             }
@@ -1650,7 +1721,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
@@ -1675,7 +1746,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -1697,6 +1768,7 @@ namespace Emberfall.Core.Combat
                         // the same AddStack/CountOf pair Ember's Burn already uses rather than a
                         // second counting mechanism living beside that one.
                         if (!target.Alive) break;
+                        if (target.Has(StatusKind.StatusGainSuppression)) break;
                         int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
                         for (int g = 0; g < effect.Hits; g++)
                         {
@@ -1720,7 +1792,8 @@ namespace Emberfall.Core.Combat
                         // shift authored before this pass, so the three-argument call below is the
                         // one-argument call it replaced.
                         ApplyTurnShift(source, target, effect.Magnitude,
-                                       effect.ShiftBanksAs, effect.StoredCap, effect.Magnitude == 0f ? 0f : effect.Power);
+                                       effect.ShiftBanksAs, effect.StoredCap, effect.Magnitude == 0f ? 0f : effect.Power,
+                                       effect.Duration);
                         break;
                     }
 
@@ -1761,7 +1834,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
 
@@ -1832,6 +1905,7 @@ namespace Emberfall.Core.Combat
                     {
                         if (!target.Alive) break;
                         float stored = target.LedgerTotalFrom(source.Id);
+                        _lastLedgerRelease = stored;
                         // Zeroed whether or not it paid out, so a release against an empty ledger
                         // is spent rather than saved up - the descriptions all read "consume".
                         for (int li = 0; li < target.Statuses.Count; li++)
@@ -1910,13 +1984,14 @@ namespace Emberfall.Core.Combat
                     case EffectKind.ExtendStatus:
                     {
                         // Adds effect.Duration rounds to every matching status on the target.
+                        // Negative values shorten rather than extend (duration reduction).
                         // When effect.Status is None, extends ALL harmful statuses (the Demos/
                         // Celen shape: "extend all debuffs by N rounds"). When effect.Status
                         // names a specific kind, extends only that kind. No RNG draw: duration
                         // is deterministic state. Does not apply a new status — a target with
                         // nothing to extend sees nothing happen.
                         if (!target.Alive) break;
-                        int added = Math.Max(1, effect.Duration);
+                        int added = effect.Duration;
                         bool namedKind = effect.Status != StatusKind.None;
                         int extended = 0;
                         for (int ei = 0; ei < target.Statuses.Count; ei++)
@@ -2081,6 +2156,7 @@ namespace Emberfall.Core.Combat
                         // overkill to the source (passive owner).
                         if (!target.Alive || target.Hp > 0f) break;
                         float overkill = -target.Hp;
+                        _lastRedirectAmount = overkill;
                         target.Hp = 1f;
                         BattleEvent saveEvt = Emit(BattleEventType.Heal, source.Id, target.Id);
                         saveEvt.Value = 1 + (int)Math.Round(overkill, MidpointRounding.AwayFromZero);
@@ -2112,6 +2188,13 @@ namespace Emberfall.Core.Combat
                             e.Duration = Math.Max(1, effect.Duration);
                             e.Value = stacks;
                         }
+                        break;
+                    }
+
+                    case EffectKind.SnapshotHp:
+                    {
+                        if (!target.Alive) break;
+                        target.SnapshotHp = (int)Math.Round(target.Hp, MidpointRounding.AwayFromZero);
                         break;
                     }
 
@@ -2206,7 +2289,12 @@ namespace Emberfall.Core.Combat
                 // 1. Base. The target-HP term joins here, before mitigation, so "12% of its
                 // missing HP" is reduced by Defense like any other authored damage rather than
                 // arriving as a second, unmitigated payload.
-                float raw = source.EffectiveAttack * effect.Power + effect.Flat + TargetHpTerm(effect, target);
+                float attackTerm = source.EffectiveAttack;
+                if (effect.ScaleByLastRelease) attackTerm = _lastLedgerRelease;
+                else if (effect.ScaleByLastRedirect) attackTerm = _lastRedirectAmount;
+                else if (effect.ScaleByLastRemoval) attackTerm = _lastRemovedStacks;
+                float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
+                raw *= OutputModMultiplier(source, target, OutputModScope.AllDamage);
                 float holyBonus = source.EffectiveHolyDamage;
 
                 // 2. Aspect factor
@@ -2316,13 +2404,48 @@ namespace Emberfall.Core.Combat
             /// shipped content - three multiplications by 0f summed, which is 0f, and adding 0f to
             /// a float is exact. That is what keeps this out of every existing battle.
             /// </summary>
+            /// <summary>Resolves ConditionSubject.LastAttacker: the unit that last attacked the
+            /// broadcast subject, or null outside a broadcast / when nobody attacked it.</summary>
+            private CombatUnit ResolveLastAttacker()
+            {
+                if (_broadcastSubject == null || _broadcastSubject.LastAttackerId < 0) return null;
+                return FindUnit(_broadcastSubject.LastAttackerId);
+            }
+
+            /// <summary>
+            /// Per-stack output modifier multiplier. Returns 1f when the source has no modifier
+            /// or when the scope/mark filter excludes this context.
+            /// </summary>
+            private static float OutputModMultiplier(CombatUnit source, CombatUnit target, OutputModScope context)
+            {
+                if (source == null || source.OutputModStatus == StatusKind.None || source.OutputModPerStack == 0f)
+                    return 1f;
+                if (source.OutputModScope != context && source.OutputModScope != OutputModScope.AllDamage)
+                    return 1f;
+                if (context == OutputModScope.HealingOnly && source.OutputModScope != OutputModScope.HealingOnly)
+                    return 1f;
+                if (source.OutputModMarkedOnly && target != null
+                    && !target.HasMarkFrom(StatusKind.Mark, source.Id)
+                    && !target.HasMarkFrom(StatusKind.MarkAlt, source.Id))
+                    return 1f;
+                int stacks = source.CountOf(source.OutputModStatus);
+                if (stacks <= 0) return 1f;
+                return 1f + source.OutputModPerStack * stacks;
+            }
+
             private static float TargetHpTerm(EffectDef effect, CombatUnit target)
             {
                 if (target == null) return 0f;
                 float maxHp = target.EffectiveMaxHp;
+                float missingTerm = (maxHp - target.Hp) * effect.TargetMissingHpRatio;
+                if (effect.MissingHpCap > 0f)
+                {
+                    float cap = maxHp * effect.MissingHpCap;
+                    if (missingTerm > cap) missingTerm = cap;
+                }
                 return maxHp * effect.TargetMaxHpRatio
                      + target.Hp * effect.TargetCurrentHpRatio
-                     + (maxHp - target.Hp) * effect.TargetMissingHpRatio;
+                     + missingTerm;
             }
 
             /// <summary>Single funnel for every point of damage in the game.</summary>
@@ -2395,6 +2518,8 @@ namespace Emberfall.Core.Combat
                             target.Remove(StatusKind.Shield);
                             BattleEvent expired = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
                             expired.Status = StatusKind.Shield;
+                            TriggerPassive(target, PassiveTrigger.OnShieldBreak, 0);
+                            if (!target.Alive || IsBattleOver()) return;
                         }
                     }
                 }
@@ -2433,6 +2558,8 @@ namespace Emberfall.Core.Combat
                         if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
                         // BankOnlyFrom: skip unless the damage source matches.
                         if (led.BankOnlyFrom != StatusKind.None && dotKind != led.BankOnlyFrom) continue;
+                        // BankFromCaster: only bank damage dealt by the same unit that applied this entry.
+                        if (led.BankFromCaster && sourceId != led.SourceId) continue;
                         float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
                         if (room <= 0f) continue;
                         float banked = damage * led.Magnitude;
@@ -2464,7 +2591,16 @@ namespace Emberfall.Core.Combat
                 e.AspectFactor = aspectFactor;
                 e.AbilityName = abilityName;
 
-                if (sourceId >= 0) target.LastAttackerId = sourceId;
+                if (sourceId >= 0)
+                {
+                    target.LastAttackerId = sourceId;
+                    CombatUnit attacker = FindUnit(sourceId);
+                    if (attacker != null)
+                    {
+                        attacker.DamageDealtThisRound += damage;
+                        if (dotKind == StatusKind.Burn) attacker.DoTDamageDealtThisRound += damage;
+                    }
+                }
 
                 target.LastDamagedRound = _round;
                 if (sourceId >= 0)
@@ -2619,6 +2755,13 @@ namespace Emberfall.Core.Combat
             {
                 if (!target.Alive || amount <= 0) return;
 
+                if (target.Has(StatusKind.HealSuppression)) return;
+
+                CombatUnit healerUnit = FindUnit(sourceId);
+                float healMod = OutputModMultiplier(healerUnit, target, OutputModScope.HealingOnly);
+                if (healMod != 1f) amount = (int)Math.Round(amount * healMod, MidpointRounding.AwayFromZero);
+                if (amount <= 0) return;
+
                 float missing = target.EffectiveMaxHp - target.Hp;
                 int healed = missing > 0f ? (int)Math.Min(missing, amount) : 0;
                 if (healed > 0)
@@ -2647,11 +2790,15 @@ namespace Emberfall.Core.Combat
 
                         // The recipient's allies hear about it too; the recipient is excluded,
                         // since a hero answering its own healing is a different ability from one
-                        // answering somebody else's.
+                        // answering somebody else's. _broadcastSourceId carries the healer so
+                        // TriggerSourceIsSelf can filter by it.
                         {
                             CombatUnit prevSubject = _broadcastSubject;
+                            int prevSourceId = _broadcastSourceId;
                             _broadcastSubject = target;
+                            _broadcastSourceId = sourceId;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
+                            _broadcastSourceId = prevSourceId;
                             _broadcastSubject = prevSubject;
                         }
                     }
@@ -3016,6 +3163,7 @@ namespace Emberfall.Core.Combat
                          || trigger == PassiveTrigger.OnAppliedStatusExpired)
                         && passive.TriggerStatus != StatusKind.None
                         && !_expiredKinds.Contains(passive.TriggerStatus)) continue;
+                    if (passive.TriggerSourceIsSelf && _broadcastSourceId != owner.Id) continue;
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
 
@@ -3161,7 +3309,7 @@ namespace Emberfall.Core.Combat
             }
 
             private void ApplyTurnShift(CombatUnit source, CombatUnit target, float fraction,
-                                        StatusKind banksAs, float cap, float rate)
+                                        StatusKind banksAs, float cap, float rate, int debtDuration = 2)
             {
                 if (_order == null || target == null || !target.Alive || fraction == 0f) return;
 
@@ -3197,7 +3345,7 @@ namespace Emberfall.Core.Combat
                 if (banksAs != StatusKind.None && destination > at)
                 {
                     float realised = (destination - at) / (float)tail;
-                    BankTurnDebt(source, target, banksAs, realised, cap, rate);
+                    BankTurnDebt(source, target, banksAs, realised, cap, rate, debtDuration);
                 }
 
                 if (destination > at && source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
@@ -3211,7 +3359,7 @@ namespace Emberfall.Core.Combat
             /// is a property of the debt rather than of how many times it was applied.
             /// </summary>
             private void BankTurnDebt(CombatUnit source, CombatUnit target, StatusKind kind,
-                                      float amount, float cap, float rate)
+                                      float amount, float cap, float rate, int duration = 2)
             {
                 if (target == null || !target.Alive || amount <= 0f) return;
 
@@ -3227,7 +3375,7 @@ namespace Emberfall.Core.Combat
 
                 if (entry == null)
                 {
-                    target.AddOrRefresh(kind, 2, rate, sourceId);
+                    target.AddOrRefresh(kind, Math.Max(1, duration), rate, sourceId);
                     for (int i = 0; i < target.Statuses.Count; i++)
                         if (target.Statuses[i].Kind == kind && target.Statuses[i].SourceId == sourceId)
                             entry = target.Statuses[i];
@@ -3384,6 +3532,13 @@ namespace Emberfall.Core.Combat
                     {
                         List<CombatUnit> ranked = AlliesByHp(caster, excluded);
                         for (int i = 0; i < ranked.Count && i < 2; i++) result.Add(ranked[i]);
+                        return result;
+                    }
+
+                    case TargetMode.ThreeLowestHpAllies:
+                    {
+                        List<CombatUnit> ranked = AlliesByHp(caster, excluded);
+                        for (int i = 0; i < ranked.Count && i < 3; i++) result.Add(ranked[i]);
                         return result;
                     }
 
@@ -3573,6 +3728,32 @@ namespace Emberfall.Core.Combat
                             if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
                             if (!u.Has(targetStatus)) continue;
                             if (picked == null || u.Slot < picked.Slot) picked = u;
+                        }
+                        break;
+                    }
+
+                    case TargetMode.HighestDamageDealtEnemy:
+                    {
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (picked == null || u.DamageDealtThisRound > picked.DamageDealtThisRound
+                                || (u.DamageDealtThisRound == picked.DamageDealtThisRound && u.Slot < picked.Slot))
+                                picked = u;
+                        }
+                        break;
+                    }
+
+                    case TargetMode.HighestDoTDamageEnemy:
+                    {
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (picked == null || u.DoTDamageDealtThisRound > picked.DoTDamageDealtThisRound
+                                || (u.DoTDamageDealtThisRound == picked.DoTDamageDealtThisRound && u.Slot < picked.Slot))
+                                picked = u;
                         }
                         break;
                     }

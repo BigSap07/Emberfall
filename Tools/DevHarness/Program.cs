@@ -5011,7 +5011,8 @@ namespace Emberfall.DevHarness
                                "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
-                               "DefeatedUnit", "ThresholdUnit", "BroadcastSubject" },
+                               "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
+                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5020,7 +5021,8 @@ namespace Emberfall.DevHarness
                                "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
                                "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
                                "HpTransfer", "ShieldTransfer", "LedgerIncrement",
-                               "RedirectLethal", "SnapshotEnergy", "TransferStatus" },
+                               "RedirectLethal", "SnapshotEnergy", "TransferStatus",
+                               "SnapshotHp" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -5038,7 +5040,8 @@ namespace Emberfall.DevHarness
                                "Vulnerable", "TurnDebt",
                                "EvasionUp", "AccuracyDown",
                                "GuaranteedCrit", "BuffSuppression",
-                               "Disrupted", "MaxHpUp", "HolyDamageUp" },
+                               "Disrupted", "MaxHpUp", "HolyDamageUp",
+                               "HealSuppression", "StatusGainSuppression" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
             Line("");

@@ -20,7 +20,7 @@ EFFECT_KINDS = {
     "MoveBuffs", "InvertStatus", "LedgerRelease", "RecordFact",
     "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
     "HpTransfer", "ShieldTransfer", "LedgerIncrement", "RedirectLethal",
-    "SnapshotEnergy", "TransferStatus",
+    "SnapshotEnergy", "TransferStatus", "SnapshotHp",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -39,6 +39,7 @@ STATUS_KINDS = {
     "EvasionUp", "AccuracyDown",
     "GuaranteedCrit", "BuffSuppression",
     "Disrupted", "MaxHpUp", "HolyDamageUp",
+    "HealSuppression", "StatusGainSuppression",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {
@@ -53,6 +54,7 @@ TARGET_MODES = {
     "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
     "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
     "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
+    "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
 }
 
 # ---------------------------------------------------------------------------
