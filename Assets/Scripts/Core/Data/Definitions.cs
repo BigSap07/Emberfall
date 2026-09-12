@@ -342,6 +342,47 @@ namespace Emberfall.Core.Data
         }
     }
 
+    /// <summary>
+    /// One parameter override a talent applies to another ability on the same hero. A talent that
+    /// carries these modifies the named ability's named field by an additive delta at unit-build
+    /// time, the same moment the talent itself is resolved.
+    ///
+    /// The override is applied by cloning the affected EffectDef (and its parent AbilityDef) on
+    /// the CombatUnit that carries the talent, exactly the way relics already clone before
+    /// rewriting Target and Hits. The content-database copy is never touched.
+    ///
+    /// An override with no matching ability or effect index is silently ignored - content may
+    /// name a slot the hero has not authored yet, which is the same tolerance TalentAt already
+    /// applies to an out-of-range selection.
+    /// </summary>
+    public sealed class TalentOverrideDef
+    {
+        /// <summary>"basic", "active", "passive1", or "passive2".</summary>
+        public string Ability = "";
+
+        /// <summary>0-based index into the ability's Effects list.</summary>
+        public int EffectIndex;
+
+        /// <summary>"power", "magnitude", "maxStacks", "duration", "flat", "chance",
+        /// "selfHpRatio", "targetMaxHpRatio", "targetMissingHpRatio", "storedCap",
+        /// "hits", "perStack", "conditionValue".</summary>
+        public string Field = "";
+
+        /// <summary>Additive delta applied to the field's current value.</summary>
+        public float Delta;
+
+        public static TalentOverrideDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            TalentOverrideDef o = new TalentOverrideDef();
+            o.Ability = j.GetString("ability", "");
+            o.EffectIndex = j.GetInt("effectIndex", 0);
+            o.Field = j.GetString("field", "");
+            o.Delta = j.GetFloat("delta", 0f);
+            return o;
+        }
+    }
+
     public sealed class PassiveDef
     {
         public string Id = "";
@@ -381,6 +422,16 @@ namespace Emberfall.Core.Data
         public int PerTargetLimit;
         public bool PerTargetPerRound;
 
+        /// <summary>
+        /// Parameter overrides this passive applies to another ability on the same unit, if any.
+        /// Only meaningful on a talent - a passive that is appended at unit-build time - because
+        /// that is the only moment the override is applied.
+        ///
+        /// Empty for every passive in shipped content. An empty list is the whole of why existing
+        /// battles cannot move: the override path is never entered.
+        /// </summary>
+        public readonly List<TalentOverrideDef> Overrides = new List<TalentOverrideDef>();
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -401,6 +452,13 @@ namespace Emberfall.Core.Data
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));
+
+            List<JsonValue> overrides = j.GetList("overrides");
+            for (int i = 0; i < overrides.Count; i++)
+            {
+                TalentOverrideDef o = TalentOverrideDef.FromJson(overrides[i]);
+                if (o != null) p.Overrides.Add(o);
+            }
             return p;
         }
     }

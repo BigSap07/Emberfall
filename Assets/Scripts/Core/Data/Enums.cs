@@ -150,7 +150,21 @@ namespace Emberfall.Core.Data
         /// Resolves only while `OnEnemyEnergyThreshold` is being broadcast, via `_thresholdUnit`;
         /// outside that window it resolves to nobody, following the same pattern as DefeatedUnit.
         /// </summary>
-        ThresholdUnit
+        ThresholdUnit,
+
+        /// <summary>
+        /// The unit a broadcast is about — the healed ally, the dying ally, the repaying enemy,
+        /// the shielded ally, the buffed enemy, etc. Resolves to `_broadcastSubject` while any
+        /// broadcast is in flight and to nobody outside one, following the same pattern as
+        /// DefeatedUnit and ThresholdUnit.
+        ///
+        /// Distinct from DefeatedUnit (which resolves to the dead unit via `_defeated`) and from
+        /// ThresholdUnit (which resolves via `_thresholdUnit`): both of those predate this and
+        /// keep their own field because content already names them and their semantics are
+        /// narrower. BroadcastSubject is the general-purpose version for every other broadcast
+        /// that fires because something happened to a specific unit.
+        /// </summary>
+        BroadcastSubject
     }
 
     public enum EffectKind
@@ -433,7 +447,17 @@ namespace Emberfall.Core.Data
         /// subject reads false, so an effect authored with this subject is inert elsewhere rather
         /// than wrong.
         /// </summary>
-        Defeated
+        Defeated,
+
+        /// <summary>
+        /// The unit a broadcast is about, for a passive that has to ask something about the unit
+        /// that CAUSED the broadcast rather than about the effect's own target: "did the enemy
+        /// whose buff just expired carry my mark", "is the enemy whose DoT ticked below 30% HP".
+        ///
+        /// Resolves to `_broadcastSubject` inside a BroadcastPassive and to nobody outside one,
+        /// following the same pattern as Defeated and ThresholdUnit.
+        /// </summary>
+        BroadcastSubject
     }
 
     /// <summary>
@@ -822,7 +846,29 @@ namespace Emberfall.Core.Data
         /// the after-energy is at or above it. A per-target limit on the passive handles the
         /// "once per enemy each battle" rider.
         /// </summary>
-        OnEnemyEnergyThreshold
+        OnEnemyEnergyThreshold,
+
+        // ---------- applier-side status lifecycle ----------
+        //
+        // Every trigger above fires on the CARRIER of a status or on the unit something happened
+        // TO. These two fire on the unit that APPLIED a status, because the descriptions that need
+        // them are written from the applier's perspective: "when a Burn she applied ticks",
+        // "when a debuff he applied expires".
+        //
+        // Broadcast to the applier's side, with _broadcastSubject set to the carrier, so an effect
+        // conditioned on the carrier (BroadcastSubject) can read the carrier's status list or HP.
+        // The applier is identified by StatusInstance.SourceId, which is already stored on every
+        // status entry.
+
+        /// <summary>A status the owner applied to a unit on the OTHER side expired naturally
+        /// (duration ran out). Broadcast to the applier's side after the status has been removed.
+        /// _broadcastSubject is the unit whose status expired.</summary>
+        OnAppliedStatusExpired,
+
+        /// <summary>A Burn the owner applied to a unit on the OTHER side ticked. Broadcast to the
+        /// applier's side after the tick's damage has been dealt. _broadcastSubject is the unit
+        /// that took the tick.</summary>
+        OnAppliedDoTTick
     }
 
     /// <summary>
