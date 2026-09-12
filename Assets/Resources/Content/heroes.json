@@ -37,27 +37,196 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "hale_the_relentless_hunter_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "hale_field_sign",
+        "name": "Field Sign",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "LowestHpEnemy",
+            "power": 1.2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpEnemy",
+            "status": "Mark",
+            "duration": 2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpEnemy",
+            "status": "Vulnerable",
+            "magnitude": 0.10,
+            "duration": 2
           }
         ]
       },
       "active": {
-        "id": "hale_the_relentless_hunter_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "hale_closing_radius",
+        "name": "Closing Radius",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 2.2
+          },
+          {
+            "kind": "Damage",
+            "target": "EnemyWithMyMark",
+            "power": 0.0,
+            "targetMissingHpRatio": 0.12,
+            "missingHpCap": 0.15,
+            "condition": "SubjectDamagedSinceMyTurn",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "EnemyWithMyMark",
+            "power": 0.0,
+            "targetMissingHpRatio": 0.12,
+            "missingHpCap": 0.15,
+            "condition": "HpBelow",
+            "conditionValue": -1,
+            "conditionOn": "Caster"
           }
         ]
+      },
+      "passive": {
+        "id": "hale_tracking_habit_stats",
+        "name": "Tracking Habit",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "magnitude": 0.10,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "Focus",
+            "magnitude": 0.10,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "hale_tracking_habit",
+        "name": "Tracking Habit",
+        "trigger": "TurnStart",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "TransferStatus",
+            "target": "EnemyWithMyMark",
+            "status": "Mark",
+            "secondaryTarget": "HighestDamageDealtEnemy"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestDamageDealtEnemy",
+            "status": "Vulnerable",
+            "magnitude": 0.10,
+            "duration": 2
+          }
+        ]
+      },
+      "passive2": {
+        "id": "hale_no_safe_distance",
+        "name": "No Safe Distance",
+        "trigger": "OnEnemyBuffGained",
+        "oncePerBattle": false,
+        "perTargetLimit": 1,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.7,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "HasShield",
+            "conditionOn2": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Vulnerable",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "HasShield",
+            "conditionOn2": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Mark",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "HasShield",
+            "conditionOn2": "BroadcastSubject"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "hale_fresh_trail",
+          "name": "Fresh Trail",
+          "trigger": "TurnStart",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "ApplyStatus",
+              "target": "Self",
+              "status": "CritDamageUp",
+              "magnitude": 0.20,
+              "duration": 1
+            }
+          ]
+        },
+        "talentII": {
+          "id": "hale_cornered",
+          "name": "Cornered",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 2,
+              "field": "conditionValue",
+              "delta": 1.5
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "hale_pursuit_continues",
+          "name": "Pursuit Continues",
+          "trigger": "OnEnemyDefeated",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "ApplyStatus",
+              "target": "LowestHpEnemy",
+              "status": "Mark",
+              "duration": 2,
+              "condition": "HasMyMark",
+              "conditionOn": "Defeated"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "LowestHpEnemy",
+              "status": "Vulnerable",
+              "magnitude": 0.10,
+              "duration": 2,
+              "condition": "HasMyMark",
+              "conditionOn": "Defeated"
+            }
+          ]
+        }
       }
     },
     {
@@ -460,27 +629,267 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "marrow_the_irrevocable_vow_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "marrow_witnessed_strike",
+        "name": "Witnessed Strike",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.05
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.55
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "status": "Mark",
+            "duration": 2,
+            "condition": "SubjectDamagedSinceMyTurn",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "status": "Covered",
+            "magnitude": 0.20,
+            "duration": 2,
+            "condition": "SubjectDamagedSinceMyTurn",
+            "conditionOn": "Target"
           }
         ]
       },
       "active": {
-        "id": "marrow_the_irrevocable_vow_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "marrow_vow_kept",
+        "name": "Vow Kept",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.75
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "TwoLowestHpAllies",
+            "status": "Mark",
+            "duration": 2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "TwoLowestHpAllies",
+            "status": "Covered",
+            "magnitude": 0.20,
+            "duration": 2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "ThreeLowestHpAllies",
+            "status": "Mark",
+            "duration": 2,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "ThreeLowestHpAllies",
+            "status": "Covered",
+            "magnitude": 0.20,
+            "duration": 2,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster"
           }
         ]
+      },
+      "passive": {
+        "id": "marrow_cost_is_named_stats",
+        "name": "The Cost Is Named",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MaxHpUp",
+            "magnitude": 0.10,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectResistUp",
+            "magnitude": 0.10,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "marrow_promise_heal",
+        "name": "The Cost Is Named",
+        "trigger": "OnAllyTurnEnd",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Heal",
+            "target": "BroadcastSubject",
+            "power": 0.01,
+            "targetMaxHpRatio": 0.08,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "Cleanse",
+            "target": "BroadcastSubject",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Covered",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Mark",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          }
+        ]
+      },
+      "passive2": {
+        "id": "marrow_promise_survives",
+        "name": "Promise Survives",
+        "trigger": "OnAllyWouldDie",
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "RedirectLethal",
+            "target": "BroadcastSubject",
+            "power": 1.0,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "HealSuppression",
+            "duration": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 1,
+            "duration": 99,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Covered",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Mark",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "marrow_shared_oath",
+          "name": "Shared Oath",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 3,
+              "field": "conditionValue",
+              "delta": -99
+            },
+            {
+              "ability": "active",
+              "effectIndex": 4,
+              "field": "conditionValue",
+              "delta": -99
+            },
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "targetMaxHpRatio",
+              "delta": -0.02
+            }
+          ]
+        },
+        "talentII": {
+          "id": "marrow_visible_cost",
+          "name": "Visible Cost",
+          "trigger": "OnDamaged",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "LastAttacker",
+              "flat": -5
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "marrow_no_withdrawal",
+          "name": "No Withdrawal",
+          "trigger": "OnAllyWouldDie",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "LowestHpEnemy",
+              "power": 1.05,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "Heal",
+              "target": "LowestHpAlly",
+              "power": 0.55,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "Self",
+              "status": "Resolve",
+              "hits": 10,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster"
+            }
+          ]
+        }
       }
     },
     {
@@ -3034,27 +3443,287 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "isara_the_second_chance_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "isara_restoring_touch",
+        "name": "Restoring Touch",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.05
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.55
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.275,
+            "condition": "HpBelow",
+            "conditionValue": 0.35,
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.90,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 3,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "Resolve",
+            "hits": 10,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 3,
+            "conditionOn": "Caster"
           }
         ]
       },
       "active": {
-        "id": "isara_the_second_chance_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "isara_return_after_loss",
+        "name": "Return After Loss",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.65
+          },
+          {
+            "kind": "Heal",
+            "target": "AllAllies",
+            "power": 0.95
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "TwoLowestHpAllies",
+            "status": "Mark",
+            "duration": 2
           }
         ]
+      },
+      "passive": {
+        "id": "isara_persistent_life_stats",
+        "name": "Persistent Life",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MaxHpUp",
+            "magnitude": 0.10,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectResistUp",
+            "magnitude": 0.10,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "DefenseUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "isara_persistent_life_growth",
+        "name": "Persistent Life",
+        "trigger": "OnHealApplied",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99,
+            "condition": "HpBelow",
+            "conditionValue": 0.50,
+            "conditionOn": "BroadcastSubject"
+          }
+        ]
+      },
+      "passive2": {
+        "id": "isara_what_survives",
+        "name": "What Survives",
+        "trigger": "OnAllyHpBelowThreshold",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MarkAlt",
+            "duration": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "HpBelow",
+            "conditionValue2": 0.20,
+            "conditionOn2": "BroadcastSubject"
+          },
+          {
+            "kind": "Heal",
+            "target": "BroadcastSubject",
+            "power": 0.01,
+            "targetMaxHpRatio": 0.12,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Shield",
+            "target": "BroadcastSubject",
+            "selfHpRatio": 0.08,
+            "duration": 2,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Mark",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 10,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.60,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "MarkAlt",
+            "hits": 1,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.70,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster",
+            "condition2": "HasMyMark",
+            "conditionStatus2": "MarkAlt",
+            "conditionOn2": "Caster"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "isara_deeper_resolve",
+          "name": "Deeper Resolve",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 2,
+              "field": "duration",
+              "delta": 1
+            },
+            {
+              "ability": "passive2",
+              "effectIndex": 2,
+              "field": "selfHpRatio",
+              "delta": 0.04
+            }
+          ]
+        },
+        "talentII": {
+          "id": "isara_shared_recovery",
+          "name": "Shared Recovery",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "passive2",
+              "effectIndex": 7,
+              "field": "conditionValue",
+              "delta": -99
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "isara_second_chance",
+          "name": "Second Chance",
+          "trigger": "OnAllyWouldDie",
+          "oncePerBattle": true,
+          "effects": [
+            {
+              "kind": "RedirectLethal",
+              "target": "BroadcastSubject",
+              "power": 1.0,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "Heal",
+              "target": "BroadcastSubject",
+              "power": 0.01,
+              "targetMaxHpRatio": 0.12,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "Shield",
+              "target": "BroadcastSubject",
+              "selfHpRatio": 0.08,
+              "duration": 2,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "flat": 10,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "Heal",
+              "target": "LowestHpAlly",
+              "power": 0.60,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "BroadcastSubject",
+              "status": "Mark",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            }
+          ]
+        }
       }
     },
     {
@@ -5155,27 +5824,237 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "cyrra_the_burden_bearer_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "cyrra_hidden_burden",
+        "name": "Hidden Burden",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.05
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "FrontEnemy",
+            "status": "Burn",
+            "magnitude": 0.35,
+            "duration": 2,
+            "condition": "LacksStatus",
+            "conditionStatus": "Burn",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.70,
+            "condition": "HasStatus",
+            "conditionStatus": "Burn",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99,
+            "condition": "HasStatus",
+            "conditionStatus": "Burn",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "FrontEnemy",
+            "status": "Burn",
+            "hits": 1,
+            "condition": "HasStatus",
+            "conditionStatus": "Burn",
+            "conditionOn": "Target"
           }
         ]
       },
       "active": {
-        "id": "cyrra_the_burden_bearer_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "cyrra_bury_the_burden",
+        "name": "Bury the Burden",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.60
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "status": "Burn",
+            "magnitude": 0.35,
+            "duration": 2
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Burn",
+            "hits": 1
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99
+          },
+          {
+            "kind": "Heal",
+            "target": "TwoLowestHpAllies",
+            "power": 0.80
+          },
+          {
+            "kind": "Shield",
+            "target": "TwoLowestHpAllies",
+            "selfHpRatio": 0.06,
+            "duration": 2
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Burn",
+            "hits": 1,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "TwoLowestHpAllies",
+            "power": 0.50,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster"
           }
         ]
+      },
+      "passive": {
+        "id": "cyrra_silent_weight_stats",
+        "name": "Silent Weight",
+        "trigger": "BattleStart",
+        "outputModStatus": "Resolve",
+        "outputModPerStack": 0.05,
+        "outputModScope": "HealingOnly",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectResistUp",
+            "magnitude": 0.10,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MaxHpUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "cyrra_carry_the_burden",
+        "name": "Carry the Burden",
+        "trigger": "OnHealApplied",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "RemoveStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Burn",
+            "hits": 1,
+            "condition": "HpBelow",
+            "conditionValue": 0.40,
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 1,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "BroadcastSubject",
+            "power": 0.80,
+            "condition": "HpBelow",
+            "conditionValue": 0.40,
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 1,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5,
+            "condition": "HpBelow",
+            "conditionValue": 0.40,
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 1,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "Resolve",
+            "hits": 1,
+            "condition": "HpBelow",
+            "conditionValue": 0.40,
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 1,
+            "conditionOn2": "Caster"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "cyrra_deeper_silence",
+          "name": "Deeper Silence",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 6,
+              "field": "conditionValue",
+              "delta": -99
+            },
+            {
+              "ability": "active",
+              "effectIndex": 7,
+              "field": "conditionValue",
+              "delta": -99
+            }
+          ]
+        },
+        "talentII": {
+          "id": "cyrra_hidden_reserve",
+          "name": "Hidden Reserve",
+          "trigger": "None",
+          "effects": []
+        },
+        "talentIII": {
+          "id": "cyrra_final_weight",
+          "name": "Final Weight",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 4,
+              "field": "power",
+              "delta": 0.40
+            }
+          ]
+        }
       }
     },
     {
@@ -5695,27 +6574,203 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "altheon_the_first_witness_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "altheon_witness_script",
+        "name": "Witness Script",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 1.2
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestAttackEnemy",
+            "power": 0.42,
+            "condition": "AlreadyDamagedSubjectThisRound",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestAttackEnemy",
+            "power": 0.75,
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "condition2": "HpAboveSnapshot",
+            "conditionOn2": "Target"
           }
         ]
       },
       "active": {
-        "id": "altheon_the_first_witness_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "altheon_immaculate_record",
+        "name": "Immaculate Record",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.85
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Mark",
+            "duration": 2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Ledger",
+            "magnitude": 0.30,
+            "duration": 2,
+            "storedCap": 1.2,
+            "ledgerAutoRelease": true,
+            "ledgerBankLimit": 1
+          },
+          {
+            "kind": "SnapshotHp",
+            "target": "HighestAttackEnemy"
           }
         ]
+      },
+      "passive": {
+        "id": "altheon_preserved_moment_stats",
+        "name": "Preserved Moment",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SpeedUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SkillDamageUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "altheon_preserved_moment",
+        "name": "Preserved Moment",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "outputModStatus": "Resolve",
+        "outputModPerStack": 0.05,
+        "outputModScope": "AllDamage",
+        "outputModMarkedOnly": true,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99
+          }
+        ]
+      },
+      "passive2": {
+        "id": "altheon_fixed_in_place",
+        "name": "Fixed in Place",
+        "trigger": "OnLedgerCapped",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.8
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 10
+          },
+          {
+            "kind": "SnapshotHp",
+            "target": "BroadcastSubject"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "altheon_deeper_record",
+          "name": "Deeper Record",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 2,
+              "field": "magnitude",
+              "delta": 0.10
+            }
+          ]
+        },
+        "talentII": {
+          "id": "altheon_secondary_record",
+          "name": "Secondary Record",
+          "trigger": "OnAppliedStatusExpired",
+          "oncePerBattle": false,
+          "triggerStatus": "Ledger",
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "LowestHpEnemy",
+              "power": 0.5,
+              "scaleByLastRelease": true
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "altheon_final_record",
+          "name": "Final Record",
+          "trigger": "OnLedgerCapped",
+          "oncePerBattle": true,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.2,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.2,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 2,
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.2,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 3,
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "Self",
+              "status": "Resolve",
+              "hits": 10
+            }
+          ]
+        }
       }
     },
     {
