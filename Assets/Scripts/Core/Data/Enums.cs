@@ -164,7 +164,18 @@ namespace Emberfall.Core.Data
         /// narrower. BroadcastSubject is the general-purpose version for every other broadcast
         /// that fires because something happened to a specific unit.
         /// </summary>
-        BroadcastSubject
+        BroadcastSubject,
+
+        // ---------- batch two ----------
+
+        /// <summary>The three lowest-HP allies by ratio, same ordering AlliesByHp uses.</summary>
+        ThreeLowestHpAllies,
+
+        /// <summary>The living enemy that has dealt the most total damage this round.</summary>
+        HighestDamageDealtEnemy,
+
+        /// <summary>The living enemy that has dealt the most DoT damage this round.</summary>
+        HighestDoTDamageEnemy
     }
 
     public enum EffectKind
@@ -296,7 +307,15 @@ namespace Emberfall.Core.Data
         /// field travel with it. A no-op when the target does not carry the named status or
         /// SecondaryTarget resolves to nobody alive.
         /// </summary>
-        TransferStatus      // 25
+        TransferStatus,     // 25
+
+        // ---------- batch two ----------
+
+        /// <summary>
+        /// Stores the target's current HP on CombatUnit.SnapshotHp, so a later
+        /// HpAboveSnapshot condition can compare against it.
+        /// </summary>
+        SnapshotHp              // 26
     }
 
     /// <summary>
@@ -477,7 +496,12 @@ namespace Emberfall.Core.Data
         /// The complement of LedgerAtLeast, which checks an absolute threshold; this checks the
         /// variable, Attack-scaled cap that was set when the Ledger was applied.
         /// </summary>
-        LedgerAtCap
+        LedgerAtCap,
+
+        // ---------- batch two ----------
+
+        /// <summary>The subject's current HP is strictly above its SnapshotHp.</summary>
+        HpAboveSnapshot
     }
 
     /// <summary>
@@ -516,7 +540,16 @@ namespace Emberfall.Core.Data
         /// Resolves to `_broadcastSubject` inside a BroadcastPassive and to nobody outside one,
         /// following the same pattern as Defeated and ThresholdUnit.
         /// </summary>
-        BroadcastSubject
+        BroadcastSubject,
+
+        // ---------- batch two ----------
+
+        /// <summary>
+        /// The unit that last attacked the broadcast subject. Resolves via
+        /// FindUnit(_broadcastSubject.LastAttackerId) inside a broadcast, and to nobody outside
+        /// one. Used by passives that need to condition on the attacker's state.
+        /// </summary>
+        LastAttacker
     }
 
     /// <summary>
@@ -765,7 +798,21 @@ namespace Emberfall.Core.Data
         /// ADD-shaped holy-damage buff. EffectiveHolyDamage reads it: HolyDamage +
         /// SumMagnitude(HolyDamageUp). The same shape Focus uses for Crit Chance.
         /// </summary>
-        HolyDamageUp
+        HolyDamageUp,
+
+        // ---------- batch two: heal and gain suppression ----------
+
+        /// <summary>
+        /// Prevents healing on the holder. ApplyHealValue checks for this and skips the heal
+        /// entirely, emitting no event. Harmful, so Cleanse can remove it.
+        /// </summary>
+        HealSuppression,
+
+        /// <summary>
+        /// Prevents Resolve gain on the holder. GainResolve checks for this and skips the stack
+        /// addition. Harmful, so Cleanse can remove it.
+        /// </summary>
+        StatusGainSuppression
     }
 
     /// <summary>
@@ -977,7 +1024,15 @@ namespace Emberfall.Core.Data
         /// Threshold. Broadcast to the applier's side, with _thresholdUnit set to the debtor.
         /// Per-target limits on the passive handle "once per enemy".
         /// </summary>
-        OnTurnDebtThreshold
+        OnTurnDebtThreshold,
+
+        // ---------- batch two ----------
+
+        /// <summary>
+        /// The holder's shield pool was depleted by incoming damage. Raised in DealRawDamage
+        /// when target.Shield reaches zero, on the unit whose shield broke.
+        /// </summary>
+        OnShieldBreak
     }
 
     /// <summary>
@@ -991,6 +1046,21 @@ namespace Emberfall.Core.Data
     /// wire, because neither activity happens inside a battle; a future kind that does would be the
     /// first one to test that promise.
     /// </summary>
+    /// <summary>
+    /// What kind of outgoing value a per-stack output modifier scales.
+    /// </summary>
+    public enum OutputModScope
+    {
+        /// <summary>All outgoing damage, both direct and DoT.</summary>
+        AllDamage,
+
+        /// <summary>Only DoT tick damage (Burn).</summary>
+        DoTOnly,
+
+        /// <summary>Only outgoing healing.</summary>
+        HealingOnly
+    }
+
     public enum EventActivityKind
     {
         /// <summary>One completed summon, successful or a duplicate - GameSession.Summon.</summary>
@@ -1455,7 +1525,10 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.AccuracyDown
                 || kind == StatusKind.BuffSuppression
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
-                || kind == StatusKind.Disrupted;
+                || kind == StatusKind.Disrupted
+                // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
+                || kind == StatusKind.HealSuppression
+                || kind == StatusKind.StatusGainSuppression;
         }
 
         /// <summary>
@@ -1538,6 +1611,8 @@ namespace Emberfall.Core.Data
                 case StatusKind.Disrupted: return "Disrupted";
                 case StatusKind.MaxHpUp: return "Max HP Up";
                 case StatusKind.HolyDamageUp: return "Holy Damage Up";
+                case StatusKind.HealSuppression: return "Heal Suppression";
+                case StatusKind.StatusGainSuppression: return "Gain Suppression";
             }
             return kind.ToString();
         }
@@ -1591,6 +1666,8 @@ namespace Emberfall.Core.Data
                 case StatusKind.Disrupted: return "DIS";
                 case StatusKind.MaxHpUp: return "HP+";
                 case StatusKind.HolyDamageUp: return "HLY+";
+                case StatusKind.HealSuppression: return "H-SUP";
+                case StatusKind.StatusGainSuppression: return "G-SUP";
             }
             return "?";
         }

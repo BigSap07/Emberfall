@@ -307,6 +307,36 @@ namespace Emberfall.Core.Data
         /// pays the full amount, 0.5 pays half. Clamped to [0, 1].</summary>
         public float ReleaseFraction = 1f;
 
+        // ---------- batch two ----------
+
+        /// <summary>Ceiling on the TargetMissingHpRatio damage term, as a fraction of the target's
+        /// max HP. Zero (default) means uncapped.</summary>
+        public float MissingHpCap;
+
+        /// <summary>OR-condition: (C1 AND C2) OR C3. When Condition3 is None (the default), no OR
+        /// branch exists and the effect is unchanged.</summary>
+        public EffectCondition Condition3 = EffectCondition.None;
+        public ConditionSubject ConditionOn3 = ConditionSubject.Target;
+        public StatusKind ConditionStatus3 = StatusKind.None;
+        public float ConditionValue3;
+        public ComparedStat ComparedStat3 = ComparedStat.Speed;
+
+        /// <summary>When true, the Attack term in the damage/heal formula is replaced by the amount
+        /// of the last LedgerRelease or auto-release.</summary>
+        public bool ScaleByLastRelease;
+
+        /// <summary>When true, the Attack term is replaced by the amount of the last
+        /// RedirectLethal.</summary>
+        public bool ScaleByLastRedirect;
+
+        /// <summary>When true, the Attack term is replaced by the count of statuses removed by the
+        /// last Cleanse/Dispel/RemoveStatus.</summary>
+        public bool ScaleByLastRemoval;
+
+        /// <summary>When true, a Ledger entry only banks damage whose SourceId matches the
+        /// entry's own SourceId. Stored on the StatusInstance.</summary>
+        public bool LedgerBankFromCaster;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -359,6 +389,16 @@ namespace Emberfall.Core.Data
             e.LedgerAutoReleaseTarget = EnumUtil.Parse(j.GetString("ledgerAutoReleaseTarget", "Self"), TargetMode.Self);
             e.LedgerBankOnlyFrom = EnumUtil.Parse(j.GetString("ledgerBankOnlyFrom", "None"), StatusKind.None);
             e.ReleaseFraction = j.GetFloat("releaseFraction", 1f);
+            e.MissingHpCap = j.GetFloat("missingHpCap", 0f);
+            e.Condition3 = EnumUtil.Parse(j.GetString("condition3", "None"), EffectCondition.None);
+            e.ConditionOn3 = EnumUtil.Parse(j.GetString("conditionOn3", "Target"), ConditionSubject.Target);
+            e.ConditionStatus3 = EnumUtil.Parse(j.GetString("conditionStatus3", "None"), StatusKind.None);
+            e.ConditionValue3 = j.GetFloat("conditionValue3", 0f);
+            e.ComparedStat3 = EnumUtil.Parse(j.GetString("comparedStat3", "Speed"), ComparedStat.Speed);
+            e.ScaleByLastRelease = j.GetBool("scaleByLastRelease", false);
+            e.ScaleByLastRedirect = j.GetBool("scaleByLastRedirect", false);
+            e.ScaleByLastRemoval = j.GetBool("scaleByLastRemoval", false);
+            e.LedgerBankFromCaster = j.GetBool("ledgerBankFromCaster", false);
             return e;
         }
 
@@ -421,6 +461,16 @@ namespace Emberfall.Core.Data
             c.LedgerAutoReleaseTarget = LedgerAutoReleaseTarget;
             c.LedgerBankOnlyFrom = LedgerBankOnlyFrom;
             c.ReleaseFraction = ReleaseFraction;
+            c.MissingHpCap = MissingHpCap;
+            c.Condition3 = Condition3;
+            c.ConditionOn3 = ConditionOn3;
+            c.ConditionStatus3 = ConditionStatus3;
+            c.ConditionValue3 = ConditionValue3;
+            c.ComparedStat3 = ComparedStat3;
+            c.ScaleByLastRelease = ScaleByLastRelease;
+            c.ScaleByLastRedirect = ScaleByLastRedirect;
+            c.ScaleByLastRemoval = ScaleByLastRemoval;
+            c.LedgerBankFromCaster = LedgerBankFromCaster;
             return c;
         }
     }
@@ -547,6 +597,26 @@ namespace Emberfall.Core.Data
         /// </summary>
         public StatusKind TriggerStatus = StatusKind.None;
 
+        // ---------- batch two: per-stack output modifier ----------
+
+        /// <summary>Which stacking status on the owner drives the output modifier. None means no
+        /// modifier — the whole system is inert.</summary>
+        public StatusKind OutputModStatus = StatusKind.None;
+
+        /// <summary>Per-stack multiplier added to outgoing damage or healing.</summary>
+        public float OutputModPerStack;
+
+        /// <summary>Which outgoing value to scale: all damage, DoT only, or healing only.</summary>
+        public OutputModScope OutputModScope = OutputModScope.AllDamage;
+
+        /// <summary>When true, the modifier only applies against targets carrying the owner's
+        /// Mark or MarkAlt.</summary>
+        public bool OutputModMarkedOnly;
+
+        /// <summary>When true on a broadcast trigger, fires only if the broadcast source (healer,
+        /// attacker, etc.) is the passive owner.</summary>
+        public bool TriggerSourceIsSelf;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -565,6 +635,11 @@ namespace Emberfall.Core.Data
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
             p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
+            p.OutputModStatus = EnumUtil.Parse(j.GetString("outputModStatus", "None"), StatusKind.None);
+            p.OutputModPerStack = j.GetFloat("outputModPerStack", 0f);
+            p.OutputModScope = EnumUtil.Parse(j.GetString("outputModScope", "AllDamage"), OutputModScope.AllDamage);
+            p.OutputModMarkedOnly = j.GetBool("outputModMarkedOnly", false);
+            p.TriggerSourceIsSelf = j.GetBool("triggerSourceIsSelf", false);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));

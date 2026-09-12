@@ -108,6 +108,9 @@ namespace Emberfall.Core.Combat
 
         /// <summary>Who receives the auto-release payout. Self (default) means the holder.</summary>
         public TargetMode AutoReleaseTarget = TargetMode.Self;
+
+        /// <summary>When true, only bank damage whose SourceId matches this entry's SourceId.</summary>
+        public bool BankFromCaster;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -243,6 +246,23 @@ namespace Emberfall.Core.Combat
         /// Answers "already damaged this round" and "more than once in a round".</summary>
         public readonly List<int> DamagedThisRound = new List<int>();
 
+        // ---------- batch two ----------
+
+        /// <summary>HP snapshot stored by EffectKind.SnapshotHp, read by HpAboveSnapshot.</summary>
+        public int SnapshotHp;
+
+        /// <summary>Total damage this unit dealt this round, for HighestDamageDealtEnemy.</summary>
+        public float DamageDealtThisRound;
+
+        /// <summary>DoT tick damage this unit dealt this round, for HighestDoTDamageEnemy.</summary>
+        public float DoTDamageDealtThisRound;
+
+        /// <summary>Per-stack output modifier, copied from PassiveDef at build time.</summary>
+        public StatusKind OutputModStatus = StatusKind.None;
+        public float OutputModPerStack;
+        public OutputModScope OutputModScope = OutputModScope.AllDamage;
+        public bool OutputModMarkedOnly;
+
         /// <summary>How many times this unit has damaged that one this round.</summary>
         public int TimesDamagedThisRound(int targetId)
         {
@@ -258,6 +278,8 @@ namespace Emberfall.Core.Combat
             StatusesExpiredThisRound = false;
             ActedThisRound = false;
             DamagedThisRound.Clear();
+            DamageDealtThisRound = 0f;
+            DoTDamageDealtThisRound = 0f;
 
             // Per-round status uses, and the per-round half of the per-target limits. Both are
             // "how many times has this already happened THIS round", so both belong to the one
@@ -597,6 +619,14 @@ namespace Emberfall.Core.Combat
             Passives.Add(passive);
             _passiveFired.Add(false);
             _passiveLastRound.Add(0);
+
+            if (passive.OutputModStatus != StatusKind.None)
+            {
+                OutputModStatus = passive.OutputModStatus;
+                OutputModPerStack = passive.OutputModPerStack;
+                OutputModScope = passive.OutputModScope;
+                OutputModMarkedOnly = passive.OutputModMarkedOnly;
+            }
         }
 
         /// <summary>Whether the passive at this index has spent its oncePerBattle allowance.</summary>
