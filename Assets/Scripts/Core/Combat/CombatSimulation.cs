@@ -397,6 +397,14 @@ namespace Emberfall.Core.Combat
             private CombatUnit _thresholdUnit;
 
             /// <summary>
+            /// The unit a broadcast is about - the carrier of a status that expired, the target
+            /// of a DoT tick, etc. Non-null only while a BroadcastPassive is in flight.
+            /// ConditionSubject.BroadcastSubject resolves through this and to nobody outside the
+            /// window, the same pattern _defeated and _thresholdUnit use.
+            /// </summary>
+            private CombatUnit _broadcastSubject;
+
+            /// <summary>
             /// The per-target budget of the passive currently resolving, or null. Set by
             /// TriggerPassive around its ResolveAbility call and restored afterwards, so a passive
             /// that fires inside another passive does not inherit or clobber its budget.
@@ -516,7 +524,11 @@ namespace Emberfall.Core.Combat
                     // adds nothing, which is what makes the talent path unreachable until a player
                     // picks one.
                     PassiveDef talent = hero.Def.TalentAt(hero.SelectedTalent);
-                    if (talent != null) unit.AddPassive(talent);
+                    if (talent != null)
+                    {
+                        unit.AddPassive(talent);
+                        ApplyTalentOverrides(unit, talent);
+                    }
 
                     _units.Add(unit);
                 }
@@ -563,6 +575,122 @@ namespace Emberfall.Core.Combat
                         UnitStats stats = StatMath.ForEnemy(def, spawns[i].Level);
                         _units.Add(CombatUnit.FromDef(def, stats, spawns[i].Level, false, i, id++, _cfg.EnergyMax));
                     }
+                }
+            }
+
+            // ------------------------------------------------------------------ talent overrides
+
+            /// <summary>
+            /// Applies a talent's parameter overrides to the unit's abilities. Each override names
+            /// an ability ("basic", "active", "passive1", "passive2"), an effect index, a field
+            /// and an additive delta. The affected EffectDef (and its parent AbilityDef for basic /
+            /// active) is cloned before mutation, exactly the way relics clone before rewriting
+            /// Target and Hits, so the content-database copy is never touched.
+            ///
+            /// Silently ignores an override that names an ability or index the unit does not have,
+            /// which is the same tolerance TalentAt applies to an out-of-range selection.
+            /// </summary>
+            private static void ApplyTalentOverrides(CombatUnit unit, PassiveDef talent)
+            {
+                if (talent.Overrides.Count == 0) return;
+
+                for (int i = 0; i < talent.Overrides.Count; i++)
+                {
+                    TalentOverrideDef ov = talent.Overrides[i];
+                    if (string.IsNullOrEmpty(ov.Ability) || string.IsNullOrEmpty(ov.Field)) continue;
+
+                    string ab = ov.Ability.ToLowerInvariant();
+                    if (ab == "basic" || ab == "active")
+                    {
+                        AbilityDef src = ab == "basic" ? unit.Basic : unit.Active;
+                        if (src == null) continue;
+
+                        // energyCost is on the ability, not on an effect
+                        if (ov.Field.ToLowerInvariant() == "energycost")
+                        {
+                            AbilityDef clone = CloneAbility(src);
+                            clone.EnergyCost += (int)Math.Round(ov.Delta, MidpointRounding.AwayFromZero);
+                            if (ab == "basic") unit.Basic = clone; else unit.Active = clone;
+                            continue;
+                        }
+
+                        if (ov.EffectIndex < 0 || ov.EffectIndex >= src.Effects.Count) continue;
+                        AbilityDef aclone = CloneAbility(src);
+                        ApplyDelta(aclone.Effects[ov.EffectIndex], ov.Field, ov.Delta);
+                        if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
+                    }
+                    else if (ab == "passive1" || ab == "passive2")
+                    {
+                        int pi = ab == "passive1" ? 0 : 1;
+                        if (pi >= unit.Passives.Count) continue;
+                        PassiveDef passive = unit.Passives[pi];
+
+                        // Threshold is on the passive itself, not on an effect
+                        if (ov.Field.ToLowerInvariant() == "threshold")
+                        {
+                            PassiveDef clone = ClonePassive(passive);
+                            clone.Threshold += ov.Delta;
+                            unit.Passives[pi] = clone;
+                            continue;
+                        }
+
+                        if (ov.EffectIndex < 0 || ov.EffectIndex >= passive.Effects.Count) continue;
+                        PassiveDef pclone = ClonePassive(passive);
+                        ApplyDelta(pclone.Effects[ov.EffectIndex], ov.Field, ov.Delta);
+                        unit.Passives[pi] = pclone;
+                    }
+                }
+            }
+
+            private static AbilityDef CloneAbility(AbilityDef src)
+            {
+                AbilityDef a = new AbilityDef();
+                a.Id = src.Id;
+                a.Name = src.Name;
+                a.Description = src.Description;
+                a.Kind = src.Kind;
+                a.EnergyCost = src.EnergyCost;
+                a.Vfx = src.Vfx;
+                for (int i = 0; i < src.Effects.Count; i++) a.Effects.Add(src.Effects[i].Clone());
+                return a;
+            }
+
+            private static PassiveDef ClonePassive(PassiveDef src)
+            {
+                PassiveDef p = new PassiveDef();
+                p.Id = src.Id;
+                p.Name = src.Name;
+                p.Description = src.Description;
+                p.Trigger = src.Trigger;
+                p.Threshold = src.Threshold;
+                p.OncePerBattle = src.OncePerBattle;
+                p.Limit = src.Limit;
+                p.LimitRounds = src.LimitRounds;
+                p.PerTargetLimit = src.PerTargetLimit;
+                p.PerTargetPerRound = src.PerTargetPerRound;
+                p.Vfx = src.Vfx;
+                p.Effects = new List<EffectDef>();
+                for (int i = 0; i < src.Effects.Count; i++) p.Effects.Add(src.Effects[i].Clone());
+                return p;
+            }
+
+            private static void ApplyDelta(EffectDef e, string field, float delta)
+            {
+                switch (field.ToLowerInvariant())
+                {
+                    case "power":      e.Power += delta; break;
+                    case "magnitude":  e.Magnitude += delta; break;
+                    case "maxstacks":  e.MaxStacks += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
+                    case "duration":   e.Duration += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
+                    case "flat":       e.Flat += delta; break;
+                    case "chance":     e.Chance += delta; break;
+                    case "selfhpratio": e.SelfHpRatio += delta; break;
+                    case "targetmaxhpratio": e.TargetMaxHpRatio += delta; break;
+                    case "targetmissinghpratio": e.TargetMissingHpRatio += delta; break;
+                    case "storedcap":  e.StoredCap += delta; break;
+                    case "hits":       e.Hits += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
+                    case "perstack":   e.PerStack += delta; break;
+                    case "conditionvalue": e.ConditionValue += delta; break;
                 }
             }
 
@@ -709,6 +837,22 @@ namespace Emberfall.Core.Combat
                         // Debrief and any on-screen attribution can't misname a burn tick as a fresh hit
                         DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn, 1f, StatusInfo.DisplayName(StatusKind.Burn));
                         if (!unit.Alive) return;
+
+                        // Applier-side lifecycle: the unit that applied this Burn hears about the
+                        // tick. Broadcast to the source's side with _broadcastSubject set to the
+                        // carrier, so a condition on BroadcastSubject can read the carrier's HP.
+                        if (s.SourceId >= 0)
+                        {
+                            CombatUnit burnSource = FindUnit(s.SourceId);
+                            if (burnSource != null && burnSource.IsPlayer != unit.IsPlayer)
+                            {
+                                CombatUnit prevSubject = _broadcastSubject;
+                                _broadcastSubject = unit;
+                                BroadcastPassive(burnSource.IsPlayer, PassiveTrigger.OnAppliedDoTTick, 0, null);
+                                _broadcastSubject = prevSubject;
+                                if (!unit.Alive || IsBattleOver()) return;
+                            }
+                        }
                     }
                     else if (s.Kind == StatusKind.Regen)
                     {
@@ -739,6 +883,8 @@ namespace Emberfall.Core.Combat
                 unit.StatusesExpiredThisRound = true;
 
                 bool expired = false;
+                bool expiredFromPlayer = false;
+                bool expiredFromEnemy = false;
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
                     StatusInstance s = unit.Statuses[i];
@@ -761,6 +907,20 @@ namespace Emberfall.Core.Combat
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
                     expired = true;
+
+                    // Track which side the expired status was applied FROM, for the applier-side
+                    // lifecycle broadcast below. Only statuses applied by the OTHER side matter:
+                    // a hero whose own buff expired is not what "when a debuff I applied expires"
+                    // means. The source side is determined by looking up SourceId.
+                    if (s.SourceId >= 0)
+                    {
+                        CombatUnit source = FindUnit(s.SourceId);
+                        if (source != null && source.IsPlayer != unit.IsPlayer)
+                        {
+                            if (source.IsPlayer) expiredFromPlayer = true;
+                            else expiredFromEnemy = true;
+                        }
+                    }
                 }
 
                 // Raised once after the whole sweep rather than per status, so a unit shedding
@@ -768,6 +928,21 @@ namespace Emberfall.Core.Combat
                 // here: a cleanse, a dispel, an absorbed ward and a death each remove statuses by
                 // their own path and are each a different thing happening.
                 if (expired) TriggerPassive(unit, PassiveTrigger.OnStatusExpired, 0);
+
+                // Applier-side lifecycle: broadcast to the side that APPLIED each expired status.
+                // A unit on the player side whose Burn expired fires OnAppliedStatusExpired on the
+                // enemy side (the applier's side), with _broadcastSubject set to the carrier.
+                // Collected per-source-side, so one broadcast per side rather than one per status.
+                if (expiredFromPlayer || expiredFromEnemy)
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    _broadcastSubject = unit;
+                    if (expiredFromPlayer)
+                        BroadcastPassive(true, PassiveTrigger.OnAppliedStatusExpired, 0, null);
+                    if (expiredFromEnemy)
+                        BroadcastPassive(false, PassiveTrigger.OnAppliedStatusExpired, 0, null);
+                    _broadcastSubject = prevSubject;
+                }
             }
 
             // ------------------------------------------------------------------ abilities
@@ -791,6 +966,7 @@ namespace Emberfall.Core.Combat
 
                 CombatUnit subject = effect.ConditionOn == ConditionSubject.Caster ? caster
                                    : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                   : effect.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
                                    : target;
                 if (subject == null) return false;
 
@@ -815,11 +991,13 @@ namespace Emberfall.Core.Combat
                     }
                 }
 
-                // Everything else, including a Defeated subject asking an ordinary question, is
-                // answered by the pure function - with the resolved subject substituted in, so
-                // "did the unit that just died carry my mark" reaches the same HasMyMark code every
-                // other subject does.
-                if (effect.ConditionOn == ConditionSubject.Defeated)
+                // Everything else, including a Defeated or BroadcastSubject asking an ordinary
+                // question, is answered by the pure function - with the resolved subject
+                // substituted in, so "did the unit that just died carry my mark" and "is the
+                // unit whose DoT ticked below 30%" reach the same condition code every other
+                // subject does.
+                if (effect.ConditionOn == ConditionSubject.Defeated
+                    || effect.ConditionOn == ConditionSubject.BroadcastSubject)
                 {
                     EffectDef asTarget = effect.Clone();
                     asTarget.ConditionOn = ConditionSubject.Target;
@@ -1005,6 +1183,7 @@ namespace Emberfall.Core.Combat
                         {
                             CombatUnit holder = effect.ConditionOn == ConditionSubject.Caster ? caster
                                               : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
+                                              : effect.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
                                               : target;
                             StatusInstance used = FindRecord(holder, effect.ConditionStatus, caster);
                             if (used != null) used.UsesThisRound++;

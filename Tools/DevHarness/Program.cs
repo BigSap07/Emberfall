@@ -39,6 +39,7 @@ namespace Emberfall.DevHarness
             CheckEnumParity(content);
             CheckTierFiveMechanics(content);
             CheckTierSixMechanics(content);
+            CheckTierSevenMechanics(content);
             CheckAspectDirection(content);
             CheckNoAspectKeyedBehaviour(content);
             CheckOnKillPassive(content);
@@ -13280,6 +13281,83 @@ namespace Emberfall.DevHarness
                 session.LevelUpHero(cheapest, 1);
             }
             return false;
+        }
+        // =====================================================================
+        // TIER SEVEN — talent overrides, applier-side lifecycle, broadcast subject
+        // =====================================================================
+
+        private static void CheckTierSevenMechanics(ContentDatabase live)
+        {
+            Line("TIER SEVEN (talent overrides, applier-side status lifecycle, broadcast-subject condition)");
+
+            CheckNoShippedContentReachesTierSeven(live);
+            CheckTierSevenOrdinals();
+        }
+
+        private static void CheckNoShippedContentReachesTierSeven(ContentDatabase live)
+        {
+            List<string> talentOverrides = new List<string>();
+            List<string> applierTriggers = new List<string>();
+            List<string> broadcastSubject = new List<string>();
+
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+
+                // Talent overrides
+                for (int t = 0; t < def.Talents.Count; t++)
+                {
+                    if (def.Talents[t].Overrides.Count > 0)
+                        talentOverrides.Add(def.Id + "/talent" + (t + 1));
+                }
+
+                // Applier-side lifecycle triggers
+                List<PassiveDef> allPassives = new List<PassiveDef>(def.Passives);
+                for (int t = 0; t < def.Talents.Count; t++) allPassives.Add(def.Talents[t]);
+
+                for (int p = 0; p < allPassives.Count; p++)
+                {
+                    PassiveDef passive = allPassives[p];
+                    if (passive.Trigger == PassiveTrigger.OnAppliedStatusExpired
+                        || passive.Trigger == PassiveTrigger.OnAppliedDoTTick)
+                        applierTriggers.Add(def.Id + "/" + passive.Name + " (" + passive.Trigger + ")");
+                }
+
+                // BroadcastSubject condition
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                {
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                    {
+                        EffectDef ef = abilities[a].Effects[e];
+                        if (ef.ConditionOn == ConditionSubject.BroadcastSubject)
+                            broadcastSubject.Add(def.Id + "/" + abilities[a].Id + "[" + e + "]");
+                    }
+                }
+                for (int p = 0; p < allPassives.Count; p++)
+                {
+                    for (int e = 0; e < allPassives[p].Effects.Count; e++)
+                    {
+                        EffectDef ef = allPassives[p].Effects[e];
+                        if (ef.ConditionOn == ConditionSubject.BroadcastSubject)
+                            broadcastSubject.Add(def.Id + "/" + allPassives[p].Id + "[" + e + "]");
+                    }
+                }
+            }
+
+            Check(talentOverrides.Count == 0, "no shipped talent carries overrides" + Detail(talentOverrides));
+            Check(applierTriggers.Count == 0, "no shipped passive triggers on OnAppliedStatusExpired/OnAppliedDoTTick" + Detail(applierTriggers));
+            Check(broadcastSubject.Count == 0, "no shipped content conditions on BroadcastSubject" + Detail(broadcastSubject));
+        }
+
+        private static void CheckTierSevenOrdinals()
+        {
+            Check((int)ConditionSubject.BroadcastSubject == 3,
+                  "ConditionSubject.BroadcastSubject at 3 (got " + (int)ConditionSubject.BroadcastSubject + ")");
+            Check((int)PassiveTrigger.OnAppliedStatusExpired == 25
+                  && (int)PassiveTrigger.OnAppliedDoTTick == 26,
+                  "PassiveTrigger.OnAppliedStatusExpired at 25, OnAppliedDoTTick at 26 (got "
+                  + (int)PassiveTrigger.OnAppliedStatusExpired + ", " + (int)PassiveTrigger.OnAppliedDoTTick + ")");
         }
     }
 }
