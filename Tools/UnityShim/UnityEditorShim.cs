@@ -16,6 +16,11 @@ namespace UnityEngine
         public static bool GetKeyDown(KeyCode key) { return false; }
         public static bool GetKey(KeyCode key) { return false; }
     }
+
+    public static class GUILayout
+    {
+        public static bool Button(string text) { return false; }
+    }
 }
 
 namespace UnityEditor
@@ -106,8 +111,32 @@ namespace UnityEditor
         public static EditorWindow GetWindow(Type t, bool utility) { return null; }
         public static EditorWindow GetWindow(Type t, bool utility, string title) { return null; }
         public static EditorWindow GetWindow(Type t, bool utility, string title, bool focus) { return null; }
+        public static T GetWindow<T>(string title) where T : EditorWindow { return null; }
         public void Focus() { }
         public void Repaint() { }
+    }
+
+    public enum MessageType { None, Info, Warning, Error }
+
+    public sealed class GUIStyle { }
+
+    public static class EditorStyles
+    {
+        public static GUIStyle boldLabel { get { return null; } }
+    }
+
+    public static class EditorGUILayout
+    {
+        public static void LabelField(string label, GUIStyle style) { }
+        public static void LabelField(string label, string value) { }
+        public static string TextField(string label, string value) { return value; }
+        public static int IntSlider(string label, int value, int min, int max) { return value; }
+        public static void HelpBox(string message, MessageType type) { }
+        public static Vector2 BeginScrollView(Vector2 scroll) { return scroll; }
+        public static void EndScrollView() { }
+        public static void BeginHorizontal() { }
+        public static void EndHorizontal() { }
+        public static void Space() { }
     }
 
     /// <summary>
