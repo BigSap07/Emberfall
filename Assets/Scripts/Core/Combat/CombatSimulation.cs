@@ -778,7 +778,12 @@ namespace Emberfall.Core.Combat
                     // acts on the board the caster is about to hit rather than on the wreckage
                     // afterwards. That is what "when an Anticipated enemy uses an active skill"
                     // asks for, and it is also the only ordering that lets an answer matter.
-                    BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActive, 0, null);
+                    {
+                        CombatUnit prevSubject = _broadcastSubject;
+                        _broadcastSubject = unit;
+                        BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActive, 0, null);
+                        _broadcastSubject = prevSubject;
+                    }
                     if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
                     ResolveAbility(unit, unit.Active, 0);
@@ -1094,7 +1099,12 @@ namespace Emberfall.Core.Combat
 
                 // Broadcast to the side that did NOT pay, which is always the side the debt came
                 // from: an ability watching a repayment is the ability that applied the debt.
+                // The repaying unit is stored as _broadcastSubject so an effect can target or
+                // condition on it via TargetMode.BroadcastSubject / ConditionSubject.BroadcastSubject.
+                CombatUnit prevSubject = _broadcastSubject;
+                _broadcastSubject = unit;
                 BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnTurnDebtRepaid, 0, null);
+                _broadcastSubject = prevSubject;
             }
 
             private void ResolveAbility(CombatUnit caster, AbilityDef ability, int depth)
@@ -1293,7 +1303,12 @@ namespace Emberfall.Core.Combat
                                 if (target.Statuses[si].Kind == StatusKind.Shield)
                                     target.Statuses[si].Charges = effect.Charges;
 
-                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShielded, depth, target);
+                        {
+                            CombatUnit prevSubject = _broadcastSubject;
+                            _broadcastSubject = target;
+                            BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShielded, depth, target);
+                            _broadcastSubject = prevSubject;
+                        }
                         break;
                     }
                     case EffectKind.ApplyStatus:
@@ -1433,7 +1448,12 @@ namespace Emberfall.Core.Combat
                         // handed `depth`, so a buff-gained passive that itself buffs somebody
                         // cascades no further than MaxPassiveDepth already allows.
                         if (!StatusInfo.IsHarmful(effect.Status))
+                        {
+                            CombatUnit prevSubject = _broadcastSubject;
+                            _broadcastSubject = target;
                             BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyBuffGained, depth, null);
+                            _broadcastSubject = prevSubject;
+                        }
                         break;
                     }
                     case EffectKind.Cleanse:
@@ -2071,7 +2091,10 @@ namespace Emberfall.Core.Combat
                     if (!_inDeathCheck)
                     {
                         _inDeathCheck = true;
+                        CombatUnit prevSubject = _broadcastSubject;
+                        _broadcastSubject = target;
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyWouldDie, 0, target);
+                        _broadcastSubject = prevSubject;
                         _inDeathCheck = false;
                     }
 
@@ -2123,6 +2146,8 @@ namespace Emberfall.Core.Combat
                         _inDefeatDispatch = true;
                         CombatUnit previous = _defeated;
                         _defeated = target;
+                        CombatUnit prevSubject = _broadcastSubject;
+                        _broadcastSubject = target;
 
                         // The dead unit's OWN side hears OnAllyDefeated; the other side hears
                         // OnEnemyDefeated. Split rather than one trigger with a condition, because
@@ -2131,6 +2156,7 @@ namespace Emberfall.Core.Combat
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyDefeated, 0, target);
                         BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyDefeated, 0, null);
 
+                        _broadcastSubject = prevSubject;
                         _defeated = previous;
                         _inDefeatDispatch = false;
                     }
@@ -2152,14 +2178,24 @@ namespace Emberfall.Core.Combat
                 // came from somewhere - a Burn tick whose source is long dead still counts, a
                 // sourceless one does not.
                 if (sourceId >= 0)
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    _broadcastSubject = target;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnEnemyDamagedAlly, 0, target);
+                    _broadcastSubject = prevSubject;
+                }
 
                 // And separately, that an ally has dropped low. A distinct question from being hit
                 // at all - a chip hit on a full bar is not what "when an ally falls below 35%" is
                 // asking about - so it is its own trigger rather than a condition on that one. The
                 // watcher's OWN Threshold decides how low counts, read where every other threshold
                 // passive reads it.
-                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    _broadcastSubject = target;
+                    BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
+                    _broadcastSubject = prevSubject;
+                }
 
                 // Mirrored Wound shares this dispatch point with the OnDamaged passive above and
                 // deliberately runs AFTER it. That trigger is not free real estate - Backwash
@@ -2201,12 +2237,24 @@ namespace Emberfall.Core.Combat
                     {
                         CombatUnit healer = FindUnit(sourceId);
                         if (healer != null && healer.Alive)
+                        {
+                            // The healed ally is the broadcast subject so a condition on the
+                            // healer's passive can read the recipient's HP via BroadcastSubject.
+                            CombatUnit prevSubject = _broadcastSubject;
+                            _broadcastSubject = target;
                             TriggerPassive(healer, PassiveTrigger.OnHealApplied, 0);
+                            _broadcastSubject = prevSubject;
+                        }
 
                         // The recipient's allies hear about it too; the recipient is excluded,
                         // since a hero answering its own healing is a different ability from one
                         // answering somebody else's.
-                        BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
+                        {
+                            CombatUnit prevSubject = _broadcastSubject;
+                            _broadcastSubject = target;
+                            BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
+                            _broadcastSubject = prevSubject;
+                        }
                     }
                 }
             }
@@ -3043,6 +3091,12 @@ namespace Emberfall.Core.Combat
                     case TargetMode.ThresholdUnit:
                         picked = _thresholdUnit != null && _thresholdUnit.Alive && _thresholdUnit != excluded
                             ? _thresholdUnit : null;
+                        break;
+
+                    case TargetMode.BroadcastSubject:
+                        // Like ThresholdUnit: alive, not excluded, null outside a broadcast.
+                        picked = _broadcastSubject != null && _broadcastSubject.Alive && _broadcastSubject != excluded
+                            ? _broadcastSubject : null;
                         break;
 
                     case TargetMode.EnemyWithStatus:

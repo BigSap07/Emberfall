@@ -150,7 +150,21 @@ namespace Emberfall.Core.Data
         /// Resolves only while `OnEnemyEnergyThreshold` is being broadcast, via `_thresholdUnit`;
         /// outside that window it resolves to nobody, following the same pattern as DefeatedUnit.
         /// </summary>
-        ThresholdUnit
+        ThresholdUnit,
+
+        /// <summary>
+        /// The unit a broadcast is about — the healed ally, the dying ally, the repaying enemy,
+        /// the shielded ally, the buffed enemy, etc. Resolves to `_broadcastSubject` while any
+        /// broadcast is in flight and to nobody outside one, following the same pattern as
+        /// DefeatedUnit and ThresholdUnit.
+        ///
+        /// Distinct from DefeatedUnit (which resolves to the dead unit via `_defeated`) and from
+        /// ThresholdUnit (which resolves via `_thresholdUnit`): both of those predate this and
+        /// keep their own field because content already names them and their semantics are
+        /// narrower. BroadcastSubject is the general-purpose version for every other broadcast
+        /// that fires because something happened to a specific unit.
+        /// </summary>
+        BroadcastSubject
     }
 
     public enum EffectKind

@@ -50,7 +50,7 @@ TARGET_MODES = {
     "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
     "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
     "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
-    "DefeatedUnit", "ThresholdUnit",
+    "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
 }
 
 # ---------------------------------------------------------------------------

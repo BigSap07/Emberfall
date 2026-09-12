@@ -5010,7 +5010,7 @@ namespace Emberfall.DevHarness
                                "EnemyWithStatus", "HighestEnergyEnemy", "HighestSpeedEnemy",
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
-                               "DefeatedUnit", "ThresholdUnit" },
+                               "DefeatedUnit", "ThresholdUnit", "BroadcastSubject" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -13299,6 +13299,7 @@ namespace Emberfall.DevHarness
             List<string> talentOverrides = new List<string>();
             List<string> applierTriggers = new List<string>();
             List<string> broadcastSubject = new List<string>();
+            List<string> broadcastTarget = new List<string>();
 
             for (int h = 0; h < live.Heroes.Count; h++)
             {
@@ -13323,7 +13324,7 @@ namespace Emberfall.DevHarness
                         applierTriggers.Add(def.Id + "/" + passive.Name + " (" + passive.Trigger + ")");
                 }
 
-                // BroadcastSubject condition
+                // BroadcastSubject condition and target mode
                 List<AbilityDef> abilities = AllAbilitiesOf(def);
                 for (int a = 0; a < abilities.Count; a++)
                 {
@@ -13332,6 +13333,8 @@ namespace Emberfall.DevHarness
                         EffectDef ef = abilities[a].Effects[e];
                         if (ef.ConditionOn == ConditionSubject.BroadcastSubject)
                             broadcastSubject.Add(def.Id + "/" + abilities[a].Id + "[" + e + "]");
+                        if (ef.Target == TargetMode.BroadcastSubject || ef.SecondaryTarget == TargetMode.BroadcastSubject)
+                            broadcastTarget.Add(def.Id + "/" + abilities[a].Id + "[" + e + "]");
                     }
                 }
                 for (int p = 0; p < allPassives.Count; p++)
@@ -13341,6 +13344,8 @@ namespace Emberfall.DevHarness
                         EffectDef ef = allPassives[p].Effects[e];
                         if (ef.ConditionOn == ConditionSubject.BroadcastSubject)
                             broadcastSubject.Add(def.Id + "/" + allPassives[p].Id + "[" + e + "]");
+                        if (ef.Target == TargetMode.BroadcastSubject || ef.SecondaryTarget == TargetMode.BroadcastSubject)
+                            broadcastTarget.Add(def.Id + "/" + allPassives[p].Id + "[" + e + "]");
                     }
                 }
             }
@@ -13348,6 +13353,7 @@ namespace Emberfall.DevHarness
             Check(talentOverrides.Count == 0, "no shipped talent carries overrides" + Detail(talentOverrides));
             Check(applierTriggers.Count == 0, "no shipped passive triggers on OnAppliedStatusExpired/OnAppliedDoTTick" + Detail(applierTriggers));
             Check(broadcastSubject.Count == 0, "no shipped content conditions on BroadcastSubject" + Detail(broadcastSubject));
+            Check(broadcastTarget.Count == 0, "no shipped content targets BroadcastSubject" + Detail(broadcastTarget));
         }
 
         private static void CheckTierSevenOrdinals()
@@ -13358,6 +13364,8 @@ namespace Emberfall.DevHarness
                   && (int)PassiveTrigger.OnAppliedDoTTick == 26,
                   "PassiveTrigger.OnAppliedStatusExpired at 25, OnAppliedDoTTick at 26 (got "
                   + (int)PassiveTrigger.OnAppliedStatusExpired + ", " + (int)PassiveTrigger.OnAppliedDoTTick + ")");
+            Check((int)TargetMode.BroadcastSubject == 23,
+                  "TargetMode.BroadcastSubject at 23 (got " + (int)TargetMode.BroadcastSubject + ")");
         }
     }
 }
