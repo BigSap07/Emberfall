@@ -5860,10 +5860,10 @@
             "conditionOn": "Target"
           },
           {
-            "kind": "RemoveStatus",
+            "kind": "ExtendStatus",
             "target": "FrontEnemy",
             "status": "Burn",
-            "hits": 1,
+            "duration": -1,
             "condition": "HasStatus",
             "conditionStatus": "Burn",
             "conditionOn": "Target"
@@ -5898,6 +5898,20 @@
             "target": "Self",
             "maxStacks": 3,
             "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "TwoLowestHpAllies",
+            "status": "Ledger",
+            "magnitude": 0.50,
+            "duration": 2,
+            "ledgerBankHeals": true,
+            "ledgerAutoRelease": true,
+            "ledgerAutoReleaseAsHeal": true,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 99,
+            "conditionOn": "Caster"
           },
           {
             "kind": "Heal",
@@ -5963,10 +5977,10 @@
         "limit": "OncePerRound",
         "effects": [
           {
-            "kind": "RemoveStatus",
+            "kind": "ExtendStatus",
             "target": "HighestAttackEnemy",
             "status": "Burn",
-            "hits": 1,
+            "duration": -1,
             "condition": "HpBelow",
             "conditionValue": 0.40,
             "conditionOn": "BroadcastSubject",
@@ -6023,13 +6037,13 @@
           "overrides": [
             {
               "ability": "active",
-              "effectIndex": 6,
+              "effectIndex": 7,
               "field": "conditionValue",
               "delta": -99
             },
             {
               "ability": "active",
-              "effectIndex": 7,
+              "effectIndex": 8,
               "field": "conditionValue",
               "delta": -99
             }
@@ -6039,7 +6053,15 @@
           "id": "cyrra_hidden_reserve",
           "name": "Hidden Reserve",
           "trigger": "None",
-          "effects": []
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 4,
+              "field": "conditionValue",
+              "delta": -99
+            }
+          ]
         },
         "talentIII": {
           "id": "cyrra_final_weight",
@@ -6049,7 +6071,7 @@
           "overrides": [
             {
               "ability": "active",
-              "effectIndex": 4,
+              "effectIndex": 5,
               "field": "power",
               "delta": 0.40
             }
