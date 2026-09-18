@@ -343,6 +343,16 @@ namespace Emberfall.Core.Data
         /// authored chance.</summary>
         public bool BypassResist;
 
+        // ---------- batch three ----------
+
+        /// <summary>Ceiling on the TargetMaxHpRatio damage term, as a fraction of the target's
+        /// max HP. Zero (default) means uncapped. Mirrors MissingHpCap for the max-HP term.</summary>
+        public float MaxHpCap;
+
+        /// <summary>When ConsumesResolve is true and this is > 0, removes exactly this many stacks
+        /// instead of all. Zero (default) means remove all, the existing behaviour.</summary>
+        public int ConsumeStacks;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -406,6 +416,8 @@ namespace Emberfall.Core.Data
             e.ScaleByLastRemoval = j.GetBool("scaleByLastRemoval", false);
             e.LedgerBankFromCaster = j.GetBool("ledgerBankFromCaster", false);
             e.BypassResist = j.GetBool("bypassResist", false);
+            e.MaxHpCap = j.GetFloat("maxHpCap", 0f);
+            e.ConsumeStacks = Math.Max(0, j.GetInt("consumeStacks", 0));
             return e;
         }
 
@@ -479,6 +491,8 @@ namespace Emberfall.Core.Data
             c.ScaleByLastRemoval = ScaleByLastRemoval;
             c.LedgerBankFromCaster = LedgerBankFromCaster;
             c.BypassResist = BypassResist;
+            c.MaxHpCap = MaxHpCap;
+            c.ConsumeStacks = ConsumeStacks;
             return c;
         }
     }
@@ -625,6 +639,18 @@ namespace Emberfall.Core.Data
         /// attacker, etc.) is the passive owner.</summary>
         public bool TriggerSourceIsSelf;
 
+        // ---------- batch three: resolve-to-stat scaling ----------
+
+        /// <summary>Which stacking status on the owner adds to a base stat. None means no scaling
+        /// — the whole system is inert.</summary>
+        public StatusKind StatModStatus = StatusKind.None;
+
+        /// <summary>Per-stack additive contribution to the stat named by StatModKind.</summary>
+        public float StatModPerStack;
+
+        /// <summary>Which stat each stack modifies. Only Speed is supported in this pass.</summary>
+        public ComparedStat StatModKind = ComparedStat.Speed;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -648,6 +674,9 @@ namespace Emberfall.Core.Data
             p.OutputModScope = EnumUtil.Parse(j.GetString("outputModScope", "AllDamage"), OutputModScope.AllDamage);
             p.OutputModMarkedOnly = j.GetBool("outputModMarkedOnly", false);
             p.TriggerSourceIsSelf = j.GetBool("triggerSourceIsSelf", false);
+            p.StatModStatus = EnumUtil.Parse(j.GetString("statModStatus", "None"), StatusKind.None);
+            p.StatModPerStack = j.GetFloat("statModPerStack", 0f);
+            p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));

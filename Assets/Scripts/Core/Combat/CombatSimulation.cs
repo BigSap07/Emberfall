@@ -273,6 +273,34 @@ namespace Emberfall.Core.Combat
                 case EffectCondition.HpAboveSnapshot:
                     return subject.SnapshotHp > 0 && subject.Hp > subject.SnapshotHp;
 
+                // ---------- batch three ----------
+
+                case EffectCondition.HasAnyBeneficialStatus:
+                {
+                    for (int i = 0; i < subject.Statuses.Count; i++)
+                    {
+                        StatusKind k = subject.Statuses[i].Kind;
+                        // Exclude inert / counter kinds that are neither buff nor debuff.
+                        if (k == StatusKind.None || k == StatusKind.Resolve || k == StatusKind.Resolve2
+                            || k == StatusKind.Ledger || k == StatusKind.Mark || k == StatusKind.MarkAlt)
+                            continue;
+                        if (!StatusInfo.IsHarmful(k)) return true;
+                    }
+                    return false;
+                }
+
+                case EffectCondition.HasAnyHarmfulStatus:
+                {
+                    for (int i = 0; i < subject.Statuses.Count; i++)
+                        if (StatusInfo.IsHarmful(subject.Statuses[i].Kind)) return true;
+                    return false;
+                }
+
+                // ShieldBrokenByCaster is contextual — answered by the Sim's _shieldBreakerId.
+                // In the pure function (harness, outside a battle) it is always false.
+                case EffectCondition.ShieldBrokenByCaster:
+                    return false;
+
                 case EffectCondition.LedgerAtCap:
                 {
                     if (caster == null) return false;
@@ -353,6 +381,29 @@ namespace Emberfall.Core.Combat
             }
         }
 
+        /// <summary>Public mirror of the Sim's TargetHpTerm, exposed for the harness. Pure
+        /// arithmetic on an EffectDef and a CombatUnit — no Sim state needed.</summary>
+        public static float TargetHpTerm(EffectDef effect, CombatUnit target)
+        {
+            if (target == null) return 0f;
+            float maxHp = target.EffectiveMaxHp;
+            float missingTerm = (maxHp - target.Hp) * effect.TargetMissingHpRatio;
+            if (effect.MissingHpCap > 0f)
+            {
+                float cap = maxHp * effect.MissingHpCap;
+                if (missingTerm > cap) missingTerm = cap;
+            }
+            float maxHpTerm = maxHp * effect.TargetMaxHpRatio;
+            if (effect.MaxHpCap > 0f)
+            {
+                float cap = maxHp * effect.MaxHpCap;
+                if (maxHpTerm > cap) maxHpTerm = cap;
+            }
+            return maxHpTerm
+                 + target.Hp * effect.TargetCurrentHpRatio
+                 + missingTerm;
+        }
+
         private sealed class Sim
         {
             private readonly BattleRequest _request;
@@ -423,6 +474,16 @@ namespace Emberfall.Core.Combat
             /// <summary>The source unit id of the current broadcast (e.g. healer for OnAllyHealed),
             /// or -1 outside a broadcast that carries source identity.</summary>
             private int _broadcastSourceId = -1;
+
+            /// <summary>The unit that was just damaged, healed or otherwise affected in a broadcast.
+            /// Set at every broadcast site that has a clear victim or recipient. Resolves
+            /// TargetMode.BroadcastVictim — the target-mode counterpart of BroadcastSubject that
+            /// resolves BEFORE the Taunt anchor so a provoke cannot intercept it.</summary>
+            private CombatUnit _broadcastVictim;
+
+            /// <summary>The unit that broke the current shield, or -1 outside OnShieldBreak.
+            /// Read by EffectCondition.ShieldBrokenByCaster.</summary>
+            private int _shieldBreakerId = -1;
 
             // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
             private float _lastLedgerRelease;
@@ -1097,6 +1158,10 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    case EffectCondition.ShieldBrokenByCaster:
+                        first = _shieldBreakerId >= 0 && caster != null && _shieldBreakerId == caster.Id;
+                        break;
+
                     default:
                     {
                         // Everything else, including a Defeated or BroadcastSubject asking an ordinary
@@ -1492,11 +1557,22 @@ namespace Emberfall.Core.Combat
                     // Spent after the effect has finished with every target, so an AoE pays the
                     // stack once. Emitted as StatusExpired for the same reason Cleanse does: the
                     // status row has to stop showing a counter the unit no longer holds.
-                    if (!suppressed && effect.ConsumesResolve && caster.CountOf(StatusKind.Resolve) > 0)
+                    //
+                    // Batch three: effect.Status picks which counter to spend (same logic as
+                    // GainResolve). ConsumeStacks > 0 removes exactly that many instead of all.
+                    if (!suppressed && effect.ConsumesResolve)
                     {
-                        caster.Remove(StatusKind.Resolve);
-                        BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
-                        spent.Status = StatusKind.Resolve;
+                        StatusKind resolveKind = effect.Status == StatusKind.Resolve2
+                                                 ? StatusKind.Resolve2 : StatusKind.Resolve;
+                        if (caster.CountOf(resolveKind) > 0)
+                        {
+                            if (effect.ConsumeStacks > 0)
+                                caster.RemoveStacks(resolveKind, effect.ConsumeStacks);
+                            else
+                                caster.Remove(resolveKind);
+                            BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
+                            spent.Status = resolveKind;
+                        }
                     }
                 }
             }
@@ -1771,21 +1847,27 @@ namespace Emberfall.Core.Combat
                         // hand to any hero without touching the simulation again. It stacks through
                         // the same AddStack/CountOf pair Ember's Burn already uses rather than a
                         // second counting mechanism living beside that one.
+                        //
+                        // Batch three: effect.Status picks which counter to grant. None (the
+                        // default and every shipped effect) maps to Resolve, preserving the
+                        // existing behaviour. Resolve2 grants the second independent counter.
                         if (!target.Alive) break;
                         if (target.Has(StatusKind.StatusGainSuppression)) break;
+                        StatusKind resolveKind = effect.Status == StatusKind.Resolve2
+                                                 ? StatusKind.Resolve2 : StatusKind.Resolve;
                         int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
                         for (int g = 0; g < effect.Hits; g++)
                         {
-                            if (!target.AddStack(StatusKind.Resolve, Math.Max(1, effect.Duration),
+                            if (!target.AddStack(resolveKind, Math.Max(1, effect.Duration),
                                                  effect.Magnitude, source.Id, cap))
                                 break;   // already at cap; do not emit a second event for a no-op
                             BattleEvent re = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
-                            re.Status = StatusKind.Resolve;
+                            re.Status = resolveKind;
                             re.Duration = Math.Max(1, effect.Duration);
                             // Value carries stack depth here for the same reason Ember's Burn
                             // stacking uses it: StatusApplied already fires per application, it
                             // just never said how many there were.
-                            re.Value = target.CountOf(StatusKind.Resolve);
+                            re.Value = target.CountOf(resolveKind);
                         }
                         break;
                     }
@@ -2447,7 +2529,13 @@ namespace Emberfall.Core.Combat
                     float cap = maxHp * effect.MissingHpCap;
                     if (missingTerm > cap) missingTerm = cap;
                 }
-                return maxHp * effect.TargetMaxHpRatio
+                float maxHpTerm = maxHp * effect.TargetMaxHpRatio;
+                if (effect.MaxHpCap > 0f)
+                {
+                    float cap = maxHp * effect.MaxHpCap;
+                    if (maxHpTerm > cap) maxHpTerm = cap;
+                }
+                return maxHpTerm
                      + target.Hp * effect.TargetCurrentHpRatio
                      + missingTerm;
             }
@@ -2522,7 +2610,13 @@ namespace Emberfall.Core.Combat
                             target.Remove(StatusKind.Shield);
                             BattleEvent expired = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
                             expired.Status = StatusKind.Shield;
+                            int prevBreaker = _shieldBreakerId;
+                            CombatUnit prevVictimSB = _broadcastVictim;
+                            _shieldBreakerId = sourceId;
+                            _broadcastVictim = target;
                             TriggerPassive(target, PassiveTrigger.OnShieldBreak, 0);
+                            _shieldBreakerId = prevBreaker;
+                            _broadcastVictim = prevVictimSB;
                             if (!target.Alive || IsBattleOver()) return;
                         }
                     }
@@ -2631,9 +2725,12 @@ namespace Emberfall.Core.Combat
                     {
                         _inDeathCheck = true;
                         CombatUnit prevSubject = _broadcastSubject;
+                        CombatUnit prevVictim = _broadcastVictim;
                         _broadcastSubject = target;
+                        _broadcastVictim = target;
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyWouldDie, 0, target);
                         _broadcastSubject = prevSubject;
+                        _broadcastVictim = prevVictim;
                         _inDeathCheck = false;
                     }
 
@@ -2686,7 +2783,9 @@ namespace Emberfall.Core.Combat
                         CombatUnit previous = _defeated;
                         _defeated = target;
                         CombatUnit prevSubject = _broadcastSubject;
+                        CombatUnit prevVictim = _broadcastVictim;
                         _broadcastSubject = target;
+                        _broadcastVictim = target;
 
                         // The dead unit's OWN side hears OnAllyDefeated; the other side hears
                         // OnEnemyDefeated. Split rather than one trigger with a condition, because
@@ -2696,6 +2795,7 @@ namespace Emberfall.Core.Combat
                         BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyDefeated, 0, null);
 
                         _broadcastSubject = prevSubject;
+                        _broadcastVictim = prevVictim;
                         _defeated = previous;
                         _inDefeatDispatch = false;
                     }
@@ -2719,9 +2819,12 @@ namespace Emberfall.Core.Combat
                 if (sourceId >= 0)
                 {
                     CombatUnit prevSubject = _broadcastSubject;
+                    CombatUnit prevVictim = _broadcastVictim;
                     _broadcastSubject = target;
+                    _broadcastVictim = target;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnEnemyDamagedAlly, 0, target);
                     _broadcastSubject = prevSubject;
+                    _broadcastVictim = prevVictim;
                 }
 
                 // And separately, that an ally has dropped low. A distinct question from being hit
@@ -2731,9 +2834,24 @@ namespace Emberfall.Core.Combat
                 // passive reads it.
                 {
                     CombatUnit prevSubject = _broadcastSubject;
+                    CombatUnit prevVictim = _broadcastVictim;
                     _broadcastSubject = target;
+                    _broadcastVictim = target;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
                     _broadcastSubject = prevSubject;
+                    _broadcastVictim = prevVictim;
+                }
+
+                // Mirrored from the victim's side to the attacker's: that an enemy dropped below
+                // threshold. Same trigger shape, other audience.
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    CombatUnit prevVictim = _broadcastVictim;
+                    _broadcastSubject = target;
+                    _broadcastVictim = target;
+                    BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyHpBelowThreshold, 0, null);
+                    _broadcastSubject = prevSubject;
+                    _broadcastVictim = prevVictim;
                 }
 
                 // Mirrored Wound shares this dispatch point with the OnDamaged passive above and
@@ -2787,9 +2905,12 @@ namespace Emberfall.Core.Combat
                             // The healed ally is the broadcast subject so a condition on the
                             // healer's passive can read the recipient's HP via BroadcastSubject.
                             CombatUnit prevSubject = _broadcastSubject;
+                            CombatUnit prevVictim = _broadcastVictim;
                             _broadcastSubject = target;
+                            _broadcastVictim = target;
                             TriggerPassive(healer, PassiveTrigger.OnHealApplied, 0);
                             _broadcastSubject = prevSubject;
+                            _broadcastVictim = prevVictim;
                         }
 
                         // The recipient's allies hear about it too; the recipient is excluded,
@@ -2798,12 +2919,15 @@ namespace Emberfall.Core.Combat
                         // TriggerSourceIsSelf can filter by it.
                         {
                             CombatUnit prevSubject = _broadcastSubject;
+                            CombatUnit prevVictim = _broadcastVictim;
                             int prevSourceId = _broadcastSourceId;
                             _broadcastSubject = target;
+                            _broadcastVictim = target;
                             _broadcastSourceId = sourceId;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
                             _broadcastSourceId = prevSourceId;
                             _broadcastSubject = prevSubject;
+                            _broadcastVictim = prevVictim;
                         }
                     }
                 }
@@ -3570,6 +3694,16 @@ namespace Emberfall.Core.Combat
                         // a heal or a cleanse aimed at whoever needs it most, and "most" of zero is
                         // the front-most ally rather than nobody.
                         if (best != null) result.Add(best);
+                        return result;
+                    }
+
+                    // BroadcastVictim resolves BEFORE the anchor, alongside the ally modes: the
+                    // whole point is to reach a specific unit regardless of which side it is on,
+                    // and a Taunt holder must not intercept it.
+                    case TargetMode.BroadcastVictim:
+                    {
+                        if (_broadcastVictim != null && _broadcastVictim.Alive && _broadcastVictim != excluded)
+                            result.Add(_broadcastVictim);
                         return result;
                     }
 

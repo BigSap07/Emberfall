@@ -175,7 +175,21 @@ namespace Emberfall.Core.Data
         HighestDamageDealtEnemy,
 
         /// <summary>The living enemy that has dealt the most DoT damage this round.</summary>
-        HighestDoTDamageEnemy
+        HighestDoTDamageEnemy,
+
+        // ---------- batch three ----------
+
+        /// <summary>
+        /// The unit that was just damaged, healed or otherwise affected in a broadcast, as a
+        /// target rather than only a condition subject. Resolves from _broadcastVictim, which is
+        /// set at every broadcast site that has a clear victim or recipient.
+        ///
+        /// BEFORE THE ANCHOR, alongside the ally modes: the whole point is to reach a specific
+        /// unit regardless of which side it is on, and a Taunt holder must not intercept it.
+        /// BroadcastSubject in the post-anchor section has the same anchor-override problem but
+        /// is left where it is for backward compatibility.
+        /// </summary>
+        BroadcastVictim
     }
 
     public enum EffectKind
@@ -501,7 +515,22 @@ namespace Emberfall.Core.Data
         // ---------- batch two ----------
 
         /// <summary>The subject's current HP is strictly above its SnapshotHp.</summary>
-        HpAboveSnapshot
+        HpAboveSnapshot,
+
+        // ---------- batch three ----------
+
+        /// <summary>The subject carries at least one beneficial status (anything StatusInfo.IsHarmful
+        /// returns false for, excluding None, Resolve, Resolve2, Ledger and the inert marks).</summary>
+        HasAnyBeneficialStatus,
+
+        /// <summary>The subject carries at least one harmful status (anything StatusInfo.IsHarmful
+        /// returns true for).</summary>
+        HasAnyHarmfulStatus,
+
+        /// <summary>The unit that broke the subject's shield (stored as _shieldBreakerId during
+        /// OnShieldBreak) matches the caster. Meaningful only inside an OnShieldBreak trigger;
+        /// outside that window it is false.</summary>
+        ShieldBrokenByCaster
     }
 
     /// <summary>
@@ -812,7 +841,17 @@ namespace Emberfall.Core.Data
         /// Prevents Resolve gain on the holder. GainResolve checks for this and skips the stack
         /// addition. Harmful, so Cleanse can remove it.
         /// </summary>
-        StatusGainSuppression
+        StatusGainSuppression,
+
+        // ---------- batch three: second independent counter ----------
+
+        /// <summary>
+        /// A second independent stacking counter, identical in mechanics to Resolve but tracked
+        /// separately. GainResolve reads effect.Status to pick which counter to grant (Resolve when
+        /// None, Resolve2 when explicitly named), and ConsumesResolve spends the counter named by
+        /// the same field. Dual-resource kits stack and spend the two counters independently.
+        /// </summary>
+        Resolve2
     }
 
     /// <summary>
@@ -1032,7 +1071,16 @@ namespace Emberfall.Core.Data
         /// The holder's shield pool was depleted by incoming damage. Raised in DealRawDamage
         /// when target.Shield reaches zero, on the unit whose shield broke.
         /// </summary>
-        OnShieldBreak
+        OnShieldBreak,
+
+        // ---------- batch three ----------
+
+        /// <summary>
+        /// An enemy dropped to or below PassiveDef.Threshold of its max HP. Broadcast to the
+        /// OTHER side (the one that dealt the damage) after the hit lands, mirroring
+        /// OnAllyHpBelowThreshold but for enemy units. _broadcastVictim is set to the enemy.
+        /// </summary>
+        OnEnemyHpBelowThreshold
     }
 
     /// <summary>
@@ -1613,6 +1661,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.HolyDamageUp: return "Holy Damage Up";
                 case StatusKind.HealSuppression: return "Heal Suppression";
                 case StatusKind.StatusGainSuppression: return "Gain Suppression";
+                case StatusKind.Resolve2: return "Resolve II";
             }
             return kind.ToString();
         }
@@ -1668,6 +1717,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.HolyDamageUp: return "HLY+";
                 case StatusKind.HealSuppression: return "H-SUP";
                 case StatusKind.StatusGainSuppression: return "G-SUP";
+                case StatusKind.Resolve2: return "RSV2";
             }
             return "?";
         }
