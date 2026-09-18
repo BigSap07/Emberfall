@@ -62,6 +62,7 @@ namespace Emberfall.DevHarness
             CheckTurnStatusAndEnemyTriggers(content);
             CheckMarksLimitsAndLedger(content);
             CheckHistoryAlliesAndCharges(content);
+            CheckBatchThreeMechanics(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -5013,7 +5014,8 @@ namespace Emberfall.DevHarness
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
                                "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
-                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy" },
+                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
+                               "BroadcastVictim" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5042,7 +5044,8 @@ namespace Emberfall.DevHarness
                                "EvasionUp", "AccuracyDown",
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
-                               "HealSuppression", "StatusGainSuppression" },
+                               "HealSuppression", "StatusGainSuppression",
+                               "Resolve2" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
             Line("");
@@ -7985,6 +7988,212 @@ namespace Emberfall.DevHarness
                 Line("  [FAIL] synthetic relic content warning: " + db.Warnings[i]);
             Check(false, "synthetic relic test content parses with no warnings");
             return null;
+        }
+
+        // ================================================================ BATCH THREE
+        //
+        // BroadcastVictim, partial stack removal, HasAnyBeneficialStatus / HasAnyHarmfulStatus,
+        // Resolve2, Resolve→stat scaling, OnEnemyHpBelowThreshold, ShieldBrokenByCaster,
+        // TargetMaxHpRatio damage cap (MaxHpCap).
+
+        private static void CheckBatchThreeMechanics(ContentDatabase live)
+        {
+            Line("BATCH THREE ENGINE GAPS");
+            CheckBatchThreeOrdinalPins();
+            CheckBatchThreeNoShippedUsage(live);
+            CheckBeneficialHarmfulConditions();
+            CheckResolve2Counter();
+            CheckResolveToStatScaling();
+            CheckPartialStackRemoval();
+            CheckMaxHpCap();
+            Line("");
+        }
+
+        private static void CheckBatchThreeOrdinalPins()
+        {
+            // New members are appended; every earlier ordinal is unchanged.
+            Check((int)TargetMode.BroadcastVictim == 27,
+                  "TargetMode.BroadcastVictim is appended at 27");
+            Check((int)EffectCondition.HasAnyBeneficialStatus == 34
+                  && (int)EffectCondition.HasAnyHarmfulStatus == 35
+                  && (int)EffectCondition.ShieldBrokenByCaster == 36,
+                  "batch-three EffectConditions are appended at 34..36");
+            Check((int)PassiveTrigger.OnEnemyHpBelowThreshold == 32,
+                  "PassiveTrigger.OnEnemyHpBelowThreshold is appended at 32");
+            Check((int)StatusKind.Resolve2 == 47,
+                  "StatusKind.Resolve2 is appended at 47");
+        }
+
+        private static void CheckBatchThreeNoShippedUsage(ContentDatabase db)
+        {
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            int resolve2 = 0, broadcastVictim = 0, maxHpCap = 0, consumeStacks = 0;
+            int statMod = 0, shieldBroken = 0, enemyThreshold = 0, beneficialCond = 0;
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    all.AddRange(def.Passives[pi].Effects);
+                    if (def.Passives[pi].StatModStatus != StatusKind.None) statMod++;
+                    if (def.Passives[pi].Trigger == PassiveTrigger.OnEnemyHpBelowThreshold) enemyThreshold++;
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef ef = all[e];
+                    if (ef.Status == StatusKind.Resolve2) resolve2++;
+                    if (ef.Target == TargetMode.BroadcastVictim) broadcastVictim++;
+                    if (ef.MaxHpCap != 0f) maxHpCap++;
+                    if (ef.ConsumeStacks != 0) consumeStacks++;
+                    if (ef.Condition == EffectCondition.HasAnyBeneficialStatus
+                        || ef.Condition == EffectCondition.HasAnyHarmfulStatus
+                        || ef.Condition2 == EffectCondition.HasAnyBeneficialStatus
+                        || ef.Condition2 == EffectCondition.HasAnyHarmfulStatus) beneficialCond++;
+                    if (ef.Condition == EffectCondition.ShieldBrokenByCaster
+                        || ef.Condition2 == EffectCondition.ShieldBrokenByCaster) shieldBroken++;
+                }
+            }
+
+            Check(resolve2 == 0, "no shipped effect uses Resolve2 (" + resolve2 + ")");
+            Check(broadcastVictim == 0, "no shipped effect targets BroadcastVictim (" + broadcastVictim + ")");
+            Check(maxHpCap == 0, "no shipped effect sets maxHpCap (" + maxHpCap + ")");
+            Check(consumeStacks == 0, "no shipped effect sets consumeStacks (" + consumeStacks + ")");
+            Check(statMod == 0, "no shipped passive sets statModStatus (" + statMod + ")");
+            Check(shieldBroken == 0, "no shipped effect uses ShieldBrokenByCaster (" + shieldBroken + ")");
+            Check(enemyThreshold == 0, "no shipped passive listens on OnEnemyHpBelowThreshold (" + enemyThreshold + ")");
+            Check(beneficialCond == 0, "no shipped effect uses HasAnyBeneficialStatus / HasAnyHarmfulStatus (" + beneficialCond + ")");
+        }
+
+        private static void CheckBeneficialHarmfulConditions()
+        {
+            CombatUnit subject = new CombatUnit(); subject.Id = 1; subject.MaxHp = 100f; subject.Hp = 80f;
+
+            EffectDef hasBeneficial = new EffectDef();
+            hasBeneficial.Condition = EffectCondition.HasAnyBeneficialStatus;
+            EffectDef hasHarmful = new EffectDef();
+            hasHarmful.Condition = EffectCondition.HasAnyHarmfulStatus;
+
+            // No statuses: both false
+            Check(!CombatSimulation.ConditionMet(hasBeneficial, subject, subject),
+                  "HasAnyBeneficialStatus is false with no statuses");
+            Check(!CombatSimulation.ConditionMet(hasHarmful, subject, subject),
+                  "HasAnyHarmfulStatus is false with no statuses");
+
+            // Add a beneficial status (AttackUp)
+            subject.AddOrRefresh(StatusKind.AttackUp, 2, 0.2f, -1);
+            Check(CombatSimulation.ConditionMet(hasBeneficial, subject, subject),
+                  "HasAnyBeneficialStatus is true with AttackUp");
+            Check(!CombatSimulation.ConditionMet(hasHarmful, subject, subject),
+                  "HasAnyHarmfulStatus is still false with only AttackUp");
+
+            // Add a harmful status (Burn)
+            subject.AddOrRefresh(StatusKind.Burn, 2, 10f, -1);
+            Check(CombatSimulation.ConditionMet(hasHarmful, subject, subject),
+                  "HasAnyHarmfulStatus is true with Burn");
+
+            // Resolve is excluded from beneficial
+            CombatUnit clean = new CombatUnit(); clean.Id = 2; clean.MaxHp = 100f; clean.Hp = 80f;
+            clean.AddStack(StatusKind.Resolve, 99, 0f, -1, 5);
+            Check(!CombatSimulation.ConditionMet(hasBeneficial, clean, clean),
+                  "HasAnyBeneficialStatus excludes Resolve");
+            clean.AddStack(StatusKind.Resolve2, 99, 0f, -1, 5);
+            Check(!CombatSimulation.ConditionMet(hasBeneficial, clean, clean),
+                  "HasAnyBeneficialStatus excludes Resolve2");
+        }
+
+        private static void CheckResolve2Counter()
+        {
+            // Resolve2 stacks independently from Resolve
+            CombatUnit u = new CombatUnit(); u.Id = 1; u.MaxHp = 100f; u.Hp = 100f;
+            u.AddStack(StatusKind.Resolve, 99, 0f, -1, 5);
+            u.AddStack(StatusKind.Resolve, 99, 0f, -1, 5);
+            u.AddStack(StatusKind.Resolve2, 99, 0f, -1, 5);
+
+            Check(u.CountOf(StatusKind.Resolve) == 2, "Resolve stacks to 2");
+            Check(u.CountOf(StatusKind.Resolve2) == 1, "Resolve2 stacks independently to 1");
+
+            u.Remove(StatusKind.Resolve);
+            Check(u.CountOf(StatusKind.Resolve) == 0, "Remove(Resolve) clears only Resolve");
+            Check(u.CountOf(StatusKind.Resolve2) == 1, "Resolve2 survives Remove(Resolve)");
+
+            // DisplayName and ShortTag
+            Check(StatusInfo.DisplayName(StatusKind.Resolve2) == "Resolve II",
+                  "Resolve2 DisplayName is 'Resolve II'");
+            Check(StatusInfo.ShortTag(StatusKind.Resolve2) == "RSV2",
+                  "Resolve2 ShortTag is 'RSV2'");
+        }
+
+        private static void CheckResolveToStatScaling()
+        {
+            CombatUnit u = new CombatUnit(); u.Id = 1; u.MaxHp = 1000f; u.Hp = 1000f;
+            u.Speed = 100f;
+            u.StatModStatus = StatusKind.Resolve;
+            u.StatModPerStack = 5f;
+            u.StatModKind = ComparedStat.Speed;
+
+            float baseline = u.EffectiveSpeed;
+            Check(Math.Abs(baseline - 100f) < 0.01f,
+                  "EffectiveSpeed is 100 with zero Resolve stacks");
+
+            u.AddStack(StatusKind.Resolve, 99, 0f, -1, 10);
+            u.AddStack(StatusKind.Resolve, 99, 0f, -1, 10);
+            u.AddStack(StatusKind.Resolve, 99, 0f, -1, 10);
+            Check(Math.Abs(u.EffectiveSpeed - 115f) < 0.01f,
+                  "EffectiveSpeed is 115 with 3 Resolve stacks at 5 per stack (" + u.EffectiveSpeed + ")");
+
+            // Stat mod from a PassiveDef flows through AddPassive
+            CombatUnit u2 = new CombatUnit(); u2.Id = 2; u2.MaxHp = 1000f; u2.Hp = 1000f;
+            u2.Speed = 100f;
+            PassiveDef p = new PassiveDef();
+            p.StatModStatus = StatusKind.Resolve2;
+            p.StatModPerStack = 10f;
+            p.StatModKind = ComparedStat.Speed;
+            u2.AddPassive(p);
+            Check(u2.StatModStatus == StatusKind.Resolve2, "AddPassive copies StatModStatus");
+            u2.AddStack(StatusKind.Resolve2, 99, 0f, -1, 5);
+            Check(Math.Abs(u2.EffectiveSpeed - 110f) < 0.01f,
+                  "Resolve2 drives speed via StatMod (" + u2.EffectiveSpeed + ")");
+        }
+
+        private static void CheckPartialStackRemoval()
+        {
+            CombatUnit u = new CombatUnit(); u.Id = 1; u.MaxHp = 100f; u.Hp = 100f;
+            for (int i = 0; i < 5; i++) u.AddStack(StatusKind.Resolve, 99, 0f, -1, 10);
+            Check(u.CountOf(StatusKind.Resolve) == 5, "starts with 5 Resolve stacks");
+
+            int removed = u.RemoveStacks(StatusKind.Resolve, 2);
+            Check(removed == 2 && u.CountOf(StatusKind.Resolve) == 3,
+                  "RemoveStacks(2) leaves 3 (" + u.CountOf(StatusKind.Resolve) + ")");
+
+            removed = u.RemoveStacks(StatusKind.Resolve, 10);
+            Check(removed == 3 && u.CountOf(StatusKind.Resolve) == 0,
+                  "RemoveStacks(10) removes only what exists (" + removed + " removed)");
+        }
+
+        private static void CheckMaxHpCap()
+        {
+            CombatUnit target = new CombatUnit(); target.Id = 1; target.MaxHp = 10000f; target.Hp = 10000f;
+
+            // Without cap, TargetMaxHpRatio 0.12 on 10000 maxHp = 1200
+            EffectDef uncapped = new EffectDef();
+            uncapped.TargetMaxHpRatio = 0.12f;
+            float uncappedTerm = CombatSimulation.TargetHpTerm(uncapped, target);
+            Check(Math.Abs(uncappedTerm - 1200f) < 0.01f,
+                  "uncapped TargetMaxHpRatio 0.12 on 10000 maxHp = 1200 (" + uncappedTerm + ")");
+
+            // With cap at 0.08, capped to 10000 * 0.08 = 800
+            EffectDef capped = new EffectDef();
+            capped.TargetMaxHpRatio = 0.12f;
+            capped.MaxHpCap = 0.08f;
+            float cappedTerm = CombatSimulation.TargetHpTerm(capped, target);
+            Check(Math.Abs(cappedTerm - 800f) < 0.01f,
+                  "MaxHpCap 0.08 caps the term to 800 (" + cappedTerm + ")");
         }
 
         private static void CheckDebrief()

@@ -40,6 +40,7 @@ STATUS_KINDS = {
     "GuaranteedCrit", "BuffSuppression",
     "Disrupted", "MaxHpUp", "HolyDamageUp",
     "HealSuppression", "StatusGainSuppression",
+    "Resolve2",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {
@@ -55,6 +56,7 @@ TARGET_MODES = {
     "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
     "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
     "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
+    "BroadcastVictim",
 }
 
 # ---------------------------------------------------------------------------

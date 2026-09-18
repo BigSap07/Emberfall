@@ -263,6 +263,14 @@ namespace Emberfall.Core.Combat
         public OutputModScope OutputModScope = OutputModScope.AllDamage;
         public bool OutputModMarkedOnly;
 
+        // ---------- batch three: resolve-to-stat scaling ----------
+
+        /// <summary>Which stacking status on this unit contributes to a base stat. None means
+        /// no scaling — the whole system is inert. Copied from PassiveDef at build time.</summary>
+        public StatusKind StatModStatus = StatusKind.None;
+        public float StatModPerStack;
+        public ComparedStat StatModKind = ComparedStat.Speed;
+
         /// <summary>How many times this unit has damaged that one this round.</summary>
         public int TimesDamagedThisRound(int targetId)
         {
@@ -414,7 +422,15 @@ namespace Emberfall.Core.Combat
             {
                 float m = 1f + SumMagnitude(StatusKind.SpeedUp) - SumMagnitude(StatusKind.Slow);
                 if (m < 0.3f) m = 0.3f;
-                return Speed * m;
+                float v = Speed * m;
+                // Stat-mod contribution: each stack of StatModStatus adds StatModPerStack to the
+                // effective stat. Only Speed is implemented; other stats would add their own getter
+                // modification. Additive on the final value, not on the multiplier, so it stacks
+                // linearly with counter depth.
+                if (StatModStatus != StatusKind.None && StatModKind == ComparedStat.Speed && StatModPerStack != 0f)
+                    v += CountOf(StatModStatus) * StatModPerStack;
+                if (v < 1f) v = 1f;
+                return v;
             }
         }
 
@@ -627,6 +643,13 @@ namespace Emberfall.Core.Combat
                 OutputModScope = passive.OutputModScope;
                 OutputModMarkedOnly = passive.OutputModMarkedOnly;
             }
+
+            if (passive.StatModStatus != StatusKind.None)
+            {
+                StatModStatus = passive.StatModStatus;
+                StatModPerStack = passive.StatModPerStack;
+                StatModKind = passive.StatModKind;
+            }
         }
 
         /// <summary>Whether the passive at this index has spent its oncePerBattle allowance.</summary>
@@ -677,6 +700,19 @@ namespace Emberfall.Core.Combat
         public void Remove(StatusKind kind)
         {
             for (int i = Statuses.Count - 1; i >= 0; i--) if (Statuses[i].Kind == kind) Statuses.RemoveAt(i);
+        }
+
+        /// <summary>Remove exactly `count` entries of the given kind, oldest first. If the unit has
+        /// fewer than `count`, removes all of them. Returns how many were actually removed.</summary>
+        public int RemoveStacks(StatusKind kind, int count)
+        {
+            int removed = 0;
+            for (int i = 0; i < Statuses.Count && removed < count; /* no i++ */)
+            {
+                if (Statuses[i].Kind == kind) { Statuses.RemoveAt(i); removed++; }
+                else i++;
+            }
+            return removed;
         }
 
         public UnitSnapshot ToSnapshot()
