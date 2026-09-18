@@ -1007,6 +1007,7 @@ namespace Emberfall.Core.Combat
 
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
+                    e.Duration = 1;  // marks a natural duration-based expiry, not a removal
                     expired = true;
                     if (!_expiredKinds.Contains(s.Kind)) _expiredKinds.Add(s.Kind);
 
@@ -1552,8 +1553,10 @@ namespace Emberfall.Core.Combat
                     case EffectKind.ApplyStatus:
                     {
                         if (!target.Alive || effect.Status == StatusKind.None) break;
-                        float landing = ResolveLandingChance(effect.Chance, effect.Status,
-                                                              source.EffectiveEffectHit, target.EffectiveEffectResist);
+                        float landing = effect.BypassResist
+                            ? effect.Chance
+                            : ResolveLandingChance(effect.Chance, effect.Status,
+                                                    source.EffectiveEffectHit, target.EffectiveEffectResist);
 
                         // The Unbroken Ledger, applied BEFORE Control Immunity below and never
                         // after it. The relic erases Effect Resist only, and the ordering is what

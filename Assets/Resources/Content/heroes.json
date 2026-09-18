@@ -56,7 +56,8 @@
             "target": "LowestHpEnemy",
             "status": "Vulnerable",
             "magnitude": 0.10,
-            "duration": 2
+            "duration": 2,
+            "bypassResist": true
           }
         ]
       },
@@ -73,7 +74,7 @@
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 0.0,
+            "power": 1.0,
             "targetMissingHpRatio": 0.12,
             "missingHpCap": 0.15,
             "condition": "SubjectDamagedSinceMyTurn",
@@ -123,7 +124,8 @@
             "target": "HighestDamageDealtEnemy",
             "status": "Vulnerable",
             "magnitude": 0.10,
-            "duration": 2
+            "duration": 2,
+            "bypassResist": true
           }
         ]
       },
@@ -778,6 +780,7 @@
             "target": "Self",
             "status": "HealSuppression",
             "duration": 1,
+            "bypassResist": true,
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject"
           },
@@ -1063,6 +1066,7 @@
             "target": "AllEnemies",
             "status": "BuffSuppression",
             "duration": 1,
+            "bypassResist": true,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
             "condition2": "LacksMyMark",
@@ -5831,6 +5835,7 @@
             "status": "Burn",
             "magnitude": 0.35,
             "duration": 2,
+            "bypassResist": true,
             "condition": "LacksStatus",
             "conditionStatus": "Burn",
             "conditionOn": "Target"
@@ -5878,7 +5883,8 @@
             "target": "AllEnemies",
             "status": "Burn",
             "magnitude": 0.35,
-            "duration": 2
+            "duration": 2,
+            "bypassResist": true
           },
           {
             "kind": "RemoveStatus",
@@ -7024,7 +7030,8 @@
             "target": "LowestHpEnemy",
             "status": "Burn",
             "magnitude": 0.35,
-            "duration": 2
+            "duration": 2,
+            "bypassResist": true
           }
         ]
       },
