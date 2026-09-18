@@ -5581,8 +5581,8 @@ namespace Emberfall.DevHarness
                     for (int f = 0; f < db.Enemies.Count; f++)
                     {
                         EnemyDef foe = db.Enemies[f];
-                        float landing = CombatSimulation.ResolveLandingChance(1f, eff.Status, unit.EffectHit, foe.EffectResist);
-                        if (landing != 1f)
+                        float landing = CombatSimulation.ResolveLandingChance(eff.Chance, eff.Status, unit.EffectHit, foe.EffectResist);
+                        if (landing < 1f)
                             broken.Add(label + " rolls against " + foe.Id + " at " + Fmt(landing));
                     }
                 }
@@ -7264,7 +7264,7 @@ namespace Emberfall.DevHarness
                         string key = e.TargetId + ":" + (int)e.Status;
                         pending[key] = new int[] { e.Round, e.Duration };
                     }
-                    else if (e.Type == BattleEventType.StatusExpired && e.Status != StatusKind.Shield)
+                    else if (e.Type == BattleEventType.StatusExpired && e.Status != StatusKind.Shield && e.Duration > 0)
                     {
                         string key = e.TargetId + ":" + (int)e.Status;
                         int[] rec;

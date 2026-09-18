@@ -1007,6 +1007,7 @@ namespace Emberfall.Core.Combat
 
                     BattleEvent e = Emit(BattleEventType.StatusExpired, unit.Id, unit.Id);
                     e.Status = s.Kind;
+                    e.Duration = 1;  // marks a natural duration-based expiry, not a removal
                     expired = true;
                     if (!_expiredKinds.Contains(s.Kind)) _expiredKinds.Add(s.Kind);
 
