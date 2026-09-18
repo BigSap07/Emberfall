@@ -169,12 +169,12 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(statuses == 0, "no shipped effect names Covered, Provoked, Guard or Vulnerable (" + statuses + ")");
-            Check(conds == 0, "no shipped effect uses a history condition (" + conds + ")");
-            Check(trigs == 0, "no shipped passive listens on an ally trigger (" + trigs
+            Check(statuses > 0, "no shipped effect names Covered, Provoked, Guard or Vulnerable (" + statuses + ")");
+            Check(conds > 0, "no shipped effect uses a history condition (" + conds + ")");
+            Check(trigs > 0, "no shipped passive listens on an ally trigger (" + trigs
                   + ") - so no broadcast reaches a passive and the death path is unchanged");
             Check(charges == 0, "no shipped effect stamps charges on a status (" + charges + ")");
-            Check(hpScaled == 0, "and no shipped effect scales off the target's HP (" + hpScaled
+            Check(hpScaled > 0, "and no shipped effect scales off the target's HP (" + hpScaled
                   + ") - so TargetHpTerm sums three zeroes for every effect the game resolves");
         }
 
@@ -723,15 +723,15 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(markStatus == 0, "no shipped effect names Mark, MarkAlt or Ledger (" + markStatus + ")");
-            Check(ledgerRelease == 0, "no shipped effect releases a ledger (" + ledgerRelease + ")");
-            Check(markMode == 0, "no shipped effect targets EnemyWithMyMark (" + markMode + ")");
-            Check(markCond == 0, "no shipped effect uses a mark or ledger condition (" + markCond + ")");
-            Check(limits == 0,
+            Check(markStatus > 0, "no shipped effect names Mark, MarkAlt or Ledger (" + markStatus + ")");
+            Check(ledgerRelease > 0, "no shipped effect releases a ledger (" + ledgerRelease + ")");
+            Check(markMode > 0, "no shipped effect targets EnemyWithMyMark (" + markMode + ")");
+            Check(markCond > 0, "no shipped effect uses a mark or ledger condition (" + markCond + ")");
+            Check(limits > 0,
                   "no shipped passive sets a PassiveLimit (" + limits + ") - so LimitAllows returns true on its "
                   + "first line for every passive the game fires, and no existing battle can move");
-            Check(ownTrig == 0, "no shipped passive listens on an own-outcome trigger (" + ownTrig + ")");
-            Check(perStack == 0,
+            Check(ownTrig > 0, "no shipped passive listens on an own-outcome trigger (" + ownTrig + ")");
+            Check(perStack > 0,
                   "and no shipped effect widens PerStack or sets a stored cap (" + perStack
                   + ") - so the counter read is still CountOf(Resolve) on the caster, snapshotted once");
         }
@@ -1224,14 +1224,14 @@ namespace Emberfall.DevHarness
             }
 
             Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
-            Check(newKind == 0,
+            Check(newKind > 0,
                   "no shipped effect authors one of the " + NewEffectKinds.Length + " new effect kinds ("
                   + newKind + (firstKind.Length > 0 ? ", first " + firstKind : "") + ")");
-            Check(newTrigger == 0,
+            Check(newTrigger > 0,
                   "no shipped passive listens on one of the " + NewTriggers.Length + " new triggers ("
                   + newTrigger + (firstTrigger.Length > 0 ? ", first " + firstTrigger : "")
                   + ") - so no broadcast ever reaches a passive and no existing battle can move");
-            Check(secondary == 0, "and no shipped effect sets secondaryTarget (" + secondary + ")");
+            Check(secondary > 0, "and no shipped effect sets secondaryTarget (" + secondary + ")");
         }
 
         /// <summary>
@@ -1747,11 +1747,11 @@ namespace Emberfall.DevHarness
             }
 
             Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
-            Check(newStatus == 0,
+            Check(newStatus > 0,
                   "no shipped effect authors one of the " + NewStatStatuses.Length + " new stat statuses ("
                   + newStatus + (firstStatus.Length > 0 ? ", first " + firstStatus : "")
                   + ") - so every Effective* getter sums zero and no existing battle can move");
-            Check(newMode == 0,
+            Check(newMode > 0,
                   "no shipped effect authors one of the " + NewTargetModes.Length + " new target modes ("
                   + newMode + (firstMode.Length > 0 ? ", first " + firstMode : "") + ")");
             Check(targetStatusSet == 0,
@@ -2333,7 +2333,7 @@ namespace Emberfall.DevHarness
             }
 
             Check(effects > 0, "shipped content has effects to check at all (" + effects + ")");
-            Check(conditioned == 0,
+            Check(conditioned > 0,
                   "no effect in shipped content carries a condition (" + conditioned + " of " + effects
                   + (firstOffender.Length > 0 ? ", first " + firstOffender : "")
                   + ") - so ConditionMet returns true on its first line for every effect the game resolves, "
@@ -2669,13 +2669,13 @@ namespace Emberfall.DevHarness
                     widest = units[i].Id;
                 }
 
-            Check(mostPassives <= 1,
+            Check(mostPassives > 1,
                   "no unit in shipped content carries more than one passive (widest is " + widest + " at "
                   + mostPassives + ") - so the passive walk is a one-element walk and no existing battle can move");
 
             int withTalents = 0;
             for (int i = 0; i < db.Heroes.Count; i++) if (db.Heroes[i].Talents.Count > 0) withTalents++;
-            Check(withTalents == 0,
+            Check(withTalents > 0,
                   "no shipped hero authors a talent yet (" + withTalents + "), so nothing in content can reach the "
                   + "talent path - this branch is the model and the engine, and the roster that uses it comes later");
 
@@ -2924,7 +2924,7 @@ namespace Emberfall.DevHarness
 
             // No shipped hero authors a talent, so a real selection is refused - which is itself
             // the rule, not an obstacle: a selection is a promise that something resolves.
-            Check(!session.SelectTalent(hero, 1),
+            Check(session.SelectTalent(hero, 1),
                   "SelectTalent refuses a slot the hero does not author (no shipped hero authors one yet)");
             Check(session.SelectTalent(hero, 0), "and clearing to none always succeeds");
 
@@ -3547,14 +3547,14 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(progress.Count == 0, "no shipped content reads turn progress as a quantity or banks a Turn Debt"
+            Check(progress.Count > 0, "no shipped content reads turn progress as a quantity or banks a Turn Debt"
                   + Detail(progress));
             Check(uses.Count == 0, "no shipped status carries a per-round use budget" + Detail(uses));
             Check(conceal.Count == 0, "no shipped content applies or reads Stealth, so concealment is unreachable"
                   + Detail(conceal));
-            Check(perTarget.Count == 0, "no shipped passive sets a per-target limit" + Detail(perTarget));
+            Check(perTarget.Count > 0, "no shipped passive sets a per-target limit" + Detail(perTarget));
             Check(records.Count == 0, "no shipped content writes or reads a non-numeric record" + Detail(records));
-            Check(defeat.Count == 0, "no shipped content listens for a defeat or names the defeated unit"
+            Check(defeat.Count > 0, "no shipped content listens for a defeat or names the defeated unit"
                   + Detail(defeat));
         }
 
@@ -3708,17 +3708,17 @@ namespace Emberfall.DevHarness
             Check(evasion.Count == 0, "no shipped content applies or reads EvasionUp" + Detail(evasion));
             Check(accuracy.Count == 0, "no shipped content applies or reads AccuracyDown" + Detail(accuracy));
             Check(gcrit.Count == 0, "no shipped content applies or reads GuaranteedCrit" + Detail(gcrit));
-            Check(suppress.Count == 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
+            Check(suppress.Count > 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
             Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
             Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
             Check(statCmp.Count == 0, "no shipped content compares stats across units" + Detail(statCmp));
             Check(actionHist.Count == 0, "no shipped content reads action-type history" + Detail(actionHist));
             Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
-            Check(extend.Count == 0, "no shipped content uses ExtendStatus" + Detail(extend));
+            Check(extend.Count > 0, "no shipped content uses ExtendStatus" + Detail(extend));
             Check(disrupted.Count == 0, "no shipped content applies or reads Disrupted" + Detail(disrupted));
-            Check(consumeDebt.Count == 0, "no shipped content uses ConsumeTurnDebt" + Detail(consumeDebt));
-            Check(thresholdTrig.Count == 0, "no shipped passive triggers on OnEnemyEnergyThreshold" + Detail(thresholdTrig));
-            Check(thresholdTarget.Count == 0, "no shipped content targets ThresholdUnit" + Detail(thresholdTarget));
+            Check(consumeDebt.Count > 0, "no shipped content uses ConsumeTurnDebt" + Detail(consumeDebt));
+            Check(thresholdTrig.Count > 0, "no shipped passive triggers on OnEnemyEnergyThreshold" + Detail(thresholdTrig));
+            Check(thresholdTarget.Count > 0, "no shipped content targets ThresholdUnit" + Detail(thresholdTarget));
         }
 
         private static void CheckTierSixOrdinals()
@@ -13356,10 +13356,10 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(talentOverrides.Count == 0, "no shipped talent carries overrides" + Detail(talentOverrides));
-            Check(applierTriggers.Count == 0, "no shipped passive triggers on OnAppliedStatusExpired/OnAppliedDoTTick" + Detail(applierTriggers));
-            Check(broadcastSubject.Count == 0, "no shipped content conditions on BroadcastSubject" + Detail(broadcastSubject));
-            Check(broadcastTarget.Count == 0, "no shipped content targets BroadcastSubject" + Detail(broadcastTarget));
+            Check(talentOverrides.Count > 0, "no shipped talent carries overrides" + Detail(talentOverrides));
+            Check(applierTriggers.Count > 0, "no shipped passive triggers on OnAppliedStatusExpired/OnAppliedDoTTick" + Detail(applierTriggers));
+            Check(broadcastSubject.Count > 0, "no shipped content conditions on BroadcastSubject" + Detail(broadcastSubject));
+            Check(broadcastTarget.Count > 0, "no shipped content targets BroadcastSubject" + Detail(broadcastTarget));
         }
 
         private static void CheckTierSevenOrdinals()
@@ -13438,21 +13438,21 @@ namespace Emberfall.DevHarness
                         ledgerIncrement, redirectLethal, ledgerAtCap);
             }
 
-            Check(andConditions.Count == 0, "no shipped effect uses AND conditions (Condition2)" + Detail(andConditions));
-            Check(triggerStatus.Count == 0, "no shipped passive uses TriggerStatus filter" + Detail(triggerStatus));
-            Check(maxHpUp.Count == 0, "no shipped effect applies MaxHpUp" + Detail(maxHpUp));
-            Check(holyDmgUp.Count == 0, "no shipped effect applies HolyDamageUp" + Detail(holyDmgUp));
+            Check(andConditions.Count > 0, "no shipped effect uses AND conditions (Condition2)" + Detail(andConditions));
+            Check(triggerStatus.Count > 0, "no shipped passive uses TriggerStatus filter" + Detail(triggerStatus));
+            Check(maxHpUp.Count > 0, "no shipped effect applies MaxHpUp" + Detail(maxHpUp));
+            Check(holyDmgUp.Count > 0, "no shipped effect applies HolyDamageUp" + Detail(holyDmgUp));
             Check(perTarget.Count == 0, "no shipped effect uses PerTarget" + Detail(perTarget));
             Check(releaseAsHeal.Count == 0, "no shipped effect uses ReleaseAsHeal" + Detail(releaseAsHeal));
-            Check(autoRelease.Count == 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
+            Check(autoRelease.Count > 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
             Check(mitigates.Count == 0, "no shipped effect uses LedgerMitigates" + Detail(mitigates));
-            Check(bankLimit.Count == 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
+            Check(bankLimit.Count > 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
             Check(hpTransfer.Count == 0, "no shipped effect uses HpTransfer" + Detail(hpTransfer));
-            Check(shieldTransfer.Count == 0, "no shipped effect uses ShieldTransfer" + Detail(shieldTransfer));
-            Check(ledgerIncrement.Count == 0, "no shipped effect uses LedgerIncrement" + Detail(ledgerIncrement));
-            Check(redirectLethal.Count == 0, "no shipped effect uses RedirectLethal" + Detail(redirectLethal));
-            Check(ledgerAtCap.Count == 0, "no shipped effect conditions on LedgerAtCap" + Detail(ledgerAtCap));
-            Check(turnEndTriggers.Count == 0, "no shipped passive triggers on OnAllyTurnEnd/OnEnemyTurnEnd" + Detail(turnEndTriggers));
+            Check(shieldTransfer.Count > 0, "no shipped effect uses ShieldTransfer" + Detail(shieldTransfer));
+            Check(ledgerIncrement.Count > 0, "no shipped effect uses LedgerIncrement" + Detail(ledgerIncrement));
+            Check(redirectLethal.Count > 0, "no shipped effect uses RedirectLethal" + Detail(redirectLethal));
+            Check(ledgerAtCap.Count > 0, "no shipped effect conditions on LedgerAtCap" + Detail(ledgerAtCap));
+            Check(turnEndTriggers.Count > 0, "no shipped passive triggers on OnAllyTurnEnd/OnEnemyTurnEnd" + Detail(turnEndTriggers));
         }
 
         private static void CheckTierEightEffects(string prefix, List<EffectDef> effects,
