@@ -5629,7 +5629,8 @@ namespace Emberfall.DevHarness
             {
                 EffectDef e = ability.Effects[i];
                 bool zero = false;
-                if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f;
+                if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f
+                    && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f && e.TargetMissingHpRatio <= 0f;
                 else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield) zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f;
                 else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat <= 0f;
                 if (zero)
@@ -8045,6 +8046,16 @@ namespace Emberfall.DevHarness
                     if (def.Passives[pi].StatModStatus != StatusKind.None) statMod++;
                     if (def.Passives[pi].Trigger == PassiveTrigger.OnEnemyHpBelowThreshold) enemyThreshold++;
                 }
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                {
+                    for (int ti = 0; ti < hero.Talents.Count; ti++)
+                    {
+                        all.AddRange(hero.Talents[ti].Effects);
+                        if (hero.Talents[ti].StatModStatus != StatusKind.None) statMod++;
+                        if (hero.Talents[ti].Trigger == PassiveTrigger.OnEnemyHpBelowThreshold) enemyThreshold++;
+                    }
+                }
                 for (int e = 0; e < all.Count; e++)
                 {
                     EffectDef ef = all[e];
@@ -8061,14 +8072,14 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(resolve2 == 0, "no shipped effect uses Resolve2 (" + resolve2 + ")");
-            Check(broadcastVictim == 0, "no shipped effect targets BroadcastVictim (" + broadcastVictim + ")");
-            Check(maxHpCap == 0, "no shipped effect sets maxHpCap (" + maxHpCap + ")");
-            Check(consumeStacks == 0, "no shipped effect sets consumeStacks (" + consumeStacks + ")");
-            Check(statMod == 0, "no shipped passive sets statModStatus (" + statMod + ")");
+            Check(resolve2 > 0, "shipped content now uses Resolve2 (" + resolve2 + ")");
+            Check(broadcastVictim > 0, "shipped content now targets BroadcastVictim (" + broadcastVictim + ")");
+            Check(maxHpCap > 0, "shipped content now sets maxHpCap (" + maxHpCap + ")");
+            Check(consumeStacks > 0, "shipped content now sets consumeStacks (" + consumeStacks + ")");
+            Check(statMod > 0, "shipped content now sets statModStatus (" + statMod + ")");
             Check(shieldBroken == 0, "no shipped effect uses ShieldBrokenByCaster (" + shieldBroken + ")");
-            Check(enemyThreshold == 0, "no shipped passive listens on OnEnemyHpBelowThreshold (" + enemyThreshold + ")");
-            Check(beneficialCond == 0, "no shipped effect uses HasAnyBeneficialStatus / HasAnyHarmfulStatus (" + beneficialCond + ")");
+            Check(enemyThreshold > 0, "shipped content now listens on OnEnemyHpBelowThreshold (" + enemyThreshold + ")");
+            Check(beneficialCond > 0, "shipped content now uses HasAnyBeneficialStatus / HasAnyHarmfulStatus (" + beneficialCond + ")");
         }
 
         private static void CheckBeneficialHarmfulConditions()
