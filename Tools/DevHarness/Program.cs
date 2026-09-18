@@ -49,6 +49,7 @@ namespace Emberfall.DevHarness
             CheckDeterminism(content);
             CheckEffectHitResistNoOp(content);
             CheckEffectHitResistDirection(content);
+            CheckBypassResist();
             CheckTeamSizeStructure(content);
             CheckProvokeTargeting(content);
             CheckStatusExpiry(content);
@@ -5574,6 +5575,7 @@ namespace Emberfall.DevHarness
                     EffectDef eff = abilities[a].Effects[e];
                     if (eff.Kind != EffectKind.ApplyStatus) continue;
                     if (!StatusInfo.IsHarmful(eff.Status)) continue;
+                    if (eff.BypassResist) continue;
                     if (eff.Chance < 1f) continue;
 
                     string label = unit.Id + "/" + abilities[a].Name + "/" + eff.Status;
@@ -6105,15 +6107,11 @@ namespace Emberfall.DevHarness
             // The trap: an ApplyStatus with no authored "chance" defaults to 1.0, and
             // ResolveLandingChance then computes 1f + hit - resist. When hit and resist are equal
             // that evaluates to 0.99999994 in float, which fails DeterministicRng.Chance's >= 1f
-            // short-circuit and silently turns a certainty into a draw. Nyx's Hollowing was the one
-            // harmful status in the game authored that way, which is why this was written about her.
+            // short-circuit and silently turns a certainty into a draw.
             //
-            // There is NO SUBJECT LEFT: every harmful ApplyStatus the five remaining heroes and the
-            // enemies author carries an explicit chance below 1.0, and the only implicit-1.0
-            // applications left are beneficial, which bypass both stats outright. So the loop below
-            // has nothing to iterate today and says so rather than passing quietly. It starts
-            // checking again by itself the moment content authors a certain harmful status - which
-            // a 94-hero roster very plausibly will.
+            // Effects marked BypassResist skip the resist formula entirely at runtime, so
+            // CollectCertainHarmfulStatuses excludes them. The check guards the remaining effects
+            // that go through ResolveLandingChance with an authored chance >= 1.0.
             List<string> certainHarmful = new List<string>();
             List<string> brokenCertainty = new List<string>();
             for (int i = 0; i < db.Heroes.Count; i++)
@@ -6133,6 +6131,97 @@ namespace Emberfall.DevHarness
 
             Line("  Authored values are UNTUNED. Every win rate below moves because of them; task 14 is the retune.");
             Line("");
+        }
+
+        /// <summary>
+        /// BypassResist: a per-effect flag that skips the Effect Resist formula entirely.
+        /// Proven in a synthetic arena where the same Vulnerable application lands against a
+        /// high-resist enemy with the flag and is resisted without it. Count-based.
+        /// </summary>
+        private static void CheckBypassResist()
+        {
+            Line("BYPASS RESIST");
+
+            ContentDatabase arena = BuildBypassResistTestContent();
+            if (arena == null) { Line(""); return; }
+
+            // Battle 1: hero with bypassResist true — status must always land
+            HeroDef bypassDef = arena.GetHero("br_bypass");
+            List<HeroInstance> bypassTeam = new List<HeroInstance>();
+            bypassTeam.Add(MakeInstance(bypassDef, 1));
+            BattleResult r1 = RunWith(arena, arena.GetStage("br_arena"), 4242, bypassTeam);
+
+            int applied1 = 0, resisted1 = 0;
+            for (int i = 0; i < r1.Events.Count; i++)
+            {
+                if (r1.Events[i].Type == BattleEventType.StatusApplied && r1.Events[i].Status == StatusKind.Vulnerable)
+                    applied1++;
+                if (r1.Events[i].Type == BattleEventType.StatusResisted && r1.Events[i].Status == StatusKind.Vulnerable)
+                    resisted1++;
+            }
+
+            // Battle 2: hero WITHOUT bypassResist — status must be resisted at least once
+            HeroDef normalDef = arena.GetHero("br_normal");
+            List<HeroInstance> normalTeam = new List<HeroInstance>();
+            normalTeam.Add(MakeInstance(normalDef, 1));
+            BattleResult r2 = RunWith(arena, arena.GetStage("br_arena"), 4242, normalTeam);
+
+            int applied2 = 0, resisted2 = 0;
+            for (int i = 0; i < r2.Events.Count; i++)
+            {
+                if (r2.Events[i].Type == BattleEventType.StatusApplied && r2.Events[i].Status == StatusKind.Vulnerable)
+                    applied2++;
+                if (r2.Events[i].Type == BattleEventType.StatusResisted && r2.Events[i].Status == StatusKind.Vulnerable)
+                    resisted2++;
+            }
+
+            Check(applied1 > 0, "BypassResist Vulnerable lands against a high-resist enemy (" + applied1 + " applied)");
+            Check(resisted1 == 0, "BypassResist Vulnerable is never resisted (" + resisted1 + " resisted)");
+            Check(resisted2 > 0, "same Vulnerable WITHOUT BypassResist is resisted by the same enemy (" + resisted2 + " resisted)");
+
+            Line("");
+        }
+
+        private static ContentDatabase BuildBypassResistTestContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""br_bypass"", ""name"": ""Bypass Tester"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""br_bypass_basic"", ""name"": ""BypassStrike"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Vulnerable"",
+            ""magnitude"": 0.10, ""duration"": 2, ""bypassResist"": true }
+        ] } },
+    { ""id"": ""br_normal"", ""name"": ""Normal Tester"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""br_normal_basic"", ""name"": ""NormalStrike"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Vulnerable"",
+            ""magnitude"": 0.10, ""duration"": 2 }
+        ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""br_wall"", ""name"": ""Resist Wall"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.5,
+      ""effectResist"": 0.95,
+      ""basic"": { ""id"": ""br_wall_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""br_ch"", ""name"": ""Bypass Arena"", ""stages"": [
+        { ""id"": ""br_arena"", ""index"": 1,
+          ""enemies"": [ { ""id"": ""br_wall"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, ZeroVarianceBalance(6), "BypassResist");
         }
 
         /// <summary>

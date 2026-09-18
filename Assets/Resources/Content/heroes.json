@@ -57,7 +57,7 @@
             "status": "Vulnerable",
             "magnitude": 0.10,
             "duration": 2,
-            "chance": 1.35
+            "bypassResist": true
           }
         ]
       },
@@ -125,7 +125,7 @@
             "status": "Vulnerable",
             "magnitude": 0.10,
             "duration": 2,
-            "chance": 1.35
+            "bypassResist": true
           }
         ]
       },
@@ -780,7 +780,7 @@
             "target": "Self",
             "status": "HealSuppression",
             "duration": 1,
-            "chance": 1.35,
+            "bypassResist": true,
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject"
           },
@@ -1066,7 +1066,7 @@
             "target": "AllEnemies",
             "status": "BuffSuppression",
             "duration": 1,
-            "chance": 1.35,
+            "bypassResist": true,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
             "condition2": "LacksMyMark",
@@ -5835,7 +5835,7 @@
             "status": "Burn",
             "magnitude": 0.35,
             "duration": 2,
-            "chance": 1.35,
+            "bypassResist": true,
             "condition": "LacksStatus",
             "conditionStatus": "Burn",
             "conditionOn": "Target"
@@ -5884,7 +5884,7 @@
             "status": "Burn",
             "magnitude": 0.35,
             "duration": 2,
-            "chance": 1.35
+            "bypassResist": true
           },
           {
             "kind": "RemoveStatus",
@@ -7031,7 +7031,7 @@
             "status": "Burn",
             "magnitude": 0.35,
             "duration": 2,
-            "chance": 1.35
+            "bypassResist": true
           }
         ]
       },

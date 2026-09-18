@@ -337,6 +337,12 @@ namespace Emberfall.Core.Data
         /// entry's own SourceId. Stored on the StatusInstance.</summary>
         public bool LedgerBankFromCaster;
 
+        /// <summary>When true, the ApplyStatus call site uses the authored Chance directly,
+        /// bypassing the Effect Resist formula entirely. Kit-defining debuffs that are not
+        /// meant to be contested use this instead of out-scaling Effect Resist with a high
+        /// authored chance.</summary>
+        public bool BypassResist;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -399,6 +405,7 @@ namespace Emberfall.Core.Data
             e.ScaleByLastRedirect = j.GetBool("scaleByLastRedirect", false);
             e.ScaleByLastRemoval = j.GetBool("scaleByLastRemoval", false);
             e.LedgerBankFromCaster = j.GetBool("ledgerBankFromCaster", false);
+            e.BypassResist = j.GetBool("bypassResist", false);
             return e;
         }
 
@@ -471,6 +478,7 @@ namespace Emberfall.Core.Data
             c.ScaleByLastRedirect = ScaleByLastRedirect;
             c.ScaleByLastRemoval = ScaleByLastRemoval;
             c.LedgerBankFromCaster = LedgerBankFromCaster;
+            c.BypassResist = BypassResist;
             return c;
         }
     }
