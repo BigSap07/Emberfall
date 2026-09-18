@@ -564,6 +564,30 @@ namespace Emberfall.Core.Data
         }
     }
 
+    /// <summary>
+    /// A full effect a talent appends to a named ability or passive, rather than modifying an
+    /// existing effect's numeric field. Applied at unit-build time alongside TalentOverrideDef.
+    /// The effect is added to the end of the named ability's effect list, so it resolves last.
+    /// </summary>
+    public sealed class TalentAppendDef
+    {
+        /// <summary>"basic", "active", "passive1", or "passive2".</summary>
+        public string Ability = "";
+
+        /// <summary>The full effect to append.</summary>
+        public EffectDef Effect;
+
+        public static TalentAppendDef FromJson(JsonValue j)
+        {
+            if (j == null || j.IsNull) return null;
+            TalentAppendDef a = new TalentAppendDef();
+            a.Ability = j.GetString("ability", "");
+            a.Effect = EffectDef.FromJson(j["effect"]);
+            if (a.Effect == null) return null;
+            return a;
+        }
+    }
+
     public sealed class PassiveDef
     {
         public string Id = "";
@@ -612,6 +636,16 @@ namespace Emberfall.Core.Data
         /// battles cannot move: the override path is never entered.
         /// </summary>
         public readonly List<TalentOverrideDef> Overrides = new List<TalentOverrideDef>();
+
+        /// <summary>
+        /// Full effects this talent appends to a named ability or passive. Each entry names an
+        /// ability slot and carries a complete EffectDef that is added to the end of that ability's
+        /// effect list at unit-build time. Parallel to Overrides, not a replacement for it.
+        ///
+        /// Empty for every passive in shipped content until a talent authors one. An empty list
+        /// is inert: the append path is never entered.
+        /// </summary>
+        public readonly List<TalentAppendDef> Appends = new List<TalentAppendDef>();
 
         /// <summary>
         /// Filters OnStatusExpired to fire only when the specific status named here expired.
@@ -686,6 +720,13 @@ namespace Emberfall.Core.Data
             {
                 TalentOverrideDef o = TalentOverrideDef.FromJson(overrides[i]);
                 if (o != null) p.Overrides.Add(o);
+            }
+
+            List<JsonValue> appends = j.GetList("appends");
+            for (int i = 0; i < appends.Count; i++)
+            {
+                TalentAppendDef a = TalentAppendDef.FromJson(appends[i]);
+                if (a != null) p.Appends.Add(a);
             }
             return p;
         }

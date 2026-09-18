@@ -517,6 +517,12 @@ namespace Emberfall.Core.Combat
             /// against. Read by PerTarget to scale Hits.</summary>
             private int _lastEffectTargetCount;
 
+            /// <summary>The last unit an effect in the current ability resolved against. Set after
+            /// each effect's per-target loop, cleared at ability boundaries. Lets a Self-targeted
+            /// effect condition on the target of the previous effect via ConditionSubject.LastTarget.
+            /// </summary>
+            private CombatUnit _lastTarget;
+
             public Sim(BattleRequest request)
             {
                 _request = request;
@@ -627,6 +633,7 @@ namespace Emberfall.Core.Combat
                     {
                         unit.AddPassive(talent);
                         ApplyTalentOverrides(unit, talent);
+                        ApplyTalentAppends(unit, talent);
                     }
 
                     _units.Add(unit);
@@ -741,6 +748,40 @@ namespace Emberfall.Core.Combat
                 }
             }
 
+            /// <summary>
+            /// Applies a talent's appended effects to the unit's abilities. Each append names an
+            /// ability slot and carries a full EffectDef that is added to the end of that ability's
+            /// effect list. The ability is cloned before mutation, same as overrides.
+            /// </summary>
+            private static void ApplyTalentAppends(CombatUnit unit, PassiveDef talent)
+            {
+                if (talent.Appends.Count == 0) return;
+
+                for (int i = 0; i < talent.Appends.Count; i++)
+                {
+                    TalentAppendDef ap = talent.Appends[i];
+                    if (string.IsNullOrEmpty(ap.Ability) || ap.Effect == null) continue;
+
+                    string ab = ap.Ability.ToLowerInvariant();
+                    if (ab == "basic" || ab == "active")
+                    {
+                        AbilityDef src = ab == "basic" ? unit.Basic : unit.Active;
+                        if (src == null) continue;
+                        AbilityDef aclone = CloneAbility(src);
+                        aclone.Effects.Add(ap.Effect.Clone());
+                        if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
+                    }
+                    else if (ab == "passive1" || ab == "passive2")
+                    {
+                        int pi = ab == "passive1" ? 0 : 1;
+                        if (pi >= unit.Passives.Count) continue;
+                        PassiveDef pclone = ClonePassive(unit.Passives[pi]);
+                        pclone.Effects.Add(ap.Effect.Clone());
+                        unit.Passives[pi] = pclone;
+                    }
+                }
+            }
+
             private static AbilityDef CloneAbility(AbilityDef src)
             {
                 AbilityDef a = new AbilityDef();
@@ -768,6 +809,14 @@ namespace Emberfall.Core.Combat
                 p.PerTargetLimit = src.PerTargetLimit;
                 p.PerTargetPerRound = src.PerTargetPerRound;
                 p.TriggerStatus = src.TriggerStatus;
+                p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
+                p.OutputModStatus = src.OutputModStatus;
+                p.OutputModPerStack = src.OutputModPerStack;
+                p.OutputModScope = src.OutputModScope;
+                p.OutputModMarkedOnly = src.OutputModMarkedOnly;
+                p.StatModStatus = src.StatModStatus;
+                p.StatModPerStack = src.StatModPerStack;
+                p.StatModKind = src.StatModKind;
                 p.Vfx = src.Vfx;
                 p.Effects = new List<EffectDef>();
                 for (int i = 0; i < src.Effects.Count; i++) p.Effects.Add(src.Effects[i].Clone());
@@ -1133,6 +1182,7 @@ namespace Emberfall.Core.Combat
                                    : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
                                    : effect.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
                                    : effect.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
+                                   : effect.ConditionOn == ConditionSubject.LastTarget ? _lastTarget
                                    : target;
                 if (subject == null) return false;
 
@@ -1169,7 +1219,8 @@ namespace Emberfall.Core.Combat
                         // substituted in.
                         if (effect.ConditionOn == ConditionSubject.Defeated
                             || effect.ConditionOn == ConditionSubject.BroadcastSubject
-                            || effect.ConditionOn == ConditionSubject.LastAttacker)
+                            || effect.ConditionOn == ConditionSubject.LastAttacker
+                            || effect.ConditionOn == ConditionSubject.LastTarget)
                         {
                             EffectDef asTarget = effect.Clone();
                             asTarget.ConditionOn = ConditionSubject.Target;
@@ -1212,6 +1263,7 @@ namespace Emberfall.Core.Combat
                                     : gate2.ConditionOn == ConditionSubject.Defeated ? _defeated
                                     : gate2.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
                                     : gate2.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
+                                    : gate2.ConditionOn == ConditionSubject.LastTarget ? _lastTarget
                                     : target;
                 if (subject2 == null) return false;
 
@@ -1231,7 +1283,8 @@ namespace Emberfall.Core.Combat
 
                 if (gate2.ConditionOn == ConditionSubject.Defeated
                     || gate2.ConditionOn == ConditionSubject.BroadcastSubject
-                    || gate2.ConditionOn == ConditionSubject.LastAttacker)
+                    || gate2.ConditionOn == ConditionSubject.LastAttacker
+                    || gate2.ConditionOn == ConditionSubject.LastTarget)
                 {
                     gate2.ConditionOn = ConditionSubject.Target;
                     return ConditionMet(gate2, caster, subject2);
@@ -1261,6 +1314,7 @@ namespace Emberfall.Core.Combat
                                     : gate3.ConditionOn == ConditionSubject.Defeated ? _defeated
                                     : gate3.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
                                     : gate3.ConditionOn == ConditionSubject.LastAttacker ? ResolveLastAttacker()
+                                    : gate3.ConditionOn == ConditionSubject.LastTarget ? _lastTarget
                                     : target;
                 if (subject3 == null) return false;
 
@@ -1280,7 +1334,8 @@ namespace Emberfall.Core.Combat
 
                 if (gate3.ConditionOn == ConditionSubject.Defeated
                     || gate3.ConditionOn == ConditionSubject.BroadcastSubject
-                    || gate3.ConditionOn == ConditionSubject.LastAttacker)
+                    || gate3.ConditionOn == ConditionSubject.LastAttacker
+                    || gate3.ConditionOn == ConditionSubject.LastTarget)
                 {
                     gate3.ConditionOn = ConditionSubject.Target;
                     return ConditionMet(gate3, caster, subject3);
@@ -1387,6 +1442,8 @@ namespace Emberfall.Core.Combat
             private void ResolveAbility(CombatUnit caster, AbilityDef ability, int depth)
             {
                 if (ability == null) return;
+                CombatUnit prevLastTarget = _lastTarget;
+                _lastTarget = null;
                 for (int i = 0; i < ability.Effects.Count; i++)
                 {
                     // No relic reshapes an effect any more. Both legendary relics in the current
@@ -1486,6 +1543,7 @@ namespace Emberfall.Core.Combat
                             CombatUnit holder = effect.ConditionOn == ConditionSubject.Caster ? caster
                                               : effect.ConditionOn == ConditionSubject.Defeated ? _defeated
                                               : effect.ConditionOn == ConditionSubject.BroadcastSubject ? _broadcastSubject
+                                              : effect.ConditionOn == ConditionSubject.LastTarget ? _lastTarget
                                               : target;
                             StatusInstance used = FindRecord(holder, effect.ConditionStatus, caster);
                             if (used != null) used.UsesThisRound++;
@@ -1532,7 +1590,8 @@ namespace Emberfall.Core.Combat
                         }
 
                         ApplyEffect(caster, target, landed, ability, depth);
-                        if (IsBattleOver()) return;
+                        _lastTarget = target;
+                        if (IsBattleOver()) { _lastTarget = prevLastTarget; return; }
                     }
 
                     // An effect whose condition held for nobody did not happen, so it does not pay
@@ -1575,6 +1634,7 @@ namespace Emberfall.Core.Combat
                         }
                     }
                 }
+                _lastTarget = prevLastTarget;
             }
 
             private void ApplyEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)

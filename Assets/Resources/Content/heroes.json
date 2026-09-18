@@ -55,7 +55,7 @@
             "kind": "ApplyStatus",
             "target": "LowestHpEnemy",
             "status": "Vulnerable",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 2,
             "bypassResist": true
           }
@@ -94,14 +94,14 @@
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "AttackUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           },
           {
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "Focus",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           }
         ]
@@ -123,7 +123,7 @@
             "kind": "ApplyStatus",
             "target": "HighestDamageDealtEnemy",
             "status": "Vulnerable",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 2,
             "bypassResist": true
           }
@@ -178,7 +178,7 @@
               "kind": "ApplyStatus",
               "target": "Self",
               "status": "CritDamageUp",
-              "magnitude": 0.20,
+              "magnitude": 0.2,
               "duration": 1
             }
           ]
@@ -215,7 +215,7 @@
               "kind": "ApplyStatus",
               "target": "LowestHpEnemy",
               "status": "Vulnerable",
-              "magnitude": 0.10,
+              "magnitude": 0.1,
               "duration": 2,
               "condition": "HasMyMark",
               "conditionOn": "Defeated"
@@ -299,18 +299,6 @@
             "target": "Self",
             "maxStacks": 4,
             "duration": 3
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "AllEnemies",
-            "status": "Mark",
-            "duration": 2,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionOn": "Caster",
-            "conditionValue": 99,
-            "condition2": "HasMyMark",
-            "conditionOn2": "Target"
           }
         ]
       },
@@ -490,12 +478,17 @@
           "name": "Clear the Debris",
           "trigger": "None",
           "effects": [],
-          "overrides": [
+          "appends": [
             {
               "ability": "active",
-              "effectIndex": 3,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "Mark",
+                "duration": 2,
+                "condition": "HasMyMark",
+                "conditionOn": "Target"
+              }
             }
           ]
         },
@@ -649,7 +642,7 @@
             "kind": "ApplyStatus",
             "target": "LowestHpAlly",
             "status": "Covered",
-            "magnitude": 0.20,
+            "magnitude": 0.2,
             "duration": 2,
             "condition": "SubjectDamagedSinceMyTurn",
             "conditionOn": "Target"
@@ -676,29 +669,8 @@
             "kind": "ApplyStatus",
             "target": "TwoLowestHpAllies",
             "status": "Covered",
-            "magnitude": 0.20,
+            "magnitude": 0.2,
             "duration": 2
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "ThreeLowestHpAllies",
-            "status": "Mark",
-            "duration": 2,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionValue": 99,
-            "conditionOn": "Caster"
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "ThreeLowestHpAllies",
-            "status": "Covered",
-            "magnitude": 0.20,
-            "duration": 2,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionValue": 99,
-            "conditionOn": "Caster"
           }
         ]
       },
@@ -711,14 +683,14 @@
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "MaxHpUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           },
           {
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "EffectResistUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           }
         ]
@@ -818,22 +790,31 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "active",
-              "effectIndex": 3,
-              "field": "conditionValue",
-              "delta": -99
-            },
-            {
-              "ability": "active",
-              "effectIndex": 4,
-              "field": "conditionValue",
-              "delta": -99
-            },
-            {
               "ability": "passive1",
               "effectIndex": 0,
               "field": "targetMaxHpRatio",
               "delta": -0.02
+            }
+          ],
+          "appends": [
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "ThreeLowestHpAllies",
+                "status": "Covered",
+                "magnitude": 0.2,
+                "duration": 2
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "ThreeLowestHpAllies",
+                "status": "Mark",
+                "duration": 2
+              }
             }
           ]
         },
@@ -993,15 +974,6 @@
             "duration": 2,
             "storedCap": 0.8,
             "ledgerBankLimit": 1
-          },
-          {
-            "kind": "LedgerIncrement",
-            "target": "HighestEnergyEnemy",
-            "power": 0.0,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionOn": "Caster",
-            "conditionValue": 99
           }
         ]
       },
@@ -1175,12 +1147,16 @@
               "effectIndex": 6,
               "field": "power",
               "delta": 0.3
-            },
+            }
+          ],
+          "appends": [
             {
               "ability": "active",
-              "effectIndex": 6,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "LedgerIncrement",
+                "target": "HighestEnergyEnemy",
+                "power": 0.0
+              }
             }
           ]
         },
@@ -3464,7 +3440,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.90,
+            "power": 0.9,
             "condition": "StatusStacksAtLeast",
             "conditionStatus": "Resolve",
             "conditionValue": 3,
@@ -3514,14 +3490,14 @@
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "MaxHpUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           },
           {
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "EffectResistUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           },
           {
@@ -3545,7 +3521,7 @@
             "maxStacks": 3,
             "duration": 99,
             "condition": "HpBelow",
-            "conditionValue": 0.50,
+            "conditionValue": 0.5,
             "conditionOn": "BroadcastSubject"
           }
         ]
@@ -3564,7 +3540,7 @@
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject",
             "condition2": "HpBelow",
-            "conditionValue2": 0.20,
+            "conditionValue2": 0.2,
             "conditionOn2": "BroadcastSubject"
           },
           {
@@ -3605,7 +3581,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.60,
+            "power": 0.6,
             "condition": "HasMyMark",
             "conditionStatus": "MarkAlt",
             "conditionOn": "Caster"
@@ -3618,18 +3594,6 @@
             "condition": "HasMyMark",
             "conditionStatus": "MarkAlt",
             "conditionOn": "Caster"
-          },
-          {
-            "kind": "Heal",
-            "target": "LowestHpAlly",
-            "power": 0.70,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionValue": 99,
-            "conditionOn": "Caster",
-            "condition2": "HasMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Caster"
           }
         ]
       },
@@ -3659,12 +3623,17 @@
           "name": "Shared Recovery",
           "trigger": "None",
           "effects": [],
-          "overrides": [
+          "appends": [
             {
               "ability": "passive2",
-              "effectIndex": 7,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "Heal",
+                "target": "LowestHpAlly",
+                "power": 0.7,
+                "condition": "HasMyMark",
+                "conditionStatus": "MarkAlt",
+                "conditionOn": "Caster"
+              }
             }
           ]
         },
@@ -3707,7 +3676,7 @@
             {
               "kind": "Heal",
               "target": "LowestHpAlly",
-              "power": 0.60,
+              "power": 0.6,
               "condition": "HasMyMark",
               "conditionOn": "BroadcastSubject"
             },
@@ -4696,15 +4665,6 @@
             "target": "ThresholdUnit",
             "magnitude": 0.1,
             "secondaryTarget": "LowestEnergyAlly"
-          },
-          {
-            "kind": "TurnShift",
-            "target": "LowestEnergyAlly",
-            "magnitude": 0.0,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionOn": "Caster",
-            "conditionValue": 99
           }
         ]
       },
@@ -4738,12 +4698,16 @@
               "effectIndex": 1,
               "field": "magnitude",
               "delta": 0.1
-            },
+            }
+          ],
+          "appends": [
             {
               "ability": "passive2",
-              "effectIndex": 1,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "TurnShift",
+                "target": "LowestEnergyAlly",
+                "magnitude": 0.0
+              }
             }
           ]
         },
@@ -5843,7 +5807,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.70,
+            "power": 0.7,
             "condition": "HasStatus",
             "conditionStatus": "Burn",
             "conditionOn": "Target"
@@ -5876,7 +5840,7 @@
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.60
+            "power": 1.6
           },
           {
             "kind": "ApplyStatus",
@@ -5902,7 +5866,7 @@
             "kind": "ApplyStatus",
             "target": "TwoLowestHpAllies",
             "status": "Ledger",
-            "magnitude": 0.50,
+            "magnitude": 0.5,
             "duration": 2,
             "ledgerBankHeals": true,
             "ledgerAutoRelease": true,
@@ -5915,7 +5879,7 @@
           {
             "kind": "Heal",
             "target": "TwoLowestHpAllies",
-            "power": 0.80,
+            "power": 0.8,
             "scaleByLastRemoval": true
           },
           {
@@ -5923,26 +5887,6 @@
             "target": "TwoLowestHpAllies",
             "selfHpRatio": 0.06,
             "duration": 2
-          },
-          {
-            "kind": "RemoveStatus",
-            "target": "HighestDoTDamageEnemy",
-            "status": "Burn",
-            "hits": 1,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionValue": 99,
-            "conditionOn": "Caster"
-          },
-          {
-            "kind": "Heal",
-            "target": "TwoLowestHpAllies",
-            "power": 0.50,
-            "scaleByLastRemoval": true,
-            "condition": "StatusStacksAtLeast",
-            "conditionStatus": "Resolve",
-            "conditionValue": 99,
-            "conditionOn": "Caster"
           }
         ]
       },
@@ -5958,7 +5902,7 @@
             "kind": "ApplyStatus",
             "target": "Self",
             "status": "EffectResistUp",
-            "magnitude": 0.10,
+            "magnitude": 0.1,
             "duration": 99
           },
           {
@@ -5983,7 +5927,7 @@
             "status": "Burn",
             "duration": -1,
             "condition": "HpBelow",
-            "conditionValue": 0.40,
+            "conditionValue": 0.4,
             "conditionOn": "BroadcastSubject",
             "condition2": "StatusStacksAtLeast",
             "conditionStatus2": "Resolve",
@@ -5993,9 +5937,9 @@
           {
             "kind": "Heal",
             "target": "BroadcastSubject",
-            "power": 0.80,
+            "power": 0.8,
             "condition": "HpBelow",
-            "conditionValue": 0.40,
+            "conditionValue": 0.4,
             "conditionOn": "BroadcastSubject",
             "condition2": "StatusStacksAtLeast",
             "conditionStatus2": "Resolve",
@@ -6007,7 +5951,7 @@
             "target": "Self",
             "flat": 5,
             "condition": "HpBelow",
-            "conditionValue": 0.40,
+            "conditionValue": 0.4,
             "conditionOn": "BroadcastSubject",
             "condition2": "StatusStacksAtLeast",
             "conditionStatus2": "Resolve",
@@ -6020,7 +5964,7 @@
             "status": "Resolve",
             "hits": 1,
             "condition": "HpBelow",
-            "conditionValue": 0.40,
+            "conditionValue": 0.4,
             "conditionOn": "BroadcastSubject",
             "condition2": "StatusStacksAtLeast",
             "conditionStatus2": "Resolve",
@@ -6035,18 +5979,24 @@
           "name": "Deeper Silence",
           "trigger": "None",
           "effects": [],
-          "overrides": [
+          "appends": [
             {
               "ability": "active",
-              "effectIndex": 7,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "Heal",
+                "target": "TwoLowestHpAllies",
+                "power": 0.5,
+                "scaleByLastRemoval": true
+              }
             },
             {
               "ability": "active",
-              "effectIndex": 8,
-              "field": "conditionValue",
-              "delta": -99
+              "effect": {
+                "kind": "RemoveStatus",
+                "target": "HighestDoTDamageEnemy",
+                "status": "Burn",
+                "hits": 1
+              }
             }
           ]
         },
@@ -6060,7 +6010,7 @@
               "kind": "ApplyStatus",
               "target": "BroadcastSubject",
               "status": "Ledger",
-              "magnitude": 0.50,
+              "magnitude": 0.5,
               "duration": 2,
               "ledgerBankHeals": true,
               "ledgerAutoRelease": true,
@@ -6078,7 +6028,7 @@
               "ability": "active",
               "effectIndex": 5,
               "field": "power",
-              "delta": 0.40
+              "delta": 0.4
             }
           ]
         }
@@ -6647,7 +6597,7 @@
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Ledger",
-            "magnitude": 0.30,
+            "magnitude": 0.3,
             "duration": 2,
             "storedCap": 1.2,
             "ledgerAutoRelease": true,
@@ -6738,7 +6688,7 @@
               "ability": "active",
               "effectIndex": 2,
               "field": "magnitude",
-              "delta": 0.10
+              "delta": 0.1
             }
           ]
         },
