@@ -730,6 +730,7 @@ namespace Emberfall.Core.Combat
                     case "hits":       e.Hits += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
                     case "perstack":   e.PerStack += delta; break;
                     case "conditionvalue": e.ConditionValue += delta; break;
+                    case "conditionvalue3": e.ConditionValue3 += delta; break;
                 }
             }
 

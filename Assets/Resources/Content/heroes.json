@@ -77,17 +77,10 @@
             "targetMissingHpRatio": 0.12,
             "missingHpCap": 0.15,
             "condition": "SubjectDamagedSinceMyTurn",
-            "conditionOn": "Target"
-          },
-          {
-            "kind": "Damage",
-            "target": "EnemyWithMyMark",
-            "power": 0.0,
-            "targetMissingHpRatio": 0.12,
-            "missingHpCap": 0.15,
-            "condition": "HpBelow",
-            "conditionValue": -1,
-            "conditionOn": "Caster"
+            "conditionOn": "Target",
+            "condition3": "HpBelow",
+            "conditionValue3": -1,
+            "conditionOn3": "Caster"
           }
         ]
       },
@@ -196,8 +189,8 @@
           "overrides": [
             {
               "ability": "active",
-              "effectIndex": 2,
-              "field": "conditionValue",
+              "effectIndex": 1,
+              "field": "conditionValue3",
               "delta": 1.5
             }
           ]
@@ -5889,7 +5882,7 @@
           },
           {
             "kind": "RemoveStatus",
-            "target": "HighestAttackEnemy",
+            "target": "HighestDoTDamageEnemy",
             "status": "Burn",
             "hits": 1
           },
@@ -5910,13 +5903,14 @@
             "ledgerAutoReleaseAsHeal": true,
             "condition": "StatusStacksAtLeast",
             "conditionStatus": "Resolve",
-            "conditionValue": 99,
+            "conditionValue": 3,
             "conditionOn": "Caster"
           },
           {
             "kind": "Heal",
             "target": "TwoLowestHpAllies",
-            "power": 0.80
+            "power": 0.80,
+            "scaleByLastRemoval": true
           },
           {
             "kind": "Shield",
@@ -5926,7 +5920,7 @@
           },
           {
             "kind": "RemoveStatus",
-            "target": "HighestAttackEnemy",
+            "target": "HighestDoTDamageEnemy",
             "status": "Burn",
             "hits": 1,
             "condition": "StatusStacksAtLeast",
@@ -5938,6 +5932,7 @@
             "kind": "Heal",
             "target": "TwoLowestHpAllies",
             "power": 0.50,
+            "scaleByLastRemoval": true,
             "condition": "StatusStacksAtLeast",
             "conditionStatus": "Resolve",
             "conditionValue": 99,
@@ -6052,14 +6047,18 @@
         "talentII": {
           "id": "cyrra_hidden_reserve",
           "name": "Hidden Reserve",
-          "trigger": "None",
-          "effects": [],
-          "overrides": [
+          "trigger": "OnShieldBreak",
+          "oncePerBattle": false,
+          "effects": [
             {
-              "ability": "active",
-              "effectIndex": 4,
-              "field": "conditionValue",
-              "delta": -99
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Ledger",
+              "magnitude": 0.50,
+              "duration": 2,
+              "ledgerBankHeals": true,
+              "ledgerAutoRelease": true,
+              "ledgerAutoReleaseAsHeal": true
             }
           ]
         },
