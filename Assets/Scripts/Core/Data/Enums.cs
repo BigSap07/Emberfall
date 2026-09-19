@@ -1111,7 +1111,44 @@ namespace Emberfall.Core.Data
         /// inside TriggerPassive before the passive's effects resolve, so the effects see the
         /// unit without the spent counter.
         /// </summary>
-        OnStackThreshold
+        OnStackThreshold,
+
+        // ---------- batch five ----------
+        //
+        // Four broadcast triggers plus one same-side applier lifecycle, all serving heroes
+        // whose kits react to events on allies or enemies that the existing triggers cannot
+        // reach. No shipped content sets any of these.
+
+        /// <summary>An ally of the owner had its shield pool broken by incoming damage.
+        /// Broadcast to the broken unit's OWN side (excluding the broken unit itself, which
+        /// already has OnShieldBreak). _broadcastSubject and _broadcastVictim are the broken
+        /// unit; _shieldBreakerId is the attacker. Darian reacts to an ally's shield
+        /// breaking.</summary>
+        OnAllyShieldBreak,
+
+        /// <summary>A Ledger entry on a same-side unit just banked. Broadcast to the
+        /// applier's side (excluding the carrier), with _broadcastSubject set to the carrier.
+        /// _lastLedgerBankedStored holds the Ledger's total Stored after the banking event.
+        /// Brenna copies a fraction of an ally's recorded Memory.</summary>
+        OnAllyLedgerBanked,
+
+        /// <summary>An enemy was healed (actual HP restored). Broadcast to the OPPOSING side,
+        /// with _broadcastSubject and _broadcastVictim set to the healed enemy. Velis reacts
+        /// to enemy healing.</summary>
+        OnEnemyHealed,
+
+        /// <summary>A FunnelConvert Ledger entry the owner applied just converted a heal into
+        /// damage. Broadcast to the applier's side, with _broadcastSubject set to the unit
+        /// that was hit by the converted damage. Velis gains Remnant when Hollowed
+        /// fires.</summary>
+        OnFunnelConvertFired,
+
+        /// <summary>A status the owner applied to a unit on the SAME side (including self)
+        /// expired naturally. Broadcast to the carrier's side after the status has been
+        /// removed. _broadcastSubject is the unit whose status expired. Filtered by
+        /// TriggerStatus the same way OnAppliedStatusExpired is. Darian counts same-side
+        /// shield expiries.</summary>
+        OnAppliedAllyStatusExpired
     }
 
     /// <summary>

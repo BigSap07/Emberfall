@@ -333,6 +333,10 @@ namespace Emberfall.Core.Data
         /// last Cleanse/Dispel/RemoveStatus.</summary>
         public bool ScaleByLastRemoval;
 
+        /// <summary>When true, the Attack term is replaced by the total Stored on the Ledger
+        /// that just banked, as carried by the OnAllyLedgerBanked broadcast.</summary>
+        public bool ScaleByLastBanked;
+
         /// <summary>When true, a Ledger entry only banks damage whose SourceId matches the
         /// entry's own SourceId. Stored on the StatusInstance.</summary>
         public bool LedgerBankFromCaster;
@@ -442,6 +446,7 @@ namespace Emberfall.Core.Data
             e.ScaleByLastRelease = j.GetBool("scaleByLastRelease", false);
             e.ScaleByLastRedirect = j.GetBool("scaleByLastRedirect", false);
             e.ScaleByLastRemoval = j.GetBool("scaleByLastRemoval", false);
+            e.ScaleByLastBanked = j.GetBool("scaleByLastBanked", false);
             e.LedgerBankFromCaster = j.GetBool("ledgerBankFromCaster", false);
             e.BypassResist = j.GetBool("bypassResist", false);
             e.MaxHpCap = j.GetFloat("maxHpCap", 0f);
@@ -522,6 +527,7 @@ namespace Emberfall.Core.Data
             c.ScaleByLastRelease = ScaleByLastRelease;
             c.ScaleByLastRedirect = ScaleByLastRedirect;
             c.ScaleByLastRemoval = ScaleByLastRemoval;
+            c.ScaleByLastBanked = ScaleByLastBanked;
             c.LedgerBankFromCaster = LedgerBankFromCaster;
             c.BypassResist = BypassResist;
             c.MaxHpCap = MaxHpCap;
