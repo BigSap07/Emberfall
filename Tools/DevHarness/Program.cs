@@ -5113,7 +5113,7 @@ namespace Emberfall.DevHarness
                                "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
                                "HpTransfer", "ShieldTransfer", "LedgerIncrement",
                                "RedirectLethal", "SnapshotEnergy", "TransferStatus",
-                               "SnapshotHp" },
+                               "SnapshotHp", "LedgerDeposit" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -14239,7 +14239,7 @@ namespace Emberfall.DevHarness
         private static void CheckFunnelBankingEnumParity()
         {
             bool ok = CheckEnumSet("FunnelSource",
-                new string[] { "Damage", "ShieldAbsorb", "DamageMitigation", "HealIntercept" },
+                new string[] { "Damage", "ShieldAbsorb", "DamageMitigation", "HealIntercept", "GuardMitigation" },
                 Enum.GetNames(typeof(FunnelSource)));
             Check(ok, "FunnelSource enum parity");
         }

@@ -3482,9 +3482,10 @@
           {
             "kind": "ApplyStatus",
             "target": "Self",
-            "status": "DamageReductionUp",
+            "status": "Guard",
             "magnitude": 0.18,
-            "duration": 2
+            "duration": 2,
+            "charges": 1
           },
           {
             "kind": "ApplyStatus",
@@ -3492,7 +3493,7 @@
             "status": "Ledger",
             "magnitude": 1.0,
             "duration": 2,
-            "ledgerFunnelSource": "DamageMitigation",
+            "ledgerFunnelSource": "GuardMitigation",
             "ledgerAutoRelease": true,
             "ledgerAutoReleaseAsHeal": true
           }
@@ -3511,9 +3512,10 @@
           {
             "kind": "ApplyStatus",
             "target": "AllAllies",
-            "status": "DamageReductionUp",
+            "status": "Guard",
             "magnitude": 0.18,
-            "duration": 2
+            "duration": 2,
+            "charges": 1
           },
           {
             "kind": "ApplyStatus",
@@ -3523,7 +3525,7 @@
             "duration": 2,
             "storedCap": 0.08,
             "storedCapBasis": "maxHp",
-            "ledgerFunnelSource": "DamageMitigation",
+            "ledgerFunnelSource": "GuardMitigation",
             "ledgerAutoRelease": true,
             "ledgerAutoReleaseAsHeal": true
           }
@@ -3584,16 +3586,16 @@
             "target": "BroadcastSubject",
             "power": 1.0,
             "condition": "HasStatus",
-            "conditionStatus": "DamageReductionUp",
+            "conditionStatus": "Guard",
             "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "RemoveStatus",
             "target": "BroadcastSubject",
-            "status": "DamageReductionUp",
+            "status": "Guard",
             "hits": 1,
             "condition": "HasStatus",
-            "conditionStatus": "DamageReductionUp",
+            "conditionStatus": "Guard",
             "conditionOn": "BroadcastSubject"
           },
           {
@@ -3602,15 +3604,14 @@
             "status": "Ledger",
             "hits": 1,
             "condition": "HasStatus",
-            "conditionStatus": "DamageReductionUp",
+            "conditionStatus": "Guard",
             "conditionOn": "BroadcastSubject"
           },
           {
-            "kind": "Shield",
-            "target": "LowestHpAlly",
+            "kind": "LedgerDeposit",
+            "target": "Self",
             "power": 1.0,
-            "scaleByLastRedirect": true,
-            "duration": 2
+            "scaleByLastRedirect": true
           }
         ]
       },
@@ -3640,9 +3641,10 @@
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpAlly",
-                "status": "DamageReductionUp",
+                "status": "Guard",
                 "magnitude": 0.1,
-                "duration": 1
+                "duration": 1,
+                "charges": 1
               }
             }
           ]
@@ -3664,8 +3666,8 @@
             {
               "ability": "active",
               "effect": {
-                "kind": "Heal",
-                "target": "AllAllies",
+                "kind": "LedgerDeposit",
+                "target": "Self",
                 "selfHpRatio": 0.04,
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve",
@@ -7105,6 +7107,17 @@
             "duration": 99,
             "condition": "HasShield",
             "conditionOn": "Caster"
+          },
+          {
+            "kind": "Damage",
+            "target": "FrontEnemy",
+            "power": 0.75,
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 3,
+            "conditionValue": 1,
+            "conditionOn": "Caster",
+            "consumesResolve": true,
+            "counterIndex": 3
           }
         ]
       },
@@ -7221,8 +7234,49 @@
             "kind": "Damage",
             "target": "HighestAttackEnemy",
             "power": 0.5
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "counterIndex": 3,
+            "maxStacks": 1,
+            "duration": 99
           }
         ]
+      },
+      "skills": {
+        "passive1": {
+          "id": "darian_both_shields_survived",
+          "name": "Both Shields Survived",
+          "trigger": "OnAppliedAllyStatusExpired",
+          "triggerStatus": "Shield",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "GainResolve",
+              "target": "Self",
+              "counterIndex": 2,
+              "maxStacks": 2,
+              "duration": 99
+            }
+          ]
+        },
+        "passive2": {
+          "id": "darian_shield_discipline",
+          "name": "Shield Discipline",
+          "trigger": "OnStackThreshold",
+          "counterIndex": 2,
+          "stackThresholdStatus": "Resolve",
+          "stackThresholdCount": 2,
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "flat": 20
+            }
+          ]
+        }
       },
       "talents": {
         "talentI": {
@@ -7266,8 +7320,7 @@
             {
               "kind": "LedgerRelease",
               "target": "Self",
-              "power": 1.0,
-              "releaseAsHeal": true
+              "power": 0
             },
             {
               "kind": "Shield",

@@ -110,6 +110,17 @@ namespace Emberfall.Core.Combat
         /// A null subject is false rather than true: a condition is a statement that something is
         /// the case, and about a unit that is not there nothing is the case.
         /// </summary>
+        /// <summary>Resolves which counter index an effect/condition refers to.
+        /// 0 = Resolve, 1 = Resolve2, ≥ 2 = generalized.
+        /// Returns -1 when the status is not a counter kind (e.g. Burn stacks).</summary>
+        static int ResolveCounterIndex(int explicitIndex, StatusKind status)
+        {
+            if (explicitIndex > 0) return explicitIndex;
+            if (status == StatusKind.Resolve2) return 1;
+            if (status == StatusKind.Resolve || status == StatusKind.None) return 0;
+            return -1;
+        }
+
         public static bool ConditionMet(EffectDef effect, CombatUnit caster, CombatUnit target)
         {
             if (effect == null || effect.Condition == EffectCondition.None) return true;
@@ -143,10 +154,17 @@ namespace Emberfall.Core.Combat
 
                 case EffectCondition.StatusStacksAtLeast:
                 {
+                    int ci = ResolveCounterIndex(effect.ConditionCounterIndex, effect.ConditionStatus);
+                    if (ci >= 2)
+                    {
+                        int needed = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                        if (needed < 1) needed = 1;
+                        return subject.CountOfCounter(ci) >= needed;
+                    }
                     if (effect.ConditionStatus == StatusKind.None) return false;
-                    int needed = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
-                    if (needed < 1) needed = 1;
-                    return subject.CountOf(effect.ConditionStatus) >= needed;
+                    int needed1 = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                    if (needed1 < 1) needed1 = 1;
+                    return subject.CountOf(effect.ConditionStatus) >= needed1;
                 }
 
                 // Source-filtered variant: counts only entries applied by the caster, so two
@@ -1355,6 +1373,7 @@ namespace Emberfall.Core.Combat
                 gate2.ConditionStatus = effect.ConditionStatus2;
                 gate2.ConditionValue = effect.ConditionValue2;
                 gate2.ComparedStat = effect.ComparedStat2;
+                gate2.ConditionCounterIndex = effect.ConditionCounterIndex2;
                 gate2.Condition2 = EffectCondition.None; // prevent infinite recursion
 
                 CombatUnit subject2 = gate2.ConditionOn == ConditionSubject.Caster ? caster
@@ -1405,6 +1424,7 @@ namespace Emberfall.Core.Combat
                 gate3.ConditionStatus = effect.ConditionStatus3;
                 gate3.ConditionValue = effect.ConditionValue3;
                 gate3.ComparedStat = effect.ComparedStat3;
+                gate3.ConditionCounterIndex = effect.ConditionCounterIndex3;
                 gate3.Condition2 = EffectCondition.None;
                 gate3.Condition3 = EffectCondition.None;
 
@@ -1719,16 +1739,31 @@ namespace Emberfall.Core.Combat
                     // GainResolve). ConsumeStacks > 0 removes exactly that many instead of all.
                     if (!suppressed && effect.ConsumesResolve)
                     {
-                        StatusKind resolveKind = effect.Status == StatusKind.Resolve2
-                                                 ? StatusKind.Resolve2 : StatusKind.Resolve;
-                        if (caster.CountOf(resolveKind) > 0)
+                        int ci = ResolveCounterIndex(effect.CounterIndex, effect.Status);
+                        if (ci >= 2)
                         {
-                            if (effect.ConsumeStacks > 0)
-                                caster.RemoveStacks(resolveKind, effect.ConsumeStacks);
-                            else
-                                caster.Remove(resolveKind);
-                            BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
-                            spent.Status = resolveKind;
+                            if (caster.CountOfCounter(ci) > 0)
+                            {
+                                if (effect.ConsumeStacks > 0)
+                                    caster.SpendCounter(ci, effect.ConsumeStacks);
+                                else
+                                    caster.ClearCounter(ci);
+                                BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
+                                spent.Status = StatusKind.Resolve;
+                            }
+                        }
+                        else
+                        {
+                            StatusKind resolveKind = ci == 1 ? StatusKind.Resolve2 : StatusKind.Resolve;
+                            if (caster.CountOf(resolveKind) > 0)
+                            {
+                                if (effect.ConsumeStacks > 0)
+                                    caster.RemoveStacks(resolveKind, effect.ConsumeStacks);
+                                else
+                                    caster.Remove(resolveKind);
+                                BattleEvent spent = Emit(BattleEventType.StatusExpired, caster.Id, caster.Id);
+                                spent.Status = resolveKind;
+                            }
                         }
                     }
                 }
@@ -2027,36 +2062,36 @@ namespace Emberfall.Core.Combat
                     }
                     case EffectKind.GainResolve:
                     {
-                        // Resolve is a personal counter and nothing else. Nothing in the damage,
-                        // heal, defence or targeting path reads StatusKind.Resolve - it is inert
-                        // until an effect asks for it with PerStack, which is what makes it safe to
-                        // hand to any hero without touching the simulation again. It stacks through
-                        // the same AddStack/CountOf pair Ember's Burn already uses rather than a
-                        // second counting mechanism living beside that one.
-                        //
-                        // Batch three: effect.Status picks which counter to grant. None (the
-                        // default and every shipped effect) maps to Resolve, preserving the
-                        // existing behaviour. Resolve2 grants the second independent counter.
                         if (!target.Alive) break;
                         if (target.Has(StatusKind.StatusGainSuppression)) break;
-                        StatusKind resolveKind = effect.Status == StatusKind.Resolve2
-                                                 ? StatusKind.Resolve2 : StatusKind.Resolve;
+                        int ci = ResolveCounterIndex(effect.CounterIndex, effect.Status);
                         int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
-                        for (int g = 0; g < effect.Hits; g++)
+                        if (ci >= 2)
                         {
-                            if (!target.AddStack(resolveKind, Math.Max(1, effect.Duration),
-                                                 effect.Magnitude, source.Id, cap))
-                                break;   // already at cap; do not emit a second event for a no-op
+                            // Generalized counter: pure int on CombatUnit, no StatusInstance.
+                            int before = target.CountOfCounter(ci);
+                            if (before >= cap) break;
+                            int gained = Math.Min(effect.Hits, cap - before);
+                            target.GainCounter(ci, gained, cap);
                             BattleEvent re = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
-                            re.Status = resolveKind;
-                            re.Duration = Math.Max(1, effect.Duration);
-                            // Value carries stack depth here for the same reason Ember's Burn
-                            // stacking uses it: StatusApplied already fires per application, it
-                            // just never said how many there were.
-                            re.Value = target.CountOf(resolveKind);
+                            re.Status = StatusKind.Resolve;
+                            re.Value = target.CountOfCounter(ci);
                         }
-                        // Stack-threshold auto-trigger: if the new count crosses a threshold,
-                        // TriggerPassive handles the check, consumption and firing.
+                        else
+                        {
+                            // Index 0 (Resolve) or 1 (Resolve2): existing StatusInstance path.
+                            StatusKind resolveKind = ci == 1 ? StatusKind.Resolve2 : StatusKind.Resolve;
+                            for (int g = 0; g < effect.Hits; g++)
+                            {
+                                if (!target.AddStack(resolveKind, Math.Max(1, effect.Duration),
+                                                     effect.Magnitude, source.Id, cap))
+                                    break;
+                                BattleEvent re = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
+                                re.Status = resolveKind;
+                                re.Duration = Math.Max(1, effect.Duration);
+                                re.Value = target.CountOf(resolveKind);
+                            }
+                        }
                         if (target.Alive) TriggerPassive(target, PassiveTrigger.OnStackThreshold, depth);
                         break;
                     }
@@ -2502,6 +2537,51 @@ namespace Emberfall.Core.Combat
                         applied.Value = dest.CountOf(moving.Kind);
                         break;
                     }
+
+                    case EffectKind.LedgerDeposit:
+                    {
+                        // Deposits an amount into existing Ledger entries on the target from the
+                        // caster. Computes amount, finds Ledger entries, adds to Stored.
+                        if (!target.Alive) break;
+                        float baseAmt = effect.Power * source.Attack + effect.Flat
+                                      + effect.SelfHpRatio * source.EffectiveMaxHp;
+                        if (effect.ScaleByLastRedirect) baseAmt = _lastRedirectAmount;
+                        if (effect.ScaleByLastRelease)
+                        {
+                            float rel;
+                            baseAmt = _lastLedgerRelease.TryGetValue(source.Id, out rel) ? rel * effect.Power : 0f;
+                        }
+                        if (effect.ScaleByLastBanked) baseAmt = _lastLedgerBankedStored * effect.Power;
+                        if (baseAmt <= 0f) break;
+                        for (int li = 0; li < target.Statuses.Count; li++)
+                        {
+                            StatusInstance led = target.Statuses[li];
+                            if (led.Kind != StatusKind.Ledger) continue;
+                            if (led.SourceId != source.Id) continue;
+                            float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                            if (room <= 0f) continue;
+                            float deposited = baseAmt;
+                            if (deposited > room) deposited = room;
+                            bool wasBelow = led.StoredCap > 0f && led.Stored < led.StoredCap;
+                            led.Stored += deposited;
+                            if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
+                            {
+                                CombatUnit prevSubject = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(source.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSubject = prevSubject;
+                            }
+                            if (source.IsPlayer == target.IsPlayer)
+                            {
+                                _lastLedgerBankedStored = led.Stored;
+                                CombatUnit prevSubjectB = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSubject = prevSubjectB;
+                            }
+                        }
+                        break;
+                    }
                 }
             }
 
@@ -2785,6 +2865,7 @@ namespace Emberfall.Core.Combat
                 // Guard: a charge-based reduction, spent by USE rather than by time. Applied before
                 // the shield pool, so a guarded ward meets a smaller hit. Walked backwards because
                 // a spent charge removes its entry.
+                int damageBeforeGuard = damage;
                 for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
                 {
                     StatusInstance guard = target.Statuses[gi];
@@ -2798,9 +2879,54 @@ namespace Emberfall.Core.Combat
                         BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
                         spent.Status = StatusKind.Guard;
                     }
-                    if (damage <= 0) return;
+                    if (damage <= 0) { damage = 0; break; }
                     break;   // one guard a hit, so two cannot stack into immunity
                 }
+
+                // Funnel banking: GuardMitigation entries bank the amount Guard prevented.
+                {
+                    float guardMitigated = damageBeforeGuard - damage;
+                    if (guardMitigated > 0f)
+                    {
+                        for (int fi = 0; fi < target.Statuses.Count; fi++)
+                        {
+                            StatusInstance led = target.Statuses[fi];
+                            if (led.Kind != StatusKind.Ledger) continue;
+                            if (led.FunnelSource != FunnelSource.GuardMitigation) continue;
+                            if (led.Magnitude <= 0f) continue;
+                            if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+                            float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                            if (room <= 0f) continue;
+                            float banked = guardMitigated * led.Magnitude;
+                            if (banked > room) banked = room;
+                            bool wasBelow = led.StoredCap > 0f && led.Stored < led.StoredCap;
+                            led.Stored += banked;
+                            if (led.BankLimit > 0) led.BankUsesThisRound++;
+                            if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
+                            {
+                                CombatUnit ledSource = FindUnit(led.SourceId);
+                                if (ledSource != null)
+                                {
+                                    CombatUnit prevSubject = _broadcastSubject;
+                                    _broadcastSubject = target;
+                                    BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSubject = prevSubject;
+                                }
+                            }
+                            CombatUnit bankSrc = FindUnit(led.SourceId);
+                            if (bankSrc != null && bankSrc.IsPlayer == target.IsPlayer)
+                            {
+                                _lastLedgerBankedStored = led.Stored;
+                                CombatUnit prevSubjectB = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSubject = prevSubjectB;
+                            }
+                        }
+                    }
+                }
+
+                if (damage <= 0) return;
 
                 // Cover: a share of the hit is taken by the protector instead. Split BEFORE the
                 // holder's own shield pool, so the protector soaks its part and the ward underneath
@@ -3716,15 +3842,23 @@ namespace Emberfall.Core.Combat
                         && passive.TriggerStatus != StatusKind.None
                         && !_expiredKinds.Contains(passive.TriggerStatus)) continue;
                     // Stack-threshold filter: check the owner's stack count against the
-                    // passive's threshold, and consume if met. No shipped content sets
-                    // OnStackThreshold, so this branch is unreachable in every existing battle.
+                    // passive's threshold, and consume if met.
                     if (trigger == PassiveTrigger.OnStackThreshold)
                     {
-                        if (passive.StackThresholdStatus == StatusKind.None
-                            || passive.StackThresholdCount <= 0) continue;
-                        if (owner.CountOf(passive.StackThresholdStatus) < passive.StackThresholdCount)
-                            continue;
-                        owner.RemoveStacks(passive.StackThresholdStatus, passive.StackThresholdCount);
+                        int ci = passive.CounterIndex > 0 ? passive.CounterIndex
+                               : ResolveCounterIndex(0, passive.StackThresholdStatus);
+                        if (ci < 0 || passive.StackThresholdCount <= 0) continue;
+                        if (ci >= 2)
+                        {
+                            if (owner.CountOfCounter(ci) < passive.StackThresholdCount) continue;
+                            owner.SpendCounter(ci, passive.StackThresholdCount);
+                        }
+                        else
+                        {
+                            StatusKind sk = ci == 1 ? StatusKind.Resolve2 : StatusKind.Resolve;
+                            if (owner.CountOf(sk) < passive.StackThresholdCount) continue;
+                            owner.RemoveStacks(sk, passive.StackThresholdCount);
+                        }
                     }
                     if (passive.TriggerSourceIsSelf && _broadcastSourceId != owner.Id) continue;
                     if (passive.Effects.Count == 0) continue;

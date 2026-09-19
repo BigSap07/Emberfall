@@ -335,7 +335,17 @@ namespace Emberfall.Core.Data
         /// Stores the target's current HP on CombatUnit.SnapshotHp, so a later
         /// HpAboveSnapshot condition can compare against it.
         /// </summary>
-        SnapshotHp              // 26
+        SnapshotHp,             // 26
+
+        // ---------- batch five ----------
+
+        /// <summary>
+        /// Deposits an amount into existing Ledger entries on the target from the caster.
+        /// Amount is computed from Power * Attack + Flat + selfHpRatio * casterMaxHp, then
+        /// optionally scaled by ScaleByLastRedirect / ScaleByLastRelease / ScaleByLastBanked.
+        /// Stored is added up to StoredCap; OnLedgerCapped and OnAllyLedgerBanked fire as usual.
+        /// </summary>
+        LedgerDeposit           // 27
     }
 
     /// <summary>
@@ -1196,7 +1206,10 @@ namespace Emberfall.Core.Data
         /// <summary>Banks from the incoming heal amount before it restores HP. When
         /// FunnelConvert is true on the entry, the intercepted amount is dealt as damage
         /// immediately instead of banked.</summary>
-        HealIntercept
+        HealIntercept,
+
+        /// <summary>Banks from the amount Guard charges prevented in DealRawDamage.</summary>
+        GuardMitigation
     }
 
     public enum EventActivityKind
