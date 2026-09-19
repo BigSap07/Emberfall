@@ -2415,7 +2415,42 @@
           "name": "Counterrevision",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "AttackDown",
+                "duration": 2,
+                "bypassResist": true,
+                "condition": "HasStatus",
+                "conditionStatus": "AttackUp",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "Self",
+                "status": "DefenseUp",
+                "magnitude": 0.08,
+                "duration": 2,
+                "condition": "LacksStatus",
+                "conditionStatus": "AttackUp",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "rheia_perfect_reversal",
@@ -3565,6 +3600,14 @@
             "power": 1.15
           },
           {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.7,
+            "condition": "HasStatus",
+            "conditionStatus": "Slow",
+            "conditionOn": "LastTarget"
+          },
+          {
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Slow",
@@ -3639,7 +3682,10 @@
             "kind": "GainResolve",
             "target": "Self",
             "maxStacks": 4,
-            "duration": 99
+            "duration": 99,
+            "condition": "HasStatus",
+            "conditionStatus": "Slow",
+            "conditionOn": "LastTarget"
           }
         ]
       },
@@ -3750,7 +3796,7 @@
           "overrides": [
             {
               "ability": "basic",
-              "effectIndex": 1,
+              "effectIndex": 2,
               "field": "duration",
               "delta": 1
             },
@@ -3767,7 +3813,26 @@
           "name": "Sanctuary Spreads",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "appends": [
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Slow",
+                "duration": 2,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Damage",
+                "target": "LowestHpEnemy",
+                "power": 0.8
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "elyra_harvest_of_patience",
@@ -3780,6 +3845,17 @@
               "effectIndex": 5,
               "field": "power",
               "delta": 1.0
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "Shield",
+                "target": "LowestHpAlly",
+                "selfHpRatio": 0.06,
+                "duration": 2
+              }
             }
           ]
         }
@@ -6552,6 +6628,13 @@
             "duration": 2,
             "condition": "HasAnyBeneficialStatus",
             "conditionOn": "Target"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5,
+            "condition": "HasAnyBeneficialStatus",
+            "conditionOn": "LastTarget"
           }
         ]
       },
@@ -6691,14 +6774,57 @@
           "name": "Blank Space",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "flat": 15,
+                "condition": "StatusStacksAtLeast",
+                "conditionStatus": "Resolve2",
+                "conditionValue": 3,
+                "conditionOn": "Caster"
+              }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "BroadcastSubject",
+                "flat": -10,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "mireth_no_record_remains",
           "name": "No Record Remains",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "Damage",
+                "target": "BroadcastSubject",
+                "power": 1.5,
+                "condition": "HpBelow",
+                "conditionValue": 0.5,
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
         }
       }
     },
@@ -7611,6 +7737,13 @@
             "kind": "Damage",
             "target": "FrontEnemy",
             "power": 1.15
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5,
+            "condition": "HasMyMark",
+            "conditionOn": "LastTarget"
           }
         ]
       },

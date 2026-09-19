@@ -936,7 +936,11 @@ namespace Emberfall.Core.Combat
                     }
                     if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
-                    ResolveAbility(unit, unit.Active, 0);
+                    {
+                        CombatUnit prevLT = _lastTarget;
+                        ResolveAbility(unit, unit.Active, 0);
+                        _lastTarget = prevLT;
+                    }
                 }
                 else
                 {
@@ -945,7 +949,10 @@ namespace Emberfall.Core.Combat
                     attack.AbilityId = basic.Id;
                     attack.AbilityName = basic.Name;
                     attack.Vfx = basic.Vfx;
+                    CombatUnit prevLastTarget = _lastTarget;
                     ResolveAbility(unit, basic, 0);
+                    // _lastTarget now holds the basic's final target (depth-0 does not restore).
+                    // AfterBasicAttack passives can reference it via ConditionSubject.LastTarget.
 
                     if (unit.Alive)
                     {
@@ -953,6 +960,7 @@ namespace Emberfall.Core.Combat
                         AddEnergy(unit, _cfg.EnergyPerBasicAttack, -1);
                         TriggerPassive(unit, PassiveTrigger.AfterBasicAttack, 0);
                     }
+                    _lastTarget = prevLastTarget;
                 }
 
                 // Turn-end broadcasts. No shipped passive uses OnAllyTurnEnd or OnEnemyTurnEnd,
@@ -1591,7 +1599,7 @@ namespace Emberfall.Core.Combat
 
                         ApplyEffect(caster, target, landed, ability, depth);
                         _lastTarget = target;
-                        if (IsBattleOver()) { _lastTarget = prevLastTarget; return; }
+                        if (IsBattleOver()) { if (depth > 0) _lastTarget = prevLastTarget; return; }
                     }
 
                     // An effect whose condition held for nobody did not happen, so it does not pay
@@ -1634,7 +1642,12 @@ namespace Emberfall.Core.Combat
                         }
                     }
                 }
-                _lastTarget = prevLastTarget;
+                // At depth > 0 (passive-triggered abilities), restore _lastTarget so the outer
+                // ability's chain is not clobbered. At depth 0 (basic / active), leave _lastTarget
+                // set: AfterBasicAttack passives need to see the basic's last target via
+                // ConditionSubject.LastTarget, and the caller restores it once it is done.
+                if (depth > 0)
+                    _lastTarget = prevLastTarget;
             }
 
             private void ApplyEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
