@@ -686,6 +686,7 @@ namespace Emberfall.DevHarness
             CheckNamedMarks();
             CheckPassiveLimits();
             CheckLedger();
+            CheckPerCasterLedgerRelease();
             CheckPerStackWidening();
             CheckOwnOutcomeTriggers();
             Line("");
@@ -1022,6 +1023,89 @@ namespace Emberfall.DevHarness
             List<HeroInstance> team = new List<HeroInstance>();
             team.Add(MakeInstance(hero, 1));
             return RunWith(db, db.GetStage("lg_arena"), 4949, team);
+        }
+
+        /// <summary>
+        /// Two Ledger heroes on the same team, each targeting a different enemy. Both Ledgers
+        /// auto-release in the same round. Each hero has a passive that fires ScaleByLastRelease
+        /// damage after a basic attack. With a global _lastLedgerRelease, the second enemy's
+        /// ExpireStatuses overwrites the first and both heroes scale off the same (wrong) value.
+        /// Per-caster keying fixes it: each reads its own release.
+        ///
+        /// Hero A (attack 200, speed 200) targets FrontEnemy (X), Hero B (attack 100, speed 100)
+        /// targets HighestHpEnemy (Y, which has more HP than X). Each Ledger auto-releases at the
+        /// end of its carrier's turn. Y's turn runs after X's (lower speed), so the global ends
+        /// up holding B's stored value. In round 2, A's passive should scale off A's release, not
+        /// B's — the assertion that fails against the old global.
+        /// </summary>
+        private static void CheckPerCasterLedgerRelease()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lg_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 999999, ""attack"": 200, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.0, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lg_a_basic"", ""name"": ""A Mark"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Ledger"",
+                         ""magnitude"": 0.5, ""storedCap"": 0, ""duration"": 1, ""chance"": 1,
+                         ""ledgerAutoRelease"": true },
+                       { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""lg_a_scale"", ""name"": ""A Scale"", ""trigger"": ""AfterBasicAttack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""scaleByLastRelease"": true } ] } },
+    { ""id"": ""lg_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 999999, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.0, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lg_b_basic"", ""name"": ""B Mark"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""HighestHpEnemy"", ""status"": ""Ledger"",
+                         ""magnitude"": 0.5, ""storedCap"": 0, ""duration"": 1, ""chance"": 1,
+                         ""ledgerAutoRelease"": true },
+                       { ""kind"": ""Damage"", ""target"": ""HighestHpEnemy"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""lg_b_scale"", ""name"": ""B Scale"", ""trigger"": ""AfterBasicAttack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""HighestHpEnemy"", ""power"": 1.0, ""scaleByLastRelease"": true } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lg_foe_x"", ""name"": ""X"", ""aspect"": ""Ember"",
+      ""hp"": 500000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lgfx"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lg_foe_y"", ""name"": ""Y"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 1, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lgfy"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lg_ch2"", ""name"": ""LedgerPC"", ""stages"": [
+    { ""id"": ""lg_arena2"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lg_foe_x"", ""level"": 1 }, { ""id"": ""lg_foe_y"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "LedgerPerCaster");
+            if (db == null) { Check(false, "per-caster ledger arena built"); return; }
+            HeroDef heroA = db.GetHero("lg_a");
+            HeroDef heroB = db.GetHero("lg_b");
+            if (heroA == null || heroB == null) { Check(false, "per-caster ledger heroes parsed"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(heroA, 1));
+            team.Add(MakeInstance(heroB, 1));
+            BattleResult r = RunWith(db, db.GetStage("lg_arena2"), 7171, team);
+            if (r == null) { Check(false, "per-caster ledger arena ran"); return; }
+
+            // Collect the first ScaleByLastRelease damage from each hero's passive (round 2+).
+            int aDmg = 0;
+            int bDmg = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.Round < 2) continue;
+                if (e.AbilityName == "A Scale" && aDmg == 0) aDmg = e.Value;
+                if (e.AbilityName == "B Scale" && bDmg == 0) bDmg = e.Value;
+                if (aDmg > 0 && bDmg > 0) break;
+            }
+            Check(aDmg > 0 && bDmg > 0,
+                  "both heroes landed a ScaleByLastRelease hit (A=" + aDmg + ", B=" + bDmg + ")");
+            Check(aDmg > bDmg,
+                  "per-caster ledger release: A (attack 200) scales off its own stored value, not B's"
+                  + " (A=" + aDmg + ", B=" + bDmg + ", expect A ~2x B)");
         }
 
         /// <summary>

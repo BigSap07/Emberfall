@@ -496,9 +496,15 @@ namespace Emberfall.Core.Combat
             private int _shieldBreakerId = -1;
 
             // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
-            private float _lastLedgerRelease;
+            private readonly Dictionary<int, float> _lastLedgerRelease = new Dictionary<int, float>();
             private float _lastRedirectAmount;
             private float _lastRemovedStacks;
+
+            private float GetLastLedgerRelease(int unitId)
+            {
+                float v;
+                return _lastLedgerRelease.TryGetValue(unitId, out v) ? v : 0f;
+            }
 
             /// <summary>
             /// The per-target budget of the passive currently resolving, or null. Set by
@@ -1128,7 +1134,7 @@ namespace Emberfall.Core.Combat
                     if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
                     {
                         int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
-                        _lastLedgerRelease = s.Stored;
+                        _lastLedgerRelease[s.SourceId] = s.Stored;
                         s.Stored = 0f;
                         if (payout > 0 && unit.Alive)
                         {
@@ -1160,7 +1166,7 @@ namespace Emberfall.Core.Combat
                                     CombatUnit applier = FindUnit(s.SourceId);
                                     if (applier != null && applier.Alive)
                                     {
-                                        int splitHeal = (int)Math.Round(_lastLedgerRelease * s.AutoReleaseSplitHeal,
+                                        int splitHeal = (int)Math.Round(GetLastLedgerRelease(s.SourceId) * s.AutoReleaseSplitHeal,
                                             MidpointRounding.AwayFromZero);
                                         if (splitHeal > 0)
                                             ApplyHealValue(s.SourceId, applier, splitHeal, "heal", true);
@@ -2147,7 +2153,7 @@ namespace Emberfall.Core.Combat
                     {
                         if (!target.Alive) break;
                         float stored = target.LedgerTotalFrom(source.Id);
-                        _lastLedgerRelease = stored;
+                        _lastLedgerRelease[source.Id] = stored;
                         // Zeroed whether or not it paid out, so a release against an empty ledger
                         // is spent rather than saved up - the descriptions all read "consume".
                         for (int li = 0; li < target.Statuses.Count; li++)
@@ -2532,7 +2538,7 @@ namespace Emberfall.Core.Combat
                 // missing HP" is reduced by Defense like any other authored damage rather than
                 // arriving as a second, unmitigated payload.
                 float attackTerm = source.EffectiveAttack;
-                if (effect.ScaleByLastRelease) attackTerm = _lastLedgerRelease;
+                if (effect.ScaleByLastRelease) attackTerm = GetLastLedgerRelease(source.Id);
                 else if (effect.ScaleByLastRedirect) attackTerm = _lastRedirectAmount;
                 else if (effect.ScaleByLastRemoval) attackTerm = _lastRemovedStacks;
                 float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
