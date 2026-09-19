@@ -233,7 +233,62 @@ namespace Emberfall.Core.Data
         /// when there is no link, and a FrontEnemy fallback would quietly aim a bound effect at a
         /// body the link never named.
         /// </summary>
-        LinkedUnit
+        LinkedUnit,
+
+        // ---------- the nine-gap pass ----------
+
+        /// <summary>
+        /// The caster's link partner with the HIGHEST current HP, excluding the partner of the
+        /// link dispatch currently in flight. Nobody when the caster holds no other link.
+        ///
+        /// GAP 4: "the OTHER recorded target". A hero holding two links had no way to name the one
+        /// that was not just hit - `LinkedUnit` resolves to `_linkPartner`, which inside a dispatch
+        /// is precisely the body that WAS hit.
+        ///
+        /// One mode serves both shapes that asked for it, which is why it is defined by highest HP
+        /// rather than by "the one that is not it". With two records there is exactly one other
+        /// partner and "highest HP among one" is that partner, so the base case is unambiguous;
+        /// with three - a talent that records an extra enemy - the same rule reads "the recorded
+        /// target with the highest present HP", which is what such a talent asks for in as many
+        /// words. A second mode for the two-record case would have been two spellings of one
+        /// question.
+        ///
+        /// BEFORE THE ANCHOR, alongside LinkedUnit and for the same reason: a link names specific
+        /// bodies on either side, and a Taunt holder answering for them would make the mode lie.
+        /// </summary>
+        OtherLinkedUnit,
+
+        /// <summary>
+        /// EVERY living unit the caster holds a link to. The SET the pairwise link had no concept
+        /// of - "deal damage to both recorded targets" needs all of them at once, and resolving the
+        /// partners one at a time cannot express it.
+        ///
+        /// Returned in unit order and deduplicated, so a caster holding two links to one body hits
+        /// it once. Empty when the caster holds no link, which is the honest answer rather than a
+        /// fallback, exactly as LinkedUnit's is.
+        ///
+        /// NOT skipped for concealment, which is the one place it parts company with the
+        /// single-target link modes. It is a multi-target mode and `AllEnemies` is not skipped
+        /// either; beyond that, a link is a claim already made on a specific body, and hiding from
+        /// somebody you are already bound to is not what concealment means.
+        /// </summary>
+        AllLinkedUnits,
+
+        /// <summary>
+        /// The unit that CAUSED the broadcast in flight - the healer, the attacker, the hitter - as
+        /// opposed to BroadcastSubject and BroadcastVictim, which both name the unit a broadcast is
+        /// ABOUT.
+        ///
+        /// GAP 8. The distinction had no target-mode side at all: a passive could TEST the causing
+        /// unit through ConditionSubject.LastAttacker, and only in the one case where the subject
+        /// had been damaged by it, and could never aim an effect at it. "Record the triggering
+        /// ally's role" has to point RecordFact at that ally, and there was no way to name it.
+        ///
+        /// Resolves from `_broadcastSourceId` and to nobody outside a broadcast that carries one,
+        /// the same window discipline DefeatedUnit and ThresholdUnit keep. Before the anchor,
+        /// because the causing unit can stand on either side.
+        /// </summary>
+        BroadcastSource
     }
 
     public enum EffectKind
@@ -634,7 +689,41 @@ namespace Emberfall.Core.Data
 
         /// <summary>Like StatusStacksAtLeast, but counts only entries whose SourceId matches the
         /// caster. "My stacks of X on this target ≥ N" vs "any stacks of X on this target ≥ N".</summary>
-        MyStatusStacksAtLeast
+        MyStatusStacksAtLeast,
+
+        // ---------- the nine-gap pass ----------
+
+        /// <summary>
+        /// The caster has NOT damaged this subject yet this round. The exact mirror of
+        /// AlreadyDamagedSubjectThisRound, reading the same CombatUnit.DamagedThisRound list.
+        ///
+        /// GAP 9, and it exists because this enum has no negation. "Repeat 40% of the damage
+        /// against a lower-HP enemy, if ANOTHER enemy has lower HP than the target" needs the
+        /// secondary pick to be a body the blow has not already landed on, and
+        /// AlreadyDamagedSubjectThisRound was the right test with precisely the wrong sign.
+        ///
+        /// A GENERAL `negate` FLAG WAS CONSIDERED AND REJECTED. One bool per condition slot would
+        /// have been three fields that silently re-point all forty conditions, including the
+        /// twenty-odd whose negation nobody has reasoned about - what "not TurnProgressAbove" means
+        /// for a unit with no position left, or "not StoredRoleMatches" when nothing was recorded.
+        /// A mirror member answers the clause that asked and changes the meaning of nothing else.
+        /// </summary>
+        SubjectNotDamagedByMeThisRound,
+
+        /// <summary>
+        /// The last amount the CASTER moved - see EffectDef.ScaleByLastMoved - is at least
+        /// ConditionValue times the SUBJECT's EffectiveMaxHp.
+        ///
+        /// GAP 7's condition half. "If the Shield moved is at least 10% of the ally's Max HP" is a
+        /// comparison between a runtime amount and a fraction of a body's health, and neither
+        /// operand was reachable: the amount had no store, and every existing condition compares
+        /// against an authored constant. ConditionValue is the fraction; the subject supplies the
+        /// max HP, so pointing it at BroadcastSubject reads the ally rather than the caster.
+        ///
+        /// False when the caster has moved nothing, rather than true-by-vacuity at a threshold of
+        /// zero: a clause gated on how much moved did not happen if nothing moved.
+        /// </summary>
+        LastMovedAboveHpFraction
     }
 
     /// <summary>
@@ -691,7 +780,21 @@ namespace Emberfall.Core.Data
         /// (EnergyGain, Heal, GainResolve) condition on the state of whatever the prior effect
         /// in the same ability just hit.
         /// </summary>
-        LastTarget
+        LastTarget,
+
+        /// <summary>
+        /// The unit that CAUSED the broadcast in flight, read from `_broadcastSourceId`.
+        ///
+        /// GAP 8's condition half, and distinct from LastAttacker, which is the nearest thing that
+        /// existed. LastAttacker resolves through `_broadcastSubject.LastAttackerId` - the last
+        /// unit to have DAMAGED the subject - so it answers correctly only for a broadcast raised
+        /// by a hit, and silently names the wrong body for one raised by a heal, a shield or a
+        /// status landing. This names the causing unit directly, whatever the broadcast was about.
+        ///
+        /// Nobody outside a broadcast that carries a source, so a condition authored with this
+        /// subject reads false elsewhere rather than wrong.
+        /// </summary>
+        BroadcastSource
     }
 
     /// <summary>
@@ -1009,12 +1112,18 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>
-    /// What a StatusKind.Linked entry does to damage arriving at its holder.
+    /// What a StatusKind.Linked entry does to damage at its holder - arriving for the first three
+    /// members, LEAVING for the fourth.
     ///
-    /// Three members and not two, because "the link does nothing to damage" is a real authoring
-    /// rather than an absence: Vaelis's binding exists so her passive can hear about a hit on the
-    /// other end, and a link that also moved damage would be a different ability. None is the
-    /// default so an entry created without a transfer named is inert at the funnel.
+    /// None is a real authoring rather than an absence: Vaelis's binding exists so her passive can
+    /// hear about a hit on the other end, and a link that also moved damage would be a different
+    /// ability. It is the default, so an entry created without a transfer named is inert at the
+    /// funnel.
+    ///
+    /// The outgoing direction (Deflect) joined this enum rather than becoming a second status
+    /// because it is the same binding answering a different question about the same pair. A
+    /// separate kind would have meant two bodies of link bookkeeping - creation, charges, the
+    /// from-caster filter, MoveStatus carriage - kept in step by hand.
     /// </summary>
     public enum LinkTransfer
     {
@@ -1028,7 +1137,31 @@ namespace Emberfall.Core.Data
 
         /// <summary>A share of the holder's incoming damage ALSO lands on the partner. The holder
         /// takes the hit in full.</summary>
-        Echo
+        Echo,
+
+        /// <summary>
+        /// GAP 5. An attack the HOLDER makes against the link's CREATOR lands on the holder's
+        /// partner instead, for a Magnitude share of what it would have dealt.
+        ///
+        /// THE ONLY MEMBER THAT READS DAMAGE LEAVING ITS HOLDER RATHER THAN ARRIVING AT IT, which
+        /// is why the enum's own summary had to widen. Redirect and Echo both ask "what happens to
+        /// a blow aimed at this body"; this asks "what happens to a blow this body aims at the
+        /// hero who bound it". Same primitive, other direction.
+        ///
+        /// It is its OWN RULE rather than a loosened Provoked, which was the alternative and was
+        /// rejected deliberately. Provoked refuses a same-side destination
+        /// (`provoker.IsPlayer == caster.IsPlayer` is skipped) because it means "this attacker
+        /// answers to the unit that provoked it", and an enemy cannot be provoked into attacking
+        /// its own ally without that sentence stopping being true. Widening it to serve a deflect
+        /// would weaken a guard that is correct for what Provoked means, so the deflect sits beside
+        /// the redirect path instead and shares its arithmetic.
+        ///
+        /// THREE CONDITIONS, all of which must hold: the damage is arriving at the link's SourceId
+        /// (the hero who created it), the attacker is the entry's holder, and the partner is alive
+        /// and is not the victim. Nothing else in the funnel keys on the attacker's own statuses
+        /// except Vulnerable and AccuracyDown, so this is a new question asked at one point.
+        /// </summary>
+        Deflect
     }
 
     /// <summary>
@@ -1354,7 +1487,82 @@ namespace Emberfall.Core.Data
         /// original attacker, not the link - so TriggerSourceIsAlly is what "when an ALLY hits the
         /// unit I am bound to" reads.
         /// </summary>
-        OnLinkedUnitHit
+        OnLinkedUnitHit,
+
+        // ---------- the nine-gap pass: four moments nothing could hear ----------
+        //
+        // GAP 6. Each fires on the unit the thing happened TO - the owner-centric shape - and each
+        // publishes `_broadcastSourceId`, so TriggerSourceIsSelf, TriggerSourceIsAlly and the new
+        // BroadcastSource subject and target mode can all read who caused it.
+
+        /// <summary>
+        /// The owner was SELECTED as the target of a Damage effect. Raised at the top of
+        /// ApplyDamageEffect beside the link's OnLinkedUnitTargeted and under the same reasoning:
+        /// it fires for a blow that goes on to miss, to be Blocked or to be soaked whole, because
+        /// being aimed at is not the same event as being hit.
+        ///
+        /// The owner-centric half of a pair whose broadcast half already existed.
+        /// OnLinkedUnitTargeted reaches a unit BOUND to the body being aimed at; this reaches the
+        /// body itself, which is what "the next time that enemy targets me" needs and what nothing
+        /// could hear before - OnDamaged was the nearest and answers a strictly later question.
+        ///
+        /// DAMAGE EFFECTS ONLY, the same narrowness OnLinkedUnitTargeted is held to, and for the
+        /// same reason: a heal, a buff and a cleanse all name a target, and ResolveTargets is the
+        /// point they share, but firing a passive from inside targeting means firing after the
+        /// targets are chosen and before the effect resolves, where a passive that kills the
+        /// target leaves the caller holding a corpse it has committed to acting on.
+        /// </summary>
+        OnTargeted,
+
+        /// <summary>
+        /// The owner GAINED a status. Raised in the ApplyStatus branch on the unit that received
+        /// it, after the entry is on the unit so a passive answering it reads the board it is
+        /// answering. Filtered by PassiveDef.TriggerStatus exactly as OnStatusExpired is, so
+        /// "whenever she becomes Untargetable" is this trigger with TriggerStatus Stealth.
+        ///
+        /// The missing corner of a lifecycle that had every other one covered: OnStatusRemoved
+        /// fires on the remover, OnStatusExpired on the carrier at expiry, OnEnemyBuffGained on
+        /// the other side, OnAppliedStatusExpired and OnAppliedAllyStatusExpired on the applier.
+        /// Nothing fired on the CARRIER at the moment it gained one.
+        ///
+        /// Fires for an application that REFRESHES an existing entry as well as one that creates
+        /// it, because "becomes Untargetable" is true of a unit whose concealment was renewed and
+        /// the two are indistinguishable to whoever is watching. Does NOT fire for a status that
+        /// arrives by MoveStatus or TransferStatus: those are a status changing CARRIER, which is
+        /// its own event with its own record (StatusSpread), and folding them in would make a
+        /// passive fire on somebody else's misfortune arriving second-hand.
+        /// </summary>
+        OnStatusGained,
+
+        /// <summary>
+        /// A link the owner CREATED just fired its echo. Not a broadcast - it is raised directly
+        /// on the link's SourceId, which is the one unit the event is about. _broadcastSubject and
+        /// _broadcastVictim are the body the echo landed on, so an effect can aim at it, and
+        /// `_lastMoved` for the owner holds the echoed amount.
+        ///
+        /// "Whenever my attack triggers against a secondary target" had no hook at all: the echo
+        /// happens inside DealRawDamage with nothing raised, so a hero could cause one and never
+        /// learn it had happened. Fires once per echo, an echo that killed its victim included.
+        /// </summary>
+        OnLinkEchoFired,
+
+        /// <summary>
+        /// The owner RECEIVED a redirected share - a Covered ward's split or a link's Redirect -
+        /// rather than being hit directly. Raised on the destination once the share has landed,
+        /// with _broadcastSubject set to the body it was moved OFF, _broadcastSourceId to the
+        /// original attacker, and `_lastMoved` for the owner holding the share.
+        ///
+        /// A protector could not previously tell a redirected share from any other hit: both
+        /// arrive as OnDamaged with the attacker as source, and the body being protected appears
+        /// nowhere in what the protector can read. That is the whole of what "when Rovan receives
+        /// redirected damage from Covered" has to know.
+        ///
+        /// Raised for BOTH mechanics rather than for the link alone, because they are one path -
+        /// Sim.RedirectShare - and a trigger that fired for one and not the other would be the two
+        /// drifting apart at their first opportunity. No shipped Covered has a listener, so the
+        /// dispatch walks an empty passive list in every existing battle.
+        /// </summary>
+        OnRedirectReceived
     }
 
     /// <summary>

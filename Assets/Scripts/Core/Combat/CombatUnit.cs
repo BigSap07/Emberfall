@@ -149,6 +149,40 @@ namespace Emberfall.Core.Combat
         /// kind, so an entry that is not a Link is inert at the funnel by construction rather
         /// than by a kind test.</summary>
         public LinkTransfer LinkTransfer = LinkTransfer.None;
+
+        /// <summary>
+        /// A FLAT amount an Echo link pays on top of its Magnitude share, Attack-scaled and
+        /// stamped at creation.
+        ///
+        /// GAP 2. An echo could only pay a fraction of the blow that caused it, and "the attack
+        /// also strikes the other recorded target for 70% of Attack damage" is not a share of
+        /// anything - it is a fixed payload the size of the caster's Attack. Magnitude and this
+        /// sum, so a link can be part share and part flat, and an entry setting only this is a
+        /// pure flat echo.
+        ///
+        /// ECHO ONLY, never Redirect or Deflect, and that is a rule rather than an oversight: a
+        /// redirect is a SPLIT and must create no value, which is the guarantee RedirectShare
+        /// holds by subtracting exactly what it delivers. A flat addend on a redirect would hand
+        /// the destination more than was ever struck.
+        ///
+        /// Scaled once, at creation, off the applier's Attack - the same convention Burn's
+        /// per-tick magnitude and the Ledger's StoredCap already follow, so a link means the same
+        /// thing at every level and does not quietly re-read a stat that has since been buffed.
+        /// </summary>
+        public float LinkAmount;
+
+        /// <summary>
+        /// When true, this link only fires for damage dealt by the unit that CREATED it.
+        ///
+        /// GAP 3. The funnel is attacker-agnostic by default, which is right for a ward and wrong
+        /// for "the next time either recorded target is attacked BY TALREN". Compares the incoming
+        /// sourceId against this entry's own SourceId, the same test
+        /// StatusInstance.BankFromCaster already makes for a Ledger - deliberately the same
+        /// spelling, because it is the same question asked of a different mechanic.
+        ///
+        /// False by default, so a link authored without it behaves as links did before.
+        /// </summary>
+        public bool LinkFromCasterOnly;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>

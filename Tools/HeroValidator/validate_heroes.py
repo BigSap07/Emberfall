@@ -65,6 +65,9 @@ TARGET_MODES = {
     # hardcoded list against the C# enum and therefore cannot see this file drift.
     "HighestMyMarkStacksEnemy",
     "PreviousTarget", "LinkedUnit",
+    # nine-gap pass: naming the other end of a link, the whole set, and the unit that
+    # caused a broadcast.
+    "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
 }
 
 # ---------------------------------------------------------------------------

@@ -118,6 +118,74 @@ the partner, which for Talren are three different bodies.
   thing, which this engine has refused before (see the absent `AllEnemiesWithStatus`). The
   visible cost is that the log shows the blow aimed at her and the damage landing on the partner.
 
+### Open: `engine/nine-gaps` — unmerged, off `engine/linked-targeting`
+
+**All nine gaps the blocked authoring attempt named. Engine only; still no hero authored.** 72 of
+72 fingerprints unmoved, the same 11 harness reds line for line, 42 new checks with a count-based
+arena per gap. It sits on `engine/linked-targeting` and needs it.
+
+- **Gap 1, charges.** `SpendLinkCharge` decrements and removes at zero, emitting `StatusExpired`
+  the way a spent Guard charge does. 0 charges stays UNLIMITED, which every link authored before
+  this has. Spent BEFORE the share is delivered, so a one-charge link cannot fire again from
+  inside the recursion its own delivery starts.
+- **Gap 2, a flat echo.** `StatusInstance.LinkAmount`, Attack-scaled once at creation like Burn's
+  magnitude and the Ledger's cap. An echo pays `share + flat`. **Echo only** — a redirect is a
+  SPLIT that must create no value, and a flat addend on one would hand the destination more than
+  was ever struck.
+- **Gap 3, the attacker filter.** `LinkFromCasterOnly`, the same test and deliberately the same
+  spelling as the Ledger's `BankFromCaster`, folded into `FindLink` so every link reader honours
+  it at once.
+- **Gap 4, the other end and the set.** `OtherLinkedUnit` is the caster's highest-HP partner
+  excluding the one the dispatch is about — one mode for both shapes that asked, because with two
+  records "highest HP among one" IS the other one, and with three it is the sentence a talent asks
+  for in as many words. `AllLinkedUnits` is the set, deduplicated.
+- **Gap 5, attacker-keyed deflect.** `LinkTransfer.Deflect`, its own rule beside `RedirectShare`
+  rather than a loosened Provoked: Provoked's same-side refusal is correct for what Provoked means
+  and is untouched. It fires FIRST in the funnel, ahead of Guard, and that placement is the rule's
+  meaning rather than a convenience — the blow never reaches this body, so none of the victim's
+  own defences may spend themselves on it.
+- **Gap 6, four triggers.** `OnTargeted`, `OnStatusGained` (TriggerStatus-filtered, and
+  deliberately NOT raised by MoveStatus or TransferStatus — a status changing carrier is its own
+  event with its own record), `OnLinkEchoFired` on the link's creator, `OnRedirectReceived` on the
+  protector. The last fires for Covered as well as for a link, because they are one path and a
+  trigger serving only one would be the two drifting apart at the first opportunity.
+- **Gap 7, the moved amount.** `ScaleByLastMoved` reading `_lastMoved`, a **Dictionary keyed per
+  caster from the start**, joining `_lastLedgerRelease` rather than the three single-field scalars
+  beside it. `LastMovedAboveHpFraction` is the threshold half. A second scalar,
+  `ScaleByLastDamage`, reads the broadcast-window `_lastDamageDealt`.
+  - **What the arena can and cannot prove, stated rather than glossed.** It proves the scalar
+    tracks the amount: halving the ward's share halves the follow-up strike, and the strike equals
+    the share. It does NOT prove the per-caster keying, and no arena can — every write immediately
+    precedes its own read, so one global would answer identically in any ordering a battle can
+    produce. The keying is structural, against a failure mode this harness cannot construct.
+- **Gap 8, the causing unit.** `TargetMode.BroadcastSource` and `ConditionSubject.BroadcastSource`.
+  Distinct from `LastAttacker`, which resolves through the subject's `LastAttackerId` and so
+  answers correctly only for a broadcast raised by a hit, naming the wrong body for one raised by
+  a heal or a shield.
+- **Gap 9, the wrong sign.** `SubjectNotDamagedByMeThisRound`, the exact mirror of
+  `AlreadyDamagedSubjectThisRound`. **A general `negate` flag was rejected**: three fields that
+  silently re-point all forty conditions, including the twenty-odd whose negation nobody has
+  reasoned about — what "not TurnProgressAbove" means for a unit with no position left, or "not
+  StoredRoleMatches" when nothing was recorded.
+
+**A bug in the previous pass, found by an arena rather than by reading.** `DispatchLinkPassive`
+was handed depth 0 at the funnel, matching the broadcasts beside it — but a passive answering "my
+partner was hit" by striking its OTHER partner walks straight back in at 0 again. The gap-4 arena
+overflowed the stack the first time it authored that with `oncePerBattle` false, which is the
+natural shape of the link triggers rather than an exotic case. `_linkDispatchDepth` bounds it and
+is handed to `TriggerPassive` as the depth, so one cap governs instead of two that could disagree.
+
+**THE ONE BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
+honour the `ScaleBy*` family through a shared `ScaledTerm`. They read it nowhere before, so a Heal
+or Shield authoring one of those flags computed off plain Attack and the flag did nothing at all.
+**Six shipped effects author one, across four heroes, and TWO ARE LIVE ABILITIES** —
+`brenna_deep_resolve` (passive1, a Shield off `scaleByLastBanked`) and `cyrra_bury_the_burden`
+(active, a Heal off `scaleByLastRemoval`). The other four are talents, inert until selected. Every
+battle Brenna or Cyrra fights changes; no fingerprint moves only because neither stands in the
+sweep's starter squad, which is coverage rather than safety. The count is pinned at 6, so a
+seventh cannot appear unnoticed. Left in rather than reverted, because the flags are authored
+intent and silently ignoring them is the older bug.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is

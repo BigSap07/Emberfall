@@ -428,6 +428,46 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool LinkMutual;
 
+        // ---------- the nine-gap pass ----------
+
+        /// <summary>
+        /// Attack multiplier for the FLAT amount an Echo link pays on top of its Magnitude share.
+        /// Resolved against the applier's Attack once, at creation, and stored on the
+        /// StatusInstance as LinkAmount. Zero (the default) is a pure share echo, which is what
+        /// every link before this pass was.
+        /// </summary>
+        public float LinkAmountPower;
+
+        /// <summary>When true, the created link only fires for damage dealt by the unit that
+        /// created it. Stored on the StatusInstance as LinkFromCasterOnly.</summary>
+        public bool LinkFromCaster;
+
+        /// <summary>
+        /// When true, the Attack term is replaced by the last amount the CASTER moved - a
+        /// redirected or echoed share it caused, a Shield it transferred, HP it transferred.
+        ///
+        /// GAP 7, and KEYED PER CASTER rather than held in one global, which is the whole
+        /// difference between this and three of the four scalars beside it.
+        /// `_lastRedirectAmount`, `_lastRemovedStacks` and `_lastLedgerBankedStored` are single
+        /// fields shared by every unit on the field, so a second hero moving something between
+        /// the write and the read silently answers for the first. `_lastLedgerRelease` is already
+        /// a Dictionary keyed by unit id for exactly that reason, and this follows it rather than
+        /// the majority.
+        /// </summary>
+        public bool ScaleByLastMoved;
+
+        /// <summary>
+        /// When true, the Attack term is replaced by the damage the most recent hit actually
+        /// dealt - `Sim._lastDamageDealt`, the same realised number EchoDamage repeats.
+        ///
+        /// A BROADCAST-WINDOW READ, and deliberately not per caster. It is meaningful only inside
+        /// a dispatch raised from the funnel, where it names the one hit that raised it - the same
+        /// discipline `_broadcastSubject` keeps, and the same reason neither needs a key. Outside
+        /// such a window it holds whatever the last hit of the current ability dealt, and zero at
+        /// an ability boundary.
+        /// </summary>
+        public bool ScaleByLastDamage;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -505,6 +545,10 @@ namespace Emberfall.Core.Data
             e.ConditionCounterIndex3 = Math.Max(0, j.GetInt("conditionCounterIndex3", 0));
             e.LinkTransfer = EnumUtil.Parse(j.GetString("linkTransfer", "None"), LinkTransfer.None);
             e.LinkMutual = j.GetBool("linkMutual", false);
+            e.LinkAmountPower = j.GetFloat("linkAmountPower", 0f);
+            e.LinkFromCaster = j.GetBool("linkFromCaster", false);
+            e.ScaleByLastMoved = j.GetBool("scaleByLastMoved", false);
+            e.ScaleByLastDamage = j.GetBool("scaleByLastDamage", false);
             return e;
         }
 
