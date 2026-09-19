@@ -7678,7 +7678,7 @@
             "flat": 8,
             "condition": "HpBelow",
             "conditionValue": 0.4,
-            "conditionOn": "Target"
+            "conditionOn": "LastTarget"
           },
           {
             "kind": "Damage",
@@ -7686,7 +7686,7 @@
             "power": 0.45,
             "condition": "HpBelow",
             "conditionValue": 0.4,
-            "conditionOn": "Target"
+            "conditionOn": "LastTarget"
           }
         ]
       },
