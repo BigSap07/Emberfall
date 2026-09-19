@@ -329,8 +329,17 @@ namespace Emberfall.Core.Data
         /// RedirectLethal.</summary>
         public bool ScaleByLastRedirect;
 
-        /// <summary>When true, the Attack term is replaced by the count of statuses removed by the
-        /// last Cleanse/Dispel/RemoveStatus.</summary>
+        /// <summary>
+        /// When true, the Attack term is replaced by the DAMAGE the last Cleanse, Dispel or
+        /// RemoveStatus took off a unit - the remaining damage of the removed damage-over-time
+        /// entries, summed.
+        ///
+        /// It carried a COUNT until the nine-gap pass, which was a defect rather than a choice:
+        /// every description in the roster that reaches this flag says amount, and a Heal authored
+        /// at power 0.8 against one removed Burn healed for 1 HP. The flag's name and JSON spelling
+        /// are unchanged, because "scale by what the last removal took" was always what it meant
+        /// and only the unit was wrong. Zero when what was removed carries no damage.
+        /// </summary>
         public bool ScaleByLastRemoval;
 
         /// <summary>When true, the Attack term is replaced by the total Stored on the Ledger

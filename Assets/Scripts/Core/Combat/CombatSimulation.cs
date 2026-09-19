@@ -540,7 +540,41 @@ namespace Emberfall.Core.Combat
             // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
             private readonly Dictionary<int, float> _lastLedgerRelease = new Dictionary<int, float>();
             private float _lastRedirectAmount;
-            private float _lastRemovedStacks;
+            /// <summary>
+            /// WHAT the last Cleanse, Dispel or RemoveStatus took off a unit, as a damage amount -
+            /// not how many entries it took.
+            ///
+            /// IT USED TO BE A COUNT, AND THAT WAS THE DEFECT. `ScaleByLastRemoval` fed this into
+            /// an effect's Attack term, so a Heal authored at power 0.8 against a removed Burn
+            /// healed for `1 x 0.8` = 1 HP. Both descriptions in the roster that reach this flag
+            /// say AMOUNT in as many words - "the removed damage is converted into healing equal to
+            /// 100% of that amount", "converts only 60% of its removed damage" - and nothing
+            /// anywhere reads it expecting a count, which is what made changing the meaning the
+            /// right repair rather than adding a second scalar beside it. A sibling would have left
+            /// the mis-named one in place for the next author to reach for.
+            ///
+            /// The authored JSON key keeps its spelling. Renaming `scaleByLastRemoval` would have
+            /// broken the two effects this exists to fix, for no gain: the flag still means "scale
+            /// by what the last removal took", and only the unit of measurement was wrong.
+            /// </summary>
+            private float _lastRemovedValue;
+
+            /// <summary>
+            /// The damage a status entry would still have dealt had it not been removed:
+            /// per-tick Magnitude times the rounds left on it. Zero for anything that is not a
+            /// damage-over-time, which is most of the enum.
+            ///
+            /// Zero rather than some stand-in for a Slow or an AttackDown, because those have no
+            /// damage to convert and inventing one would be a number nobody authored. An effect
+            /// scaling off the removal of a non-DoT therefore resolves to nothing, which is the
+            /// honest answer - and is visible, since a heal of zero emits no event.
+            /// </summary>
+            private static float RemainingDotDamage(StatusInstance entry)
+            {
+                if (entry == null || entry.Kind != StatusKind.Burn) return 0f;
+                int rounds = entry.RoundsLeft > 0 ? entry.RoundsLeft : 0;
+                return entry.Magnitude * rounds;
+            }
             private float _lastLedgerBankedStored;
 
             private float GetLastLedgerRelease(int unitId)
@@ -2195,21 +2229,24 @@ namespace Emberfall.Core.Combat
                     {
                         if (!target.Alive) break;
                         int removed = 0;
+                        float cleansedValue = 0f;
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (!StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
+                            cleansedValue += RemainingDotDamage(target.Statuses[i]);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = cleansedValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
                     {
                         if (!target.Alive) break;
                         int removed = 0;
+                        float dispelledValue = 0f;
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
@@ -2225,10 +2262,11 @@ namespace Emberfall.Core.Combat
                             // Dispel that stripped the tag and left the pool would be the same
                             // disagreement, reached by a different door.
                             if (target.Statuses[i].Kind == StatusKind.Shield) target.Shield = 0f;
+                            dispelledValue += RemainingDotDamage(target.Statuses[i]);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = dispelledValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -2309,6 +2347,7 @@ namespace Emberfall.Core.Combat
                         // entry down one, and a forward walk steps over the next match.
                         if (!target.Alive || effect.Status == StatusKind.None) break;
                         int removed = 0;
+                        float strippedValue = 0f;
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (target.Statuses[i].Kind != effect.Status) continue;
@@ -2318,6 +2357,7 @@ namespace Emberfall.Core.Combat
                             // opposite direction and a different question.
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
+                            strippedValue += RemainingDotDamage(target.Statuses[i]);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -2325,7 +2365,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) { _lastRemovedStacks = removed; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = strippedValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
                         break;
                     }
 
@@ -3145,7 +3185,7 @@ namespace Emberfall.Core.Combat
             {
                 if (effect.ScaleByLastRelease) return GetLastLedgerRelease(source.Id);
                 if (effect.ScaleByLastRedirect) return _lastRedirectAmount;
-                if (effect.ScaleByLastRemoval) return _lastRemovedStacks;
+                if (effect.ScaleByLastRemoval) return _lastRemovedValue;
                 if (effect.ScaleByLastBanked) return _lastLedgerBankedStored;
                 if (effect.ScaleByLastMoved) return GetLastMoved(source.Id);
                 if (effect.ScaleByLastDamage) return _lastDamageDealt;

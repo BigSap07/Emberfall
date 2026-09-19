@@ -68,6 +68,7 @@ namespace Emberfall.DevHarness
             CheckBatchFiveEngineGaps(content);
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
+            CheckAuthoredHeroSweep(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -16082,6 +16083,7 @@ namespace Emberfall.DevHarness
             CheckGap7MovedAmount();
             CheckGap8BroadcastSource();
             CheckGap9NotDamagedByMe();
+            CheckRemovedValueScalar();
             Line("");
         }
 
@@ -17198,6 +17200,519 @@ namespace Emberfall.DevHarness
             List<HeroInstance> team = new List<HeroInstance>();
             team.Add(MakeInstance(db.GetHero("g9_hero"), 1));
             return RunWith(db, db.GetStage("g9_arena"), 8909, team);
+        }
+
+        // ---- the removed-value scalar: an amount, not a count -----------------------------------
+
+        /// <summary>
+        /// `scaleByLastRemoval` now feeds an effect the DAMAGE the last removal took off a unit
+        /// rather than how many entries it took, which is what every description reaching it says.
+        ///
+        /// The arena makes the two readings impossible to confuse. A Burn is applied at a known
+        /// per-tick magnitude for a known duration, then stripped, and a Heal scales off the
+        /// removal at power 1.0. A count-based scalar heals 1; an amount-based one heals the Burn's
+        /// whole remaining damage. The check asserts the second and names the first, so a
+        /// regression back to counting fails loudly rather than shrinking a number nobody watches.
+        ///
+        /// The second run halves the Burn's remaining duration, so the heal halves with it - which
+        /// is what proves the scalar reads the REMAINING damage rather than one tick or a constant.
+        /// </summary>
+        private static void CheckRemovedValueScalar()
+        {
+            BattleResult twoRounds = RunRemovedValueArena(2);
+            BattleResult oneRound = RunRemovedValueArena(1);
+            if (twoRounds == null || oneRound == null)
+            { Check(false, "removed-value arena built"); return; }
+
+            int healTwo = HealTo(twoRounds, "RvAlly");
+            int healOne = HealTo(oneRound, "RvAlly");
+
+            Check(healTwo > 1,
+                  "GAP (b): scaleByLastRemoval feeds an AMOUNT - the removed Burn's remaining damage "
+                  + "(" + healTwo + " healed). A count-based scalar would have healed 1, which is "
+                  + "what it did before this repair");
+            Check(healOne > 1 && healTwo == healOne * 2,
+                  "and it is the REMAINING damage rather than one tick or a constant: halving the "
+                  + "Burn's duration halves the heal (" + healOne + " against " + healTwo + ")");
+        }
+
+        /// <summary>Total Heal-event value landed on one unit, by name.</summary>
+        private static int HealTo(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Heal && e.TargetId == id) total += e.Value;
+            }
+            return total;
+        }
+
+        private static BattleResult RunRemovedValueArena(int burnRounds)
+        {
+            // One caster: apply Burn, strip it, heal off what the strip took. The wounded ally is
+            // the only body that can receive the heal, so its Heal total is the scalar's value.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""rv_caster"", ""name"": ""RvCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 1000, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rv_basic"", ""name"": ""Bury"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.3, ""duration"": " + burnRounds + @", ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""RemoveStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"", ""hits"": 1 },
+          { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.0, ""scaleByLastRemoval"": true }
+        ] },
+      ""active"": { ""id"": ""rv_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""rv_ally"", ""name"": ""RvAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 200000, ""attack"": 10, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rva_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""rva_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""rv_foe"", ""name"": ""RvFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 3000, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rvf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""rv_ch"", ""name"": ""RemovedValue"", ""stages"": [
+    { ""id"": ""rv_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""rv_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "removed value");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("rv_caster"), 1));
+            team.Add(MakeInstance(db.GetHero("rv_ally"), 1));
+            return RunWith(db, db.GetStage("rv_arena"), 9101, team);
+        }
+
+        // ================================================================= authored-hero sweep
+        //
+        // THE CRITERION THIS EXISTS TO STRENGTHEN. The 24-stage fingerprint sweep fields a fresh
+        // profile, which deploys three starters, so it measures three of the twenty-one authored
+        // heroes. "No fingerprint moved" was therefore true of a change that altered two other
+        // heroes outright - the ScaleBy repair did exactly that, and the stage sweep reported zero.
+        //
+        // This puts EVERY authored hero into one fixed arena with one fixed squad and records what
+        // its battle did, against a committed baseline. A kit whose behaviour changes moves its own
+        // line and nobody else's.
+        //
+        // A GOLDEN FILE, deliberately, because the alternative cannot do the job. The stage sweep
+        // re-runs the same seed twice and asserts the two agree, which proves reproducibility
+        // within one build and says nothing about whether this build differs from the last. Only a
+        // committed record can answer that. Precedent: Tools/doc-lint-baseline.txt.
+        //
+        // A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE. The
+        // regenerate flag exists so an intended change can be recorded in one step; reaching for it
+        // to quiet a surprise is how a guard stops guarding.
+
+        private const string HeroSweepBaselineFile = "hero-sweep-baseline.txt";
+        private const int HeroSweepSeeds = 5;
+
+        private static void CheckAuthoredHeroSweep(ContentDatabase live)
+        {
+            Line("AUTHORED-HERO SWEEP (every authored kit in one fixed arena, against a committed baseline)");
+
+            List<HeroDef> authored = new List<HeroDef>();
+            int placeholders = 0;
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef h = live.Heroes[i];
+                if (h.BasicAttack != null && h.BasicAttack.Id.Contains("placeholder")) { placeholders++; continue; }
+                authored.Add(h);
+            }
+            authored.Sort(delegate (HeroDef a, HeroDef b) { return string.CompareOrdinal(a.Id, b.Id); });
+            Check(authored.Count > 0,
+                  authored.Count + " authored hero(es) in the sweep, " + placeholders + " placeholder(s) skipped");
+            if (authored.Count == 0) { Line(""); return; }
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            if (arena == null) { Check(false, "hero-sweep arena built"); Line(""); return; }
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            if (fillers == null) { Check(false, "hero-sweep neutral fillers built"); Line(""); return; }
+            StageDef stage = arena.GetStage("sweep_arena");
+            if (stage == null) { Check(false, "hero-sweep stage resolved"); Line(""); return; }
+
+            List<string> lines = new List<string>();
+            for (int h = 0; h < authored.Count; h++)
+            {
+                for (int s = 1; s <= HeroSweepSeeds; s++)
+                {
+                    List<HeroInstance> team = new List<HeroInstance>();
+                    team.Add(MakeInstance(authored[h], 40));
+                    for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                    BattleResult r = RunWith(arena, stage, 4400000 + h * 97 + s, team);
+                    lines.Add(authored[h].Id + "|" + s + "|" + (r == null ? "NULL" : HeroSweepHash(r)));
+                }
+            }
+
+            // THE SWEEP HAS TO MEASURE ITS SUBJECT, not the four bodies standing next to it. If
+            // two heroes produced the same fingerprint for the same seed, their lines would be
+            // reporting on the fillers and the arena rather than on either kit, and a kit could
+            // change without its line moving. Asserted per seed rather than across the whole file,
+            // because two seeds of one hero SHOULD differ and comparing them all together would
+            // confuse the two questions.
+            int collisions = 0;
+            List<string> collided = new List<string>();
+            for (int s = 1; s <= HeroSweepSeeds; s++)
+            {
+                Dictionary<string, string> seenHash = new Dictionary<string, string>();
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    string[] parts = lines[i].Split('|');
+                    if (parts.Length != 3 || parts[1] != s.ToString()) continue;
+                    string owner;
+                    if (seenHash.TryGetValue(parts[2], out owner))
+                    {
+                        collisions++;
+                        collided.Add(owner + " / " + parts[0] + " (seed " + s + ")");
+                        continue;
+                    }
+                    seenHash[parts[2]] = parts[0];
+                }
+            }
+            Check(collisions == 0,
+                  collisions == 0
+                    ? "every authored hero fingerprints differently from every other at the same seed"
+                      + " - each line measures its own subject rather than the squad around it"
+                    : collisions + " hero pair(s) share a fingerprint at the same seed, so those lines"
+                      + " are not measuring their subject: " + string.Join(", ", collided.ToArray()));
+
+            string dir = FindToolDir("DevHarness");
+            string path = dir == null ? null : Path.Combine(dir, HeroSweepBaselineFile);
+            bool regen = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMBERFALL_REGEN_HERO_SWEEP"));
+
+            if (path == null)
+            {
+                Line("  [note] Tools/DevHarness not found next to this binary, so the sweep could not"
+                     + " be compared against its baseline. The " + lines.Count + " fingerprints were"
+                     + " still produced.");
+                Line("");
+                return;
+            }
+
+            if (regen || !File.Exists(path))
+            {
+                WriteHeroSweepBaseline(path, lines);
+                Line("  [note] " + (regen ? "EMBERFALL_REGEN_HERO_SWEEP is set" : "no baseline existed")
+                     + " - wrote " + lines.Count + " fingerprints to " + HeroSweepBaselineFile
+                     + ". A regenerate is a CLAIM that every moved line was intended; the diff is the"
+                     + " record of what was claimed.");
+                Line("");
+                return;
+            }
+
+            CompareHeroSweepBaseline(path, lines);
+            Line("  [note] This covers each hero's behaviour IN THIS ARENA - one squad, one enemy"
+                 + " line, five seeds. A clause that needs a Taunt enemy, a particular aspect"
+                 + " matchup, a second copy of its own hero or an ally it does not have here is"
+                 + " still unmeasured. It raises coverage from the three starters the stage sweep"
+                 + " fields to all " + authored.Count + " authored kits; it is not proof that a kit"
+                 + " does everything its description says.");
+            Line("");
+        }
+
+        private static void WriteHeroSweepBaseline(string path, List<string> lines)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("# Emberfall authored-hero sweep baseline.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# One line per authored hero per seed: <heroId>|<seed>|<fnv1a-64 of the battle>.\r\n");
+            sb.Append("# The hash folds event type, source, target, value and status over the whole\r\n");
+            sb.Append("# event stream, plus the outcome and the round count.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# A MOVED LINE IS A BEHAVIOUR CHANGE. It needs a stated reason in the commit that\r\n");
+            sb.Append("# moves it - which hero, which clause, and why the new behaviour is the right one.\r\n");
+            sb.Append("# Regenerating to make a surprise go away is how a guard stops guarding.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# Regenerate deliberately:  EMBERFALL_REGEN_HERO_SWEEP=1  pwsh Tools/build-check.ps1\r\n");
+            for (int i = 0; i < lines.Count; i++) sb.Append(lines[i]).Append("\r\n");
+            File.WriteAllText(path, sb.ToString());
+        }
+
+        private static void CompareHeroSweepBaseline(string path, List<string> lines)
+        {
+            Dictionary<string, string> baseline = new Dictionary<string, string>();
+            string[] raw = File.ReadAllLines(path);
+            for (int i = 0; i < raw.Length; i++)
+            {
+                string t = raw[i].Trim();
+                if (t.Length == 0 || t[0] == '#') continue;
+                int cut = t.LastIndexOf('|');
+                if (cut <= 0) continue;
+                baseline[t.Substring(0, cut)] = t.Substring(cut + 1);
+            }
+
+            List<string> moved = new List<string>();
+            List<string> added = new List<string>();
+            Dictionary<string, bool> seen = new Dictionary<string, bool>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int cut = lines[i].LastIndexOf('|');
+                string key = lines[i].Substring(0, cut);
+                string hash = lines[i].Substring(cut + 1);
+                seen[key] = true;
+                string was;
+                if (!baseline.TryGetValue(key, out was)) { added.Add(key); continue; }
+                if (was != hash) moved.Add(key);
+            }
+            List<string> gone = new List<string>();
+            foreach (KeyValuePair<string, string> kv in baseline)
+                if (!seen.ContainsKey(kv.Key)) gone.Add(kv.Key);
+
+            Check(moved.Count == 0,
+                  moved.Count == 0
+                    ? "all " + lines.Count + " sweep fingerprints match " + HeroSweepBaselineFile
+                      + " - no authored kit's behaviour moved"
+                    : moved.Count + " of " + lines.Count + " sweep fingerprints MOVED: "
+                      + string.Join(", ", moved.ToArray())
+                      + " - each is a behaviour change in that hero's kit and needs a stated reason in"
+                      + " the commit that moves it, NOT a regenerate");
+            Check(added.Count == 0,
+                  added.Count == 0
+                    ? "no sweep entry is missing from the baseline"
+                    : added.Count + " sweep entr(ies) are not in the baseline (a hero was authored or"
+                      + " the seed count changed): " + string.Join(", ", added.ToArray()));
+            Check(gone.Count == 0,
+                  gone.Count == 0
+                    ? "no baseline entry has lost its hero"
+                    : gone.Count + " baseline entr(ies) no longer resolve to an authored hero: "
+                      + string.Join(", ", gone.ToArray()));
+        }
+
+        /// <summary>FNV-1a over the battle, folding the same fields the stage fingerprint does plus
+        /// the status kind, so a line is a short hash rather than a whole event stream.</summary>
+        private static string HeroSweepHash(BattleResult r)
+        {
+            ulong hash = 14695981039346656037UL;
+            HeroSweepMix(ref hash, r.Victory ? 1 : 0);
+            HeroSweepMix(ref hash, r.Rounds);
+            HeroSweepMix(ref hash, r.Events.Count);
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                HeroSweepMix(ref hash, (int)e.Type);
+                HeroSweepMix(ref hash, e.SourceId);
+                HeroSweepMix(ref hash, e.TargetId);
+                HeroSweepMix(ref hash, e.Value);
+                HeroSweepMix(ref hash, (int)e.Status);
+            }
+            return hash.ToString("x16");
+        }
+
+        private static void HeroSweepMix(ref ulong hash, int v)
+        {
+            for (int b = 0; b < 4; b++)
+            {
+                hash ^= (byte)(v >> (b * 8));
+                hash *= 1099511628211UL;
+            }
+        }
+
+        /// <summary>
+        /// The arena: the REAL heroes and the REAL balance, against a fixed synthetic enemy line on
+        /// a fixed synthetic stage.
+        ///
+        /// Real balance rather than a zero-variance one, which is the opposite of what the small
+        /// mechanic arenas do and is right here for the opposite reason. Those isolate one rule and
+        /// want no noise; this wants maximum SENSITIVITY - with damage and speed variance live,
+        /// every hit draws from the stream, so a change that merely shifts RNG consumption moves the
+        /// hash instead of hiding inside a zeroed term.
+        ///
+        /// The enemy line is five bodies chosen to give reactive kits something to react to: a
+        /// heavy hitter that aims at the weakest ally, a healer, a Burn applier, a self-buffer and
+        /// a Taunt holder. Between them they raise the damage, heal, DoT, buff-gained and anchor
+        /// paths every round without any of it depending on which hero is being measured.
+        /// </summary>
+        private static ContentDatabase BuildHeroSweepArena(ContentDatabase live)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""sweep_hitter"", ""name"": ""SweepHitter"", ""aspect"": ""Ember"",
+      ""hp"": 240000, ""attack"": 900, ""defense"": 120, ""speed"": 150, ""critChance"": 0.05, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_hit"", ""name"": ""Crush"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""sweep_healer"", ""name"": ""SweepHealer"", ""aspect"": ""Tide"",
+      ""hp"": 200000, ""attack"": 400, ""defense"": 100, ""speed"": 140, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_heal"", ""name"": ""Mend"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.2 }
+        ] } },
+    { ""id"": ""sweep_burner"", ""name"": ""SweepBurner"", ""aspect"": ""Verdant"",
+      ""hp"": 190000, ""attack"": 500, ""defense"": 90, ""speed"": 130, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_burn"", ""name"": ""Scald"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.6 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""RandomEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.25, ""duration"": 2, ""chance"": 0.9 }
+        ] } },
+    { ""id"": ""sweep_buffer"", ""name"": ""SweepBuffer"", ""aspect"": ""Gale"",
+      ""hp"": 180000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_buff"", ""name"": ""Urge"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
+        ] } },
+    { ""id"": ""sweep_warden"", ""name"": ""SweepWarden"", ""aspect"": ""Lumen"",
+      ""hp"": 300000, ""attack"": 300, ""defense"": 180, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_ward"", ""name"": ""Stand"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.4 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"",
+            ""magnitude"": 1.0, ""duration"": 2, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""sweep_ch"", ""name"": ""Sweep"", ""stages"": [
+    { ""id"": ""sweep_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""sweep_hitter"", ""level"": 30 },
+      { ""id"": ""sweep_healer"", ""level"": 30 },
+      { ""id"": ""sweep_burner"", ""level"": 30 },
+      { ""id"": ""sweep_buffer"", ""level"": 30 },
+      { ""id"": ""sweep_warden"", ""level"": 30 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] hero-sweep arena warning: " + db.Warnings[i]);
+            return null;
+        }
+
+        /// <summary>
+        /// Four NEUTRAL stat-sticks that fill the squad and contribute nothing of their own.
+        ///
+        /// PURPOSE-BUILT, NOT BORROWED FROM THE ROSTER, and that is the difference between a sweep
+        /// that isolates its subject and one that does not. Real heroes as fillers would mean a
+        /// change to any filler's kit moved all twenty-one lines at once, so every line would
+        /// report on five kits and none of them would say which.
+        ///
+        /// No passive, no talent, an active nobody can afford, and a basic that deals a token hit.
+        /// Their HP descends in fixed steps so LowestHpAlly, SecondLowestHpAlly and
+        /// TwoLowestHpAllies resolve to specific, stable bodies - a subject that wards or heals "the
+        /// lowest-HP ally" reaches the same filler every run.
+        ///
+        /// They are loaded from their own database and handed over on the HeroInstance, so they
+        /// never enter heroes.json and cannot be summoned, deployed or counted as content.
+        /// </summary>
+        private static List<HeroDef> BuildHeroSweepFillers()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""sweep_filler_a"", ""name"": ""FillerA"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 900, ""attack"": 60, ""defense"": 30, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfa_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfa_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_b"", ""name"": ""FillerB"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 800, ""attack"": 60, ""defense"": 30, ""speed"": 95, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfb_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfb_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_c"", ""name"": ""FillerC"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 700, ""attack"": 60, ""defense"": 30, ""speed"": 90, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfc_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfc_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_d"", ""name"": ""FillerD"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 600, ""attack"": 60, ""defense"": 30, ""speed"": 85, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfd_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfd_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""sweep_filler_foe"", ""name"": ""Unused"", ""aspect"": ""Ember"",
+      ""hp"": 100, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""sff"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""sfc_ch"", ""name"": ""Fillers"", ""stages"": [
+    { ""id"": ""sfc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""sweep_filler_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, ZeroVarianceBalance(5));
+            if (db.Warnings.Count > 0)
+            {
+                for (int i = 0; i < db.Warnings.Count; i++)
+                    Line("  [FAIL] hero-sweep filler warning: " + db.Warnings[i]);
+                return null;
+            }
+            List<HeroDef> fillers = new List<HeroDef>();
+            string[] ids = { "sweep_filler_a", "sweep_filler_b", "sweep_filler_c", "sweep_filler_d" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef d = db.GetHero(ids[i]);
+                if (d == null) return null;
+                fillers.Add(d);
+            }
+            return fillers;
+        }
+
+        /// <summary>The content directory, found the same way Main does when given no argument.</summary>
+        private static string FindContentDirForSweep()
+        {
+            string candidate = FindContentDir();
+            return Directory.Exists(candidate) ? candidate : null;
+        }
+
+        /// <summary>The directory a tool lives in, for a file that may not exist yet - which is why
+        /// this cannot be FindToolSource, whose whole job is to find an existing file.</summary>
+        private static string FindToolDir(string folder)
+        {
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            for (int r = 0; r < roots.Length; r++)
+            {
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName, Path.Combine("Tools", folder));
+                    if (Directory.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
+            }
+            return null;
         }
     }
 }

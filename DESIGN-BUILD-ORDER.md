@@ -175,7 +175,56 @@ overflowed the stack the first time it authored that with `oncePerBattle` false,
 natural shape of the link triggers rather than an exotic case. `_linkDispatchDepth` bounds it and
 is handed to `TriggerPassive` as the depth, so one cap governs instead of two that could disagree.
 
-**THE ONE BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
+**`ScaleByLastRemoval` carried a COUNT where every description says an amount, and that was the
+real defect.** Verified before repairing, on real content at level 40: Cyrra's active healed **791**
+before the `ScaledTerm` change (0.8 × Attack, the flag inert) and **1** after (0.8 × one entry
+removed). Her text says *"the removed damage is converted into healing equal to 100% of that
+amount"*; her talent I says *"converts only 60% of its removed damage"*. **Audited the whole
+roster: two users, both hers, both wanting an amount, and nothing anywhere reading it as a
+count** — which is what made changing the meaning the right repair rather than adding a sibling
+scalar. A sibling would have left the mis-named one in place for the next author to reach for.
+- `_lastRemovedStacks` became `_lastRemovedValue`, summed at all three removal sites (Cleanse,
+  Dispel, RemoveStatus) as `RemainingDotDamage` — per-tick Magnitude × rounds left. Zero for
+  anything carrying no damage, rather than a stand-in nobody authored.
+- The JSON key keeps its spelling. `scaleByLastRemoval` always meant "scale by what the last
+  removal took"; only the unit was wrong, and renaming it would have broken the two effects the
+  repair exists to fix.
+- `CheckRemovedValueScalar` measures it: a Burn of known magnitude and duration stripped and
+  converted, healing **3216** at two rounds and **1608** at one. Halving the duration halves the
+  heal, which is what proves it reads the REMAINING damage rather than one tick or a constant.
+
+**Shipped: the authored-hero sweep, and the reason it had to exist.** The 24-stage fingerprint
+sweep fields a fresh profile, which deploys three starters — so it measured **three of the
+twenty-one authored heroes**. "0 of 72 fingerprints moved" was therefore true of a change that
+altered two other heroes outright. The criterion was weaker than it read.
+- `Tools/DevHarness/hero-sweep-baseline.txt`, 105 lines: every authored hero × 5 seeds, in one
+  fixed arena, hashed FNV-1a over the whole event stream with the hero id in plain text.
+- **A golden file, deliberately.** The stage sweep re-runs a seed twice and asserts the two agree,
+  which proves reproducibility within one build and says nothing about whether this build differs
+  from the last. Only a committed record answers that. It sits beside `doc-lint-baseline.txt`.
+- **A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE** — which hero,
+  which clause, why the new behaviour is right. `EMBERFALL_REGEN_HERO_SWEEP=1` exists so an
+  intended change lands in one step; reaching for it to quiet a surprise is how a guard stops
+  guarding.
+- **Neutral purpose-built fillers, not heroes from the roster.** Four stat-sticks with no passive,
+  no talent and an unaffordable active, loaded from their own database and handed over on the
+  `HeroInstance`, so they never enter `heroes.json`. Real heroes as fillers would mean a change to
+  any filler's kit moved all 21 lines at once. A standing check asserts no two heroes share a
+  fingerprint at the same seed, which is what proves each line measures its subject rather than
+  the squad around it.
+- **Real balance, not a zero-variance one** — the opposite of what the small mechanic arenas use
+  and right for the opposite reason. Those isolate one rule and want no noise; this wants
+  sensitivity, so every hit draws from the RNG stream and a change that merely shifts consumption
+  moves the hash instead of hiding inside a zeroed term.
+- **Cost, measured:** 105 battles, **~25 ms**, against a harness that runs in 6.9 s. Full
+  build-check went 9.0 s to **10.4 s**. The baseline file is 4.6 KB.
+- **The honest limit, stated in the check's own output:** it covers each hero's behaviour IN THAT
+  ARENA — one squad, one enemy line, five seeds. A clause needing a Taunt enemy, a particular
+  aspect matchup, a second copy of its own hero or an ally it does not have here is still
+  unmeasured. It raises coverage from three heroes to twenty-one; it is not proof that a kit does
+  everything its description says.
+
+**THE OTHER BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
 honour the `ScaleBy*` family through a shared `ScaledTerm`. They read it nowhere before, so a Heal
 or Shield authoring one of those flags computed off plain Attack and the flag did nothing at all.
 **Six shipped effects author one, across four heroes, and TWO ARE LIVE ABILITIES** —
