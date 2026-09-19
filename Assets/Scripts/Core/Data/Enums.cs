@@ -195,7 +195,45 @@ namespace Emberfall.Core.Data
 
         /// <summary>The living enemy carrying the most entries of the caster's mark kind from the
         /// caster specifically. Ties broken by lowest slot. No marked enemy → nobody.</summary>
-        HighestMyMarkStacksEnemy
+        HighestMyMarkStacksEnemy,
+
+        // ---------- linked targeting ----------
+
+        /// <summary>
+        /// The enemy the caster's attack landed on BEFORE its current one, read off
+        /// CombatUnit.PreviousTargetId.
+        ///
+        /// A sibling of LastTarget, and placed in the same post-anchor family for the same reasons:
+        /// it names a single enemy, so the side's anchor outranks it, and it falls back to
+        /// FrontEnemy when the remembered unit is dead, excluded or was never set. PreviousTargetId
+        /// is only written when the target actually CHANGES - ApplyDamageEffect refuses to shuffle
+        /// a unit's own history when it hits the same body twice - so "the one before this one"
+        /// means a genuinely different body, never the same one twice.
+        ///
+        /// With no previous target at all this resolves to the front enemy rather than to nobody,
+        /// which is the same answer LastTarget gives in the same situation. The alternative -
+        /// resolving to nobody - would make an ability silently do nothing on its owner's first
+        /// two turns, and the condition family (SubjectIsMyPreviousTarget) is what a kit uses when
+        /// it needs "only if there WAS one".
+        /// </summary>
+        PreviousTarget,
+
+        /// <summary>
+        /// The unit on the other end of the caster's own Link - see StatusKind.Linked.
+        ///
+        /// BEFORE THE ANCHOR, alongside BroadcastVictim and the ally modes, and for the identical
+        /// reason: a Link names one specific body, which may be an ally (Rovan's ward) or an enemy
+        /// (Talren's pair), and a Taunt holder intercepting it would make the link name somebody it
+        /// is not bound to. A link is a claim about two units; letting a third answer for it would
+        /// make the mode mean nothing.
+        ///
+        /// Resolves the FIRST live Link entry on the caster, front-most by nothing but list order,
+        /// and to nobody when the caster holds none or the partner is dead. Resolving to nobody is
+        /// the honest answer here rather than a fallback: "the unit I am linked to" has no referent
+        /// when there is no link, and a FrontEnemy fallback would quietly aim a bound effect at a
+        /// body the link never named.
+        /// </summary>
+        LinkedUnit
     }
 
     public enum EffectKind
@@ -345,7 +383,51 @@ namespace Emberfall.Core.Data
         /// optionally scaled by ScaleByLastRedirect / ScaleByLastRelease / ScaleByLastBanked.
         /// Stored is added up to StoredCap; OnLedgerCapped and OnAllyLedgerBanked fire as usual.
         /// </summary>
-        LedgerDeposit           // 27
+        LedgerDeposit,          // 27
+
+        // ---------- linked targeting ----------
+
+        /// <summary>
+        /// Binds the effect's Target to its SecondaryTarget with a StatusKind.Linked entry - see
+        /// that member for what the engine then does with the pair.
+        ///
+        /// Its own kind rather than an ApplyStatus of Linked, because a link needs TWO units named
+        /// and ApplyStatus resolves one. Every other field an ApplyStatus would stamp is stamped
+        /// here too - Duration, Chance, UsesPerRound, Charges - so a Link is an ordinary status in
+        /// every respect except how it is created.
+        ///
+        /// `LinkMutual` decides whether the reverse entry is written as well. False writes one
+        /// entry, on the Target, naming the SecondaryTarget: that is a one-way binding, which is
+        /// what a ward is ("a share of what THEY take comes to ME", and nothing flows back).
+        /// True writes both, which is what a paired mark is ("a hit on either strikes the other").
+        /// A mutual link is two entries rather than one bidirectional entry, so a Dispel, a Cleanse
+        /// or a death can break one half and leave the other standing - which is what the
+        /// descriptions mean when they say the link is on both bodies.
+        ///
+        /// `Magnitude` is the transfer fraction and `LinkTransfer` is what the fraction does. A
+        /// LinkTransfer of None makes the entry a pure record that only the two link triggers read,
+        /// which is a legitimate authoring - not every link moves damage.
+        /// </summary>
+        LinkUnits,              // 28
+
+        /// <summary>
+        /// Repeats a fraction of the damage ALREADY DEALT in this ability, onto the effect's own
+        /// Target. `Power` is the fraction.
+        ///
+        /// It reads a realised number rather than recomputing one, and that is the whole point.
+        /// The amount is `Sim._lastDamageDealt`, which is what the most recent hit actually took
+        /// off a bar after Guard, Cover, the shield pool, the Ledger and every mitigation step -
+        /// so "echoes 40% of its damage" echoes 40% of what landed, not 40% of what was rolled.
+        /// It is paid through DealRawDamage rather than ApplyDamageEffect for the same reason: the
+        /// number has already been through the pipeline once, and sending it round again would
+        /// apply Defense, crit, variance and the aspect chart to it twice.
+        ///
+        /// `_lastDamageDealt` is cleared at every ability boundary, exactly as `_lastTarget` is, so
+        /// an echo authored with no damage ahead of it in the same ability reads zero and does
+        /// nothing. An echo that could read a number from three turns ago would be a different
+        /// ability every time it fired.
+        /// </summary>
+        EchoDamage              // 29
     }
 
     /// <summary>
@@ -882,7 +964,71 @@ namespace Emberfall.Core.Data
         /// None, Resolve2 when explicitly named), and ConsumesResolve spends the counter named by
         /// the same field. Dual-resource kits stack and spend the two counters independently.
         /// </summary>
-        Resolve2
+        Resolve2,
+
+        // ---------- linked targeting: two units bound together ----------
+
+        /// <summary>
+        /// A binding to one OTHER unit, named by StatusInstance.LinkedToId.
+        ///
+        /// THE ONLY STATUS THAT NAMES A THIRD UNIT. Every other entry in this enum is about its
+        /// holder, told apart from another holder's copy by SourceId - who applied it. A Link needs
+        /// both: SourceId is still the hero that created it, and LinkedToId is the partner the
+        /// binding points at. Those are usually three different bodies (Talren binds two enemies to
+        /// each other), which is why the partner could not be folded into SourceId.
+        ///
+        /// What the engine does with it is StatusInstance.LinkTransfer, and it is read at exactly
+        /// one place - the damage funnel in DealRawDamage:
+        ///
+        ///   Redirect: a Magnitude share of the holder's incoming damage lands on the partner
+        ///   INSTEAD. The holder takes that much less. This is Covered's rule with the destination
+        ///   named by the link rather than by the applier, and it runs through the same code -
+        ///   see Sim.RedirectShare.
+        ///
+        ///   Echo: a Magnitude share of the holder's incoming damage ALSO lands on the partner. The
+        ///   holder takes the hit in full. The same split arithmetic as Redirect and the opposite
+        ///   bookkeeping, which is the whole difference between "instead" and "as well".
+        ///
+        ///   None: nothing at the funnel. The entry is a pure record, and only the two link
+        ///   triggers read it.
+        ///
+        /// WHAT A REDIRECT MOVES IS THE DAMAGE, NOT THE CALCULATION, and that is worth stating
+        /// because it is the one place a reader will expect otherwise. DealRawDamage is handed a
+        /// number that has already been through the attacker's crit roll, the aspect chart and the
+        /// HOLDER's Defense, Armor Break and Damage Reduction. Redirecting it does not re-run any
+        /// of that against the partner: the partner's own Defense is not applied, and its own
+        /// Guard, Cover, shield pool and Ledger are, because those all live inside the funnel. That
+        /// is exactly how Covered has always behaved, and a link that recomputed instead would be a
+        /// second, differently-shaped redirect rather than the same one used twice.
+        ///
+        /// Neither harmful nor beneficial: IsHarmful returns false, like Mark and Ledger, so a
+        /// Cleanse does not take it. Dispel does, since it removes anything not harmful - a link is
+        /// a claim on a body and answering it is what Dispel is for.
+        /// </summary>
+        Linked
+    }
+
+    /// <summary>
+    /// What a StatusKind.Linked entry does to damage arriving at its holder.
+    ///
+    /// Three members and not two, because "the link does nothing to damage" is a real authoring
+    /// rather than an absence: Vaelis's binding exists so her passive can hear about a hit on the
+    /// other end, and a link that also moved damage would be a different ability. None is the
+    /// default so an entry created without a transfer named is inert at the funnel.
+    /// </summary>
+    public enum LinkTransfer
+    {
+        /// <summary>The link moves no damage. Only OnLinkedUnitTargeted and OnLinkedUnitHit read
+        /// the entry.</summary>
+        None,
+
+        /// <summary>A share of the holder's incoming damage lands on the partner INSTEAD of on the
+        /// holder. The holder takes that much less.</summary>
+        Redirect,
+
+        /// <summary>A share of the holder's incoming damage ALSO lands on the partner. The holder
+        /// takes the hit in full.</summary>
+        Echo
     }
 
     /// <summary>
@@ -1158,7 +1304,57 @@ namespace Emberfall.Core.Data
         /// removed. _broadcastSubject is the unit whose status expired. Filtered by
         /// TriggerStatus the same way OnAppliedStatusExpired is. Darian counts same-side
         /// shield expiries.</summary>
-        OnAppliedAllyStatusExpired
+        OnAppliedAllyStatusExpired,
+
+        // ---------- linked targeting: the far end of a Link ----------
+        //
+        // A NEW DISPATCH SHAPE, and the third one in this enum. The owner-centric triggers fire on
+        // the unit something happened to; the broadcasts fire on a whole side; these two fire on
+        // whoever holds a StatusKind.Linked entry NAMING the unit something happened to, wherever
+        // that holder stands. Sim.DispatchLinkPassive walks the units once looking for that entry.
+        // Neither is a broadcast, because a link is not a side: Rovan's partner is an ally and
+        // Talren's are two enemies, and a side-scoped dispatch would answer the wrong question in
+        // one of those two cases.
+        //
+        // Both are gated on Sim._anyLinks, a bool that is false until the first Link lands. No
+        // battle without a link pays more than one bool test at either dispatch point, which is
+        // what keeps every existing fingerprint where it is.
+        //
+        // SPLIT INTO TWO, not folded into one with a flag, because "targeted" and "hit" are
+        // genuinely different moments and a kit needs to say which. A blow that misses, is Blocked
+        // or is fully absorbed was aimed and never landed.
+
+        /// <summary>
+        /// The owner's linked partner was SELECTED as the target of a Damage effect. Raised at the
+        /// top of ApplyDamageEffect, before the miss check, so it fires for a hit that goes on to
+        /// miss, to be Blocked, or to be soaked whole by a ward.
+        ///
+        /// Deliberately NOT raised for every kind of targeting. A heal, a buff or a cleanse also
+        /// names a target, and ResolveTargets is reached by all of them - but firing a passive from
+        /// inside targeting means firing it after the targets are chosen and before the effect has
+        /// resolved, where a passive that kills the target leaves the caller holding a corpse it
+        /// already decided to act on. The same argument OnEnemyDamagedAlly settled: the damage half
+        /// has one funnel and one well-defined moment, so that is the half raised correctly rather
+        /// than four call sites with four meanings. "An attack aimed at" is what the abilities
+        /// asking for this say, and an attack is a Damage effect.
+        ///
+        /// `_broadcastSourceId` carries the attacker, so TriggerSourceIsSelf and
+        /// TriggerSourceIsAlly can filter by who aimed it.
+        /// </summary>
+        OnLinkedUnitTargeted,
+
+        /// <summary>
+        /// The owner's linked partner TOOK DAMAGE. Raised in DealRawDamage once the hit has landed
+        /// and the Damage event is in the record, so the passive answers the damage that actually
+        /// happened rather than the damage that was attempted.
+        ///
+        /// Raised for every point of damage the funnel carries, a Burn tick and a redirected share
+        /// included, because they are all the partner being hurt and the funnel does not rank them.
+        /// `_broadcastSourceId` carries whoever dealt it - which for a link's own echo is the
+        /// original attacker, not the link - so TriggerSourceIsAlly is what "when an ALLY hits the
+        /// unit I am bound to" reads.
+        /// </summary>
+        OnLinkedUnitHit
     }
 
     /// <summary>
@@ -1765,6 +1961,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.HealSuppression: return "Heal Suppression";
                 case StatusKind.StatusGainSuppression: return "Gain Suppression";
                 case StatusKind.Resolve2: return "Resolve II";
+                case StatusKind.Linked: return "Linked";
             }
             return kind.ToString();
         }
@@ -1821,6 +2018,10 @@ namespace Emberfall.Core.Data
                 case StatusKind.HealSuppression: return "H-SUP";
                 case StatusKind.StatusGainSuppression: return "G-SUP";
                 case StatusKind.Resolve2: return "RSV2";
+                // One tag for every link, the same cost the marks already pay: a StatusKind has no
+                // per-instance display name, so a bar cannot say WHO the holder is bound to. That
+                // is the same UI problem Mark carries and it is not made worse here.
+                case StatusKind.Linked: return "LNK";
             }
             return "?";
         }

@@ -19,6 +19,105 @@ Previously three checks were red (role coverage, summon pity, CEIL). The 94-hero
 the first two: all ten roles are now filled, and 91 non-starter heroes satisfy the pity
 guarantee.
 
+### Open: `engine/linked-targeting` — unmerged
+
+**The linked-targeting primitive. Engine only; no hero is authored on it.** One concept covering
+the four uses the 14-hero survey identified, so it is a primitive rather than a mechanism built
+for whoever asked first: **two units bound together so that an action on one causes an effect on
+the other.** `StatusKind.Linked` is the binding, and it is the only status in the enum that names
+a THIRD unit — `SourceId` is still the hero that created it, and `StatusInstance.LinkedToId` is
+the partner, which for Talren are three different bodies.
+
+- **All 24 stage fingerprints are unmoved: 72 of 72 byte-identical** (24 stages × 3 seeds, the
+  set `CheckEffectHitResistNoOp` reproduces, dumped as text before and after and compared). The
+  harness report is a strict superset — 43 new checks, no existing line changed except the
+  PassiveTrigger parity label, which reads 41 members instead of 39. The 11 red checks are the
+  same 11, line for line: the CEIL band plus ten guards the authored batch-five kits already
+  tripped.
+- **Three of the four uses touch the damage funnel, and that is what the `_anyLinks` bool is
+  for.** Every link dispatch point tests one bool that is false until a link is created, so a
+  battle with no link in it pays nothing. Redirect, echo and the hit trigger all sit inside
+  `DealRawDamage`, which every point of damage in the game passes through; without the gate the
+  cost would be paid by every battle ever resolved.
+- **Rovan's Covered and Nysera's Linked redirect are one path, and the harness measures the
+  claim rather than asserting it.** `Sim.RedirectShare` is the split; Covered names its
+  destination with the applier's id and a link names it with `LinkedToId`, which is the entire
+  difference. The arithmetic was extracted from the Covered block **without changing** — same
+  rounding, same clamp, same two early exits in the same order — which mattered because
+  **Covered is authored by six effects in `heroes.json`** and is the one part of this work that
+  shipped content reaches. `CheckCoverAndLinkAreOnePath` runs the same arena twice at the same
+  seed, once with each mechanic, and asserts every unit's damage total matches.
+- **Redirect and Echo are the same split with opposite bookkeeping.** Redirect subtracts the
+  moved share from the holder; Echo does not. That is the whole of "instead" versus "as well",
+  and it is why they are one `LinkTransfer` enum rather than two mechanics. A third member,
+  `None`, is a real authoring and not an absence: Vaelis's binding exists so her passive can hear
+  about a hit on the far end, and a link that also moved damage would be a different ability.
+- **`_inCover` became `_inRedirect` and is now shared by all three.** One guard, so a Covered hop
+  onto a Linked protector does not then echo and a link redirect onto a Covered partner does not
+  split again. Separate guards would let alternating mechanics chain as deep as the pairings
+  allowed, and a pair of units linked to each other is exactly Talren's active. The echo arena
+  builds that mutual pair deliberately and proves the bound with a number: the front enemy's
+  total is the control's exactly, not more.
+- **What a redirect moves is the damage, not the calculation.** `DealRawDamage` is handed a
+  number already through the attacker's crit roll, the aspect chart and the HOLDER's Defense, so
+  redirecting it does not re-run any of that against the partner. That is precisely how Covered
+  has always behaved; a link that recomputed would be a second differently-shaped redirect rather
+  than the same one twice. The aspect source scan lists the three new lines that carry
+  `aspectFactor` into a redirected or echoed share, because keeping the original blow's chart
+  reading is a decision and the scan is meant to make one say so out loud.
+- **"Targeted" and "hit" are two triggers, not one with a flag.** `OnLinkedUnitTargeted` fires at
+  the top of `ApplyDamageEffect` before the miss check; `OnLinkedUnitHit` fires below the funnel
+  once damage has landed. An arena whose bound enemy carries `EvasionUp` at 1.0 separates them
+  with counts: the aim trigger fires four times and nothing lands at all.
+  - **The targeted half is deliberately narrow and covers DAMAGE effects only.** A heal, a buff
+    and a cleanse all name a target too, and `ResolveTargets` is the point they share — but
+    firing a passive from inside targeting means firing between targets being chosen and the
+    effect resolving, where a passive that kills the target leaves the caller holding a corpse it
+    has committed to acting on. Same argument `OnEnemyDamagedAlly` settled the same way.
+- **Neither is a broadcast, which is a third dispatch shape.** `Sim.DispatchLinkPassive` walks the
+  units looking for an entry naming the subject, because a link is not a side: Rovan's partner is
+  an ally, Talren binds two enemies to each other, and a side-scoped dispatch would be wrong for
+  at least one of them.
+- **`PassiveDef.TriggerSourceIsAlly`, because no condition can ask which side a unit is on.**
+  Vaelis's "when an ALLY hits the bound enemy" needed it: `TriggerSourceIsSelf` is the wrong
+  half, and `ConditionSubject.LastAttacker` names the attacker while every `EffectCondition` then
+  asks about its HP, statuses or stats. The arena is a differential — the same fight run twice,
+  differing only in whether the watcher attacks the bound enemy herself — and her fire count is
+  the ally's alone in both, so the filter is measured excluding something rather than untested.
+- **`EffectKind.EchoDamage` reads a realised number, not a recomputed one.** It repeats a fraction
+  of `_lastDamageDealt`, which is what the last hit actually took off a bar after Guard, Cover,
+  the pool and the Ledger, and it pays through `DealRawDamage` so the pipeline is not applied
+  twice. Cleared at every ability boundary exactly as `_lastTarget` is. The arena gives the echo's
+  victim real Defense, so a recomputed hit would land on a different figure and the 40% equality
+  would fail.
+  - **An echo does not become what later echoes read.** The funnel writes `_lastDamageDealt` for
+    every hit it carries, so without saving and restoring it an echo aimed at `AllEnemies` would
+    compound down the line — the third body taking a fraction of a fraction of a fraction.
+- **`TargetMode.PreviousTarget` and `TargetMode.LinkedUnit`.** Previous is a sibling of
+  `LastTarget` in every respect and sits in the same post-anchor family; `LinkedUnit` resolves
+  BEFORE the anchor alongside `BroadcastVictim`, because a link names one specific body that may
+  stand on either side and a Taunt holder intercepting it would make the mode mean nothing. The
+  PreviousTarget arena puts a bystander in slot 0 that the mode's FrontEnemy fallback would hit:
+  it takes zero in the treatment and the whole third effect in the control.
+- **A drift was found in `validate_heroes.py` and the check that should have caught it could
+  not.** `CheckEnumParity` compares a list hardcoded in the harness against the C# enum, which
+  answers whether the harness knows the enum and NOT the question its label asks.
+  `HighestMyMarkStacksEnemy` was in `Enums.cs` and in the harness list and had never reached the
+  python file, so a kit authoring it validated as a bad TargetMode while the section reported
+  parity. Fixed, and `CheckValidatorFileParity` now **reads `validate_heroes.py` itself** and
+  parses its five sets — the same lesson the role-ordinal scan that passed by comparing nothing
+  already taught once.
+- **No new `BattleEventType` for a sixth pass.** A link reuses `StatusApplied` and an echo reuses
+  `Damage`. The one deviation is recorded rather than left to be found: a Linked `StatusApplied`
+  writes the PARTNER'S ID into `Value` where every other status writes a stack depth, because a
+  link's identity is who it names and a `StatusKind` carries no per-instance name. No existing
+  battle records a Linked event, so nothing reading `Value` for a stack depth is affected.
+- **Not built, and named rather than approximated:** targeting-time redirection. Nysera's
+  "an attack aimed at her is redirected" is served at the funnel at a magnitude of 1.0, which
+  produces the same outcome; a second, targeting-level redirect would be two ways to say one
+  thing, which this engine has refused before (see the absent `AllEnemiesWithStatus`). The
+  visible cost is that the log shows the blow aimed at her and the damage landing on the partner.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is
