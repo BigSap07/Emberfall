@@ -149,6 +149,16 @@ namespace Emberfall.Core.Combat
                     return subject.CountOf(effect.ConditionStatus) >= needed;
                 }
 
+                // Source-filtered variant: counts only entries applied by the caster, so two
+                // heroes using the same status kind each see their own depth.
+                case EffectCondition.MyStatusStacksAtLeast:
+                {
+                    if (effect.ConditionStatus == StatusKind.None || caster == null) return false;
+                    int needed = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                    if (needed < 1) needed = 1;
+                    return subject.CountOfFrom(effect.ConditionStatus, caster.Id) >= needed;
+                }
+
                 // The mark conditions read the CASTER's identity, never the subject's, which is the
                 // whole point of a mark being one kind told apart by who applied it.
                 case EffectCondition.HasMyMark:
@@ -486,9 +496,15 @@ namespace Emberfall.Core.Combat
             private int _shieldBreakerId = -1;
 
             // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
-            private float _lastLedgerRelease;
+            private readonly Dictionary<int, float> _lastLedgerRelease = new Dictionary<int, float>();
             private float _lastRedirectAmount;
             private float _lastRemovedStacks;
+
+            private float GetLastLedgerRelease(int unitId)
+            {
+                float v;
+                return _lastLedgerRelease.TryGetValue(unitId, out v) ? v : 0f;
+            }
 
             /// <summary>
             /// The per-target budget of the passive currently resolving, or null. Set by
@@ -1018,6 +1034,44 @@ namespace Emberfall.Core.Combat
                         DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn, 1f, StatusInfo.DisplayName(StatusKind.Burn));
                         if (!unit.Alive) return;
 
+                        // Per-tick recording: combines DoT damage with RecordFact's recording in a
+                        // single status. None on every Burn in shipped content, so no existing tick
+                        // records anything new. Runs the same logic RecordFact uses, inline rather
+                        // than through RecordFact because RecordFact expects an EffectDef and here
+                        // the recording is stamped on the StatusInstance.
+                        if (s.TickRecord != RecordKind.None && dotSource != null)
+                        {
+                            StatusInstance recEntry = null;
+                            for (int ri = 0; ri < unit.Statuses.Count; ri++)
+                            {
+                                if (unit.Statuses[ri] != s) continue;
+                                recEntry = s;
+                                break;
+                            }
+                            if (recEntry != null)
+                            {
+                                switch (s.TickRecord)
+                                {
+                                    case RecordKind.LastPositiveStatus:
+                                        for (int ri = unit.Statuses.Count - 1; ri >= 0; ri--)
+                                        {
+                                            StatusKind k = unit.Statuses[ri].Kind;
+                                            if (k == StatusKind.Burn || StatusInfo.IsHarmful(k)) continue;
+                                            recEntry.StoredStatus = k;
+                                            break;
+                                        }
+                                        break;
+                                    case RecordKind.LastActionType:
+                                        if (unit.ActionsTaken > 0) recEntry.StoredAction = unit.LastActionWasActive ? 2 : 1;
+                                        break;
+                                    case RecordKind.MinHpRatio:
+                                        if (recEntry.StoredMin < 0f || unit.HpRatio < recEntry.StoredMin)
+                                            recEntry.StoredMin = unit.HpRatio;
+                                        break;
+                                }
+                            }
+                        }
+
                         // Applier-side lifecycle: the unit that applied this Burn hears about the
                         // tick. Broadcast to the source's side with _broadcastSubject set to the
                         // carrier, so a condition on BroadcastSubject can read the carrier's HP.
@@ -1080,7 +1134,7 @@ namespace Emberfall.Core.Combat
                     if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
                     {
                         int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
-                        _lastLedgerRelease = s.Stored;
+                        _lastLedgerRelease[s.SourceId] = s.Stored;
                         s.Stored = 0f;
                         if (payout > 0 && unit.Alive)
                         {
@@ -1104,6 +1158,20 @@ namespace Emberfall.Core.Combat
                             {
                                 DealRawDamage(s.SourceId, unit, payout, false, "burst",
                                               StatusKind.None, 1f, "Ledger");
+                                // Split heal: a fraction of the stored amount heals the applier on
+                                // top of the damage to the holder. Zero on every Ledger in shipped
+                                // content, so no existing auto-release gains a heal nobody authored.
+                                if (s.AutoReleaseSplitHeal > 0f && s.SourceId >= 0)
+                                {
+                                    CombatUnit applier = FindUnit(s.SourceId);
+                                    if (applier != null && applier.Alive)
+                                    {
+                                        int splitHeal = (int)Math.Round(GetLastLedgerRelease(s.SourceId) * s.AutoReleaseSplitHeal,
+                                            MidpointRounding.AwayFromZero);
+                                        if (splitHeal > 0)
+                                            ApplyHealValue(s.SourceId, applier, splitHeal, "heal", true);
+                                    }
+                                }
                             }
                             if (!unit.Alive) return;
                         }
@@ -1764,7 +1832,16 @@ namespace Emberfall.Core.Combat
                         // behaves the same way whoever applied it. AddStack is still here and still
                         // used - GainResolve stacks through it - but nothing reaches it because of
                         // an aspect any more, and the emberBurnStackCap that bounded it is gone.
-                        target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
+                        //
+                        // StackOnReapply: the effect wants each application by the same caster to
+                        // deepen a counter rather than refreshing. MaxStacks caps it (0 → 1).
+                        if (effect.StackOnReapply)
+                        {
+                            int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
+                            target.AddStack(effect.Status, duration, magnitude, source.Id, cap);
+                        }
+                        else
+                            target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
 
                         // A Ledger's cap belongs to the mark that is counting, so it is stamped on
                         // the entry as it lands rather than being looked up by whatever pays it
@@ -1815,6 +1892,18 @@ namespace Emberfall.Core.Combat
                                 led.BankFromCaster = effect.LedgerBankFromCaster;
                                 led.AutoReleaseAsHeal = effect.LedgerAutoReleaseAsHeal;
                                 led.AutoReleaseTarget = effect.LedgerAutoReleaseTarget;
+                                led.AutoReleaseSplitHeal = effect.LedgerAutoReleaseSplitHeal;
+                            }
+
+                        // DoTRecord: stamp TickRecord on Burn entries so TickDamageOverTime can
+                        // record a fact each tick. None on every Burn in shipped content, so no
+                        // existing tick gains recording nobody authored.
+                        if (effect.Status == StatusKind.Burn && effect.DoTRecord != RecordKind.None)
+                            for (int bi = 0; bi < target.Statuses.Count; bi++)
+                            {
+                                StatusInstance bs = target.Statuses[bi];
+                                if (bs.Kind == StatusKind.Burn && bs.SourceId == source.Id)
+                                    bs.TickRecord = effect.DoTRecord;
                             }
 
                         // Disrupted: StoredCap carries the turn shift fraction, raw rather than
@@ -2064,7 +2153,7 @@ namespace Emberfall.Core.Combat
                     {
                         if (!target.Alive) break;
                         float stored = target.LedgerTotalFrom(source.Id);
-                        _lastLedgerRelease = stored;
+                        _lastLedgerRelease[source.Id] = stored;
                         // Zeroed whether or not it paid out, so a release against an empty ledger
                         // is spent rather than saved up - the descriptions all read "consume".
                         for (int li = 0; li < target.Statuses.Count; li++)
@@ -2449,7 +2538,7 @@ namespace Emberfall.Core.Combat
                 // missing HP" is reduced by Defense like any other authored damage rather than
                 // arriving as a second, unmitigated payload.
                 float attackTerm = source.EffectiveAttack;
-                if (effect.ScaleByLastRelease) attackTerm = _lastLedgerRelease;
+                if (effect.ScaleByLastRelease) attackTerm = GetLastLedgerRelease(source.Id);
                 else if (effect.ScaleByLastRedirect) attackTerm = _lastRedirectAmount;
                 else if (effect.ScaleByLastRemoval) attackTerm = _lastRemovedStacks;
                 float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
@@ -3906,6 +3995,28 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    // Deepest-stack variant of EnemyWithMyMark: the enemy carrying the most
+                    // entries of the caster's mark kind from this caster specifically. Ties broken
+                    // by lowest slot. No marked enemy → nobody.
+                    case TargetMode.HighestMyMarkStacksEnemy:
+                    {
+                        StatusKind markKind = MarkKindOf(targetStatus);
+                        int bestCount = 0;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            int count = u.CountOfFrom(markKind, caster.Id);
+                            if (count <= 0) continue;
+                            if (count > bestCount || (count == bestCount && (picked == null || u.Slot < picked.Slot)))
+                            {
+                                picked = u;
+                                bestCount = count;
+                            }
+                        }
+                        break;
+                    }
+
                     // THE ONE MODE THAT CAN NAME A DEAD UNIT, and only inside the window where
                     // that means something. Outside a defeat broadcast _defeated is null and this
                     // resolves to nobody, which is the honest answer rather than a fallback.
@@ -4209,6 +4320,8 @@ namespace Emberfall.Core.Combat
                     landed.StoredMin = status.StoredMin;
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
+                    landed.TickRecord = status.TickRecord;
+                    landed.AutoReleaseSplitHeal = status.AutoReleaseSplitHeal;
                     break;
                 }
 

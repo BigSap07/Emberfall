@@ -111,6 +111,16 @@ namespace Emberfall.Core.Combat
 
         /// <summary>When true, only bank damage whose SourceId matches this entry's SourceId.</summary>
         public bool BankFromCaster;
+
+        // ---------- batch four ----------
+
+        /// <summary>Which non-numeric fact this Burn entry records per tick. None means no
+        /// recording, which is every Burn in shipped content.</summary>
+        public RecordKind TickRecord = RecordKind.None;
+
+        /// <summary>Fraction of Stored that auto-release pays as healing to the applier, on top
+        /// of the damage to the holder. Zero means no split heal, the existing behaviour.</summary>
+        public float AutoReleaseSplitHeal;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
@@ -591,6 +601,18 @@ namespace Emberfall.Core.Combat
         {
             int n = 0;
             for (int i = 0; i < Statuses.Count; i++) if (Statuses[i].Kind == kind) n++;
+            return n;
+        }
+
+        /// <summary>How many entries of the given kind were applied by that specific unit. The
+        /// source-filtered counterpart of CountOf, for MyStatusStacksAtLeast and
+        /// HighestMyMarkStacksEnemy.</summary>
+        public int CountOfFrom(StatusKind kind, int sourceId)
+        {
+            if (sourceId < 0) return 0;
+            int n = 0;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == kind && Statuses[i].SourceId == sourceId) n++;
             return n;
         }
 
