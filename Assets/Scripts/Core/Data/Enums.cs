@@ -578,7 +578,16 @@ namespace Emberfall.Core.Data
         /// FindUnit(_broadcastSubject.LastAttackerId) inside a broadcast, and to nobody outside
         /// one. Used by passives that need to condition on the attacker's state.
         /// </summary>
-        LastAttacker
+        LastAttacker,
+
+        /// <summary>
+        /// The last unit that an effect in the current ability resolved against. Set after each
+        /// effect's per-target loop, cleared at ability boundaries so it cannot leak across
+        /// passives or between a basic and a passive it triggers. Lets a Self-targeted effect
+        /// (EnergyGain, Heal, GainResolve) condition on the state of whatever the prior effect
+        /// in the same ability just hit.
+        /// </summary>
+        LastTarget
     }
 
     /// <summary>

@@ -63,6 +63,7 @@ namespace Emberfall.DevHarness
             CheckMarksLimitsAndLedger(content);
             CheckHistoryAlliesAndCharges(content);
             CheckBatchThreeMechanics(content);
+            CheckLastTargetAndTalentAppends(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -8194,6 +8195,242 @@ namespace Emberfall.DevHarness
             float cappedTerm = CombatSimulation.TargetHpTerm(capped, target);
             Check(Math.Abs(cappedTerm - 800f) < 0.01f,
                   "MaxHpCap 0.08 caps the term to 800 (" + cappedTerm + ")");
+        }
+
+        // ================================================================ LAST TARGET + TALENT APPENDS
+
+        private static void CheckLastTargetAndTalentAppends(ContentDatabase live)
+        {
+            Line("LAST TARGET, TALENT APPENDS, DORMANT-EFFECT GUARD");
+            CheckLastTargetOrdinalPin();
+            CheckLastTargetArena();
+            CheckTalentAppendArena();
+            CheckNoDormantSentinels(live);
+            Line("");
+        }
+
+        private static void CheckLastTargetOrdinalPin()
+        {
+            Check((int)ConditionSubject.LastTarget == 5,
+                  "ConditionSubject.LastTarget is appended at 5");
+        }
+
+        /// <summary>
+        /// A hero with a two-effect basic: Damage to FrontEnemy, then Heal to Self
+        /// conditioned on HasMyMark on LastTarget. Run against a marked enemy (heal should
+        /// fire) and an unmarked enemy (heal should NOT fire).
+        /// </summary>
+        private static void CheckLastTargetArena()
+        {
+            string heroesUnmarked = @"{
+  ""heroes"": [
+    { ""id"": ""lt_hero"", ""name"": ""Last Target Tester"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lt_basic"", ""name"": ""LT Basic"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 },
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 10,
+            ""condition"": ""HasMyMark"", ""conditionOn"": ""LastTarget"" }
+        ] },
+      ""active"": { ""id"": ""lt_active"", ""name"": ""LT Active"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            // Marked enemy: carries a Mark whose SourceId matches the hero.
+            // We give the hero a passive that marks the enemy at BattleStart.
+            string heroesMarked = @"{
+  ""heroes"": [
+    { ""id"": ""lt_hero"", ""name"": ""Last Target Tester"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lt_basic"", ""name"": ""LT Basic"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 },
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 10,
+            ""condition"": ""HasMyMark"", ""conditionOn"": ""LastTarget"" }
+        ] },
+      ""active"": { ""id"": ""lt_active"", ""name"": ""LT Active"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lt_mark"", ""name"": ""Opener"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Mark"", ""duration"": 99 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lt_foe"", ""name"": ""LT Foe"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5 }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lt_ch"", ""name"": ""LT"", ""stages"": [
+    { ""id"": ""lt_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lt_foe"", ""level"": 1 } ] } ] } ]
+}";
+            // Battle 1: unmarked enemy — conditional Heal should NOT fire
+            ContentDatabase db1 = LoadSyntheticContent(heroesUnmarked, enemies, campaign, ZeroVarianceBalance(5), "LastTarget-unmarked");
+            BattleResult unmarked = null;
+            if (db1 != null)
+            {
+                HeroDef h = db1.GetHero("lt_hero");
+                List<HeroInstance> team = new List<HeroInstance>();
+                team.Add(MakeInstance(h, 1));
+                unmarked = RunWith(db1, db1.AllStages[0], 42, team);
+            }
+
+            // Battle 2: marked enemy — conditional Heal SHOULD fire
+            ContentDatabase db2 = LoadSyntheticContent(heroesMarked, enemies, campaign, ZeroVarianceBalance(5), "LastTarget-marked");
+            BattleResult marked = null;
+            if (db2 != null)
+            {
+                HeroDef h = db2.GetHero("lt_hero");
+                List<HeroInstance> team = new List<HeroInstance>();
+                team.Add(MakeInstance(h, 1));
+                marked = RunWith(db2, db2.AllStages[0], 42, team);
+            }
+
+            int healsUnmarked = 0, healsMarked = 0;
+            if (unmarked != null)
+                for (int i = 0; i < unmarked.Events.Count; i++)
+                    if (unmarked.Events[i].Type == BattleEventType.Heal
+                        && unmarked.Events[i].SourceId == unmarked.Events[i].TargetId)
+                        healsUnmarked++;
+            if (marked != null)
+                for (int i = 0; i < marked.Events.Count; i++)
+                    if (marked.Events[i].Type == BattleEventType.Heal
+                        && marked.Events[i].SourceId == marked.Events[i].TargetId)
+                        healsMarked++;
+
+            Check(healsUnmarked == 0,
+                  "LastTarget: no self-heal against an unmarked enemy (" + healsUnmarked + ")");
+            Check(healsMarked > 0,
+                  "LastTarget: self-heal fires against a marked enemy (" + healsMarked + ")");
+            Check(unmarked != null && marked != null
+                  && FingerprintOf(RunWith(db1, db1.AllStages[0], 42,
+                      new List<HeroInstance> { MakeInstance(db1.GetHero("lt_hero"), 1) }))
+                  == FingerprintOf(unmarked),
+                  "LastTarget arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// A hero with a basic that does Damage only. A talent with an append that adds Heal
+        /// to the basic. Run with and without the talent selected; heals should only appear when
+        /// the talent is active.
+        /// </summary>
+        private static void CheckTalentAppendArena()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""ta_hero"", ""name"": ""Append Tester"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ta_basic"", ""name"": ""TA Basic"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }
+        ] },
+      ""active"": { ""id"": ""ta_active"", ""name"": ""TA Active"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""talents"": { ""talentI"": {
+        ""id"": ""ta_talent"", ""name"": ""TA Talent"", ""trigger"": ""None"", ""effects"": [],
+        ""appends"": [
+          { ""ability"": ""basic"", ""effect"": { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 15 } }
+        ] } } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ta_foe"", ""name"": ""TA Foe"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5 }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ta_ch"", ""name"": ""TA"", ""stages"": [
+    { ""id"": ""ta_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""ta_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemies, campaign, ZeroVarianceBalance(5), "TalentAppend");
+            if (db == null) return;
+
+            HeroDef hero = db.GetHero("ta_hero");
+
+            // Without talent selected (SelectedTalent = 0)
+            HeroInstance noTalent = MakeInstance(hero, 1);
+            noTalent.SelectedTalent = 0;
+            BattleResult without = RunWith(db, db.AllStages[0], 42,
+                new List<HeroInstance> { noTalent });
+
+            // With talent selected (SelectedTalent = 1)
+            HeroInstance withTalent = MakeInstance(hero, 1);
+            withTalent.SelectedTalent = 1;
+            BattleResult with_ = RunWith(db, db.AllStages[0], 42,
+                new List<HeroInstance> { withTalent });
+
+            int healsWithout = 0, healsWith = 0;
+            if (without != null)
+                for (int i = 0; i < without.Events.Count; i++)
+                    if (without.Events[i].Type == BattleEventType.Heal
+                        && without.Events[i].SourceId == without.Events[i].TargetId)
+                        healsWithout++;
+            if (with_ != null)
+                for (int i = 0; i < with_.Events.Count; i++)
+                    if (with_.Events[i].Type == BattleEventType.Heal
+                        && with_.Events[i].SourceId == with_.Events[i].TargetId)
+                        healsWith++;
+
+            Check(healsWithout == 0,
+                  "TalentAppend: no self-heal without the talent (" + healsWithout + ")");
+            Check(healsWith > 0,
+                  "TalentAppend: self-heal fires with the talent selected (" + healsWith + ")");
+        }
+
+        /// <summary>
+        /// Guard: no shipped effect uses conditionValue 99. The dormant-effect trick is retired.
+        /// </summary>
+        private static void CheckNoDormantSentinels(ContentDatabase db)
+        {
+            List<string> sentinels = new List<string>();
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int u = 0; u < units.Count; u++)
+            {
+                UnitDef def = units[u];
+                CheckEffectsForSentinel(def.BasicAttack, def.Id, "basic", sentinels);
+                CheckEffectsForSentinel(def.Active, def.Id, "active", sentinels);
+                for (int p = 0; p < def.Passives.Count; p++)
+                {
+                    AbilityDef wrapper = new AbilityDef();
+                    wrapper.Effects = def.Passives[p].Effects;
+                    CheckEffectsForSentinel(wrapper, def.Id, "passive" + p, sentinels);
+                }
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                {
+                    for (int t = 0; t < hero.Talents.Count; t++)
+                    {
+                        AbilityDef wrapper = new AbilityDef();
+                        wrapper.Effects = hero.Talents[t].Effects;
+                        CheckEffectsForSentinel(wrapper, def.Id, "talent" + t, sentinels);
+                    }
+                }
+            }
+
+            Check(sentinels.Count == 0,
+                  "no shipped effect uses conditionValue 99 (dormant sentinel retired)"
+                  + (sentinels.Count > 0 ? " - FOUND: " + string.Join(", ", sentinels.ToArray()) : ""));
+        }
+
+        private static void CheckEffectsForSentinel(AbilityDef ability, string owner, string slot, List<string> list)
+        {
+            if (ability == null) return;
+            for (int i = 0; i < ability.Effects.Count; i++)
+            {
+                EffectDef e = ability.Effects[i];
+                if (e.ConditionValue == 99f || e.ConditionValue2 == 99f || e.ConditionValue3 == 99f)
+                    list.Add(owner + "/" + slot + "[" + i + "]");
+            }
         }
 
         private static void CheckDebrief()
