@@ -1572,16 +1572,23 @@ namespace Emberfall.Core.Data
         OnStatusGained,
 
         /// <summary>
-        /// A link the owner CREATED just fired its echo. Not a broadcast - it is raised directly
-        /// on the link's SourceId, which is the one unit the event is about. _broadcastSubject and
-        /// _broadcastVictim are the body the echo landed on, so an effect can aim at it, and
-        /// `_lastMoved` for the owner holds the echoed amount.
+        /// AN ECHO THE OWNER CAUSED just struck a second body - either a StatusKind.Linked entry
+        /// the owner created firing its echo at the funnel, or an EffectKind.EchoDamage the owner
+        /// resolved. Not a broadcast: it is raised directly on the one unit the event is about,
+        /// the link's SourceId or the effect's caster. _broadcastSubject and _broadcastVictim are
+        /// the body the echo landed on, so an effect can aim at it, and `_lastMoved` for the owner
+        /// holds the echoed amount.
         ///
-        /// "Whenever my attack triggers against a secondary target" had no hook at all: the echo
-        /// happens inside DealRawDamage with nothing raised, so a hero could cause one and never
-        /// learn it had happened. Fires once per echo, an echo that killed its victim included.
+        /// RENAMED FROM OnLinkEchoFired AND WIDENED TO COVER BOTH, because the kit that wants it
+        /// wants both in one passive: "whenever his attack triggers against a secondary target
+        /// through Redirecting Shot OR Change the Course" is one sentence, and those two abilities
+        /// echo by the two different routes. A trigger that heard the link half and not the effect
+        /// half would have split one description across two passives, or left half of it silent -
+        /// which is what it did before this. Same ordinal; nothing authors it.
+        ///
+        /// Fires once per echo, an echo that killed its victim included.
         /// </summary>
-        OnLinkEchoFired,
+        OnEchoFired,
 
         /// <summary>
         /// The owner RECEIVED a redirected share - a Covered ward's split or a link's Redirect -

@@ -275,7 +275,66 @@ sweep's starter squad, which is coverage rather than safety. The count is pinned
 seventh cannot appear unnoticed. Left in rather than reverted, because the flags are authored
 intent and silently ignoring them is the older bug.
 
-### Blocked again: the four linked heroes — eleven clauses, NOT authored
+### Shipped on this branch: the three loose ends closed
+
+Three of the eleven were the same mistake in the nine-gap pass — a mechanism built, its hook left
+unwired — and they are fixed here. 72 of 72 fingerprints unmoved, 105 sweep lines unchanged, the
+same 11 harness reds, three new count-based arenas.
+
+- **A link's charge is now spent by the TRIGGER path.** `SpendLinkCharge` was called only from the
+  Redirect, Echo and Deflect funnel branches, so a link read by `OnLinkedUnitHit` kept its charge
+  and answered every hit for the link's whole life. `TriggerPassive` now reports whether anything
+  fired — one caller reads it — and `DispatchLinkPassive` takes a charge **only when a passive
+  actually answered**. A holder with nothing listening, or whose listener was refused by its own
+  once-per-round clock, has not used its record and does not pay for the event. Measured: one fire
+  against the uncharged control's five, one `Linked` expiry, and **zero** expiries in a third run
+  where the link is charged and nobody listens.
+- **`EffectKind.EchoDamage` now raises `OnEchoFired`** on its caster, and the trigger is renamed
+  from `OnLinkEchoFired` and widened to cover both routes — same ordinal, nothing authors it.
+  "Whenever his attack triggers against a secondary target through Redirecting Shot **or** Change
+  the Course" is one sentence and one passive; a trigger that heard the link half and not the
+  effect half split one description in two. Measured: four fires against four echoes, and zero in
+  a one-enemy control where the echo never fires.
+- **`Deflect` now goes through `RedirectShare`** instead of calling the funnel itself, which is the
+  divergence the extraction existed to end. **Covered's six shipped effects are unaffected: the
+  helper's body is untouched, this adds a third caller.** Two deliberate consequences of going
+  through it — the share is delivered with `critical` false, as Cover's and Redirect's always have
+  been, and the rule owner is recorded as the link's creator. The remainder is still discarded
+  after the call, which is the one thing a deflect does that a ward does not. Measured: four
+  `OnRedirectReceived` fires against four shares, and the aimed-at hero still takes zero.
+
+### Re-attempted and still blocked: the four heroes — ten clauses, NOT authored
+
+With the three closed, the re-attempt reads **8 of the original 11 still open, plus 2 that the
+previous pass under-called**, so ten clauses across the four. `heroes.json` remains untouched.
+
+**What the three fixes bought, and it is more than the count suggests.** Talren's active is now
+expressible end to end: two Talren-held links at one charge each, `OnLinkedUnitHit` filtered by
+`triggerSourceIsSelf`, striking `OtherLinkedUnit` — and because each record spends its own charge,
+it triggers exactly twice, which is what talent III's "for the second time" needs. Vaelis's basic
+is expressible for the same reason: Departure as a mutual one-charge link means "the NEXT allied
+hit" is once. Talren's second passive hears the basic's echo through `OnEchoFired`. **The cores of
+two kits moved from blocked to buildable.**
+
+**Still open, unchanged:** linear per-stack scaling (`Power x (1 + p*n)` cannot be `0.35n`);
+no second-lowest-HP enemy nor any way to exclude an already-recorded body from a pick;
+no HP-conditional output modifier; `EnergyGain` reads no `ScaleBy*`; a moved status cannot be given
+a new duration; no attacker-keyed damage **reduction**; a talent cannot override a `TargetMode`.
+
+**Two the previous pass under-called, named properly now:**
+
+- **A fact about one unit cannot be stored on another.** `RecordFact` writes the SUBJECT's fact
+  onto the SUBJECT's own status entry, so Vaelis recording "the triggering ally's role" can only
+  put it on that ally — and at his next Basic Attack nothing can name which ally that was, since
+  `BroadcastSource` resolves to nobody outside a broadcast. `StoredRoleMatches` compares against a
+  constant role and would have branched the three role groups fine; the record and its reader
+  simply cannot be brought together. Vaelis's first passive. Previously filed as "an authoring
+  note", which was too generous.
+- **`OnRedirectReceived` fires on the DESTINATION, and Nysera's talent II needs the link's OWNER.**
+  Closing loose end 3 made the deflect announce itself, and to the wrong unit for this kit: the
+  share lands on the partner enemy, so that enemy's passives hear it and Nysera's do not. The
+  talent also asks to increase the redirected damage in flight, which no trigger can do after the
+  share has landed. Nysera's talent II.
 
 A second authoring attempt on `content/batch-six-four-heroes`, off `engine/nine-gaps`, read all 28
 clauses against the engine with all nine gaps built and **authored none of them**. 72 of 72

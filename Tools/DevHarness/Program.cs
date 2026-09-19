@@ -5474,6 +5474,9 @@ namespace Emberfall.DevHarness
                 "float aspectFactor, string abilityName, int ruleOwnerId)",
                 "vfx, dotKind, aspectFactor, abilityName, protectorId)) return;",
                 "vfx, dotKind, aspectFactor, abilityName, redirect.SourceId)) return;",
+                // The deflect, which now goes through RedirectShare rather than calling the
+                // funnel itself - the same plumbing, reached from a third call site.
+                "vfx, dotKind, aspectFactor, abilityName, deflect.SourceId);",
                 // The Deflect delivery, which carries the original blow's chart reading to the
                 // body the blow was moved onto rather than re-deriving one from that body's aspect.
                 "aspectFactor, abilityName);",
@@ -14826,7 +14829,7 @@ namespace Emberfall.DevHarness
                     // AllEnemiesWithStatus and about the mark bank.
                     "OnLinkedUnitTargeted", "OnLinkedUnitHit",
                     // Extended again by the nine-gap pass, for the same reason: one list.
-                    "OnTargeted", "OnStatusGained", "OnLinkEchoFired", "OnRedirectReceived"
+                    "OnTargeted", "OnStatusGained", "OnEchoFired", "OnRedirectReceived"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
             Check(ok, "PassiveTrigger enum parity (45 members)");
@@ -16087,6 +16090,7 @@ namespace Emberfall.DevHarness
             CheckGap9NotDamagedByMe();
             CheckRemovedValueScalar();
             CheckPendingDotTargeting();
+            CheckLooseEnds();
             Line("");
         }
 
@@ -16119,10 +16123,10 @@ namespace Emberfall.DevHarness
                   "PassiveTrigger.OnLinkedUnitHit still at 40 (got "
                   + (int)PassiveTrigger.OnLinkedUnitHit + ")");
             Check((int)PassiveTrigger.OnTargeted == 41 && (int)PassiveTrigger.OnStatusGained == 42
-                  && (int)PassiveTrigger.OnLinkEchoFired == 43
+                  && (int)PassiveTrigger.OnEchoFired == 43
                   && (int)PassiveTrigger.OnRedirectReceived == 44,
                   "PassiveTrigger appends at 41..44 (got " + (int)PassiveTrigger.OnTargeted + ", "
-                  + (int)PassiveTrigger.OnStatusGained + ", " + (int)PassiveTrigger.OnLinkEchoFired
+                  + (int)PassiveTrigger.OnStatusGained + ", " + (int)PassiveTrigger.OnEchoFired
                   + ", " + (int)PassiveTrigger.OnRedirectReceived + ")");
 
             Check((int)StatusKind.Linked == 48 && (int)StatusKind.Covered == 33,
@@ -16174,7 +16178,7 @@ namespace Emberfall.DevHarness
                     PassiveDef p = passives[pi];
                     if (p.Trigger == PassiveTrigger.OnTargeted) onTargeted++;
                     if (p.Trigger == PassiveTrigger.OnStatusGained) onStatusGained++;
-                    if (p.Trigger == PassiveTrigger.OnLinkEchoFired) onEchoFired++;
+                    if (p.Trigger == PassiveTrigger.OnEchoFired) onEchoFired++;
                     if (p.Trigger == PassiveTrigger.OnRedirectReceived) onRedirectReceived++;
                     all.AddRange(p.Effects);
                     for (int ai = 0; ai < p.Appends.Count; ai++)
@@ -16230,7 +16234,7 @@ namespace Emberfall.DevHarness
             Check(onStatusGained == 0,
                   "no shipped passive triggers on OnStatusGained (" + onStatusGained + ")");
             Check(onEchoFired == 0,
-                  "no shipped passive triggers on OnLinkEchoFired (" + onEchoFired + ")");
+                  "no shipped passive triggers on OnEchoFired (" + onEchoFired + ")");
             Check(onRedirectReceived == 0,
                   "no shipped passive triggers on OnRedirectReceived (" + onRedirectReceived + ")");
 
@@ -16680,7 +16684,7 @@ namespace Emberfall.DevHarness
         /// <summary>
         /// Each of the four fires where its own description says and nowhere else, counted rather
         /// than merely observed: OnTargeted once per blow AIMED at its owner, OnStatusGained on the
-        /// carrier with its TriggerStatus filter honoured, OnLinkEchoFired on the link's CREATOR
+        /// carrier with its TriggerStatus filter honoured, OnEchoFired on the link's CREATOR
         /// once per echo, and OnRedirectReceived on the protector once per share.
         /// </summary>
         private static void CheckGap6Triggers()
@@ -16707,7 +16711,7 @@ namespace Emberfall.DevHarness
             int echoFires = CountPassiveFires(echo, "g6_onEcho");
             int echoHits = HitsOn(echo, "G6EchoBack");
             Check(echoFires > 0 && echoFires == echoHits,
-                  "OnLinkEchoFired fires on the link's CREATOR once per echo (" + echoFires
+                  "OnEchoFired fires on the link's CREATOR once per echo (" + echoFires
                   + " fires against " + echoHits + " echoes)");
 
             BattleResult red = RunRedirectTriggerArena();
@@ -16797,7 +16801,7 @@ namespace Emberfall.DevHarness
           { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
             ""linkTransfer"": ""Echo"", ""magnitude"": 0.5, ""duration"": 99 }
         ] },
-      ""passive2"": { ""id"": ""g6_onEcho"", ""name"": ""Echo Heard"", ""trigger"": ""OnLinkEchoFired"",
+      ""passive2"": { ""id"": ""g6_onEcho"", ""name"": ""Echo Heard"", ""trigger"": ""OnEchoFired"",
         ""oncePerBattle"": false,
         ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
   ]
@@ -17936,6 +17940,266 @@ namespace Emberfall.DevHarness
                       + "is silently resolving to FrontEnemy"
                     : bad.Count + " authored target string(s) are not TargetMode members and are "
                       + "silently falling back to FrontEnemy: " + string.Join(", ", bad.ToArray()));
+        }
+
+        // ---- the three loose ends: a charge spent once, an echo heard, a deflect received ------
+
+        /// <summary>
+        /// Three hooks the nine-gap pass built mechanisms for and left unwired. Each is measured by
+        /// a count against a control, because each failure mode is "it happens more times than it
+        /// should" or "it happens and nobody hears".
+        /// </summary>
+        private static void CheckLooseEnds()
+        {
+            CheckLinkTriggerSpendsCharge();
+            CheckEchoDamageIsHeard();
+            CheckDeflectIsReceived();
+        }
+
+        /// <summary>
+        /// A one-charge link answers a TRIGGER exactly once, where before it answered every hit for
+        /// the link's whole life. Counts carry it: one fire against the uncharged control's several.
+        ///
+        /// And the charge is spent only when somebody actually answered. The third run gives the
+        /// holder a link with a charge and NO passive listening, and the link survives - proved by
+        /// the StatusExpired a spent charge emits never appearing.
+        /// </summary>
+        private static void CheckLinkTriggerSpendsCharge()
+        {
+            BattleResult once = RunLinkTriggerChargeArena(1, true);
+            BattleResult many = RunLinkTriggerChargeArena(0, true);
+            BattleResult silent = RunLinkTriggerChargeArena(1, false);
+            if (once == null || many == null || silent == null)
+            { Check(false, "link trigger charge arena built"); return; }
+
+            int firesOnce = CountPassiveFires(once, "le_react");
+            int firesMany = CountPassiveFires(many, "le_react");
+            int spentSilent = LinkExpiries(silent);
+            int spentOnce = LinkExpiries(once);
+
+            Check(firesMany >= 3,
+                  "control: an uncharged link answers the trigger on every hit (" + firesMany + " fires)");
+            Check(firesOnce == 1,
+                  "LOOSE END 1: a one-charge link answers the trigger exactly ONCE and then ends ("
+                  + firesOnce + " fire against the control's " + firesMany + ")");
+            Check(spentOnce == 1,
+                  "and the spent charge removes the entry, which the record says out loud ("
+                  + spentOnce + " Linked expiry)");
+            Check(spentSilent == 0,
+                  "and a charged link with NOBODY listening keeps its charge - a record is spent by "
+                  + "being answered, not by the event happening (" + spentSilent + " Linked expiries)");
+        }
+
+        /// <summary>StatusExpired events naming Linked - a link charge spent to zero.</summary>
+        private static int LinkExpiries(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusExpired
+                    && r.Events[i].Status == StatusKind.Linked) n++;
+            return n;
+        }
+
+        private static BattleResult RunLinkTriggerChargeArena(int charges, bool withListener)
+        {
+            string chargeField = charges > 0 ? ", \"charges\": " + charges : "";
+            string listener = withListener
+                ? @",
+      ""passive2"": { ""id"": ""le_react"", ""name"": ""Answer The Bond"", ""trigger"": ""OnLinkedUnitHit"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] }"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""le_watcher"", ""name"": ""LeWatcher"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""le_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""le_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""le_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99" + chargeField + @" }
+        ] }" + listener + @" },
+    { ""id"": ""le_ally"", ""name"": ""LeAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lea_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lea_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""le_foe"", ""name"": ""LeFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lef"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""le_ch"", ""name"": ""LinkCharge"", ""stages"": [
+    { ""id"": ""le_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""le_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "link trigger charge");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("le_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("le_ally"), 1));
+            return RunWith(db, db.GetStage("le_arena"), 9301, team);
+        }
+
+        /// <summary>
+        /// An EchoDamage effect is now heard by its caster, through the same OnEchoFired a link's
+        /// echo raises. The count is one fire per echo, and the control - the same basic with the
+        /// echo's condition never satisfied - fires none, so the trigger is following the echo
+        /// rather than the turn.
+        /// </summary>
+        private static void CheckEchoDamageIsHeard()
+        {
+            BattleResult echoes = RunEchoHeardArena(true);
+            BattleResult none = RunEchoHeardArena(false);
+            if (echoes == null || none == null) { Check(false, "echo-heard arena built"); return; }
+
+            int fires = CountPassiveFires(echoes, "eh_react");
+            int hits = HitsOn(echoes, "EhSecond");
+            int firesNone = CountPassiveFires(none, "eh_react");
+
+            Check(hits > 0 && fires == hits,
+                  "LOOSE END 2: an EchoDamage effect raises OnEchoFired on its caster, once per echo ("
+                  + fires + " fires against " + hits + " echoes)");
+            Check(firesNone == 0,
+                  "control: with only one enemy the echo never fires and neither does the trigger ("
+                  + firesNone + " fires) - it follows the echo, not the turn");
+        }
+
+        private static BattleResult RunEchoHeardArena(bool twoEnemies)
+        {
+            string second = twoEnemies
+                ? @",
+    { ""id"": ""eh_second"", ""name"": ""EhSecond"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ehs"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                : "";
+            string stage = twoEnemies
+                ? @"{ ""id"": ""eh_first"", ""level"": 1 }, { ""id"": ""eh_second"", ""level"": 1 }"
+                : @"{ ""id"": ""eh_first"", ""level"": 1 }";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""eh_hero"", ""name"": ""EhHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""eh_basic"", ""name"": ""Redirecting Shot"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""HighestAttackEnemy"", ""power"": 1.2 },
+          { ""kind"": ""EchoDamage"", ""target"": ""LowestHpEnemy"", ""power"": 0.4,
+            ""condition"": ""SubjectNotDamagedByMeThisRound"" }
+        ] },
+      ""active"": { ""id"": ""eh_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""eh_react"", ""name"": ""Where The Arrow Lands"", ""trigger"": ""OnEchoFired"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""eh_first"", ""name"": ""EhFirst"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ehf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                + second + @"
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""eh_ch"", ""name"": ""EchoHeard"", ""stages"": [
+    { ""id"": ""eh_arena"", ""index"": 1, ""enemies"": [ " + stage + @" ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "echo heard");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("eh_hero"), 1));
+            return RunWith(db, db.GetStage("eh_arena"), 9302, team);
+        }
+
+        /// <summary>
+        /// A deflected share now arrives through RedirectShare, so the body that catches it hears
+        /// OnRedirectReceived exactly as a ward's protector does. One fire per deflect, and the
+        /// hero the attack was aimed at still takes nothing - which is the part routing through the
+        /// shared helper must not have changed.
+        /// </summary>
+        private static void CheckDeflectIsReceived()
+        {
+            BattleResult r = RunDeflectReceivedArena();
+            if (r == null) { Check(false, "deflect-received arena built"); return; }
+
+            int fires = CountPassiveFires(r, "dr_react");
+            int shares = HitsOn(r, "DrPartner");
+            int onHero = DamageTo(r, "DrHero");
+
+            Check(shares > 0 && fires == shares,
+                  "LOOSE END 3: a deflected share raises OnRedirectReceived on the body that catches "
+                  + "it, once per deflect (" + fires + " fires against " + shares + " shares) - the "
+                  + "deflect goes through RedirectShare now instead of around it");
+            Check(onHero == 0,
+                  "and the hero the blow was aimed at still takes nothing, so routing it through the "
+                  + "shared helper did not turn a deflect into a partial hit (" + onHero + ")");
+        }
+
+        private static BattleResult RunDeflectReceivedArena()
+        {
+            // The partner that catches the deflected share is an ENEMY, so its listener has to be
+            // authored on the enemy side - which is also the only way to hear a deflect at all,
+            // since the share lands on whoever the attacker was bound to.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""dr_hero"", ""name"": ""DrHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dr_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""dr_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""dr_setup"", ""name"": ""Where I Was Not"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Deflect"", ""linkMutual"": true, ""magnitude"": 0.8, ""duration"": 99 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""dr_attacker"", ""name"": ""DrAttacker"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 500, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""dra"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""dr_partner"", ""name"": ""DrPartner"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""drp"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""dr_react"", ""name"": ""Caught It"", ""trigger"": ""OnRedirectReceived"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""dr_ch"", ""name"": ""DeflectReceived"", ""stages"": [
+    { ""id"": ""dr_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""dr_attacker"", ""level"": 1 }, { ""id"": ""dr_partner"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "deflect received");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("dr_hero"), 1));
+            return RunWith(db, db.GetStage("dr_arena"), 9303, team);
         }
     }
 }
