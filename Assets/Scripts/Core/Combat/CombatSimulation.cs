@@ -499,6 +499,7 @@ namespace Emberfall.Core.Combat
             private readonly Dictionary<int, float> _lastLedgerRelease = new Dictionary<int, float>();
             private float _lastRedirectAmount;
             private float _lastRemovedStacks;
+            private float _lastLedgerBankedStored;
 
             private float GetLastLedgerRelease(int unitId)
             {
@@ -1119,6 +1120,7 @@ namespace Emberfall.Core.Combat
                 bool expired = false;
                 bool expiredFromPlayer = false;
                 bool expiredFromEnemy = false;
+                bool sameSideExpired = false;
                 _expiredKinds.Clear();
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
@@ -1201,13 +1203,21 @@ namespace Emberfall.Core.Combat
                     // lifecycle broadcast below. Only statuses applied by the OTHER side matter:
                     // a hero whose own buff expired is not what "when a debuff I applied expires"
                     // means. The source side is determined by looking up SourceId.
+                    // Same-side expiry is tracked separately for OnAppliedAllyStatusExpired.
                     if (s.SourceId >= 0)
                     {
                         CombatUnit source = FindUnit(s.SourceId);
-                        if (source != null && source.IsPlayer != unit.IsPlayer)
+                        if (source != null)
                         {
-                            if (source.IsPlayer) expiredFromPlayer = true;
-                            else expiredFromEnemy = true;
+                            if (source.IsPlayer != unit.IsPlayer)
+                            {
+                                if (source.IsPlayer) expiredFromPlayer = true;
+                                else expiredFromEnemy = true;
+                            }
+                            else
+                            {
+                                sameSideExpired = true;
+                            }
                         }
                     }
                 }
@@ -1230,6 +1240,18 @@ namespace Emberfall.Core.Combat
                         BroadcastPassive(true, PassiveTrigger.OnAppliedStatusExpired, 0, null);
                     if (expiredFromEnemy)
                         BroadcastPassive(false, PassiveTrigger.OnAppliedStatusExpired, 0, null);
+                    _broadcastSubject = prevSubject;
+                }
+
+                // Same-side applier lifecycle: broadcast to the carrier's own side when a
+                // status applied by a SAME-SIDE unit (including self) expired naturally.
+                // Darian counts same-side shield expiries. No shipped passive uses
+                // OnAppliedAllyStatusExpired, so the broadcast walks empty listener sets.
+                if (sameSideExpired)
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    _broadcastSubject = unit;
+                    BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAppliedAllyStatusExpired, 0, null);
                     _broadcastSubject = prevSubject;
                 }
             }
@@ -2546,6 +2568,7 @@ namespace Emberfall.Core.Combat
                 if (effect.ScaleByLastRelease) attackTerm = GetLastLedgerRelease(source.Id);
                 else if (effect.ScaleByLastRedirect) attackTerm = _lastRedirectAmount;
                 else if (effect.ScaleByLastRemoval) attackTerm = _lastRemovedStacks;
+                else if (effect.ScaleByLastBanked) attackTerm = _lastLedgerBankedStored;
                 float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
                 raw *= OutputModMultiplier(source, target, OutputModScope.AllDamage);
                 float holyBonus = source.EffectiveHolyDamage;
@@ -2655,6 +2678,15 @@ namespace Emberfall.Core.Combat
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
                                     _broadcastSubject = prevSubject;
                                 }
+                            }
+                            CombatUnit bankSrcDR = FindUnit(led.SourceId);
+                            if (bankSrcDR != null && bankSrcDR.IsPlayer == target.IsPlayer)
+                            {
+                                _lastLedgerBankedStored = led.Stored;
+                                CombatUnit prevSubjectBDR = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSubject = prevSubjectBDR;
                             }
                         }
                     }
@@ -2819,6 +2851,17 @@ namespace Emberfall.Core.Combat
                             _shieldBreakerId = sourceId;
                             _broadcastVictim = target;
                             TriggerPassive(target, PassiveTrigger.OnShieldBreak, 0);
+                            // Ally-side broadcast: the broken unit's allies hear about
+                            // the break, so an applier like Darian can react. No shipped
+                            // passive uses OnAllyShieldBreak, so the broadcast walks
+                            // empty listener sets in every existing battle.
+                            if (target.Alive && !IsBattleOver())
+                            {
+                                CombatUnit prevSubject2 = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShieldBreak, 0, target);
+                                _broadcastSubject = prevSubject2;
+                            }
                             _shieldBreakerId = prevBreaker;
                             _broadcastVictim = prevVictimSB;
                             if (!target.Alive || IsBattleOver()) return;
@@ -2852,6 +2895,58 @@ namespace Emberfall.Core.Combat
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
                                     _broadcastSubject = prevSubject;
                                 }
+                            }
+                            CombatUnit bankSrc = FindUnit(led.SourceId);
+                            if (bankSrc != null && bankSrc.IsPlayer == target.IsPlayer)
+                            {
+                                _lastLedgerBankedStored = led.Stored;
+                                CombatUnit prevSubjectB = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSubject = prevSubjectB;
+                            }
+                        }
+
+                        // Cross-unit shield-absorb banking: for each Shield status the
+                        // holder carries that was applied by a DIFFERENT same-side unit,
+                        // bank the absorbed amount into the applier's own ShieldAbsorb
+                        // Ledger. This lets Darian bank from shields he granted to allies.
+                        // No shipped content sets FunnelSource.ShieldAbsorb, so the inner
+                        // loop body is unreachable in every existing battle.
+                        for (int si = 0; si < target.Statuses.Count; si++)
+                        {
+                            StatusInstance shield = target.Statuses[si];
+                            if (shield.Kind != StatusKind.Shield) continue;
+                            if (shield.SourceId < 0 || shield.SourceId == target.Id) continue;
+                            CombatUnit applier = FindUnit(shield.SourceId);
+                            if (applier == null || !applier.Alive) continue;
+                            if (applier.IsPlayer != target.IsPlayer) continue;
+                            for (int fi2 = 0; fi2 < applier.Statuses.Count; fi2++)
+                            {
+                                StatusInstance led2 = applier.Statuses[fi2];
+                                if (led2.Kind != StatusKind.Ledger) continue;
+                                if (led2.FunnelSource != FunnelSource.ShieldAbsorb) continue;
+                                if (led2.Magnitude <= 0f) continue;
+                                if (led2.BankLimit > 0 && led2.BankUsesThisRound >= led2.BankLimit) continue;
+                                float room2 = led2.StoredCap > 0f ? led2.StoredCap - led2.Stored : float.MaxValue;
+                                if (room2 <= 0f) continue;
+                                float banked2 = absorbed * led2.Magnitude;
+                                if (banked2 > room2) banked2 = room2;
+                                bool wasBelow2 = led2.StoredCap > 0f && led2.Stored < led2.StoredCap;
+                                led2.Stored += banked2;
+                                if (led2.BankLimit > 0) led2.BankUsesThisRound++;
+                                if (wasBelow2 && led2.StoredCap > 0f && led2.Stored >= led2.StoredCap)
+                                {
+                                    CombatUnit prevSubject = _broadcastSubject;
+                                    _broadcastSubject = applier;
+                                    BroadcastPassive(applier.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSubject = prevSubject;
+                                }
+                                _lastLedgerBankedStored = led2.Stored;
+                                CombatUnit prevSubjectB2 = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(applier.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSubject = prevSubjectB2;
                             }
                         }
                     }
@@ -2913,6 +3008,15 @@ namespace Emberfall.Core.Combat
                                 BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
                                 _broadcastSubject = prevSubject;
                             }
+                        }
+                        CombatUnit bankSrcD = FindUnit(led.SourceId);
+                        if (bankSrcD != null && bankSrcD.IsPlayer == target.IsPlayer)
+                        {
+                            _lastLedgerBankedStored = led.Stored;
+                            CombatUnit prevSubjectBD = _broadcastSubject;
+                            _broadcastSubject = target;
+                            BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                            _broadcastSubject = prevSubjectBD;
                         }
                     }
                 }
@@ -3142,6 +3246,18 @@ namespace Emberfall.Core.Combat
                         // Convert path: deal the intercepted amount as damage immediately.
                         DealRawDamage(led.SourceId, target, intercepted, false, "impact",
                                       StatusKind.None, 1f, "");
+                        // OnFunnelConvertFired: broadcast to the applier's side so the
+                        // applier can react (e.g. Velis gains Remnant). No shipped content
+                        // sets FunnelConvert, so the broadcast is unreachable in every
+                        // existing battle.
+                        CombatUnit convertSource = FindUnit(led.SourceId);
+                        if (convertSource != null && convertSource.Alive && !IsBattleOver())
+                        {
+                            CombatUnit prevSubjectC = _broadcastSubject;
+                            _broadcastSubject = target;
+                            BroadcastPassive(convertSource.IsPlayer, PassiveTrigger.OnFunnelConvertFired, 0, null);
+                            _broadcastSubject = prevSubjectC;
+                        }
                         if (!target.Alive) return;
                     }
                     else
@@ -3164,6 +3280,15 @@ namespace Emberfall.Core.Combat
                                 BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
                                 _broadcastSubject = prevSubject;
                             }
+                        }
+                        CombatUnit bankSrcHI = FindUnit(led.SourceId);
+                        if (bankSrcHI != null && bankSrcHI.IsPlayer == target.IsPlayer)
+                        {
+                            _lastLedgerBankedStored = led.Stored;
+                            CombatUnit prevSubjectBHI = _broadcastSubject;
+                            _broadcastSubject = target;
+                            BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                            _broadcastSubject = prevSubjectBHI;
                         }
                     }
                 }
@@ -3211,6 +3336,19 @@ namespace Emberfall.Core.Combat
                             _broadcastSourceId = sourceId;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHealed, 0, target);
                             _broadcastSourceId = prevSourceId;
+                            _broadcastSubject = prevSubject;
+                            _broadcastVictim = prevVictim;
+                        }
+
+                        // OnEnemyHealed: broadcast to the OPPOSING side when an enemy is
+                        // healed. No shipped passive uses OnEnemyHealed, so the broadcast
+                        // walks empty listener sets in every existing battle.
+                        {
+                            CombatUnit prevSubject = _broadcastSubject;
+                            CombatUnit prevVictim = _broadcastVictim;
+                            _broadcastSubject = target;
+                            _broadcastVictim = target;
+                            BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyHealed, 0, null);
                             _broadcastSubject = prevSubject;
                             _broadcastVictim = prevVictim;
                         }
@@ -3573,7 +3711,8 @@ namespace Emberfall.Core.Combat
                     // fires only if that status was among the ones that expired. No shipped content
                     // sets TriggerStatus, so this check never fires for existing battles.
                     if ((trigger == PassiveTrigger.OnStatusExpired
-                         || trigger == PassiveTrigger.OnAppliedStatusExpired)
+                         || trigger == PassiveTrigger.OnAppliedStatusExpired
+                         || trigger == PassiveTrigger.OnAppliedAllyStatusExpired)
                         && passive.TriggerStatus != StatusKind.None
                         && !_expiredKinds.Contains(passive.TriggerStatus)) continue;
                     // Stack-threshold filter: check the owner's stack count against the

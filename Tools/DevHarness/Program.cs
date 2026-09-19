@@ -65,6 +65,7 @@ namespace Emberfall.DevHarness
             CheckBatchThreeMechanics(content);
             CheckLastTargetAndTalentAppends(content);
             CheckFunnelBankingPrimitives(content);
+            CheckBatchFiveEngineGaps(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -14582,6 +14583,535 @@ namespace Emberfall.DevHarness
                   "stack threshold: enough stacks were gained to account for all firings ("
                   + totalStacks + " gained, " + thresholdFirings + " firings x3 = "
                   + (thresholdFirings * 3) + ")");
+        }
+
+        // ================================================================ BATCH-FIVE ENGINE GAPS
+
+        private static void CheckBatchFiveEngineGaps(ContentDatabase live)
+        {
+            Line("BATCH-FIVE ENGINE GAPS (4 broadcasts, cross-unit shield banking, same-side expiry counter)");
+            CheckBatchFiveOrdinalPins();
+            CheckBatchFiveNoShippedUsage(live);
+            CheckBatchFiveEnumParity();
+            CheckOnAllyShieldBreakArena();
+            CheckOnAllyLedgerBankedArena();
+            CheckOnEnemyHealedArena();
+            CheckOnFunnelConvertFiredArena();
+            CheckCrossUnitShieldBanking();
+            CheckOnAppliedAllyStatusExpiredArena();
+            Line("");
+        }
+
+        private static void CheckBatchFiveOrdinalPins()
+        {
+            Check((int)PassiveTrigger.OnAllyShieldBreak == 34,
+                  "PassiveTrigger.OnAllyShieldBreak at 34 (got " + (int)PassiveTrigger.OnAllyShieldBreak + ")");
+            Check((int)PassiveTrigger.OnAllyLedgerBanked == 35,
+                  "PassiveTrigger.OnAllyLedgerBanked at 35 (got " + (int)PassiveTrigger.OnAllyLedgerBanked + ")");
+            Check((int)PassiveTrigger.OnEnemyHealed == 36,
+                  "PassiveTrigger.OnEnemyHealed at 36 (got " + (int)PassiveTrigger.OnEnemyHealed + ")");
+            Check((int)PassiveTrigger.OnFunnelConvertFired == 37,
+                  "PassiveTrigger.OnFunnelConvertFired at 37 (got " + (int)PassiveTrigger.OnFunnelConvertFired + ")");
+            Check((int)PassiveTrigger.OnAppliedAllyStatusExpired == 38,
+                  "PassiveTrigger.OnAppliedAllyStatusExpired at 38 (got " + (int)PassiveTrigger.OnAppliedAllyStatusExpired + ")");
+            Check((int)PassiveTrigger.OnStackThreshold == 33,
+                  "PassiveTrigger.OnStackThreshold still at 33 (got " + (int)PassiveTrigger.OnStackThreshold + ")");
+        }
+
+        private static void CheckBatchFiveNoShippedUsage(ContentDatabase db)
+        {
+            int allyShieldBreak = 0, allyLedgerBanked = 0, enemyHealed = 0;
+            int funnelConvertFired = 0, appliedAllyExpired = 0, scaleByBanked = 0;
+
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    PassiveTrigger t = def.Passives[pi].Trigger;
+                    if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak++;
+                    if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked++;
+                    if (t == PassiveTrigger.OnEnemyHealed) enemyHealed++;
+                    if (t == PassiveTrigger.OnFunnelConvertFired) funnelConvertFired++;
+                    if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired++;
+                    all.AddRange(def.Passives[pi].Effects);
+                }
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                {
+                    for (int ti = 0; ti < hero.Talents.Count; ti++)
+                    {
+                        PassiveTrigger t = hero.Talents[ti].Trigger;
+                        if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak++;
+                        if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked++;
+                        if (t == PassiveTrigger.OnEnemyHealed) enemyHealed++;
+                        if (t == PassiveTrigger.OnFunnelConvertFired) funnelConvertFired++;
+                        if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired++;
+                        all.AddRange(hero.Talents[ti].Effects);
+                    }
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    if (all[e].ScaleByLastBanked) scaleByBanked++;
+                }
+            }
+
+            Check(allyShieldBreak == 0,
+                  "no shipped passive triggers on OnAllyShieldBreak (" + allyShieldBreak + ")");
+            Check(allyLedgerBanked == 0,
+                  "no shipped passive triggers on OnAllyLedgerBanked (" + allyLedgerBanked + ")");
+            Check(enemyHealed == 0,
+                  "no shipped passive triggers on OnEnemyHealed (" + enemyHealed + ")");
+            Check(funnelConvertFired == 0,
+                  "no shipped passive triggers on OnFunnelConvertFired (" + funnelConvertFired + ")");
+            Check(appliedAllyExpired == 0,
+                  "no shipped passive triggers on OnAppliedAllyStatusExpired (" + appliedAllyExpired + ")");
+            Check(scaleByBanked == 0,
+                  "no shipped effect uses ScaleByLastBanked (" + scaleByBanked + ")");
+        }
+
+        private static void CheckBatchFiveEnumParity()
+        {
+            bool ok = CheckEnumSet("PassiveTrigger",
+                new string[] {
+                    "None", "BattleStart", "TurnStart", "AfterBasicAttack", "OnCriticalHit",
+                    "OnKill", "OnHpBelowThreshold", "OnDamaged", "OnBlock",
+                    "OnEnemyActive", "OnEnemyBuffGained", "OnEnemyDamagedAlly", "OnTurnDelayed",
+                    "OnHealApplied", "OnStatusRemoved", "OnStatusExpired",
+                    "OnAllyHpBelowThreshold", "OnAllyHealed", "OnAllyShielded", "OnAllyWouldDie",
+                    "OnEnemyDefeated", "OnAllyDefeated", "OnTurnDebtRepaid",
+                    "OnDodge", "OnEnemyEnergyThreshold",
+                    "OnAppliedStatusExpired", "OnAppliedDoTTick",
+                    "OnAllyTurnEnd", "OnEnemyTurnEnd",
+                    "OnLedgerCapped", "OnTurnDebtThreshold",
+                    "OnShieldBreak", "OnEnemyHpBelowThreshold", "OnStackThreshold",
+                    "OnAllyShieldBreak", "OnAllyLedgerBanked", "OnEnemyHealed",
+                    "OnFunnelConvertFired", "OnAppliedAllyStatusExpired"
+                },
+                Enum.GetNames(typeof(PassiveTrigger)));
+            Check(ok, "PassiveTrigger enum parity (39 members)");
+        }
+
+        // ---- synthetic arena: OnAllyShieldBreak ----
+
+        private static void CheckOnAllyShieldBreakArena()
+        {
+            // H1 (front tank) has a small shield at BattleStart. H2 has OnAllyShieldBreak passive.
+            // Enemy breaks H1's shield → H2's passive fires.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_tank"", ""name"": ""Tank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5t_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5t_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5t_setup"", ""name"": ""Small Shield"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""Shield"", ""target"": ""Self"", ""flat"": 100, ""duration"": 99 }
+        ] } },
+    { ""id"": ""b5_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5w_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5w_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5w_react"", ""name"": ""Shield React"", ""trigger"": ""OnAllyShieldBreak"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 3, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_sb_foe"", ""name"": ""Hitter"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 500, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5sbf"", ""name"": ""Smack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5sb_ch"", ""name"": ""ShieldBreak"", ""stages"": [
+    { ""id"": ""b5sb_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_sb_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "OnAllyShieldBreak");
+            if (db == null) { Check(false, "OnAllyShieldBreak arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_tank"), 1));
+            team.Add(MakeInstance(db.GetHero("b5_watcher"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5sb_arena"), 9191, team);
+            if (r == null) { Check(false, "OnAllyShieldBreak arena ran"); return; }
+
+            int passiveFires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "b5w_react")
+                    passiveFires++;
+            }
+            Check(passiveFires >= 1,
+                  "OnAllyShieldBreak: watcher's passive fired (" + passiveFires + " times)");
+        }
+
+        // ---- synthetic arena: OnAllyLedgerBanked ----
+
+        private static void CheckOnAllyLedgerBankedArena()
+        {
+            // H1 has 50% damage reduction and a DamageMitigation Ledger. H2 reacts to OnAllyLedgerBanked.
+            // Enemy hits H1, DR mitigates, Ledger banks → H2's passive fires.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_dr"", ""name"": ""DRTank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""damageReduction"": 0.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5dr_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5dr_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5dr_setup"", ""name"": ""DR Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""DamageMitigation"" }
+        ] } },
+    { ""id"": ""b5_reactor"", ""name"": ""Reactor"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5r_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5r_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5r_react"", ""name"": ""Bank React"", ""trigger"": ""OnAllyLedgerBanked"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 3, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_dr_foe"", ""name"": ""Hitter"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5drf"", ""name"": ""Smack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5lb_ch"", ""name"": ""LedgerBank"", ""stages"": [
+    { ""id"": ""b5lb_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_dr_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "OnAllyLedgerBanked");
+            if (db == null) { Check(false, "OnAllyLedgerBanked arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_dr"), 1));
+            team.Add(MakeInstance(db.GetHero("b5_reactor"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5lb_arena"), 9292, team);
+            if (r == null) { Check(false, "OnAllyLedgerBanked arena ran"); return; }
+
+            int passiveFires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "b5r_react")
+                    passiveFires++;
+            }
+            Check(passiveFires >= 1,
+                  "OnAllyLedgerBanked: reactor's passive fired (" + passiveFires + " times)");
+        }
+
+        // ---- synthetic arena: OnEnemyHealed ----
+
+        private static void CheckOnEnemyHealedArena()
+        {
+            // Hero reacts when an enemy heals itself. Hero pokes the enemy first so the heal
+            // actually restores HP (healed > 0), then the enemy's self-heal triggers OnEnemyHealed.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_eh_hero"", ""name"": ""EnemyHealWatcher"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 500, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5eh_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""b5eh_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5eh_react"", ""name"": ""Enemy Heal React"", ""trigger"": ""OnEnemyHealed"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 3, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_eh_foe"", ""name"": ""SelfHealer"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5ehf"", ""name"": ""Hit And Heal"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1000 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5eh_ch"", ""name"": ""EnemyHeal"", ""stages"": [
+    { ""id"": ""b5eh_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_eh_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "OnEnemyHealed");
+            if (db == null) { Check(false, "OnEnemyHealed arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_eh_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5eh_arena"), 9393, team);
+            if (r == null) { Check(false, "OnEnemyHealed arena ran"); return; }
+
+            int passiveFires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "b5eh_react")
+                    passiveFires++;
+            }
+            Check(passiveFires >= 1,
+                  "OnEnemyHealed: watcher's passive fired (" + passiveFires + " times)");
+        }
+
+        // ---- synthetic arena: OnFunnelConvertFired ----
+
+        private static void CheckOnFunnelConvertFiredArena()
+        {
+            // H1 applies a FunnelConvert Ledger (HealIntercept, Convert=true) to the enemy.
+            // H2 reacts to OnFunnelConvertFired. Enemy heals itself, convert fires, H2 triggers.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_fc_app"", ""name"": ""Applicator"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 500, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5fc_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""b5fc_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5fc_setup"", ""name"": ""Apply Convert"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""HealIntercept"", ""ledgerFunnelConvert"": true }
+        ] } },
+    { ""id"": ""b5_fc_reactor"", ""name"": ""Reactor"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5fcr_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5fcr_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5fcr_react"", ""name"": ""Convert React"", ""trigger"": ""OnFunnelConvertFired"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 3, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_fc_foe"", ""name"": ""SelfHealer"", ""aspect"": ""Ember"",
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5fcf"", ""name"": ""Heal Self"",
+        ""effects"": [
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 500 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5fc_ch"", ""name"": ""FunnelConvert"", ""stages"": [
+    { ""id"": ""b5fc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_fc_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "OnFunnelConvertFired");
+            if (db == null) { Check(false, "OnFunnelConvertFired arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_fc_app"), 1));
+            team.Add(MakeInstance(db.GetHero("b5_fc_reactor"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5fc_arena"), 9494, team);
+            if (r == null) { Check(false, "OnFunnelConvertFired arena ran"); return; }
+
+            int passiveFires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "b5fcr_react")
+                    passiveFires++;
+            }
+            Check(passiveFires >= 1,
+                  "OnFunnelConvertFired: reactor's passive fired (" + passiveFires + " times)");
+        }
+
+        // ---- synthetic arena: cross-unit shield-absorb banking ----
+
+        private static void CheckCrossUnitShieldBanking()
+        {
+            // H1 applies Shield to AllAllies and Ledger(ShieldAbsorb) to Self. H2 has Taunt so
+            // the enemy only hits H2. H2's shield (applied by H1) absorbs → cross-unit loop banks
+            // into H1's Ledger. H1 releases; payout should match the tank's absorbed amount.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_xb_app"", ""name"": ""ShieldApplier"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5xb_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5xb_active"", ""name"": ""Release"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""LedgerRelease"", ""target"": ""Self"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""b5xb_setup"", ""name"": ""Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""ShieldAbsorb"" },
+          { ""kind"": ""Shield"", ""target"": ""AllAllies"", ""flat"": 5000, ""duration"": 99 },
+          { ""kind"": ""Dispel"", ""target"": ""Self"", ""hits"": 1, ""dispelOwnOnly"": true }
+        ] } },
+    { ""id"": ""b5_xb_tank"", ""name"": ""TauntTank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5xbt_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5xbt_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5xbt_taunt"", ""name"": ""Self Taunt"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"",
+            ""magnitude"": 1, ""duration"": 99, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_xb_foe"", ""name"": ""Hitter"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 500, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5xbf"", ""name"": ""Smack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5xb_ch"", ""name"": ""CrossBank"", ""stages"": [
+    { ""id"": ""b5xb_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_xb_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "CrossUnitShieldBank");
+            if (db == null) { Check(false, "cross-unit shield banking arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_xb_app"), 1));
+            team.Add(MakeInstance(db.GetHero("b5_xb_tank"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5xb_arena"), 9595, team);
+            if (r == null) { Check(false, "cross-unit shield banking arena ran"); return; }
+
+            int applierId = -1, tankId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].DefId == "b5_xb_app") applierId = r.Units[i].Id;
+                if (r.Units[i].DefId == "b5_xb_tank") tankId = r.Units[i].Id;
+            }
+            int tankAbsorbed = 0;
+            int payout = 0;
+            bool releaseSeen = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Release"
+                    && e.SourceId == applierId && !releaseSeen)
+                { payout = e.Value; releaseSeen = true; continue; }
+                if (!releaseSeen && e.Type == BattleEventType.ShieldAbsorb && e.TargetId == tankId)
+                    tankAbsorbed += e.Value;
+            }
+            Check(tankAbsorbed > 0,
+                  "cross-unit shield banking: tank's shield absorbed damage (" + tankAbsorbed + ")");
+            Check(payout > 0,
+                  "cross-unit shield banking: applier's release payout is positive (" + payout + ")");
+            Check(Math.Abs(payout - tankAbsorbed) <= 2,
+                  "cross-unit shield banking: payout matches tank absorbed (absorbed "
+                  + tankAbsorbed + ", payout " + payout + ")");
+        }
+
+        // ---- synthetic arena: OnAppliedAllyStatusExpired ----
+
+        private static void CheckOnAppliedAllyStatusExpiredArena()
+        {
+            // H1 applies a large, short-duration (2) Shield to AllAllies at BattleStart.
+            // H2 has OnAppliedAllyStatusExpired(TriggerStatus=Shield) passive. Enemy pokes weakly.
+            // Shield expires naturally → sameSideExpired fires → H2's passive triggers.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""b5_se_app"", ""name"": ""ShieldApplier"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5se_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5se_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5se_setup"", ""name"": ""Short Shield"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""Shield"", ""target"": ""AllAllies"", ""flat"": 99999, ""duration"": 2 }
+        ] } },
+    { ""id"": ""b5_se_counter"", ""name"": ""ExpiryCounter"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""b5sec_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""b5sec_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""b5sec_react"", ""name"": ""Expiry React"",
+        ""trigger"": ""OnAppliedAllyStatusExpired"", ""triggerStatus"": ""Shield"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 3, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""b5_se_foe"", ""name"": ""Poker"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 1, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""b5sef"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""b5se_ch"", ""name"": ""SameExpiry"", ""stages"": [
+    { ""id"": ""b5se_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""b5_se_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(8), "OnAppliedAllyStatusExpired");
+            if (db == null) { Check(false, "OnAppliedAllyStatusExpired arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("b5_se_app"), 1));
+            team.Add(MakeInstance(db.GetHero("b5_se_counter"), 1));
+            BattleResult r = RunWith(db, db.GetStage("b5se_arena"), 9696, team);
+            if (r == null) { Check(false, "OnAppliedAllyStatusExpired arena ran"); return; }
+
+            int passiveFires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "b5sec_react")
+                    passiveFires++;
+            }
+            Check(passiveFires >= 1,
+                  "OnAppliedAllyStatusExpired: counter's passive fired (" + passiveFires + " times)");
         }
     }
 }
