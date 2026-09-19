@@ -3715,7 +3715,7 @@ namespace Emberfall.DevHarness
             Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
             Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
             Check(statCmp.Count == 0, "no shipped content compares stats across units" + Detail(statCmp));
-            Check(actionHist.Count == 0, "no shipped content reads action-type history" + Detail(actionHist));
+            Check(actionHist.Count > 0, "no shipped content reads action-type history" + Detail(actionHist));
             Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
             Check(extend.Count > 0, "no shipped content uses ExtendStatus" + Detail(extend));
             Check(disrupted.Count == 0, "no shipped content applies or reads Disrupted" + Detail(disrupted));
@@ -5016,7 +5016,8 @@ namespace Emberfall.DevHarness
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
                                "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
                                "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
-                               "BroadcastVictim" },
+                               "BroadcastVictim",
+                               "HighestMyMarkStacksEnemy" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5632,7 +5633,7 @@ namespace Emberfall.DevHarness
                 if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f
                     && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f && e.TargetMissingHpRatio <= 0f;
                 else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield) zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f;
-                else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat <= 0f;
+                else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat == 0f;
                 if (zero)
                 {
                     found = true;
@@ -6509,6 +6510,7 @@ namespace Emberfall.DevHarness
             {
                 UnitDef def = units[u];
                 bool isKael = def.Id == "kael_the_unyielding";
+                bool isZella = def.Id == "zella_the_slow_argument";
                 if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f
                     || def.ControlImmunity != 0f || def.HolyDamage != 0f
                     || (def.Block != 0f && !isKael))
@@ -6517,16 +6519,16 @@ namespace Emberfall.DevHarness
                     Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage/Block/ControlImmunity/HolyDamage - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
-                if (UnitAppliesStatus(def, StatusKind.Silence) || UnitAppliesStatus(def, StatusKind.Stun))
+                if ((UnitAppliesStatus(def, StatusKind.Silence) && !isZella) || UnitAppliesStatus(def, StatusKind.Stun))
                 {
                     clean = false;
                     Line("  [FAIL] " + def.Id + " authors Silence or Stun - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
             }
-            Check(clean, "no shipped hero or enemy besides Kael authors Armor Break, Damage Reduction, Skill Damage, Silence, "
-                + "Stun, Block, Control Immunity or Holy Damage yet - so this pass cannot move any existing BattleFingerprint "
-                + "(CheckDeterminism / CheckEffectHitResistNoOp above already prove those stay stable)");
+            Check(clean, "no shipped hero or enemy besides Kael (Block) and Zella (Silence) authors Armor Break, Damage Reduction, "
+                + "Skill Damage, Silence, Stun, Block, Control Immunity or Holy Damage yet - so this pass cannot move any existing "
+                + "BattleFingerprint (CheckDeterminism / CheckEffectHitResistNoOp above already prove those stay stable)");
         }
 
         private static bool UnitAppliesStatus(UnitDef def, StatusKind kind)

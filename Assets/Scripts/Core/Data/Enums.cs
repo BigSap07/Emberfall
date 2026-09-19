@@ -189,7 +189,13 @@ namespace Emberfall.Core.Data
         /// BroadcastSubject in the post-anchor section has the same anchor-override problem but
         /// is left where it is for backward compatibility.
         /// </summary>
-        BroadcastVictim
+        BroadcastVictim,
+
+        // ---------- batch four ----------
+
+        /// <summary>The living enemy carrying the most entries of the caster's mark kind from the
+        /// caster specifically. Ties broken by lowest slot. No marked enemy → nobody.</summary>
+        HighestMyMarkStacksEnemy
     }
 
     public enum EffectKind
@@ -530,7 +536,13 @@ namespace Emberfall.Core.Data
         /// <summary>The unit that broke the subject's shield (stored as _shieldBreakerId during
         /// OnShieldBreak) matches the caster. Meaningful only inside an OnShieldBreak trigger;
         /// outside that window it is false.</summary>
-        ShieldBrokenByCaster
+        ShieldBrokenByCaster,
+
+        // ---------- batch four ----------
+
+        /// <summary>Like StatusStacksAtLeast, but counts only entries whose SourceId matches the
+        /// caster. "My stacks of X on this target ≥ N" vs "any stacks of X on this target ≥ N".</summary>
+        MyStatusStacksAtLeast
     }
 
     /// <summary>

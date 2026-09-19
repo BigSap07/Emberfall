@@ -353,6 +353,23 @@ namespace Emberfall.Core.Data
         /// instead of all. Zero (default) means remove all, the existing behaviour.</summary>
         public int ConsumeStacks;
 
+        // ---------- batch four ----------
+
+        /// <summary>When true, ApplyStatus calls AddStack instead of AddOrRefresh, so reapplication
+        /// by the same caster deepens a counter rather than refreshing duration. MaxStacks caps it.
+        /// False (default) keeps existing AddOrRefresh behaviour for every shipped status.</summary>
+        public bool StackOnReapply;
+
+        /// <summary>Fraction of the Ledger's Stored that auto-release pays as healing to the
+        /// APPLIER, on top of the damage it deals to the holder. Zero (default) means no split
+        /// heal fires, which is the existing behaviour.</summary>
+        public float LedgerAutoReleaseSplitHeal;
+
+        /// <summary>Which non-numeric fact a Burn tick records on the carrier each time it ticks,
+        /// combining DoT damage with RecordFact's recording. None (default) means no recording
+        /// happens in ticks, which is the existing behaviour.</summary>
+        public RecordKind DoTRecord = RecordKind.None;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -418,6 +435,9 @@ namespace Emberfall.Core.Data
             e.BypassResist = j.GetBool("bypassResist", false);
             e.MaxHpCap = j.GetFloat("maxHpCap", 0f);
             e.ConsumeStacks = Math.Max(0, j.GetInt("consumeStacks", 0));
+            e.StackOnReapply = j.GetBool("stackOnReapply", false);
+            e.LedgerAutoReleaseSplitHeal = j.GetFloat("ledgerAutoReleaseSplitHeal", 0f);
+            e.DoTRecord = EnumUtil.Parse(j.GetString("doTRecord", "None"), RecordKind.None);
             return e;
         }
 
@@ -493,6 +513,9 @@ namespace Emberfall.Core.Data
             c.BypassResist = BypassResist;
             c.MaxHpCap = MaxHpCap;
             c.ConsumeStacks = ConsumeStacks;
+            c.StackOnReapply = StackOnReapply;
+            c.LedgerAutoReleaseSplitHeal = LedgerAutoReleaseSplitHeal;
+            c.DoTRecord = DoTRecord;
             return c;
         }
     }
