@@ -2216,27 +2216,262 @@
         "spriteMirror": false
       },
       "basic": {
-        "id": "rheia_the_revision_scribe_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "rheia_shifting_script",
+        "name": "Revision Script",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 1.15
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "DefenseDown",
+            "duration": 2,
+            "bypassResist": true,
+            "condition": "HasStatus",
+            "conditionStatus": "AttackUp",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "HighestAttackEnemy",
+            "status": "AttackUp",
+            "hits": 1
           }
         ]
       },
       "active": {
-        "id": "rheia_the_revision_scribe_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "rheia_rewrite_the_outcome",
+        "name": "Rewrite the Outcome",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.0
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "status": "DefenseDown",
+            "duration": 2,
+            "bypassResist": true
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "status": "AttackUp",
+            "duration": 2,
+            "condition": "HasStatus",
+            "conditionStatus": "AttackDown",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "AllEnemies",
+            "power": 0.45,
+            "condition": "HasStatus",
+            "conditionStatus": "AttackDown",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "AllEnemies",
+            "status": "AttackDown",
+            "hits": 1
           }
         ]
+      },
+      "passive": {
+        "id": "rheia_adaptive_reasoning_stats",
+        "name": "Applied Revision",
+        "trigger": "BattleStart",
+        "statModStatus": "Resolve",
+        "statModPerStack": 0.03,
+        "statModKind": "Speed",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectHitUp",
+            "magnitude": 0.1,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SkillDamageUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "rheia_adaptive_reasoning",
+        "name": "Applied Revision",
+        "trigger": "OnEnemyBuffGained",
+        "triggerSourceIsSelf": true,
+        "oncePerBattle": false,
+        "perTargetLimit": 4,
+        "perTargetPerRound": true,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 4,
+            "duration": 99
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5
+          }
+        ]
+      },
+      "passive2": {
+        "id": "rheia_second_direction",
+        "name": "Second Draft",
+        "trigger": "OnEnemyBuffGained",
+        "triggerSourceIsSelf": true,
+        "oncePerBattle": false,
+        "perTargetLimit": 1,
+        "perTargetPerRound": true,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.7,
+            "condition": "HasStatus",
+            "conditionStatus": "DefenseDown",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 10,
+            "condition": "HasStatus",
+            "conditionStatus": "DefenseDown",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 1.0,
+            "condition": "HasStatus",
+            "conditionStatus": "DefenseDown",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 4,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "Resolve",
+            "hits": 10,
+            "condition": "HasStatus",
+            "conditionStatus": "DefenseDown",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve",
+            "conditionValue2": 4,
+            "conditionOn2": "Caster"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "rheia_endless_revision",
+          "name": "Endless Revision",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 1,
+              "field": "flat",
+              "delta": -2
+            },
+            {
+              "ability": "active",
+              "effectIndex": 3,
+              "field": "power",
+              "delta": 0.2
+            }
+          ]
+        },
+        "talentII": {
+          "id": "rheia_counterrevision",
+          "name": "Counterrevision",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "AttackDown",
+                "duration": 2,
+                "bypassResist": true,
+                "condition": "HasStatus",
+                "conditionStatus": "AttackUp",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "Self",
+                "status": "DefenseUp",
+                "magnitude": 0.08,
+                "duration": 2,
+                "condition": "LacksStatus",
+                "conditionStatus": "AttackUp",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "rheia_perfect_reversal",
+          "name": "Perfect Reversal",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "passive2",
+              "effectIndex": 2,
+              "field": "power",
+              "delta": 0.8
+            },
+            {
+              "ability": "passive2",
+              "effectIndex": 3,
+              "field": "hits",
+              "delta": -10
+            }
+          ]
+        }
       }
     },
     {
@@ -3356,27 +3591,274 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "elyra_the_patient_warden_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "elyra_patient_bloom",
+        "name": "Patient Measure",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 1.15
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.7,
+            "condition": "HasStatus",
+            "conditionStatus": "Slow",
+            "conditionOn": "LastTarget"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Slow",
+            "duration": 2,
+            "bypassResist": true
           }
         ]
       },
       "active": {
-        "id": "elyra_the_patient_warden_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "elyra_sanctuary_unbroken",
+        "name": "Sanctuary Unbroken",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.9
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "status": "Slow",
+            "duration": 2,
+            "bypassResist": true
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Taunt",
+            "duration": 1
           }
         ]
+      },
+      "passive": {
+        "id": "elyra_slow_growth_stats",
+        "name": "Slow Growth",
+        "trigger": "BattleStart",
+        "outputModStatus": "Resolve",
+        "outputModPerStack": 0.05,
+        "outputModScope": "HealingOnly",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectHitUp",
+            "magnitude": 0.1,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SkillDamageUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "elyra_slow_growth",
+        "name": "Slow Growth",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 4,
+            "duration": 99,
+            "condition": "HasStatus",
+            "conditionStatus": "Slow",
+            "conditionOn": "LastTarget"
+          }
+        ]
+      },
+      "passive2": {
+        "id": "elyra_stillness_bears_fruit",
+        "name": "Stillness Pays",
+        "trigger": "OnAppliedStatusExpired",
+        "triggerStatus": "Taunt",
+        "triggerSourceIsSelf": true,
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.8
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 1.0
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.3,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 1,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.3,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 2,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.3,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 3,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.3,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 4,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.4,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 2,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.4,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 4,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 15,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve",
+            "conditionValue": 4,
+            "conditionOn": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "Resolve",
+            "hits": 10
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "elyra_deep_rest",
+          "name": "Deep Rest",
+          "trigger": "OnAppliedStatusExpired",
+          "triggerStatus": "Slow",
+          "triggerSourceIsSelf": true,
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "flat": 5
+            }
+          ],
+          "overrides": [
+            {
+              "ability": "basic",
+              "effectIndex": 2,
+              "field": "duration",
+              "delta": 1
+            },
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "duration",
+              "delta": 1
+            }
+          ]
+        },
+        "talentII": {
+          "id": "elyra_sanctuary_spreads",
+          "name": "Sanctuary Spreads",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Slow",
+                "duration": 2,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Damage",
+                "target": "LowestHpEnemy",
+                "power": 0.8
+              }
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "elyra_harvest_of_patience",
+          "name": "Calculated Patience",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "passive2",
+              "effectIndex": 5,
+              "field": "power",
+              "delta": 1.0
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "Shield",
+                "target": "LowestHpAlly",
+                "selfHpRatio": 0.06,
+                "duration": 2
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -6131,27 +6613,219 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "mireth_the_erased_name_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "mireth_unwritten_line",
+        "name": "Unwritten Line",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 1.15
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Mark",
+            "duration": 2,
+            "condition": "HasAnyBeneficialStatus",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5,
+            "condition": "HasAnyBeneficialStatus",
+            "conditionOn": "LastTarget"
           }
         ]
       },
       "active": {
-        "id": "mireth_the_erased_name_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "mireth_remove_from_record",
+        "name": "Remove From Record",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.0
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Mark",
+            "duration": 2
           }
         ]
+      },
+      "passive": {
+        "id": "mireth_absence_has_weight_stats",
+        "name": "Absence Has Weight",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectHitUp",
+            "magnitude": 0.1,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SkillDamageUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "mireth_absence_has_weight",
+        "name": "Absence Has Weight",
+        "trigger": "OnStatusRemoved",
+        "oncePerBattle": false,
+        "outputModStatus": "Resolve",
+        "outputModPerStack": 0.06,
+        "outputModScope": "AllDamage",
+        "outputModMarkedOnly": true,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99
+          }
+        ]
+      },
+      "passive2": {
+        "id": "mireth_the_missing_page",
+        "name": "The Missing Page",
+        "trigger": "OnEnemyBuffGained",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 0.7,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "status": "Resolve2",
+            "maxStacks": 3,
+            "duration": 99,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "power": 1.2,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve2",
+            "conditionValue2": 3,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastSubject",
+            "status": "AttackDown",
+            "duration": 2,
+            "bypassResist": true,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "condition2": "StatusStacksAtLeast",
+            "conditionStatus2": "Resolve2",
+            "conditionValue2": 3,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "Resolve2",
+            "hits": 10,
+            "condition": "StatusStacksAtLeast",
+            "conditionStatus": "Resolve2",
+            "conditionValue": 3,
+            "conditionOn": "Caster"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "mireth_deeper_erasure",
+          "name": "Deeper Erasure",
+          "trigger": "None",
+          "effects": [],
+          "overrides": []
+        },
+        "talentII": {
+          "id": "mireth_blank_space",
+          "name": "Blank Space",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "flat": 15,
+                "condition": "StatusStacksAtLeast",
+                "conditionStatus": "Resolve2",
+                "conditionValue": 3,
+                "conditionOn": "Caster"
+              }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "BroadcastSubject",
+                "flat": -10,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "mireth_no_record_remains",
+          "name": "No Record Remains",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "Damage",
+                "target": "BroadcastSubject",
+                "power": 1.5,
+                "condition": "HpBelow",
+                "conditionValue": 0.5,
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -6847,27 +7521,176 @@
         "spriteMirror": false
       },
       "basic": {
-        "id": "arden_the_precise_measure_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "arden_find_the_measure",
+        "name": "Find the Measure",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestHpEnemy",
+            "power": 0.0,
+            "targetMaxHpRatio": 0.02,
+            "maxHpCap": 1.0,
+            "condition": "HasMyMark",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestHpEnemy",
+            "power": 1.25
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestHpEnemy",
+            "status": "Mark",
+            "duration": 2
           }
         ]
       },
       "active": {
-        "id": "arden_the_precise_measure_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "arden_define_the_weak_point",
+        "name": "Define the Weak Point",
         "energyCost": 100,
         "effects": [
           {
+            "kind": "ApplyStatus",
+            "target": "HighestHpEnemy",
+            "status": "MarkAlt",
+            "duration": 2
+          },
+          {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "HighestHpEnemy",
+            "power": 1.9
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestHpEnemy",
+            "power": 0.0,
+            "targetMaxHpRatio": 0.03,
+            "maxHpCap": 1.2,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestHpEnemy",
+            "power": 0.0,
+            "targetMaxHpRatio": 0.02,
+            "maxHpCap": 1.0,
+            "condition": "HasMyMark",
+            "conditionOn": "Target"
           }
         ]
+      },
+      "passive": {
+        "id": "arden_exact_calculation_stats",
+        "name": "Exact Calculation",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SpeedUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "ArmorBreakUp",
+            "magnitude": 0.05,
+            "duration": 99
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 1,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "arden_exact_calculation",
+        "name": "Exact Calculation",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "outputModStatus": "Resolve",
+        "outputModPerStack": 0.08,
+        "outputModScope": "AllDamage",
+        "outputModMarkedOnly": true,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "power": 0.0,
+            "targetMaxHpRatio": 0.01,
+            "maxHpCap": 0.5,
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "condition2": "HpAbove",
+            "conditionValue2": 0.7,
+            "conditionOn2": "Target"
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "power": 0.0,
+            "targetMaxHpRatio": 0.03,
+            "maxHpCap": 1.2,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Target"
+          }
+        ]
+      },
+      "passive2": {
+        "id": "arden_everything_has_a_limit",
+        "name": "Everything Has a Limit",
+        "trigger": "None",
+        "effects": []
+      },
+      "talents": {
+        "talentI": {
+          "id": "arden_deeper_measure",
+          "name": "Deeper Measure",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "basic",
+              "effectIndex": 2,
+              "field": "duration",
+              "delta": 1
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 0,
+              "field": "targetMaxHpRatio",
+              "delta": 0.005
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 0,
+              "field": "maxHpCap",
+              "delta": 0.1
+            }
+          ]
+        },
+        "talentII": {
+          "id": "arden_perfect_line",
+          "name": "Perfect Line",
+          "trigger": "None",
+          "effects": [],
+          "overrides": []
+        },
+        "talentIII": {
+          "id": "arden_final_calculation",
+          "name": "Final Calculation",
+          "trigger": "None",
+          "effects": [],
+          "overrides": []
+        }
       }
     },
     {
@@ -6907,27 +7730,167 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "caldus_the_appointed_guard_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "caldus_answer_the_blade",
+        "name": "Answer the Blade",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.15
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 5,
+            "condition": "HasMyMark",
+            "conditionOn": "LastTarget"
           }
         ]
       },
       "active": {
-        "id": "caldus_the_appointed_guard_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "caldus_declare_the_threat",
+        "name": "Declare the Threat",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.8
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestAttackEnemy",
+            "status": "Mark",
+            "duration": 2
           }
         ]
+      },
+      "passive": {
+        "id": "caldus_defined_duty_stats",
+        "name": "Defined Duty",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MaxHpUp",
+            "magnitude": 0.08,
+            "duration": 99
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "DefenseUp",
+            "magnitude": 0.08,
+            "duration": 99
+          }
+        ]
+      },
+      "passive1": {
+        "id": "caldus_defined_duty",
+        "name": "Defined Duty",
+        "trigger": "OnDamaged",
+        "oncePerBattle": false,
+        "perTargetLimit": 1,
+        "perTargetPerRound": true,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastAttacker",
+            "power": 0.75,
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "perStackStatus": "Resolve",
+            "perStackOn": "Caster",
+            "perStack": 0.1,
+            "consumesResolve": true,
+            "consumeStacks": 1
+          }
+        ]
+      },
+      "passive2": {
+        "id": "caldus_no_uncertain_ground",
+        "name": "No Uncertain Ground",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastAttacker",
+            "power": 0.45,
+            "condition": "HasMyMark",
+            "conditionOn": "LastAttacker"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 8,
+            "condition": "HasMyMark",
+            "conditionOn": "LastAttacker"
+          },
+          {
+            "kind": "Shield",
+            "target": "BroadcastVictim",
+            "selfHpRatio": 0.05,
+            "duration": 2,
+            "condition": "HasMyMark",
+            "conditionOn": "LastAttacker"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "caldus_absolute_focus",
+          "name": "Absolute Focus",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "duration",
+              "delta": 1
+            },
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.2
+            }
+          ]
+        },
+        "talentII": {
+          "id": "caldus_guardian_oath",
+          "name": "Guardian's Oath",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "passive2",
+              "effectIndex": 2,
+              "field": "selfHpRatio",
+              "delta": 0.03
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "caldus_final_verdict",
+          "name": "Final Verdict",
+          "trigger": "OnEnemyHpBelowThreshold",
+          "oncePerBattle": true,
+          "threshold": 0.3,
+          "effects": [
+            {
+              "kind": "GainResolve",
+              "target": "Self",
+              "maxStacks": 3,
+              "hits": 2,
+              "duration": 99,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject"
+            }
+          ]
+        }
       }
     },
     {
