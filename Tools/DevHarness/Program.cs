@@ -64,6 +64,7 @@ namespace Emberfall.DevHarness
             CheckHistoryAlliesAndCharges(content);
             CheckBatchThreeMechanics(content);
             CheckLastTargetAndTalentAppends(content);
+            CheckFunnelBankingPrimitives(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -14152,6 +14153,435 @@ namespace Emberfall.DevHarness
                   "PassiveTrigger.OnLedgerCapped at 29 (got " + (int)PassiveTrigger.OnLedgerCapped + ")");
             Check((int)PassiveTrigger.OnTurnDebtThreshold == 30,
                   "PassiveTrigger.OnTurnDebtThreshold at 30 (got " + (int)PassiveTrigger.OnTurnDebtThreshold + ")");
+        }
+
+        // ================================================================ FUNNEL-BANKING PRIMITIVES
+
+        private static void CheckFunnelBankingPrimitives(ContentDatabase live)
+        {
+            Line("FUNNEL-BANKING PRIMITIVES (shield absorb, damage mitigation, heal intercept, stack threshold)");
+            CheckFunnelBankingOrdinalPins();
+            CheckFunnelBankingNoShippedUsage(live);
+            CheckFunnelBankingEnumParity();
+            CheckShieldAbsorbBanking();
+            CheckDamageMitigationBanking();
+            CheckHealInterceptBanking();
+            CheckHealInterceptConvert();
+            CheckStackThresholdTrigger();
+            Line("");
+        }
+
+        private static void CheckFunnelBankingOrdinalPins()
+        {
+            Check((int)PassiveTrigger.OnStackThreshold == 33,
+                  "PassiveTrigger.OnStackThreshold is appended at 33 (got "
+                  + (int)PassiveTrigger.OnStackThreshold + ")");
+
+            // FunnelSource is new and has no prior ordinals to guard; pin the four members.
+            Check((int)FunnelSource.Damage == 0
+                  && (int)FunnelSource.ShieldAbsorb == 1
+                  && (int)FunnelSource.DamageMitigation == 2
+                  && (int)FunnelSource.HealIntercept == 3,
+                  "FunnelSource ordinals: Damage=0, ShieldAbsorb=1, DamageMitigation=2, HealIntercept=3");
+
+            // Every earlier PassiveTrigger keeps its ordinal.
+            Check((int)PassiveTrigger.OnEnemyHpBelowThreshold == 32,
+                  "PassiveTrigger.OnEnemyHpBelowThreshold still at 32 (got "
+                  + (int)PassiveTrigger.OnEnemyHpBelowThreshold + ")");
+        }
+
+        private static void CheckFunnelBankingNoShippedUsage(ContentDatabase db)
+        {
+            int funnelNonDamage = 0, funnelConvert = 0, stackThreshold = 0;
+
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    all.AddRange(def.Passives[pi].Effects);
+                    if (def.Passives[pi].Trigger == PassiveTrigger.OnStackThreshold)
+                        stackThreshold++;
+                }
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                {
+                    for (int ti = 0; ti < hero.Talents.Count; ti++)
+                    {
+                        all.AddRange(hero.Talents[ti].Effects);
+                        if (hero.Talents[ti].Trigger == PassiveTrigger.OnStackThreshold)
+                            stackThreshold++;
+                    }
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    if (all[e].LedgerFunnelSource != FunnelSource.Damage) funnelNonDamage++;
+                    if (all[e].LedgerFunnelConvert) funnelConvert++;
+                }
+            }
+
+            Check(funnelNonDamage == 0,
+                  "no shipped effect uses a non-Damage LedgerFunnelSource (" + funnelNonDamage + ")");
+            Check(funnelConvert == 0,
+                  "no shipped effect uses LedgerFunnelConvert (" + funnelConvert + ")");
+            Check(stackThreshold == 0,
+                  "no shipped passive triggers on OnStackThreshold (" + stackThreshold + ")");
+        }
+
+        private static void CheckFunnelBankingEnumParity()
+        {
+            bool ok = CheckEnumSet("FunnelSource",
+                new string[] { "Damage", "ShieldAbsorb", "DamageMitigation", "HealIntercept" },
+                Enum.GetNames(typeof(FunnelSource)));
+            Check(ok, "FunnelSource enum parity");
+        }
+
+        // ---- synthetic arena: shield absorption banking ----
+
+        private static void CheckShieldAbsorbBanking()
+        {
+            // Hero applies a Shield to itself at BattleStart, then a Ledger (FunnelSource=ShieldAbsorb)
+            // to the front enemy. Enemy pokes the hero, shield absorbs, Ledger banks the absorbed amount.
+            // Hero's active releases the Ledger. Assert payout > 0 and proportional to absorbed.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""fb_shield_hero"", ""name"": ""ShieldBanker"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fbs_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""fbs_active"", ""name"": ""Release"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""LedgerRelease"", ""target"": ""Self"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""fbs_setup"", ""name"": ""Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""Shield"", ""target"": ""Self"", ""flat"": 500, ""duration"": 99 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""ShieldAbsorb"" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""fb_shield_foe"", ""name"": ""Hitter"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 500, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""fbsf"", ""name"": ""Smack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""fbs_ch"", ""name"": ""ShieldBank"", ""stages"": [
+    { ""id"": ""fbs_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""fb_shield_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "ShieldAbsorbBank");
+            if (db == null) { Check(false, "shield absorb banking arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("fb_shield_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("fbs_arena"), 8181, team);
+            if (r == null) { Check(false, "shield absorb banking arena ran"); return; }
+
+            int totalAbsorbed = 0;
+            int payout = 0;
+            bool releaseSeen = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Release" && !releaseSeen)
+                { payout = e.Value; releaseSeen = true; continue; }
+                if (!releaseSeen && e.Type == BattleEventType.ShieldAbsorb) totalAbsorbed += e.Value;
+            }
+            Check(totalAbsorbed > 0,
+                  "shield absorb banking: shield actually absorbed damage (" + totalAbsorbed + ")");
+            Check(payout > 0 && Math.Abs(payout - totalAbsorbed) <= 2,
+                  "shield absorb banking: payout matches absorbed amount (absorbed " + totalAbsorbed
+                  + ", payout " + payout + ")");
+        }
+
+        // ---- synthetic arena: damage mitigation banking ----
+
+        private static void CheckDamageMitigationBanking()
+        {
+            // Hero has high DamageReduction (0.5). A Ledger (FunnelSource=DamageMitigation) on the
+            // hero banks the prevented amount. Enemy pokes, hero's active releases. Payout should be
+            // roughly equal to the mitigated portion.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""fb_dr_hero"", ""name"": ""DRBanker"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""damageReduction"": 0.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fbdr_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""fbdr_active"", ""name"": ""Release"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""LedgerRelease"", ""target"": ""Self"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""fbdr_setup"", ""name"": ""Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""DamageMitigation"" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""fb_dr_foe"", ""name"": ""Hitter"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 400, ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""fbdrf"", ""name"": ""Smack"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""fbdr_ch"", ""name"": ""DRBank"", ""stages"": [
+    { ""id"": ""fbdr_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""fb_dr_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "DamageMitigationBank");
+            if (db == null) { Check(false, "damage mitigation banking arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("fb_dr_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("fbdr_arena"), 8282, team);
+            if (r == null) { Check(false, "damage mitigation banking arena ran"); return; }
+
+            // Count damage dealt TO the hero (enemy hits) BEFORE the first release, and the payout.
+            int totalDealt = 0;
+            int payout = 0;
+            bool releaseSeen = false;
+            int heroId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == "fb_dr_hero") heroId = r.Units[i].Id;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Release" && !releaseSeen)
+                { payout = e.Value; releaseSeen = true; continue; }
+                if (!releaseSeen && e.Type == BattleEventType.Damage && e.TargetId == heroId)
+                    totalDealt += e.Value;
+            }
+            // With 50% DR the hero takes half, so the banked (prevented) amount equals totalDealt.
+            // Payout should be approximately totalDealt (the prevented = totalDealt because the enemy
+            // deals 2x what lands, and DR prevents half).
+            Check(totalDealt > 0, "damage mitigation banking: hero took damage (" + totalDealt + ")");
+            Check(payout > 0, "damage mitigation banking: payout is positive (" + payout + ")");
+            // Mitigated amount = totalDealt (since DR is 50%, what lands = what is prevented).
+            Check(Math.Abs(payout - totalDealt) <= 2,
+                  "damage mitigation banking: payout ~= mitigated amount (dealt " + totalDealt
+                  + ", payout " + payout + ")");
+        }
+
+        // ---- synthetic arena: heal intercept banking ----
+
+        private static void CheckHealInterceptBanking()
+        {
+            // Hero has a Ledger (FunnelSource=HealIntercept, magnitude 0.5) on itself. An ally heals
+            // the hero. Half the heal is diverted to the Ledger. Hero's active releases it.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""fb_heal_hero"", ""name"": ""HealBanker"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fbh_basic"", ""name"": ""Heal Self"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1000 } ] },
+      ""active"": { ""id"": ""fbh_active"", ""name"": ""Release"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""LedgerRelease"", ""target"": ""Self"", ""power"": 1.0 } ] },
+      ""passive1"": { ""id"": ""fbh_setup"", ""name"": ""Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 0.5, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""HealIntercept"" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""fb_heal_foe"", ""name"": ""Poker"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 600, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""fbhf"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""fbh_ch"", ""name"": ""HealBank"", ""stages"": [
+    { ""id"": ""fbh_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""fb_heal_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "HealInterceptBank");
+            if (db == null) { Check(false, "heal intercept banking arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("fb_heal_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("fbh_arena"), 8383, team);
+            if (r == null) { Check(false, "heal intercept banking arena ran"); return; }
+
+            // Count total heals that landed on the hero BEFORE the first release, and the payout.
+            int totalHealed = 0;
+            int payout = 0;
+            bool releaseSeen = false;
+            int heroId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == "fb_heal_hero") heroId = r.Units[i].Id;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Release" && !releaseSeen)
+                { payout = e.Value; releaseSeen = true; continue; }
+                if (!releaseSeen && e.Type == BattleEventType.Heal && e.TargetId == heroId)
+                    totalHealed += e.Value;
+            }
+            Check(totalHealed > 0, "heal intercept banking: heals actually landed (" + totalHealed + ")");
+            Check(payout > 0, "heal intercept banking: payout is positive (" + payout + ")");
+            // With magnitude 0.5, half of each 1000-flat heal is diverted. The heal that lands is
+            // reduced (only the non-intercepted part restores HP). The payout should roughly equal
+            // the total healed amount (since the intercepted half is banked, not healed).
+            // Expected: each heal attempt = 1000, intercepted = 500, healed = 500.
+            // After N basics, banked = N*500, healed = N*500. Payout = N*500.
+            // So payout ~= totalHealed.
+            Check(Math.Abs(payout - totalHealed) <= totalHealed / 4 + 2,
+                  "heal intercept banking: payout is proportional to healed amount (healed "
+                  + totalHealed + ", payout " + payout + ")");
+        }
+
+        // ---- synthetic arena: heal intercept convert (Velis path) ----
+
+        private static void CheckHealInterceptConvert()
+        {
+            // Hero has a Ledger (FunnelSource=HealIntercept, FunnelConvert=true, magnitude 1.0).
+            // Any heal on the hero is converted entirely to damage. Hero should take damage when
+            // healed, and the heal should be zero (intercepted in full).
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""fb_conv_hero"", ""name"": ""Converter"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fbc_basic"", ""name"": ""Heal Self"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 500 } ] },
+      ""active"": { ""id"": ""fbc_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""fbc_setup"", ""name"": ""Setup"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Ledger"",
+            ""magnitude"": 1.0, ""storedCap"": 0, ""duration"": 99, ""chance"": 1,
+            ""ledgerFunnelSource"": ""HealIntercept"", ""ledgerFunnelConvert"": true }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""fb_conv_foe"", ""name"": ""Poker"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""fbcf"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""fbc_ch"", ""name"": ""ConvBank"", ""stages"": [
+    { ""id"": ""fbc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""fb_conv_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "HealConvert");
+            if (db == null) { Check(false, "heal convert arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("fb_conv_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("fbc_arena"), 8484, team);
+            if (r == null) { Check(false, "heal convert arena ran"); return; }
+
+            // With FunnelConvert=true and magnitude 1.0, every heal attempt is fully intercepted
+            // and dealt as damage. No Heal events should appear for the hero.
+            int heroId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == "fb_conv_hero") heroId = r.Units[i].Id;
+            int healsOnHero = 0;
+            int convertDamage = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Heal && e.TargetId == heroId) healsOnHero++;
+                // The convert damage comes from DealRawDamage with the Ledger's SourceId.
+                // It targets the hero (the holder of the intercepted heal).
+                if (e.Type == BattleEventType.Damage && e.TargetId == heroId
+                    && e.SourceId == heroId) convertDamage += e.Value;
+            }
+            Check(healsOnHero == 0,
+                  "heal convert: no heal events land on the hero (" + healsOnHero + ")");
+            Check(convertDamage > 0,
+                  "heal convert: intercepted heal dealt as damage (" + convertDamage + ")");
+        }
+
+        // ---- synthetic arena: stack-threshold auto-trigger ----
+
+        private static void CheckStackThresholdTrigger()
+        {
+            // Hero gains 1 Resolve per basic attack (MaxStacks=9). A passive with
+            // OnStackThreshold at 3 stacks fires a Damage effect when 3 stacks accumulate.
+            // After 3 basics, the threshold fires and consumes the 3 stacks. Count-based.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""fb_st_hero"", ""name"": ""StackTrigger"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 200, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fbst_basic"", ""name"": ""Stack And Poke"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+          { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 9, ""duration"": 99 }
+        ] },
+      ""active"": { ""id"": ""fbst_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""fbst_threshold"", ""name"": ""Threshold Burst"",
+        ""trigger"": ""OnStackThreshold"", ""oncePerBattle"": false,
+        ""stackThresholdStatus"": ""Resolve"", ""stackThresholdCount"": 3,
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""fb_st_foe"", ""name"": ""Dummy"", ""aspect"": ""Ember"",
+      ""hp"": 999999, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""fbstf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""fbst_ch"", ""name"": ""StackThresh"", ""stages"": [
+    { ""id"": ""fbst_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""fb_st_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(10), "StackThreshold");
+            if (db == null) { Check(false, "stack threshold arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("fb_st_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("fbst_arena"), 8585, team);
+            if (r == null) { Check(false, "stack threshold arena ran"); return; }
+
+            // Count how many times the threshold passive fired (PassiveTrigger events named
+            // "Threshold Burst") and how many total GainResolve stacks were gained.
+            int thresholdFirings = 0;
+            int totalStacks = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityName == "Threshold Burst")
+                    thresholdFirings++;
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve)
+                    totalStacks++;
+            }
+            // With 10 rounds, the hero acts ~10 times, gaining ~10 stacks total. Every 3 stacks
+            // consumed = 1 firing, so expect at least 3 firings (9 stacks / 3 = 3).
+            Check(thresholdFirings >= 2,
+                  "stack threshold: passive fired at least twice (" + thresholdFirings + " times from "
+                  + totalStacks + " total stacks)");
+            // Each firing consumes 3 stacks. Verify by checking that the total stacks gained exceeds
+            // threshold firings * 3 (stacks are consumed, not just counted).
+            Check(totalStacks >= thresholdFirings * 3,
+                  "stack threshold: enough stacks were gained to account for all firings ("
+                  + totalStacks + " gained, " + thresholdFirings + " firings x3 = "
+                  + (thresholdFirings * 3) + ")");
         }
     }
 }

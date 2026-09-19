@@ -121,6 +121,16 @@ namespace Emberfall.Core.Combat
         /// <summary>Fraction of Stored that auto-release pays as healing to the applier, on top
         /// of the damage to the holder. Zero means no split heal, the existing behaviour.</summary>
         public float AutoReleaseSplitHeal;
+
+        // ---------- funnel-banking primitives ----------
+
+        /// <summary>Which funnel point this Ledger entry banks from. Damage (default) is the
+        /// existing behaviour; the three new members divert amounts at other pipeline points.</summary>
+        public FunnelSource FunnelSource = FunnelSource.Damage;
+
+        /// <summary>When true and FunnelSource is HealIntercept, the intercepted heal amount is
+        /// dealt as damage to the holder immediately instead of being banked into Stored.</summary>
+        public bool FunnelConvert;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>

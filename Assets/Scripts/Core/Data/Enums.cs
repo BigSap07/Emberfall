@@ -1101,7 +1101,17 @@ namespace Emberfall.Core.Data
         /// OTHER side (the one that dealt the damage) after the hit lands, mirroring
         /// OnAllyHpBelowThreshold but for enemy units. _broadcastVictim is set to the enemy.
         /// </summary>
-        OnEnemyHpBelowThreshold
+        OnEnemyHpBelowThreshold,
+
+        // ---------- funnel-banking primitives ----------
+
+        /// <summary>
+        /// A stacking status on the owner reached PassiveDef.StackThresholdCount entries.
+        /// Raised after GainResolve adds the crossing stack. The matching stacks are consumed
+        /// inside TriggerPassive before the passive's effects resolve, so the effects see the
+        /// unit without the spent counter.
+        /// </summary>
+        OnStackThreshold
     }
 
     /// <summary>
@@ -1128,6 +1138,28 @@ namespace Emberfall.Core.Data
 
         /// <summary>Only outgoing healing.</summary>
         HealingOnly
+    }
+
+    /// <summary>
+    /// Which point in the damage/heal pipeline a Ledger entry banks from. Defaults to Damage,
+    /// which is the existing behaviour: banks from incoming damage in DealRawDamage. The three
+    /// new members read amounts at other funnel points and bank or convert them.
+    /// </summary>
+    public enum FunnelSource
+    {
+        /// <summary>Banks from incoming damage hitting the holder (existing Ledger behaviour).</summary>
+        Damage,
+
+        /// <summary>Banks from the amount a shield pool absorbed in DealRawDamage.</summary>
+        ShieldAbsorb,
+
+        /// <summary>Banks from the amount DamageReduction prevented in ApplyDamageEffect.</summary>
+        DamageMitigation,
+
+        /// <summary>Banks from the incoming heal amount before it restores HP. When
+        /// FunnelConvert is true on the entry, the intercepted amount is dealt as damage
+        /// immediately instead of banked.</summary>
+        HealIntercept
     }
 
     public enum EventActivityKind
