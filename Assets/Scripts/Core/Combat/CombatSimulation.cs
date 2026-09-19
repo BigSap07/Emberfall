@@ -1893,6 +1893,8 @@ namespace Emberfall.Core.Combat
                                 led.AutoReleaseAsHeal = effect.LedgerAutoReleaseAsHeal;
                                 led.AutoReleaseTarget = effect.LedgerAutoReleaseTarget;
                                 led.AutoReleaseSplitHeal = effect.LedgerAutoReleaseSplitHeal;
+                                led.FunnelSource = effect.LedgerFunnelSource;
+                                led.FunnelConvert = effect.LedgerFunnelConvert;
                             }
 
                         // DoTRecord: stamp TickRecord on Burn entries so TickDamageOverTime can
@@ -2031,6 +2033,9 @@ namespace Emberfall.Core.Combat
                             // just never said how many there were.
                             re.Value = target.CountOf(resolveKind);
                         }
+                        // Stack-threshold auto-trigger: if the new count crosses a threshold,
+                        // TriggerPassive handles the check, consumption and firing.
+                        if (target.Alive) TriggerPassive(target, PassiveTrigger.OnStackThreshold, depth);
                         break;
                     }
                     case EffectKind.TurnShift:
@@ -2611,11 +2616,48 @@ namespace Emberfall.Core.Combat
                 // 7. Damage Reduction - flat percentage off the damage that already survived
                 // Defense + Armor Break above (Holy Damage included - only Defense was asked to
                 // skip it). Its own step, strictly after step 5/6, never folded into `mitigation` itself.
+                float rawBeforeDR = raw;
                 float damageReduction = target.EffectiveDamageReduction;
                 if (damageReduction > 0f)
                 {
                     if (damageReduction > 1f) damageReduction = 1f;
                     raw *= 1f - damageReduction;
+                }
+
+                // Funnel banking: DamageMitigation entries bank the amount DamageReduction
+                // prevented. No shipped content sets FunnelSource.DamageMitigation, so the loop
+                // body is unreachable in every existing battle.
+                {
+                    float mitigated = rawBeforeDR - raw;
+                    if (mitigated > 0f)
+                    {
+                        for (int fi = 0; fi < target.Statuses.Count; fi++)
+                        {
+                            StatusInstance led = target.Statuses[fi];
+                            if (led.Kind != StatusKind.Ledger) continue;
+                            if (led.FunnelSource != FunnelSource.DamageMitigation) continue;
+                            if (led.Magnitude <= 0f) continue;
+                            if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+                            float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                            if (room <= 0f) continue;
+                            float banked = mitigated * led.Magnitude;
+                            if (banked > room) banked = room;
+                            bool wasBelow = led.StoredCap > 0f && led.Stored < led.StoredCap;
+                            led.Stored += banked;
+                            if (led.BankLimit > 0) led.BankUsesThisRound++;
+                            if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
+                            {
+                                CombatUnit ledSource = FindUnit(led.SourceId);
+                                if (ledSource != null)
+                                {
+                                    CombatUnit prevSubject = _broadcastSubject;
+                                    _broadcastSubject = target;
+                                    BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSubject = prevSubject;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 7.5. Vulnerable - SOURCE-KEYED, which is what makes it different from
@@ -2781,6 +2823,37 @@ namespace Emberfall.Core.Combat
                             _broadcastVictim = prevVictimSB;
                             if (!target.Alive || IsBattleOver()) return;
                         }
+
+                        // Funnel banking: ShieldAbsorb entries bank the amount the shield pool
+                        // absorbed, at the same funnel point Guard and Cover have already passed.
+                        // No shipped content sets FunnelSource.ShieldAbsorb, so this loop is
+                        // unreachable in every existing battle.
+                        for (int fi = 0; fi < target.Statuses.Count; fi++)
+                        {
+                            StatusInstance led = target.Statuses[fi];
+                            if (led.Kind != StatusKind.Ledger) continue;
+                            if (led.FunnelSource != FunnelSource.ShieldAbsorb) continue;
+                            if (led.Magnitude <= 0f) continue;
+                            if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+                            float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                            if (room <= 0f) continue;
+                            float banked = absorbed * led.Magnitude;
+                            if (banked > room) banked = room;
+                            bool wasBelow = led.StoredCap > 0f && led.Stored < led.StoredCap;
+                            led.Stored += banked;
+                            if (led.BankLimit > 0) led.BankUsesThisRound++;
+                            if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
+                            {
+                                CombatUnit ledSource = FindUnit(led.SourceId);
+                                if (ledSource != null)
+                                {
+                                    CombatUnit prevSubject = _broadcastSubject;
+                                    _broadcastSubject = target;
+                                    BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSubject = prevSubject;
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2813,7 +2886,9 @@ namespace Emberfall.Core.Combat
                     {
                         // Banking: the original behaviour. Banks Magnitude fraction of the hit.
                         // Entries with BankHeals are skipped here; they bank in ApplyHealValue.
+                        // Entries with a non-Damage FunnelSource bank at their own hook point.
                         if (led.BankHeals) continue;
+                        if (led.FunnelSource != FunnelSource.Damage) continue;
                         if (led.Magnitude <= 0f) continue;
                         if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
                         // BankOnlyFrom: skip unless the damage source matches.
@@ -3044,6 +3119,54 @@ namespace Emberfall.Core.Combat
                 CombatUnit healerUnit = FindUnit(sourceId);
                 float healMod = OutputModMultiplier(healerUnit, target, OutputModScope.HealingOnly);
                 if (healMod != 1f) amount = (int)Math.Round(amount * healMod, MidpointRounding.AwayFromZero);
+                if (amount <= 0) return;
+
+                // Funnel banking: HealIntercept entries divert a fraction of the incoming heal
+                // BEFORE it restores HP. No shipped content sets FunnelSource.HealIntercept, so
+                // this loop is unreachable in every existing battle.
+                for (int fi = 0; fi < target.Statuses.Count; fi++)
+                {
+                    StatusInstance led = target.Statuses[fi];
+                    if (led.Kind != StatusKind.Ledger) continue;
+                    if (led.FunnelSource != FunnelSource.HealIntercept) continue;
+                    if (led.Magnitude <= 0f || amount <= 0) continue;
+                    if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+
+                    int intercepted = (int)Math.Round(amount * led.Magnitude, MidpointRounding.AwayFromZero);
+                    if (intercepted <= 0) continue;
+                    if (intercepted > amount) intercepted = amount;
+                    amount -= intercepted;
+
+                    if (led.FunnelConvert)
+                    {
+                        // Convert path: deal the intercepted amount as damage immediately.
+                        DealRawDamage(led.SourceId, target, intercepted, false, "impact",
+                                      StatusKind.None, 1f, "");
+                        if (!target.Alive) return;
+                    }
+                    else
+                    {
+                        // Bank path: store the intercepted amount.
+                        float room = led.StoredCap > 0f ? led.StoredCap - led.Stored : float.MaxValue;
+                        if (room <= 0f) continue;
+                        float banked = (float)intercepted;
+                        if (banked > room) banked = room;
+                        bool wasBelow = led.StoredCap > 0f && led.Stored < led.StoredCap;
+                        led.Stored += banked;
+                        if (led.BankLimit > 0) led.BankUsesThisRound++;
+                        if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
+                        {
+                            CombatUnit ledSource = FindUnit(led.SourceId);
+                            if (ledSource != null)
+                            {
+                                CombatUnit prevSubject = _broadcastSubject;
+                                _broadcastSubject = target;
+                                BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSubject = prevSubject;
+                            }
+                        }
+                    }
+                }
                 if (amount <= 0) return;
 
                 float missing = target.EffectiveMaxHp - target.Hp;
@@ -3453,6 +3576,17 @@ namespace Emberfall.Core.Combat
                          || trigger == PassiveTrigger.OnAppliedStatusExpired)
                         && passive.TriggerStatus != StatusKind.None
                         && !_expiredKinds.Contains(passive.TriggerStatus)) continue;
+                    // Stack-threshold filter: check the owner's stack count against the
+                    // passive's threshold, and consume if met. No shipped content sets
+                    // OnStackThreshold, so this branch is unreachable in every existing battle.
+                    if (trigger == PassiveTrigger.OnStackThreshold)
+                    {
+                        if (passive.StackThresholdStatus == StatusKind.None
+                            || passive.StackThresholdCount <= 0) continue;
+                        if (owner.CountOf(passive.StackThresholdStatus) < passive.StackThresholdCount)
+                            continue;
+                        owner.RemoveStacks(passive.StackThresholdStatus, passive.StackThresholdCount);
+                    }
                     if (passive.TriggerSourceIsSelf && _broadcastSourceId != owner.Id) continue;
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
@@ -4322,6 +4456,8 @@ namespace Emberfall.Core.Combat
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;
                     landed.AutoReleaseSplitHeal = status.AutoReleaseSplitHeal;
+                    landed.FunnelSource = status.FunnelSource;
+                    landed.FunnelConvert = status.FunnelConvert;
                     break;
                 }
 

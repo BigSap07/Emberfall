@@ -370,6 +370,17 @@ namespace Emberfall.Core.Data
         /// happens in ticks, which is the existing behaviour.</summary>
         public RecordKind DoTRecord = RecordKind.None;
 
+        // ---------- funnel-banking primitives ----------
+
+        /// <summary>Which funnel point this Ledger banks from. Damage (default) is the existing
+        /// behaviour. Stored on the StatusInstance.</summary>
+        public FunnelSource LedgerFunnelSource = FunnelSource.Damage;
+
+        /// <summary>When true and LedgerFunnelSource is HealIntercept, the intercepted heal is
+        /// dealt as damage to the holder immediately instead of banked. Stored on the
+        /// StatusInstance.</summary>
+        public bool LedgerFunnelConvert;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -438,6 +449,8 @@ namespace Emberfall.Core.Data
             e.StackOnReapply = j.GetBool("stackOnReapply", false);
             e.LedgerAutoReleaseSplitHeal = j.GetFloat("ledgerAutoReleaseSplitHeal", 0f);
             e.DoTRecord = EnumUtil.Parse(j.GetString("doTRecord", "None"), RecordKind.None);
+            e.LedgerFunnelSource = EnumUtil.Parse(j.GetString("ledgerFunnelSource", "Damage"), FunnelSource.Damage);
+            e.LedgerFunnelConvert = j.GetBool("ledgerFunnelConvert", false);
             return e;
         }
 
@@ -516,6 +529,8 @@ namespace Emberfall.Core.Data
             c.StackOnReapply = StackOnReapply;
             c.LedgerAutoReleaseSplitHeal = LedgerAutoReleaseSplitHeal;
             c.DoTRecord = DoTRecord;
+            c.LedgerFunnelSource = LedgerFunnelSource;
+            c.LedgerFunnelConvert = LedgerFunnelConvert;
             return c;
         }
     }
@@ -708,6 +723,16 @@ namespace Emberfall.Core.Data
         /// <summary>Which stat each stack modifies. Only Speed is supported in this pass.</summary>
         public ComparedStat StatModKind = ComparedStat.Speed;
 
+        // ---------- funnel-banking primitives: stack-threshold auto-trigger ----------
+
+        /// <summary>Which stacking status on the owner this OnStackThreshold passive watches.
+        /// None means no threshold — the trigger is inert.</summary>
+        public StatusKind StackThresholdStatus = StatusKind.None;
+
+        /// <summary>How many stacks of StackThresholdStatus must accumulate before the trigger
+        /// fires and consumes them.</summary>
+        public int StackThresholdCount;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -734,6 +759,8 @@ namespace Emberfall.Core.Data
             p.StatModStatus = EnumUtil.Parse(j.GetString("statModStatus", "None"), StatusKind.None);
             p.StatModPerStack = j.GetFloat("statModPerStack", 0f);
             p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);
+            p.StackThresholdStatus = EnumUtil.Parse(j.GetString("stackThresholdStatus", "None"), StatusKind.None);
+            p.StackThresholdCount = Math.Max(0, j.GetInt("stackThresholdCount", 0));
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));
