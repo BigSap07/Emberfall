@@ -275,6 +275,74 @@ sweep's starter squad, which is coverage rather than safety. The count is pinned
 seventh cannot appear unnoticed. Left in rather than reverted, because the flags are authored
 intent and silently ignoring them is the older bug.
 
+### Blocked again: the four linked heroes — eleven clauses, NOT authored
+
+A second authoring attempt on `content/batch-six-four-heroes`, off `engine/nine-gaps`, read all 28
+clauses against the engine with all nine gaps built and **authored none of them**. 72 of 72
+fingerprints unmoved, 105 sweep lines unchanged, 11 harness reds — every number as before, because
+`heroes.json` is untouched. The sweep did NOT gain four lines, and that is the honest report of the
+outcome rather than a result.
+
+**The nine gaps moved the count from nine to eleven, and that is not a wash.** Most of each kit is
+now expressible where before the core of three of four was not: Nysera's active is exactly the
+`Deflect` link (she is the third party, the pair is two enemies, and `SpendLinkCharge` in the
+deflect branch is "ends after triggering once"); her basic's Vanishing Mark is `OnTargeted` plus
+`HasMyMark` on `BroadcastSource` and **self-limits correctly** because removing the mark makes its
+own condition false; Rovan's active, both passives and talent I all land; Talren's basic, first
+passive and talent I land; Vaelis's second passive and talent II land. What remains is eleven
+clauses, and they cluster.
+
+**Three are the same mistake in the nine-gap pass: a mechanism was built, its hook was not.**
+
+1. **A link's charge is never spent by the TRIGGER path.** `SpendLinkCharge` is called from the
+   Redirect, Echo and Deflect branches of the funnel and from nowhere else, so `OnLinkedUnitHit`
+   fires for as long as the link lives. "The next time either recorded target is attacked by
+   Talren" and "the next allied hit against it" are both unbounded. Talren's active and Vaelis's
+   basic are the two kits the trigger was built for.
+2. **`EffectKind.EchoDamage` raises no trigger.** Talren's second passive answers "whenever his
+   attack triggers against a secondary target through Redirecting Shot", and the basic's echo is
+   an `EchoDamage` effect, which the engine performs silently. The active's half is hearable and
+   the basic's is not.
+3. **The `Deflect` branch raises no trigger.** It calls `DealRawDamage` directly rather than going
+   through `RedirectShare`, so `OnRedirectReceived` never fires for it. Nysera's talent II answers
+   "when the Linked effect redirects an attack away from Nysera" and has nothing to listen to.
+
+**Four are arithmetic and selection the engine has never had.**
+
+4. **Per-stack scaling has no linear form.** `PerStack` is `Power x (1 + p*n)`; "35% of Attack per
+   Route" is `0.35n`, and no choice of Power and p gives that for every n. Talren's talent III.
+5. **No second-lowest-HP ENEMY, and no way to exclude an already-recorded body from a pick.**
+   `LinkUnits` excludes only its own primary target. Talren's talent II records "one additional
+   enemy with the lowest HP", which must be a body the first two records did not take.
+6. **No HP-conditional output modifier.** `OutputModStatus` filters on marks and nothing else, so
+   "each Absence increases her damage against enemies below 50% HP by 5%" has no home — and
+   expressing it as a separate additive hit runs into 4 again. Nysera's first passive.
+7. **`EnergyGain` cannot scale off a runtime amount.** It is `Flat + Power * 100` and reads no
+   `ScaleBy*`. Rovan's talent II grants "8 Energy for every 10% Max HP Shield moved, up to 16".
+
+**Four are shapes no effect currently has.**
+
+8. **A moved status cannot be given a new duration.** `MoveStatus` carries `RoundsLeft` across
+   unchanged, which is the guarantee that a move creates no value. Vaelis's active moves positive
+   effects "for 1 round".
+9. **No negation of `StoredRoleMatches`,** and no way to compare a new record against a previous
+   one — each record lives on its own carrier's entry. Vaelis's talent III fires "from an ally in a
+   different role than the previously recorded role". The same shape gap 9 closed for exactly one
+   condition.
+10. **No attacker-keyed damage reduction.** `Vulnerable` is source-keyed and only increases;
+    nothing lets a status on the ATTACKER reduce what its victim takes. Rovan's basic turns 20% of
+    a Deflected enemy's blow into a Shield on him **instead**, and the "instead" is the half that
+    cannot be said.
+11. **A talent cannot redirect an existing effect's destination.** `ApplyDelta` moves numeric
+    fields only, so a `TargetMode` cannot be overridden. Rovan's talent III sends the Shield to the
+    next-lowest-HP ally "instead of returning it to himself".
+
+**One authoring note that is not a blocker but would be a silent cost.** `RecordFact` writes onto
+a status entry the caster already placed on the subject, so Vaelis recording "the triggering ally's
+role" needs him to carry a mark on every ally — a status his description never mentions, showing on
+four allies' status bars. Authorable, and it would be an addition to his kit rather than a
+translation of it, which is why it is named here rather than quietly done.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is
