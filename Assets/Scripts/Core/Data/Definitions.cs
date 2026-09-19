@@ -385,6 +385,24 @@ namespace Emberfall.Core.Data
         /// StatusInstance.</summary>
         public bool LedgerFunnelConvert;
 
+        // ---------- batch five: generalized counters ----------
+
+        /// <summary>Which counter index GainResolve grants / ConsumesResolve spends. Zero (default)
+        /// means "derive from Status": None→Resolve (index 0), Resolve2→index 1. Values ≥ 2 address
+        /// generalized counters stored on CombatUnit.Counters, independent of the StatusKind enum.
+        /// StatusStacksAtLeast and OnStackThreshold read the same index.</summary>
+        public int CounterIndex;
+
+        /// <summary>Counter index for Condition (StatusStacksAtLeast). Zero means derive from
+        /// ConditionStatus as above. ≥ 2 reads a generalized counter.</summary>
+        public int ConditionCounterIndex;
+
+        /// <summary>Counter index for Condition2 (StatusStacksAtLeast). Same semantics.</summary>
+        public int ConditionCounterIndex2;
+
+        /// <summary>Counter index for Condition3 (StatusStacksAtLeast). Same semantics.</summary>
+        public int ConditionCounterIndex3;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -456,6 +474,10 @@ namespace Emberfall.Core.Data
             e.DoTRecord = EnumUtil.Parse(j.GetString("doTRecord", "None"), RecordKind.None);
             e.LedgerFunnelSource = EnumUtil.Parse(j.GetString("ledgerFunnelSource", "Damage"), FunnelSource.Damage);
             e.LedgerFunnelConvert = j.GetBool("ledgerFunnelConvert", false);
+            e.CounterIndex = Math.Max(0, j.GetInt("counterIndex", 0));
+            e.ConditionCounterIndex = Math.Max(0, j.GetInt("conditionCounterIndex", 0));
+            e.ConditionCounterIndex2 = Math.Max(0, j.GetInt("conditionCounterIndex2", 0));
+            e.ConditionCounterIndex3 = Math.Max(0, j.GetInt("conditionCounterIndex3", 0));
             return e;
         }
 
@@ -537,6 +559,10 @@ namespace Emberfall.Core.Data
             c.DoTRecord = DoTRecord;
             c.LedgerFunnelSource = LedgerFunnelSource;
             c.LedgerFunnelConvert = LedgerFunnelConvert;
+            c.CounterIndex = CounterIndex;
+            c.ConditionCounterIndex = ConditionCounterIndex;
+            c.ConditionCounterIndex2 = ConditionCounterIndex2;
+            c.ConditionCounterIndex3 = ConditionCounterIndex3;
             return c;
         }
     }
@@ -739,6 +765,10 @@ namespace Emberfall.Core.Data
         /// fires and consumes them.</summary>
         public int StackThresholdCount;
 
+        /// <summary>Counter index for OnStackThreshold. Zero means derive from StackThresholdStatus.
+        /// ≥ 2 watches a generalized counter on CombatUnit.Counters.</summary>
+        public int CounterIndex;
+
         public string Vfx = "buff";
         public List<EffectDef> Effects = new List<EffectDef>();
 
@@ -767,6 +797,7 @@ namespace Emberfall.Core.Data
             p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);
             p.StackThresholdStatus = EnumUtil.Parse(j.GetString("stackThresholdStatus", "None"), StatusKind.None);
             p.StackThresholdCount = Math.Max(0, j.GetInt("stackThresholdCount", 0));
+            p.CounterIndex = Math.Max(0, j.GetInt("counterIndex", 0));
             p.Vfx = j.GetString("vfx", "buff");
             List<JsonValue> effects = j.GetList("effects");
             for (int i = 0; i < effects.Count; i++) p.Effects.Add(EffectDef.FromJson(effects[i]));

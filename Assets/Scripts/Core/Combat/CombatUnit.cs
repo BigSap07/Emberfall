@@ -291,6 +291,49 @@ namespace Emberfall.Core.Combat
         public float StatModPerStack;
         public ComparedStat StatModKind = ComparedStat.Speed;
 
+        // ---------- batch five: generalized counters ----------
+
+        /// <summary>Counter stacks by index for indices ≥ 2. Indices 0 and 1 are Resolve and
+        /// Resolve2 respectively, stored as StatusInstances. This dictionary holds everything
+        /// beyond those two so the StatusKind enum does not need a member per hero.</summary>
+        public readonly Dictionary<int, int> Counters = new Dictionary<int, int>();
+
+        /// <summary>Read the stack count of a counter by index. 0 = Resolve, 1 = Resolve2,
+        /// ≥ 2 = generalized (Dictionary).</summary>
+        public int CountOfCounter(int index)
+        {
+            if (index <= 0) return CountOf(StatusKind.Resolve);
+            if (index == 1) return CountOf(StatusKind.Resolve2);
+            int v;
+            return Counters.TryGetValue(index, out v) ? v : 0;
+        }
+
+        /// <summary>Grant stacks to a generalized counter (index ≥ 2). Returns true if at least
+        /// one stack was added (i.e. was below cap).</summary>
+        public bool GainCounter(int index, int amount, int cap)
+        {
+            if (cap < 1) cap = 1;
+            int cur;
+            Counters.TryGetValue(index, out cur);
+            if (cur >= cap) return false;
+            Counters[index] = Math.Min(cur + amount, cap);
+            return true;
+        }
+
+        /// <summary>Remove exactly `count` stacks from a generalized counter (index ≥ 2).
+        /// Clamps to zero.</summary>
+        public void SpendCounter(int index, int count)
+        {
+            int cur;
+            if (!Counters.TryGetValue(index, out cur) || cur <= 0) return;
+            cur -= count;
+            if (cur <= 0) Counters.Remove(index);
+            else Counters[index] = cur;
+        }
+
+        /// <summary>Remove all stacks of a generalized counter (index ≥ 2).</summary>
+        public void ClearCounter(int index) { Counters.Remove(index); }
+
         /// <summary>How many times this unit has damaged that one this round.</summary>
         public int TimesDamagedThisRound(int targetId)
         {
