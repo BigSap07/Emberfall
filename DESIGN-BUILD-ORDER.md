@@ -193,6 +193,46 @@ scalar. A sibling would have left the mis-named one in place for the next author
   converted, healing **3216** at two rounds and **1608** at one. Halving the duration halves the
   heal, which is what proves it reads the REMAINING damage rather than one tick or a constant.
 
+**Cyrra's active was stripping the FRONT enemy, not the most-burdened one.** `HighestDoTDamageEnemy`
+meant "the enemy that has DEALT the most DoT this round"; her text asks for *"the enemy with the
+highest remaining Burden damage"*. Different question — and because she converts what the removed
+DoT would have dealt into healing, the pick decided how much she healed, not merely where she aimed.
+- **Audited both damage-dealt modes.** `HighestDamageDealtEnemy` has one user, Hale, and he reads it
+  correctly: *"move Quarry to the enemy that dealt the most damage that round"*. `HighestDoTDamageEnemy`
+  had only Cyrra, who wanted the opposite. **So the meaning was sound and its use was wrong** — the
+  reverse of the `ScaleByLastRemoval` case, and the audit is what told them apart.
+- **Worse than a near miss.** `DoTDamageDealtThisRound` resets for everybody at `BeginRound` and only
+  fills when a unit carrying that enemy's Burn takes its own turn, so at Cyrra's turn it is normally
+  zero across the whole enemy line and the mode collapses onto the first living body. She was not
+  stripping the wrong burning enemy; she was stripping the front one, and often one carrying nothing.
+- **Added `TargetMode.HighestPendingDoTEnemy`** — the enemy carrying the most DoT damage still
+  queued on it, ranked with `Sim.RemainingDotDamage`, the same helper `_lastRemovedValue` sums when a
+  removal happens, so "which enemy has the most to remove" and "how much was removed" cannot drift
+  apart. Nobody when no enemy carries any, rather than falling through to the front body.
+- **Renamed `HighestDoTDamageEnemy` to `HighestDoTDealtEnemy`**, same ordinal, meaning untouched.
+  That name was the trap and it caught somebody; it now cannot be misread for the carried-DoT
+  question sitting next to it. No content uses it.
+- **A new guard, because the rename made a silent failure live.** `EnumUtil.Parse` falls back to the
+  default rather than throwing, so a file still naming the old spelling would aim at the front enemy
+  without a word. `CheckTargetModeStringsParse` reads the content JSON as text — the parsed database
+  is where the evidence has already been destroyed — and asserts every authored target string
+  round-trips through `TargetMode`. It read 554 strings, and asserts it read some before reporting,
+  for the reason the role scan does.
+
+**The sweep was blind to all of single-target targeting, and the Cyrra fix is what found it.**
+Correcting her mode moved **none** of her sweep lines. Measured, not assumed, by reverting her and
+re-running. Two faults in the arena, both now repaired, and all 105 baseline lines move as a result:
+- **The warden's Taunt was permanent** — re-applied every turn — and **the anchor overrides every
+  single-enemy target mode there is**. Every hero that picks one enemy was resolving onto the warden
+  regardless of what its kit asked for. Its Taunt is now a BattleStart application lasting two
+  rounds and never renewed: the anchor path is still exercised, and the rest of the fight lets a kit
+  aim where it says it aims.
+- **Every enemy carried identical DoT**, so a carried-DoT pick and a front-enemy fallthrough
+  resolved to the same body. The back enemy now carries a long shallow self-Burn nobody else has,
+  which costs it about 2000 HP of 300000 across a fight and makes a whole axis of targeting visible.
+- **Re-verified after the repair:** reverting Cyrra's mode now moves exactly her five lines and
+  nobody else's. That is the sweep doing the job it was built for, on the change that exposed it.
+
 **Shipped: the authored-hero sweep, and the reason it had to exist.** The 24-stage fingerprint
 sweep fields a fresh profile, which deploys three starters — so it measured **three of the
 twenty-one authored heroes**. "0 of 72 fingerprints moved" was therefore true of a change that

@@ -5333,7 +5333,7 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
-                    case TargetMode.HighestDoTDamageEnemy:
+                    case TargetMode.HighestDoTDealtEnemy:
                     {
                         for (int i = 0; i < _units.Count; i++)
                         {
@@ -5342,6 +5342,33 @@ namespace Emberfall.Core.Combat
                             if (picked == null || u.DoTDamageDealtThisRound > picked.DoTDamageDealtThisRound
                                 || (u.DoTDamageDealtThisRound == picked.DoTDamageDealtThisRound && u.Slot < picked.Slot))
                                 picked = u;
+                        }
+                        break;
+                    }
+
+                    // The carried-DoT pick, ranked with the same helper a removal sums, so the
+                    // enemy chosen as "the most to remove" and the amount credited for removing it
+                    // are two readings of one number rather than two implementations of one idea.
+                    //
+                    // An enemy carrying nothing scores zero and is never preferred over one that
+                    // carries something; when NO enemy carries any DoT the mode picks nobody,
+                    // which is the honest answer. That is deliberately unlike the stat picks
+                    // above, where every living enemy is a candidate because every one has a stat.
+                    case TargetMode.HighestPendingDoTEnemy:
+                    {
+                        float best = 0f;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            float pending = 0f;
+                            for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s]);
+                            if (pending <= 0f) continue;
+                            if (picked == null || pending > best || (pending == best && u.Slot < picked.Slot))
+                            {
+                                picked = u;
+                                best = pending;
+                            }
                         }
                         break;
                     }

@@ -5104,11 +5104,12 @@ namespace Emberfall.DevHarness
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
                                "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
-                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
+                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDealtEnemy",
                                "BroadcastVictim",
                                "HighestMyMarkStacksEnemy",
                                "PreviousTarget", "LinkedUnit",
-                               "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource" },
+                               "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
+                               "HighestPendingDoTEnemy" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5144,6 +5145,7 @@ namespace Emberfall.DevHarness
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
             CheckValidatorFileParity();
+            CheckTargetModeStringsParse(db);
             Line("");
         }
 
@@ -16084,6 +16086,7 @@ namespace Emberfall.DevHarness
             CheckGap8BroadcastSource();
             CheckGap9NotDamagedByMe();
             CheckRemovedValueScalar();
+            CheckPendingDotTargeting();
             Line("");
         }
 
@@ -17538,6 +17541,24 @@ namespace Emberfall.DevHarness
         /// heavy hitter that aims at the weakest ally, a healer, a Burn applier, a self-buffer and
         /// a Taunt holder. Between them they raise the damage, heal, DoT, buff-gained and anchor
         /// paths every round without any of it depending on which hero is being measured.
+        ///
+        /// THE WARDEN SMOULDERS, and that is a repair rather than flavour. The first shape of this
+        /// arena left every enemy carrying identical DoT, so a pick that reads CARRIED DoT and a
+        /// pick that falls through to the front body resolved to the same enemy - and the sweep
+        /// measurably failed to notice Cyrra's targeting being corrected from one to the other.
+        /// The back body now carries a long, shallow self-Burn nobody else has, so the enemy with
+        /// the most pending DoT is a specific and distant body. It costs it about 2000 HP of its
+        /// 300000 across a whole fight, so it perturbs the line barely at all while making a whole
+        /// axis of targeting behaviour visible.
+        ///
+        /// ITS TAUNT LASTS TWO ROUNDS AND IS NEVER RENEWED, which is the other half of the same
+        /// repair and the larger one. Re-applied every turn it made the warden a PERMANENT anchor,
+        /// and the anchor overrides every single-enemy target mode there is - so every hero that
+        /// picks one enemy resolved onto the warden regardless of what its kit asked for, and the
+        /// sweep was blind to the whole of single-target targeting. Measured, not suspected: with
+        /// the permanent Taunt standing, correcting Cyrra's active from one target mode to another
+        /// moved none of her lines. Two anchored rounds still exercise the anchor path; the rest
+        /// of the fight lets a kit aim where it says it aims.
         /// </summary>
         private static ContentDatabase BuildHeroSweepArena(ContentDatabase live)
         {
@@ -17582,11 +17603,16 @@ namespace Emberfall.DevHarness
         ] } },
     { ""id"": ""sweep_warden"", ""name"": ""SweepWarden"", ""aspect"": ""Lumen"",
       ""hp"": 300000, ""attack"": 300, ""defense"": 180, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5,
-      ""basic"": { ""id"": ""sw_ward"", ""name"": ""Stand"",
+      ""passive"": { ""id"": ""sw_ward_smoulder"", ""name"": ""Smoulder"", ""trigger"": ""BattleStart"",
         ""effects"": [
-          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.4 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"",
+            ""magnitude"": 0.05, ""duration"": 20, ""chance"": 1 },
           { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"",
             ""magnitude"": 1.0, ""duration"": 2, ""chance"": 1 }
+        ] },
+      ""basic"": { ""id"": ""sw_ward"", ""name"": ""Stand"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.4 }
         ] } }
   ]
 }";
@@ -17713,6 +17739,203 @@ namespace Emberfall.DevHarness
                 }
             }
             return null;
+        }
+
+        // ---- pending-DoT targeting: the enemy carrying the most, not the one dealing the most ---
+
+        /// <summary>
+        /// `HighestPendingDoTEnemy` picks the enemy with the most DoT damage still queued ON it.
+        /// The arena puts that body in the BACK slot, so a pick that merely fell through to the
+        /// front enemy cannot pass by coincidence, and gives a middle body TWO shallow Burns
+        /// against the deep body's one, so a pick ranking on entry count lands somewhere else.
+        ///
+        /// THE CONTROL IS THE BUG, REPRODUCED. Cyrra's active was authored against
+        /// HighestDoTDealtEnemy - "the enemy that has DEALT the most DoT this round" - while her
+        /// text asks for "the enemy with the highest remaining Burden damage". Aiming the identical
+        /// effect at the old mode here strips the FRONT body, and the reason is worth stating
+        /// because it is worse than a near miss: DoTDamageDealtThisRound resets for everybody at
+        /// BeginRound and only fills when a unit carrying that enemy's Burn takes its own turn, so
+        /// at the caster's turn it is normally zero across the whole enemy line and the mode
+        /// collapses onto the first living body. Cyrra was not stripping the wrong burning enemy;
+        /// she was stripping the front one. And because she converts what the removed DoT WOULD
+        /// have dealt into healing, that decided how much she healed, not merely where she aimed.
+        /// </summary>
+        private static void CheckPendingDotTargeting()
+        {
+            BattleResult pending = RunPendingDotArena("HighestPendingDoTEnemy");
+            BattleResult dealt = RunPendingDotArena("HighestDoTDealtEnemy");
+            if (pending == null || dealt == null) { Check(false, "pending-DoT arena built"); return; }
+
+            string firstPending = FirstBurnStripTarget(pending);
+            string firstDealt = FirstBurnStripTarget(dealt);
+
+            Check(firstPending == "PdDeepBurn",
+                  "HighestPendingDoTEnemy strips the enemy CARRYING the most pending DoT, which sits "
+                  + "in the BACK slot so a front-enemy fallthrough cannot pass by coincidence (first "
+                  + "strip landed on " + firstPending + ")");
+            Check(firstPending != "PdShallow",
+                  "and it ranks on pending DAMAGE rather than on how many DoT entries a body holds - "
+                  + "the two-Burn body is passed over for the one-Burn body with more left to deal "
+                  + "(first strip landed on " + firstPending + ", not PdShallow)");
+            Check(firstDealt == "PdDealer" && firstDealt != firstPending,
+                  "control: the same effect aimed at HighestDoTDealtEnemy strips the FRONT body "
+                  + "instead (" + firstDealt + "), because every enemy's DoT-dealt counter is zero at "
+                  + "the caster's turn - that mode collapses onto the first living enemy, which is "
+                  + "what Cyrra's active was actually doing");
+        }
+
+        /// <summary>The name of the unit the first externally-caused Burn removal landed on, or
+        /// "(none)". A strip is a StatusExpired naming Burn whose source is somebody else; a
+        /// natural expiry reports the carrier as its own source.</summary>
+        private static string FirstBurnStripTarget(BattleResult r)
+        {
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusExpired || e.Status != StatusKind.Burn) continue;
+                if (e.SourceId == e.TargetId) continue;
+                for (int u = 0; u < r.Units.Count; u++)
+                    if (r.Units[u].Id == e.TargetId) return r.Units[u].Name;
+            }
+            return "(none)";
+        }
+
+        private static BattleResult RunPendingDotArena(string mode)
+        {
+            // Slot order is load-bearing. PdDealer is FRONT, so a mode that falls through to the
+            // first living enemy lands on it; PdDeepBurn is BACK and carries the deepest Burn, so
+            // only a pick that genuinely reads pending damage finds it. PdShallow sits between them
+            // with TWO Burns worth less between them than the deep one alone.
+            //
+            // All three carry a Burn, deliberately. An earlier shape left the front body clean and
+            // the control stripped NOTHING, which proves the old mode missed the burning enemies
+            // but not which body it actually chose. Giving the front body its own Burn makes both
+            // runs strip something, so the two picks can be compared as two named bodies.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""pd_caster"", ""name"": ""PdCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 1000, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""pd_basic"", ""name"": ""Strip"",
+        ""effects"": [
+          { ""kind"": ""RemoveStatus"", ""target"": """ + mode + @""", ""status"": ""Burn"", ""hits"": 1 }
+        ] },
+      ""active"": { ""id"": ""pd_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""pd_seed"", ""name"": ""Seed The Burns"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.5, ""duration"": 9, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""ApplyStatus"", ""target"": ""HighestHpEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.05, ""duration"": 2, ""chance"": 1, ""bypassResist"": true,
+            ""stackOnReapply"": true, ""maxStacks"": 2, ""hits"": 2 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""HighestAttackEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.2, ""duration"": 2, ""chance"": 1, ""bypassResist"": true }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""pd_dealer"", ""name"": ""PdDealer"", ""aspect"": ""Ember"",
+      ""hp"": 600000, ""attack"": 900, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pdl"", ""name"": ""Scald"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.6, ""duration"": 2, ""chance"": 1, ""bypassResist"": true }
+        ] } },
+    { ""id"": ""pd_shallow"", ""name"": ""PdShallow"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pds"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""pd_deep"", ""name"": ""PdDeepBurn"", ""aspect"": ""Ember"",
+      ""hp"": 400000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pdd"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""pd_ch"", ""name"": ""PendingDot"", ""stages"": [
+    { ""id"": ""pd_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""pd_dealer"", ""level"": 1 }, { ""id"": ""pd_shallow"", ""level"": 1 },
+      { ""id"": ""pd_deep"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(6), "pending dot");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("pd_caster"), 1));
+            return RunWith(db, db.GetStage("pd_arena"), 9202, team);
+        }
+
+        /// <summary>
+        /// EVERY authored target string round-trips through TargetMode.
+        ///
+        /// EnumUtil.Parse falls back to the default rather than throwing, so content naming a mode
+        /// this enum does not know loads clean, resolves to FrontEnemy and is silently wrong. That
+        /// is the same silent-fallback shape the role scan was built for after it shipped broken
+        /// once, and this pass made it live: HighestDoTDamageEnemy was renamed, so any file still
+        /// naming the old spelling would now aim at the front enemy without a word.
+        ///
+        /// Reads the JSON text rather than the parsed database, because the parsed database is
+        /// exactly where the evidence has already been destroyed - by then a bad string has become
+        /// FrontEnemy and is indistinguishable from an authored one. Asserts it read something
+        /// before reporting a verdict, for the reason the role scan does: a guard that inspects
+        /// nothing passes everything.
+        /// </summary>
+        private static void CheckTargetModeStringsParse(ContentDatabase db)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null)
+            {
+                Line("  [note] content directory not found next to this binary, so the target-mode "
+                     + "string scan did not run.");
+                return;
+            }
+
+            string[] files = { "heroes.json", "enemies.json" };
+            List<string> bad = new List<string>();
+            int scanned = 0;
+            for (int f = 0; f < files.Length; f++)
+            {
+                string text;
+                try { text = File.ReadAllText(Path.Combine(dir, files[f])); }
+                catch (Exception) { continue; }
+
+                string[] keys = { "\"target\"", "\"secondaryTarget\"", "\"ledgerAutoReleaseTarget\"" };
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    int at = 0;
+                    while (true)
+                    {
+                        at = text.IndexOf(keys[k], at, StringComparison.Ordinal);
+                        if (at < 0) break;
+                        at += keys[k].Length;
+                        int open = text.IndexOf('"', at);
+                        int colon = text.IndexOf(':', at);
+                        if (open < 0 || colon < 0 || open < colon) { }
+                        int q1 = text.IndexOf('"', colon < 0 ? at : colon);
+                        if (q1 < 0) break;
+                        int q2 = text.IndexOf('"', q1 + 1);
+                        if (q2 < 0) break;
+                        string value = text.Substring(q1 + 1, q2 - q1 - 1);
+                        scanned++;
+                        bool known = false;
+                        string[] names = Enum.GetNames(typeof(TargetMode));
+                        for (int n = 0; n < names.Length; n++) if (names[n] == value) { known = true; break; }
+                        if (!known && !bad.Contains(value)) bad.Add(files[f] + ": '" + value + "'");
+                    }
+                }
+            }
+
+            Check(scanned > 0,
+                  "the target-mode scan actually read " + scanned + " authored target string(s) "
+                  + "before reporting - a scan that read none would pass by inspecting nothing");
+            Check(bad.Count == 0,
+                  bad.Count == 0
+                    ? "every authored target string round-trips through TargetMode, so none of them "
+                      + "is silently resolving to FrontEnemy"
+                    : bad.Count + " authored target string(s) are not TargetMode members and are "
+                      + "silently falling back to FrontEnemy: " + string.Join(", ", bad.ToArray()));
         }
     }
 }

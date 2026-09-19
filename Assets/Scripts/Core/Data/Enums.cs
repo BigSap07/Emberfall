@@ -171,11 +171,26 @@ namespace Emberfall.Core.Data
         /// <summary>The three lowest-HP allies by ratio, same ordering AlliesByHp uses.</summary>
         ThreeLowestHpAllies,
 
-        /// <summary>The living enemy that has dealt the most total damage this round.</summary>
+        /// <summary>The living enemy that has DEALT the most total damage this round. Hale's
+        /// "move Quarry to the enemy that dealt the most damage that round".</summary>
         HighestDamageDealtEnemy,
 
-        /// <summary>The living enemy that has dealt the most DoT damage this round.</summary>
-        HighestDoTDamageEnemy,
+        /// <summary>
+        /// The living enemy that has DEALT the most damage-over-time this round - damage it
+        /// inflicted, reading CombatUnit.DoTDamageDealtThisRound.
+        ///
+        /// RENAMED FROM HighestDoTDamageEnemy, same ordinal, because that name was the trap and
+        /// it caught somebody. "DoT damage enemy" reads just as naturally as "the enemy with the
+        /// most DoT ON it", which is the opposite question and the one Cyrra's active actually
+        /// asks - it was authored against this mode and stripped a Burn off whichever enemy had
+        /// been burning the party hardest, not off the one carrying the most Burn. For the
+        /// carried-DoT question see HighestPendingDoTEnemy.
+        ///
+        /// The meaning is unchanged and deliberately so: it is the DoT half of a pair whose total
+        /// half Hale uses correctly, and redefining one half would leave a pair where one member
+        /// means "dealt" and the other "carried". No shipped content uses this member now.
+        /// </summary>
+        HighestDoTDealtEnemy,
 
         // ---------- batch three ----------
 
@@ -288,7 +303,29 @@ namespace Emberfall.Core.Data
         /// the same window discipline DefeatedUnit and ThresholdUnit keep. Before the anchor,
         /// because the causing unit can stand on either side.
         /// </summary>
-        BroadcastSource
+        BroadcastSource,
+
+        /// <summary>
+        /// The living enemy carrying the most PENDING damage-over-time: the damage its DoT
+        /// entries would still deal if left alone, summed - per-tick magnitude times rounds left.
+        ///
+        /// The carried-DoT question, as against HighestDoTDealtEnemy's dealt-DoT one. "Removes
+        /// Burden from the enemy with the highest remaining Burden damage" is this and has no
+        /// other spelling: every other enemy pick ranks on a stat, a status count or damage
+        /// output, and none of them can see how much a DoT has left to do.
+        ///
+        /// It matters to the kit that asked for it rather than being a nicety. Cyrra strips a
+        /// Burden and converts what it WOULD have dealt into healing, so the pick decides the
+        /// size of the conversion; choosing the wrong enemy does not merely retarget her active,
+        /// it changes how much she heals.
+        ///
+        /// Ranks with Sim.RemainingDotDamage, the same helper _lastRemovedValue sums when a
+        /// removal happens, so "which enemy has the most to remove" and "how much was removed"
+        /// cannot drift apart. An enemy carrying no DoT contributes zero and is never picked over
+        /// one that does; nobody at all when no enemy carries any, which is the honest answer
+        /// rather than falling through to the front body.
+        /// </summary>
+        HighestPendingDoTEnemy
     }
 
     public enum EffectKind

@@ -326,7 +326,8 @@ namespace Emberfall.Core.Combat
         /// <summary>Total damage this unit dealt this round, for HighestDamageDealtEnemy.</summary>
         public float DamageDealtThisRound;
 
-        /// <summary>DoT tick damage this unit dealt this round, for HighestDoTDamageEnemy.</summary>
+        /// <summary>DoT tick damage this unit DEALT this round, for HighestDoTDealtEnemy. Not what
+        /// it is carrying - that is read per status by Sim.RemainingDotDamage.</summary>
         public float DoTDamageDealtThisRound;
 
         /// <summary>Per-stack output modifier, copied from PassiveDef at build time.</summary>

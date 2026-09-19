@@ -57,7 +57,7 @@ TARGET_MODES = {
     "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
     "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
     "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
-    "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
+    "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDealtEnemy",
     "BroadcastVictim",
     # HighestMyMarkStacksEnemy was in Enums.cs and the harness's own parity list but had
     # never been added here, so a kit authoring it validated as a bad TargetMode. Found and
@@ -68,6 +68,9 @@ TARGET_MODES = {
     # nine-gap pass: naming the other end of a link, the whole set, and the unit that
     # caused a broadcast.
     "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
+    # the enemy carrying the most PENDING DoT, as against HighestDoTDealtEnemy
+    # which is the one that has DEALT the most.
+    "HighestPendingDoTEnemy",
 }
 
 # ---------------------------------------------------------------------------
