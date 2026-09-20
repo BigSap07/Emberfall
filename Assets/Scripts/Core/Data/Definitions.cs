@@ -866,7 +866,11 @@ namespace Emberfall.Core.Data
     /// </summary>
     public sealed class TalentOverrideDef
     {
-        /// <summary>"basic", "active", "passive1", or "passive2".</summary>
+        /// <summary>
+        /// "basic", "active", or the JSON KEY of a passive - "passive", "passive1", "passive2",
+        /// and where a hero authors both shapes, "skills.passive1" / "skills.passive2" or
+        /// "passives.N". Not a position: see PassiveDef.SlotKey.
+        /// </summary>
         public string Ability = "";
 
         /// <summary>0-based index into the ability's Effects list.</summary>
@@ -901,7 +905,7 @@ namespace Emberfall.Core.Data
     /// </summary>
     public sealed class TalentAppendDef
     {
-        /// <summary>"basic", "active", "passive1", or "passive2".</summary>
+        /// <summary>"basic", "active", or a passive's JSON key. See TalentOverrideDef.Ability.</summary>
         public string Ability = "";
 
         /// <summary>The full effect to append.</summary>
@@ -937,6 +941,23 @@ namespace Emberfall.Core.Data
     public sealed class PassiveDef
     {
         public string Id = "";
+
+        /// <summary>
+        /// THE JSON KEY THIS PASSIVE WAS READ FROM: "passive", "passive1", "passive2",
+        /// "skills.passive1", "skills.passive2", or "passives.N" for the overflow list.
+        ///
+        /// It exists so a talent can address a passive BY THE NAME ITS AUTHOR WROTE. A talent slot
+        /// used to be a position in the built list, and the list begins with the stat block a
+        /// described passive was split into - so "passive2" meant the SECOND ENTRY, which is the
+        /// author's passive1, and every talent on the roster was written one short. That produced
+        /// the same defect three times: dropped overrides, overrides setting a field the effect it
+        /// landed on never reads, and appends reading a subject their host never publishes. Three
+        /// detectors were built for it, and none could see the fourth case - a wrong slot that
+        /// happens to be a real passive, which fires and looks entirely correct.
+        ///
+        /// A key cannot be off by one. That is the whole argument.
+        /// </summary>
+        public string SlotKey = "";
         public string Name = "";
         public string Description = "";
         public PassiveTrigger Trigger = PassiveTrigger.None;
@@ -1263,24 +1284,26 @@ namespace Emberfall.Core.Data
         /// </summary>
         private void ReadPassives(JsonValue j)
         {
-            AddPassive(PassiveDef.FromJson(j["passive"]));
-            AddPassive(PassiveDef.FromJson(j["passive1"]));
-            AddPassive(PassiveDef.FromJson(j["passive2"]));
+            AddPassive(PassiveDef.FromJson(j["passive"]), "passive");
+            AddPassive(PassiveDef.FromJson(j["passive1"]), "passive1");
+            AddPassive(PassiveDef.FromJson(j["passive2"]), "passive2");
 
             JsonValue skills = j["skills"];
-            AddPassive(PassiveDef.FromJson(skills["passive1"]));
-            AddPassive(PassiveDef.FromJson(skills["passive2"]));
+            AddPassive(PassiveDef.FromJson(skills["passive1"]), "skills.passive1");
+            AddPassive(PassiveDef.FromJson(skills["passive2"]), "skills.passive2");
 
             // The overflow list, last so the named slots keep the indices they have always had -
             // talents address a passive BY INDEX, and reading this first would renumber every
             // talent in the file. Empty on every unit in content until a kit needs a sixth.
             List<JsonValue> extra = j.GetList("passives");
-            for (int i = 0; i < extra.Count; i++) AddPassive(PassiveDef.FromJson(extra[i]));
+            for (int i = 0; i < extra.Count; i++)
+                AddPassive(PassiveDef.FromJson(extra[i]), "passives." + i);
         }
 
-        private void AddPassive(PassiveDef passive)
+        private void AddPassive(PassiveDef passive, string slotKey)
         {
             if (passive == null) return;
+            passive.SlotKey = slotKey;
             if (!string.IsNullOrEmpty(passive.Id))
                 for (int i = 0; i < Passives.Count; i++)
                     if (Passives[i].Id == passive.Id) return;
