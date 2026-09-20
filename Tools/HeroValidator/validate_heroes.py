@@ -43,6 +43,8 @@ STATUS_KINDS = {
     "HealSuppression", "StatusGainSuppression",
     "Resolve2",
     "Linked",
+    # batch eight: the partial sibling of HealSuppression.
+    "HealingReduction",
 }
 # A standing rule forbidding a unit one class of target. Declared on a passive as
 # "targetBan"; the harness reads this set out of this file and compares it to Enums.cs,
@@ -75,6 +77,8 @@ TARGET_MODES = {
     # the enemy carrying the most PENDING DoT, as against HighestDoTDealtEnemy
     # which is the one that has DEALT the most.
     "HighestPendingDoTEnemy", "LowestEnergyEnemy",
+    # batch eight: the two bodies a SwapTurnOrder moved.
+    "SwapAdvancedUnit", "SwapDelayedUnit",
 }
 
 # ---------------------------------------------------------------------------

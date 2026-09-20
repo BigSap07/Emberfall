@@ -705,6 +705,58 @@ copier's body out of the sources and asserts every field is assigned — 149 fie
 with the four `AddOrRefresh` sets whitelisted for `MoveStatus` and a list counted as copied when
 the body adds to it.
 
+### Open: `content/batch-eight-unblock` — unmerged, off `main`
+
+**Every clause batch seven authored as nothing is authored now.** 72 of 72 stage fingerprints
+unmoved; **5 of 145 sweep lines moved, all of them Merek's**, and that is the whole of the
+movement in this pass.
+
+#### Ten gaps, built because a clause asked and not because enough clauses asked
+
+The judgement that some of these were not worth building for a single want was withdrawn, so
+where a gap serves one clause it was built anyway and is marked here:
+
+| gap | built as | wants |
+|---|---|---|
+| absolute Energy | `EnergyAtLeast` / `EnergyBelow` | Oris II, both halves |
+| partial healing reduction | `StatusKind.HealingReduction`, read beside `HealSuppression` | Sylven III, Demos |
+| readable turn-shift amount | `_lastTurnShift` per caster + `scaleByLastShift` | Merek p1 — **one clause** |
+| naming the unit a swap moved | `SwapAdvancedUnit` / `SwapDelayedUnit` | Merek's active and II |
+| magnitude change on transfer | `transferMagnitude` | Sylven p1 — **one clause** |
+| healed-or-shielded since my turn | `SubjectHealedSinceMyTurn` / `SubjectShieldedSinceMyTurn` | Kiva's active — **one clause** |
+| a cap in the caster's currency | `attackCap` | Kiva's active, Merek p1 |
+| the round's own boundary | `PassiveTrigger.RoundStart` | Merek p2 — **one clause** |
+| the far end of an enemy cast | `PassiveTrigger.OnEnemyActiveResolved` | Merek's basic — **one clause** |
+| a cadence on a one-off blow | **no engine work** — `PassiveLimit.EveryNRounds` already existed, and the talent carries both the marker it reads and the limit | Oris III |
+
+**`SubjectRoleIs` stays at ordinal 40.** The first attempt inserted the four new conditions before
+it and moved it to 44; ten shipped effects of Vaelis's read that member, so they were moved to the
+end of the enum and a pin now asserts it.
+
+#### What moved, and what did not
+
+**Merek's five lines**, for four changed clauses at once: First Claim is designated at the start of
+the round rather than at his turn (`merek_first_claim` 25 → 28 fires), Anticipated answers the far
+end of a cast, the swap now marks the body it pushed back, and his basic carries the
+recorded-progress blow (`merek_unsettled_timing` fires twice in the sweep).
+
+**Kiva is a starter and her stage fingerprints did not move**, which is worth stating rather than
+assuming: her changed gate is "shielded or healed since my last turn", and she acts before the
+arena's healer every round, so the stamp it reads is always the previous round's and the gate is
+false either way. The `attackCap` under it does not bind at that scale either.
+
+**Sylven's and Oris's lines did not move** because everything they gained is a talent, and the
+sweep selects none.
+
+#### Two gaps from the list that are NOT here
+
+Gaps 12 and 13 of the batch-seven survey — redirect immunity and Energy-delta ranking — serve
+clauses that no longer exist: batch seven's description edits removed Kiva's "cannot receive
+damage redirection" (nothing in `enemies.json` can protect another enemy, so it guarded nothing)
+and reworded Oris III away from "the enemy whose Energy changed the most". Building them would
+mean restoring two clauses of Pinoy's text that were deliberately retired. Named here rather than
+done quietly; if those clauses come back, both gaps are still unbuilt.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a
