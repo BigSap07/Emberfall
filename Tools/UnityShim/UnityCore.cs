@@ -151,6 +151,11 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
         public Vector2 min { get { return new Vector2(x, y); } }
         public Vector2 size { get { return new Vector2(width, height); } }
+        public float xMin { get { return x; } }
+        public float yMin { get { return y; } }
+        public float xMax { get { return x + width; } }
+        public float yMax { get { return y + height; } }
+        public Vector2 center { get { return new Vector2(x + width * 0.5f, y + height * 0.5f); } }
     }
 
     public struct Color
