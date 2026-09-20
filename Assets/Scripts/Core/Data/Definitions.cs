@@ -501,6 +501,17 @@ namespace Emberfall.Core.Data
         public int TransferDuration;
 
         /// <summary>
+        /// Multiplies the magnitude of the status TransferStatus relocates. Zero (the default)
+        /// leaves it alone, which is what every transfer authored before this did.
+        ///
+        /// The one thing a move was not allowed to do, and one clause asks for it in as many
+        /// words: "transferred Bleed deals 20% more damage". A move creating value is exactly what
+        /// MoveStatus's own comment forbids - so this is authored, explicit, and on the single-kind
+        /// transfer only, where the author knows what they are re-sizing.
+        /// </summary>
+        public float TransferMagnitude;
+
+        /// <summary>
         /// Stamps the relocated or applied entry so ExtendStatus will not lengthen it.
         ///
         /// A fact about the ENTRY rather than about whoever tries to extend it, so it travels with
@@ -511,6 +522,27 @@ namespace Emberfall.Core.Data
         /// event that reports an extension reports what actually moved.
         /// </summary>
         public bool PreventExtend;
+
+        /// <summary>
+        /// Ceiling on this effect's resolved amount, as a multiple of the CASTER's Attack. Zero
+        /// (the default) is uncapped.
+        ///
+        /// MaxHpCap and MissingHpCap both ceiling a term against the TARGET's health, which is the
+        /// wrong unit for "up to 130% of Attack" - a cap a description writes in the caster's own
+        /// currency. Applied to the whole resolved amount rather than to one term, because that is
+        /// what "up to" means in the sentences that ask for it.
+        /// </summary>
+        public float AttackCap;
+
+        /// <summary>
+        /// Scales this effect off the turn progress the caster's last shift actually realised, as
+        /// a fraction, times Attack.
+        ///
+        /// The odd one of the ScaleBy family: the others carry an absolute amount and this carries
+        /// a fraction, so it is multiplied by Attack to become one. That is what the clause asking
+        /// for it says - "35% of the recorded amount as a percentage of Attack".
+        /// </summary>
+        public bool ScaleByLastShift;
 
         public static EffectDef FromJson(JsonValue j)
         {
@@ -595,6 +627,9 @@ namespace Emberfall.Core.Data
             e.ScaleByLastDamage = j.GetBool("scaleByLastDamage", false);
             e.MoveDuration = Math.Max(0, j.GetInt("moveDuration", 0));
             e.TransferDuration = Math.Max(0, j.GetInt("transferDuration", 0));
+            e.TransferMagnitude = j.GetFloat("transferMagnitude", 0f);
+            e.AttackCap = j.GetFloat("attackCap", 0f);
+            e.ScaleByLastShift = j.GetBool("scaleByLastShift", false);
             e.PreventExtend = j.GetBool("preventExtend", false);
             return e;
         }
@@ -699,6 +734,9 @@ namespace Emberfall.Core.Data
             c.ScaleByLastDamage = ScaleByLastDamage;
             c.MoveDuration = MoveDuration;
             c.TransferDuration = TransferDuration;
+            c.TransferMagnitude = TransferMagnitude;
+            c.AttackCap = AttackCap;
+            c.ScaleByLastShift = ScaleByLastShift;
             c.PreventExtend = PreventExtend;
             return c;
         }

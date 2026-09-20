@@ -317,6 +317,12 @@ namespace Emberfall.Core.Combat
         public int LastTurnRound;
         public int LastDamagedRound;
 
+        /// <summary>The round this unit was last healed in, and the round it last gained a Shield.
+        /// Siblings of LastDamagedRound, written at the same kind of moment and read by the two
+        /// conditions that ask "since my last turn" about something other than a blow.</summary>
+        public int LastHealedRound;
+        public int LastShieldedRound;
+
         /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
         /// Two flags rather than a list: no description asks about more than the last two.</summary>
         public bool LastActionWasActive;

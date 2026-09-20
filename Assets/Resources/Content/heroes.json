@@ -587,18 +587,23 @@
           {
             "kind": "RemoveStatus",
             "target": "EnemyWithMyMark",
-            "condition": "HasShield",
-            "conditionOn": "Target",
             "hits": 1,
-            "status": "Shield"
+            "status": "Shield",
+            "condition": "SubjectShieldedSinceMyTurn",
+            "conditionOn": "Target",
+            "condition3": "SubjectHealedSinceMyTurn",
+            "conditionOn3": "Target"
           },
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "condition": "HasShield",
-            "conditionOn": "Target",
             "power": 0.0,
-            "targetMissingHpRatio": 0.1
+            "targetMissingHpRatio": 0.1,
+            "condition": "SubjectShieldedSinceMyTurn",
+            "conditionOn": "Target",
+            "condition3": "SubjectHealedSinceMyTurn",
+            "conditionOn3": "Target",
+            "attackCap": 1.3
           },
           {
             "kind": "ApplyStatus",
@@ -5703,7 +5708,8 @@
             "preventExtend": true,
             "secondaryTarget": "HighestHpEnemy",
             "status": "Burn",
-            "transferDuration": 2
+            "transferDuration": 2,
+            "transferMagnitude": 1.2
           }
         ]
       },
@@ -5787,7 +5793,24 @@
           "id": "sylven_nothing_heals_cleanly",
           "name": "Nothing Heals Cleanly",
           "trigger": "None",
-          "effects": []
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "bypassResist": true,
+                "chance": 1,
+                "condition": "StoredStatusMatches",
+                "conditionOn": "BroadcastSubject",
+                "conditionStatus": "Ledger",
+                "duration": 2,
+                "magnitude": 0.2,
+                "status": "HealingReduction"
+              }
+            }
+          ]
         }
       }
     },
@@ -6878,6 +6901,19 @@
             "chance": 1,
             "duration": 2,
             "status": "Mark"
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestEnergyEnemy",
+            "attackCap": 0.7,
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 2,
+            "conditionOn": "Caster",
+            "conditionValue": 1,
+            "consumesResolve": true,
+            "counterIndex": 2,
+            "power": 0.35,
+            "scaleByLastShift": true
           }
         ]
       },
@@ -6894,6 +6930,15 @@
           {
             "kind": "SwapTurnOrder",
             "target": "FrontEnemy"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "SwapDelayedUnit",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "SkillDamageDown"
           }
         ]
       },
@@ -6928,7 +6973,7 @@
       "passive1": {
         "id": "merek_anticipated",
         "name": "Interjecting Clause (Anticipated)",
-        "trigger": "OnEnemyActive",
+        "trigger": "OnEnemyActiveResolved",
         "oncePerBattle": false,
         "effects": [
           {
@@ -6943,7 +6988,7 @@
       "passive2": {
         "id": "merek_first_claim",
         "name": "Priority Inversion",
-        "trigger": "TurnStart",
+        "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
           {
@@ -6970,6 +7015,22 @@
               "conditionOn": "BroadcastSubject",
               "conditionStatus": "MarkAlt",
               "magnitude": 0.2
+            }
+          ]
+        },
+        "passive2": {
+          "id": "merek_unsettled_timing",
+          "name": "Unsettled Timing",
+          "trigger": "OnTurnDelayed",
+          "limit": "OncePerRound",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "GainResolve",
+              "target": "Self",
+              "counterIndex": 2,
+              "duration": 99,
+              "maxStacks": 1
             }
           ]
         }
@@ -7007,7 +7068,21 @@
           "id": "merek_reordered_agenda",
           "name": "Reordered Agenda",
           "trigger": "None",
-          "effects": []
+          "effects": [],
+          "appends": [
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "SwapAdvancedUnit",
+                "bypassResist": true,
+                "chance": 1,
+                "duration": 2,
+                "magnitude": 0.1,
+                "status": "DefenseDown"
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "merek_no_first_move",
@@ -7301,23 +7376,63 @@
           "id": "oris_change_the_key",
           "name": "Change the Key",
           "trigger": "None",
-          "effects": []
+          "effects": [],
+          "appends": [
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "AllEnemies",
+                "condition": "EnergyAtLeast",
+                "conditionValue": 71,
+                "flat": -15
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "condition": "EnergyBelow",
+                "conditionOn": "Target",
+                "conditionValue": 29,
+                "flat": 10
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "oris_open_ending",
           "name": "Open Ending",
-          "trigger": "None",
-          "effects": [],
+          "trigger": "AfterBasicAttack",
+          "limit": "EveryNRounds",
+          "limitRounds": 2,
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "LastTarget",
+              "condition": "StatusStacksAtLeast",
+              "conditionCounterIndex": 3,
+              "conditionOn": "Caster",
+              "conditionValue": 1,
+              "consumesResolve": true,
+              "counterIndex": 3,
+              "power": 0.9
+            }
+          ],
           "appends": [
             {
               "ability": "basic",
               "effect": {
-                "kind": "Damage",
-                "target": "LastTarget",
+                "kind": "GainResolve",
+                "target": "Self",
                 "condition": "HasStatus",
                 "conditionOn": "Caster",
                 "conditionStatus": "MarkAlt",
-                "power": 0.9
+                "counterIndex": 3,
+                "duration": 2,
+                "maxStacks": 1
               }
             }
           ]

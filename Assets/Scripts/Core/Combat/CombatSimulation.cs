@@ -201,6 +201,26 @@ namespace Emberfall.Core.Combat
                     return caster != null && subject.LastDamagedRound > 0
                         && subject.LastDamagedRound >= caster.LastTurnRound;
 
+                // The heal and shield siblings of the line above, round-granular in exactly the
+                // same way and carrying the same approximation: two units acting inside one round
+                // are not ordered against each other by it.
+                case EffectCondition.SubjectHealedSinceMyTurn:
+                    return caster != null && subject.LastHealedRound > 0
+                        && subject.LastHealedRound >= caster.LastTurnRound;
+
+                case EffectCondition.SubjectShieldedSinceMyTurn:
+                    return caster != null && subject.LastShieldedRound > 0
+                        && subject.LastShieldedRound >= caster.LastTurnRound;
+
+                // Absolute Energy, read raw - nothing modifies it, and it is already the number
+                // the player watches fill. CasterStatBelowTarget compares two units and could not
+                // answer "more than 70", which is a question about one.
+                case EffectCondition.EnergyAtLeast:
+                    return subject.Energy >= effect.ConditionValue;
+
+                case EffectCondition.EnergyBelow:
+                    return subject.Energy <= effect.ConditionValue;
+
                 case EffectCondition.SubjectIsMyPreviousTarget:
                     return caster != null && caster.PreviousTargetId >= 0
                         && caster.PreviousTargetId == subject.Id;
@@ -546,6 +566,16 @@ namespace Emberfall.Core.Combat
             // ---------- runtime values: set at the moment they happen, read by ScaleBy* ----------
             private readonly Dictionary<int, float> _lastLedgerRelease = new Dictionary<int, float>();
             private float _lastRedirectAmount;
+
+            /// <summary>The two bodies the last SwapTurnOrder moved, named by the target modes that
+            /// ask about them. Null outside the ability that performed the swap.</summary>
+            private CombatUnit _swapAdvanced;
+            private CombatUnit _swapDelayed;
+
+            /// <summary>The turn-progress fraction each caster's last shift actually realised.
+            /// Keyed per caster from the start, the way _lastMoved is, so two units shifting in one
+            /// round cannot answer for each other.</summary>
+            private readonly Dictionary<int, float> _lastTurnShift = new Dictionary<int, float>();
             /// <summary>
             /// WHAT the last Cleanse, Dispel or RemoveStatus took off a unit, as a damage amount -
             /// not how many entries it took.
@@ -755,6 +785,12 @@ namespace Emberfall.Core.Combat
                     roundEvent.Value = _round;
 
                     for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
+
+                    // The round's own boundary, before anybody acts. Raised on every living unit
+                    // rather than broadcast to a side, because "at the start of each round" is a
+                    // statement about the clock and not about either team.
+                    for (int i = 0; i < _units.Count; i++)
+                        if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundStart, 0);
 
                     // The list is live and the cursor is a field rather than a loop local, so an
                     // effect resolving mid-round can move the part of the order that has not
@@ -1163,6 +1199,20 @@ namespace Emberfall.Core.Combat
                         CombatUnit prevLT = _lastTarget;
                         ResolveAbility(unit, unit.Active, 0);
                         _lastTarget = prevLT;
+                    }
+
+                    // AND THE OTHER END OF THE CAST. OnEnemyActive is raised before it, on purpose,
+                    // so a passive answering it acts on the board the caster is about to hit; this
+                    // is for the clauses whose text says "after the skill resolves", and the two
+                    // see the board either side of everything the active did. Guarded on the
+                    // battle still running, so a cast that ended the fight does not raise a
+                    // trigger into a finished board.
+                    if (unit.Alive && !IsBattleOver())
+                    {
+                        CombatUnit prevResolved = _broadcastSubject;
+                        _broadcastSubject = unit;
+                        BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActiveResolved, 0, null);
+                        _broadcastSubject = prevResolved;
                     }
                 }
                 else
@@ -1779,6 +1829,13 @@ namespace Emberfall.Core.Combat
                 // up a stale reading would be a different ability every time it fired.
                 int prevLastDamage = _lastDamageDealt;
                 _lastDamageDealt = 0;
+                // Cleared and restored on the same boundary, for the same reason: an effect that
+                // reads "the body the swap moved" must read this ability's swap or nobody, never
+                // a body a previous turn moved.
+                CombatUnit prevSwapAdvanced = _swapAdvanced;
+                CombatUnit prevSwapDelayed = _swapDelayed;
+                _swapAdvanced = null;
+                _swapDelayed = null;
                 for (int i = 0; i < ability.Effects.Count; i++)
                 {
                     // No relic reshapes an effect any more. Both legendary relics in the current
@@ -1998,6 +2055,11 @@ namespace Emberfall.Core.Combat
                     _lastTarget = prevLastTarget;
                     _lastDamageDealt = prevLastDamage;
                 }
+                // Restored at EVERY depth, unlike the two above: a swap the outer ability made is
+                // still the swap that ability is about, and an inner passive that made none must
+                // not leave the outer one reading nobody.
+                _swapAdvanced = prevSwapAdvanced;
+                _swapDelayed = prevSwapDelayed;
             }
 
             private void ApplyEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
@@ -2030,6 +2092,7 @@ namespace Emberfall.Core.Combat
                         if (value <= 0) break;
                         target.Shield += value;
                         target.AddOrRefresh(StatusKind.Shield, Math.Max(1, effect.Duration), 0f, source.Id);
+                        target.LastShieldedRound = _round;
                         BattleEvent e = Emit(BattleEventType.ShieldGain, source.Id, target.Id);
                         e.Value = value;
                         e.Vfx = "buff";
@@ -2841,6 +2904,10 @@ namespace Emberfall.Core.Combat
                         // extended" is a fact about the entry and has to travel with it.
                         if (effect.PreventExtend) moving.NoExtend = true;
 
+                        // And the one resize a move is allowed, because an author asked for it in
+                        // as many words. Everything else about the entry still crosses untouched.
+                        if (effect.TransferMagnitude > 0f) moving.Magnitude *= effect.TransferMagnitude;
+
                         dest.Statuses.Add(moving);
                         BattleEvent applied = Emit(BattleEventType.StatusApplied, source.Id, dest.Id);
                         applied.Status = moving.Kind;
@@ -3096,6 +3163,17 @@ namespace Emberfall.Core.Combat
                 // arriving as a second, unmitigated payload.
                 float attackTerm = ScaledTerm(effect, source);
                 float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
+                // "Up to 130% of Attack" - a ceiling written in the CASTER's currency, where
+                // MaxHpCap and MissingHpCap both ceiling against the TARGET's health. Applied to
+                // the assembled amount rather than to one term, because that is what "up to"
+                // means in the sentences asking for it, and before the output modifier for the
+                // same reason: the cap is on what the ability is worth, not on what a stack of
+                // Absence then does to it.
+                if (effect.AttackCap > 0f)
+                {
+                    float ceiling = source.EffectiveAttack * effect.AttackCap;
+                    if (raw > ceiling) raw = ceiling;
+                }
                 raw *= OutputModMultiplier(source, target, OutputModScope.AllDamage);
                 float holyBonus = source.EffectiveHolyDamage;
 
@@ -3311,6 +3389,15 @@ namespace Emberfall.Core.Combat
                 if (effect.ScaleByLastBanked) return _lastLedgerBankedStored;
                 if (effect.ScaleByLastMoved) return GetLastMoved(source.Id);
                 if (effect.ScaleByLastDamage) return _lastDamageDealt;
+                // The odd one: a FRACTION rather than an amount, so it is turned into one here
+                // against the caster's own Attack. "35% of the recorded amount as a percentage of
+                // Attack" is Power 0.35 on top of this.
+                if (effect.ScaleByLastShift)
+                {
+                    float frac;
+                    return _lastTurnShift.TryGetValue(source.Id, out frac)
+                        ? frac * source.EffectiveAttack : 0f;
+                }
                 return source.EffectiveAttack;
             }
 
@@ -4210,6 +4297,26 @@ namespace Emberfall.Core.Combat
 
                 if (target.Has(StatusKind.HealSuppression)) return;
 
+                // Partial reduction, read immediately after the total one and before anything
+                // else touches the amount. Deepest entry wins rather than the entries stacking:
+                // two 20% reductions are 20%, not 36% or 40%, which is the reading every other
+                // magnitude-bearing status in this engine takes.
+                float healCut = 0f;
+                for (int hi = 0; hi < target.Statuses.Count; hi++)
+                {
+                    StatusInstance hr = target.Statuses[hi];
+                    if (hr.Kind != StatusKind.HealingReduction) continue;
+                    if (hr.Magnitude > healCut) healCut = hr.Magnitude;
+                }
+                if (healCut > 0f)
+                {
+                    if (healCut > 1f) healCut = 1f;
+                    amount = (int)Math.Round(amount * (1f - healCut), MidpointRounding.AwayFromZero);
+                    if (amount <= 0) return;
+                }
+
+                target.LastHealedRound = _round;
+
                 CombatUnit healerUnit = FindUnit(sourceId);
                 float healMod = OutputModMultiplier(healerUnit, target, OutputModScope.HealingOnly);
                 if (healMod != 1f) amount = (int)Math.Round(amount * healMod, MidpointRounding.AwayFromZero);
@@ -5035,6 +5142,13 @@ namespace Emberfall.Core.Combat
                 // ceil and after both clamps. An effect that asked for 12% on a two-unit tail moved
                 // one place and took 50%, and the debt has to say 50% or it is describing a
                 // different event than the one that happened.
+                // The realised fraction, banked per caster so a later effect in the same ability
+                // can read what the shift actually cost. The same number BankTurnDebt uses, and
+                // for the same reason: it is what the move cost in places over the tail, after
+                // the ceil and both clamps, rather than the fraction somebody authored.
+                if (source != null)
+                    _lastTurnShift[source.Id] = (destination - at) / (float)tail;
+
                 if (banksAs != StatusKind.None && destination > at)
                 {
                     float realised = (destination - at) / (float)tail;
@@ -5125,6 +5239,13 @@ namespace Emberfall.Core.Combat
                 CombatUnit b = _order[latest];
                 _order[earliest] = b;
                 _order[latest] = a;
+
+                // A SWAP HAS TWO SUBJECTS. `b` was last in the pending order and is now first, so
+                // it moved forward; `a` went the other way. Recorded here because this is the only
+                // place that knows which was which, and read by the two target modes that name
+                // them. Cleared when the ability ends, so they resolve to nobody outside it.
+                _swapAdvanced = b;
+                _swapDelayed = a;
 
                 BattleEvent e = Emit(BattleEventType.TurnOrderShift, source != null ? source.Id : -1, b.Id);
                 e.Status = StatusKind.None;
@@ -5592,6 +5713,19 @@ namespace Emberfall.Core.Combat
                     // mis-authored effect aimed here is inert rather than wrong.
                     case TargetMode.DefeatedUnit:
                         picked = _defeated != null && _defeated != excluded ? _defeated : null;
+                        break;
+
+                    // The two bodies a swap moved. Alive-gated where the corpse above is not:
+                    // a swap moves the living, and a body that died between the swap and the
+                    // effect reading it is not a body the effect can do anything to.
+                    case TargetMode.SwapAdvancedUnit:
+                        picked = _swapAdvanced != null && _swapAdvanced.Alive && _swapAdvanced != excluded
+                            ? _swapAdvanced : null;
+                        break;
+
+                    case TargetMode.SwapDelayedUnit:
+                        picked = _swapDelayed != null && _swapDelayed.Alive && _swapDelayed != excluded
+                            ? _swapDelayed : null;
                         break;
 
                     case TargetMode.ThresholdUnit:

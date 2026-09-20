@@ -338,7 +338,21 @@ namespace Emberfall.Core.Data
         /// Energy is read raw, the same way `HighestEnergyEnemy` reads it: nothing modifies it, and
         /// it is already the number the player watches fill.
         /// </summary>
-        LowestEnergyEnemy
+        LowestEnergyEnemy,
+
+        /// <summary>
+        /// The unit the last SwapTurnOrder moved FORWARD, and the one it moved BACK.
+        ///
+        /// A swap has two subjects and the event carried only one of them, so "the enemy moved
+        /// backward gains Skill Damage Down" and "the enemy moved forward gains Defense Down" had
+        /// no way to name what they were about. Both resolve to nobody outside the ability that
+        /// performed the swap, the same way DefeatedUnit resolves to nobody outside the defeat
+        /// window: they are set by ApplySwapTurnOrder and cleared when the ability ends.
+        /// </summary>
+        SwapAdvancedUnit,
+
+        /// <summary>The unit the last SwapTurnOrder moved BACK. Sibling of SwapAdvancedUnit.</summary>
+        SwapDelayedUnit
     }
 
     public enum EffectKind
@@ -775,6 +789,7 @@ namespace Emberfall.Core.Data
         /// </summary>
         LastMovedAboveHpFraction,
 
+
         /// <summary>
         /// The subject's HeroRole is the one named by ConditionValue, read as a role ordinal.
         ///
@@ -791,7 +806,25 @@ namespace Emberfall.Core.Data
         /// That is a raw number in JSON rather than a name, which is ugly and is the existing
         /// convention; changing it would mean changing both.
         /// </summary>
-        SubjectRoleIs
+        SubjectRoleIs,
+
+        /// <summary>The subject's Energy is at or above ConditionValue, read as a raw number.</summary>
+        EnergyAtLeast,
+
+        /// <summary>The subject's Energy is at or below ConditionValue, read as a raw number.</summary>
+        EnergyBelow,
+
+        /// <summary>
+        /// The subject has been healed since the CASTER's last turn. The heal sibling of
+        /// SubjectDamagedSinceMyTurn, round-granular in exactly the same way and for the same
+        /// reason - it compares the round the subject was last healed in against the round the
+        /// caster last acted in.
+        /// </summary>
+        SubjectHealedSinceMyTurn,
+
+        /// <summary>The subject has gained a Shield since the caster's last turn. The other half
+        /// of "gained a Shield OR was healed", which is one clause wanting both.</summary>
+        SubjectShieldedSinceMyTurn
     }
 
     /// <summary>
@@ -1176,7 +1209,22 @@ namespace Emberfall.Core.Data
         /// Cleanse does not take it. Dispel does, since it removes anything not harmful - a link is
         /// a claim on a body and answering it is what Dispel is for.
         /// </summary>
-        Linked
+        Linked,
+
+        /// <summary>
+        /// Incoming healing is reduced by Magnitude, as a fraction.
+        ///
+        /// HealSuppression is the same idea at 100% and was the only one of the pair the engine
+        /// had, so "receives 20% less healing" had nowhere to go and two clauses were waiting on
+        /// it - Sylven's talent III and Demos's `No Appeal`. A second status rather than a
+        /// magnitude on the first, because HealSuppression is authored as a flag with no magnitude
+        /// by four shipped effects and giving it one would have made every one of them mean
+        /// something new.
+        ///
+        /// Harmful, so a Cleanse takes it and a Dispel does not - the same side of that line as
+        /// every other stat-down.
+        /// </summary>
+        HealingReduction
     }
 
     /// <summary>
@@ -1656,7 +1704,29 @@ namespace Emberfall.Core.Data
         /// that unit has already been told by OnRedirectReceived, and raising both on one body
         /// would have a hero listening to each answer a single event twice.
         /// </summary>
-        OnRedirectSent
+        OnRedirectSent,
+
+        /// <summary>
+        /// The start of a round, raised on every living unit before any of them acts.
+        ///
+        /// TurnStart is per-unit and fires when that unit's own turn comes up, which is a
+        /// different moment and a different number of times. "At the start of each round,
+        /// designate the fastest living enemy" needs the round's own boundary: designating at
+        /// Merek's turn names whoever is fastest by then, after everything before him has moved
+        /// the order about.
+        /// </summary>
+        RoundStart,
+
+        /// <summary>
+        /// An enemy's active skill has finished resolving.
+        ///
+        /// OnEnemyActive is raised BEFORE the cast, deliberately, so a passive answering it acts
+        /// on the board the caster is about to hit. This is the other end of the same event, for
+        /// the clauses whose text says "after the skill resolves" - and the difference is not
+        /// cosmetic, because the board those two see is the one either side of everything the
+        /// active did.
+        /// </summary>
+        OnEnemyActiveResolved
     }
 
     /// <summary>
@@ -2203,6 +2273,9 @@ namespace Emberfall.Core.Data
                 // application. Both are debuffs — cleansable, and Umbra locks them.
                 || kind == StatusKind.AccuracyDown
                 || kind == StatusKind.BuffSuppression
+                // Partial healing reduction, on the same side of the line as HealSuppression's
+                // total: done TO a unit, so a Cleanse takes it and an Umbra source locks it.
+                || kind == StatusKind.HealingReduction
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
                 || kind == StatusKind.Disrupted
                 // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
