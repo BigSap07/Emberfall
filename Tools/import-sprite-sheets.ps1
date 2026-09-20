@@ -139,8 +139,11 @@ $wanted = [ordered]@{
 function Write-TextureMeta([string] $pngPath) {
     $metaPath = "$pngPath.meta"
     if (Test-Path $metaPath) { return 'kept' }   # never clobber an existing guid
-    $template = Get-ChildItem (Join-Path $outDir "kael_the_ashbound_*.png.meta") -ErrorAction SilentlyContinue |
-                Select-Object -First 1
+    # ANY existing sheet meta, not a named hero's. This used to glob kael_the_ashbound_*, whose
+    # art was deleted with the placeholder roster - after which the template silently vanished and
+    # every sheet would import at 2048 and shear. The metas differ only by guid.
+    $template = Get-ChildItem (Join-Path $outDir "*.png.meta") -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -First 1
     if (-not $template) { return 'no-template' }
     $guid = [guid]::NewGuid().ToString('N')
     $text = (Get-Content $template.FullName -Raw) -replace '(?m)^guid: [0-9a-f]{32}\s*$', "guid: $guid"
@@ -302,7 +305,7 @@ foreach ($clip in $wanted.Keys) {
 
     $meta = Write-TextureMeta $outPng
     if ($meta -eq 'no-template') {
-        Write-Warning "no kael_the_ashbound_*.png.meta to template from - $([IO.Path]::GetFileName($outPng)) will import at Unity's 2048 default and be sheared. See note 5."
+        Write-Warning "no *.png.meta in Sprites/Units to template from - $([IO.Path]::GetFileName($outPng)) will import at Unity's 2048 default and be sheared. See note 5."
     }
 
     $trim = ""

@@ -81,8 +81,16 @@ CLIP_MAP = {
 
 
 def find_meta_template():
-    """Find a Kael .meta file to use as template."""
-    for f in OUT_DIR.glob("kael_the_ashbound_*.png.meta"):
+    """Any existing unit-sheet .meta, to copy import settings from.
+
+    It used to name kael_the_ashbound specifically. He was a hero of the placeholder roster and
+    his art has been deleted, so that glob now matches nothing and every sheet written after it
+    would import at Unity's 2048 default and be sheared - silently, since a missing template only
+    prints a warning. The settings are identical across every sheet in the folder and differ only
+    by guid, so the first one that exists serves; naming a particular hero only created something
+    that could be deleted out from under this.
+    """
+    for f in sorted(OUT_DIR.glob("*.png.meta")):
         return f
     return None
 
@@ -366,7 +374,9 @@ def process_hero(hero_cfg, meta_template):
 def main():
     meta_template = find_meta_template()
     if meta_template is None:
-        print("WARNING: no kael_the_ashbound_*.png.meta template found")
+        print("WARNING: no *.png.meta in Sprites/Units to template from - sheets will import at
+"
+              "         Unity's 2048 default and be sheared. Import one hero by hand first.")
 
     for hero_cfg in HEROES:
         print(f"\n{'='*60}")
