@@ -710,6 +710,10 @@ namespace Emberfall.Core.Combat
             /// also the path every Basic and Active takes, and threading a passive-only concept
             /// through both would put it in the signature of everything.
             /// </summary>
+            /// <summary>Which passive is mid-firing, for the per-subject firing conditions.</summary>
+            private int _firedPassiveIndex = -1;
+            private CombatUnit _firedPassiveOwner;
+
             private CombatUnit _perTargetOwner;
             private int _perTargetIndex;
             private int _perTargetLimit;
@@ -814,6 +818,11 @@ namespace Emberfall.Core.Combat
                     roundEvent.Value = _round;
 
                     for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
+
+                    // The defense-ignore budget is per round and lives on the simulation rather
+                    // than on a unit, because it is keyed by the modifier as well as the attacker.
+                    // Empty in every battle that authors none.
+                    _ignoreDefenseUses.Clear();
 
                     // The round's own boundary, before anybody acts. Raised on every living unit
                     // rather than broadcast to a side, because "at the start of each round" is a
@@ -1002,10 +1011,36 @@ namespace Emberfall.Core.Combat
                         PassiveDef passive = unit.Passives[pi];
 
                         // Threshold is on the passive itself, not on an effect
-                        if (ov.Field.ToLowerInvariant() == "threshold")
+                        string pf = ov.Field.ToLowerInvariant();
+                        if (pf == "threshold")
                         {
                             PassiveDef clone = ClonePassive(passive);
                             clone.Threshold += ov.Delta;
+                            unit.Passives[pi] = clone;
+                            continue;
+                        }
+
+                        // THE FIRING BUDGET, which is also on the passive rather than on an effect.
+                        // A talent that says "this can happen twice per enemy instead of once a
+                        // round" is changing how often the passive runs, and nothing about the
+                        // numbers inside it - there was no way to say that before.
+                        //
+                        // limitOff is a switch rather than an addition, and is the one field here
+                        // that is: PassiveLimit is a category, and "OncePerRound plus one" means
+                        // nothing. Any positive delta turns the limit off.
+                        if (pf == "firespersubject")
+                        {
+                            PassiveDef clone = ClonePassive(passive);
+                            clone.FiresPerSubject += (int)Math.Round(ov.Delta, MidpointRounding.AwayFromZero);
+                            if (clone.FiresPerSubject < 0) clone.FiresPerSubject = 0;
+                            unit.Passives[pi] = clone;
+                            continue;
+                        }
+                        if (pf == "limitoff")
+                        {
+                            if (ov.Delta <= 0f) continue;
+                            PassiveDef clone = ClonePassive(passive);
+                            clone.Limit = PassiveLimit.Unlimited;
                             unit.Passives[pi] = clone;
                             continue;
                         }
@@ -1105,6 +1140,7 @@ namespace Emberfall.Core.Combat
                 p.LimitRounds = src.LimitRounds;
                 p.PerTargetLimit = src.PerTargetLimit;
                 p.PerTargetPerRound = src.PerTargetPerRound;
+                p.FiresPerSubject = src.FiresPerSubject;
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
                 p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
@@ -1157,6 +1193,7 @@ namespace Emberfall.Core.Combat
                     case "perstack":   e.PerStack += delta; break;
                     case "conditionvalue": e.ConditionValue += delta; break;
                     case "conditionvalue3": e.ConditionValue3 += delta; break;
+                    case "ignoredefense": e.IgnoreDefense += delta; break;
                 }
             }
 
@@ -1307,6 +1344,10 @@ namespace Emberfall.Core.Combat
                         _lastTarget = prevLT;
                     }
                     ClearCast();
+                    // The far side of the caster's own Active, mirroring AfterBasicAttack. No
+                    // shipped passive answers it, so this walks an empty listener set today.
+                    if (unit.Alive && !IsBattleOver())
+                        TriggerPassive(unit, PassiveTrigger.AfterActiveCast, 0);
 
                     // AND THE OTHER END OF THE CAST. OnEnemyActive is raised before it, on purpose,
                     // so a passive answering it acts on the board the caster is about to hit; this
@@ -1429,6 +1470,11 @@ namespace Emberfall.Core.Combat
                                     case RecordKind.LastActionType:
                                         if (unit.ActionsTaken > 0) recEntry.StoredAction = unit.LastActionWasActive ? 2 : 1;
                                         break;
+                                    case RecordKind.HpFractionBand:
+                                        // The expiry-side recorder writes the same band, so an
+                                        // entry that records on a clock and one that records on
+                                        // a hit keep the same two numbers.
+                                        break;
                                     case RecordKind.MinHpRatio:
                                         if (recEntry.StoredMin < 0f || unit.HpRatio < recEntry.StoredMin)
                                             recEntry.StoredMin = unit.HpRatio;
@@ -1502,6 +1548,19 @@ namespace Emberfall.Core.Combat
                     // amount is the payout. Only fires when the Ledger duration genuinely expires;
                     // a cleanse, a dispel and a death each remove statuses by their own path and
                     // none of them should auto-release.
+                    // A BAND OUTLIVES ITS ENTRY BY EXACTLY ONE MOMENT. The clause that pays it
+                    // out fires on the expiry broadcast, which happens after this loop has removed
+                    // the entry, so the two numbers and the body they were recorded against are
+                    // captured here - the same arrangement _lastLedgerRelease has, and for the
+                    // same reason. Keyed by the unit that recorded them, so two markers keep two
+                    // bands.
+                    if (s.StoredLowHp >= 0f || s.StoredHighHp >= 0f)
+                    {
+                        _lastBandLow[s.SourceId] = s.StoredLowHp;
+                        _lastBandHigh[s.SourceId] = s.StoredHighHp;
+                        _lastBandHp[s.SourceId] = unit.Hp;
+                    }
+
                     if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
                     {
                         int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
@@ -1686,6 +1745,21 @@ namespace Emberfall.Core.Combat
                     case EffectCondition.SubjectIsCasting:
                         first = _castCaster != null && subject == _castCaster && !_castCancelled;
                         break;
+
+                    // How many times the passive now firing has fired about this subject before.
+                    // Reads the live firing index, so it answers for the passive that asked rather
+                    // than for whichever one happens to sit at the same slot on another unit.
+                    case EffectCondition.PassiveFiredOnSubjectAtLeast:
+                    case EffectCondition.PassiveFiredOnSubjectBelow:
+                    {
+                        int need = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                        int fired = _firedPassiveOwner == null || _firedPassiveIndex < 0 || subject == null
+                                    ? 0
+                                    : _firedPassiveOwner.PassiveFiresOnSubject(_firedPassiveIndex, subject.Id);
+                        first = effect.Condition == EffectCondition.PassiveFiredOnSubjectAtLeast
+                                ? fired >= need : fired < need;
+                        break;
+                    }
 
                     // GAP 7's condition half. Sim-side rather than in the pure ConditionMet
                     // because it reads _lastMoved, which is per-battle state the static function
@@ -3319,7 +3393,8 @@ namespace Emberfall.Core.Combat
                 // missing HP" is reduced by Defense like any other authored damage rather than
                 // arriving as a second, unmitigated payload.
                 float attackTerm = ScaledTerm(effect, source);
-                float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target);
+                float raw = attackTerm * effect.Power + effect.Flat + TargetHpTerm(effect, target)
+                          + BandTerm(effect, source);
                 // "Up to 130% of Attack" - a ceiling written in the CASTER's currency, where
                 // MaxHpCap and MissingHpCap both ceiling against the TARGET's health. Applied to
                 // the assembled amount rather than to one term, because that is what "up to"
@@ -3374,6 +3449,20 @@ namespace Emberfall.Core.Combat
 
                 // 5. Defense mitigation ratio (EffectiveDefense already folds in DefenseUp/DefenseDown)
                 float defense = target.EffectiveDefense;
+
+                // 5a. A fraction of that Defense this hit does not see. It scales the INPUT, where
+                // Armor Break below scales the ratio's OUTPUT - "ignores 10% of its Defense" and
+                // "Armor Break 10%" are different sentences and this engine keeps them different
+                // terms. Gated and budgeted by the modifier itself, because the only thing that
+                // can carry it onto an existing blow is an override, and an override cannot add a
+                // condition. Skipped entirely when the field is zero, which it is everywhere in
+                // shipped content, so no existing hit changes.
+                if (effect.IgnoreDefense > 0f && defense > 0f && SpendIgnoreDefense(effect, source, target))
+                {
+                    float ignore = effect.IgnoreDefense;
+                    if (ignore > 1f) ignore = 1f;
+                    defense *= 1f - ignore;
+                }
                 float mitigation = defense / (defense + _cfg.DefenseConstant + _cfg.DefensePerLevel * source.Level);
 
                 // 6. Armor Break - its own multiplicative reduction of the mitigation RATIO, not of
@@ -3553,6 +3642,71 @@ namespace Emberfall.Core.Combat
             /// shipped content outside that one talent, so the substitution above is bit-identical
             /// for all of them.
             /// </summary>
+            /// <summary>
+            /// What the band an expiring record left behind is worth to this effect.
+            ///
+            ///   ScaleByBandGap  - how far the carrier stood ABOVE the lowest value it recorded,
+            ///                     floored at zero. "Damage equal to the difference", and the floor
+            ///                     is what makes "if its HP is higher than the lowest" a fact about
+            ///                     the number rather than a condition that has to be written twice.
+            ///   ScaleByBandHigh - the highest value recorded, times `magnitude` where one is set.
+            ///
+            /// Read from the capture rather than from the entry, because every clause that asks for
+            /// a band asks at the moment the record ENDS. Returns an exact zero when neither flag
+            /// is set, so every damage number in every existing battle is bit-identical.
+            /// </summary>
+            private float BandTerm(EffectDef effect, CombatUnit source)
+            {
+                if (!effect.ScaleByBandGap && !effect.ScaleByBandHigh) return 0f;
+                if (source == null) return 0f;
+                float term = 0f;
+                if (effect.ScaleByBandGap)
+                {
+                    float low, hp;
+                    if (_lastBandLow.TryGetValue(source.Id, out low) && low >= 0f
+                        && _lastBandHp.TryGetValue(source.Id, out hp))
+                    {
+                        float gap = hp - low;
+                        if (gap > 0f) term += gap;
+                    }
+                }
+                if (effect.ScaleByBandHigh)
+                {
+                    float high;
+                    if (_lastBandHigh.TryGetValue(source.Id, out high) && high >= 0f)
+                        term += high * (effect.Magnitude > 0f ? effect.Magnitude : 1f);
+                }
+                return term;
+            }
+
+            private readonly Dictionary<int, float> _lastBandLow = new Dictionary<int, float>();
+            private readonly Dictionary<int, float> _lastBandHigh = new Dictionary<int, float>();
+            private readonly Dictionary<int, float> _lastBandHp = new Dictionary<int, float>();
+
+            /// <summary>
+            /// Whether this blow may use its defense-ignore, and spends the round's budget if so.
+            /// Asked only when a modifier exists, so a battle with none never enters it.
+            /// </summary>
+            private bool SpendIgnoreDefense(EffectDef effect, CombatUnit source, CombatUnit target)
+            {
+                if (source == null) return false;
+                if (effect.IgnoreDefenseVsStatus != StatusKind.None
+                    && (target == null || !target.HasMarkFrom(effect.IgnoreDefenseVsStatus, source.Id)))
+                    return false;
+                if (effect.IgnoreDefenseUsesPerRound <= 0) return true;
+
+                // Counted on the ATTACKER and keyed by the effect's own gate, so two different
+                // modifiers on one unit do not share a budget. Cleared with the round.
+                string key = source.Id + ":" + (int)effect.IgnoreDefenseVsStatus;
+                int used;
+                _ignoreDefenseUses.TryGetValue(key, out used);
+                if (used >= effect.IgnoreDefenseUsesPerRound) return false;
+                _ignoreDefenseUses[key] = used + 1;
+                return true;
+            }
+
+            private readonly Dictionary<string, int> _ignoreDefenseUses = new Dictionary<string, int>();
+
             private float ScaledTerm(EffectDef effect, CombatUnit source)
             {
                 if (effect.ScaleByLastRelease) return GetLastLedgerRelease(source.Id);
@@ -5084,6 +5238,18 @@ namespace Emberfall.Core.Combat
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
 
+                    // The per-subject budget. Checked here, where the subject is already known and
+                    // the firing has not happened yet; charged below, after the effects have run,
+                    // so a condition asking "have I fired on this one before" reads 0 during the
+                    // first firing. Zero on every shipped passive, and a zero never enters.
+                    if (passive.FiresPerSubject > 0)
+                    {
+                        if (_broadcastSubject == null) continue;
+                        if (owner.PassiveFiresOnSubject(i, _broadcastSubject.Id) >= passive.FiresPerSubject)
+                            continue;
+                    }
+                    CombatUnit budgetSubject = passive.FiresPerSubject > 0 ? _broadcastSubject : null;
+
                     if (passive.OncePerBattle) owner.MarkPassiveFired(i);
                     if (passive.Limit != PassiveLimit.Unlimited) owner.MarkPassiveRound(i, _round);
 
@@ -5111,12 +5277,24 @@ namespace Emberfall.Core.Combat
                     _perTargetLimit = passive.PerTargetLimit;
                     _perTargetPerRound = passive.PerTargetPerRound;
 
+                    int prevFired = _firedPassiveIndex;
+                    _firedPassiveIndex = i;
+                    CombatUnit prevFiredOwner = _firedPassiveOwner;
+                    _firedPassiveOwner = owner;
+
                     ResolveAbility(owner, wrapper, depth + 1);
 
+                    _firedPassiveIndex = prevFired;
+                    _firedPassiveOwner = prevFiredOwner;
                     _perTargetOwner = prevOwner;
                     _perTargetIndex = prevIndex;
                     _perTargetLimit = prevLimit;
                     _perTargetPerRound = prevPerRound;
+
+                    // CHARGED AFTER, not before. A condition asking how many times this passive
+                    // has fired about this subject has to read 0 while the first firing is still
+                    // running, or "only the first time" can never be written.
+                    if (budgetSubject != null) owner.NotePassiveFireOnSubject(i, budgetSubject.Id);
                 }
                 return firedAny;
             }
@@ -6228,6 +6406,19 @@ namespace Emberfall.Core.Combat
                         entry.StoredRoleSet = true;
                         break;
 
+                    case RecordKind.HpFractionBand:
+                    {
+                        // A fraction of where the carrier stands RIGHT NOW, folded into a running
+                        // low and a running high. Both move on the first write, which is what
+                        // makes a single recorded value its own lowest and highest rather than
+                        // leaving one of them unset.
+                        float band = target.Hp * effect.Magnitude;
+                        if (band <= 0f) break;
+                        if (entry.StoredLowHp < 0f || band < entry.StoredLowHp) entry.StoredLowHp = band;
+                        if (entry.StoredHighHp < 0f || band > entry.StoredHighHp) entry.StoredHighHp = band;
+                        break;
+                    }
+
                     case RecordKind.MinHpRatio:
                         // A running minimum: it only ever moves down while the entry lives, which
                         // is the difference between "the lowest it went" and "where it is now".
@@ -6360,6 +6551,8 @@ namespace Emberfall.Core.Combat
                     landed.StoredRole = status.StoredRole;
                     landed.StoredRoleSet = status.StoredRoleSet;
                     landed.StoredMin = status.StoredMin;
+                    landed.StoredLowHp = status.StoredLowHp;
+                    landed.StoredHighHp = status.StoredHighHp;
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;

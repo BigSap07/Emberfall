@@ -844,7 +844,19 @@ namespace Emberfall.Core.Data
         /// if it is. False for everybody outside a declaration window, which is every moment of
         /// every battle in shipped content.
         /// </summary>
-        SubjectIsCasting
+        SubjectIsCasting,
+
+
+        /// <summary>
+        /// This passive has already fired against the broadcast subject at least ConditionValue
+        /// times. The discriminator for "the SECOND time this happens to one enemy" - which the
+        /// engine could not express before, because the only firing counts it kept were per round
+        /// and per effect-target rather than per subject.
+        /// </summary>
+        PassiveFiredOnSubjectAtLeast,
+
+        /// <summary>The negation, so "only the first firing" can be said without a NOT.</summary>
+        PassiveFiredOnSubjectBelow
     }
 
     /// <summary>
@@ -948,7 +960,21 @@ namespace Emberfall.Core.Data
         /// <summary>The LOWEST HP ratio the subject has been seen at while the entry lived, into
         /// `StatusInstance.StoredMin`. A running minimum rather than a snapshot, which is the
         /// distinction Arden's Everything Has a Limit turns on.</summary>
-        MinHpRatio
+        MinHpRatio,
+
+        /// <summary>
+        /// A running LOW AND HIGH of a fraction of the carrier's current HP, written into the
+        /// entry's StoredLowHp and StoredHighHp each time the recording effect resolves.
+        /// `Magnitude` is the fraction - 0.2 for "records 20% of the target's current HP".
+        ///
+        /// MinHpRatio, one member up, keeps a running minimum of an HP RATIO and answers "how low
+        /// did this unit get". This keeps ABSOLUTE amounts and answers a different question: what
+        /// the smallest and largest of a series of recorded values were. A clause that pays out
+        /// the difference between where a unit is now and the lowest thing it recorded cannot be
+        /// written against a ratio, and one that pays out the HIGHEST recorded value cannot be
+        /// written at all, because nothing kept a maximum.
+        /// </summary>
+        HpFractionBand
     }
 
     /// <summary>
@@ -1809,7 +1835,20 @@ namespace Emberfall.Core.Data
         /// a negative EnergyGain and anything later that spends an enemy's bar all count as one
         /// idea rather than three sites that have to remember each other.
         /// </summary>
-        OnEnemyEnergyDrained
+        OnEnemyEnergyDrained,
+
+        /// <summary>
+        /// This unit's own Active has finished resolving. The mirror of AfterBasicAttack, which
+        /// has existed since the first roster, and absent for no better reason than that nothing
+        /// had asked: a clause that says "whenever Arden triggers the bonus damage" covers both
+        /// the blow he throws on his turn and the one his Active throws, and only half of that
+        /// was hookable.
+        ///
+        /// Raised on the caster after the ability resolves and after the cast state is cleared,
+        /// so a passive answering it sees a finished turn rather than a cast still in flight.
+        /// Not raised for a cancelled cast: nothing resolved, so nothing followed it.
+        /// </summary>
+        AfterActiveCast
     }
 
     /// <summary>

@@ -549,6 +549,47 @@ namespace Emberfall.Core.Data
         /// names. Read at apply time and stamped onto the entry, the way Disrupted's Magnitude and
         /// StoredCap are.
         /// </summary>
+        /// <summary>
+        /// A FRACTION OF THE TARGET'S DEFENSE THIS HIT DOES NOT SEE. Applied to the Defense value
+        /// before the mitigation ratio is computed, which is what "ignores 10% of its Defense"
+        /// says - Armor Break, one step below, scales the ratio's OUTPUT instead and is a
+        /// different sentence.
+        ///
+        /// A MODIFIER ON AN EXISTING HIT, NOT A HIT OF ITS OWN, and that is the whole reason it is
+        /// a field. The clause that wanted it says the ATTACK ignores Defense; a talent can only
+        /// append an effect or override a number, and an appended effect is a second blow rather
+        /// than a change to the first. A number on the blow itself is the only shape that says it.
+        ///
+        /// It carries its own gate and its own budget because of the same limitation: an override
+        /// can change a number and cannot add a condition, so a modifier that must only apply to
+        /// marked targets and only once a round has to bring both with it.
+        ///   VsStatus     - only when the target carries the CASTER's entry of this kind. None
+        ///                  means no gate.
+        ///   UsesPerRound - how many hits a round may use it, 0 for unlimited. Counted on the
+        ///                  attacker, so two blows in one turn spend one budget.
+        /// Zero on every effect in shipped content, so the damage path is unchanged by it.
+        /// </summary>
+        public float IgnoreDefense;
+        public StatusKind IgnoreDefenseVsStatus = StatusKind.None;
+        public int IgnoreDefenseUsesPerRound;
+
+        /// <summary>
+        /// Damage terms read off the band a RecordKind.HpFractionBand entry left behind when it
+        /// expired - see BandTerm, which explains why they are read from a capture and not from
+        /// the entry.
+        ///
+        ///   ScaleByBandGap  - how far the carrier stood above the lowest value it recorded,
+        ///                     floored at zero. "Damage equal to the difference."
+        ///   ScaleByBandHigh - the highest recorded value. Multiply it with `magnitude` for a
+        ///                     fraction of it.
+        ///
+        /// Both add into the damage beside TargetHpTerm rather than replacing the Attack term, so
+        /// an effect can still carry a power if it wants both. Both are false everywhere in
+        /// shipped content, and a false one contributes an exact zero.
+        /// </summary>
+        public bool ScaleByBandGap;
+        public bool ScaleByBandHigh;
+
         public TargetBan TargetBanKind = TargetBan.None;
         public StatusKind TargetBanStatus = StatusKind.None;
 
@@ -638,6 +679,11 @@ namespace Emberfall.Core.Data
             e.TransferMagnitude = j.GetFloat("transferMagnitude", 0f);
             e.AttackCap = j.GetFloat("attackCap", 0f);
             e.ScaleByLastShift = j.GetBool("scaleByLastShift", false);
+            e.IgnoreDefense = j.GetFloat("ignoreDefense", 0f);
+            e.IgnoreDefenseVsStatus = EnumUtil.Parse(j.GetString("ignoreDefenseVsStatus", "None"), StatusKind.None);
+            e.IgnoreDefenseUsesPerRound = j.GetInt("ignoreDefenseUsesPerRound", 0);
+            e.ScaleByBandGap = j.GetBool("scaleByBandGap", false);
+            e.ScaleByBandHigh = j.GetBool("scaleByBandHigh", false);
             e.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
             e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
@@ -747,6 +793,11 @@ namespace Emberfall.Core.Data
             c.TransferMagnitude = TransferMagnitude;
             c.AttackCap = AttackCap;
             c.ScaleByLastShift = ScaleByLastShift;
+            c.IgnoreDefense = IgnoreDefense;
+            c.IgnoreDefenseVsStatus = IgnoreDefenseVsStatus;
+            c.IgnoreDefenseUsesPerRound = IgnoreDefenseUsesPerRound;
+            c.ScaleByBandGap = ScaleByBandGap;
+            c.ScaleByBandHigh = ScaleByBandHigh;
             c.TargetBanKind = TargetBanKind;
             c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
@@ -823,7 +874,9 @@ namespace Emberfall.Core.Data
 
         /// <summary>"power", "magnitude", "maxStacks", "duration", "flat", "chance",
         /// "selfHpRatio", "targetMaxHpRatio", "targetMissingHpRatio", "storedCap",
-        /// "hits", "perStack", "conditionValue".</summary>
+        /// "hits", "perStack", "conditionValue", "ignoreDefense" - and on the ABILITY rather than
+        /// an effect, "energyCost" for a basic or active and "threshold", "firesPerSubject" or
+        /// "limitOff" for a passive.</summary>
         public string Field = "";
 
         /// <summary>Additive delta applied to the field's current value.</summary>
@@ -903,6 +956,25 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int PerTargetLimit;
         public bool PerTargetPerRound;
+
+        /// <summary>
+        /// How many times this passive may fire AGAINST ONE BROADCAST SUBJECT, 0 for unlimited.
+        ///
+        /// A THIRD BUDGET, and it exists because neither of the other two can say "twice per
+        /// enemy". PassiveLimit is answered from the owner's clock and knows nothing about who the
+        /// news was about. PerTargetLimit is spent inside the effect loop, once per effect that
+        /// lands, so a passive with four effects and a budget of one spends the whole budget on
+        /// its first effect and silently drops the other three - which is a separate defect, left
+        /// alone here because repairing it moves five shipped kits.
+        ///
+        /// This is charged ONCE PER FIRING, against the broadcast subject, and charged AFTER the
+        /// effects have resolved so a condition asking "have I fired on this one before" reads 0
+        /// during the first firing rather than 1.
+        ///
+        /// Only meaningful on a broadcast trigger, which is the only kind that has a subject. Zero
+        /// on every passive in shipped content, and a zero is never charged and never checked.
+        /// </summary>
+        public int FiresPerSubject;
 
         /// <summary>
         /// Parameter overrides this passive applies to another ability on the same unit, if any.
@@ -1036,6 +1108,7 @@ namespace Emberfall.Core.Data
             p.LimitRounds = Math.Max(1, j.GetInt("limitRounds", 2));
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
+            p.FiresPerSubject = j.GetInt("firesPerSubject", 0);
             p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
             p.TriggerAbilityId = j.GetString("triggerAbilityId", "");
             p.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
