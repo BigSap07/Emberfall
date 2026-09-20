@@ -110,7 +110,22 @@ namespace Emberfall.Core.Combat
         /// </summary>
         StatusSpread,
 
-        BattleEnd
+        BattleEnd,
+
+        /// <summary>
+        /// A declared cast did not resolve. SourceId is whatever cancelled it, TargetId the
+        /// caster, AbilityId and AbilityName the ability that was lost.
+        ///
+        /// APPENDED, so every existing ordinal stays where it is - the battle fingerprint folds
+        /// (int)Type, and a member inserted anywhere but the end would rewrite the record of every
+        /// battle ever resolved. Emitted only when a cancel actually happens, which nothing in
+        /// shipped content can do, so no existing battle gains an event either.
+        ///
+        /// It exists because the screen reads the record rather than recomputing it: a turn where
+        /// an enemy spent its whole bar and nothing came out has to say so, or it looks like the
+        /// simulation dropped a turn.
+        /// </summary>
+        CastCancelled
     }
 
     /// <summary>

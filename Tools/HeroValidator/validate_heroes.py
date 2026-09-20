@@ -22,6 +22,8 @@ EFFECT_KINDS = {
     "HpTransfer", "ShieldTransfer", "LedgerIncrement", "RedirectLethal",
     "SnapshotEnergy", "TransferStatus", "SnapshotHp", "LedgerDeposit",
     "LinkUnits", "EchoDamage",
+    # cast cancellation: the interrupt half.
+    "CancelCast",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",

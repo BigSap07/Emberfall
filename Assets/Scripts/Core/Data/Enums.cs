@@ -546,7 +546,17 @@ namespace Emberfall.Core.Data
         /// nothing. An echo that could read a number from three turns ago would be a different
         /// ability every time it fired.
         /// </summary>
-        EchoDamage              // 29
+        EchoDamage,              // 29
+
+        /// <summary>
+        /// Cancels the target's declared cast, if it has one in flight.
+        ///
+        /// The interrupt half of cast cancellation. It reaches only a cast that has been DECLARED
+        /// and has not yet resolved - which is a window that did not exist before this pass, and
+        /// is the whole point of it. Outside that window there is nothing to cancel and the effect
+        /// does nothing, the same way RedirectLethal does nothing outside an OnAllyWouldDie.
+        /// </summary>
+        CancelCast
     }
 
     /// <summary>
@@ -824,7 +834,17 @@ namespace Emberfall.Core.Data
 
         /// <summary>The subject has gained a Shield since the caster's last turn. The other half
         /// of "gained a Shield OR was healed", which is one clause wanting both.</summary>
-        SubjectShieldedSinceMyTurn
+        SubjectShieldedSinceMyTurn,
+
+        /// <summary>
+        /// The subject has a cast declared and not yet resolved.
+        ///
+        /// "An ability that changes based on what the enemy is about to do" is this: an ordinary
+        /// effect can ask whether the body in front of it is mid-cast and take a different shape
+        /// if it is. False for everybody outside a declaration window, which is every moment of
+        /// every battle in shipped content.
+        /// </summary>
+        SubjectIsCasting
     }
 
     /// <summary>
@@ -1726,7 +1746,22 @@ namespace Emberfall.Core.Data
         /// cosmetic, because the board those two see is the one either side of everything the
         /// active did.
         /// </summary>
-        OnEnemyActiveResolved
+        OnEnemyActiveResolved,
+
+        /// <summary>
+        /// A cast has been declared and has not resolved. Raised on EVERY living unit, not
+        /// broadcast to one side.
+        ///
+        /// OnEnemyActive is the same moment seen from the other team and is the older, narrower
+        /// hook: it reaches the caster's opponents only. A declaration is a fact about the board,
+        /// and the three things this primitive exists for - an interrupt, a reaction to one named
+        /// ability, a blow that lands before the cast it answers - are all wanted by allies as
+        /// often as by enemies.
+        ///
+        /// Anything this raises resolves BEFORE the cast does, which is what makes "damage that
+        /// lands before the cast it answers" a matter of ordering rather than of a new mechanism.
+        /// </summary>
+        OnCastDeclared
     }
 
     /// <summary>
