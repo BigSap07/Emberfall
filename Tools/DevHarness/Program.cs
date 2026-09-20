@@ -17564,17 +17564,8 @@ namespace Emberfall.DevHarness
             else if (ab == "active") effects = def.Active == null ? null : def.Active.Effects;
             else
             {
-                if (string.IsNullOrEmpty(ab) || !ab.StartsWith("passive")) return null;
-                string tail = ab.Substring(7);
-                if (tail.Length == 0) return null;
-                int n = 0;
-                for (int i = 0; i < tail.Length; i++)
-                {
-                    if (tail[i] < '0' || tail[i] > '9') return null;
-                    n = n * 10 + (tail[i] - '0');
-                }
-                int pi = n - 1;
-                if (pi < 0 || pi >= def.Passives.Count) return null;
+                int pi = HarnessPassiveSlot(def, ab);
+                if (pi < 0) return null;
                 effects = def.Passives[pi].Effects;
             }
             if (effects == null || ov.EffectIndex < 0 || ov.EffectIndex >= effects.Count) return null;
@@ -17586,20 +17577,9 @@ namespace Emberfall.DevHarness
         {
             if (ability == "basic") return def.BasicAttack == null ? -1 : def.BasicAttack.Effects.Count;
             if (ability == "active") return def.Active == null ? -1 : def.Active.Effects.Count;
-            if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
-            string tail = ability.Substring(7);
-            if (tail.Length == 0) return -1;
-            int n = 0;
-            for (int i = 0; i < tail.Length; i++)
-            {
-                if (tail[i] < '0' || tail[i] > '9') return -1;
-                n = n * 10 + (tail[i] - '0');
-            }
-            int pi = n - 1;
-            // +1: the selected talent is appended to the unit's passive list before the overrides
-            // are applied, so the engine sees one slot more than the def authored.
-            if (pi < 0 || pi >= def.Passives.Count + 1) return -1;
-            return pi < def.Passives.Count ? def.Passives[pi].Effects.Count : 0;
+            int pi = HarnessPassiveSlot(def, ability);
+            if (pi < 0) return -1;
+            return def.Passives[pi].Effects.Count;
         }
 
         /// <summary>
@@ -18309,8 +18289,8 @@ namespace Emberfall.DevHarness
                     {
                         string slot = (talent.Appends[a].Ability ?? "").ToLowerInvariant();
                         PassiveTrigger host = PassiveTrigger.None;
-                        int pi = HarnessPassiveSlot(slot);
-                        if (pi >= 0 && pi < def.Passives.Count) host = def.Passives[pi].Trigger;
+                        int pi = HarnessPassiveSlot(def, slot);
+                        if (pi >= 0) host = def.Passives[pi].Trigger;
                         InspectEffect(talent.Appends[a].Effect, host, table, bad,
                                       where + " -> " + slot);
                     }
@@ -18356,20 +18336,21 @@ namespace Emberfall.DevHarness
                 bad.Add(where + " reads the broadcast subject at " + trig + ", which sets none");
         }
 
-        /// <summary>"passive1" -> 0, "passive7" -> 6, anything else -> -1. The harness's own copy
-        /// of the engine's PassiveSlotIndex, which is private to the simulation.</summary>
-        private static int HarnessPassiveSlot(string ability)
+        /// <summary>
+        /// The passive a talent named, by its JSON KEY - the harness's copy of the engine's
+        /// PassiveSlotIndex, which is private to the simulation. Exact key first, then the nested
+        /// spelling, and -1 for a name that matches nothing.
+        /// </summary>
+        private static int HarnessPassiveSlot(HeroDef def, string ability)
         {
-            if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
-            string tail = ability.Substring(7);
-            if (tail.Length == 0) return -1;
-            int n = 0;
-            for (int i = 0; i < tail.Length; i++)
-            {
-                if (tail[i] < '0' || tail[i] > '9') return -1;
-                n = n * 10 + (tail[i] - '0');
-            }
-            return n >= 1 ? n - 1 : -1;
+            if (def == null || string.IsNullOrEmpty(ability)) return -1;
+            for (int i = 0; i < def.Passives.Count; i++)
+                if (def.Passives[i].SlotKey == ability) return i;
+            if (!ability.StartsWith("passive") || ability.StartsWith("passives.")) return -1;
+            string nested = "skills." + ability;
+            for (int i = 0; i < def.Passives.Count; i++)
+                if (def.Passives[i].SlotKey == nested) return i;
+            return -1;
         }
 
         private static bool Publishes(List<TriggerCtx> table, PassiveTrigger trig, bool wantSource)

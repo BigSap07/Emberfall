@@ -1002,7 +1002,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effectIndex": 0,
               "field": "targetMaxHpRatio",
               "delta": -0.02
@@ -1371,7 +1371,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 2,
               "field": "magnitude",
               "delta": -0.1
@@ -2621,7 +2621,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effectIndex": 1,
               "field": "flat",
               "delta": -2
@@ -2683,13 +2683,13 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 2,
               "field": "power",
               "delta": 0.8
             },
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 3,
               "field": "hits",
               "delta": -10
@@ -3615,7 +3615,7 @@
               }
             },
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "RemoveStatus",
                 "target": "BroadcastSubject",
@@ -3652,7 +3652,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -3663,7 +3663,7 @@
               }
             },
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -5224,7 +5224,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 5,
               "field": "power",
               "delta": 1.0
@@ -5232,7 +5232,7 @@
           ],
           "appends": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effect": {
                 "kind": "Shield",
                 "target": "LowestHpAlly",
@@ -5480,7 +5480,7 @@
               "delta": 1
             },
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 2,
               "field": "selfHpRatio",
               "delta": 0.04
@@ -5776,7 +5776,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "HighestHpEnemy",
@@ -6752,7 +6752,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effect": {
                 "kind": "TurnShift",
                 "target": "LowestEnergyAlly",
@@ -7064,7 +7064,7 @@
           ],
           "appends": [
             {
-              "ability": "passive4",
+              "ability": "skills.passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "BroadcastSource",
@@ -7084,7 +7084,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive5",
+              "ability": "skills.passive2",
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
@@ -7311,7 +7311,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -7321,7 +7321,7 @@
               }
             },
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "TurnShift",
                 "target": "BroadcastSubject",
@@ -9522,17 +9522,17 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "field": "limitOff",
               "delta": 1
             },
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "field": "firesPerSubject",
               "delta": 2
             },
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 0,
               "field": "power",
               "delta": -0.21
@@ -9540,7 +9540,7 @@
           ],
           "appends": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effect": {
                 "kind": "Damage",
                 "target": "BroadcastSubject",
@@ -9561,7 +9561,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "atIndex": 4,
               "effect": {
                 "kind": "EnergyGain",
@@ -9574,7 +9574,7 @@
               }
             },
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "atIndex": 4,
               "effect": {
                 "kind": "EnergyGain",
@@ -9597,7 +9597,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "atIndex": 4,
               "effect": {
                 "kind": "Damage",
@@ -9820,7 +9820,7 @@
           ],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "Dispel",
                 "target": "BroadcastSource",
@@ -10783,7 +10783,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive1",
+              "ability": "passive",
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
@@ -10792,7 +10792,7 @@
               }
             },
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
@@ -10809,7 +10809,7 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive1",
+              "ability": "passive",
               "effect": {
                 "kind": "Heal",
                 "target": "BroadcastSubject",
@@ -10819,7 +10819,7 @@
               }
             },
             {
-              "ability": "passive1",
+              "ability": "passive",
               "effect": {
                 "kind": "Cleanse",
                 "target": "BroadcastSubject",
@@ -11063,7 +11063,7 @@
           ],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -11290,7 +11290,7 @@
               "delta": 1
             },
             {
-              "ability": "passive2",
+              "ability": "passive1",
               "effectIndex": 0,
               "field": "power",
               "delta": 0.2
@@ -11304,7 +11304,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive3",
+              "ability": "passive2",
               "effectIndex": 2,
               "field": "selfHpRatio",
               "delta": 0.03

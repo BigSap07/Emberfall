@@ -1024,9 +1024,9 @@ namespace Emberfall.Core.Combat
                         ApplyDelta(aclone.Effects[ov.EffectIndex], ov.Field, ov.Delta);
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (PassiveSlotIndex(ab) >= 0)
+                    else if (PassiveSlotIndex(unit, ab) >= 0)
                     {
-                        int pi = PassiveSlotIndex(ab);
+                        int pi = PassiveSlotIndex(unit, ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef passive = unit.Passives[pi];
 
@@ -1096,9 +1096,9 @@ namespace Emberfall.Core.Combat
                         InsertAppend(aclone.Effects, ap);
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (PassiveSlotIndex(ab) >= 0)
+                    else if (PassiveSlotIndex(unit, ab) >= 0)
                     {
-                        int pi = PassiveSlotIndex(ab);
+                        int pi = PassiveSlotIndex(unit, ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef pclone = ClonePassive(unit.Passives[pi]);
                         InsertAppend(pclone.Effects, ap);
@@ -1108,30 +1108,28 @@ namespace Emberfall.Core.Combat
             }
 
             /// <summary>
-            /// "passive1" -> 0, "passive2" -> 1, "passive7" -> 6, anything else -> -1.
+            /// THE PASSIVE A TALENT NAMED, found by its JSON KEY rather than its position.
             ///
-            /// The two named cases are what this replaces and they resolve identically, digit for
-            /// digit. The reason it generalises at all: a talent addresses a passive BY POSITION in
-            /// the unit's list, the list is no longer capped at the named JSON slots, and a talent
-            /// that wants to touch the sixth passive had no way to say so.
+            /// A bare "passiveN" prefers the FLAT key and falls back to "skills.passiveN", which
+            /// is unambiguous for every hero that authors only one of the two shapes - that is all
+            /// but two of them, and those two address the nested half explicitly.
             ///
-            /// Returns -1 rather than throwing on a name it does not understand, because the
+            /// Returns -1 rather than throwing on a name that matches nothing, because the
             /// surrounding loop already treats an unresolvable slot as an override content may
             /// have authored against a kit that does not have it - the same tolerance TalentAt
-            /// applies to an out-of-range selection.
+            /// applies to an out-of-range selection. What catches a name that matches nothing is
+            /// the build, not the battle.
             /// </summary>
-            private static int PassiveSlotIndex(string ability)
+            private static int PassiveSlotIndex(CombatUnit unit, string ability)
             {
-                if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
-                string tail = ability.Substring(7);
-                if (tail.Length == 0) return -1;
-                int n = 0;
-                for (int i = 0; i < tail.Length; i++)
-                {
-                    if (tail[i] < '0' || tail[i] > '9') return -1;
-                    n = n * 10 + (tail[i] - '0');
-                }
-                return n >= 1 ? n - 1 : -1;
+                if (unit == null || string.IsNullOrEmpty(ability)) return -1;
+                for (int i = 0; i < unit.Passives.Count; i++)
+                    if (unit.Passives[i].SlotKey == ability) return i;
+                if (!ability.StartsWith("passive") || ability.StartsWith("passives.")) return -1;
+                string nested = "skills." + ability;
+                for (int i = 0; i < unit.Passives.Count; i++)
+                    if (unit.Passives[i].SlotKey == nested) return i;
+                return -1;
             }
 
             /// <summary>
@@ -1173,6 +1171,7 @@ namespace Emberfall.Core.Combat
                 p.PerTargetLimit = src.PerTargetLimit;
                 p.PerTargetPerRound = src.PerTargetPerRound;
                 p.FiresPerSubject = src.FiresPerSubject;
+                p.SlotKey = src.SlotKey;
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
                 p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
