@@ -47,6 +47,11 @@ cyrra_the_burden_bearer|2|858abe6189af1dad
 cyrra_the_burden_bearer|3|12e496f25bf31e4b
 cyrra_the_burden_bearer|4|ef64dd897483197f
 cyrra_the_burden_bearer|5|66302946491dc801
+dahlia_the_wayward_hymn|1|995743fc8fd923ed
+dahlia_the_wayward_hymn|2|deb02e8f8b754e4a
+dahlia_the_wayward_hymn|3|cb8538f347133f6a
+dahlia_the_wayward_hymn|4|14ba0483cfe9d382
+dahlia_the_wayward_hymn|5|abb76f010c96a75f
 darian_the_hidden_bulwark|1|1334cca9d25635a9
 darian_the_hidden_bulwark|2|949791bd0ac48cb5
 darian_the_hidden_bulwark|3|48bcc783450be134

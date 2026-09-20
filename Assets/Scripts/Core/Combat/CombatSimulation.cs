@@ -995,9 +995,9 @@ namespace Emberfall.Core.Combat
                         ApplyDelta(aclone.Effects[ov.EffectIndex], ov.Field, ov.Delta);
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (ab == "passive1" || ab == "passive2")
+                    else if (PassiveSlotIndex(ab) >= 0)
                     {
-                        int pi = ab == "passive1" ? 0 : 1;
+                        int pi = PassiveSlotIndex(ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef passive = unit.Passives[pi];
 
@@ -1041,15 +1041,42 @@ namespace Emberfall.Core.Combat
                         aclone.Effects.Add(ap.Effect.Clone());
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (ab == "passive1" || ab == "passive2")
+                    else if (PassiveSlotIndex(ab) >= 0)
                     {
-                        int pi = ab == "passive1" ? 0 : 1;
+                        int pi = PassiveSlotIndex(ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef pclone = ClonePassive(unit.Passives[pi]);
                         pclone.Effects.Add(ap.Effect.Clone());
                         unit.Passives[pi] = pclone;
                     }
                 }
+            }
+
+            /// <summary>
+            /// "passive1" -> 0, "passive2" -> 1, "passive7" -> 6, anything else -> -1.
+            ///
+            /// The two named cases are what this replaces and they resolve identically, digit for
+            /// digit. The reason it generalises at all: a talent addresses a passive BY POSITION in
+            /// the unit's list, the list is no longer capped at the named JSON slots, and a talent
+            /// that wants to touch the sixth passive had no way to say so.
+            ///
+            /// Returns -1 rather than throwing on a name it does not understand, because the
+            /// surrounding loop already treats an unresolvable slot as an override content may
+            /// have authored against a kit that does not have it - the same tolerance TalentAt
+            /// applies to an out-of-range selection.
+            /// </summary>
+            private static int PassiveSlotIndex(string ability)
+            {
+                if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
+                string tail = ability.Substring(7);
+                if (tail.Length == 0) return -1;
+                int n = 0;
+                for (int i = 0; i < tail.Length; i++)
+                {
+                    if (tail[i] < '0' || tail[i] > '9') return -1;
+                    n = n * 10 + (tail[i] - '0');
+                }
+                return n >= 1 ? n - 1 : -1;
             }
 
             private static AbilityDef CloneAbility(AbilityDef src)
@@ -4373,7 +4400,21 @@ namespace Emberfall.Core.Combat
                 // -1: energy from being hit is the victim's own regen, not something the attacker
                 // granted. A Tide attacker must not redirect its victim's line's energy.
                 AddEnergy(target, _cfg.EnergyOnDamaged, -1);
-                TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+
+                // The victim is its own subject here, so ConditionSubject.LastAttacker resolves at
+                // OnDamaged to the unit that just hit it - the same thing it already means at
+                // OnEnemyDamagedAlly eight lines below, which reads the victim's LastAttackerId
+                // through exactly this field. Without it a passive on the body being hit cannot
+                // ask anything about who is hitting it, while every ALLY of that body can.
+                //
+                // Reads nothing and changes nothing on its own: it moves a field that only a
+                // condition subject consults, and no shipped passive at OnDamaged names one.
+                {
+                    CombatUnit prevDmgSubject = _broadcastSubject;
+                    _broadcastSubject = target;
+                    TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+                    _broadcastSubject = prevDmgSubject;
+                }
 
                 // The victim's own allies hear about it; the victim does not, because OnDamaged
                 // one line up is already its own version of this news. Raised only for damage that
@@ -4663,7 +4704,36 @@ namespace Emberfall.Core.Combat
                 // shipped content applies TurnDebt, so this branch is unreachable today.
                 if (amount > 0 && energyBefore >= 0)
                     CheckEnergyThreshold(unit, energyBefore);
+
+                // --- and the mirror of it: somebody took Energy off an enemy ---
+                // After the clamp, so "lost Energy" means the bar actually moved rather than a
+                // drain that hit an empty one. Across the line only - a unit paying its own cast
+                // cost, or an ally handing energy about, is not a drain and never reaches here.
+                //
+                // Re-entrancy is why the flag exists rather than a depth count: the passive this
+                // fires can itself drain, and a Tempo that feeds itself is an endless battle
+                // rather than a wrong number. One drain answers one trigger.
+                if (amount < 0 && energyBefore > 0 && unit.Energy != energyBefore
+                    && sourceId >= 0 && !_inDrainTrigger)
+                {
+                    CombatUnit drainer = FindUnit(sourceId);
+                    if (drainer != null && drainer.Alive && drainer.IsPlayer != unit.IsPlayer)
+                    {
+                        _inDrainTrigger = true;
+                        CombatUnit prevDrSubject = _broadcastSubject;
+                        int prevDrSource = _broadcastSourceId;
+                        _broadcastSubject = unit;
+                        _broadcastSourceId = drainer.Id;
+                        TriggerPassive(drainer, PassiveTrigger.OnEnemyEnergyDrained, 0);
+                        _broadcastSourceId = prevDrSource;
+                        _broadcastSubject = prevDrSubject;
+                        _inDrainTrigger = false;
+                    }
+                }
             }
+
+            /// <summary>Guards the drain trigger against a passive that drains. See AddEnergy.</summary>
+            private bool _inDrainTrigger;
 
             /// <summary>
             /// The original clamping AddEnergy, returning what it would otherwise have thrown away.

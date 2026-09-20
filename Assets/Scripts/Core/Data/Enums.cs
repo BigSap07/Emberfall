@@ -1794,7 +1794,22 @@ namespace Emberfall.Core.Data
         /// A unit's FIRST blow does not raise it. Acquiring a target is not changing one, and
         /// LastTargetId being unset is the difference; every clause in the roster says "changes".
         /// </summary>
-        OnEnemyChangedTarget
+        OnEnemyChangedTarget,
+
+        /// <summary>
+        /// This unit took Energy off an enemy. Fired ON THE DRAINER rather than broadcast to a
+        /// side, because the clause asking for it is "whenever an enemy loses Energy BECAUSE OF
+        /// me" - the causer is the whole point, and AddEnergy already carries the granter's id for
+        /// the event it emits. The enemy that lost the Energy is the broadcast subject.
+        ///
+        /// Only a loss, only across the line, and only when the bar actually moved: a unit paying
+        /// its own cast cost is not being drained, and a drain against an empty bar took nothing.
+        ///
+        /// The one funnel every energy change passes through is where it sits, so Interrupt,
+        /// a negative EnergyGain and anything later that spends an enemy's bar all count as one
+        /// idea rather than three sites that have to remember each other.
+        /// </summary>
+        OnEnemyEnergyDrained
     }
 
     /// <summary>

@@ -1136,6 +1136,13 @@ namespace Emberfall.Core.Data
         ///   "passive":  { ... }                          - the single flat key, every shipped unit
         ///   "passive1": { ... }, "passive2": { ... }      - flat, two named slots
         ///   "skills": { "passive1": ..., "passive2": ... } - nested, as the new roster authors it
+        ///   "passives": [ { ... }, { ... } ]               - the overflow list, read last
+        ///
+        /// THE FIFTH SHAPE EXISTS BECAUSE FOUR NAMED SLOTS IS A CEILING, NOT A DESIGN. A described
+        /// passive routinely becomes several authored ones - one per trigger it answers - and the
+        /// named slots ran out at five while a single hero's two described passives and one active
+        /// wanted seven between them. The list is read after the named slots and appended in
+        /// order, so a hero using only the named ones is parsed exactly as before.
         ///
         /// A unit authoring only the first - which is every hero and every enemy in content today -
         /// gets a one-element list, so nothing about how its passive resolves changes.
@@ -1154,6 +1161,12 @@ namespace Emberfall.Core.Data
             JsonValue skills = j["skills"];
             AddPassive(PassiveDef.FromJson(skills["passive1"]));
             AddPassive(PassiveDef.FromJson(skills["passive2"]));
+
+            // The overflow list, last so the named slots keep the indices they have always had -
+            // talents address a passive BY INDEX, and reading this first would renumber every
+            // talent in the file. Empty on every unit in content until a kit needs a sixth.
+            List<JsonValue> extra = j.GetList("passives");
+            for (int i = 0; i < extra.Count; i++) AddPassive(PassiveDef.FromJson(extra[i]));
         }
 
         private void AddPassive(PassiveDef passive)
