@@ -106,9 +106,17 @@ def _get_skills(hero):
       - Generator format: skills block with those keys directly.
       - Engine format: flat keys basic, active, passive at the hero root.
       - Synthetic fixture format: flat keys basicAttack/activeSkill at root.
+
+    An engine-format hero may ALSO carry a skills block, which the engine reads as
+    extra passive slots (UnitDef.ReadPassives appends skills.passive1/passive2 after
+    the flat ones).  Returning that block wholesale made this validator blind to
+    every such hero: it saw no basicAttack, reported one, and then checked the star
+    shape against a hero it could not see.  Seven of them were authored that way
+    before anyone noticed, which is a guard reporting on nothing.  The block is now
+    an overlay that cannot shadow a flat slot.
     """
     skills = hero.get("skills")
-    if isinstance(skills, dict):
+    if isinstance(skills, dict) and ("basicAttack" in skills or "activeSkill" in skills):
         return skills
     # Engine format uses basic/active/passive; map to import-format keys so
     # every downstream check uses one vocabulary.
@@ -122,6 +130,10 @@ def _get_skills(hero):
     val = hero.get("passive2")
     if val is not None:
         result["passive2"] = val
+    if isinstance(skills, dict):
+        for key, val in skills.items():
+            if val is not None:
+                result.setdefault(key, val)
     return result
 
 

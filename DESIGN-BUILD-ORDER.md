@@ -271,11 +271,21 @@ or Shield authoring one of those flags computed off plain Attack and the flag di
 `brenna_deep_resolve` (passive1, a Shield off `scaleByLastBanked`) and `cyrra_bury_the_burden`
 (active, a Heal off `scaleByLastRemoval`). The other four are talents, inert until selected. Every
 battle Brenna or Cyrra fights changes; no fingerprint moves only because neither stands in the
-sweep's starter squad, which is coverage rather than safety. The count is pinned at 6, so a
-seventh cannot appear unnoticed. Left in rather than reverted, because the flags are authored
+sweep's starter squad, which is coverage rather than safety. The count is pinned, so another
+cannot appear unnoticed. Left in rather than reverted, because the flags are authored
 intent and silently ignoring them is the older bug.
 
-### Shipped on this branch: the three loose ends closed
+**The pin moved from 6 to 7 when Rovan was authored**, which is what a pin is for.
+`rovan_deflected_conversion` is a live passive Shield off `scaleByLastDamage` and the first entry
+on that list written AFTER the flag started working, rather than caught by it. An eighth still
+means somebody authored a flag that used to be inert.
+
+### Open: `content/batch-six-four-heroes` — unmerged, off `engine/nine-gaps`
+
+Two things shipped on it, in order: the three loose ends the nine-gap pass left unwired, and
+then the four heroes those fixes unblocked.
+
+**First, the three loose ends.**
 
 Three of the eleven were the same mistake in the nine-gap pass — a mechanism built, its hook left
 unwired — and they are fixed here. 72 of 72 fingerprints unmoved, 105 sweep lines unchanged, the
@@ -303,113 +313,156 @@ same 11 harness reds, three new count-based arenas.
   after the call, which is the one thing a deflect does that a ward does not. Measured: four
   `OnRedirectReceived` fires against four shares, and the aimed-at hero still takes zero.
 
-### Re-attempted and still blocked: the four heroes — ten clauses, NOT authored
+### Then, on the same branch: the four heroes ARE authored
 
-With the three closed, the re-attempt reads **8 of the original 11 still open, plus 2 that the
-previous pass under-called**, so ten clauses across the four. `heroes.json` remains untouched.
+Talren, Vaelis, Nysera and Rovan carry full kits. The ten clauses two passes stopped on were
+closed three ways — **three engine additions, five description edits, two authoring idioms** — and
+what could not be closed is named at the end rather than approximated into the content.
 
-**What the three fixes bought, and it is more than the count suggests.** Talren's active is now
-expressible end to end: two Talren-held links at one charge each, `OnLinkedUnitHit` filtered by
-`triggerSourceIsSelf`, striking `OtherLinkedUnit` — and because each record spends its own charge,
-it triggers exactly twice, which is what talent III's "for the second time" needs. Vaelis's basic
-is expressible for the same reason: Departure as a mutual one-charge link means "the NEXT allied
-hit" is once. Talren's second passive hears the basic's echo through `OnEchoFired`. **The cores of
-two kits moved from blocked to buildable.**
+**72 of 72 stage fingerprints unmoved**, and that claim is now reproducible rather than
+remembered: `EMBERFALL_DUMP_STAGE_FP=1` prints all 72, so before-and-after is a diff of two runs.
+**The sweep went from 105 lines to 125** — the four new kits, each distinct from every other hero
+at every seed. Harness reds went from 11 to 32; all 21 new ones are dormancy tripwires reading
+"no shipped effect uses X", and every one of them now has a user, which is what authoring these
+four means. No check that measures behaviour is red.
 
-**Still open, unchanged:** linear per-stack scaling (`Power x (1 + p*n)` cannot be `0.35n`);
-no second-lowest-HP enemy nor any way to exclude an already-recorded body from a pick;
-no HP-conditional output modifier; `EnergyGain` reads no `ScaleBy*`; a moved status cannot be given
-a new duration; no attacker-keyed damage **reduction**; a talent cannot override a `TargetMode`.
+#### Three built, and each one is measured
 
-**Two the previous pass under-called, named properly now:**
+- **The redirect's OWNER hears it: `PassiveTrigger.OnRedirectSent`.** A redirect has three parties
+  — the body it came off, the body it landed on, and the hero whose ward or link moved it — and
+  only the second had a hook. Raised in `RedirectShare` beside `OnRedirectReceived`, with
+  `_lastMoved` for the owner already holding the share, and **skipped when the owner IS the
+  destination**, which is every ordinary Covered ward: that unit has already been told, and firing
+  both would have one hero answer one event twice. Measured at four fires against four shares in
+  the split arena and zero in the ward control.
+- **`moveDuration`: a moved status can be re-clocked as it lands.** Zero keeps the entry's own
+  remaining rounds, which is every move authored before this and the guarantee that a move creates
+  no value. Six abilities move an UNKNOWN set of statuses and name a duration in the same breath,
+  and the remove-and-reapply idiom cannot serve them — an `ApplyStatus` has to name the kind it
+  applies, and these do not know it. Magnitude, `Stored`, charges and every record still cross
+  untouched: only the clock is authored. Measured at 1 round against the control's 6, same
+  magnitude both ways.
+- **`EffectCondition.SubjectRoleIs`: the engine can ask what a unit IS.** It could test HP,
+  statuses, stacks, energy, speed, shields, action history, turn position and what a mark recorded,
+  and it could not ask whether a body is a Mender. The nearest thing, `StoredRoleMatches`, compares
+  a role somebody previously WROTE DOWN against a constant. Reads `CombatUnit.Role`, rebuilt from
+  content every battle, so it reaches no save byte. Measured by a role-gated bonus landing on the
+  Bulwark and not on the Striker in the same blow.
 
-- **A fact about one unit cannot be stored on another.** `RecordFact` writes the SUBJECT's fact
-  onto the SUBJECT's own status entry, so Vaelis recording "the triggering ally's role" can only
-  put it on that ally — and at his next Basic Attack nothing can name which ally that was, since
-  `BroadcastSource` resolves to nobody outside a broadcast. `StoredRoleMatches` compares against a
-  constant role and would have branched the three role groups fine; the record and its reader
-  simply cannot be brought together. Vaelis's first passive. Previously filed as "an authoring
-  note", which was too generous.
-- **`OnRedirectReceived` fires on the DESTINATION, and Nysera's talent II needs the link's OWNER.**
-  Closing loose end 3 made the deflect announce itself, and to the wrong unit for this kit: the
-  share lands on the partner enemy, so that enemy's passives hear it and Nysera's do not. The
-  talent also asks to increase the redirected damage in flight, which no trigger can do after the
-  share has landed. Nysera's talent II.
+#### Five description edits, in `import/Heroes.json`
 
-A second authoring attempt on `content/batch-six-four-heroes`, off `engine/nine-gaps`, read all 28
-clauses against the engine with all nine gaps built and **authored none of them**. 72 of 72
-fingerprints unmoved, 105 sweep lines unchanged, 11 harness reds — every number as before, because
-`heroes.json` is untouched. The sweep did NOT gain four lines, and that is the honest report of the
-outcome rather than a result.
+Pinoy's words, changed only where the clause asked for something the engine does not have and the
+nearest true sentence is as good a hero. Each is a REWORDING, not a deletion.
 
-**The nine gaps moved the count from nine to eleven, and that is not a wash.** Most of each kit is
-now expressible where before the core of three of four was not: Nysera's active is exactly the
-`Deflect` link (she is the third party, the pair is two enemies, and `SpendLinkCharge` in the
-deflect branch is "ends after triggering once"); her basic's Vanishing Mark is `OnTargeted` plus
-`HasMyMark` on `BroadcastSource` and **self-limits correctly** because removing the mark makes its
-own condition false; Rovan's active, both passives and talent I all land; Talren's basic, first
-passive and talent I land; Vaelis's second passive and talent II land. What remains is eleven
-clauses, and they cluster.
+- **Talren II** recorded "one additional enemy with the lowest HP" — a third body that the first
+  two records must not already have taken, and nothing can exclude an already-recorded body from a
+  pick. Now records **the highest-HP enemy**, which no other clause of his competes for, and the
+  extra strike goes to the recorded target with the highest present HP.
+- **Nysera's first passive** read "each Absence increases her damage **against enemies below 50%
+  HP** by 5%". `OutputModStatus` filters on marks and nothing else, and expressing the HP gate as
+  a separate additive hit runs into the linear-per-stack problem instead. Now "each Absence
+  increases her damage by 5%", which is the in-pipeline modifier and so rides a crit.
+- **Rovan's basic** turned part of a Deflected enemy's blow into a Shield on him **instead** — an
+  attacker-keyed damage REDUCTION, which nothing in the engine does (`Vulnerable` is source-keyed
+  and only increases). The "instead" is gone: he gains a Shield equal to 20% of the damage dealt,
+  the first time that enemy damages an ally each round.
+- **Rovan III** sent the expiring Shield to the next-lowest-HP ally "instead of returning it to
+  himself". `ApplyDelta` moves numeric fields only, so a talent cannot override a `TargetMode`.
+  Now he **also** grants that ally a Shield worth 8% of his Max HP, and the return still happens.
+- **Vaelis's first passive and talent III.** A fact about one unit cannot be stored on another —
+  `RecordFact` writes the subject's fact onto the subject's own entry — so "records the triggering
+  ally's role" and then "an ally in a different role than the previously recorded role" could not
+  be brought together. The passive now names its three role groups outright
+  (Bulwark/Vanguard, Mender/Warden, any damage role), which `SubjectRoleIs` banks into three
+  counters at the moment Departure triggers, and talent III fires **from a Mender or Warden ally**.
 
-**Three are the same mistake in the nine-gap pass: a mechanism was built, its hook was not.**
+#### Two closed by authoring rather than by engine work
 
-1. **A link's charge is never spent by the TRIGGER path.** `SpendLinkCharge` is called from the
-   Redirect, Echo and Deflect branches of the funnel and from nowhere else, so `OnLinkedUnitHit`
-   fires for as long as the link lives. "The next time either recorded target is attacked by
-   Talren" and "the next allied hit against it" are both unbounded. Talren's active and Vaelis's
-   basic are the two kits the trigger was built for.
-2. **`EffectKind.EchoDamage` raises no trigger.** Talren's second passive answers "whenever his
-   attack triggers against a secondary target through Redirecting Shot", and the basic's echo is
-   an `EchoDamage` effect, which the engine performs silently. The active's half is hearable and
-   the basic's is not.
-3. **The `Deflect` branch raises no trigger.** It calls `DealRawDamage` directly rather than going
-   through `RedirectShare`, so `OnRedirectReceived` never fires for it. Nysera's talent II answers
-   "when the Linked effect redirects an attack away from Nysera" and has nothing to listen to.
+- **Linear per-stack scaling.** `PerStack` is `Power x (1 + p*n)` and "35% of Attack per Route" is
+  `0.35n`. Talren III is three gated effects at 0.35 each, one per Route threshold — the shape
+  Kael's Rubble already uses. No engine change, and no description change either.
+- **`EnergyGain` reads no `ScaleBy*`.** Rovan II grants "8 Energy for every 10% Max HP Shield
+  moved, up to 16", which is two grants gated on `LastMovedAboveHpFraction` at 0.10 and 0.20. The
+  cap is that there are two of them.
 
-**Four are arithmetic and selection the engine has never had.**
+#### The three live approximations, measured before and after
 
-4. **Per-stack scaling has no linear form.** `PerStack` is `Power x (1 + p*n)`; "35% of Attack per
-   Route" is `0.35n`, and no choice of Power and p gives that for every n. Talren's talent III.
-5. **No second-lowest-HP ENEMY, and no way to exclude an already-recorded body from a pick.**
-   `LinkUnits` excludes only its own primary target. Talren's talent II records "one additional
-   enemy with the lowest HP", which must be a body the first two records did not take.
-6. **No HP-conditional output modifier.** `OutputModStatus` filters on marks and nothing else, so
-   "each Absence increases her damage against enemies below 50% HP by 5%" has no home — and
-   expressing it as a separate additive hit runs into 4 again. Nysera's first passive.
-7. **`EnergyGain` cannot scale off a runtime amount.** It is `Flat + Power * 100` and reads no
-   `ScaleBy*`. Rovan's talent II grants "8 Energy for every 10% Max HP Shield moved, up to 16".
+Each was a shipped clause saying "when damage is redirected" wired to `OnDamaged`, which fires on
+every blow. `CheckRedirectApproximations` runs each on the real roster in the sweep arena, twice —
+as it ships, and with the same definition patched back in memory to what it replaced. The pair is
+the evidence; a fire count alone says nothing.
 
-**Four are shapes no effect currently has.**
+- **Marrow II, "the attacker loses 5 Energy":** 105 fires against 110 blows before — every blow
+  that did not kill him — and **16** after. Eighty-nine drains the clause never asked for.
+- **Nereia's first passive, "receives redirected damage OR heals an ally below 40% HP":** one
+  `OnDamaged` passive counting 171 blows and **no heal at all**. Now two halves of one sentence:
+  **22** on shares received, **87** on heals to an ally under 40%.
+- **Nereia III, "80% of the redirected damage":** it was 80% of ATTACK, the flag absent. 19275
+  total across five seeds before, **12255** after, now that `scaleByLastRedirect` reads what
+  Change of Course actually moved.
 
-8. **A moved status cannot be given a new duration.** `MoveStatus` carries `RoundsLeft` across
-   unchanged, which is the guarantee that a move creates no value. Vaelis's active moves positive
-   effects "for 1 round".
-9. **No negation of `StoredRoleMatches`,** and no way to compare a new record against a previous
-   one — each record lives on its own carrier's entry. Vaelis's talent III fires "from an ally in a
-   different role than the previously recorded role". The same shape gap 9 closed for exactly one
-   condition.
-10. **No attacker-keyed damage reduction.** `Vulnerable` is source-keyed and only increases;
-    nothing lets a status on the ATTACKER reduce what its victim takes. Rovan's basic turns 20% of
-    a Deflected enemy's blow into a Shield on him **instead**, and the "instead" is the half that
-    cannot be said.
-11. **A talent cannot redirect an existing effect's destination.** `ApplyDelta` moves numeric
-    fields only, so a `TargetMode` cannot be overridden. Rovan's talent III sends the Shield to the
-    next-lowest-HP ally "instead of returning it to himself".
+#### The sweep's seed is keyed to the hero ID now, and that cost one regenerate
 
-**One authoring note that is not a blocker but would be a silent cost.** `RecordFact` writes onto
-a status entry the caster already placed on the subject, so Vaelis recording "the triggering ally's
-role" needs him to carry a mark on every ally — a status his description never mentions, showing on
-four allies' status bars. Authorable, and it would be an addition to his kit rather than a
-translation of it, which is why it is named here rather than quietly done.
+The seed was `4400000 + index * 97 + seed`, and the list is sorted by id — so **authoring a hero
+re-seeded every hero alphabetically after it**. These four moved twenty lines belonging to Rheia,
+Seraphine, Velis and Zella, whose kits nobody had touched. Measured rather than assumed: with the
+four still placeholders, the same engine change moved **exactly Nereia's five lines and nobody
+else's**, which is also the proof that the Marrow/Nereia rewiring touched only its own heroes.
+Marrow's own lines did not move because his is a talent and the sweep selects none.
+
+A guard that cries wolf on every insertion gets regenerated, and a baseline regenerated to quiet a
+surprise has stopped guarding. Keyed to the id, a hero's seeds are its own for as long as it keeps
+its id. Every line in the baseline moved once, on this pass, and that is the last time an
+insertion moves one.
+
+#### Named, not approximated
+
+- **Nereia III's cap.** "This damage cannot exceed 15% of Nereia's Max HP" has no field to live
+  in: `MaxHpCap` ceilings the `TargetMaxHpRatio` term against the TARGET's health, and nothing
+  bounds an amount against the CASTER's. Measured before leaving it: at level 40 in the sweep
+  arena the cap is 1955 and the largest single hit the talent dealt is 1383, so it does not bind
+  there — but it is uncapped, and an overkill big enough would pass it.
+- **Vaelis's basic re-arms on a stale body.** "If Vaelis attacked a different enemy on his previous
+  turn" is guarded with `SubjectIsMyPreviousTarget`, which tests that a previous target EXISTS.
+  `PreviousTargetId` is only written when the target actually changes, so on a turn where he
+  strikes the same body as last turn the engine cannot tell that from having struck it once, and
+  Departure re-arms on the older body. The engine's own target history collapses repeats; the
+  difference is not expressible against it.
+- **Nysera's concealment chain is unexercised by the sweep arena.** `AUTHORED-KIT EXERCISE` reports
+  `nysera_unaccounted_for 0`: her Mark goes on the highest-Attack enemy, that enemy aims at the
+  lowest-HP ally, and at level 40 she is never it — so Vanishing Mark's condition is false all 80
+  times its trigger reaches her. The concealment rule itself is engine code with its own arena;
+  what is unmeasured is her chain through it. `vaelis_opening_moves 0` is the same kind of fact:
+  no enemy dies in that arena.
+
+#### Tooling repaired along the way
+
+- **The enum-string scan covered one enum of fourteen.** It existed because a `TargetMode` rename
+  made a silent failure live — `EnumUtil.Parse` falls back to the default rather than throwing —
+  and the same trap is set on `condition`, `trigger`, `status` and eleven others: a misspelled
+  condition never gates, a misspelled trigger never fires, and both look authored. It is
+  structural now rather than textual, because `kind` means `EffectKind` inside an effect and
+  something else on a unit. **554 strings scanned before, 2534 now**, all of them members.
+- **`validate_heroes.py` was blind to every hero using the nested `skills` block.** `_get_skills`
+  returned that block wholesale, so an engine-format hero carrying one had no `basicAttack` as far
+  as the validator could see — it reported that, then checked the star shape against a hero it
+  could not read. Seven heroes were authored that way before anyone noticed. The block is an
+  overlay that cannot shadow a flat slot now: 70 findings became 62, and all seven read OK.
+- **`AUTHORED-KIT EXERCISE`**, a report and deliberately not a guard. The sweep proves a line is a
+  kit's own and has not moved; it cannot say the kit DID anything, because a passive wired to a
+  trigger nothing raises fingerprints exactly like one that fires every round. Four kits on six
+  triggers this roster had never used is where that distinction matters most.
 
 ### Placeholder-period notes (until abilities are authored)
 
-- **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is
-  missing passives and/or talents the star contract requires. This is the expected state while
-  abilities are placeholders and closes when real kits are authored.
+- **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a
+  placeholder is missing passives and/or talents the star contract requires. This is the expected
+  state while abilities are placeholders and closes as real kits are authored: it was 86 before
+  any kit was written and 70 before this pass. Every authored hero now reads OK, including the
+  seven the validator could not previously see at all.
 - **Twelve 2-star heroes carry neither an active nor a passive.** The star contract says 2-star
   heroes should have passive1; placeholder bodies have no passive at all. These twelve are a
-  subset of the 86 violations above.
+  subset of the findings above.
 - **Two heroes carry weapon `"spellbook"` which is not in `UnitRig.BuildWeapon`'s switch.**
   `AttacksAtRange` recognises spellbook for range detection, but `BuildWeapon` does not build a
   visual for it — they fall through to the default. Either add a spellbook case to `BuildWeapon`

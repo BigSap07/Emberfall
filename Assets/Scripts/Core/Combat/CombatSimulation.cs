@@ -263,6 +263,12 @@ namespace Emberfall.Core.Combat
                     return rec != null && rec.StoredRoleSet && rec.StoredRole == (HeroRole)(int)effect.ConditionValue;
                 }
 
+                // What the subject IS, as against what somebody wrote down about it. Pure - it
+                // reads a field rebuilt from content at battle start - so it lives in the static
+                // evaluator with the rest of the unit questions.
+                case EffectCondition.SubjectRoleIs:
+                    return subject.Role == (HeroRole)(int)effect.ConditionValue;
+
                 // A running minimum is only meaningful once something has been recorded, and the
                 // unset sentinel is negative precisely so "never recorded" and "recorded 0%" are
                 // different answers rather than the same one.
@@ -2399,7 +2405,9 @@ namespace Emberfall.Core.Combat
                             // status row, so moving the entry alone would hand the recipient a
                             // marker with nothing behind it.
                             if (entry.Kind == StatusKind.Shield) continue;
-                            MoveStatus(target, to, entry, true);
+                            // MoveDuration re-clocks the entry as it lands; 0 keeps its own, which
+                            // is every move authored before this one.
+                            MoveStatus(target, to, entry, true, effect.MoveDuration);
                             moved++;
                         }
                         break;
@@ -3292,6 +3300,40 @@ namespace Emberfall.Core.Combat
                     _broadcastVictim = target;
                     _broadcastSourceId = sourceId;
                     TriggerPassive(destination, PassiveTrigger.OnRedirectReceived, 0);
+                    _broadcastSourceId = prevSourceId;
+                    _broadcastVictim = prevVictim;
+                    _broadcastSubject = prevSubject;
+                }
+
+                // AND THE UNIT WHOSE RULE MOVED IT hears that it moved. A redirect has three
+                // parties - the body it came off, the body it landed on, and the hero whose ward or
+                // link did the moving - and only the second had a hook. That left the whole
+                // "when I redirect damage" family with nothing to listen to, and the roster has
+                // five of them: Marrow, Nereia twice, Linnet, Ruma, Toren.
+                //
+                // A SECOND TRIGGER RATHER THAN A SUBJECT ON THE FIRST, because the owner needs to
+                // FIRE, and a subject only lets somebody already firing ask a question. The owner
+                // is usually not the destination and often not on the same side as either of the
+                // other two.
+                //
+                // Skipped when the owner IS the destination, which is every Covered ward: a
+                // protector that caught its own ward's share has already been told by
+                // OnRedirectReceived, and firing both on one unit would make a hero that listens to
+                // each answer one event twice.
+                //
+                // `_lastMoved[ruleOwnerId]` was set just above, so ScaleByLastMoved on the owner
+                // reads the share - which is what "damage equal to 80% of the redirected damage"
+                // needs and had no way to say.
+                CombatUnit ruleOwner = FindUnit(ruleOwnerId);
+                if (ruleOwner != null && ruleOwner.Alive && ruleOwner != destination && !IsBattleOver())
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    CombatUnit prevVictim = _broadcastVictim;
+                    int prevSourceId = _broadcastSourceId;
+                    _broadcastSubject = target;
+                    _broadcastVictim = target;
+                    _broadcastSourceId = sourceId;
+                    TriggerPassive(ruleOwner, PassiveTrigger.OnRedirectSent, 0);
                     _broadcastSourceId = prevSourceId;
                     _broadcastVictim = prevVictim;
                     _broadcastSubject = prevSubject;
@@ -5740,11 +5782,32 @@ namespace Emberfall.Core.Combat
 
             private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status, bool removeFromSource)
             {
+                MoveStatus(from, to, status, removeFromSource, 0);
+            }
+
+            /// <summary>
+            /// `newDuration` of 0 keeps the entry's own RoundsLeft, which is what every caller did
+            /// before this and what makes a move create no value. A positive value RE-CLOCKS the
+            /// entry as it lands.
+            ///
+            /// Six abilities in the roster move a set of statuses and name a duration in the same
+            /// breath - "moves its debuffs to the highest-HP enemy FOR 2 ROUNDS", "transfers its
+            /// buffs to the lowest-HP enemy FOR 1 ROUND" - and the set is unknown at authoring
+            /// time, so the remove-and-reapply idiom Seraphine uses cannot serve them: you cannot
+            /// re-apply statuses you cannot name, and doing so would lose whatever they recorded.
+            ///
+            /// It is still a move rather than a grant: magnitude, Stored, charges and every record
+            /// cross untouched. Only the clock is authored, and only when an effect says so.
+            /// </summary>
+            private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status,
+                                    bool removeFromSource, int newDuration)
+            {
                 if (to == null || status == null) return;
 
                 if (removeFromSource && from != null) from.Statuses.Remove(status);
 
-                to.AddOrRefresh(status.Kind, status.RoundsLeft, status.Magnitude, status.SourceId);
+                int rounds = newDuration > 0 ? newDuration : status.RoundsLeft;
+                to.AddOrRefresh(status.Kind, rounds, status.Magnitude, status.SourceId);
 
                 // EVERYTHING THE ENTRY RECORDED TRAVELS WITH IT. A ledger that forgets its balance
                 // when it changes carrier is not a ledger, and a record that forgets what it
@@ -5790,7 +5853,10 @@ namespace Emberfall.Core.Combat
 
                 BattleEvent e = Emit(BattleEventType.StatusSpread, from != null ? from.Id : -1, to.Id);
                 e.Status = status.Kind;
-                e.Duration = status.RoundsLeft;
+                // The clock the entry LANDED with, which is the one it left with unless the move
+                // re-clocked it. Reporting the old number would have the record disagree with the
+                // board for every authored move duration.
+                e.Duration = rounds;
                 e.Value = status.SourceId;
             }
 

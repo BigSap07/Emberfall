@@ -477,6 +477,18 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool ScaleByLastDamage;
 
+        /// <summary>
+        /// Rounds to put on a status MoveDebuffs or MoveBuffs relocates. Zero (the default) keeps
+        /// the entry's own remaining clock, which is what every move did before this and what keeps
+        /// a move from creating value.
+        ///
+        /// Six abilities across the roster move an UNKNOWN set of statuses and name a duration in
+        /// the same breath - "moves its debuffs to the highest-HP enemy for 2 rounds", "transfers
+        /// its buffs to the lowest-HP enemy for 1 round". The remove-and-reapply idiom cannot serve
+        /// them: an ApplyStatus has to name the kind it applies, and these do not know it.
+        /// </summary>
+        public int MoveDuration;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -558,6 +570,7 @@ namespace Emberfall.Core.Data
             e.LinkFromCaster = j.GetBool("linkFromCaster", false);
             e.ScaleByLastMoved = j.GetBool("scaleByLastMoved", false);
             e.ScaleByLastDamage = j.GetBool("scaleByLastDamage", false);
+            e.MoveDuration = Math.Max(0, j.GetInt("moveDuration", 0));
             return e;
         }
 
