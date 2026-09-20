@@ -1,0 +1,16 @@
+# Git decides text-or-binary per file and stores every text file with LF in the index.
+#
+# THIS IS A GUARD, NOT A PREFERENCE. Without it the repository has already acquired one
+# .gitignore that was half UTF-16LE - 50 NUL bytes appended by a PowerShell redirect -
+# which git read as binary and which silently killed the rule spliced onto the end of the
+# broken block. `text=auto` makes that file's successor normalise on the way in instead of
+# landing intact, so the next one is caught at `git add` rather than months later.
+#
+# It does NOT force a working-tree line ending: core.autocrlf still decides what lands on
+# disk at checkout. Only the stored form is pinned.
+* text=auto
+
+# The roster design source is captured verbatim: no line-ending or encoding
+# translation, so a future diff of it shows only what somebody actually edited.
+# Last, because the last matching pattern wins.
+/import/Heroes.json -text

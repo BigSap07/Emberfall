@@ -30,7 +30,13 @@ Write-Host ""
 
 function Compile($label, $sources, $target, $outputPath, $defines) {
     $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
-    ($sources | ForEach-Object { '"' + $_ + '"' }) | Set-Content -Path $rsp -Encoding UTF8
+    # UTF-8 WITHOUT A BOM, written through .NET rather than Set-Content -Encoding UTF8, which on
+    # Windows PowerShell 5.1 means UTF-8 WITH one. csc.exe happens to tolerate a BOM at the top of
+    # a response file, so this was never a visible failure - it is the same mistake that put a
+    # UTF-16 block in .gitignore and a BOM on the Discord payload, and CLAUDE.md already documents
+    # the idiom for the third case. Fixed here so the repository stops carrying an example of it.
+    $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
+    [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))
     Write-Host ("[" + $label + "] " + $sources.Count + " files")
     $defineArgs = @()
     if ($defines) { $defineArgs = @("-define:$defines") }
