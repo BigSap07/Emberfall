@@ -71,6 +71,7 @@ namespace Emberfall.DevHarness
             CheckAuthoredHeroSweep(content);
             CheckNoTalentIsEmpty(content);
             CheckTalentTargetsResolve(content);
+            CheckTalentOverridesNameALiveField(content);
             CheckAuthoredTalentSweep(content);
             CheckAuthoredKitExercise(content);
             ReportTalentExercise();
@@ -17478,6 +17479,89 @@ namespace Emberfall.DevHarness
                       + "so none of them is silently dropped at unit-build time"
                     : broken.Count + " talent target(s) do not resolve and are SILENTLY DROPPED by "
                       + "ApplyTalentOverrides: " + string.Join("; ", broken.ToArray()));
+        }
+
+        /// <summary>
+        /// AN OVERRIDE THAT LANDS SOMEWHERE REAL AND STILL MEANS NOTHING.
+        ///
+        /// The resolve check above catches a target that is out of range. It cannot catch the
+        /// worse version of the same mistake: an address that is one slot short but still inside
+        /// the list, which lands on a REAL effect and sets a field that effect does not read. The
+        /// talent looks alive - it may even move a fingerprint through its other half - and does
+        /// nothing at all.
+        ///
+        /// Every hero who authors a "passive" stat block has it at list position 0, so his JSON
+        /// "passive1" and "passive2" are at 1 and 2, and a talent addressing "passive1" lands on
+        /// the stat block. That is how three of these were written: an override of `power`, `flat`
+        /// or `targetMaxHpRatio` aimed at an ApplyStatus that grants a permanent self-buff.
+        ///
+        /// The test is deliberately narrow, because a false positive here would be worse than the
+        /// silence it replaces: ONLY the damage and healing magnitude terms, and ONLY against
+        /// ApplyStatus, which applies a status and reads none of them. It does not guess about any
+        /// other combination.
+        /// </summary>
+        private static void CheckTalentOverridesNameALiveField(ContentDatabase live)
+        {
+            string[] magnitudeTerms = { "power", "flat", "selfhpratio", "targetmaxhpratio",
+                                        "targetmissinghpratio" };
+            List<string> dead = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+                for (int t = 1; t <= def.Talents.Count; t++)
+                {
+                    PassiveDef p = def.TalentAt(t);
+                    if (p == null) continue;
+                    for (int i = 0; i < p.Overrides.Count; i++)
+                    {
+                        TalentOverrideDef ov = p.Overrides[i];
+                        EffectDef hit = TalentOverrideTarget(def, ov);
+                        if (hit == null || hit.Kind != EffectKind.ApplyStatus) continue;
+                        string field = (ov.Field ?? "").ToLowerInvariant();
+                        for (int m = 0; m < magnitudeTerms.Length; m++)
+                            if (field == magnitudeTerms[m])
+                            {
+                                dead.Add(def.Id + " " + RomanOf(t) + " sets " + ov.Field + " on "
+                                         + ov.Ability + " effect " + ov.EffectIndex
+                                         + ", an ApplyStatus (" + hit.Status + ") that never reads it");
+                                break;
+                            }
+                    }
+                }
+            }
+            Check(dead.Count == 0,
+                  dead.Count == 0
+                    ? "every talent override names a field the effect it lands on actually reads"
+                    : dead.Count + " talent override(s) land on a real effect and set a field it "
+                      + "does not read, so they are alive-looking and inert: "
+                      + string.Join("; ", dead.ToArray()));
+        }
+
+        /// <summary>The effect an override lands on, resolved the way the engine resolves it, or null.</summary>
+        private static EffectDef TalentOverrideTarget(HeroDef def, TalentOverrideDef ov)
+        {
+            string ab = (ov.Ability ?? "").ToLowerInvariant();
+            List<EffectDef> effects = null;
+            if (ab == "basic") effects = def.BasicAttack == null ? null : def.BasicAttack.Effects;
+            else if (ab == "active") effects = def.Active == null ? null : def.Active.Effects;
+            else
+            {
+                if (string.IsNullOrEmpty(ab) || !ab.StartsWith("passive")) return null;
+                string tail = ab.Substring(7);
+                if (tail.Length == 0) return null;
+                int n = 0;
+                for (int i = 0; i < tail.Length; i++)
+                {
+                    if (tail[i] < '0' || tail[i] > '9') return null;
+                    n = n * 10 + (tail[i] - '0');
+                }
+                int pi = n - 1;
+                if (pi < 0 || pi >= def.Passives.Count) return null;
+                effects = def.Passives[pi].Effects;
+            }
+            if (effects == null || ov.EffectIndex < 0 || ov.EffectIndex >= effects.Count) return null;
+            return effects[ov.EffectIndex];
         }
 
         /// <summary>Effects in the slot a talent names, or -1 if the slot does not exist.</summary>

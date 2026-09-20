@@ -1353,21 +1353,13 @@
           "name": "Cross Reference",
           "trigger": "None",
           "effects": [],
-          "overrides": [
-            {
-              "ability": "active",
-              "effectIndex": 6,
-              "field": "power",
-              "delta": 0.3
-            }
-          ],
           "appends": [
             {
               "ability": "active",
               "effect": {
                 "kind": "LedgerIncrement",
                 "target": "HighestEnergyEnemy",
-                "power": 0.0
+                "power": 0.3
               }
             }
           ]
@@ -1379,7 +1371,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 2,
               "field": "magnitude",
               "delta": -0.1
@@ -2691,13 +2683,13 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 2,
               "field": "power",
               "delta": 0.8
             },
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 3,
               "field": "hits",
               "delta": -10
@@ -5232,7 +5224,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 5,
               "field": "power",
               "delta": 1.0
@@ -5240,12 +5232,16 @@
           ],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effect": {
                 "kind": "Shield",
                 "target": "LowestHpAlly",
-                "selfHpRatio": 0.06,
-                "duration": 2
+                "selfHpRatio": 0.08,
+                "duration": 2,
+                "condition": "StatusStacksAtLeast",
+                "conditionStatus": "Resolve",
+                "conditionValue": 4,
+                "conditionOn": "Caster"
               }
             }
           ]
@@ -5484,7 +5480,7 @@
               "delta": 1
             },
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 2,
               "field": "selfHpRatio",
               "delta": 0.04
@@ -6754,21 +6750,13 @@
           "name": "Shared Tempo",
           "trigger": "None",
           "effects": [],
-          "overrides": [
-            {
-              "ability": "passive2",
-              "effectIndex": 1,
-              "field": "magnitude",
-              "delta": 0.1
-            }
-          ],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effect": {
                 "kind": "TurnShift",
                 "target": "LowestEnergyAlly",
-                "magnitude": 0.0
+                "magnitude": 0.1
               }
             }
           ]
@@ -11190,7 +11178,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
               "effectIndex": 2,
               "field": "selfHpRatio",
               "delta": 0.03
