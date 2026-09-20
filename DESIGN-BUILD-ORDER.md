@@ -803,6 +803,56 @@ changes based on what the enemy is about to do".
 folds `(int)Type`. Three older guards claimed the event enum was "untouched"; their pins were
 right and their prose was not, and both now say what they actually guarantee.
 
+### Stopped: `content/dahlia` — she is NOT authored, and three clauses are why
+
+**72 of 72 stage fingerprints unmoved, 145 of 145 sweep lines unchanged, 29 authored heroes —
+because `heroes.json` was not touched.** The sweep did not gain five lines. That is the outcome
+rather than a result.
+
+Both of her known blockers were built and **neither one serves her**, which is the finding.
+
+#### The third pass dissolved one of four, and found a shipped kit broken on the same shape
+
+*"Whenever a Displaced enemy attacks an ally"* was filed as needing the attacker as a broadcast
+subject. It does not. `OnEnemyDamagedAlly` sets `_broadcastSubject` to the VICTIM, and
+`ConditionSubject.LastAttacker` resolves through `_broadcastSubject.LastAttackerId` — which the
+blow set one line earlier. **Caldus already authors exactly this shape that way**, in
+`caldus_no_uncertain_ground`, three clauses of it.
+
+**And that is how a live defect turned up. `rovan_deflected_conversion` answers the same trigger
+with `conditionOn: BroadcastSource`, and nothing sets `_broadcastSourceId` at that site.** It is a
+field initialised to -1 and saved-and-restored around every window that does set it, so outside
+one it resolves to nobody and the condition is false. **Rovan's Deflection Strike shield can never
+pay out.** It fires 58 times in the sweep and banks nothing. Authored in batch six against an
+assumption, with the correct idiom one hero away in a kit authored before it.
+
+#### Three clauses that still cannot be said
+
+- **`TargetBan` cannot be applied by an ability.** It is adopted from a `PassiveDef` in
+  `CombatUnit.AddPassive` and written nowhere else, so it is a standing property of a unit decided
+  at battle start. *"Creates a Displaced state … Displaced enemies cannot target the same ally
+  twice in a row"* needs a restriction that arrives mid-battle, lasts two rounds and leaves. The
+  primitive is the right rule attached to the wrong thing. **The shape to copy is `Disrupted`:** a
+  status instance carrying its own parameters, read at the site that enforces it.
+- **The `OnCastDeclared` window names nobody.** It is raised on every living unit with no
+  broadcast context, so a passive answering it cannot test the caster. `CancelCast` works only
+  because it matches the in-flight caster itself, so an author must aim it at a `TargetMode` that
+  happens to resolve to the right body. *"If the Displaced enemy uses an Active Skill, cancel it"*
+  needs the caster testable, and *"Dahlia immediately deals 75% of Attack damage to it"* needs the
+  caster nameable. Two lines of the code written last pass.
+- **Nothing broadcasts an enemy changing its attack target.** `PreviousTargetId` is updated
+  silently inside `DealRawDamage` and is readable only by the picker, through
+  `SubjectIsNotMyPreviousTarget`. An observer has no hook. This is the whole of her second passive
+  and half of talent I.
+
+Her basic, talent II and talent III are clear, and talent III is neat rather than blocked: *"when
+Displaced ends WITHOUT the enemy having its Active Skill canceled"* is `OnAppliedStatusExpired`
+filtered on Displaced, because the cancel removes Displaced and an entry that expires is one the
+cancel never reached.
+
+Nothing was authored and nothing was approximated. Three engine additions and one content repair
+are named above; **she is the last of the thirty 5-stars and the roster closes when they land.**
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a
