@@ -67,6 +67,8 @@ namespace Emberfall.DevHarness
             CheckFunnelBankingPrimitives(content);
             CheckBatchFiveEngineGaps(content);
             CheckLinkedTargeting(content);
+            CheckNineGaps(content);
+            CheckAuthoredHeroSweep(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -5102,10 +5104,12 @@ namespace Emberfall.DevHarness
                                "LowestSpeedEnemy", "LowestEnergyAlly", "TwoLowestHpAllies",
                                "SecondLowestHpAlly", "AllyWithMostDebuffs", "EnemyWithMyMark",
                                "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
-                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
+                               "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDealtEnemy",
                                "BroadcastVictim",
                                "HighestMyMarkStacksEnemy",
-                               "PreviousTarget", "LinkedUnit" },
+                               "PreviousTarget", "LinkedUnit",
+                               "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
+                               "HighestPendingDoTEnemy" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5141,6 +5145,7 @@ namespace Emberfall.DevHarness
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
             CheckValidatorFileParity();
+            CheckTargetModeStringsParse(db);
             Line("");
         }
 
@@ -5461,8 +5466,17 @@ namespace Emberfall.DevHarness
                 // The old inline Covered line - `DealRawDamage(sourceId, protector, moved, ...)` -
                 // is gone, replaced by the RedirectShare call below that Covered and Linked share.
                 "DealRawDamage(sourceId, destination, moved, false, vfx, dotKind, aspectFactor, abilityName);",
-                "vfx, dotKind, aspectFactor, abilityName)) return;",
                 "DealRawDamage(sourceId, echoTo, copied, false, vfx, dotKind, aspectFactor, abilityName);",
+                // RedirectShare's signature and its two call sites, wrapped across lines. The
+                // trailing parameter is the rule's owner, added so a moved share can be keyed to
+                // the unit whose decision moved it; the aspectFactor beside it is unchanged
+                // plumbing.
+                "float aspectFactor, string abilityName, int ruleOwnerId)",
+                "vfx, dotKind, aspectFactor, abilityName, protectorId)) return;",
+                "vfx, dotKind, aspectFactor, abilityName, redirect.SourceId)) return;",
+                // The Deflect delivery, which carries the original blow's chart reading to the
+                // body the blow was moved onto rather than re-deriving one from that body's aspect.
+                "aspectFactor, abilityName);",
                 "e.AspectFactor = aspectFactor;",
             });
             ScanForAspectReads("CombatUnit.cs", new string[] {
@@ -14810,10 +14824,12 @@ namespace Emberfall.DevHarness
                     // and two full copies of the same enum would be two things to keep in step -
                     // which is the argument this codebase has already made about
                     // AllEnemiesWithStatus and about the mark bank.
-                    "OnLinkedUnitTargeted", "OnLinkedUnitHit"
+                    "OnLinkedUnitTargeted", "OnLinkedUnitHit",
+                    // Extended again by the nine-gap pass, for the same reason: one list.
+                    "OnTargeted", "OnStatusGained", "OnLinkEchoFired", "OnRedirectReceived"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (41 members)");
+            Check(ok, "PassiveTrigger enum parity (45 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -15391,9 +15407,9 @@ namespace Emberfall.DevHarness
         private static void CheckLinkEnumParity()
         {
             bool ok = CheckEnumSet("LinkTransfer",
-                new string[] { "None", "Redirect", "Echo" },
+                new string[] { "None", "Redirect", "Echo", "Deflect" },
                 Enum.GetNames(typeof(LinkTransfer)));
-            Check(ok, "LinkTransfer enum parity (3 members)");
+            Check(ok, "LinkTransfer enum parity (4 members)");
         }
 
         // ---- shared arena scaffolding ------------------------------------------------------
@@ -16042,6 +16058,1884 @@ namespace Emberfall.DevHarness
             team.Add(MakeInstance(db.GetHero("lk_sp_warded"), 1));
             team.Add(MakeInstance(db.GetHero("lk_sp_guard"), 1));
             return RunWith(db, db.GetStage("lksp_arena"), 7777, team);
+        }
+
+        // ================================================================= the nine gaps
+        //
+        // Nine things the four linked heroes' descriptions asked for that the engine could not
+        // say. Each gap gets an arena whose proof is a NUMBER - a total, a count, or a control run
+        // of the same fight with the mechanic removed - rather than an assertion that something
+        // fired. Ordinal pins and the standing guards come first, because a gap closed by a
+        // renumbered enum would rewrite the record of every battle ever resolved.
+
+        private static void CheckNineGaps(ContentDatabase live)
+        {
+            Line("THE NINE GAPS (charges, flat echo, attacker filter, the other end, attacker-keyed");
+            Line("               deflect, four triggers, moved amounts, the broadcast source, and a");
+            Line("               condition that existed with the wrong sign)");
+            CheckNineGapOrdinalPins();
+            CheckNineGapNoShippedUsage(live);
+            CheckNineGapEnumParity();
+            CheckGap1LinkCharges();
+            CheckGap2FlatEcho();
+            CheckGap3AttackerFilter();
+            CheckGap4OtherAndAllLinked();
+            CheckGap5Deflect();
+            CheckGap6Triggers();
+            CheckGap7MovedAmount();
+            CheckGap8BroadcastSource();
+            CheckGap9NotDamagedByMe();
+            CheckRemovedValueScalar();
+            CheckPendingDotTargeting();
+            Line("");
+        }
+
+        private static void CheckNineGapOrdinalPins()
+        {
+            Check((int)TargetMode.LinkedUnit == 30,
+                  "TargetMode.LinkedUnit still at 30 (got " + (int)TargetMode.LinkedUnit + ")");
+            Check((int)TargetMode.OtherLinkedUnit == 31 && (int)TargetMode.AllLinkedUnits == 32
+                  && (int)TargetMode.BroadcastSource == 33,
+                  "TargetMode appends at 31/32/33 (got " + (int)TargetMode.OtherLinkedUnit + ", "
+                  + (int)TargetMode.AllLinkedUnits + ", " + (int)TargetMode.BroadcastSource + ")");
+
+            Check((int)EffectCondition.MyStatusStacksAtLeast == 37,
+                  "EffectCondition.MyStatusStacksAtLeast still at 37 (got "
+                  + (int)EffectCondition.MyStatusStacksAtLeast + ")");
+            Check((int)EffectCondition.SubjectNotDamagedByMeThisRound == 38
+                  && (int)EffectCondition.LastMovedAboveHpFraction == 39,
+                  "EffectCondition appends at 38/39 (got "
+                  + (int)EffectCondition.SubjectNotDamagedByMeThisRound + ", "
+                  + (int)EffectCondition.LastMovedAboveHpFraction + ")");
+
+            Check((int)ConditionSubject.LastTarget == 5 && (int)ConditionSubject.BroadcastSource == 6,
+                  "ConditionSubject.BroadcastSource appended at 6 (got "
+                  + (int)ConditionSubject.BroadcastSource + ")");
+
+            Check((int)LinkTransfer.Echo == 2 && (int)LinkTransfer.Deflect == 3,
+                  "LinkTransfer.Deflect appended at 3 (got " + (int)LinkTransfer.Deflect + ")");
+
+            Check((int)PassiveTrigger.OnLinkedUnitHit == 40,
+                  "PassiveTrigger.OnLinkedUnitHit still at 40 (got "
+                  + (int)PassiveTrigger.OnLinkedUnitHit + ")");
+            Check((int)PassiveTrigger.OnTargeted == 41 && (int)PassiveTrigger.OnStatusGained == 42
+                  && (int)PassiveTrigger.OnLinkEchoFired == 43
+                  && (int)PassiveTrigger.OnRedirectReceived == 44,
+                  "PassiveTrigger appends at 41..44 (got " + (int)PassiveTrigger.OnTargeted + ", "
+                  + (int)PassiveTrigger.OnStatusGained + ", " + (int)PassiveTrigger.OnLinkEchoFired
+                  + ", " + (int)PassiveTrigger.OnRedirectReceived + ")");
+
+            Check((int)StatusKind.Linked == 48 && (int)StatusKind.Covered == 33,
+                  "StatusKind is untouched by this pass - no new kind, so no status ordinal moves");
+            Check((int)BattleEventType.Damage == 6 && (int)BattleEventType.StatusApplied == 10
+                  && (int)BattleEventType.StatusExpired == 12 && (int)BattleEventType.BattleEnd == 20,
+                  "BattleEventType untouched for a seventh pass - a spent link charge reuses "
+                  + "StatusExpired and a deflected blow reuses Damage");
+        }
+
+        /// <summary>
+        /// THE STANDING GUARD, extended. Two of these nine sit on the hot path with no link gate at
+        /// all - the OnTargeted dispatch in ApplyDamageEffect and, behind _anyLinks, the Deflect
+        /// test at the top of DealRawDamage - so "no existing battle moved" rests on shipped
+        /// content reaching none of the new vocabulary. The day a hero authors one, this fails and
+        /// the claim is re-earned rather than assumed.
+        ///
+        /// Covered is again NOT counted: six effects apply it, it is meant to keep working, and the
+        /// 24-stage sweep plus the cover arena are what prove the shared path still splits a hit
+        /// the way it always did.
+        /// </summary>
+        private static void CheckNineGapNoShippedUsage(ContentDatabase db)
+        {
+            int otherLinked = 0, allLinked = 0, bcSourceTarget = 0, bcSourceCond = 0;
+            int notDamaged = 0, lastMovedCond = 0, deflect = 0;
+            int linkAmount = 0, linkFromCaster = 0, scaleMoved = 0, scaleDamage = 0;
+            int onTargeted = 0, onStatusGained = 0, onEchoFired = 0, onRedirectReceived = 0;
+            int scaledHealShield = 0;
+            List<string> named = new List<string>();
+
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<PassiveDef> passives = new List<PassiveDef>();
+                for (int pi = 0; pi < def.Passives.Count; pi++) passives.Add(def.Passives[pi]);
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                    for (int ti = 0; ti < hero.Talents.Count; ti++) passives.Add(hero.Talents[ti]);
+
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < passives.Count; pi++)
+                {
+                    PassiveDef p = passives[pi];
+                    if (p.Trigger == PassiveTrigger.OnTargeted) onTargeted++;
+                    if (p.Trigger == PassiveTrigger.OnStatusGained) onStatusGained++;
+                    if (p.Trigger == PassiveTrigger.OnLinkEchoFired) onEchoFired++;
+                    if (p.Trigger == PassiveTrigger.OnRedirectReceived) onRedirectReceived++;
+                    all.AddRange(p.Effects);
+                    for (int ai = 0; ai < p.Appends.Count; ai++)
+                        if (p.Appends[ai].Effect != null) all.Add(p.Appends[ai].Effect);
+                }
+
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef eff = all[e];
+                    if (eff.Target == TargetMode.OtherLinkedUnit
+                        || eff.SecondaryTarget == TargetMode.OtherLinkedUnit) otherLinked++;
+                    if (eff.Target == TargetMode.AllLinkedUnits
+                        || eff.SecondaryTarget == TargetMode.AllLinkedUnits) allLinked++;
+                    if (eff.Target == TargetMode.BroadcastSource
+                        || eff.SecondaryTarget == TargetMode.BroadcastSource) bcSourceTarget++;
+                    if (eff.ConditionOn == ConditionSubject.BroadcastSource
+                        || eff.ConditionOn2 == ConditionSubject.BroadcastSource
+                        || eff.ConditionOn3 == ConditionSubject.BroadcastSource) bcSourceCond++;
+                    if (eff.Condition == EffectCondition.SubjectNotDamagedByMeThisRound
+                        || eff.Condition2 == EffectCondition.SubjectNotDamagedByMeThisRound
+                        || eff.Condition3 == EffectCondition.SubjectNotDamagedByMeThisRound) notDamaged++;
+                    if (eff.Condition == EffectCondition.LastMovedAboveHpFraction
+                        || eff.Condition2 == EffectCondition.LastMovedAboveHpFraction
+                        || eff.Condition3 == EffectCondition.LastMovedAboveHpFraction) lastMovedCond++;
+                    if (eff.LinkTransfer == LinkTransfer.Deflect) deflect++;
+                    if (eff.LinkAmountPower != 0f) linkAmount++;
+                    if (eff.LinkFromCaster) linkFromCaster++;
+                    if (eff.ScaleByLastMoved) scaleMoved++;
+                    if (eff.ScaleByLastDamage) scaleDamage++;
+
+                    if (eff.Kind != EffectKind.Heal && eff.Kind != EffectKind.Shield) continue;
+                    if (!eff.ScaleByLastRelease && !eff.ScaleByLastRedirect && !eff.ScaleByLastRemoval
+                        && !eff.ScaleByLastBanked && !eff.ScaleByLastMoved && !eff.ScaleByLastDamage) continue;
+                    scaledHealShield++;
+                    named.Add(def.Id);
+                }
+            }
+
+            Check(otherLinked == 0, "no shipped effect targets OtherLinkedUnit (" + otherLinked + ")");
+            Check(allLinked == 0, "no shipped effect targets AllLinkedUnits (" + allLinked + ")");
+            Check(bcSourceTarget == 0, "no shipped effect targets BroadcastSource (" + bcSourceTarget + ")");
+            Check(bcSourceCond == 0, "no shipped effect conditions on BroadcastSource (" + bcSourceCond + ")");
+            Check(notDamaged == 0,
+                  "no shipped effect uses SubjectNotDamagedByMeThisRound (" + notDamaged + ")");
+            Check(lastMovedCond == 0,
+                  "no shipped effect uses LastMovedAboveHpFraction (" + lastMovedCond + ")");
+            Check(deflect == 0, "no shipped effect creates a Deflect link (" + deflect + ")");
+            Check(linkAmount == 0, "no shipped effect sets linkAmountPower (" + linkAmount + ")");
+            Check(linkFromCaster == 0, "no shipped effect sets linkFromCaster (" + linkFromCaster + ")");
+            Check(scaleMoved == 0, "no shipped effect uses ScaleByLastMoved (" + scaleMoved + ")");
+            Check(scaleDamage == 0, "no shipped effect uses ScaleByLastDamage (" + scaleDamage + ")");
+            Check(onTargeted == 0, "no shipped passive triggers on OnTargeted (" + onTargeted + ")");
+            Check(onStatusGained == 0,
+                  "no shipped passive triggers on OnStatusGained (" + onStatusGained + ")");
+            Check(onEchoFired == 0,
+                  "no shipped passive triggers on OnLinkEchoFired (" + onEchoFired + ")");
+            Check(onRedirectReceived == 0,
+                  "no shipped passive triggers on OnRedirectReceived (" + onRedirectReceived + ")");
+
+            // THE ONE BEHAVIOUR CHANGE IN THIS PASS, counted rather than described in prose alone.
+            // Heal and Shield now honour the ScaleBy family, which they silently ignored before, so
+            // any shipped Heal or Shield already authoring one of those flags changes what it does.
+            // This names them, so the list cannot grow unnoticed.
+            Check(scaledHealShield == 6,
+                  "SIX shipped Heal/Shield effects author a ScaleBy flag and therefore change "
+                  + "behaviour in this pass (" + scaledHealShield + ": "
+                  + string.Join(", ", named.ToArray()) + "). Four are talents, inert until selected. "
+                  + "TWO ARE LIVE ABILITIES - brenna_deep_resolve (passive1, a Shield off "
+                  + "scaleByLastBanked) and cyrra_bury_the_burden (active, a Heal off "
+                  + "scaleByLastRemoval) - and every battle either hero fights changes. No "
+                  + "fingerprint moves because neither stands in the sweep's starter squad, which "
+                  + "is coverage rather than safety. The number is pinned so the list cannot grow "
+                  + "unnoticed: a seventh means somebody authored a flag that used to be inert.");
+        }
+
+        private static void CheckNineGapEnumParity()
+        {
+            bool ok = CheckEnumSet("ConditionSubject",
+                new string[] { "Target", "Caster", "Defeated", "BroadcastSubject",
+                               "LastAttacker", "LastTarget", "BroadcastSource" },
+                Enum.GetNames(typeof(ConditionSubject)));
+            Check(ok, "ConditionSubject enum parity (7 members)");
+
+            ok = CheckEnumSet("EffectCondition",
+                new string[] {
+                    "None", "HasStatus", "LacksStatus", "HpBelow", "HpAbove", "HasShield",
+                    "LacksShield", "StatusStacksAtLeast", "HasMyMark", "LacksMyMark",
+                    "LedgerAtLeast", "SubjectActedThisRound", "SubjectHasNotActedThisRound",
+                    "SubjectDamagedSinceMyTurn", "SubjectIsMyPreviousTarget",
+                    "SubjectIsNotMyPreviousTarget", "CasterRepeatedActionType",
+                    "AlreadyDamagedSubjectThisRound", "TurnProgressAbove", "TurnProgressBelow",
+                    "CasterActsBeforeSubject", "StoredStatusMatches", "StoredActionMatches",
+                    "StoredRoleMatches", "SubjectAboveStoredMin", "StatusUseAvailable",
+                    "CasterStatAboveTarget", "CasterStatBelowTarget", "SubjectLastActionWasBasic",
+                    "SubjectLastActionWasActive", "SubjectChangedActionType",
+                    "SubjectRepeatedActionType", "LedgerAtCap", "HpAboveSnapshot",
+                    "HasAnyBeneficialStatus", "HasAnyHarmfulStatus", "ShieldBrokenByCaster",
+                    "MyStatusStacksAtLeast", "SubjectNotDamagedByMeThisRound",
+                    "LastMovedAboveHpFraction"
+                },
+                Enum.GetNames(typeof(EffectCondition)));
+            Check(ok, "EffectCondition enum parity (40 members)");
+        }
+
+        // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
+
+        /// <summary>
+        /// A one-charge Echo link fires exactly ONCE across a fight it would otherwise fire in
+        /// every round. Counts carry it: one echo against the uncharged control's several, and the
+        /// one it fired was a full echo rather than a partial.
+        /// </summary>
+        private static void CheckGap1LinkCharges()
+        {
+            BattleResult once = RunLinkChargeArena(1);
+            BattleResult many = RunLinkChargeArena(0);
+            if (once == null || many == null) { Check(false, "link charge arena built"); return; }
+
+            int backOnce = DamageTo(once, "ChargeBack");
+            int backMany = DamageTo(many, "ChargeBack");
+            int hitsMany = HitsOn(many, "ChargeBack");
+            int hitsOnce = HitsOn(once, "ChargeBack");
+
+            Check(hitsMany >= 3,
+                  "control: an uncharged link echoes on every blow (" + hitsMany + " echoes)");
+            Check(hitsOnce == 1,
+                  "GAP 1: a one-charge link echoes exactly once and then ends (" + hitsOnce
+                  + " echo against the control's " + hitsMany + ")");
+            Check(hitsMany > 0 && backOnce > 0 && backOnce == backMany / hitsMany,
+                  "and the one echo it fired was a full one, not a partial (" + backOnce
+                  + " against the control's per-echo " + (hitsMany > 0 ? backMany / hitsMany : 0) + ")");
+        }
+
+        private static BattleResult RunLinkChargeArena(int charges)
+        {
+            string chargeField = charges > 0 ? ", \"charges\": " + charges : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g1_striker"", ""name"": ""ChargeStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g1_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""g1_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g1_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Echo"", ""magnitude"": 0.5, ""duration"": 99" + chargeField + @" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g1_front"", ""name"": ""ChargeFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g1f"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g1_back"", ""name"": ""ChargeBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g1b"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g1_ch"", ""name"": ""Charge"", ""stages"": [
+    { ""id"": ""g1_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g1_front"", ""level"": 1 }, { ""id"": ""g1_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "link charges");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g1_striker"), 1));
+            return RunWith(db, db.GetStage("g1_arena"), 8101, team);
+        }
+
+        // ---- gap 2: a flat, Attack-scaled echo ------------------------------------------------
+
+        /// <summary>
+        /// An Echo link with a flat linkAmountPower and a Magnitude of zero pays a fixed payload the
+        /// size of the applier's Attack, independent of the blow that triggered it. The proof is
+        /// that the SAME link pays the SAME amount behind two very different hits - which a share
+        /// could not do.
+        /// </summary>
+        private static void CheckGap2FlatEcho()
+        {
+            BattleResult big = RunFlatEchoArena("2.0");
+            BattleResult small = RunFlatEchoArena("0.5");
+            if (big == null || small == null) { Check(false, "flat echo arena built"); return; }
+
+            int frontBig = DamageTo(big, "FlatFront");
+            int frontSmall = DamageTo(small, "FlatFront");
+            int backBig = DamageTo(big, "FlatBack");
+            int backSmall = DamageTo(small, "FlatBack");
+
+            Check(frontBig > frontSmall * 2,
+                  "the two runs land very different blows on the front enemy (" + frontBig
+                  + " against " + frontSmall + ")");
+            Check(backBig > 0 && backBig == backSmall,
+                  "GAP 2: the flat echo pays the same Attack-scaled payload behind both ("
+                  + backBig + " against " + backSmall + ") - it is a payload, not a share of the blow");
+        }
+
+        private static BattleResult RunFlatEchoArena(string power)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g2_striker"", ""name"": ""FlatStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g2_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": " + power + @" } ] },
+      ""active"": { ""id"": ""g2_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g2_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Echo"", ""magnitude"": 0, ""linkAmountPower"": 0.7, ""duration"": 99 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g2_front"", ""name"": ""FlatFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g2f"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g2_back"", ""name"": ""FlatBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g2b"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g2_ch"", ""name"": ""FlatEcho"", ""stages"": [
+    { ""id"": ""g2_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g2_front"", ""level"": 1 }, { ""id"": ""g2_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "flat echo");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g2_striker"), 1));
+            return RunWith(db, db.GetStage("g2_arena"), 8202, team);
+        }
+
+        // ---- gap 3: the link only fires for its own creator ------------------------------------
+
+        /// <summary>
+        /// With linkFromCaster set, an ally's blows on the linked body produce no echo and the
+        /// link's creator's do. The count separates them: echoes equal the CREATOR's hit count,
+        /// while the unfiltered control's equal every blow from either hero.
+        /// </summary>
+        private static void CheckGap3AttackerFilter()
+        {
+            BattleResult filtered = RunAttackerFilterArena(true);
+            BattleResult open = RunAttackerFilterArena(false);
+            if (filtered == null || open == null) { Check(false, "attacker filter arena built"); return; }
+
+            int echoesFiltered = HitsOn(filtered, "FilterBack");
+            int echoesOpen = HitsOn(open, "FilterBack");
+            int creatorHits = HitsBy(filtered, "FilterCreator", "FilterFront");
+            int allyHits = HitsBy(filtered, "FilterAlly", "FilterFront");
+
+            Check(creatorHits > 0 && allyHits > 0,
+                  "both the link's creator and an ally strike the linked body (" + creatorHits
+                  + " and " + allyHits + ")");
+            Check(echoesOpen == creatorHits + allyHits,
+                  "control: an unfiltered link echoes for every blow whoever lands it (" + echoesOpen
+                  + " echoes against " + (creatorHits + allyHits) + " blows)");
+            Check(echoesFiltered == creatorHits,
+                  "GAP 3: with linkFromCaster it echoes only for its creator's blows ("
+                  + echoesFiltered + " echoes against " + creatorHits + " creator blows, with "
+                  + allyHits + " ally blows ignored)");
+        }
+
+        private static BattleResult RunAttackerFilterArena(bool fromCaster)
+        {
+            string filterField = fromCaster ? ", \"linkFromCaster\": true" : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g3_creator"", ""name"": ""FilterCreator"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g3c_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""g3c_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g3_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Echo"", ""magnitude"": 0.5, ""duration"": 99" + filterField + @" }
+        ] } },
+    { ""id"": ""g3_ally"", ""name"": ""FilterAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g3a_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""g3a_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g3_front"", ""name"": ""FilterFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g3f"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g3_back"", ""name"": ""FilterBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g3b"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g3_ch"", ""name"": ""Filter"", ""stages"": [
+    { ""id"": ""g3_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g3_front"", ""level"": 1 }, { ""id"": ""g3_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "attacker filter");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g3_creator"), 1));
+            team.Add(MakeInstance(db.GetHero("g3_ally"), 1));
+            return RunWith(db, db.GetStage("g3_arena"), 8303, team);
+        }
+
+        // ---- gap 4: the other end, and the whole set -------------------------------------------
+
+        /// <summary>
+        /// A hero holding two links strikes THE OTHER one when one is hit, and strikes BOTH with
+        /// AllLinkedUnits. Three enemies, so "the other one" and "the front one" are different
+        /// bodies and the mode cannot pass by coincidence; the third is bound to nothing and must
+        /// be untouched by either mode.
+        /// </summary>
+        private static void CheckGap4OtherAndAllLinked()
+        {
+            BattleResult other = RunOtherLinkedArena("OtherLinkedUnit");
+            BattleResult all = RunOtherLinkedArena("AllLinkedUnits");
+            if (other == null || all == null) { Check(false, "other-linked arena built"); return; }
+
+            int aOther = DamageTo(other, "LinkA");
+            int bOther = DamageTo(other, "LinkB");
+            int cOther = DamageTo(other, "LinkC");
+            int aAll = DamageTo(all, "LinkA");
+            int bAll = DamageTo(all, "LinkB");
+            int cAll = DamageTo(all, "LinkC");
+
+            Check(cOther == 0 && cAll == 0,
+                  "the unlinked bystander is struck by neither mode (" + cOther + " / " + cAll + ")");
+            Check(bOther > 0,
+                  "GAP 4: hitting one link partner reaches THE OTHER one (" + bOther + " on LinkB)");
+            Check(aAll > aOther && bAll > 0,
+                  "and AllLinkedUnits reaches both partners at once where OtherLinkedUnit reached "
+                  + "one (LinkA " + aAll + " against " + aOther + ", LinkB " + bAll + ")");
+        }
+
+        private static BattleResult RunOtherLinkedArena(string mode)
+        {
+            // The hero binds himself to A and to B - two separate links - then strikes A every
+            // turn. His OnLinkedUnitHit passive aims at `mode`. LinkC is bound to nothing.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g4_hero"", ""name"": ""TwoLinks"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g4_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""HighestHpEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""g4_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g4_setup"", ""name"": ""Record Two"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""HighestHpEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99 },
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""LowestHpEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99 }
+        ] },
+      ""passive2"": { ""id"": ""g4_react"", ""name"": ""Strike The Other"", ""trigger"": ""OnLinkedUnitHit"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": """ + mode + @""", ""power"": 0.5 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g4_a"", ""name"": ""LinkA"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g4fa"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g4_b"", ""name"": ""LinkB"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g4fb"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g4_c"", ""name"": ""LinkC"", ""aspect"": ""Ember"",
+      ""hp"": 4000000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g4fc"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g4_ch"", ""name"": ""OtherLinked"", ""stages"": [
+    { ""id"": ""g4_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g4_a"", ""level"": 1 }, { ""id"": ""g4_b"", ""level"": 1 },
+      { ""id"": ""g4_c"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "other linked");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g4_hero"), 1));
+            return RunWith(db, db.GetStage("g4_arena"), 8404, team);
+        }
+
+        // ---- gap 5: attacker-keyed deflect ------------------------------------------------------
+
+        /// <summary>
+        /// THE GAP THE DECISION WAS MADE ON, and the one whose rule is genuinely new. An enemy
+        /// carrying a Deflect link created by the hero cannot land a blow on that hero: the attack
+        /// goes to the enemy's OWN partner at the authored share, and the hero takes nothing.
+        ///
+        /// Proved against a control where the same arena runs with the link never created, so the
+        /// hero's total goes from all of it to zero and the partner's from zero to the share. It
+        /// also demonstrates the rule is ATTACKER-keyed rather than victim-keyed: the hero carries
+        /// no status of any kind, and the unit carrying one is the one attacking.
+        /// </summary>
+        private static void CheckGap5Deflect()
+        {
+            BattleResult deflected = RunDeflectArena(true);
+            BattleResult plain = RunDeflectArena(false);
+            if (deflected == null || plain == null) { Check(false, "deflect arena built"); return; }
+
+            int heroPlain = DamageTo(plain, "DeflectHero");
+            int heroDef = DamageTo(deflected, "DeflectHero");
+            int partnerPlain = DamageTo(plain, "DeflectPartner");
+            int partnerDef = DamageTo(deflected, "DeflectPartner");
+            int blows = HitsOn(plain, "DeflectHero");
+            int expected = blows > 0
+                ? (int)Math.Round((heroPlain / (float)blows) * 0.8f, MidpointRounding.AwayFromZero) * blows
+                : -1;
+
+            Check(heroPlain > 0 && partnerPlain == 0,
+                  "control: with no link the attacker's blows all land on the hero (" + heroPlain
+                  + " on the hero, " + partnerPlain + " on its partner)");
+            Check(heroDef == 0,
+                  "GAP 5: a Deflect link on the ATTACKER sends its blows away from the hero who "
+                  + "created it - she takes nothing at all (" + heroDef + ")");
+            Check(partnerDef == expected,
+                  "and the attacker's own partner takes 80% of what the blow would have dealt ("
+                  + partnerDef + " against " + expected + ")");
+        }
+
+        private static BattleResult RunDeflectArena(bool withLink)
+        {
+            // The hero binds the two enemies to each other with a Deflect link SHE creates, then
+            // does nothing but wait. The first enemy attacks her; its blow lands on the second.
+            string link = withLink
+                ? @"{ ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+                      ""linkTransfer"": ""Deflect"", ""linkMutual"": true, ""magnitude"": 0.8, ""duration"": 99 }"
+                : @"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                      ""magnitude"": 0, ""duration"": 99, ""chance"": 1 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g5_hero"", ""name"": ""DeflectHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g5_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g5_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g5_setup"", ""name"": ""Where I Was Not"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + link + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g5_a"", ""name"": ""DeflectAttacker"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 500, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g5fa"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""g5_b"", ""name"": ""DeflectPartner"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g5fb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g5_ch"", ""name"": ""Deflect"", ""stages"": [
+    { ""id"": ""g5_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g5_a"", ""level"": 1 }, { ""id"": ""g5_b"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "deflect");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g5_hero"), 1));
+            return RunWith(db, db.GetStage("g5_arena"), 8505, team);
+        }
+
+        // ---- gap 6: the four triggers -----------------------------------------------------------
+
+        /// <summary>
+        /// Each of the four fires where its own description says and nowhere else, counted rather
+        /// than merely observed: OnTargeted once per blow AIMED at its owner, OnStatusGained on the
+        /// carrier with its TriggerStatus filter honoured, OnLinkEchoFired on the link's CREATOR
+        /// once per echo, and OnRedirectReceived on the protector once per share.
+        /// </summary>
+        private static void CheckGap6Triggers()
+        {
+            BattleResult r = RunTriggerSuiteArena();
+            if (r == null) { Check(false, "nine-gap trigger arena built"); return; }
+
+            int aimed = CountPassiveFires(r, "g6_onTargeted");
+            int gained = CountPassiveFires(r, "g6_onGained");
+            int gainedWrong = CountPassiveFires(r, "g6_onGainedWrong");
+            int blows = HitsBy(r, "G6Foe", "G6Tank");
+
+            Check(aimed > 0 && aimed == blows,
+                  "GAP 6: OnTargeted fires once for every blow aimed at its owner (" + aimed
+                  + " fires against " + blows + " blows)");
+            Check(gained > 0,
+                  "OnStatusGained fires on the unit that GAINED the status (" + gained + ")");
+            Check(gainedWrong == 0,
+                  "and its TriggerStatus filter excludes a kind it does not name (" + gainedWrong
+                  + " fires for the wrong status)");
+
+            BattleResult echo = RunEchoTriggerArena();
+            if (echo == null) { Check(false, "echo-trigger arena built"); return; }
+            int echoFires = CountPassiveFires(echo, "g6_onEcho");
+            int echoHits = HitsOn(echo, "G6EchoBack");
+            Check(echoFires > 0 && echoFires == echoHits,
+                  "OnLinkEchoFired fires on the link's CREATOR once per echo (" + echoFires
+                  + " fires against " + echoHits + " echoes)");
+
+            BattleResult red = RunRedirectTriggerArena();
+            if (red == null) { Check(false, "redirect-trigger arena built"); return; }
+            int redFires = CountPassiveFires(red, "g6_onRedirect");
+            int redShares = HitsOn(red, "G6Protector");
+            Check(redFires > 0 && redFires == redShares,
+                  "OnRedirectReceived fires on the protector once per share, which OnDamaged could "
+                  + "not tell apart from an ordinary hit (" + redFires + " fires against "
+                  + redShares + " shares)");
+        }
+
+        private static BattleResult RunTriggerSuiteArena()
+        {
+            // The tank conceals itself ONCE at BattleStart - which is the OnStatusGained event -
+            // and is an ordinary target for the rest of the fight, so OnTargeted has blows to
+            // count. A second gained-status passive filters on a kind nothing ever applies.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g6_tank"", ""name"": ""G6Tank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g6t_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g6t_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g6t_setup"", ""name"": ""Vanish Once"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Stealth"",
+            ""magnitude"": 1.0, ""duration"": 1, ""chance"": 1 }
+        ] },
+      ""passive1"": { ""id"": ""g6_onTargeted"", ""name"": ""Aimed At"", ""trigger"": ""OnTargeted"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] },
+      ""passive2"": { ""id"": ""g6_onGained"", ""name"": ""Became Hidden"", ""trigger"": ""OnStatusGained"",
+        ""triggerStatus"": ""Stealth"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] },
+      ""skills"": {
+        ""passive1"": { ""id"": ""g6_onGainedWrong"", ""name"": ""Wrong Filter"",
+          ""trigger"": ""OnStatusGained"", ""triggerStatus"": ""Burn"", ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } } },
+    { ""id"": ""g6_guard"", ""name"": ""G6Guard"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g6g_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g6g_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g6_foe"", ""name"": ""G6Foe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 200, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g6f"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g6_ch"", ""name"": ""Triggers"", ""stages"": [
+    { ""id"": ""g6_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g6_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "gap-6 triggers");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g6_tank"), 1));
+            team.Add(MakeInstance(db.GetHero("g6_guard"), 1));
+            return RunWith(db, db.GetStage("g6_arena"), 8606, team);
+        }
+
+        private static BattleResult RunEchoTriggerArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g6e_hero"", ""name"": ""G6EchoOwner"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g6e_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""g6e_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g6e_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Echo"", ""magnitude"": 0.5, ""duration"": 99 }
+        ] },
+      ""passive2"": { ""id"": ""g6_onEcho"", ""name"": ""Echo Heard"", ""trigger"": ""OnLinkEchoFired"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g6e_front"", ""name"": ""G6EchoFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g6ef"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g6e_back"", ""name"": ""G6EchoBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g6eb"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g6e_ch"", ""name"": ""EchoTrigger"", ""stages"": [
+    { ""id"": ""g6e_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""g6e_front"", ""level"": 1 }, { ""id"": ""g6e_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "echo trigger");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g6e_hero"), 1));
+            return RunWith(db, db.GetStage("g6e_arena"), 8616, team);
+        }
+
+        private static BattleResult RunRedirectTriggerArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g6r_warded"", ""name"": ""G6Warded"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 4000000, ""attack"": 10, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g6rw_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g6rw_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g6r_guard"", ""name"": ""G6Protector"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g6rg_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g6rg_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g6rg_setup"", ""name"": ""Cover"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Covered"",
+            ""magnitude"": 0.5, ""duration"": 99, ""chance"": 1 }
+        ] },
+      ""passive2"": { ""id"": ""g6_onRedirect"", ""name"": ""Took The Blow"",
+        ""trigger"": ""OnRedirectReceived"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g6r_foe"", ""name"": ""G6RedFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g6rf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g6r_ch"", ""name"": ""RedirectTrigger"", ""stages"": [
+    { ""id"": ""g6r_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g6r_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "redirect trigger");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g6r_warded"), 1));
+            team.Add(MakeInstance(db.GetHero("g6r_guard"), 1));
+            return RunWith(db, db.GetStage("g6r_arena"), 8626, team);
+        }
+
+        // ---- gap 7: the amount that moved --------------------------------------------------------
+
+        /// <summary>
+        /// ScaleByLastMoved sizes an effect by the share the caster just soaked, and
+        /// LastMovedAboveHpFraction reads the same amount as a threshold.
+        ///
+        /// WHAT THIS ARENA CAN AND CANNOT PROVE, stated rather than glossed. It proves the scalar
+        /// reads the MOVED AMOUNT: halving the ward's share halves the protector's follow-up
+        /// strike, and the strike equals the share itself. It does NOT prove the store is keyed per
+        /// caster, and no arena can - every write immediately precedes its own read, so a single
+        /// global would answer identically in any ordering a battle can produce. The keying is a
+        /// structural guarantee (a Dictionary, not a field) adopted because a global's failure mode
+        /// is a silent wrong answer under interleaving that this harness cannot construct, which is
+        /// the same argument `_lastLedgerRelease` was already keyed on.
+        /// </summary>
+        private static void CheckGap7MovedAmount()
+        {
+            BattleResult half = RunMovedAmountArena("0.5");
+            BattleResult quarter = RunMovedAmountArena("0.25");
+            if (half == null || quarter == null) { Check(false, "moved-amount arena built"); return; }
+
+            int soakedHalf = DamageTo(half, "G7Prot");
+            int strikeHalf = DamageTo(half, "G7Foe");
+            int soakedQuarter = DamageTo(quarter, "G7Prot");
+            int strikeQuarter = DamageTo(quarter, "G7Foe");
+
+            Check(soakedHalf > 0 && strikeHalf > 0,
+                  "the protector soaked a share and struck back (" + soakedHalf + " soaked, "
+                  + strikeHalf + " struck)");
+            Check(strikeHalf == soakedHalf,
+                  "GAP 7: the strike is sized by the share exactly, at power 1.0 (" + strikeHalf
+                  + " against the " + soakedHalf + " soaked)");
+            Check(soakedQuarter < soakedHalf && strikeQuarter == soakedQuarter,
+                  "and halving the ward's share halves both - the scalar tracks the amount rather "
+                  + "than a constant (" + strikeQuarter + " against " + soakedQuarter + ")");
+
+            BattleResult passes = RunMovedConditionArena("0.001");
+            BattleResult fails = RunMovedConditionArena("0.95");
+            if (passes == null || fails == null) { Check(false, "moved-condition arena built"); return; }
+            int firedLow = DamageTo(passes, "G7CondFoe");
+            int firedHigh = DamageTo(fails, "G7CondFoe");
+            Check(firedLow > 0,
+                  "LastMovedAboveHpFraction passes when the moved amount clears the fraction of the "
+                  + "subject's max HP (" + firedLow + " damage struck; the protector soaked "
+                  + DamageTo(passes, "G7CondProt") + " across the fight)");
+            Check(firedHigh == 0,
+                  "and fails when it does not, so the threshold is genuinely read (" + firedHigh + ")");
+        }
+
+        private static BattleResult RunMovedAmountArena(string share)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g7_warded"", ""name"": ""G7Warded"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 4000000, ""attack"": 10, ""defense"": 0, ""speed"": 40, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g7w_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g7w_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g7_prot"", ""name"": ""G7Prot"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g7p_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g7p_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g7p_setup"", ""name"": ""Cover"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Covered"",
+            ""magnitude"": " + share + @", ""duration"": 99, ""chance"": 1 }
+        ] },
+      ""passive2"": { ""id"": ""g7p_hit"", ""name"": ""Answer"", ""trigger"": ""OnRedirectReceived"",
+        ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""scaleByLastMoved"": true }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g7_foe"", ""name"": ""G7Foe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g7f"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g7_ch"", ""name"": ""Moved"", ""stages"": [
+    { ""id"": ""g7_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g7_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "moved amount");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g7_warded"), 1));
+            team.Add(MakeInstance(db.GetHero("g7_prot"), 1));
+            return RunWith(db, db.GetStage("g7_arena"), 8707, team);
+        }
+
+        private static BattleResult RunMovedConditionArena(string fraction)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g7c_warded"", ""name"": ""G7CondWarded"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 20000, ""attack"": 10, ""defense"": 0, ""speed"": 40, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g7cw_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g7cw_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g7c_prot"", ""name"": ""G7CondProt"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g7cp_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g7cp_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g7cp_setup"", ""name"": ""Cover"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Covered"",
+            ""magnitude"": 0.5, ""duration"": 99, ""chance"": 1 }
+        ] },
+      ""passive2"": { ""id"": ""g7cp_hit"", ""name"": ""Answer If Big"",
+        ""trigger"": ""OnRedirectReceived"", ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0,
+            ""condition"": ""LastMovedAboveHpFraction"", ""conditionOn"": ""BroadcastSubject"",
+            ""conditionValue"": " + fraction + @" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g7c_foe"", ""name"": ""G7CondFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g7cf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g7c_ch"", ""name"": ""MovedCond"", ""stages"": [
+    { ""id"": ""g7c_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g7c_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "moved condition");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g7c_warded"), 1));
+            team.Add(MakeInstance(db.GetHero("g7c_prot"), 1));
+            return RunWith(db, db.GetStage("g7c_arena"), 8717, team);
+        }
+
+        // ---- gap 8: the unit that caused the broadcast -------------------------------------------
+
+        /// <summary>
+        /// BroadcastSource names the HEALER; BroadcastSubject names the HEALED. The arena aims one
+        /// effect at each in turn and the damage lands on a different body each time, which is the
+        /// whole distinction stated as two numbers.
+        ///
+        /// The effect is a Damage aimed at an ALLY, which the engine permits and which is what
+        /// makes the two bodies unambiguous here - no other mode in the enum could have named the
+        /// healer at all.
+        /// </summary>
+        private static void CheckGap8BroadcastSource()
+        {
+            BattleResult atSource = RunBroadcastSourceArena("BroadcastSource");
+            BattleResult atSubject = RunBroadcastSourceArena("BroadcastSubject");
+            if (atSource == null || atSubject == null)
+            { Check(false, "broadcast-source arena built"); return; }
+
+            int menderHitBySource = DamageTo(atSource, "G8Mender");
+            int hurtHitBySource = DamageTo(atSource, "G8Hurt");
+            int menderHitBySubject = DamageTo(atSubject, "G8Mender");
+            int hurtHitBySubject = DamageTo(atSubject, "G8Hurt");
+
+            Check(menderHitBySource > 0,
+                  "GAP 8: an effect aimed at BroadcastSource reaches the HEALER (" + menderHitBySource
+                  + " on the mender)");
+            Check(menderHitBySubject == 0,
+                  "control: the same effect aimed at BroadcastSubject does not (" + menderHitBySubject
+                  + " on the mender)");
+            Check(hurtHitBySubject > hurtHitBySource,
+                  "and lands on the HEALED ally instead, so the two modes name different bodies ("
+                  + hurtHitBySubject + " against " + hurtHitBySource + " on the healed ally)");
+        }
+
+        private static BattleResult RunBroadcastSourceArena(string mode)
+        {
+            // The mender heals the wounded ally every turn. The watcher answers OnAllyHealed with a
+            // strike aimed at `mode` - the healer for BroadcastSource, the healed for
+            // BroadcastSubject. The enemy exists only to keep the wounded ally wounded.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g8_mender"", ""name"": ""G8Mender"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g8m_basic"", ""name"": ""Mend"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""flat"": 500 } ] },
+      ""active"": { ""id"": ""g8m_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g8_hurt"", ""name"": ""G8Hurt"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 2000000, ""attack"": 10, ""defense"": 0, ""speed"": 30, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g8h_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g8h_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g8_watcher"", ""name"": ""G8Watcher"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 200, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g8w_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""g8w_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""g8_react"", ""name"": ""Whose Hand"", ""trigger"": ""OnAllyHealed"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": """ + mode + @""", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g8_foe"", ""name"": ""G8Foe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 300, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g8f"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g8_ch"", ""name"": ""BroadcastSource"", ""stages"": [
+    { ""id"": ""g8_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g8_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "broadcast source");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g8_mender"), 1));
+            team.Add(MakeInstance(db.GetHero("g8_hurt"), 1));
+            team.Add(MakeInstance(db.GetHero("g8_watcher"), 1));
+            return RunWith(db, db.GetStage("g8_arena"), 8808, team);
+        }
+
+        // ---- gap 9: the condition that existed with the wrong sign -------------------------------
+
+        /// <summary>
+        /// Talren's clause, exactly. A basic strikes the highest-Attack enemy and echoes 40% at the
+        /// lowest-HP one ONLY when that is another body. Three runs: two enemies where the picks
+        /// differ, and one enemy that is both - guarded and unguarded.
+        ///
+        /// The unguarded single-enemy run is the bug the condition exists to prevent, and it shows
+        /// up as a count rather than an argument: the lone enemy is struck TWICE a turn, by the
+        /// blow and by the blow's own echo.
+        /// </summary>
+        private static void CheckGap9NotDamagedByMe()
+        {
+            BattleResult twoGuarded = RunNotDamagedArena(true, true);
+            BattleResult oneGuarded = RunNotDamagedArena(false, true);
+            BattleResult oneOpen = RunNotDamagedArena(false, false);
+            if (twoGuarded == null || oneGuarded == null || oneOpen == null)
+            { Check(false, "not-damaged-by-me arena built"); return; }
+
+            int backTwo = DamageTo(twoGuarded, "G9Back");
+            int soloGuarded = DamageTo(oneGuarded, "G9Front");
+            int soloOpen = DamageTo(oneOpen, "G9Front");
+            int soloHits = HitsOn(oneGuarded, "G9Front");
+            int soloOpenHits = HitsOn(oneOpen, "G9Front");
+
+            Check(backTwo > 0,
+                  "with two enemies the echo still lands on the second one (" + backTwo + ")");
+            Check(soloHits > 0 && soloOpenHits == soloHits * 2,
+                  "control: unguarded, a lone enemy is struck TWICE a turn - the blow and its own "
+                  + "echo (" + soloOpenHits + " hits against the guarded " + soloHits + ")");
+            Check(soloGuarded < soloOpen,
+                  "GAP 9: SubjectNotDamagedByMeThisRound stops the echo repeating onto the body the "
+                  + "blow already hit (" + soloGuarded + " against the unguarded " + soloOpen + ")");
+        }
+
+        private static BattleResult RunNotDamagedArena(bool twoEnemies, bool guarded)
+        {
+            string cond = guarded ? @", ""condition"": ""SubjectNotDamagedByMeThisRound""" : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g9_hero"", ""name"": ""G9Hero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""g9_basic"", ""name"": ""Redirecting Shot"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""HighestAttackEnemy"", ""power"": 1.2 },
+          { ""kind"": ""EchoDamage"", ""target"": ""LowestHpEnemy"", ""power"": 0.4" + cond + @" }
+        ] },
+      ""active"": { ""id"": ""g9_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string secondEnemy = twoEnemies
+                ? @",
+    { ""id"": ""g9_back"", ""name"": ""G9Back"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g9b"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                : "";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g9_front"", ""name"": ""G9Front"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""g9f"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                + secondEnemy + @"
+  ]
+}";
+            string stageEnemies = twoEnemies
+                ? @"{ ""id"": ""g9_front"", ""level"": 1 }, { ""id"": ""g9_back"", ""level"": 1 }"
+                : @"{ ""id"": ""g9_front"", ""level"": 1 }";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g9_ch"", ""name"": ""NotDamaged"", ""stages"": [
+    { ""id"": ""g9_arena"", ""index"": 1, ""enemies"": [ " + stageEnemies + @" ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "not damaged by me");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("g9_hero"), 1));
+            return RunWith(db, db.GetStage("g9_arena"), 8909, team);
+        }
+
+        // ---- the removed-value scalar: an amount, not a count -----------------------------------
+
+        /// <summary>
+        /// `scaleByLastRemoval` now feeds an effect the DAMAGE the last removal took off a unit
+        /// rather than how many entries it took, which is what every description reaching it says.
+        ///
+        /// The arena makes the two readings impossible to confuse. A Burn is applied at a known
+        /// per-tick magnitude for a known duration, then stripped, and a Heal scales off the
+        /// removal at power 1.0. A count-based scalar heals 1; an amount-based one heals the Burn's
+        /// whole remaining damage. The check asserts the second and names the first, so a
+        /// regression back to counting fails loudly rather than shrinking a number nobody watches.
+        ///
+        /// The second run halves the Burn's remaining duration, so the heal halves with it - which
+        /// is what proves the scalar reads the REMAINING damage rather than one tick or a constant.
+        /// </summary>
+        private static void CheckRemovedValueScalar()
+        {
+            BattleResult twoRounds = RunRemovedValueArena(2);
+            BattleResult oneRound = RunRemovedValueArena(1);
+            if (twoRounds == null || oneRound == null)
+            { Check(false, "removed-value arena built"); return; }
+
+            int healTwo = HealTo(twoRounds, "RvAlly");
+            int healOne = HealTo(oneRound, "RvAlly");
+
+            Check(healTwo > 1,
+                  "GAP (b): scaleByLastRemoval feeds an AMOUNT - the removed Burn's remaining damage "
+                  + "(" + healTwo + " healed). A count-based scalar would have healed 1, which is "
+                  + "what it did before this repair");
+            Check(healOne > 1 && healTwo == healOne * 2,
+                  "and it is the REMAINING damage rather than one tick or a constant: halving the "
+                  + "Burn's duration halves the heal (" + healOne + " against " + healTwo + ")");
+        }
+
+        /// <summary>Total Heal-event value landed on one unit, by name.</summary>
+        private static int HealTo(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Heal && e.TargetId == id) total += e.Value;
+            }
+            return total;
+        }
+
+        private static BattleResult RunRemovedValueArena(int burnRounds)
+        {
+            // One caster: apply Burn, strip it, heal off what the strip took. The wounded ally is
+            // the only body that can receive the heal, so its Heal total is the scalar's value.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""rv_caster"", ""name"": ""RvCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 1000, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rv_basic"", ""name"": ""Bury"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.3, ""duration"": " + burnRounds + @", ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""RemoveStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"", ""hits"": 1 },
+          { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.0, ""scaleByLastRemoval"": true }
+        ] },
+      ""active"": { ""id"": ""rv_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""rv_ally"", ""name"": ""RvAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 200000, ""attack"": 10, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rva_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""rva_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""rv_foe"", ""name"": ""RvFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 3000, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rvf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""rv_ch"", ""name"": ""RemovedValue"", ""stages"": [
+    { ""id"": ""rv_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""rv_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "removed value");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("rv_caster"), 1));
+            team.Add(MakeInstance(db.GetHero("rv_ally"), 1));
+            return RunWith(db, db.GetStage("rv_arena"), 9101, team);
+        }
+
+        // ================================================================= authored-hero sweep
+        //
+        // THE CRITERION THIS EXISTS TO STRENGTHEN. The 24-stage fingerprint sweep fields a fresh
+        // profile, which deploys three starters, so it measures three of the twenty-one authored
+        // heroes. "No fingerprint moved" was therefore true of a change that altered two other
+        // heroes outright - the ScaleBy repair did exactly that, and the stage sweep reported zero.
+        //
+        // This puts EVERY authored hero into one fixed arena with one fixed squad and records what
+        // its battle did, against a committed baseline. A kit whose behaviour changes moves its own
+        // line and nobody else's.
+        //
+        // A GOLDEN FILE, deliberately, because the alternative cannot do the job. The stage sweep
+        // re-runs the same seed twice and asserts the two agree, which proves reproducibility
+        // within one build and says nothing about whether this build differs from the last. Only a
+        // committed record can answer that. Precedent: Tools/doc-lint-baseline.txt.
+        //
+        // A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE. The
+        // regenerate flag exists so an intended change can be recorded in one step; reaching for it
+        // to quiet a surprise is how a guard stops guarding.
+
+        private const string HeroSweepBaselineFile = "hero-sweep-baseline.txt";
+        private const int HeroSweepSeeds = 5;
+
+        private static void CheckAuthoredHeroSweep(ContentDatabase live)
+        {
+            Line("AUTHORED-HERO SWEEP (every authored kit in one fixed arena, against a committed baseline)");
+
+            List<HeroDef> authored = new List<HeroDef>();
+            int placeholders = 0;
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef h = live.Heroes[i];
+                if (h.BasicAttack != null && h.BasicAttack.Id.Contains("placeholder")) { placeholders++; continue; }
+                authored.Add(h);
+            }
+            authored.Sort(delegate (HeroDef a, HeroDef b) { return string.CompareOrdinal(a.Id, b.Id); });
+            Check(authored.Count > 0,
+                  authored.Count + " authored hero(es) in the sweep, " + placeholders + " placeholder(s) skipped");
+            if (authored.Count == 0) { Line(""); return; }
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            if (arena == null) { Check(false, "hero-sweep arena built"); Line(""); return; }
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            if (fillers == null) { Check(false, "hero-sweep neutral fillers built"); Line(""); return; }
+            StageDef stage = arena.GetStage("sweep_arena");
+            if (stage == null) { Check(false, "hero-sweep stage resolved"); Line(""); return; }
+
+            List<string> lines = new List<string>();
+            for (int h = 0; h < authored.Count; h++)
+            {
+                for (int s = 1; s <= HeroSweepSeeds; s++)
+                {
+                    List<HeroInstance> team = new List<HeroInstance>();
+                    team.Add(MakeInstance(authored[h], 40));
+                    for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                    BattleResult r = RunWith(arena, stage, 4400000 + h * 97 + s, team);
+                    lines.Add(authored[h].Id + "|" + s + "|" + (r == null ? "NULL" : HeroSweepHash(r)));
+                }
+            }
+
+            // THE SWEEP HAS TO MEASURE ITS SUBJECT, not the four bodies standing next to it. If
+            // two heroes produced the same fingerprint for the same seed, their lines would be
+            // reporting on the fillers and the arena rather than on either kit, and a kit could
+            // change without its line moving. Asserted per seed rather than across the whole file,
+            // because two seeds of one hero SHOULD differ and comparing them all together would
+            // confuse the two questions.
+            int collisions = 0;
+            List<string> collided = new List<string>();
+            for (int s = 1; s <= HeroSweepSeeds; s++)
+            {
+                Dictionary<string, string> seenHash = new Dictionary<string, string>();
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    string[] parts = lines[i].Split('|');
+                    if (parts.Length != 3 || parts[1] != s.ToString()) continue;
+                    string owner;
+                    if (seenHash.TryGetValue(parts[2], out owner))
+                    {
+                        collisions++;
+                        collided.Add(owner + " / " + parts[0] + " (seed " + s + ")");
+                        continue;
+                    }
+                    seenHash[parts[2]] = parts[0];
+                }
+            }
+            Check(collisions == 0,
+                  collisions == 0
+                    ? "every authored hero fingerprints differently from every other at the same seed"
+                      + " - each line measures its own subject rather than the squad around it"
+                    : collisions + " hero pair(s) share a fingerprint at the same seed, so those lines"
+                      + " are not measuring their subject: " + string.Join(", ", collided.ToArray()));
+
+            string dir = FindToolDir("DevHarness");
+            string path = dir == null ? null : Path.Combine(dir, HeroSweepBaselineFile);
+            bool regen = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMBERFALL_REGEN_HERO_SWEEP"));
+
+            if (path == null)
+            {
+                Line("  [note] Tools/DevHarness not found next to this binary, so the sweep could not"
+                     + " be compared against its baseline. The " + lines.Count + " fingerprints were"
+                     + " still produced.");
+                Line("");
+                return;
+            }
+
+            if (regen || !File.Exists(path))
+            {
+                WriteHeroSweepBaseline(path, lines);
+                Line("  [note] " + (regen ? "EMBERFALL_REGEN_HERO_SWEEP is set" : "no baseline existed")
+                     + " - wrote " + lines.Count + " fingerprints to " + HeroSweepBaselineFile
+                     + ". A regenerate is a CLAIM that every moved line was intended; the diff is the"
+                     + " record of what was claimed.");
+                Line("");
+                return;
+            }
+
+            CompareHeroSweepBaseline(path, lines);
+            Line("  [note] This covers each hero's behaviour IN THIS ARENA - one squad, one enemy"
+                 + " line, five seeds. A clause that needs a Taunt enemy, a particular aspect"
+                 + " matchup, a second copy of its own hero or an ally it does not have here is"
+                 + " still unmeasured. It raises coverage from the three starters the stage sweep"
+                 + " fields to all " + authored.Count + " authored kits; it is not proof that a kit"
+                 + " does everything its description says.");
+            Line("");
+        }
+
+        private static void WriteHeroSweepBaseline(string path, List<string> lines)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("# Emberfall authored-hero sweep baseline.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# One line per authored hero per seed: <heroId>|<seed>|<fnv1a-64 of the battle>.\r\n");
+            sb.Append("# The hash folds event type, source, target, value and status over the whole\r\n");
+            sb.Append("# event stream, plus the outcome and the round count.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# A MOVED LINE IS A BEHAVIOUR CHANGE. It needs a stated reason in the commit that\r\n");
+            sb.Append("# moves it - which hero, which clause, and why the new behaviour is the right one.\r\n");
+            sb.Append("# Regenerating to make a surprise go away is how a guard stops guarding.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# Regenerate deliberately:  EMBERFALL_REGEN_HERO_SWEEP=1  pwsh Tools/build-check.ps1\r\n");
+            for (int i = 0; i < lines.Count; i++) sb.Append(lines[i]).Append("\r\n");
+            File.WriteAllText(path, sb.ToString());
+        }
+
+        private static void CompareHeroSweepBaseline(string path, List<string> lines)
+        {
+            Dictionary<string, string> baseline = new Dictionary<string, string>();
+            string[] raw = File.ReadAllLines(path);
+            for (int i = 0; i < raw.Length; i++)
+            {
+                string t = raw[i].Trim();
+                if (t.Length == 0 || t[0] == '#') continue;
+                int cut = t.LastIndexOf('|');
+                if (cut <= 0) continue;
+                baseline[t.Substring(0, cut)] = t.Substring(cut + 1);
+            }
+
+            List<string> moved = new List<string>();
+            List<string> added = new List<string>();
+            Dictionary<string, bool> seen = new Dictionary<string, bool>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int cut = lines[i].LastIndexOf('|');
+                string key = lines[i].Substring(0, cut);
+                string hash = lines[i].Substring(cut + 1);
+                seen[key] = true;
+                string was;
+                if (!baseline.TryGetValue(key, out was)) { added.Add(key); continue; }
+                if (was != hash) moved.Add(key);
+            }
+            List<string> gone = new List<string>();
+            foreach (KeyValuePair<string, string> kv in baseline)
+                if (!seen.ContainsKey(kv.Key)) gone.Add(kv.Key);
+
+            Check(moved.Count == 0,
+                  moved.Count == 0
+                    ? "all " + lines.Count + " sweep fingerprints match " + HeroSweepBaselineFile
+                      + " - no authored kit's behaviour moved"
+                    : moved.Count + " of " + lines.Count + " sweep fingerprints MOVED: "
+                      + string.Join(", ", moved.ToArray())
+                      + " - each is a behaviour change in that hero's kit and needs a stated reason in"
+                      + " the commit that moves it, NOT a regenerate");
+            Check(added.Count == 0,
+                  added.Count == 0
+                    ? "no sweep entry is missing from the baseline"
+                    : added.Count + " sweep entr(ies) are not in the baseline (a hero was authored or"
+                      + " the seed count changed): " + string.Join(", ", added.ToArray()));
+            Check(gone.Count == 0,
+                  gone.Count == 0
+                    ? "no baseline entry has lost its hero"
+                    : gone.Count + " baseline entr(ies) no longer resolve to an authored hero: "
+                      + string.Join(", ", gone.ToArray()));
+        }
+
+        /// <summary>FNV-1a over the battle, folding the same fields the stage fingerprint does plus
+        /// the status kind, so a line is a short hash rather than a whole event stream.</summary>
+        private static string HeroSweepHash(BattleResult r)
+        {
+            ulong hash = 14695981039346656037UL;
+            HeroSweepMix(ref hash, r.Victory ? 1 : 0);
+            HeroSweepMix(ref hash, r.Rounds);
+            HeroSweepMix(ref hash, r.Events.Count);
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                HeroSweepMix(ref hash, (int)e.Type);
+                HeroSweepMix(ref hash, e.SourceId);
+                HeroSweepMix(ref hash, e.TargetId);
+                HeroSweepMix(ref hash, e.Value);
+                HeroSweepMix(ref hash, (int)e.Status);
+            }
+            return hash.ToString("x16");
+        }
+
+        private static void HeroSweepMix(ref ulong hash, int v)
+        {
+            for (int b = 0; b < 4; b++)
+            {
+                hash ^= (byte)(v >> (b * 8));
+                hash *= 1099511628211UL;
+            }
+        }
+
+        /// <summary>
+        /// The arena: the REAL heroes and the REAL balance, against a fixed synthetic enemy line on
+        /// a fixed synthetic stage.
+        ///
+        /// Real balance rather than a zero-variance one, which is the opposite of what the small
+        /// mechanic arenas do and is right here for the opposite reason. Those isolate one rule and
+        /// want no noise; this wants maximum SENSITIVITY - with damage and speed variance live,
+        /// every hit draws from the stream, so a change that merely shifts RNG consumption moves the
+        /// hash instead of hiding inside a zeroed term.
+        ///
+        /// The enemy line is five bodies chosen to give reactive kits something to react to: a
+        /// heavy hitter that aims at the weakest ally, a healer, a Burn applier, a self-buffer and
+        /// a Taunt holder. Between them they raise the damage, heal, DoT, buff-gained and anchor
+        /// paths every round without any of it depending on which hero is being measured.
+        ///
+        /// THE WARDEN SMOULDERS, and that is a repair rather than flavour. The first shape of this
+        /// arena left every enemy carrying identical DoT, so a pick that reads CARRIED DoT and a
+        /// pick that falls through to the front body resolved to the same enemy - and the sweep
+        /// measurably failed to notice Cyrra's targeting being corrected from one to the other.
+        /// The back body now carries a long, shallow self-Burn nobody else has, so the enemy with
+        /// the most pending DoT is a specific and distant body. It costs it about 2000 HP of its
+        /// 300000 across a whole fight, so it perturbs the line barely at all while making a whole
+        /// axis of targeting behaviour visible.
+        ///
+        /// ITS TAUNT LASTS TWO ROUNDS AND IS NEVER RENEWED, which is the other half of the same
+        /// repair and the larger one. Re-applied every turn it made the warden a PERMANENT anchor,
+        /// and the anchor overrides every single-enemy target mode there is - so every hero that
+        /// picks one enemy resolved onto the warden regardless of what its kit asked for, and the
+        /// sweep was blind to the whole of single-target targeting. Measured, not suspected: with
+        /// the permanent Taunt standing, correcting Cyrra's active from one target mode to another
+        /// moved none of her lines. Two anchored rounds still exercise the anchor path; the rest
+        /// of the fight lets a kit aim where it says it aims.
+        /// </summary>
+        private static ContentDatabase BuildHeroSweepArena(ContentDatabase live)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""sweep_hitter"", ""name"": ""SweepHitter"", ""aspect"": ""Ember"",
+      ""hp"": 240000, ""attack"": 900, ""defense"": 120, ""speed"": 150, ""critChance"": 0.05, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_hit"", ""name"": ""Crush"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""sweep_healer"", ""name"": ""SweepHealer"", ""aspect"": ""Tide"",
+      ""hp"": 200000, ""attack"": 400, ""defense"": 100, ""speed"": 140, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_heal"", ""name"": ""Mend"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.2 }
+        ] } },
+    { ""id"": ""sweep_burner"", ""name"": ""SweepBurner"", ""aspect"": ""Verdant"",
+      ""hp"": 190000, ""attack"": 500, ""defense"": 90, ""speed"": 130, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_burn"", ""name"": ""Scald"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.6 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""RandomEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.25, ""duration"": 2, ""chance"": 0.9 }
+        ] } },
+    { ""id"": ""sweep_buffer"", ""name"": ""SweepBuffer"", ""aspect"": ""Gale"",
+      ""hp"": 180000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""sw_buff"", ""name"": ""Urge"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
+        ] } },
+    { ""id"": ""sweep_warden"", ""name"": ""SweepWarden"", ""aspect"": ""Lumen"",
+      ""hp"": 300000, ""attack"": 300, ""defense"": 180, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5,
+      ""passive"": { ""id"": ""sw_ward_smoulder"", ""name"": ""Smoulder"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"",
+            ""magnitude"": 0.05, ""duration"": 20, ""chance"": 1 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"",
+            ""magnitude"": 1.0, ""duration"": 2, ""chance"": 1 }
+        ] },
+      ""basic"": { ""id"": ""sw_ward"", ""name"": ""Stand"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.4 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""sweep_ch"", ""name"": ""Sweep"", ""stages"": [
+    { ""id"": ""sweep_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""sweep_hitter"", ""level"": 30 },
+      { ""id"": ""sweep_healer"", ""level"": 30 },
+      { ""id"": ""sweep_burner"", ""level"": 30 },
+      { ""id"": ""sweep_buffer"", ""level"": 30 },
+      { ""id"": ""sweep_warden"", ""level"": 30 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] hero-sweep arena warning: " + db.Warnings[i]);
+            return null;
+        }
+
+        /// <summary>
+        /// Four NEUTRAL stat-sticks that fill the squad and contribute nothing of their own.
+        ///
+        /// PURPOSE-BUILT, NOT BORROWED FROM THE ROSTER, and that is the difference between a sweep
+        /// that isolates its subject and one that does not. Real heroes as fillers would mean a
+        /// change to any filler's kit moved all twenty-one lines at once, so every line would
+        /// report on five kits and none of them would say which.
+        ///
+        /// No passive, no talent, an active nobody can afford, and a basic that deals a token hit.
+        /// Their HP descends in fixed steps so LowestHpAlly, SecondLowestHpAlly and
+        /// TwoLowestHpAllies resolve to specific, stable bodies - a subject that wards or heals "the
+        /// lowest-HP ally" reaches the same filler every run.
+        ///
+        /// They are loaded from their own database and handed over on the HeroInstance, so they
+        /// never enter heroes.json and cannot be summoned, deployed or counted as content.
+        /// </summary>
+        private static List<HeroDef> BuildHeroSweepFillers()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""sweep_filler_a"", ""name"": ""FillerA"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 900, ""attack"": 60, ""defense"": 30, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfa_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfa_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_b"", ""name"": ""FillerB"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 800, ""attack"": 60, ""defense"": 30, ""speed"": 95, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfb_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfb_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_c"", ""name"": ""FillerC"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 700, ""attack"": 60, ""defense"": 30, ""speed"": 90, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfc_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfc_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
+    { ""id"": ""sweep_filler_d"", ""name"": ""FillerD"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 600, ""attack"": 60, ""defense"": 30, ""speed"": 85, ""critChance"": 0, ""critDamage"": 1.5,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""sfd_basic"", ""name"": ""Token"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
+      ""active"": { ""id"": ""sfd_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""sweep_filler_foe"", ""name"": ""Unused"", ""aspect"": ""Ember"",
+      ""hp"": 100, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""sff"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""sfc_ch"", ""name"": ""Fillers"", ""stages"": [
+    { ""id"": ""sfc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""sweep_filler_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, ZeroVarianceBalance(5));
+            if (db.Warnings.Count > 0)
+            {
+                for (int i = 0; i < db.Warnings.Count; i++)
+                    Line("  [FAIL] hero-sweep filler warning: " + db.Warnings[i]);
+                return null;
+            }
+            List<HeroDef> fillers = new List<HeroDef>();
+            string[] ids = { "sweep_filler_a", "sweep_filler_b", "sweep_filler_c", "sweep_filler_d" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef d = db.GetHero(ids[i]);
+                if (d == null) return null;
+                fillers.Add(d);
+            }
+            return fillers;
+        }
+
+        /// <summary>The content directory, found the same way Main does when given no argument.</summary>
+        private static string FindContentDirForSweep()
+        {
+            string candidate = FindContentDir();
+            return Directory.Exists(candidate) ? candidate : null;
+        }
+
+        /// <summary>The directory a tool lives in, for a file that may not exist yet - which is why
+        /// this cannot be FindToolSource, whose whole job is to find an existing file.</summary>
+        private static string FindToolDir(string folder)
+        {
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            for (int r = 0; r < roots.Length; r++)
+            {
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName, Path.Combine("Tools", folder));
+                    if (Directory.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
+            }
+            return null;
+        }
+
+        // ---- pending-DoT targeting: the enemy carrying the most, not the one dealing the most ---
+
+        /// <summary>
+        /// `HighestPendingDoTEnemy` picks the enemy with the most DoT damage still queued ON it.
+        /// The arena puts that body in the BACK slot, so a pick that merely fell through to the
+        /// front enemy cannot pass by coincidence, and gives a middle body TWO shallow Burns
+        /// against the deep body's one, so a pick ranking on entry count lands somewhere else.
+        ///
+        /// THE CONTROL IS THE BUG, REPRODUCED. Cyrra's active was authored against
+        /// HighestDoTDealtEnemy - "the enemy that has DEALT the most DoT this round" - while her
+        /// text asks for "the enemy with the highest remaining Burden damage". Aiming the identical
+        /// effect at the old mode here strips the FRONT body, and the reason is worth stating
+        /// because it is worse than a near miss: DoTDamageDealtThisRound resets for everybody at
+        /// BeginRound and only fills when a unit carrying that enemy's Burn takes its own turn, so
+        /// at the caster's turn it is normally zero across the whole enemy line and the mode
+        /// collapses onto the first living body. Cyrra was not stripping the wrong burning enemy;
+        /// she was stripping the front one. And because she converts what the removed DoT WOULD
+        /// have dealt into healing, that decided how much she healed, not merely where she aimed.
+        /// </summary>
+        private static void CheckPendingDotTargeting()
+        {
+            BattleResult pending = RunPendingDotArena("HighestPendingDoTEnemy");
+            BattleResult dealt = RunPendingDotArena("HighestDoTDealtEnemy");
+            if (pending == null || dealt == null) { Check(false, "pending-DoT arena built"); return; }
+
+            string firstPending = FirstBurnStripTarget(pending);
+            string firstDealt = FirstBurnStripTarget(dealt);
+
+            Check(firstPending == "PdDeepBurn",
+                  "HighestPendingDoTEnemy strips the enemy CARRYING the most pending DoT, which sits "
+                  + "in the BACK slot so a front-enemy fallthrough cannot pass by coincidence (first "
+                  + "strip landed on " + firstPending + ")");
+            Check(firstPending != "PdShallow",
+                  "and it ranks on pending DAMAGE rather than on how many DoT entries a body holds - "
+                  + "the two-Burn body is passed over for the one-Burn body with more left to deal "
+                  + "(first strip landed on " + firstPending + ", not PdShallow)");
+            Check(firstDealt == "PdDealer" && firstDealt != firstPending,
+                  "control: the same effect aimed at HighestDoTDealtEnemy strips the FRONT body "
+                  + "instead (" + firstDealt + "), because every enemy's DoT-dealt counter is zero at "
+                  + "the caster's turn - that mode collapses onto the first living enemy, which is "
+                  + "what Cyrra's active was actually doing");
+        }
+
+        /// <summary>The name of the unit the first externally-caused Burn removal landed on, or
+        /// "(none)". A strip is a StatusExpired naming Burn whose source is somebody else; a
+        /// natural expiry reports the carrier as its own source.</summary>
+        private static string FirstBurnStripTarget(BattleResult r)
+        {
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusExpired || e.Status != StatusKind.Burn) continue;
+                if (e.SourceId == e.TargetId) continue;
+                for (int u = 0; u < r.Units.Count; u++)
+                    if (r.Units[u].Id == e.TargetId) return r.Units[u].Name;
+            }
+            return "(none)";
+        }
+
+        private static BattleResult RunPendingDotArena(string mode)
+        {
+            // Slot order is load-bearing. PdDealer is FRONT, so a mode that falls through to the
+            // first living enemy lands on it; PdDeepBurn is BACK and carries the deepest Burn, so
+            // only a pick that genuinely reads pending damage finds it. PdShallow sits between them
+            // with TWO Burns worth less between them than the deep one alone.
+            //
+            // All three carry a Burn, deliberately. An earlier shape left the front body clean and
+            // the control stripped NOTHING, which proves the old mode missed the burning enemies
+            // but not which body it actually chose. Giving the front body its own Burn makes both
+            // runs strip something, so the two picks can be compared as two named bodies.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""pd_caster"", ""name"": ""PdCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 1000, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""pd_basic"", ""name"": ""Strip"",
+        ""effects"": [
+          { ""kind"": ""RemoveStatus"", ""target"": """ + mode + @""", ""status"": ""Burn"", ""hits"": 1 }
+        ] },
+      ""active"": { ""id"": ""pd_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""pd_seed"", ""name"": ""Seed The Burns"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.5, ""duration"": 9, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""ApplyStatus"", ""target"": ""HighestHpEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.05, ""duration"": 2, ""chance"": 1, ""bypassResist"": true,
+            ""stackOnReapply"": true, ""maxStacks"": 2, ""hits"": 2 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""HighestAttackEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.2, ""duration"": 2, ""chance"": 1, ""bypassResist"": true }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""pd_dealer"", ""name"": ""PdDealer"", ""aspect"": ""Ember"",
+      ""hp"": 600000, ""attack"": 900, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pdl"", ""name"": ""Scald"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.6, ""duration"": 2, ""chance"": 1, ""bypassResist"": true }
+        ] } },
+    { ""id"": ""pd_shallow"", ""name"": ""PdShallow"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pds"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""pd_deep"", ""name"": ""PdDeepBurn"", ""aspect"": ""Ember"",
+      ""hp"": 400000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""pdd"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""pd_ch"", ""name"": ""PendingDot"", ""stages"": [
+    { ""id"": ""pd_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""pd_dealer"", ""level"": 1 }, { ""id"": ""pd_shallow"", ""level"": 1 },
+      { ""id"": ""pd_deep"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(6), "pending dot");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("pd_caster"), 1));
+            return RunWith(db, db.GetStage("pd_arena"), 9202, team);
+        }
+
+        /// <summary>
+        /// EVERY authored target string round-trips through TargetMode.
+        ///
+        /// EnumUtil.Parse falls back to the default rather than throwing, so content naming a mode
+        /// this enum does not know loads clean, resolves to FrontEnemy and is silently wrong. That
+        /// is the same silent-fallback shape the role scan was built for after it shipped broken
+        /// once, and this pass made it live: HighestDoTDamageEnemy was renamed, so any file still
+        /// naming the old spelling would now aim at the front enemy without a word.
+        ///
+        /// Reads the JSON text rather than the parsed database, because the parsed database is
+        /// exactly where the evidence has already been destroyed - by then a bad string has become
+        /// FrontEnemy and is indistinguishable from an authored one. Asserts it read something
+        /// before reporting a verdict, for the reason the role scan does: a guard that inspects
+        /// nothing passes everything.
+        /// </summary>
+        private static void CheckTargetModeStringsParse(ContentDatabase db)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null)
+            {
+                Line("  [note] content directory not found next to this binary, so the target-mode "
+                     + "string scan did not run.");
+                return;
+            }
+
+            string[] files = { "heroes.json", "enemies.json" };
+            List<string> bad = new List<string>();
+            int scanned = 0;
+            for (int f = 0; f < files.Length; f++)
+            {
+                string text;
+                try { text = File.ReadAllText(Path.Combine(dir, files[f])); }
+                catch (Exception) { continue; }
+
+                string[] keys = { "\"target\"", "\"secondaryTarget\"", "\"ledgerAutoReleaseTarget\"" };
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    int at = 0;
+                    while (true)
+                    {
+                        at = text.IndexOf(keys[k], at, StringComparison.Ordinal);
+                        if (at < 0) break;
+                        at += keys[k].Length;
+                        int open = text.IndexOf('"', at);
+                        int colon = text.IndexOf(':', at);
+                        if (open < 0 || colon < 0 || open < colon) { }
+                        int q1 = text.IndexOf('"', colon < 0 ? at : colon);
+                        if (q1 < 0) break;
+                        int q2 = text.IndexOf('"', q1 + 1);
+                        if (q2 < 0) break;
+                        string value = text.Substring(q1 + 1, q2 - q1 - 1);
+                        scanned++;
+                        bool known = false;
+                        string[] names = Enum.GetNames(typeof(TargetMode));
+                        for (int n = 0; n < names.Length; n++) if (names[n] == value) { known = true; break; }
+                        if (!known && !bad.Contains(value)) bad.Add(files[f] + ": '" + value + "'");
+                    }
+                }
+            }
+
+            Check(scanned > 0,
+                  "the target-mode scan actually read " + scanned + " authored target string(s) "
+                  + "before reporting - a scan that read none would pass by inspecting nothing");
+            Check(bad.Count == 0,
+                  bad.Count == 0
+                    ? "every authored target string round-trips through TargetMode, so none of them "
+                      + "is silently resolving to FrontEnemy"
+                    : bad.Count + " authored target string(s) are not TargetMode members and are "
+                      + "silently falling back to FrontEnemy: " + string.Join(", ", bad.ToArray()));
         }
     }
 }

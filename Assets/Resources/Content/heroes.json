@@ -6863,7 +6863,7 @@
           },
           {
             "kind": "RemoveStatus",
-            "target": "HighestDoTDamageEnemy",
+            "target": "HighestPendingDoTEnemy",
             "status": "Burn",
             "hits": 1
           },
@@ -7004,7 +7004,7 @@
               "ability": "active",
               "effect": {
                 "kind": "RemoveStatus",
-                "target": "HighestDoTDamageEnemy",
+                "target": "HighestPendingDoTEnemy",
                 "status": "Burn",
                 "hits": 1
               }

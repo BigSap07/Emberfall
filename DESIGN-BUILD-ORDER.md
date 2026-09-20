@@ -118,6 +118,163 @@ the partner, which for Talren are three different bodies.
   thing, which this engine has refused before (see the absent `AllEnemiesWithStatus`). The
   visible cost is that the log shows the blow aimed at her and the damage landing on the partner.
 
+### Open: `engine/nine-gaps` — unmerged, off `engine/linked-targeting`
+
+**All nine gaps the blocked authoring attempt named. Engine only; still no hero authored.** 72 of
+72 fingerprints unmoved, the same 11 harness reds line for line, 42 new checks with a count-based
+arena per gap. It sits on `engine/linked-targeting` and needs it.
+
+- **Gap 1, charges.** `SpendLinkCharge` decrements and removes at zero, emitting `StatusExpired`
+  the way a spent Guard charge does. 0 charges stays UNLIMITED, which every link authored before
+  this has. Spent BEFORE the share is delivered, so a one-charge link cannot fire again from
+  inside the recursion its own delivery starts.
+- **Gap 2, a flat echo.** `StatusInstance.LinkAmount`, Attack-scaled once at creation like Burn's
+  magnitude and the Ledger's cap. An echo pays `share + flat`. **Echo only** — a redirect is a
+  SPLIT that must create no value, and a flat addend on one would hand the destination more than
+  was ever struck.
+- **Gap 3, the attacker filter.** `LinkFromCasterOnly`, the same test and deliberately the same
+  spelling as the Ledger's `BankFromCaster`, folded into `FindLink` so every link reader honours
+  it at once.
+- **Gap 4, the other end and the set.** `OtherLinkedUnit` is the caster's highest-HP partner
+  excluding the one the dispatch is about — one mode for both shapes that asked, because with two
+  records "highest HP among one" IS the other one, and with three it is the sentence a talent asks
+  for in as many words. `AllLinkedUnits` is the set, deduplicated.
+- **Gap 5, attacker-keyed deflect.** `LinkTransfer.Deflect`, its own rule beside `RedirectShare`
+  rather than a loosened Provoked: Provoked's same-side refusal is correct for what Provoked means
+  and is untouched. It fires FIRST in the funnel, ahead of Guard, and that placement is the rule's
+  meaning rather than a convenience — the blow never reaches this body, so none of the victim's
+  own defences may spend themselves on it.
+- **Gap 6, four triggers.** `OnTargeted`, `OnStatusGained` (TriggerStatus-filtered, and
+  deliberately NOT raised by MoveStatus or TransferStatus — a status changing carrier is its own
+  event with its own record), `OnLinkEchoFired` on the link's creator, `OnRedirectReceived` on the
+  protector. The last fires for Covered as well as for a link, because they are one path and a
+  trigger serving only one would be the two drifting apart at the first opportunity.
+- **Gap 7, the moved amount.** `ScaleByLastMoved` reading `_lastMoved`, a **Dictionary keyed per
+  caster from the start**, joining `_lastLedgerRelease` rather than the three single-field scalars
+  beside it. `LastMovedAboveHpFraction` is the threshold half. A second scalar,
+  `ScaleByLastDamage`, reads the broadcast-window `_lastDamageDealt`.
+  - **What the arena can and cannot prove, stated rather than glossed.** It proves the scalar
+    tracks the amount: halving the ward's share halves the follow-up strike, and the strike equals
+    the share. It does NOT prove the per-caster keying, and no arena can — every write immediately
+    precedes its own read, so one global would answer identically in any ordering a battle can
+    produce. The keying is structural, against a failure mode this harness cannot construct.
+- **Gap 8, the causing unit.** `TargetMode.BroadcastSource` and `ConditionSubject.BroadcastSource`.
+  Distinct from `LastAttacker`, which resolves through the subject's `LastAttackerId` and so
+  answers correctly only for a broadcast raised by a hit, naming the wrong body for one raised by
+  a heal or a shield.
+- **Gap 9, the wrong sign.** `SubjectNotDamagedByMeThisRound`, the exact mirror of
+  `AlreadyDamagedSubjectThisRound`. **A general `negate` flag was rejected**: three fields that
+  silently re-point all forty conditions, including the twenty-odd whose negation nobody has
+  reasoned about — what "not TurnProgressAbove" means for a unit with no position left, or "not
+  StoredRoleMatches" when nothing was recorded.
+
+**A bug in the previous pass, found by an arena rather than by reading.** `DispatchLinkPassive`
+was handed depth 0 at the funnel, matching the broadcasts beside it — but a passive answering "my
+partner was hit" by striking its OTHER partner walks straight back in at 0 again. The gap-4 arena
+overflowed the stack the first time it authored that with `oncePerBattle` false, which is the
+natural shape of the link triggers rather than an exotic case. `_linkDispatchDepth` bounds it and
+is handed to `TriggerPassive` as the depth, so one cap governs instead of two that could disagree.
+
+**`ScaleByLastRemoval` carried a COUNT where every description says an amount, and that was the
+real defect.** Verified before repairing, on real content at level 40: Cyrra's active healed **791**
+before the `ScaledTerm` change (0.8 × Attack, the flag inert) and **1** after (0.8 × one entry
+removed). Her text says *"the removed damage is converted into healing equal to 100% of that
+amount"*; her talent I says *"converts only 60% of its removed damage"*. **Audited the whole
+roster: two users, both hers, both wanting an amount, and nothing anywhere reading it as a
+count** — which is what made changing the meaning the right repair rather than adding a sibling
+scalar. A sibling would have left the mis-named one in place for the next author to reach for.
+- `_lastRemovedStacks` became `_lastRemovedValue`, summed at all three removal sites (Cleanse,
+  Dispel, RemoveStatus) as `RemainingDotDamage` — per-tick Magnitude × rounds left. Zero for
+  anything carrying no damage, rather than a stand-in nobody authored.
+- The JSON key keeps its spelling. `scaleByLastRemoval` always meant "scale by what the last
+  removal took"; only the unit was wrong, and renaming it would have broken the two effects the
+  repair exists to fix.
+- `CheckRemovedValueScalar` measures it: a Burn of known magnitude and duration stripped and
+  converted, healing **3216** at two rounds and **1608** at one. Halving the duration halves the
+  heal, which is what proves it reads the REMAINING damage rather than one tick or a constant.
+
+**Cyrra's active was stripping the FRONT enemy, not the most-burdened one.** `HighestDoTDamageEnemy`
+meant "the enemy that has DEALT the most DoT this round"; her text asks for *"the enemy with the
+highest remaining Burden damage"*. Different question — and because she converts what the removed
+DoT would have dealt into healing, the pick decided how much she healed, not merely where she aimed.
+- **Audited both damage-dealt modes.** `HighestDamageDealtEnemy` has one user, Hale, and he reads it
+  correctly: *"move Quarry to the enemy that dealt the most damage that round"*. `HighestDoTDamageEnemy`
+  had only Cyrra, who wanted the opposite. **So the meaning was sound and its use was wrong** — the
+  reverse of the `ScaleByLastRemoval` case, and the audit is what told them apart.
+- **Worse than a near miss.** `DoTDamageDealtThisRound` resets for everybody at `BeginRound` and only
+  fills when a unit carrying that enemy's Burn takes its own turn, so at Cyrra's turn it is normally
+  zero across the whole enemy line and the mode collapses onto the first living body. She was not
+  stripping the wrong burning enemy; she was stripping the front one, and often one carrying nothing.
+- **Added `TargetMode.HighestPendingDoTEnemy`** — the enemy carrying the most DoT damage still
+  queued on it, ranked with `Sim.RemainingDotDamage`, the same helper `_lastRemovedValue` sums when a
+  removal happens, so "which enemy has the most to remove" and "how much was removed" cannot drift
+  apart. Nobody when no enemy carries any, rather than falling through to the front body.
+- **Renamed `HighestDoTDamageEnemy` to `HighestDoTDealtEnemy`**, same ordinal, meaning untouched.
+  That name was the trap and it caught somebody; it now cannot be misread for the carried-DoT
+  question sitting next to it. No content uses it.
+- **A new guard, because the rename made a silent failure live.** `EnumUtil.Parse` falls back to the
+  default rather than throwing, so a file still naming the old spelling would aim at the front enemy
+  without a word. `CheckTargetModeStringsParse` reads the content JSON as text — the parsed database
+  is where the evidence has already been destroyed — and asserts every authored target string
+  round-trips through `TargetMode`. It read 554 strings, and asserts it read some before reporting,
+  for the reason the role scan does.
+
+**The sweep was blind to all of single-target targeting, and the Cyrra fix is what found it.**
+Correcting her mode moved **none** of her sweep lines. Measured, not assumed, by reverting her and
+re-running. Two faults in the arena, both now repaired, and all 105 baseline lines move as a result:
+- **The warden's Taunt was permanent** — re-applied every turn — and **the anchor overrides every
+  single-enemy target mode there is**. Every hero that picks one enemy was resolving onto the warden
+  regardless of what its kit asked for. Its Taunt is now a BattleStart application lasting two
+  rounds and never renewed: the anchor path is still exercised, and the rest of the fight lets a kit
+  aim where it says it aims.
+- **Every enemy carried identical DoT**, so a carried-DoT pick and a front-enemy fallthrough
+  resolved to the same body. The back enemy now carries a long shallow self-Burn nobody else has,
+  which costs it about 2000 HP of 300000 across a fight and makes a whole axis of targeting visible.
+- **Re-verified after the repair:** reverting Cyrra's mode now moves exactly her five lines and
+  nobody else's. That is the sweep doing the job it was built for, on the change that exposed it.
+
+**Shipped: the authored-hero sweep, and the reason it had to exist.** The 24-stage fingerprint
+sweep fields a fresh profile, which deploys three starters — so it measured **three of the
+twenty-one authored heroes**. "0 of 72 fingerprints moved" was therefore true of a change that
+altered two other heroes outright. The criterion was weaker than it read.
+- `Tools/DevHarness/hero-sweep-baseline.txt`, 105 lines: every authored hero × 5 seeds, in one
+  fixed arena, hashed FNV-1a over the whole event stream with the hero id in plain text.
+- **A golden file, deliberately.** The stage sweep re-runs a seed twice and asserts the two agree,
+  which proves reproducibility within one build and says nothing about whether this build differs
+  from the last. Only a committed record answers that. It sits beside `doc-lint-baseline.txt`.
+- **A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE** — which hero,
+  which clause, why the new behaviour is right. `EMBERFALL_REGEN_HERO_SWEEP=1` exists so an
+  intended change lands in one step; reaching for it to quiet a surprise is how a guard stops
+  guarding.
+- **Neutral purpose-built fillers, not heroes from the roster.** Four stat-sticks with no passive,
+  no talent and an unaffordable active, loaded from their own database and handed over on the
+  `HeroInstance`, so they never enter `heroes.json`. Real heroes as fillers would mean a change to
+  any filler's kit moved all 21 lines at once. A standing check asserts no two heroes share a
+  fingerprint at the same seed, which is what proves each line measures its subject rather than
+  the squad around it.
+- **Real balance, not a zero-variance one** — the opposite of what the small mechanic arenas use
+  and right for the opposite reason. Those isolate one rule and want no noise; this wants
+  sensitivity, so every hit draws from the RNG stream and a change that merely shifts consumption
+  moves the hash instead of hiding inside a zeroed term.
+- **Cost, measured:** 105 battles, **~25 ms**, against a harness that runs in 6.9 s. Full
+  build-check went 9.0 s to **10.4 s**. The baseline file is 4.6 KB.
+- **The honest limit, stated in the check's own output:** it covers each hero's behaviour IN THAT
+  ARENA — one squad, one enemy line, five seeds. A clause needing a Taunt enemy, a particular
+  aspect matchup, a second copy of its own hero or an ally it does not have here is still
+  unmeasured. It raises coverage from three heroes to twenty-one; it is not proof that a kit does
+  everything its description says.
+
+**THE OTHER BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
+honour the `ScaleBy*` family through a shared `ScaledTerm`. They read it nowhere before, so a Heal
+or Shield authoring one of those flags computed off plain Attack and the flag did nothing at all.
+**Six shipped effects author one, across four heroes, and TWO ARE LIVE ABILITIES** —
+`brenna_deep_resolve` (passive1, a Shield off `scaleByLastBanked`) and `cyrra_bury_the_burden`
+(active, a Heal off `scaleByLastRemoval`). The other four are talents, inert until selected. Every
+battle Brenna or Cyrra fights changes; no fingerprint moves only because neither stands in the
+sweep's starter squad, which is coverage rather than safety. The count is pinned at 6, so a
+seventh cannot appear unnoticed. Left in rather than reverted, because the flags are authored
+intent and silently ignoring them is the older bug.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 86 star-shape violations.** Every hero above 1-star is
