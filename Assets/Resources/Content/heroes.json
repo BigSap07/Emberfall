@@ -9561,7 +9561,8 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
+              "atIndex": 4,
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -9573,7 +9574,8 @@
               }
             },
             {
-              "ability": "passive2",
+              "ability": "passive3",
+              "atIndex": 4,
               "effect": {
                 "kind": "EnergyGain",
                 "target": "BroadcastSubject",
@@ -9595,7 +9597,8 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "passive3",
+              "atIndex": 4,
               "effect": {
                 "kind": "Damage",
                 "target": "BroadcastSubject",

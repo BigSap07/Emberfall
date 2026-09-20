@@ -1093,7 +1093,7 @@ namespace Emberfall.Core.Combat
                         AbilityDef src = ab == "basic" ? unit.Basic : unit.Active;
                         if (src == null) continue;
                         AbilityDef aclone = CloneAbility(src);
-                        aclone.Effects.Add(ap.Effect.Clone());
+                        InsertAppend(aclone.Effects, ap);
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
                     else if (PassiveSlotIndex(ab) >= 0)
@@ -1101,7 +1101,7 @@ namespace Emberfall.Core.Combat
                         int pi = PassiveSlotIndex(ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef pclone = ClonePassive(unit.Passives[pi]);
-                        pclone.Effects.Add(ap.Effect.Clone());
+                        InsertAppend(pclone.Effects, ap);
                         unit.Passives[pi] = pclone;
                     }
                 }
@@ -1132,6 +1132,18 @@ namespace Emberfall.Core.Combat
                     n = n * 10 + (tail[i] - '0');
                 }
                 return n >= 1 ? n - 1 : -1;
+            }
+
+            /// <summary>
+            /// Puts an appended effect where the talent asked for it. -1 and anything out of range
+            /// means the end, which is where every append written before AtIndex existed goes and
+            /// is why adding the field moved nothing.
+            /// </summary>
+            private static void InsertAppend(List<EffectDef> effects, TalentAppendDef ap)
+            {
+                EffectDef e = ap.Effect.Clone();
+                if (ap.AtIndex < 0 || ap.AtIndex > effects.Count) effects.Add(e);
+                else effects.Insert(ap.AtIndex, e);
             }
 
             private static AbilityDef CloneAbility(AbilityDef src)
@@ -4267,8 +4279,16 @@ namespace Emberfall.Core.Combat
                             expired.Status = StatusKind.Shield;
                             int prevBreaker = _shieldBreakerId;
                             CombatUnit prevVictimSB = _broadcastVictim;
+                            // AND THE SUBJECT, which this site alone left unset. Eight lines
+                            // below, OnAllyShieldBreak publishes the same body under both names
+                            // for the same event; here only the victim was named, so a clause
+                            // about "the ally whose Shield broke" resolved against whatever an
+                            // earlier, unrelated window had left behind. One event, two triggers,
+                            // and they disagreed about what they were telling you.
+                            CombatUnit prevSubjectSB = _broadcastSubject;
                             _shieldBreakerId = sourceId;
                             _broadcastVictim = target;
+                            _broadcastSubject = target;
                             int prevSbSrc = _broadcastSourceId;
                             _broadcastSourceId = sourceId;
                             TriggerPassive(target, PassiveTrigger.OnShieldBreak, 0);
@@ -4287,6 +4307,7 @@ namespace Emberfall.Core.Combat
                                 _broadcastSourceId = prevAsbSrc;
                                 _broadcastSubject = prevSubject2;
                             }
+                            _broadcastSubject = prevSubjectSB;
                             _shieldBreakerId = prevBreaker;
                             _broadcastVictim = prevVictimSB;
                             if (!target.Alive || IsBattleOver()) return;

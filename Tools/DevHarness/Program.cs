@@ -71,6 +71,8 @@ namespace Emberfall.DevHarness
             CheckAuthoredHeroSweep(content);
             CheckPerTargetBudgetIsPerFiring();
             CheckSourceFilterFiresForItsCauser(content);
+            CheckCyrraReserveLandsOnTheAlly(content);
+            CheckMirethAppendsFindTheirHost(content);
             CheckTriggerContextParity();
             CheckNoContentReadsAnUnsetField(content);
             CheckPerTargetBudgetLandsWholeFirings(content);
@@ -17982,6 +17984,176 @@ namespace Emberfall.DevHarness
             return new int[] { fires, buffs };
         }
 
+        /// <summary>
+        /// CYRRA'S HIDDEN RESERVE, AND THE BODY IT LANDS ON.
+        ///
+        /// Her talent says the ALLY whose Shield broke is healed for what was stored, and it aims
+        /// at the broadcast subject to say so. OnShieldBreak published a victim and no subject,
+        /// while OnAllyShieldBreak - the same event, eight lines below - published the same body
+        /// under both names. So her Ledger went wherever the last unrelated window had left its
+        /// subject, which in this arena was an ENEMY as often as not.
+        ///
+        /// Counted by side, because "it fired" was never the problem: it fired 13 times.
+        /// </summary>
+        private static void CheckCyrraReserveLandsOnTheAlly(ContentDatabase live)
+        {
+            int[] with = RunCyrraArena(live, 2);
+            int[] without = RunCyrraArena(live, 0);
+            if (with == null || without == null) { Check(false, "cyrra arena built"); return; }
+            int ally = with[0] - without[0], foe = with[1] - without[1];
+            Check(ally > 0 && foe == 0,
+                  "Hidden Reserve puts its stored healing on an ALLY every time (" + ally
+                  + " ledgers on allies, " + foe + " on enemies, over no-talent runs of the same "
+                  + "five seeds) - it is aimed at the body whose Shield broke, and that trigger "
+                  + "names one now");
+        }
+
+        /// <summary>{ledgers landed on allies, on enemies}</summary>
+        private static int[] RunCyrraArena(ContentDatabase live, int talent)
+        {
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            HeroDef cyrra = arena == null ? null : arena.GetHero("cyrra_the_burden_bearer");
+            if (arena == null || fillers == null || stage == null || cyrra == null) return null;
+
+            int ally = 0, foe = 0;
+            for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                HeroInstance her = MakeInstance(cyrra, 40);
+                her.SelectedTalent = talent;
+                team.Add(her);
+                for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                BattleResult r = RunWith(arena, stage, HeroSweepSeed(cyrra.Id, seed), team);
+                if (r == null) continue;
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type != BattleEventType.StatusApplied || e.Status != StatusKind.Ledger) continue;
+                    UnitSnapshot u = r.FindUnit(e.TargetId);
+                    if (u == null) continue;
+                    if (u.IsPlayer) ally++; else foe++;
+                }
+            }
+            return new int[] { ally, foe };
+        }
+
+        /// <summary>
+        /// MIRETH'S TWO APPENDS, ON THE PASSIVE THEY DESCRIBE.
+        ///
+        /// Both name a passive slot, and a slot is a LIST POSITION: her stat block sits at 0, so
+        /// her JSON "passive2" - The Missing Page - is position 2 and the talents landed one short,
+        /// on Absence Has Weight. That passive answers OnStatusRemoved, which publishes no subject,
+        /// so an appended effect aimed at the broadcast subject had nothing to aim at.
+        ///
+        /// The hero sweep cannot see this: her Missing Page needs three Pages and a wounded Focused
+        /// enemy, and its arena provides neither. So the measurement is made where the host
+        /// actually fires - a marked enemy that buffs itself every turn - and counts which of her
+        /// two passives the appended effects hang off.
+        /// </summary>
+        private static void CheckMirethAppendsFindTheirHost(ContentDatabase live)
+        {
+            Line("MIRETH'S APPENDS (which passive the talent's effects hang off, in an arena that fires it)");
+
+            int[] none = RunMirethArena(0);
+            int[] two = RunMirethArena(2);
+            int[] three = RunMirethArena(3);
+            if (none == null || two == null || three == null)
+            { Check(false, "mireth arena built"); Line(""); return; }
+
+            Line("  [note] no talent      : Missing Page fired " + none[0] + ", Absence Has Weight "
+                 + none[1] + ", she dealt " + none[2] + " damage and took " + none[3]
+                 + " energy off enemies");
+            Line("  [note] talent II      : Missing Page fired " + two[0] + ", Absence Has Weight "
+                 + two[1] + ", she dealt " + two[2] + " damage and took " + two[3]
+                 + " energy off enemies");
+            Line("  [note] talent III     : Missing Page fired " + three[0] + ", Absence Has Weight "
+                 + three[1] + ", she dealt " + three[2] + " damage and took " + three[3]
+                 + " energy off enemies");
+
+            Check(two[3] > none[3],
+                  "Blank Space takes " + (two[3] - none[3]) + " more Energy off the Focused enemy "
+                  + "than no talent does (" + two[3] + " against " + none[3]
+                  + ") - appended to Absence Has Weight it drained nobody, because that trigger "
+                  + "names no subject to drain");
+            Check(three[2] > none[2],
+                  "No Record Remains adds " + (three[2] - none[2]) + " damage (" + three[2]
+                  + " against " + none[2] + "), landing on the enemy The Missing Page just hit");
+            Line("");
+        }
+
+        /// <summary>{missing-page firings, absence firings, damage she dealt, enemy energy removed}</summary>
+        private static int[] RunMirethArena(int talent)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            // Buffs itself every turn, so a Focused body keeps handing her the trigger, and is
+            // soft enough that she can push it under the health gates her talents ask about.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""mi_foe"", ""name"": ""MiFoe"", ""aspect"": ""Ember"",
+      ""hp"": 26000, ""attack"": 45, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""mi_b"", ""name"": ""Bolster"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1 },
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.2 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""mi_ch"", ""name"": ""Mi"", ""stages"": [
+    { ""id"": ""mi_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""mi_foe"", ""level"": 40 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, balance, "mireth appends");
+            if (db == null) return null;
+            HeroDef mireth = db.GetHero("mireth_the_erased_name");
+            StageDef stage = db.GetStage("mi_arena");
+            if (mireth == null || stage == null) return null;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroInstance her = MakeInstance(mireth, 40);
+            her.SelectedTalent = talent;
+            team.Add(her);
+            BattleResult r = RunWith(db, stage, 5190, team);
+            if (r == null) return null;
+
+            int mine = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].DefId == mireth.Id) mine = r.Units[i].Id;
+
+            int page = 0, absence = 0, dealt = 0, drained = 0;
+            Dictionary<int, int> energy = new Dictionary<int, int>();
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger)
+                {
+                    if (e.AbilityId == "mireth_the_missing_page") page++;
+                    else if (e.AbilityId == "mireth_absence_has_weight") absence++;
+                }
+                if (e.Type == BattleEventType.Damage && e.SourceId == mine) dealt += e.Value;
+                if (e.Type == BattleEventType.EnergyChanged)
+                {
+                    UnitSnapshot u = r.FindUnit(e.TargetId);
+                    if (u == null || u.IsPlayer) continue;
+                    int was;
+                    if (energy.TryGetValue(e.TargetId, out was) && e.Value < was) drained += was - e.Value;
+                    energy[e.TargetId] = e.Value;
+                }
+            }
+            return new int[] { page, absence, dealt, drained };
+        }
+
         private struct TriggerCtx
         {
             public PassiveTrigger Trigger;
@@ -18055,7 +18227,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnLinkedUnitTargeted, true, true),
                 C(PassiveTrigger.OnRedirectReceived, true, true),
                 C(PassiveTrigger.OnRedirectSent, true, true),
-                C(PassiveTrigger.OnShieldBreak, true, false),
+                C(PassiveTrigger.OnShieldBreak, true, true),
                 C(PassiveTrigger.OnStackThreshold, false, false),
                 C(PassiveTrigger.OnStatusExpired, false, false),
                 C(PassiveTrigger.OnStatusGained, true, false),
