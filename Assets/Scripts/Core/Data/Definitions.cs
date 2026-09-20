@@ -907,12 +907,28 @@ namespace Emberfall.Core.Data
         /// <summary>The full effect to append.</summary>
         public EffectDef Effect;
 
+        /// <summary>
+        /// WHERE IN THE CLAUSE THE LINE GOES. -1, the default and the shape of every append
+        /// written before this, puts it at the end.
+        ///
+        /// The end is wrong whenever the clause SPENDS something the added line wants to read.
+        /// Mireth's Missing Page pays out at three Pages and then clears them in its last effect;
+        /// a talent that adds "and also take 10 Energy when that happens" tested the Pages after
+        /// the clause had already consumed them, so it could never once pass - on the right host,
+        /// with the right subject, and still dead. Position is part of what the append means.
+        ///
+        /// Clamped into range at build time, so a talent naming a position the ability does not
+        /// have lands at the end rather than throwing.
+        /// </summary>
+        public int AtIndex = -1;
+
         public static TalentAppendDef FromJson(JsonValue j)
         {
             if (j == null || j.IsNull) return null;
             TalentAppendDef a = new TalentAppendDef();
             a.Ability = j.GetString("ability", "");
             a.Effect = EffectDef.FromJson(j["effect"]);
+            a.AtIndex = j.GetInt("atIndex", -1);
             if (a.Effect == null) return null;
             return a;
         }
