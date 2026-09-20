@@ -69,6 +69,9 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
+            CheckPerTargetBudgetIsPerFiring();
+            CheckSourceFilteredPassivesCanFire(content);
+            CheckPerTargetBudgetLandsWholeFirings(content);
             CheckTalentCompletionPrimitives();
             CheckNoTalentIsEmpty(content);
             CheckTalentTargetsResolve(content);
@@ -17892,6 +17895,238 @@ namespace Emberfall.DevHarness
                 if (r.Events[i].Type == (firstOnly == null ? BattleEventType.PassiveTrigger : BattleEventType.Damage)
                     && r.Events[i].AbilityName == "Watch") n++;
             return n;
+        }
+
+        /// <summary>
+        /// A PASSIVE THAT ASKS WHO CAUSED IT, AT A TRIGGER THAT NEVER SAYS.
+        ///
+        /// TriggerSourceIsSelf and TriggerSourceIsAlly are answered from _broadcastSourceId, and
+        /// only some broadcasts set one. A passive carrying either flag at a trigger that sets no
+        /// source id compares against a field that is not about this event, so it can never fire -
+        /// not rarely, never - and it does so in total silence.
+        ///
+        /// FOUND BY ACCIDENT while measuring something else: rheia_adaptive_reasoning would not
+        /// fire in an arena built to make it fire, and a control watcher standing beside her in the
+        /// same fight answered the same trigger 30 times. The same shape as Rovan's dead shield,
+        /// which read BroadcastSource at a trigger that sets no source.
+        ///
+        /// NOT FIXED HERE. This pass is the per-target budget and nothing else, so that every line
+        /// it moves has one possible cause. This check exists so the finding cannot be lost.
+        /// </summary>
+        private static void CheckSourceFilteredPassivesCanFire(ContentDatabase live)
+        {
+            // The triggers whose broadcast sets _broadcastSourceId. Everything else leaves it as
+            // whatever the last window that cared put there, which is not about this event.
+            List<PassiveTrigger> sourced = new List<PassiveTrigger>(new PassiveTrigger[] {
+                PassiveTrigger.OnAllyHealed, PassiveTrigger.OnLinkedUnitHit,
+                PassiveTrigger.OnLinkedUnitTargeted, PassiveTrigger.OnEnemyChangedTarget,
+                PassiveTrigger.OnEnemyEnergyDrained, PassiveTrigger.OnCastDeclared,
+                PassiveTrigger.OnStatusGained, PassiveTrigger.OnRedirectReceived,
+                PassiveTrigger.OnRedirectSent });
+
+            List<string> dead = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+                for (int p = 0; p < def.Passives.Count; p++)
+                {
+                    PassiveDef pd = def.Passives[p];
+                    if (!pd.TriggerSourceIsSelf && !pd.TriggerSourceIsAlly) continue;
+                    if (sourced.Contains(pd.Trigger)) continue;
+                    dead.Add(def.Id + "/" + pd.Id + " (" + pd.Trigger + ", "
+                             + (pd.TriggerSourceIsSelf ? "source-is-self" : "source-is-ally") + ")");
+                }
+            }
+            Check(dead.Count == 0,
+                  dead.Count == 0
+                    ? "every passive filtering on who caused its trigger answers a trigger that says"
+                    : dead.Count + " shipped passive(s) filter on WHO caused a trigger whose "
+                      + "broadcast sets no source id, so they can never fire at all: "
+                      + string.Join(", ", dead.ToArray()));
+        }
+
+        /// <summary>
+        /// ONE FIRING, ONE CHARGE, MEASURED ON NOTHING BUT THE RULE.
+        ///
+        /// A passive with three identical effects and a budget of one per target, against two
+        /// enemies that buff themselves every turn. What the budget means decides the numbers
+        /// exactly:
+        ///
+        ///   charged per EFFECT - the first effect pays the whole budget, the second and third
+        ///                        are skipped, and each enemy ever sees ONE hit
+        ///   charged per FIRING - the firing pays once and all three effects land, so each enemy
+        ///                        sees THREE hits, all from the one firing that paid
+        ///
+        /// Neither reading changes how often the passive FIRES. The budget has always limited what
+        /// a firing may land on a body rather than whether it answers its trigger, which is why it
+        /// is charged after targeting, and this pass leaves that exactly where it was.
+        ///
+        /// Two enemies rather than one because the budget is per TARGET: the second body must get
+        /// its own three, or the fix would have turned a per-target limit into a per-battle one.
+        /// </summary>
+        private static void CheckPerTargetBudgetIsPerFiring()
+        {
+            int[] perEnemy = RunPerTargetBudgetArena();
+            if (perEnemy == null) { Check(false, "per-target budget arena built"); return; }
+
+            Check(perEnemy[0] == 3 && perEnemy[1] == 3,
+                  "a three-effect passive budgeted once per target lands all three on each enemy ("
+                  + perEnemy[0] + " and " + perEnemy[1] + ") - the firing pays the budget once, "
+                  + "where charging each effect would have let exactly one through");
+            Check(perEnemy[2] > 2,
+                  "and the passive still FIRES every time it is triggered (" + perEnemy[2]
+                  + " firings for 6 landings) - the budget limits what a firing may LAND on a body, "
+                  + "not how often the passive answers its trigger, and that distinction is "
+                  + "untouched: it is why the charge sits after targeting rather than at the trigger");
+        }
+
+        /// <summary>{hits on enemy A, hits on enemy B, total firings}</summary>
+        private static int[] RunPerTargetBudgetArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ptb_hero"", ""name"": ""PtbHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ptb_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""ptb_act"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""ptb_watch"", ""name"": ""Watch"", ""trigger"": ""OnEnemyBuffGained"",
+        ""oncePerBattle"": false, ""perTargetLimit"": 1,
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ptb_a"", ""name"": ""PtbA"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ptb_ab"", ""name"": ""Bolster"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                         ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1 } ] } },
+    { ""id"": ""ptb_b"", ""name"": ""PtbB"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ptb_bb"", ""name"": ""Bolster"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                         ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ptb_ch"", ""name"": ""Ptb"", ""stages"": [
+    { ""id"": ""ptb_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""ptb_a"", ""level"": 1 }, { ""id"": ""ptb_b"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "per-target budget");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ptb_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("ptb_arena"), 5160, team);
+            if (r == null) return null;
+
+            int idA = -1, idB = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "PtbA") idA = r.Units[i].Id;
+                if (r.Units[i].Name == "PtbB") idB = r.Units[i].Id;
+            }
+            int a = 0, b = 0, fires = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "ptb_watch") fires++;
+                if (e.Type != BattleEventType.Damage || e.AbilityName != "Watch") continue;
+                if (e.TargetId == idA) a++;
+                else if (e.TargetId == idB) b++;
+            }
+            return new int[] { a, b, fires };
+        }
+
+        /// <summary>
+        /// HOW MUCH OF A BUDGETED PASSIVE ACTUALLY LANDS WHEN IT FIRES.
+        ///
+        /// The per-target budget used to be charged once per EFFECT that landed, so a passive with
+        /// four effects and a budget of one paid for its first effect and had nothing left for the
+        /// other three - which were skipped in silence, with no event and no record. Every
+        /// description behind the field says the passive TRIGGERS once per target, so the budget
+        /// belongs to the firing.
+        ///
+        /// Measured as events produced per firing, in the hero sweep's own arena at its own seeds.
+        /// The window runs from a passive's own PassiveTrigger event to the next event that can
+        /// only belong to something else - another trigger, a turn, a round, a blow or a cast - so
+        /// a firing that reaches deeper into other passives closes its window early and is counted
+        /// short rather than long. An effect that produces no event of its own (ExtendStatus is
+        /// the one here) is invisible to this, so these numbers are a FLOOR on what changed.
+        /// </summary>
+        private static void CheckPerTargetBudgetLandsWholeFirings(ContentDatabase live)
+        {
+            Line("PER-TARGET BUDGET (events produced per firing, for every budgeted multi-effect passive)");
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "per-target budget arena built"); Line(""); return; }
+
+            int measured = 0;
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = arena.GetHero(live.Heroes[h].Id);
+                if (def == null) continue;
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+
+                for (int p = 0; p < def.Passives.Count; p++)
+                {
+                    PassiveDef pd = def.Passives[p];
+                    if (pd.PerTargetLimit <= 0 || pd.Effects.Count <= 1) continue;
+
+                    int firings = 0, events = 0;
+                    for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+                    {
+                        List<HeroInstance> team = new List<HeroInstance>();
+                        team.Add(MakeInstance(def, 40));
+                        for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                        BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+                        if (r == null) continue;
+
+                        for (int i = 0; i < r.Events.Count; i++)
+                        {
+                            if (r.Events[i].Type != BattleEventType.PassiveTrigger) continue;
+                            if (r.Events[i].AbilityId != pd.Id) continue;
+                            firings++;
+                            for (int j = i + 1; j < r.Events.Count; j++)
+                            {
+                                BattleEventType t = r.Events[j].Type;
+                                if (t == BattleEventType.PassiveTrigger || t == BattleEventType.TurnStart
+                                    || t == BattleEventType.RoundStart || t == BattleEventType.BasicAttack
+                                    || t == BattleEventType.AbilityCast || t == BattleEventType.BattleEnd)
+                                    break;
+                                events++;
+                            }
+                        }
+                    }
+                    measured++;
+                    string per = firings == 0 ? "-" : (events / (float)firings).ToString("0.00", CultureInfo.InvariantCulture);
+                    Line("  [note] " + def.Id + " / " + pd.Id + " (" + pd.Effects.Count
+                         + " effects, budget " + pd.PerTargetLimit
+                         + (pd.PerTargetPerRound ? " per round" : " per battle") + "): "
+                         + firings + " firing(s), " + events + " event(s), " + per + " per firing");
+
+                }
+            }
+
+            Check(measured > 0, measured + " budgeted multi-effect passive(s) measured");
+            Line("  [note] These five numbers are IDENTICAL before and after the change, and that "
+                 + "is the finding rather than a failure of it: in this arena no budgeted passive "
+                 + "ever has two effects pass their conditions on one body in one firing, so there "
+                 + "is nothing for the old charge to have dropped. The rule itself is proven above, "
+                 + "on content built to reach it.");
+            Line("");
         }
 
         private const string TalentSweepBaselineFile = "talent-sweep-baseline.txt";

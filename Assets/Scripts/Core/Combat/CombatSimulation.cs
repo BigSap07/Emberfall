@@ -719,6 +719,13 @@ namespace Emberfall.Core.Combat
             private int _perTargetLimit;
             private bool _perTargetPerRound;
 
+            /// <summary>
+            /// The bodies the firing now resolving has already charged its per-target budget for.
+            /// Null except while a budgeted passive is running; see the budget block in
+            /// ResolveAbility for why one firing pays once.
+            /// </summary>
+            private List<int> _perTargetAdmitted;
+
             /// <summary>StatusKinds that expired in the current ExpireStatuses sweep. Set before
             /// TriggerPassive(OnStatusExpired) so a passive with TriggerStatus can filter.</summary>
             private readonly List<StatusKind> _expiredKinds = new List<StatusKind>();
@@ -2175,12 +2182,31 @@ namespace Emberfall.Core.Combat
                         //
                         // Null owner is every Basic and every Active, which take this branch as a
                         // single null test and are unchanged by it.
-                        if (_perTargetOwner != null && _perTargetLimit > 0)
+                        // CHARGED ONCE PER FIRING, NOT ONCE PER EFFECT. It used to charge on
+                        // every effect that landed, so a passive with four effects and a budget of
+                        // one spent the whole budget on its first effect and dropped the rest in
+                        // silence - Hale never removed the Quarry he had just punished, Rheia never
+                        // took the Energy beside her hit, Zella never extended the Residue she had
+                        // just drained. The field's own name is how many times the passive may FIRE
+                        // against one target, and every description behind it says "this TRIGGERS
+                        // once per target": one budget for the clause, not one per line of it.
+                        //
+                        // _perTargetAdmitted remembers which bodies THIS FIRING has already paid
+                        // for. It is non-null only while a budgeted passive resolves, so a Basic,
+                        // an Active and every unbudgeted passive still reach one null test.
+                        //
+                        // A per-EFFECT budget is still expressible and is a different mechanism: a
+                        // status carrying UsesPerRound, read through StatusUseAvailable, which is
+                        // spent by the effect that reads it. That is where "this one line at most
+                        // once" belongs, and no shipped kit asks for it here.
+                        if (_perTargetOwner != null && _perTargetLimit > 0
+                            && !_perTargetAdmitted.Contains(target.Id))
                         {
                             if (_perTargetOwner.PassiveFiresAgainst(_perTargetIndex, target.Id,
                                                                     _perTargetPerRound) >= _perTargetLimit)
                                 continue;
                             _perTargetOwner.NotePassiveFireAgainst(_perTargetIndex, target.Id);
+                            _perTargetAdmitted.Add(target.Id);
                         }
 
                         ApplyEffect(caster, target, landed, ability, depth);
@@ -5272,10 +5298,13 @@ namespace Emberfall.Core.Combat
                     int prevLimit = _perTargetLimit;
                     bool prevPerRound = _perTargetPerRound;
 
+                    List<int> prevAdmitted = _perTargetAdmitted;
                     _perTargetOwner = passive.PerTargetLimit > 0 ? owner : null;
                     _perTargetIndex = i;
                     _perTargetLimit = passive.PerTargetLimit;
                     _perTargetPerRound = passive.PerTargetPerRound;
+                    // A fresh sheet per firing, and only for a passive that has a budget at all.
+                    _perTargetAdmitted = passive.PerTargetLimit > 0 ? new List<int>() : null;
 
                     int prevFired = _firedPassiveIndex;
                     _firedPassiveIndex = i;
@@ -5286,6 +5315,7 @@ namespace Emberfall.Core.Combat
 
                     _firedPassiveIndex = prevFired;
                     _firedPassiveOwner = prevFiredOwner;
+                    _perTargetAdmitted = prevAdmitted;
                     _perTargetOwner = prevOwner;
                     _perTargetIndex = prevIndex;
                     _perTargetLimit = prevLimit;
