@@ -1002,7 +1002,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive1",
+              "ability": "passive2",
               "effectIndex": 0,
               "field": "targetMaxHpRatio",
               "delta": -0.02
@@ -2621,7 +2621,7 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive1",
+              "ability": "passive2",
               "effectIndex": 1,
               "field": "flat",
               "delta": -2
@@ -9520,7 +9520,39 @@
           "name": "Deeper Erasure",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "overrides": [
+            {
+              "ability": "passive3",
+              "field": "limitOff",
+              "delta": 1
+            },
+            {
+              "ability": "passive3",
+              "field": "firesPerSubject",
+              "delta": 2
+            },
+            {
+              "ability": "passive3",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": -0.21
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive3",
+              "effect": {
+                "kind": "Damage",
+                "target": "BroadcastSubject",
+                "power": 0.21,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "PassiveFiredOnSubjectBelow",
+                "conditionValue2": 1,
+                "conditionOn2": "BroadcastSubject"
+              }
+            }
+          ]
         },
         "talentII": {
           "id": "mireth_blank_space",
@@ -10848,7 +10880,10 @@
           {
             "kind": "Damage",
             "target": "HighestHpEnemy",
-            "power": 1.25
+            "power": 1.25,
+            "ignoreDefense": 0.0,
+            "ignoreDefenseVsStatus": "MarkAlt",
+            "ignoreDefenseUsesPerRound": 1
           },
           {
             "kind": "ApplyStatus",
@@ -10872,7 +10907,10 @@
           {
             "kind": "Damage",
             "target": "HighestHpEnemy",
-            "power": 1.9
+            "power": 1.9,
+            "ignoreDefense": 0.0,
+            "ignoreDefenseVsStatus": "MarkAlt",
+            "ignoreDefenseUsesPerRound": 1
           },
           {
             "kind": "Damage",
@@ -10959,8 +10997,20 @@
       "passive2": {
         "id": "arden_everything_has_a_limit",
         "name": "Everything Has a Limit",
-        "trigger": "None",
-        "effects": []
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "RecordFact",
+            "target": "LastTarget",
+            "status": "MarkAlt",
+            "record": "HpFractionBand",
+            "magnitude": 0.2,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Target"
+          }
+        ]
       },
       "talents": {
         "talentI": {
@@ -10994,16 +11044,89 @@
           "name": "Perfect Line",
           "trigger": "None",
           "effects": [],
-          "overrides": []
+          "overrides": [
+            {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "ignoreDefense",
+              "delta": 0.1
+            },
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "ignoreDefense",
+              "delta": 0.1
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "flat": 5,
+                "condition": "HasMyMark",
+                "conditionStatus": "MarkAlt",
+                "conditionOn": "LastTarget",
+                "condition2": "HpAbove",
+                "conditionValue2": 0.7,
+                "conditionOn2": "LastTarget"
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "arden_final_calculation",
           "name": "Final Calculation",
-          "trigger": "None",
-          "effects": [],
-          "overrides": []
+          "trigger": "OnAppliedStatusExpired",
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.0,
+              "scaleByBandHigh": true,
+              "magnitude": 0.5,
+              "attackCap": 1.8
+            }
+          ],
+          "overrides": [],
+          "triggerStatus": "MarkAlt",
+          "oncePerBattle": true
         }
-      }
+      },
+      "passives": [
+        {
+          "id": "arden_everything_has_a_limit_active",
+          "name": "Everything Has a Limit",
+          "trigger": "AfterActiveCast",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "RecordFact",
+              "target": "EnemyWithMyMark",
+              "status": "MarkAlt",
+              "record": "HpFractionBand",
+              "magnitude": 0.2
+            }
+          ]
+        },
+        {
+          "id": "arden_everything_has_a_limit_payout",
+          "name": "Everything Has a Limit",
+          "trigger": "OnAppliedStatusExpired",
+          "triggerStatus": "MarkAlt",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.0,
+              "scaleByBandGap": true,
+              "attackCap": 1.5
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "caldus_the_appointed_guard",
@@ -11164,7 +11287,7 @@
               "delta": 1
             },
             {
-              "ability": "passive1",
+              "ability": "passive2",
               "effectIndex": 0,
               "field": "power",
               "delta": 0.2

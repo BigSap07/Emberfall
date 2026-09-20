@@ -69,6 +69,7 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
+            CheckTalentCompletionPrimitives();
             CheckNoTalentIsEmpty(content);
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
@@ -5858,8 +5859,12 @@ namespace Emberfall.DevHarness
             {
                 EffectDef e = ability.Effects[i];
                 bool zero = false;
+                // A damage term does not have to be a number on the effect. The band scalers
+                // carry the whole payout - a record's gap, or a fraction of its highest value - so
+                // an effect using one is deliberately written with power 0 and is not empty.
                 if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f
-                    && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f && e.TargetMissingHpRatio <= 0f;
+                    && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f && e.TargetMissingHpRatio <= 0f
+                    && !e.ScaleByBandGap && !e.ScaleByBandHigh;
                 else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield) zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f;
                 else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat == 0f;
                 if (zero)
@@ -14858,10 +14863,12 @@ namespace Emberfall.DevHarness
                     // the displaced primitives: a unit turning on a different body
                     "OnEnemyChangedTarget",
                     // and the drain heard on the unit that caused it
-                    "OnEnemyEnergyDrained"
+                    "OnEnemyEnergyDrained",
+                    // the far side of a unit's own Active
+                    "AfterActiveCast"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (51 members)");
+            Check(ok, "PassiveTrigger enum parity (52 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -16336,10 +16343,13 @@ namespace Emberfall.DevHarness
                     "EnergyAtLeast", "EnergyBelow",
                     "SubjectHealedSinceMyTurn", "SubjectShieldedSinceMyTurn",
                     // cast cancellation: is this body mid-cast
-                    "SubjectIsCasting"
+                    "SubjectIsCasting",
+                    // the talent-completion pass: the two halves of "has this passive fired
+                    // about this subject before"
+                    "PassiveFiredOnSubjectAtLeast", "PassiveFiredOnSubjectBelow"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (46 members)");
+            Check(ok, "EffectCondition enum parity (48 members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
@@ -17635,6 +17645,253 @@ namespace Emberfall.DevHarness
             if (t.Overrides.Count > 0) return "its host " + t.Overrides[0].Ability
                                               + " to resolve and the number to matter";
             return "an arena that reaches it";
+        }
+
+        /// <summary>
+        /// THE THREE PRIMITIVES THE LAST THREE TALENTS NEEDED, each measured on its own rather
+        /// than through the kit that wanted it: a blow that ignores part of Defense, a record that
+        /// keeps a low and a high and outlives its own entry by one moment, and a firing budget
+        /// counted per broadcast subject with a condition that can tell the second firing from the
+        /// first.
+        /// </summary>
+        private static void CheckTalentCompletionPrimitives()
+        {
+            Line("TALENT-COMPLETION PRIMITIVES (defense ignore, recorded band, per-subject budget)");
+
+            CheckIgnoreDefense();
+            CheckRecordedBand();
+            CheckPerSubjectBudget();
+            Line("");
+        }
+
+        /// <summary>
+        /// A FRACTION OF DEFENSE THIS BLOW DOES NOT SEE, and the two things it carries with it.
+        ///
+        /// Three runs of one arena: the modifier off, the modifier on against a marked target, and
+        /// the modifier on against a target carrying no mark. Zero defence ignored must be exactly
+        /// the untouched number, an ignored fraction must hurt more, and the gate must make the
+        /// third run identical to the first.
+        /// </summary>
+        private static void CheckIgnoreDefense()
+        {
+            int off = RunIgnoreDefenseArena(0f, true);
+            int on = RunIgnoreDefenseArena(0.5f, true);
+            int unmarked = RunIgnoreDefenseArena(0.5f, false);
+
+            Check(off > 0 && on > off,
+                  "a blow that ignores half the target's Defense lands harder (" + on + " against "
+                  + off + ") - it scales the Defense INPUT, where Armor Break scales the ratio's output");
+            Check(unmarked == off,
+                  "and it does nothing at all against a target carrying no mark of the caster's ("
+                  + unmarked + ", the same as with no modifier at all) - the gate travels with the "
+                  + "modifier because an override can change a number and cannot add a condition");
+        }
+
+        private static int RunIgnoreDefenseArena(float ignore, bool marked)
+        {
+            string mark = marked
+                ? @"{ ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Mark"", ""duration"": 9, ""chance"": 1 },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""idf_hero"", ""name"": ""IdfHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 400, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""idf_basic"", ""name"": ""Cut"",
+        ""effects"": [
+          " + mark + @"
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0,
+            ""ignoreDefense"": " + Fmt(ignore) + @", ""ignoreDefenseVsStatus"": ""Mark"" }
+        ] },
+      ""active"": { ""id"": ""idf_act"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""idf_wall"", ""name"": ""IdfWall"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 900, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""idf_w"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""idf_ch"", ""name"": ""Idf"", ""stages"": [
+    { ""id"": ""idf_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""idf_wall"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "ignore defense");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("idf_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("idf_arena"), 5150, team);
+            if (r == null) return -1;
+
+            // The FIRST blow only. The budget is one use a round and the point of the first two
+            // runs is the size of one hit, not the shape of a whole fight.
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].Value > 10)
+                    return r.Events[i].Value;
+            return 0;
+        }
+
+        /// <summary>
+        /// A RECORD THAT KEEPS A LOW AND A HIGH, and pays out after it has stopped existing.
+        ///
+        /// The hero marks the enemy, records a band on it twice at two different HP levels, and the
+        /// mark then runs out. Two payouts are measured against the numbers they should be: the gap
+        /// between where the enemy stood when the record ended and the LOWEST value it recorded,
+        /// and a fraction of the HIGHEST. Both are paid from the expiry broadcast, by which point
+        /// the entry itself is gone - which is the whole reason the band is captured rather than
+        /// read off the entry.
+        /// </summary>
+        private static void CheckRecordedBand()
+        {
+            int gap = RunBandArena(false);
+            int high = RunBandArena(true);
+            Check(gap > 0,
+                  "a record that outlived its entry pays out the gap between the carrier's HP and "
+                  + "the lowest value it recorded (" + gap + ")");
+            Check(high > 0 && high != gap,
+                  "and the same record answers separately for the HIGHEST value it kept (" + high
+                  + ") - a maximum RecordKind could not keep before this pass");
+        }
+
+        private static int RunBandArena(bool useHigh)
+        {
+            string payout = useHigh
+                ? @"""scaleByBandHigh"": true, ""magnitude"": 0.5"
+                : @"""scaleByBandGap"": true";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""bnd_hero"", ""name"": ""BndHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 100, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bnd_basic"", ""name"": ""Cut"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 20.0 },
+          { ""kind"": ""RecordFact"", ""target"": ""FrontEnemy"", ""status"": ""MarkAlt"",
+            ""record"": ""HpFractionBand"", ""magnitude"": 0.2 }
+        ] },
+      ""passive1"": { ""id"": ""bnd_mark"", ""name"": ""Mark"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""MarkAlt"",
+                         ""duration"": 3, ""chance"": 1 } ] },
+      ""active"": { ""id"": ""bnd_act"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""bnd_pay"", ""name"": ""Settle"", ""trigger"": ""OnAppliedStatusExpired"",
+        ""triggerStatus"": ""MarkAlt"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 0.0, " + payout + @" } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""bnd_foe"", ""name"": ""BndFoe"", ""aspect"": ""Ember"",
+      ""hp"": 60000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bnd_f"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""bnd_ch"", ""name"": ""Bnd"", ""stages"": [
+    { ""id"": ""bnd_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""bnd_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "recorded band");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("bnd_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("bnd_arena"), 5151, team);
+            if (r == null) return -1;
+
+            int paid = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].AbilityName == "Settle")
+                    paid += r.Events[i].Value;
+            return paid;
+        }
+
+        /// <summary>
+        /// TWICE PER SUBJECT, AND THE SECOND ONE KNOWS IT IS THE SECOND.
+        ///
+        /// A passive answering an enemy buff, budgeted at two firings against each enemy, whose
+        /// second firing pays a different amount from its first. Three numbers are asked for: how
+        /// often it fired, that the budget stopped a third, and that the two firings were told
+        /// apart - the last being the thing no condition could ask before.
+        /// </summary>
+        private static void CheckPerSubjectBudget()
+        {
+            int fires = RunSubjectBudgetArena(2);
+            int capped = RunSubjectBudgetArena(1);
+            Check(fires == 2, "a passive budgeted at two firings per subject fires exactly twice ("
+                              + fires + ")");
+            Check(capped == 1, "and exactly once at a budget of one (" + capped + "), so the budget "
+                               + "is the thing stopping it rather than the arena running out of buffs");
+
+            int first = RunSubjectBudgetMark(true);
+            int second = RunSubjectBudgetMark(false);
+            Check(first == 1 && second == 1,
+                  "the first firing and the second are distinguishable from inside the passive ("
+                  + first + " / " + second + ") - one effect fired only on the first, the other "
+                  + "only on the second");
+        }
+
+        private static int RunSubjectBudgetArena(int budget) { return RunSubjectBudget(budget, null); }
+        private static int RunSubjectBudgetMark(bool firstOnly) { return RunSubjectBudget(2, firstOnly); }
+
+        private static int RunSubjectBudget(int budget, bool? firstOnly)
+        {
+            // Two effects with opposite firing tests when firstOnly is asked about, one plain
+            // effect when it is not.
+            string effects = firstOnly == null
+                ? @"{ ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0 }"
+                : (firstOnly.Value
+                    ? @"{ ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0,
+                          ""condition"": ""PassiveFiredOnSubjectBelow"", ""conditionValue"": 1,
+                          ""conditionOn"": ""BroadcastSubject"" }"
+                    : @"{ ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0,
+                          ""condition"": ""PassiveFiredOnSubjectAtLeast"", ""conditionValue"": 1,
+                          ""conditionOn"": ""BroadcastSubject"" }");
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""psb_hero"", ""name"": ""PsbHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""psb_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""psb_act"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""psb_watch"", ""name"": ""Watch"", ""trigger"": ""OnEnemyBuffGained"",
+        ""oncePerBattle"": false, ""firesPerSubject"": " + budget + @",
+        ""effects"": [ " + effects + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""psb_foe"", ""name"": ""PsbFoe"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""psb_f"", ""name"": ""Bolster"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                         ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""psb_ch"", ""name"": ""Psb"", ""stages"": [
+    { ""id"": ""psb_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""psb_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "per-subject budget");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("psb_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("psb_arena"), 5152, team);
+            if (r == null) return -1;
+
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == (firstOnly == null ? BattleEventType.PassiveTrigger : BattleEventType.Damage)
+                    && r.Events[i].AbilityName == "Watch") n++;
+            return n;
         }
 
         private const string TalentSweepBaselineFile = "talent-sweep-baseline.txt";

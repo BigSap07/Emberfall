@@ -63,6 +63,18 @@ namespace Emberfall.Core.Combat
         /// Negative means nothing has been recorded yet, so 0% is distinguishable from unset.</summary>
         public float StoredMin = -1f;
 
+        /// <summary>
+        /// The smallest and largest values a RecordKind.HpFractionBand effect has written on this
+        /// entry, as absolute amounts. -1 until something records, which is what the conditions
+        /// and the scalers test before reading them.
+        ///
+        /// On the ENTRY rather than on the unit for the same reason Disrupted's parameters are:
+        /// two marks from two casters are two records, and a field on the unit would be one value
+        /// they fought over.
+        /// </summary>
+        public float StoredLowHp = -1f;
+        public float StoredHighHp = -1f;
+
         // ---------------------------------------------------------------- per-round uses
         //
         // "The first area hit each round", "the first time that enemy damages an ally each round",
@@ -477,6 +489,27 @@ namespace Emberfall.Core.Combat
         // flat string key keeps the reset in BeginRound a single Clear.
         private readonly Dictionary<string, int> _passiveTargetsBattle = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _passiveTargetsThisRound = new Dictionary<string, int>();
+
+        /// <summary>
+        /// How many times each passive has FIRED about each broadcast subject, for the life of the
+        /// battle. Keyed the same way the per-target books are, and kept separate from them on
+        /// purpose: those count effect landings, this counts firings, and a passive with four
+        /// effects makes four of the first and one of the second.
+        /// </summary>
+        private readonly Dictionary<string, int> _passiveSubjects = new Dictionary<string, int>();
+
+        public int PassiveFiresOnSubject(int index, int subjectId)
+        {
+            int n;
+            return _passiveSubjects.TryGetValue(index + ":" + subjectId, out n) ? n : 0;
+        }
+
+        public void NotePassiveFireOnSubject(int index, int subjectId)
+        {
+            string key = index + ":" + subjectId;
+            int n;
+            _passiveSubjects[key] = _passiveSubjects.TryGetValue(key, out n) ? n + 1 : 1;
+        }
 
         /// <summary>How many times passive `index` has already fired against `targetId`, over the
         /// whole battle or within this round.</summary>
