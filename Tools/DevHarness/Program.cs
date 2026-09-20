@@ -198,7 +198,9 @@ namespace Emberfall.DevHarness
             Check((int)PassiveTrigger.OnStatusExpired == 15 && (int)PassiveTrigger.OnAllyHpBelowThreshold == 16,
                   "PassiveTrigger keeps its ordinals and the ally members are appended");
             Check((int)BattleEventType.BattleEnd == 20,
-                  "and BattleEventType is untouched for a third pass running");
+                  "and BattleEventType's existing ordinals are untouched - BattleEnd is still 20. "
+                  + "CastCancelled is appended at 21, which moves none of them and so moves no "
+                  + "fingerprint field");
         }
 
         /// <summary>
@@ -763,7 +765,8 @@ namespace Emberfall.DevHarness
             Check((int)TargetMode.AllyWithMostDebuffs == 19 && (int)TargetMode.EnemyWithMyMark == 20,
                   "TargetMode keeps its ordinals and EnemyWithMyMark is appended");
             Check((int)BattleEventType.BattleEnd == 20,
-                  "and BattleEventType is untouched again this pass - no new event type, so no fingerprint field moves");
+                  "and BattleEnd is still 20, so no existing event ordinal moved - the one member "
+                  + "appended since is at the end, where the fingerprint cannot feel it");
         }
 
         /// <summary>
@@ -5126,7 +5129,7 @@ namespace Emberfall.DevHarness
                                "HpTransfer", "ShieldTransfer", "LedgerIncrement",
                                "RedirectLethal", "SnapshotEnergy", "TransferStatus",
                                "SnapshotHp", "LedgerDeposit",
-                               "LinkUnits", "EchoDamage" },
+                               "LinkUnits", "EchoDamage", "CancelCast" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -14844,10 +14847,12 @@ namespace Emberfall.DevHarness
                     "OnTargeted", "OnStatusGained", "OnEchoFired", "OnRedirectReceived",
                     "OnRedirectSent",
                     // batch eight: the round's own boundary, and the far end of an enemy cast.
-                    "RoundStart", "OnEnemyActiveResolved"
+                    "RoundStart", "OnEnemyActiveResolved",
+                    // cast cancellation: the declaration window, open to both sides
+                    "OnCastDeclared"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (48 members)");
+            Check(ok, "PassiveTrigger enum parity (49 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -15336,7 +15341,7 @@ namespace Emberfall.DevHarness
 
             Check((int)BattleEventType.Damage == 6 && (int)BattleEventType.StatusApplied == 10
                   && (int)BattleEventType.BattleEnd == 20,
-                  "BattleEventType is untouched for another pass - a link reuses StatusApplied and an "
+                  "BattleEventType's existing ordinals are untouched - a link reuses StatusApplied and an "
                   + "echo reuses Damage, so no fingerprint field moves");
         }
 
@@ -16111,6 +16116,7 @@ namespace Emberfall.DevHarness
             CheckBatchSevenGaps();
             CheckTargetRestriction(live);
             CheckBatchEightGaps(live);
+            CheckCastCancellation(live);
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -16314,10 +16320,12 @@ namespace Emberfall.DevHarness
                     // SubjectDamagedSinceMyTurn. Appended after SubjectRoleIs so its ordinal,
                     // which ten shipped effects of Vaelis's read, does not move.
                     "EnergyAtLeast", "EnergyBelow",
-                    "SubjectHealedSinceMyTurn", "SubjectShieldedSinceMyTurn"
+                    "SubjectHealedSinceMyTurn", "SubjectShieldedSinceMyTurn",
+                    // cast cancellation: is this body mid-cast
+                    "SubjectIsCasting"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (45 members)");
+            Check(ok, "EffectCondition enum parity (46 members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
@@ -18793,6 +18801,269 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+        // ---- cast cancellation: an active with a state between declaration and resolution -----
+
+        private static void CheckCastCancellation(ContentDatabase live)
+        {
+            Line("CAST CANCELLATION (an active becomes a thing that can be stopped in flight)");
+            CheckCastPins();
+            CheckNoShippedCastUse(live);
+            CheckCastResolvesWhenNobodyStopsIt();
+            CheckCastCancelledLosesTheAbilityAndTheEnergy();
+            CheckCastWindowRunsBeforeTheCast();
+            CheckCastAbilityIdFilter();
+            CheckCastLosingItsTargetIsNotCancelled();
+            Line("");
+        }
+
+        private static void CheckCastPins()
+        {
+            Check((int)BattleEventType.BattleEnd == 20 && (int)BattleEventType.CastCancelled == 21,
+                  "BattleEventType.BattleEnd still at 20 and CastCancelled appended at 21 - the "
+                  + "fingerprint folds (int)Type, so this is the one place in the enum a member "
+                  + "could be added at all");
+            Check((int)EffectKind.EchoDamage == 29 && (int)EffectKind.CancelCast == 30,
+                  "EffectKind.EchoDamage still at 29, CancelCast appended at 30");
+            Check((int)EffectCondition.SubjectShieldedSinceMyTurn == 44
+                  && (int)EffectCondition.SubjectIsCasting == 45,
+                  "EffectCondition appends at 45, after every member shipped content reads");
+            Check((int)PassiveTrigger.OnEnemyActiveResolved == 47
+                  && (int)PassiveTrigger.OnCastDeclared == 48,
+                  "PassiveTrigger.OnCastDeclared appended at 48");
+            Check((int)StatusKind.HealingReduction == 49 && (int)TargetMode.SwapDelayedUnit == 37,
+                  "StatusKind and TargetMode are untouched by this pass - the cast in flight is "
+                  + "three fields on the simulation, not a status and not a target");
+        }
+
+        private static void CheckNoShippedCastUse(ContentDatabase live)
+        {
+            int uses = 0;
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                List<AbilityDef> abilities = AllAbilitiesOf(live.Heroes[h]);
+                for (int a = 0; a < abilities.Count; a++)
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                        if (abilities[a].Effects[e].Kind == EffectKind.CancelCast
+                            || abilities[a].Effects[e].Condition == EffectCondition.SubjectIsCasting)
+                            uses++;
+                for (int p = 0; p < live.Heroes[h].Passives.Count; p++)
+                    if (live.Heroes[h].Passives[p].Trigger == PassiveTrigger.OnCastDeclared
+                        || !string.IsNullOrEmpty(live.Heroes[h].Passives[p].TriggerAbilityId))
+                        uses++;
+            }
+            for (int n = 0; n < live.Enemies.Count; n++)
+                for (int p = 0; p < live.Enemies[n].Passives.Count; p++)
+                    if (live.Enemies[n].Passives[p].Trigger == PassiveTrigger.OnCastDeclared) uses++;
+
+            Check(uses == 0,
+                  uses == 0
+                    ? "no shipped content cancels a cast, answers a declaration or names an ability "
+                      + "id, which is why the turn loop can change without a fingerprint moving"
+                    : uses + " shipped use(s) - the fingerprint claims above need re-earning");
+        }
+
+        /// <summary>
+        /// The control the other four are read against: with nothing answering the declaration, a
+        /// cast resolves exactly as it always did.
+        /// </summary>
+        private static void CheckCastResolvesWhenNobodyStopsIt()
+        {
+            CastProbe p = RunCastArena(false, false, "");
+            if (p == null) { Check(false, "cast arena built"); return; }
+            Check(p.Casts > 0 && p.Damage > 0 && p.Cancelled == 0,
+                  "control: an uninterrupted cast is declared and resolves (" + p.Casts
+                  + " cast(s), " + p.Damage + " damage, " + p.Cancelled + " cancelled)");
+        }
+
+        /// <summary>
+        /// The whole primitive in one count: the cast is declared, something answers the window,
+        /// the ability never resolves - and the energy does not come back.
+        /// </summary>
+        private static void CheckCastCancelledLosesTheAbilityAndTheEnergy()
+        {
+            CastProbe free = RunCastArena(false, false, "");
+            CastProbe stopped = RunCastArena(true, false, "");
+            if (free == null || stopped == null) { Check(false, "cancel arena built"); return; }
+
+            Check(stopped.Casts > 0,
+                  "the cast is still DECLARED when it is cancelled (" + stopped.Casts
+                  + " AbilityCast event(s)) - a declaration that never happened would be a"
+                  + " different rule, and the screen would have nothing to explain the lost turn with");
+            Check(stopped.Cancelled > 0,
+                  "and a CastCancelled event records it (" + stopped.Cancelled + ")");
+            Check(stopped.Damage == 0 && free.Damage > 0,
+                  "the ability does not resolve: " + stopped.Damage + " damage against the control's "
+                  + free.Damage);
+            Check(stopped.EnergyAfter == 0,
+                  "AND THE ENERGY IS GONE (" + stopped.EnergyAfter + " left) - a cancelled cast "
+                  + "refunds nothing, which is what makes an interrupt worth a turn rather than a "
+                  + "delay, and is the reading EffectKind.Interrupt already had");
+        }
+
+        /// <summary>
+        /// "Damage that lands before the cast it answers" is a matter of ordering, and the order is
+        /// measurable: the answer's blow is in the event list before the cast's own damage.
+        /// </summary>
+        private static void CheckCastWindowRunsBeforeTheCast()
+        {
+            CastProbe p = RunCastArena(false, true, "");
+            if (p == null) { Check(false, "window-order arena built"); return; }
+            Check(p.AnswerBeforeCast > 0,
+                  "a passive answering the declaration lands its blow BEFORE the cast resolves ("
+                  + p.AnswerBeforeCast + " time(s)) - the window is open between the two, which is "
+                  + "what makes 'damage that lands before the cast it answers' an ordering rather "
+                  + "than a new mechanism");
+            Check(p.Damage > 0,
+                  "and the cast still resolves afterwards (" + p.Damage + ") - answering a "
+                  + "declaration is not the same as stopping it");
+        }
+
+        /// <summary>
+        /// A reaction can name the ability it answers. Two runs against the same caster: the
+        /// filter naming the ability fires, the filter naming another one does not.
+        /// </summary>
+        private static void CheckCastAbilityIdFilter()
+        {
+            CastProbe right = RunCastArena(true, false, "cc_enemy_active");
+            CastProbe wrong = RunCastArena(true, false, "some_other_ability");
+            if (right == null || wrong == null) { Check(false, "ability-filter arena built"); return; }
+            Check(right.Cancelled > 0,
+                  "triggerAbilityId naming the declared ability answers it (" + right.Cancelled
+                  + " cancelled)");
+            Check(wrong.Cancelled == 0 && wrong.Damage > 0,
+                  "and naming a different one does not (" + wrong.Cancelled + " cancelled, "
+                  + wrong.Damage + " damage) - a reaction to a SPECIFIC ability, rather than to any "
+                  + "cast at all");
+        }
+
+        /// <summary>
+        /// A cast that loses its target mid-flight is NOT cancelled by that. Only CancelCast
+        /// cancels one; targeting is per-effect and a body that is gone resolves to nobody, which
+        /// is what every AoE killing something with its first effect has always done.
+        /// </summary>
+        private static void CheckCastLosingItsTargetIsNotCancelled()
+        {
+            CastProbe p = RunCastArena(false, false, "", true);
+            if (p == null) { Check(false, "lost-target arena built"); return; }
+            Check(p.Casts > 0 && p.Cancelled == 0,
+                  "a cast whose first effect kills the body its second effect wanted is not "
+                  + "cancelled (" + p.Cancelled + " cancelled) - it carries on and the orphaned "
+                  + "effect resolves against nobody, which is the rule targeting already had");
+        }
+
+        private sealed class CastProbe
+        {
+            public int Casts;             // AbilityCast events from the enemy
+            public int Cancelled;         // CastCancelled events
+            public int Damage;            // damage the cast itself dealt to the hero
+            public int EnergyAfter;       // the caster's energy after the turn
+            public int AnswerBeforeCast;  // times the answer's blow preceded the cast's damage
+        }
+
+        /// <summary>
+        /// One arena: an enemy that casts, and a hero that may answer the declaration. `cancel`
+        /// makes the answer an interrupt, `answerOnly` makes it a blow that lands first, and
+        /// `abilityId` puts a filter on the reaction. `lethalFirstEffect` gives the CASTER an
+        /// active whose first effect kills the body its second effect names.
+        /// </summary>
+        private static CastProbe RunCastArena(bool cancel, bool answerOnly, string abilityId,
+                                              bool lethalFirstEffect = false)
+        {
+            string filter = string.IsNullOrEmpty(abilityId) ? ""
+                : @", ""triggerAbilityId"": """ + abilityId + @"""";
+            string answer = "";
+            if (cancel)
+                answer = @"""passive1"": { ""id"": ""cc_stop"", ""name"": ""Stop It"",
+        ""trigger"": ""OnCastDeclared"", ""oncePerBattle"": false" + filter + @",
+        ""effects"": [ { ""kind"": ""CancelCast"", ""target"": ""FrontEnemy"" } ] },";
+            else if (answerOnly)
+                answer = @"""passive1"": { ""id"": ""cc_answer"", ""name"": ""Answer"",
+        ""trigger"": ""OnCastDeclared"", ""oncePerBattle"": false" + filter + @",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 } ] },";
+
+            string casterActive = lethalFirstEffect
+                ? @"{ ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 50.0 },
+                   { ""kind"": ""Damage"", ""target"": ""LastTarget"", ""power"": 1.0 }"
+                : @"{ ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""cc_hero"", ""name"": ""CcHero"", ""aspect"": ""Ember"", ""role"": ""Breaker"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 200, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      " + answer + @"
+      ""basic"": { ""id"": ""cc_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cc_hero_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""cc_spare"", ""name"": ""CcSpare"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900, ""attack"": 10, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ccs"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""ccsa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""cc_caster"", ""name"": ""CcCaster"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 300, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ccb"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cc_enemy_active"", ""name"": ""Big One"", ""energyCost"": 0,
+        ""effects"": [ " + casterActive + @" ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""cc_ch"", ""name"": ""CastCancel"", ""stages"": [
+    { ""id"": ""cc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""cc_caster"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "cast cancel");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("cc_hero"), 1));
+            team.Add(MakeInstance(db.GetHero("cc_spare"), 1));
+            BattleResult r = RunWith(db, db.GetStage("cc_arena"), 9951, team);
+            if (r == null) return null;
+
+            int casterId = -1, heroId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "CcCaster") casterId = r.Units[i].Id;
+                if (r.Units[i].Name == "CcHero") heroId = r.Units[i].Id;
+            }
+
+            CastProbe p = new CastProbe();
+            bool windowOpen = false;
+            bool answeredThisCast = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.AbilityCast && e.SourceId == casterId)
+                { p.Casts++; windowOpen = true; answeredThisCast = false; continue; }
+                if (e.Type == BattleEventType.CastCancelled) { p.Cancelled++; windowOpen = false; continue; }
+                if (e.Type == BattleEventType.EnergyChanged && e.TargetId == casterId)
+                { p.EnergyAfter = e.Value; continue; }
+                if (e.Type != BattleEventType.Damage) continue;
+                if (e.SourceId == casterId && e.TargetId != casterId)
+                {
+                    // the cast's own damage, and the first of it closes the window
+                    if (windowOpen && answeredThisCast) p.AnswerBeforeCast++;
+                    windowOpen = false;
+                    p.Damage += e.Value;
+                }
+                else if (e.TargetId == casterId && windowOpen)
+                {
+                    answeredThisCast = true;   // somebody hit the caster inside its own window
+                }
+            }
+            return p;
+        }
 
         // ---- batch eight: the ten gaps the last authoring pass named and did not build ---------
 

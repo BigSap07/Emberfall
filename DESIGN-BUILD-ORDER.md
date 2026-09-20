@@ -757,6 +757,52 @@ and reworded Oris III away from "the enemy whose Energy changed the most". Build
 mean restoring two clauses of Pinoy's text that were deliberately retired. Named here rather than
 done quietly; if those clauses come back, both gaps are still unbuilt.
 
+### Open: `engine/cast-cancellation` — unmerged, off `main`
+
+**An active is now a thing with a state between declaration and resolution.** Engine only.
+**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, dumped and diffed
+against `origin/main` — and this is the first pass where that was in genuine doubt, because it
+changes the turn loop rather than something hanging off it.
+
+**The declaration event already existed.** `AbilityCast` has been emitted before a single effect
+ran for the life of the project; what it did not do was leave anything behind that could be
+stopped. Three fields on the simulation are that thing — the caster, the ability, and whether it
+has been cancelled — set at declaration, readable by anything that wants to answer a cast, and
+cleared on every exit from the turn. **No event is added to an existing battle and none is
+reordered**, which is why the two numbers above hold.
+
+#### The three decisions, and why
+
+- **Declaration is the caster and the ability, not the targets.** Targeting in this engine is
+  per-effect and happens as each effect runs: `AllEnemies` resolves at the second effect against
+  whoever is standing by then, and half the roster depends on that. Snapshotting "the cast's
+  target" at declaration would mean moving targeting out of the effects and into the declaration,
+  which is a different engine and would move every fingerprint in the game.
+- **A cancelled cast refunds nothing.** The energy is spent at declaration, three lines before the
+  window opens, and it stays spent. That is what makes an interrupt worth a turn rather than a
+  delay, it is the reading `EffectKind.Interrupt` already has — it empties a bar and gives nothing
+  back — and a refund would be the only path in the engine that hands energy to a unit nobody
+  granted it to.
+- **A cast that loses its target mid-flight is not cancelled by that.** Only `CancelCast` cancels
+  one. A body that is gone resolves to nobody for the effect that wanted it and the rest of the
+  ability carries on, which is exactly what every AoE that kills something with its first effect
+  has always done. Cancelling on target loss would change the behaviour of shipped content.
+
+#### What it buys, and it is four things rather than one
+
+`CancelCast` is the interrupt. `PassiveTrigger.OnCastDeclared` is the window, raised on **every**
+living unit rather than broadcast to one side — `OnEnemyActive` is the same moment shown to the
+caster's opponents, and a declaration is a fact about the board. Anything the window raises
+resolves before the cast does, so "damage that lands before the cast it answers" is an ordering
+rather than a new mechanism. `PassiveDef.TriggerAbilityId` names the ability a reaction answers,
+because an id is the only thing that identifies one uniquely. `EffectCondition.SubjectIsCasting`
+lets an ordinary effect ask whether the body in front of it is mid-cast, which is "an ability that
+changes based on what the enemy is about to do".
+
+`BattleEventType.CastCancelled` is appended at 21, the only place a member can go: the fingerprint
+folds `(int)Type`. Three older guards claimed the event enum was "untouched"; their pins were
+right and their prose was not, and both now say what they actually guarantee.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a

@@ -898,6 +898,17 @@ namespace Emberfall.Core.Data
         /// </summary>
         public StatusKind TriggerStatus = StatusKind.None;
 
+        /// <summary>
+        /// Fires only for a declaration of the ability with this id. Empty (the default) answers
+        /// any cast, which is every passive in shipped content.
+        ///
+        /// "A reaction that fires in response to a SPECIFIC ability" needs the ability named, and
+        /// an id is the only thing that names one uniquely - a name is display text and a kind is
+        /// a category. Read by the cast triggers and ignored by every other one, the same way
+        /// TriggerStatus is read only by the status triggers.
+        /// </summary>
+        public string TriggerAbilityId = "";
+
         // ---------- batch two: per-stack output modifier ----------
 
         /// <summary>Which stacking status on the owner drives the output modifier. None means no
@@ -994,6 +1005,7 @@ namespace Emberfall.Core.Data
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
             p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
+            p.TriggerAbilityId = j.GetString("triggerAbilityId", "");
             p.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
             p.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             p.OutputModStatus = EnumUtil.Parse(j.GetString("outputModStatus", "None"), StatusKind.None);

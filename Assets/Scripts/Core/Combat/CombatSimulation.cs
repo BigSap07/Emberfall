@@ -366,6 +366,9 @@ namespace Emberfall.Core.Combat
 
                 // ShieldBrokenByCaster is contextual — answered by the Sim's _shieldBreakerId.
                 // In the pure function (harness, outside a battle) it is always false.
+                // SubjectIsCasting is contextual for the same reason and in the same way: the
+                // declared cast is Sim state, so the pure function cannot see one and says no.
+                case EffectCondition.SubjectIsCasting:
                 case EffectCondition.ShieldBrokenByCaster:
                     return false;
 
@@ -569,6 +572,32 @@ namespace Emberfall.Core.Combat
 
             /// <summary>The two bodies the last SwapTurnOrder moved, named by the target modes that
             /// ask about them. Null outside the ability that performed the swap.</summary>
+            /// <summary>
+            /// THE CAST IN FLIGHT. Null between casts, which is every moment of every battle in
+            /// shipped content outside the few lines a cast takes to resolve.
+            ///
+            /// An active used to be a statement: the energy went, the event was emitted, the
+            /// effects ran, and at no point was there a THING that could be pointed at and stopped.
+            /// These three fields are that thing. They are set at declaration, read by anything
+            /// that wants to answer a cast, and cleared on the way out of the turn whether the cast
+            /// resolved or not.
+            /// </summary>
+            private CombatUnit _castCaster;
+            private AbilityDef _castAbility;
+            private bool _castCancelled;
+            private int _castCancelSourceId = -1;
+
+            /// <summary>Closes the window. Called on every exit from a cast - resolved, cancelled,
+            /// or the caster dying inside its own declaration - so nothing outside one can ever
+            /// read a stale cast.</summary>
+            private void ClearCast()
+            {
+                _castCaster = null;
+                _castAbility = null;
+                _castCancelled = false;
+                _castCancelSourceId = -1;
+            }
+
             private CombatUnit _swapAdvanced;
             private CombatUnit _swapDelayed;
 
@@ -1061,6 +1090,7 @@ namespace Emberfall.Core.Combat
                 p.StackThresholdStatus = src.StackThresholdStatus;
                 p.StackThresholdCount = src.StackThresholdCount;
                 p.CounterIndex = src.CounterIndex;
+                p.TriggerAbilityId = src.TriggerAbilityId;
                 p.TargetBanKind = src.TargetBanKind;
                 p.TargetBanStatus = src.TargetBanStatus;
                 p.OutputModStatus = src.OutputModStatus;
@@ -1183,6 +1213,21 @@ namespace Emberfall.Core.Combat
                     cast.Vfx = unit.Active.Vfx;
                     EmitEnergy(unit);
 
+                    // DECLARED. The event above is the declaration and has been for the life of
+                    // the project - it was already emitted here, before a single effect ran, which
+                    // is why this pass adds no event to an existing battle. What it did not do was
+                    // leave anything behind that could be interrupted.
+                    //
+                    // DECLARATION IS THE CASTER AND THE ABILITY, NOT THE TARGETS. Targeting in this
+                    // engine is per-effect and happens as each effect runs - AllEnemies resolves at
+                    // the second effect against whoever is standing by then, and half the roster
+                    // depends on that. Snapshotting "the cast's target" here would mean moving
+                    // targeting out of the effects and into the declaration, which is a different
+                    // engine and would move every fingerprint in the game.
+                    _castCaster = unit;
+                    _castAbility = unit.Active;
+                    _castCancelled = false;
+
                     // Raised BEFORE the cast resolves, so a passive that answers an enemy active
                     // acts on the board the caster is about to hit rather than on the wreckage
                     // afterwards. That is what "when an Anticipated enemy uses an active skill"
@@ -1193,13 +1238,37 @@ namespace Emberfall.Core.Combat
                         BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActive, 0, null);
                         _broadcastSubject = prevSubject;
                     }
-                    if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
+                    // The declaration window, open to everybody. OnEnemyActive above is the same
+                    // moment shown to one side; this is the side-neutral hook, and anything it
+                    // raises resolves before the cast does.
+                    for (int ci = 0; ci < _units.Count && !IsBattleOver(); ci++)
+                        if (_units[ci].Alive) TriggerPassive(_units[ci], PassiveTrigger.OnCastDeclared, 0);
+
+                    if (!unit.Alive || IsBattleOver()) { ClearCast(); ExpireStatuses(unit); return; }
+
+                    // AND THE CAST EITHER SURVIVES THE WINDOW OR IT DOES NOT.
+                    //
+                    // A CANCELLED CAST REFUNDS NOTHING. The energy was spent at declaration, three
+                    // lines above, and it stays spent: that is what makes an interrupt worth a turn
+                    // rather than a delay, and it is the reading EffectKind.Interrupt already has -
+                    // it empties a bar and gives nothing back. Refunding would also be the only
+                    // path in this engine that hands energy to a unit nobody granted it to.
+                    if (_castCancelled)
+                    {
+                        BattleEvent lost = Emit(BattleEventType.CastCancelled, _castCancelSourceId, unit.Id);
+                        lost.AbilityId = unit.Active.Id;
+                        lost.AbilityName = unit.Active.Name;
+                        ClearCast();
+                        ExpireStatuses(unit);
+                        return;
+                    }
 
                     {
                         CombatUnit prevLT = _lastTarget;
                         ResolveAbility(unit, unit.Active, 0);
                         _lastTarget = prevLT;
                     }
+                    ClearCast();
 
                     // AND THE OTHER END OF THE CAST. OnEnemyActive is raised before it, on purpose,
                     // so a passive answering it acts on the board the caster is about to hit; this
@@ -1571,6 +1640,13 @@ namespace Emberfall.Core.Combat
 
                     case EffectCondition.ShieldBrokenByCaster:
                         first = _shieldBreakerId >= 0 && caster != null && _shieldBreakerId == caster.Id;
+                        break;
+
+                    // Whether this body has a cast declared and not yet resolved. Sim state, so it
+                    // is answered here rather than in the pure evaluator, the same way the
+                    // turn-progress members are.
+                    case EffectCondition.SubjectIsCasting:
+                        first = _castCaster != null && subject == _castCaster && !_castCancelled;
                         break;
 
                     // GAP 7's condition half. Sim-side rather than in the pure ConditionMet
@@ -2602,6 +2678,24 @@ namespace Emberfall.Core.Combat
                         other.Slot = tmp;
                         BattleEvent swapEvent = Emit(BattleEventType.PositionSwapped, source.Id, target.Id);
                         swapEvent.Value = other.Id;
+                        break;
+                    }
+
+                    case EffectKind.CancelCast:
+                    {
+                        // Reaches only the unit whose cast is in flight, and only while it is.
+                        // Outside the window _castCaster is null and this does nothing, the same
+                        // way RedirectLethal does nothing outside an OnAllyWouldDie.
+                        //
+                        // A CAST THAT LOSES ITS TARGET MID-FLIGHT IS NOT CANCELLED BY THAT. Only
+                        // this effect cancels one. Targeting is per-effect and already defined for
+                        // a body that is gone: the effect resolves against nobody and the rest of
+                        // the ability carries on, which is what every AoE that kills something
+                        // with its first effect has always done.
+                        if (_castCaster == null || target != _castCaster) break;
+                        if (_castCancelled) break;
+                        _castCancelled = true;
+                        _castCancelSourceId = source != null ? source.Id : -1;
                         break;
                     }
 
@@ -4815,6 +4909,13 @@ namespace Emberfall.Core.Combat
                                 debtStored += _thresholdUnit.Statuses[di].Stored;
                         if (debtStored < passive.Threshold) continue;
                     }
+                    // TriggerAbilityId filter: a passive that names an ability answers only a
+                    // declaration of THAT ability. Empty on every passive in shipped content, so
+                    // this check never rejects anything in an existing battle.
+                    if (!string.IsNullOrEmpty(passive.TriggerAbilityId)
+                        && (_castAbility == null || _castAbility.Id != passive.TriggerAbilityId))
+                        continue;
+
                     // TriggerStatus filter: when a passive names a specific status, the trigger
                     // fires only if that status was among the ones that expired. No shipped content
                     // sets TriggerStatus, so this check never fires for existing battles.
