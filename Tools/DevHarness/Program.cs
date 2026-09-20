@@ -17383,6 +17383,9 @@ namespace Emberfall.DevHarness
             if (stage == null) { Check(false, "hero-sweep stage resolved"); Line(""); return; }
 
             List<string> lines = new List<string>();
+            int runsWithAKill = 0;
+            int stragglerProbe = -1;
+            List<string> noKill = new List<string>();
             for (int h = 0; h < authored.Count; h++)
             {
                 for (int s = 1; s <= HeroSweepSeeds; s++)
@@ -17392,8 +17395,24 @@ namespace Emberfall.DevHarness
                     for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
                     BattleResult r = RunWith(arena, stage, HeroSweepSeed(authored[h].Id, s), team);
                     lines.Add(authored[h].Id + "|" + s + "|" + (r == null ? "NULL" : HeroSweepHash(r)));
+                    if (r != null && EnemyDeaths(r) > 0) runsWithAKill++;
+                    else if (r != null) noKill.Add(authored[h].Id + "|" + s);
+                    if (r != null && stragglerProbe < 0) stragglerProbe = DamageTo(r, "SweepStraggler");
                 }
             }
+
+            // AND SOMETHING HAS TO DIE IN IT. Until the straggler was added nothing ever did:
+            // every body in the line had 180,000 HP or more, so OnEnemyDefeated was raised in none
+            // of these runs and three shipped passives were unreachable. Asserted per run rather
+            // than in aggregate, because one hero failing to finish it is exactly the failure mode
+            // the straggler's HP is tuned against.
+            Check(noKill.Count == 0,
+                  noKill.Count == 0
+                    ? "an enemy dies in all " + runsWithAKill + " sweep runs, so every authored kit "
+                      + "is measured against a defeat as well as against a fight"
+                    : noKill.Count + " sweep run(s) killed nothing [first run put "
+                      + stragglerProbe + " damage into the straggler], so the defeat-triggered "
+                      + "clauses are unreachable in them: " + string.Join(", ", noKill.ToArray()));
 
             // THE SWEEP HAS TO MEASURE ITS SUBJECT, not the four bodies standing next to it. If
             // two heroes produced the same fingerprint for the same seed, their lines would be
@@ -17496,7 +17515,8 @@ namespace Emberfall.DevHarness
             string[] subjects = { "talren_the_wayfinder", "vaelis_the_unfixed_blade",
                                   "nysera_the_missing_arrow", "rovan_the_adaptive_commander",
                                   "kiva_the_forsaken_oath", "sylven_the_unfading_blade",
-                                  "merek_the_sequence_thief", "oris_the_unwritten_path" };
+                                  "merek_the_sequence_thief", "oris_the_unwritten_path",
+                                  "zella_the_slow_argument" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -17651,6 +17671,20 @@ namespace Emberfall.DevHarness
             return 4400000 + (int)(hash % 3000000UL) + seed;
         }
 
+        /// <summary>Enemies that died in this battle. The straggler is meant to be one of them in
+        /// every run; a zero here is the arena having gone blind to defeats again.</summary>
+        private static int EnemyDeaths(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                if (r.Events[i].Type != BattleEventType.Death) continue;
+                for (int u = 0; u < r.Units.Count; u++)
+                    if (r.Units[u].Id == r.Events[i].TargetId && !r.Units[u].IsPlayer) { n++; break; }
+            }
+            return n;
+        }
+
         private static string HeroSweepHash(BattleResult r)
         {
             ulong hash = 14695981039346656037UL;
@@ -17702,6 +17736,29 @@ namespace Emberfall.DevHarness
         /// 300000 across a whole fight, so it perturbs the line barely at all while making a whole
         /// axis of targeting behaviour visible.
         ///
+        /// A SIXTH BODY DIES, and that is the third repair to this arena and the same kind of
+        /// repair as the other two. The five bodies above all have 180,000 HP or more and none of
+        /// them ever died, so `OnEnemyDefeated` was never raised in a single one of the 145 runs -
+        /// and the sweep was blind to every clause that answers a defeat. Three shipped passives
+        /// live there: Zella's `Nothing Stays Settled`, Sylven's `Persistent Edge` and Vaelis's
+        /// `Opening Moves`. Zella's had been inert in the engine for two batches and the sweep had
+        /// no opinion about the repair, because it had never once reached the rule.
+        ///
+        /// IT IS FIRST IN THE LINE AND THE LOWEST HP IN IT, which is what makes it the body the
+        /// marking clauses find. `FrontEnemy` and `LowestHpEnemy` are the two picks the roster's
+        /// defeat clauses build on - Zella burns the front body, Vaelis binds the lowest-HP one -
+        /// so a corpse that carried neither would raise the trigger and move nothing, which is a
+        /// worse kind of blindness than not raising it at all.
+        ///
+        /// ITS HP IS THE WHOLE OF THE TUNING. Too low and it dies to the subject's opening blow,
+        /// before anything has been put on it, and the corpse is bare; too high and the slowest
+        /// killers in the roster never finish it. The number below is the one that leaves it
+        /// standing after the first hero turn and dead inside the fight for every authored kit -
+        /// measured across all 29 by the death count the exercise report prints.
+        ///
+        /// Once it falls the line is the five bodies it always was, so everything the paragraphs
+        /// below describe still holds for the rest of the fight.
+        ///
         /// ITS TAUNT LASTS TWO ROUNDS AND IS NEVER RENEWED, which is the other half of the same
         /// repair and the larger one. Re-applied every turn it made the warden a PERMANENT anchor,
         /// and the anchor overrides every single-enemy target mode there is - so every hero that
@@ -17725,6 +17782,16 @@ namespace Emberfall.DevHarness
 
             string enemies = @"{
   ""enemies"": [
+    { ""id"": ""sweep_straggler"", ""name"": ""SweepStraggler"", ""aspect"": ""Gale"",
+      ""hp"": 3000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
+      ""passive"": { ""id"": ""sw_strag_bleed"", ""name"": ""Bleeding Out"", ""trigger"": ""TurnStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 4.0 } ] },
+      ""basic"": { ""id"": ""sw_strag"", ""name"": ""Urge"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
+        ] } },
     { ""id"": ""sweep_hitter"", ""name"": ""SweepHitter"", ""aspect"": ""Ember"",
       ""hp"": 240000, ""attack"": 900, ""defense"": 120, ""speed"": 150, ""critChance"": 0.05, ""critDamage"": 1.5,
       ""basic"": { ""id"": ""sw_hit"", ""name"": ""Crush"",
@@ -17744,14 +17811,6 @@ namespace Emberfall.DevHarness
           { ""kind"": ""ApplyStatus"", ""target"": ""RandomEnemy"", ""status"": ""Burn"",
             ""magnitude"": 0.25, ""duration"": 2, ""chance"": 0.9 }
         ] } },
-    { ""id"": ""sweep_buffer"", ""name"": ""SweepBuffer"", ""aspect"": ""Gale"",
-      ""hp"": 180000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
-      ""basic"": { ""id"": ""sw_buff"", ""name"": ""Urge"",
-        ""effects"": [
-          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
-          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
-            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
-        ] } },
     { ""id"": ""sweep_warden"", ""name"": ""SweepWarden"", ""aspect"": ""Lumen"",
       ""hp"": 300000, ""attack"": 300, ""defense"": 180, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5,
       ""passive"": { ""id"": ""sw_ward_smoulder"", ""name"": ""Smoulder"", ""trigger"": ""BattleStart"",
@@ -17770,10 +17829,10 @@ namespace Emberfall.DevHarness
             string campaign = @"{
   ""chapters"": [ { ""id"": ""sweep_ch"", ""name"": ""Sweep"", ""stages"": [
     { ""id"": ""sweep_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""sweep_straggler"", ""level"": 30 },
       { ""id"": ""sweep_hitter"", ""level"": 30 },
       { ""id"": ""sweep_healer"", ""level"": 30 },
       { ""id"": ""sweep_burner"", ""level"": 30 },
-      { ""id"": ""sweep_buffer"", ""level"": 30 },
       { ""id"": ""sweep_warden"", ""level"": 30 } ] } ] } ]
 }";
             ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);

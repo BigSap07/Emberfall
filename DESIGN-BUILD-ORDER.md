@@ -569,6 +569,50 @@ Merek's basic answering `OnEnemyActive`, which is raised before the cast resolve
 says after; Oris's talent II, both halves gating on absolute Energy; Oris's "once every 2 rounds";
 Sylven's Healing Reduction and his "+20% on a transferred Bleed".
 
+### Then, on the same branch: the sweep can see a defeat
+
+**All 145 sweep lines moved, and the cause is the arena.** The commit contains one source file
+and the baseline it regenerates — no content, no engine — so nothing else could have moved one.
+Proved rather than argued: the PREVIOUS harness binary, run against this same content, still
+reports *"all 145 sweep fingerprints match"*. Old arena plus this content is the old baseline; new
+arena plus the same content is 145 new lines.
+
+**Nothing ever died in it.** Every body in the enemy line had 180,000 HP or more, so
+`OnEnemyDefeated` was raised in none of the 145 runs and the sweep was blind to every clause that
+answers a defeat. Three shipped passives live there — Zella's `Nothing Stays Settled`, Sylven's
+`Persistent Edge`, Vaelis's `Opening Moves` — and all three read **0** in the exercise report.
+Zella's had been inert in the engine for two batches and the sweep had no opinion about the repair,
+because it had never once reached the rule.
+
+**The self-buffer is now the body that dies, rather than a sixth body being added.**
+`_cfg.MaxTeamSize` caps an enemy line at five and takes the first five, so a sixth entry is not a
+sixth enemy — it is the warden silently dropped, and with it the Taunt anchor and the long shallow
+Burn the previous two repairs to this arena put there. That was tried first and measured: the line
+kept five bodies and the warden was gone. The straggler carries the buffer's self-AttackUp, so the
+buff-gained path is raised as often as before; it stands first in the line and lowest in HP, which
+is what makes it the body `FrontEnemy` and `LowestHpEnemy` clauses find, so the corpse carries the
+marks and Bleeds that the defeat clauses then read.
+
+**It dies on a schedule, not on hero damage, and that is the part worth stating.** Hero output in
+this arena is far smaller and far more varied than it looks — a whole fight puts about 7,000 damage
+into a front body — so no fixed HP both survives a Striker's opening blow and falls to a Mender's
+whole fight. Measured at 15,000, 40,000 and 80,000 authored HP: nothing died at any of them. It now
+carries a `TurnStart` passive that deals four times its own Attack to itself, so it falls on its
+second turn in **every** run regardless of who is standing opposite, and a new check asserts that
+per run rather than in aggregate — one hero failing to finish it is exactly the failure this is
+tuned against. Self-damage rather than a self-Burn, deliberately: a heavy Burn on it would have
+made it the enemy carrying the most pending DoT and taken that distinction off the warden, undoing
+the Cyrra repair.
+
+**What now fires that did not:** `zella_nothing_stays_settled` 0 → **5**, `sylven_persistent_edge`
+0 → **5**, `vaelis_opening_moves` 0 → **5**, once per seed. Rovan's `OnAllyDefeated` half already
+fired and still does (18). **Kiva's and Merek's defeat clauses are talents and still cannot fire
+here**, and no arena change fixes that: the sweep selects no talent, which is why the exercise
+report excludes them.
+
+The 72 stage fingerprints are untouched — the hero-sweep arena is not the campaign — and the harness
+red list is identical, line for line, at 35.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a
