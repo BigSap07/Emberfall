@@ -18796,7 +18796,8 @@ namespace Emberfall.DevHarness
             CheckTargetBanRoundGranularity();
             CheckTargetBanOutranksTheAnchor();
             CheckTargetBanEmptyFallback();
-            CheckClonePassiveCoversEveryField();
+            CheckEveryFieldByFieldCopyIsComplete();
+            CheckMovedLedgerStillPaysOut();
             Line("");
         }
 
@@ -18972,77 +18973,224 @@ namespace Emberfall.DevHarness
                   + (starved.Front + starved.Back) + " against " + (free.Front + free.Back)
                   + "), so the fallback drops the restriction rather than bending the pick");
         }
-
         /// <summary>
-        /// EVERY PUBLIC FIELD OF PassiveDef IS ASSIGNED BY ClonePassive, read out of the sources
-        /// rather than remembered.
+        /// EVERY SAME-TYPE FIELD-BY-FIELD COPY IN THE ENGINE ASSIGNS EVERY FIELD OF ITS TYPE.
         ///
-        /// The reflection guard beside this one covers EffectDef.Clone, which was dropping nine
-        /// fields when it was written. ClonePassive is the same method for the other half of an
-        /// ability and it was dropping three - StackThresholdStatus, StackThresholdCount and
-        /// CounterIndex - so a talent appending to an OnStackThreshold passive silently turned its
-        /// threshold off. Found by running the EffectDef audit against it by hand while adding two
-        /// fields below them; this is that audit, kept.
+        /// THIS BUG HAS NOW BEEN FOUND THREE TIMES, each one by accident while editing nearby, and
+        /// each time in a different method:
+        ///   - EffectDef.Clone was dropping NINE, so a talent that rebuilt an ability lost the link
+        ///     fields and moveDuration for exactly the players who selected it;
+        ///   - ClonePassive was dropping THREE, so a talent appending to an OnStackThreshold
+        ///     passive silently turned its threshold off;
+        ///   - MoveStatus was dropping NINE of the Ledger's configuration, so a Ledger moved by
+        ///     MoveBuffs kept its balance and forgot it was supposed to pay out - the only one of
+        ///     the three shipped content can reach, since Vaelis's active moves positive effects
+        ///     between enemies and Sylven's Scar Record is a Ledger.
         ///
-        /// Source text rather than reflection, because ClonePassive is private to the simulation's
-        /// nested Sim and nothing outside can call it. The same shape as the aspect source scan and
-        /// the validate_heroes.py parity read: it degrades to a [note] when the files are not next
-        /// to the binary, and a scan that read nothing fails rather than passes.
+        /// So the audit that found the third one is kept, over all four copiers at once. A copy
+        /// whose source and destination are the SAME type must assign everything; a projection
+        /// between two types must not, and those are deliberately not in this table -
+        /// CombatUnit.FromDef, StatMath.Build, CampaignWaveGenerator.BuildBattle and
+        /// ProvingGenerator.GhostOf are all cross-type and a field they leave behind may be right.
+        ///
+        /// Source text rather than reflection because three of the four are private to the
+        /// simulation's nested Sim and nothing outside can call them. A list field counts as copied
+        /// when the body Adds to it, and the four MoveStatus hands to AddOrRefresh - Kind,
+        /// RoundsLeft, Magnitude, SourceId - count as copied because that call is what sets them.
+        /// Degrades to a [note] when the sources are not beside the binary; a scan that read
+        /// nothing fails rather than passes.
         /// </summary>
-        private static void CheckClonePassiveCoversEveryField()
+        private static void CheckEveryFieldByFieldCopyIsComplete()
         {
             string defs = FindEngineSource("Data", "Definitions.cs");
+            string unit = FindEngineSource("Combat", "CombatUnit.cs");
             string sim = FindEngineSource("Combat", "CombatSimulation.cs");
-            if (defs == null || sim == null)
+            if (defs == null || unit == null || sim == null)
             {
-                Line("  [note] engine sources not found next to this binary, so ClonePassive's field"
-                     + " coverage was not read.");
+                Line("  [note] engine sources not found next to this binary, so the field-by-field"
+                     + " copies were not audited.");
                 return;
             }
-
             string defsText = File.ReadAllText(defs);
-            int at = defsText.IndexOf("public sealed class PassiveDef", StringComparison.Ordinal);
-            int end = at < 0 ? -1 : defsText.IndexOf("\n    }", at, StringComparison.Ordinal);
-            List<string> fields = new List<string>();
-            if (at >= 0 && end > at)
+            string unitText = File.ReadAllText(unit);
+            string simText = File.ReadAllText(sim);
+
+            // label | type source | type | copier source | signature | terminator | free fields
+            string[][] copiers =
             {
-                string[] rows = defsText.Substring(at, end - at).Split('\n');
-                for (int i = 0; i < rows.Length; i++)
+                new string[] { "EffectDef.Clone", "defs", "EffectDef", "defs",
+                               "public EffectDef Clone()", "return c;", "" },
+                new string[] { "CloneAbility", "defs", "AbilityDef", "sim",
+                               "private static AbilityDef CloneAbility", "return a;", "" },
+                new string[] { "ClonePassive", "defs", "PassiveDef", "sim",
+                               "private static PassiveDef ClonePassive", "return p;", "" },
+                new string[] { "MoveStatus", "unit", "StatusInstance", "sim",
+                               "private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status,",
+                               "BattleEvent e = Emit(BattleEventType.StatusSpread",
+                               "Kind,RoundsLeft,Magnitude,SourceId" },
+            };
+
+            int audited = 0;
+            List<string> broken = new List<string>();
+            for (int c = 0; c < copiers.Length; c++)
+            {
+                string typeText = copiers[c][1] == "defs" ? defsText
+                                : copiers[c][1] == "unit" ? unitText : simText;
+                string copyText = copiers[c][3] == "defs" ? defsText
+                                : copiers[c][3] == "unit" ? unitText : simText;
+                List<string> fields = PublicFieldsOf(typeText, copiers[c][2]);
+                string body = MethodBody(copyText, copiers[c][4], copiers[c][5]);
+                if (fields.Count == 0 || body == null)
                 {
-                    string row = rows[i].TrimEnd('\r');
-                    if (!row.StartsWith("        public ", StringComparison.Ordinal)) continue;
-                    if (row.Contains("(")) continue;                       // a method, not a field
-                    int semi = row.IndexOf(';');
-                    if (semi < 0) continue;
-                    string decl = row.Substring("        public ".Length, semi - "        public ".Length);
-                    int eq = decl.IndexOf('=');
-                    if (eq >= 0) decl = decl.Substring(0, eq);
-                    string[] parts = decl.Trim().Split(' ');
-                    if (parts.Length >= 2) fields.Add(parts[parts.Length - 1].Trim());
+                    broken.Add(copiers[c][0] + " (could not be read)");
+                    continue;
                 }
+                string free = "," + copiers[c][6] + ",";
+                List<string> missing = new List<string>();
+                for (int f = 0; f < fields.Count; f++)
+                {
+                    if (free.IndexOf("," + fields[f] + ",", StringComparison.Ordinal) >= 0) continue;
+                    if (body.IndexOf("." + fields[f] + " =", StringComparison.Ordinal) >= 0) continue;
+                    if (body.IndexOf("." + fields[f] + ".Add(", StringComparison.Ordinal) >= 0) continue;
+                    missing.Add(fields[f]);
+                }
+                audited += fields.Count;
+                if (missing.Count > 0)
+                    broken.Add(copiers[c][0] + " drops " + missing.Count + " ("
+                               + string.Join(", ", missing.ToArray()) + ")");
             }
 
-            string simText = File.ReadAllText(sim);
-            int cat = simText.IndexOf("private static PassiveDef ClonePassive", StringComparison.Ordinal);
-            int cend = cat < 0 ? -1 : simText.IndexOf("return p;", cat, StringComparison.Ordinal);
-            string body = (cat >= 0 && cend > cat) ? simText.Substring(cat, cend - cat) : "";
-
-            List<string> missing = new List<string>();
-            for (int i = 0; i < fields.Count; i++)
-                if (body.IndexOf("p." + fields[i] + " =", StringComparison.Ordinal) < 0)
-                    missing.Add(fields[i]);
-
-            Check(fields.Count >= 20 && body.Length > 0,
-                  "read " + fields.Count + " public field(s) off PassiveDef and " + body.Length
-                  + " characters of ClonePassive - a scan that found neither would pass by"
-                  + " inspecting nothing");
-            Check(missing.Count == 0,
-                  missing.Count == 0
-                    ? "ClonePassive assigns every one of them, so a talent that rebuilds a passive"
-                      + " cannot silently drop part of it"
-                    : missing.Count + " PassiveDef field(s) are DROPPED by ClonePassive: "
-                      + string.Join(", ", missing.ToArray()));
+            Check(audited >= 130,
+                  "audited " + audited + " field(s) across the " + copiers.Length + " same-type "
+                  + "copies in the engine - a scan that read no fields would pass by inspecting "
+                  + "nothing");
+            Check(broken.Count == 0,
+                  broken.Count == 0
+                    ? "every one of them is assigned by the copy that claims to make a copy, so no "
+                      + "talent rebuild and no status move can silently drop part of what it moved"
+                    : string.Join("; ", broken.ToArray()));
         }
+
+
+        /// <summary>
+        /// A LEDGER THAT CHANGES CARRIER STILL PAYS OUT, which is the one of the three dropped-field
+        /// bugs that shipped content can reach.
+        ///
+        /// Ledger is not harmful, so MoveBuffs moves it; Vaelis's active moves positive effects
+        /// between two enemies and Sylven's Scar Record is a Ledger. Before the carry list was
+        /// completed, a moved one arrived with its stored damage and with AutoRelease off - it kept
+        /// the number and forgot it was supposed to pay it.
+        ///
+        /// Two runs of one arena: the ledger left where it was applied, and the same ledger moved
+        /// to the other body first. The payout has to follow it.
+        /// </summary>
+        private static void CheckMovedLedgerStillPaysOut()
+        {
+            int stays = RunLedgerMoveArena(false);
+            int moves = RunLedgerMoveArena(true);
+            Check(stays > 0,
+                  "control: a Ledger that stays where it was applied pays its stored damage into "
+                  + "its holder when it expires (" + stays + ")");
+            Check(moves > 0,
+                  "and a Ledger MOVED to another body pays the same into its new holder ("
+                  + moves + ") - the rules travel with the balance now, where before the move kept "
+                  + "the number and dropped the instruction");
+            Check(moves == stays,
+                  "for the same amount either way (" + moves + " against " + stays + "), so the "
+                  + "move relocates the payout rather than resizing it");
+        }
+
+        /// <summary>Damage the auto-release put into whichever body was holding the Ledger.</summary>
+        private static int RunLedgerMoveArena(bool move)
+        {
+            string mover = move
+                ? @", { ""kind"": ""MoveBuffs"", ""target"": ""FrontEnemy"",
+                       ""secondaryTarget"": ""LowestHpEnemy"", ""hits"": 4 }"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lm_hero"", ""name"": ""LmHero"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lm_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""lm_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive1"": { ""id"": ""lm_seed"", ""name"": ""Bank And Move"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Ledger"",
+            ""duration"": 2, ""chance"": 1, ""storedCap"": 4.0, ""ledgerAutoRelease"": true },
+          { ""kind"": ""LedgerDeposit"", ""target"": ""FrontEnemy"", ""flat"": 500 }" + mover + @"
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lm_front"", ""name"": ""LmFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lmf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""lm_back"", ""name"": ""LmBack"", ""aspect"": ""Ember"",
+      ""hp"": 8000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lmb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lm_ch"", ""name"": ""LedgerMove"", ""stages"": [
+    { ""id"": ""lm_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lm_front"", ""level"": 1 }, { ""id"": ""lm_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(4), "ledger move");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lm_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("lm_arena"), 9801, team);
+            if (r == null) return -1;
+            // whichever body ended up holding it - the payout is the only damage in this arena
+            return DamageTo(r, "LmFront") + DamageTo(r, "LmBack");
+        }
+
+        /// <summary>Public instance fields declared on a class, read out of the source.</summary>
+        private static List<string> PublicFieldsOf(string text, string typeName)
+        {
+            List<string> fields = new List<string>();
+            int at = text.IndexOf("public sealed class " + typeName, StringComparison.Ordinal);
+            if (at < 0) at = text.IndexOf("public class " + typeName, StringComparison.Ordinal);
+            if (at < 0) return fields;
+            int end = text.IndexOf("\n    }", at, StringComparison.Ordinal);
+            if (end < 0) return fields;
+
+            string[] rows = text.Substring(at, end - at).Split('\n');
+            for (int i = 0; i < rows.Length; i++)
+            {
+                string row = rows[i].TrimEnd('\r');
+                if (!row.StartsWith("        public ", StringComparison.Ordinal)) continue;
+                int semi = row.IndexOf(';');
+                if (semi < 0) continue;
+                string decl = row.Substring(15, semi - 15);
+                if (decl.Contains("=>")) continue;
+                int eq = decl.IndexOf('=');
+                string left = eq >= 0 ? decl.Substring(0, eq) : decl;
+                if (left.Contains("(")) continue;          // a method
+                string[] parts = left.Trim().Split(' ');
+                if (parts.Length >= 2) fields.Add(parts[parts.Length - 1].Trim());
+            }
+            return fields;
+        }
+
+        /// <summary>The text of a method, from its signature to a terminator inside it.</summary>
+        private static string MethodBody(string text, string signature, string terminator)
+        {
+            int at = text.IndexOf(signature, StringComparison.Ordinal);
+            if (at < 0) return null;
+            int end = text.IndexOf(terminator, at, StringComparison.Ordinal);
+            return end > at ? text.Substring(at, end - at) : null;
+        }
+
+
 
         /// <summary>The engine source file at Assets/Scripts/Core/&lt;folder&gt;/&lt;name&gt;, or null.</summary>
         private static string FindEngineSource(string folder, string name)

@@ -1037,6 +1037,12 @@ namespace Emberfall.Core.Combat
                 p.Vfx = src.Vfx;
                 p.Effects = new List<EffectDef>();
                 for (int i = 0; i < src.Effects.Count; i++) p.Effects.Add(src.Effects[i].Clone());
+                // The talent lists, which no passive in content carries - a passive that is the
+                // TARGET of a talent is not itself a talent. Copied anyway, because a clone that
+                // is complete except where somebody has checked that it does not matter is how the
+                // other three of these got into the state they were in.
+                for (int i = 0; i < src.Overrides.Count; i++) p.Overrides.Add(src.Overrides[i]);
+                for (int i = 0; i < src.Appends.Count; i++) p.Appends.Add(src.Appends[i]);
                 return p;
             }
 
@@ -6002,6 +6008,25 @@ namespace Emberfall.Core.Combat
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
+
+                    // AND THE LEDGER'S RULES, NOT ONLY ITS BALANCE. These nine were the third
+                    // field-by-field copy in this engine found dropping fields, and the only one
+                    // of the three that shipped content can reach today: Ledger is not harmful, so
+                    // MoveBuffs moves it, Vaelis's active moves positive effects between two
+                    // enemies, and Sylven's Scar Record IS a Ledger. A Scar Record moved by him
+                    // arrived with its stored damage intact and with AutoRelease off - a record
+                    // that still remembers the number and has forgotten that it is supposed to pay
+                    // it out. The paragraph above promised everything the entry recorded travels
+                    // with it; what it recorded did, what it was told to DO with it did not.
+                    landed.AutoRelease = status.AutoRelease;
+                    landed.AutoReleaseAsHeal = status.AutoReleaseAsHeal;
+                    landed.AutoReleaseTarget = status.AutoReleaseTarget;
+                    landed.Mitigates = status.Mitigates;
+                    landed.BankLimit = status.BankLimit;
+                    landed.BankUsesThisRound = status.BankUsesThisRound;
+                    landed.BankHeals = status.BankHeals;
+                    landed.BankOnlyFrom = status.BankOnlyFrom;
+                    landed.BankFromCaster = status.BankFromCaster;
                     landed.AutoReleaseSplitHeal = status.AutoReleaseSplitHeal;
                     landed.FunnelSource = status.FunnelSource;
                     landed.FunnelConvert = status.FunnelConvert;

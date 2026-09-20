@@ -665,14 +665,45 @@ shipped content reaches the second call and no mode that draws from the RNG stre
 Measured: with every enemy carrying the forbidden status, the blow lands for **1608**, the same as
 the unrestricted control — the rule is dropped, not bent.
 
-#### And a second copy of a bug already fixed once
+#### It was not a second copy. It was a third, and now the audit is standing
 
-`ClonePassive` was dropping three fields — `StackThresholdStatus`, `StackThresholdCount`,
-`CounterIndex` — so a talent appending to an `OnStackThreshold` passive silently turned its
-threshold off. The same defect `EffectDef.Clone()` had, found by running the same audit against it
-by hand. That audit is now a standing check: it reads `PassiveDef`'s public fields and
-`ClonePassive`'s body out of the sources and asserts every field is assigned, alongside the
-reflection guard that already covers `EffectDef`.
+Asked before merge whether `ClonePassive` and `EffectDef.Clone` were the complete set, the answer
+was no. Searching for the SIGNATURE of the bug — a run of assignments whose left and right sides
+name the same member — turns up sixteen such runs in six files. Split by whether the copy is
+same-type or a projection:
+
+**Same-type copies, where every field must be assigned — four of them, now all complete:**
+
+| copier | type | was |
+|---|---|---|
+| `EffectDef.Clone` | EffectDef, 81 fields | dropped 9 |
+| `ClonePassive` | PassiveDef, 26 fields | dropped 3, then 2 more |
+| `CloneAbility` | AbilityDef, 7 fields | complete |
+| `MoveStatus`'s carry block | StatusInstance, 32 fields | **dropped 9** |
+
+**`MoveStatus` is the one shipped content can reach.** `Ledger` is not harmful, so `MoveBuffs`
+moves it; Vaelis's active moves positive effects between two enemies and Sylven's Scar Record IS a
+Ledger. A moved one arrived with its stored damage and with `AutoRelease` off, along with every
+other rule about how it banks and what it mitigates — **a record that still remembered the number
+and had forgotten it was supposed to pay it out.** The carry block's own comment promised that
+everything the entry recorded travels with it; what it recorded did, what it was told to do with
+it did not. Measured now: a Ledger left alone pays 500 into its holder, and a Ledger moved to
+another body pays the same 500 into the new one.
+
+The other two, `Overrides` and `Appends` on `ClonePassive`, no passive in content carries — a
+passive that is the TARGET of a talent is not itself a talent. Copied anyway, because "complete
+except where somebody has checked that it does not matter" is how the other three got into the
+state they were in.
+
+**Cross-type projections are deliberately NOT in the table** — `CombatUnit.FromDef`,
+`StatMath.Build`, `CampaignWaveGenerator.BuildBattle` (21 fields) and `ProvingGenerator.GhostOf`
+all read one type and write another, and a field they leave behind may be correct. They are named
+here so the next reader knows they were looked at rather than missed.
+
+The audit that found the third one is kept as a check: it reads each type's public fields and each
+copier's body out of the sources and asserts every field is assigned — 149 fields across the four —
+with the four `AddOrRefresh` sets whitelisted for `MoveStatus` and a list counted as copied when
+the body adds to it.
 
 ### Placeholder-period notes (until abilities are authored)
 
