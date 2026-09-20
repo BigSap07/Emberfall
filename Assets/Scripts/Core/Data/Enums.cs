@@ -325,7 +325,20 @@ namespace Emberfall.Core.Data
         /// one that does; nobody at all when no enemy carries any, which is the honest answer
         /// rather than falling through to the front body.
         /// </summary>
-        HighestPendingDoTEnemy
+        HighestPendingDoTEnemy,
+
+        /// <summary>
+        /// The living enemy with the least Energy, ties going to the front slot.
+        ///
+        /// THE MISSING CORNER OF A SET OF THREE. The enum has `HighestEnergyEnemy` and
+        /// `LowestEnergyAlly` and has never had this one, so a kit that wanted to hit whoever was
+        /// furthest from casting had nothing to name - and two clauses of one hero ask for it in as
+        /// many words.
+        ///
+        /// Energy is read raw, the same way `HighestEnergyEnemy` reads it: nothing modifies it, and
+        /// it is already the number the player watches fill.
+        /// </summary>
+        LowestEnergyEnemy
     }
 
     public enum EffectKind

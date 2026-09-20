@@ -1219,16 +1219,17 @@ namespace Emberfall.Core.Combat
                         burnDmg *= OutputModMultiplier(dotSource, unit, OutputModScope.DoTOnly);
                         int damage = (int)Math.Round(burnDmg, MidpointRounding.AwayFromZero);
                         if (damage < 1) damage = 1;
-                        // named for what it actually is - not whatever the source last cast, so the
-                        // Debrief and any on-screen attribution can't misname a burn tick as a fresh hit
-                        DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn, 1f, StatusInfo.DisplayName(StatusKind.Burn));
-                        if (!unit.Alive) return;
-
                         // Per-tick recording: combines DoT damage with RecordFact's recording in a
                         // single status. None on every Burn in shipped content, so no existing tick
                         // records anything new. Runs the same logic RecordFact uses, inline rather
                         // than through RecordFact because RecordFact expects an EffectDef and here
                         // the recording is stamped on the StatusInstance.
+                        //
+                        // BEFORE THE TICK LANDS, NOT AFTER, and the order is the clause rather than
+                        // a convenience: "records the target's last positive effect BEFORE it takes
+                        // damage" is only true if the board is read first. A Shield the tick breaks
+                        // is a positive effect the target HAD when the Bleed found it, and reading
+                        // afterwards would record whatever outlived the wound instead.
                         if (s.TickRecord != RecordKind.None && dotSource != null)
                         {
                             StatusInstance recEntry = null;
@@ -1261,6 +1262,11 @@ namespace Emberfall.Core.Combat
                                 }
                             }
                         }
+
+                        // named for what it actually is - not whatever the source last cast, so the
+                        // Debrief and any on-screen attribution can't misname a burn tick as a fresh hit
+                        DealRawDamage(s.SourceId, unit, damage, false, "burn", StatusKind.Burn, 1f, StatusInfo.DisplayName(StatusKind.Burn));
+                        if (!unit.Alive) return;
 
                         // Applier-side lifecycle: the unit that applied this Burn hears about the
                         // tick. Broadcast to the source's side with _broadcastSubject set to the
@@ -2131,6 +2137,18 @@ namespace Emberfall.Core.Combat
                                 }
                             }
 
+                        // PreventExtend on an APPLICATION as well as on a transfer, so the flag
+                        // means one thing wherever it is authored. Zella and Sylven both want it
+                        // on the transferred copy; an entry that is born unextendable is the same
+                        // fact stamped one step earlier, and a flag that worked on only one of the
+                        // two effects that create entries would be a trap.
+                        if (effect.PreventExtend)
+                            for (int ni = 0; ni < target.Statuses.Count; ni++)
+                            {
+                                StatusInstance ns = target.Statuses[ni];
+                                if (ns.Kind == effect.Status && ns.SourceId == source.Id) ns.NoExtend = true;
+                            }
+
                         if (effect.Status == StatusKind.Ledger)
                             for (int li = 0; li < target.Statuses.Count; li++)
                             {
@@ -2544,6 +2562,10 @@ namespace Emberfall.Core.Combat
                             {
                                 if (!StatusInfo.IsHarmful(entry.Kind)) continue;
                             }
+                            // An entry stamped NoExtend refuses this and refuses it SILENTLY -
+                            // it is not counted as extended, so the event reports what actually
+                            // moved. False on every entry in every battle before this pass.
+                            if (entry.NoExtend) continue;
                             entry.RoundsLeft += added;
                             extended++;
                         }
@@ -2747,7 +2769,25 @@ namespace Emberfall.Core.Combat
                     case EffectKind.TransferStatus:
                     {
                         // Moves the first matching status entry from the target to SecondaryTarget.
-                        if (!target.Alive || effect.Status == StatusKind.None) break;
+                        //
+                        // A CORPSE INSIDE THE DEFEAT WINDOW IS A LEGAL SOURCE, and refusing it made
+                        // this effect useless for the only thing shipped content uses it for.
+                        // `!target.Alive` turned away every transfer off a defeated body, which is
+                        // both of them: Zella's `Nothing Stays Settled` and Sylven's `Persistent
+                        // Edge` name TargetMode.DefeatedUnit and nothing else. Hers has been in the
+                        // game since batch five and has never once moved a status.
+                        //
+                        // The pre-clear window exists precisely so "a status survives its carrier's
+                        // death" can be authored - the comment in the death branch says so in as
+                        // many words, and lists six abilities that want it - and TransferStatus is
+                        // the effect those abilities use. The engine had the window and the door
+                        // into it was bolted.
+                        //
+                        // Narrow on purpose: the only dead unit accepted is the one the window is
+                        // currently about. Outside it _defeated is null, so every other transfer
+                        // refuses a corpse exactly as before.
+                        if (effect.Status == StatusKind.None) break;
+                        if (!target.Alive && target != _defeated) break;
                         List<CombatUnit> dests = ResolveTargets(source, effect.SecondaryTarget);
                         if (dests.Count == 0) break;
                         CombatUnit dest = dests[0];
@@ -2766,6 +2806,24 @@ namespace Emberfall.Core.Combat
                         BattleEvent gone = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                         gone.Status = moving.Kind;
                         if (moving.Kind == StatusKind.Shield) target.Shield = 0f;
+
+                        // TransferDuration re-clocks the entry as it lands, exactly as MoveDuration
+                        // does for MoveBuffs and MoveDebuffs. Zero keeps its own remaining rounds,
+                        // which is what every transfer authored before this did.
+                        //
+                        // THE SIBLING THE MOVE-DURATION PASS MISSED. TransferStatus is the
+                        // single-kind version of the same operation, and Zella's shipped passive
+                        // says "transfer its Residue to the highest-HP enemy FOR 2 ROUNDS" - a
+                        // clause that has been absent from her content since she was authored,
+                        // because there was no field to put it in and the omission was silent.
+                        if (effect.TransferDuration > 0) moving.RoundsLeft = effect.TransferDuration;
+
+                        // And PreventExtend stamps the entry so ExtendStatus will not touch it.
+                        // Set on the way in rather than tested at the extend site against some
+                        // property of the mover, because "this particular entry cannot be
+                        // extended" is a fact about the entry and has to travel with it.
+                        if (effect.PreventExtend) moving.NoExtend = true;
+
                         dest.Statuses.Add(moving);
                         BattleEvent applied = Emit(BattleEventType.StatusApplied, source.Id, dest.Id);
                         applied.Status = moving.Kind;
@@ -2869,6 +2927,19 @@ namespace Emberfall.Core.Combat
                             baseAmt = _lastLedgerRelease.TryGetValue(source.Id, out rel) ? rel * effect.Power : 0f;
                         }
                         if (effect.ScaleByLastBanked) baseAmt = _lastLedgerBankedStored * effect.Power;
+                        // The removed DoT's remaining damage, which this list did not have and
+                        // ScaledTerm has had since the removed-value repair. Sylven's Scar Record
+                        // is "the Bleed's remaining damage" banked into a Ledger, and without this
+                        // the deposit falls back to Attack and stores a number from a different
+                        // question.
+                        //
+                        // NOT routed through ScaledTerm, which would be the tidier fix: the inline
+                        // list multiplies by Power for release and banked and does NOT for redirect,
+                        // and brenna_deep_resolve is a shipped LedgerDeposit authoring
+                        // scaleByLastRedirect. Sharing the resolver would multiply her deposit by
+                        // her Power and change a live passive, so the divergence is left standing
+                        // and named rather than fixed underneath her.
+                        if (effect.ScaleByLastRemoval) baseAmt = _lastRemovedValue * effect.Power;
                         if (baseAmt <= 0f) break;
                         for (int li = 0; li < target.Statuses.Count; li++)
                         {
@@ -4012,10 +4083,41 @@ namespace Emberfall.Core.Combat
                         _inDefeatDispatch = false;
                     }
 
-                    target.Statuses.Clear();
-
+                    // ONKILL, INSIDE THE DEFEAT WINDOW AND BEFORE THE CORPSE IS STRIPPED.
+                    //
+                    // It used to fire after `Statuses.Clear()` and after `_defeated` had already
+                    // been restored, which made it a trigger that could not ask a single question
+                    // about the thing it had just killed: ConditionSubject.Defeated resolved to
+                    // nobody, and HasMyMark on the body was false because the mark had been
+                    // cleared one line earlier. "When Kiva defeats a FORSAKEN target" had no way
+                    // to test the word Forsaken.
+                    //
+                    // The killer and the corpse were split across two hooks and neither carried
+                    // both: OnEnemyDefeated has the corpse and does not say who killed it, OnKill
+                    // has the killer and, until now, nothing else.
+                    //
+                    // Raised HERE rather than moved inside the `!_inDefeatDispatch` block above,
+                    // because that block is skipped for a re-entrant death and OnKill must still
+                    // fire for one - the existing comment promises exactly that. So the context is
+                    // set around this call instead, which is the narrower change.
                     CombatUnit killer = FindUnit(sourceId);
-                    if (killer != null && killer.Alive) TriggerPassive(killer, PassiveTrigger.OnKill, 0);
+                    if (killer != null && killer.Alive)
+                    {
+                        CombatUnit prevKillSubject = _broadcastSubject;
+                        CombatUnit prevKillVictim = _broadcastVictim;
+                        CombatUnit prevKillDefeated = _defeated;
+                        _broadcastSubject = target;
+                        _broadcastVictim = target;
+                        _defeated = target;
+                        TriggerPassive(killer, PassiveTrigger.OnKill, 0);
+                        _defeated = prevKillDefeated;
+                        _broadcastVictim = prevKillVictim;
+                        _broadcastSubject = prevKillSubject;
+                    }
+
+                    // AFTER the kill trigger now. The corpse keeps what it died carrying until
+                    // every hook that could read it has run.
+                    target.Statuses.Clear();
                     return;
                 }
 
@@ -5514,6 +5616,7 @@ namespace Emberfall.Core.Combat
                             // with the lowest number on its card. Energy is raw: nothing modifies
                             // it, and it is already the number the player watches fill.
                             else if (mode == TargetMode.HighestEnergyEnemy && u.Energy > picked.Energy) picked = u;
+                            else if (mode == TargetMode.LowestEnergyEnemy && u.Energy < picked.Energy) picked = u;
                             else if (mode == TargetMode.HighestSpeedEnemy && u.EffectiveSpeed > picked.EffectiveSpeed) picked = u;
                             else if (mode == TargetMode.LowestSpeedEnemy && u.EffectiveSpeed < picked.EffectiveSpeed) picked = u;
                         }
@@ -5833,6 +5936,7 @@ namespace Emberfall.Core.Combat
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;
+                    landed.NoExtend = status.NoExtend;
                     landed.AutoReleaseSplitHeal = status.AutoReleaseSplitHeal;
                     landed.FunnelSource = status.FunnelSource;
                     landed.FunnelConvert = status.FunnelConvert;

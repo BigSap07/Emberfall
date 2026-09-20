@@ -118,6 +118,15 @@ namespace Emberfall.Core.Combat
         /// recording, which is every Burn in shipped content.</summary>
         public RecordKind TickRecord = RecordKind.None;
 
+        /// <summary>
+        /// This entry refuses ExtendStatus. Stamped by the effect that transferred or applied it,
+        /// and carried with it from then on, because "transferred Residue cannot be extended" is a
+        /// property of that copy rather than a rule about one caster.
+        ///
+        /// False on every entry in every battle before the pass that added it.
+        /// </summary>
+        public bool NoExtend;
+
         /// <summary>Fraction of Stored that auto-release pays as healing to the applier, on top
         /// of the damage to the holder. Zero means no split heal, the existing behaviour.</summary>
         public float AutoReleaseSplitHeal;

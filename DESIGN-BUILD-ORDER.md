@@ -453,6 +453,166 @@ insertion moves one.
   trigger nothing raises fingerprints exactly like one that fires every round. Four kits on six
   triggers this roster had never used is where that distinction matters most.
 
+### Open: `content/batch-seven-four-heroes` — unmerged, off `content/batch-six-four-heroes`
+
+Kiva, Sylven, Merek and Oris carry full kits, and Zella's shipped `Nothing Stays Settled` was
+repaired alongside them. Off batch six with `main` merged in, so the roster source file is
+tracked here.
+
+**The 72 stage fingerprints MOVED for the first time in these passes, and the reason is Kiva.**
+She is one of the three starters the 24-stage sweep deploys, so replacing her placeholder with a
+real kit necessarily moves every stage battle. Attributed rather than assumed: reverting Kiva
+alone to her placeholder and re-running reproduces batch six's 72 fingerprints **byte for byte**,
+so nothing else in this pass — five engine changes, three other heroes, Zella — moves a stage
+battle. **The sweep went 125 → 145 lines**, the twenty being the four new kits, with no existing
+line moved.
+
+#### Four gaps built, each measured
+
+- **`TargetMode.LowestEnergyEnemy`.** The enum had `HighestEnergyEnemy` and `LowestEnergyAlly` and
+  never the third corner. Two of Oris's clauses ask for it by name.
+- **`transferDuration`.** The single-kind sibling of `moveDuration`, missed when that was built.
+  Measured at 2 rounds against a control's 7.
+- **`preventExtend`.** Stamps the entry, not the caster, so the refusal travels with the status.
+  Refused silently: a skipped entry is not counted, so the extension event still reports what
+  actually moved.
+- **`OnKill` fires inside the defeat window.** It used to fire after `Statuses.Clear()` and after
+  `_defeated` had been restored, so it could not ask one question about the body it had just
+  killed. Raised at the call site rather than moved into the `!_inDefeatDispatch` block, because
+  that block is skipped for a re-entrant death and OnKill must still fire for one. Measured: a
+  payout gated on the corpse's mark pays out, and pays nothing when the mark is absent.
+
+**Nothing authors OnKill in shipped content, and that was measured rather than asserted:** with
+all four gaps built and the content untouched, 72 of 72 stage fingerprints and 125 of 125 sweep
+lines were unchanged.
+
+#### Two things the build found that were not on the list
+
+- **`EffectDef.Clone()` was dropping nine fields.** Clone is not a debug helper — talent overrides
+  and appends rebuild a modified ability through it — so a field missing from it is silently lost
+  for exactly the players who select that talent. Vaelis's talent I appends to a basic whose
+  `LinkUnits` sets `linkMutual` and `linkTransfer`, so Departure stopped being a mutual link for
+  anyone who took it; his talent II overrides the two `MoveBuffs` effects carrying `moveDuration`,
+  the field that talent is about. A reflection guard now sets all 81 public fields to non-default
+  values, clones, and compares, so this class of bug cannot come back.
+- **`TransferStatus` refused a corpse, which is the only thing content uses it for.** `!target.Alive`
+  turned away every transfer off a defeated body — and `TargetMode.DefeatedUnit` is the only target
+  Zella's and Sylven's transfers name. **Her passive has been in the game since batch five and has
+  never once moved a status.** The pre-clear defeat window exists precisely so a status can survive
+  its carrier's death; the door into it was bolted. Now the one dead unit accepted is the one the
+  window is currently about, so every other transfer refuses a corpse exactly as before.
+
+#### Zella's repair, measured — and why her sweep lines did not move
+
+Her text: *"transfer its Residue and recorded action history to the highest-HP enemy **for 2
+rounds**. Transferred Residue **cannot be extended**."* Neither clause was in her content, because
+`TransferStatus` had no field for either, and the omission was silent.
+
+On her real kit, in an arena where a body actually dies, with the two fields stripped back off in
+memory for the control:
+
+- the transfer fires in both runs (1 / 1)
+- **BEFORE: the moved Residue landed with 6 rounds. AFTER: 2.**
+- **BEFORE: an ExtendStatus stretched it — 1 entry. AFTER: 0**, with the other Burn on the same
+  body still extended, so the refusal is the entry's and not the caster's.
+
+**Her five sweep lines did not move, and that is a fact about the arena rather than the repair.**
+The sweep's enemies have 180,000 HP and more; nothing dies in it, so `OnEnemyDefeated` is never
+raised and her passive is never reached. The authored-kit exercise report says the same about
+Sylven's `persistent_edge 0`. **The sweep is blind to the whole defeat-triggered family** — Kiva's
+two talents, Zella, Sylven, Vaelis, Merek, Rovan — which is the same shape of blindness the Cyrra
+pass found in single-target targeting. It is named here and deliberately NOT fixed in this commit:
+giving the arena a killable body moves all 145 lines, and this commit's claim that nothing but the
+four new kits moved would stop being checkable.
+
+#### One reorder, asked rather than chosen
+
+Sylven's Bleed *"records the target's last positive effect **before** it takes damage"*, and the
+engine recorded after the tick. Put to the author as a four-line reorder or a two-word edit; the
+reorder was chosen, so the record is now taken on the board as it stood before the tick landed and
+a Shield the Bleed destroys is still what gets recorded. No Burn in shipped content carries a
+`TickRecord`, so nothing moved underneath anyone.
+
+#### One scalar, because Sylven's core needed it
+
+`LedgerDeposit` kept its own inline list of `ScaleBy` flags and had never gained
+`ScaleByLastRemoval`, so a Scar Record deposited "the Bleed's remaining damage" would have banked
+a number from a different question. **Not** routed through the shared `ScaledTerm`, which would be
+the tidier fix: the inline list multiplies by Power for release and banked and does not for
+redirect, and `brenna_deep_resolve` is a shipped `LedgerDeposit` authoring `scaleByLastRedirect`.
+Sharing the resolver would have changed a live passive. The divergence is left standing and named.
+
+#### Five description edits, in `import/Heroes.json`
+
+Eight of the file's 374 descriptions moved; the diff is eight lines.
+
+- **Merek's basic** drained 15 Energy after an active resolved. Casting sets Energy to 0, so it
+  took nothing from an empty bar: now a 10% turn-progress delay. **His talent I fell with it** —
+  it answered "when Anticipated removes Energy" and gated on an absolute Energy threshold, which
+  is a gap left unbuilt.
+- **Kiva's talent II** named an ability she does not have: *No Way Back* → *Cut the Escort*.
+- **Kiva's basic** gave Forsaken immunity to redirection "from another enemy"; nothing in
+  `enemies.json` applies Covered or creates a link, so it guarded nothing. Forsaken is a marker,
+  which is what the rest of her kit reads it as.
+- **Oris** measured time in "% of the normal turn interval" where every other hero says "% turn
+  progress", and the engine has one primitive behind both.
+- **Oris's talent III** asked for the enemy whose Energy moved most during the sequence — per-unit
+  delta tracking plus a ranking mode, the most expensive gap on the list, for one talent. It now
+  names the body the second altered attack struck, which is that body.
+
+#### Ten sub-clauses authored as nothing, each blocked on a gap left unbuilt
+
+Named rather than approximated into the content, and listed in `Tools/_author_batch_seven.py`:
+Kiva's "since Kiva's last turn" and her "up to 130% of Attack" cap; Merek's two swap riders (one
+of them his whole talent II), his recorded-progress payout, and his round-start designation;
+Merek's basic answering `OnEnemyActive`, which is raised before the cast resolves where his text
+says after; Oris's talent II, both halves gating on absolute Energy; Oris's "once every 2 rounds";
+Sylven's Healing Reduction and his "+20% on a transferred Bleed".
+
+### Then, on the same branch: the sweep can see a defeat
+
+**All 145 sweep lines moved, and the cause is the arena.** The commit contains one source file
+and the baseline it regenerates — no content, no engine — so nothing else could have moved one.
+Proved rather than argued: the PREVIOUS harness binary, run against this same content, still
+reports *"all 145 sweep fingerprints match"*. Old arena plus this content is the old baseline; new
+arena plus the same content is 145 new lines.
+
+**Nothing ever died in it.** Every body in the enemy line had 180,000 HP or more, so
+`OnEnemyDefeated` was raised in none of the 145 runs and the sweep was blind to every clause that
+answers a defeat. Three shipped passives live there — Zella's `Nothing Stays Settled`, Sylven's
+`Persistent Edge`, Vaelis's `Opening Moves` — and all three read **0** in the exercise report.
+Zella's had been inert in the engine for two batches and the sweep had no opinion about the repair,
+because it had never once reached the rule.
+
+**The self-buffer is now the body that dies, rather than a sixth body being added.**
+`_cfg.MaxTeamSize` caps an enemy line at five and takes the first five, so a sixth entry is not a
+sixth enemy — it is the warden silently dropped, and with it the Taunt anchor and the long shallow
+Burn the previous two repairs to this arena put there. That was tried first and measured: the line
+kept five bodies and the warden was gone. The straggler carries the buffer's self-AttackUp, so the
+buff-gained path is raised as often as before; it stands first in the line and lowest in HP, which
+is what makes it the body `FrontEnemy` and `LowestHpEnemy` clauses find, so the corpse carries the
+marks and Bleeds that the defeat clauses then read.
+
+**It dies on a schedule, not on hero damage, and that is the part worth stating.** Hero output in
+this arena is far smaller and far more varied than it looks — a whole fight puts about 7,000 damage
+into a front body — so no fixed HP both survives a Striker's opening blow and falls to a Mender's
+whole fight. Measured at 15,000, 40,000 and 80,000 authored HP: nothing died at any of them. It now
+carries a `TurnStart` passive that deals four times its own Attack to itself, so it falls on its
+second turn in **every** run regardless of who is standing opposite, and a new check asserts that
+per run rather than in aggregate — one hero failing to finish it is exactly the failure this is
+tuned against. Self-damage rather than a self-Burn, deliberately: a heavy Burn on it would have
+made it the enemy carrying the most pending DoT and taken that distinction off the warden, undoing
+the Cyrra repair.
+
+**What now fires that did not:** `zella_nothing_stays_settled` 0 → **5**, `sylven_persistent_edge`
+0 → **5**, `vaelis_opening_moves` 0 → **5**, once per seed. Rovan's `OnAllyDefeated` half already
+fired and still does (18). **Kiva's and Merek's defeat clauses are talents and still cannot fire
+here**, and no arena change fixes that: the sweep selects no talent, which is why the exercise
+report excludes them.
+
+The 72 stage fingerprints are untouched — the hero-sweep arena is not the campaign — and the harness
+red list is identical, line for line, at 35.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a

@@ -5114,7 +5114,7 @@ namespace Emberfall.DevHarness
                                "HighestMyMarkStacksEnemy",
                                "PreviousTarget", "LinkedUnit",
                                "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
-                               "HighestPendingDoTEnemy" },
+                               "HighestPendingDoTEnemy", "LowestEnergyEnemy" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -16105,6 +16105,8 @@ namespace Emberfall.DevHarness
             CheckLooseEnds();
             CheckCostedThree();
             CheckRedirectApproximations(live);
+            CheckBatchSevenGaps();
+            CheckZellaTransferRepair(live);
             Line("");
         }
 
@@ -17381,6 +17383,9 @@ namespace Emberfall.DevHarness
             if (stage == null) { Check(false, "hero-sweep stage resolved"); Line(""); return; }
 
             List<string> lines = new List<string>();
+            int runsWithAKill = 0;
+            int stragglerProbe = -1;
+            List<string> noKill = new List<string>();
             for (int h = 0; h < authored.Count; h++)
             {
                 for (int s = 1; s <= HeroSweepSeeds; s++)
@@ -17390,8 +17395,24 @@ namespace Emberfall.DevHarness
                     for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
                     BattleResult r = RunWith(arena, stage, HeroSweepSeed(authored[h].Id, s), team);
                     lines.Add(authored[h].Id + "|" + s + "|" + (r == null ? "NULL" : HeroSweepHash(r)));
+                    if (r != null && EnemyDeaths(r) > 0) runsWithAKill++;
+                    else if (r != null) noKill.Add(authored[h].Id + "|" + s);
+                    if (r != null && stragglerProbe < 0) stragglerProbe = DamageTo(r, "SweepStraggler");
                 }
             }
+
+            // AND SOMETHING HAS TO DIE IN IT. Until the straggler was added nothing ever did:
+            // every body in the line had 180,000 HP or more, so OnEnemyDefeated was raised in none
+            // of these runs and three shipped passives were unreachable. Asserted per run rather
+            // than in aggregate, because one hero failing to finish it is exactly the failure mode
+            // the straggler's HP is tuned against.
+            Check(noKill.Count == 0,
+                  noKill.Count == 0
+                    ? "an enemy dies in all " + runsWithAKill + " sweep runs, so every authored kit "
+                      + "is measured against a defeat as well as against a fight"
+                    : noKill.Count + " sweep run(s) killed nothing [first run put "
+                      + stragglerProbe + " damage into the straggler], so the defeat-triggered "
+                      + "clauses are unreachable in them: " + string.Join(", ", noKill.ToArray()));
 
             // THE SWEEP HAS TO MEASURE ITS SUBJECT, not the four bodies standing next to it. If
             // two heroes produced the same fingerprint for the same seed, their lines would be
@@ -17492,7 +17513,10 @@ namespace Emberfall.DevHarness
             Line("                       same as its effects passing their conditions)");
 
             string[] subjects = { "talren_the_wayfinder", "vaelis_the_unfixed_blade",
-                                  "nysera_the_missing_arrow", "rovan_the_adaptive_commander" };
+                                  "nysera_the_missing_arrow", "rovan_the_adaptive_commander",
+                                  "kiva_the_forsaken_oath", "sylven_the_unfading_blade",
+                                  "merek_the_sequence_thief", "oris_the_unwritten_path",
+                                  "zella_the_slow_argument" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -17647,6 +17671,20 @@ namespace Emberfall.DevHarness
             return 4400000 + (int)(hash % 3000000UL) + seed;
         }
 
+        /// <summary>Enemies that died in this battle. The straggler is meant to be one of them in
+        /// every run; a zero here is the arena having gone blind to defeats again.</summary>
+        private static int EnemyDeaths(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                if (r.Events[i].Type != BattleEventType.Death) continue;
+                for (int u = 0; u < r.Units.Count; u++)
+                    if (r.Units[u].Id == r.Events[i].TargetId && !r.Units[u].IsPlayer) { n++; break; }
+            }
+            return n;
+        }
+
         private static string HeroSweepHash(BattleResult r)
         {
             ulong hash = 14695981039346656037UL;
@@ -17698,6 +17736,29 @@ namespace Emberfall.DevHarness
         /// 300000 across a whole fight, so it perturbs the line barely at all while making a whole
         /// axis of targeting behaviour visible.
         ///
+        /// A SIXTH BODY DIES, and that is the third repair to this arena and the same kind of
+        /// repair as the other two. The five bodies above all have 180,000 HP or more and none of
+        /// them ever died, so `OnEnemyDefeated` was never raised in a single one of the 145 runs -
+        /// and the sweep was blind to every clause that answers a defeat. Three shipped passives
+        /// live there: Zella's `Nothing Stays Settled`, Sylven's `Persistent Edge` and Vaelis's
+        /// `Opening Moves`. Zella's had been inert in the engine for two batches and the sweep had
+        /// no opinion about the repair, because it had never once reached the rule.
+        ///
+        /// IT IS FIRST IN THE LINE AND THE LOWEST HP IN IT, which is what makes it the body the
+        /// marking clauses find. `FrontEnemy` and `LowestHpEnemy` are the two picks the roster's
+        /// defeat clauses build on - Zella burns the front body, Vaelis binds the lowest-HP one -
+        /// so a corpse that carried neither would raise the trigger and move nothing, which is a
+        /// worse kind of blindness than not raising it at all.
+        ///
+        /// ITS HP IS THE WHOLE OF THE TUNING. Too low and it dies to the subject's opening blow,
+        /// before anything has been put on it, and the corpse is bare; too high and the slowest
+        /// killers in the roster never finish it. The number below is the one that leaves it
+        /// standing after the first hero turn and dead inside the fight for every authored kit -
+        /// measured across all 29 by the death count the exercise report prints.
+        ///
+        /// Once it falls the line is the five bodies it always was, so everything the paragraphs
+        /// below describe still holds for the rest of the fight.
+        ///
         /// ITS TAUNT LASTS TWO ROUNDS AND IS NEVER RENEWED, which is the other half of the same
         /// repair and the larger one. Re-applied every turn it made the warden a PERMANENT anchor,
         /// and the anchor overrides every single-enemy target mode there is - so every hero that
@@ -17721,6 +17782,16 @@ namespace Emberfall.DevHarness
 
             string enemies = @"{
   ""enemies"": [
+    { ""id"": ""sweep_straggler"", ""name"": ""SweepStraggler"", ""aspect"": ""Gale"",
+      ""hp"": 3000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
+      ""passive"": { ""id"": ""sw_strag_bleed"", ""name"": ""Bleeding Out"", ""trigger"": ""TurnStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 4.0 } ] },
+      ""basic"": { ""id"": ""sw_strag"", ""name"": ""Urge"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
+        ] } },
     { ""id"": ""sweep_hitter"", ""name"": ""SweepHitter"", ""aspect"": ""Ember"",
       ""hp"": 240000, ""attack"": 900, ""defense"": 120, ""speed"": 150, ""critChance"": 0.05, ""critDamage"": 1.5,
       ""basic"": { ""id"": ""sw_hit"", ""name"": ""Crush"",
@@ -17740,14 +17811,6 @@ namespace Emberfall.DevHarness
           { ""kind"": ""ApplyStatus"", ""target"": ""RandomEnemy"", ""status"": ""Burn"",
             ""magnitude"": 0.25, ""duration"": 2, ""chance"": 0.9 }
         ] } },
-    { ""id"": ""sweep_buffer"", ""name"": ""SweepBuffer"", ""aspect"": ""Gale"",
-      ""hp"": 180000, ""attack"": 420, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
-      ""basic"": { ""id"": ""sw_buff"", ""name"": ""Urge"",
-        ""effects"": [
-          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 },
-          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
-            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1 }
-        ] } },
     { ""id"": ""sweep_warden"", ""name"": ""SweepWarden"", ""aspect"": ""Lumen"",
       ""hp"": 300000, ""attack"": 300, ""defense"": 180, ""speed"": 110, ""critChance"": 0, ""critDamage"": 1.5,
       ""passive"": { ""id"": ""sw_ward_smoulder"", ""name"": ""Smoulder"", ""trigger"": ""BattleStart"",
@@ -17766,10 +17829,10 @@ namespace Emberfall.DevHarness
             string campaign = @"{
   ""chapters"": [ { ""id"": ""sweep_ch"", ""name"": ""Sweep"", ""stages"": [
     { ""id"": ""sweep_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""sweep_straggler"", ""level"": 30 },
       { ""id"": ""sweep_hitter"", ""level"": 30 },
       { ""id"": ""sweep_healer"", ""level"": 30 },
       { ""id"": ""sweep_burner"", ""level"": 30 },
-      { ""id"": ""sweep_buffer"", ""level"": 30 },
       { ""id"": ""sweep_warden"", ""level"": 30 } ] } ] } ]
 }";
             ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
@@ -18715,9 +18778,639 @@ namespace Emberfall.DevHarness
         }
 
 
+
+        // ---- Zella's transfer, on live content, before and after -----------------------------
+
+        private sealed class ZellaProbe
+        {
+            public int Landed;    // Burn applications on the body that received the transfer
+            public int Duration;  // the clock the transfer landed with
+            public int Extends;   // how many later applications reported an extension
+            public int Fires;     // times her passive's trigger reached her
+            public int Deaths;    // enemies that died in the run
+        }
+
+        /// <summary>
+        /// THE TWO CLAUSES ZELLA'S SHIPPED PASSIVE HAS BEEN MISSING SINCE BATCH FIVE, measured on
+        /// her real kit rather than on a synthetic copy of it.
+        ///
+        /// "Transfer its Residue and recorded action history to the highest-HP enemy FOR 2 ROUNDS.
+        /// Transferred Residue CANNOT BE EXTENDED." Both halves were absent from her content
+        /// because TransferStatus had no field for either, and the omission was silent: the
+        /// transfer worked, so nothing looked wrong.
+        ///
+        /// THE HERO SWEEP CANNOT SEE THIS AND THAT IS WHY THIS EXISTS. Her passive is
+        /// OnEnemyDefeated and the sweep arena's enemies have 180,000 HP and more, so no enemy
+        /// dies in it and the passive never fires - her five sweep lines do not move for a repair
+        /// to a rule they never reach. The arena below kills something.
+        ///
+        /// Two runs: as her content now ships, and with the same two fields stripped back off her
+        /// effects in memory. The pair is the evidence.
+        /// </summary>
+        private static void CheckZellaTransferRepair(ContentDatabase live)
+        {
+            ZellaProbe now = RunZellaProbe(live, false);
+            ZellaProbe was = RunZellaProbe(live, true);
+            if (now == null || was == null) { Check(false, "Zella's arena built"); return; }
+
+            Check(was.Landed > 0 && now.Landed > 0,
+                  "the transfer fires in both runs - an enemy carrying her Residue dies and the "
+                  + "entry moves to the highest-HP body (" + was.Landed + " / " + now.Landed
+                  + "; her passive fired " + was.Fires + " / " + now.Fires + " times, "
+                  + was.Deaths + " / " + now.Deaths + " deaths)");
+            Check(was.Duration > 2 && now.Duration == 2,
+                  "BEFORE, the moved Residue kept whatever clock it had left - " + was.Duration
+                  + " rounds here - where her text says two. AFTER: " + now.Duration);
+            Check(was.Extends >= 1,
+                  "BEFORE, an ExtendStatus reached the moved Residue and lengthened it - the "
+                  + "extension reports " + was.Extends + " entr(ies) stretched, which her text "
+                  + "forbids in as many words");
+            Check(now.Extends == was.Extends - 1,
+                  "AFTER, the same ExtendStatus stretches one entry FEWER (" + now.Extends
+                  + " against " + was.Extends + "): the moved entry refuses and the others on the "
+                  + "same body are untouched, so the refusal is the entry's and not the caster's");
+        }
+
+        private static ZellaProbe RunZellaProbe(ContentDatabase live, bool stripped)
+        {
+            ContentDatabase arena = BuildZellaArena(live);
+            if (arena == null) return null;
+            HeroDef zella = arena.GetHero("zella_the_slow_argument");
+            if (zella == null) return null;
+
+            if (stripped)
+                for (int i = 0; i < zella.Passives.Count; i++)
+                {
+                    if (zella.Passives[i].Id != "zella_nothing_stays_settled") continue;
+                    for (int e = 0; e < zella.Passives[i].Effects.Count; e++)
+                    {
+                        zella.Passives[i].Effects[e].TransferDuration = 0;
+                        zella.Passives[i].Effects[e].PreventExtend = false;
+                    }
+                }
+
+            List<HeroDef> helper = BuildZellaHelper();
+            StageDef stage = arena.GetStage("zt_arena");
+            if (helper == null || stage == null) return null;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(zella, 40));
+            for (int i = 0; i < helper.Count; i++) team.Add(MakeInstance(helper[i], 40));
+
+            BattleResult r = RunWith(arena, stage, 9601, team);
+            if (r == null) return null;
+
+            int wallId = -1, frailId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "ZtWall") wallId = r.Units[i].Id;
+                if (r.Units[i].Name == "ZtFrail") frailId = r.Units[i].Id;
+            }
+
+            ZellaProbe p = new ZellaProbe();
+            bool corpseGaveItUp = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.PassiveTrigger
+                    && e.AbilityId == "zella_nothing_stays_settled") { p.Fires++; continue; }
+                if (e.Type == BattleEventType.Death) { p.Deaths++; continue; }
+                if (e.Type == BattleEventType.StatusExpired && e.TargetId == frailId
+                    && e.Status == StatusKind.Burn)
+                {
+                    corpseGaveItUp = true;   // TransferStatus emits this as the entry leaves
+                    continue;
+                }
+                if (e.Type != BattleEventType.StatusApplied) continue;
+                if (e.TargetId != wallId || e.Status != StatusKind.Burn) continue;
+                // Only the helper adds seven, and the event's Value is how many entries it
+                // actually lengthened - which is the number that changes when one of them refuses.
+                if (e.Duration == 7) { if (e.Value > p.Extends) p.Extends = e.Value; continue; }
+                if (corpseGaveItUp && p.Landed == 0) { p.Duration = e.Duration; p.Landed++; }
+            }
+            return p;
+        }
+
+        /// <summary>
+        /// The real roster and the real balance, against two enemies: a frail front body that dies
+        /// carrying her Residue, and a wall that receives it. The wall's HP is what makes it the
+        /// highest-HP enemy her passive names.
+        /// </summary>
+        private static ContentDatabase BuildZellaArena(ContentDatabase live)
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            // TWO ROUNDS. Long enough for the seed, the kill, the transfer and the extension,
+            // short enough that Zella's own basic cannot pile Burns onto the receiving body for
+            // the rest of a fight.
+            balance = ZeroVarianceBalance(2);
+
+            // THE EVENTS ARE TOLD APART BY ANCHOR AND BY LENGTH, not by ordinal. Her basic
+            // re-applies a Burn to whatever stands in front every turn, which after the frail dies
+            // is the wall, so counting applications in order says nothing. The transfer announces
+            // itself with a StatusExpired on the corpse, and the landing is the next application on
+            // the wall; the helper's ExtendStatus adds SEVEN rounds, a number nothing else in the
+            // arena produces, so an extension can be recognised wherever it lands.
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""zt_frail"", ""name"": ""ZtFrail"", ""aspect"": ""Ember"",
+      ""hp"": 4000, ""attack"": 50, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ztf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""zt_wall"", ""name"": ""ZtWall"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ztw"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""zt_ch"", ""name"": ""ZellaTransfer"", ""stages"": [
+    { ""id"": ""zt_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""zt_frail"", ""level"": 1 }, { ""id"": ""zt_wall"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] Zella arena warning: " + db.Warnings[i]);
+            return null;
+        }
+
+        /// <summary>
+        /// One purpose-built ally, and it does all three things in one ability and in this order:
+        /// puts a Residue on the frail body, kills it - which is where Zella's passive fires and
+        /// moves the entry - and then tries to stretch what landed on the body that received it.
+        ///
+        /// IT SEEDS THE BURN ITSELF rather than waiting for Zella to. TransferStatus matches on
+        /// KIND, not on who applied it, so the entry that moves is the same entry either way, and
+        /// seeding it here means the measurement does not depend on which body her own basic finds
+        /// first - which is what made the first version of this arena measure nothing.
+        ///
+        /// SLOWER THAN EVERYTHING, deliberately. It acts last in the round, so Zella has already
+        /// put her Residue on the frail body before it is killed - with the helper quicker than
+        /// her, it one-shot a body carrying nothing and the transfer had no entry to move.
+        /// </summary>
+        private static List<HeroDef> BuildZellaHelper()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""zt_helper"", ""name"": ""ZtHelper"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""stars"": 5, ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 4000, ""defense"": 30, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""growth"": 0.115, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""zth_basic"", ""name"": ""Finish And Stretch"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.3, ""duration"": 6, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 40.0 },
+          { ""kind"": ""ExtendStatus"", ""target"": ""HighestHpEnemy"", ""status"": ""Burn"",
+            ""duration"": 7 }
+        ] },
+      ""active"": { ""id"": ""zth_active"", ""name"": ""Unused"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } }
+  ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, "{\"enemies\":[]}",
+                "{\"chapters\":[]}", ZeroVarianceBalance(3));
+            if (db == null) return null;
+            List<HeroDef> list = new List<HeroDef>();
+            HeroDef h = db.GetHero("zt_helper");
+            if (h == null) return null;
+            list.Add(h);
+            return list;
+        }
+
         // ---- the redirect family, measured against the roster it was built for ----------------
 
         /// <summary>One probe run's counts. Every field is a sum over the five sweep seeds.</summary>
+
+        // ---- batch seven: four gaps, a reorder, and the method that was dropping nine fields ---
+
+        private static void CheckBatchSevenGaps()
+        {
+            Line("BATCH SEVEN (the lowest-Energy enemy, a re-clocked transfer, an entry that refuses");
+            Line("             extension, a kill trigger that can see the corpse, and Clone)");
+            CheckBatchSevenPins();
+            CheckEffectDefCloneIsComplete();
+            CheckLowestEnergyEnemy();
+            CheckTransferDuration();
+            CheckPreventExtend();
+            CheckOnKillSeesTheCorpse();
+            Line("");
+        }
+
+        private static void CheckBatchSevenPins()
+        {
+            Check((int)TargetMode.HighestPendingDoTEnemy == 34,
+                  "TargetMode.HighestPendingDoTEnemy still at 34 (got "
+                  + (int)TargetMode.HighestPendingDoTEnemy + ")");
+            Check((int)TargetMode.LowestEnergyEnemy == 35,
+                  "TargetMode.LowestEnergyEnemy appended at 35 (got "
+                  + (int)TargetMode.LowestEnergyEnemy + ")");
+            Check((int)StatusKind.Linked == 48 && (int)EffectKind.EchoDamage == 29
+                  && (int)PassiveTrigger.OnRedirectSent == 45,
+                  "StatusKind, EffectKind and PassiveTrigger are untouched by this pass - two new "
+                  + "EffectDef fields and one StatusInstance field carry all of it, so no ordinal "
+                  + "moves and no fingerprint can move with one");
+        }
+
+        /// <summary>
+        /// EVERY PUBLIC FIELD OF EffectDef SURVIVES Clone(), CHECKED BY REFLECTION RATHER THAN BY
+        /// READING.
+        ///
+        /// Clone is not a debug helper. ApplyTalentOverrides and ApplyTalentAppends rebuild a
+        /// modified ability through it, so a field missing from it is silently dropped for exactly
+        /// the players who select that talent - and for nobody else, which is why it survived. It
+        /// had lost NINE: the four link fields, two ScaleBy scalars, MoveDuration and the two this
+        /// pass adds. Vaelis's talent I appends to a basic whose LinkUnits sets linkMutual and
+        /// linkTransfer, so Departure stopped being a mutual link for anyone who took it.
+        ///
+        /// Written against the field list rather than against a remembered one, because the bug
+        /// was somebody remembering. Every field is set to a value that differs from its default,
+        /// the copy is compared field by field, and the count of fields actually exercised is
+        /// asserted too - a reflection check that silently set nothing would pass by doing nothing.
+        /// </summary>
+        private static void CheckEffectDefCloneIsComplete()
+        {
+            System.Reflection.FieldInfo[] fields = typeof(EffectDef).GetFields(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+            EffectDef src = new EffectDef();
+            int exercised = 0;
+            for (int i = 0; i < fields.Length; i++)
+            {
+                object v = DistinctValueFor(fields[i].FieldType, fields[i].GetValue(src));
+                if (v == null) continue;
+                fields[i].SetValue(src, v);
+                exercised++;
+            }
+
+            EffectDef copy = src.Clone();
+            List<string> lost = new List<string>();
+            for (int i = 0; i < fields.Length; i++)
+            {
+                object a = fields[i].GetValue(src);
+                object b = fields[i].GetValue(copy);
+                if (a == null ? b != null : !a.Equals(b)) lost.Add(fields[i].Name);
+            }
+
+            Check(exercised >= 70,
+                  "the clone check set " + exercised + " of EffectDef's " + fields.Length
+                  + " public fields to a non-default value before copying - a reflection check that "
+                  + "set nothing would pass by inspecting nothing");
+            Check(lost.Count == 0,
+                  lost.Count == 0
+                    ? "every one of those fields survives EffectDef.Clone(), so a talent that "
+                      + "rebuilds an ability cannot silently drop part of it"
+                    : lost.Count + " field(s) are DROPPED by EffectDef.Clone(), so any talent "
+                      + "touching an ability loses them: " + string.Join(", ", lost.ToArray()));
+        }
+
+        /// <summary>A value guaranteed to differ from the field's current one, or null for a type
+        /// this check does not know how to vary (lists, which Clone rebuilds by hand).</summary>
+        private static object DistinctValueFor(Type t, object current)
+        {
+            if (t == typeof(int)) return ((int)current) + 7;
+            if (t == typeof(float)) return ((float)current) + 0.375f;
+            if (t == typeof(bool)) return !((bool)current);
+            if (t == typeof(string)) return ((string)current ?? "") + "x";
+            if (t.IsEnum)
+            {
+                Array vals = Enum.GetValues(t);
+                for (int i = vals.Length - 1; i >= 0; i--)
+                    if (!vals.GetValue(i).Equals(current)) return vals.GetValue(i);
+                return null;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The enum had HighestEnergyEnemy and LowestEnergyAlly and never the third corner. The
+        /// arena gives two enemies different Energy and aims one blow with each mode: they must
+        /// land on different bodies, or the new member is reading nothing.
+        /// </summary>
+        private static void CheckLowestEnergyEnemy()
+        {
+            BattleResult r = RunEnergyPickArena();
+            if (r == null) { Check(false, "lowest-energy arena built"); return; }
+            int charged = DamageTo(r, "LeCharged");
+            int drained = DamageTo(r, "LeDrained");
+            Check(charged > 0 && drained > 0, "both enemies are struck, once by each mode ("
+                  + charged + " / " + drained + "). Both read " + FinalEnergy(r, "LeCharged")
+                  + " and " + FinalEnergy(r, "LeDrained") + " at the END of the fight - the picks "
+                  + "are made mid-turn, just after the grant and the drain, which is where they "
+                  + "differ and is the whole reason those two effects are there.");
+            Check(drained > charged,
+                  "LowestEnergyEnemy and HighestEnergyEnemy resolve to DIFFERENT bodies - the "
+                  + "drained enemy takes the 3x blow and the charged one the 1x (" + drained
+                  + " against " + charged + ")");
+        }
+
+        private static BattleResult RunEnergyPickArena()
+        {
+            // THE ARENA MAKES ITS OWN ENERGY DIFFERENCE. The first shape of this gave the two
+            // enemies different `startEnergy` and measured nothing, because UnitDef.StartEnergy is
+            // parsed out of the JSON and never applied to a CombatUnit - every unit in every battle
+            // begins at zero regardless of what its content says. (The StartEnergy on UnitSnapshot
+            // is a different field with the same name: the CURRENT energy, snapshotted for the
+            // screen.) So the grant below is explicit, and the two bodies differ by 60 for the two
+            // picks that follow it in the same ability: the higher-HP body is topped up by 60 and
+            // the lower-HP one is drained to the floor, both BEFORE the two blows, so the energy
+            // order is fixed every turn and cannot wash out at the cap - which is what the first
+            // version of this did, leaving both bodies pinned at 100 and the tie broken by
+            // iteration order.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""le_hero"", ""name"": ""LeHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""le_basic"", ""name"": ""Read The Gauge"",
+        ""effects"": [
+          { ""kind"": ""EnergyGain"", ""target"": ""HighestHpEnemy"", ""flat"": 60 },
+          { ""kind"": ""EnergyGain"", ""target"": ""LowestHpEnemy"", ""flat"": -999 },
+          { ""kind"": ""Damage"", ""target"": ""HighestEnergyEnemy"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": ""LowestEnergyEnemy"", ""power"": 3.0 }
+        ] },
+      ""active"": { ""id"": ""le_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""le_charged"", ""name"": ""LeCharged"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lec"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""le_drained"", ""name"": ""LeDrained"", ""aspect"": ""Ember"",
+      ""hp"": 8000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""led"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""le_ch"", ""name"": ""LowEnergy"", ""stages"": [
+    { ""id"": ""le_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""le_charged"", ""level"": 1 }, { ""id"": ""le_drained"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "lowest energy");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("le_hero"), 1));
+            return RunWith(db, db.GetStage("le_arena"), 9501, team);
+        }
+
+        /// <summary>The last energy this unit was reported at, or -1 if it never changed.</summary>
+        private static int FinalEnergy(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int last = -1;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.EnergyChanged && r.Events[i].TargetId == id)
+                    last = r.Events[i].Value;
+            return last;
+        }
+
+        private sealed class XferProbe
+        {
+            public int Landed;      // StatusApplied events for the moved kind on the destination
+            public int Duration;    // the clock the FIRST of them reported - what it landed with
+            public int Extends;     // how many of the rest were ExtendStatus reporting a change
+            public float Magnitude;
+        }
+
+        /// <summary>
+        /// A transfer re-clocks when told to, and keeps the entry's own clock when not. Measured on
+        /// the duration the landing event reports, the same way the move-duration arena is.
+        /// </summary>
+        private static void CheckTransferDuration()
+        {
+            XferProbe reclocked = RunTransferArena(2, false);
+            XferProbe kept = RunTransferArena(0, false);
+            if (reclocked == null || kept == null) { Check(false, "transfer arena built"); return; }
+
+            Check(kept.Landed > 0 && kept.Duration == 7,
+                  "control: a transfer with no authored duration carries the entry's own remaining "
+                  + "clock (" + kept.Duration + " rounds, the 7 it was seeded with)");
+            Check(reclocked.Landed > 0 && reclocked.Duration == 2,
+                  "transferDuration re-clocks the entry as it lands (" + reclocked.Duration
+                  + " against the control's " + kept.Duration + ")");
+            Check(reclocked.Magnitude == kept.Magnitude,
+                  "and the magnitude crosses untouched either way, so re-clocking is not a re-grant ("
+                  + Fmt(reclocked.Magnitude) + " against " + Fmt(kept.Magnitude) + ")");
+        }
+
+        /// <summary>
+        /// A transferred entry stamped preventExtend refuses ExtendStatus, and the control does not.
+        /// Measured on the clock the entry ends up with, because a refusal that still extended would
+        /// report the same count and a different number.
+        /// </summary>
+        private static void CheckPreventExtend()
+        {
+            XferProbe guarded = RunTransferArena(2, true);
+            XferProbe open = RunTransferArena(2, false);
+            if (guarded == null || open == null) { Check(false, "prevent-extend arena built"); return; }
+
+            Check(open.Landed > 0 && open.Extends == 1,
+                  "control: the transferred entry is extendable, and the ExtendStatus that follows "
+                  + "reports lengthening it (" + open.Extends + " extension)");
+            Check(guarded.Landed >= 1 && guarded.Duration == open.Duration,
+                  "the guarded entry lands identically - preventExtend refuses extension, not the "
+                  + "transfer (it arrives with the same " + guarded.Duration + " rounds as the "
+                  + "control's " + open.Duration + ")");
+            Check(guarded.Extends == 0,
+                  "preventExtend: the same ExtendStatus reports NOTHING extended against the stamped "
+                  + "entry (" + guarded.Extends + " against the control's " + open.Extends + "), and "
+                  + "the refusal is silent - a skipped entry is not counted, so the event says what "
+                  + "actually moved");
+        }
+
+        private static XferProbe RunTransferArena(int transferDuration, bool preventExtend)
+        {
+            // ONE SHOT, from a BattleStart passive rather than from the basic: seed a 7-round Burn
+            // on the front enemy, transfer it to the back one, then try to extend it by 4. Run from
+            // the basic it happened once per turn and the events of four turns piled onto one body,
+            // which is what made the first version of this arena unreadable.
+            string dur = transferDuration > 0 ? ", \"transferDuration\": " + transferDuration : "";
+            string guard = preventExtend ? ", \"preventExtend\": true" : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""tx_hero"", ""name"": ""TxHero"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""tx_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive1"": { ""id"": ""tx_once"", ""name"": ""Seed, Move, Stretch"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""magnitude"": 0.13, ""duration"": 7, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""TransferStatus"", ""target"": ""FrontEnemy"", ""status"": ""Burn"",
+            ""secondaryTarget"": ""LowestHpEnemy""" + dur + guard + @" },
+          { ""kind"": ""ExtendStatus"", ""target"": ""LowestHpEnemy"", ""status"": ""Burn"",
+            ""duration"": 4 }
+        ] },
+      ""active"": { ""id"": ""tx_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""tx_front"", ""name"": ""TxFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""txf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tx_back"", ""name"": ""TxBack"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""txb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""tx_ch"", ""name"": ""Transfer"", ""stages"": [
+    { ""id"": ""tx_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""tx_front"", ""level"": 1 }, { ""id"": ""tx_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "transfer duration");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("tx_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("tx_arena"), 9502, team);
+            if (r == null) return null;
+
+            int backId = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].Name == "TxBack") backId = r.Units[i].Id;
+
+            XferProbe p = new XferProbe();
+            p.Magnitude = 0.13f;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusApplied) continue;
+                if (e.TargetId != backId || e.Status != StatusKind.Burn) continue;
+                // The transfer's landing comes first and reports the clock the entry arrived with;
+                // an ExtendStatus that changed something emits the same event type afterwards, and
+                // one that changed nothing emits none at all. So the two are told apart by order,
+                // not by guessing which duration means what.
+                if (p.Landed == 0) p.Duration = e.Duration;
+                else p.Extends++;
+                p.Landed++;
+            }
+            return p;
+        }
+
+        /// <summary>
+        /// OnKill can ask about the body it just killed.
+        ///
+        /// It used to fire after Statuses.Clear() and after _defeated had been restored, so a
+        /// passive gated on the corpse could not see anything at all. Two runs: the killer's mark
+        /// is on the victim in one and absent in the other, and the payout must follow the mark.
+        /// </summary>
+        private static void CheckOnKillSeesTheCorpse()
+        {
+            BattleResult marked = RunOnKillArena(true);
+            BattleResult bare = RunOnKillArena(false);
+            if (marked == null || bare == null) { Check(false, "on-kill arena built"); return; }
+
+            int firesMarked = CountPassiveFires(marked, "ok_payout");
+            int firesBare = CountPassiveFires(bare, "ok_payout");
+            int paidMarked = StatusAppliedCount(marked, "OkHero", StatusKind.EffectResistUp);
+            int paidBare = StatusAppliedCount(bare, "OkHero", StatusKind.EffectResistUp);
+
+            Check(firesMarked > 0 && firesBare > 0,
+                  "OnKill fires in both runs (" + firesMarked + " / " + firesBare
+                  + ") - the trigger itself is unchanged");
+            Check(paidMarked > 0,
+                  "and its effect, gated on the CORPSE carrying the killer's mark, pays out ("
+                  + paidMarked + ") - which it could not before, because the corpse was stripped "
+                  + "one line before the trigger fired");
+            Check(paidBare == 0,
+                  "control: with no mark on the victim the same gated effect pays nothing ("
+                  + paidBare + "), so it is reading the mark rather than firing on any kill");
+        }
+
+        private static BattleResult RunOnKillArena(bool mark)
+        {
+            string marker = mark
+                ? @"{ ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""Mark"",
+                      ""duration"": 5, ""chance"": 1 },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ok_hero"", ""name"": ""OkHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 4000, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ok_basic"", ""name"": ""Finish It"",
+        ""effects"": [
+          " + marker + @"
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 5.0 }
+        ] },
+      ""active"": { ""id"": ""ok_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""ok_payout"", ""name"": ""Unclaimed"", ""trigger"": ""OnKill"",
+        ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""EffectResistUp"",
+            ""magnitude"": 0.1, ""duration"": 2, ""chance"": 1,
+            ""condition"": ""HasMyMark"", ""conditionOn"": ""Defeated"" }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ok_frail"", ""name"": ""OkFrail"", ""aspect"": ""Ember"",
+      ""hp"": 900, ""attack"": 200, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""okf"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""ok_wall"", ""name"": ""OkWall"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""okw"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ok_ch"", ""name"": ""OnKill"", ""stages"": [
+    { ""id"": ""ok_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""ok_frail"", ""level"": 1 }, { ""id"": ""ok_wall"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "on kill corpse");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ok_hero"), 1));
+            return RunWith(db, db.GetStage("ok_arena"), 9503, team);
+        }
+
+
+        /// <summary>
+        /// How many times a named unit was given a named status. A status application is emitted
+        /// whether or not the unit needed it, which a Heal on a unit at full HP is not - the first
+        /// shape of the on-kill arena paid out correctly and measured zero for that reason.
+        /// </summary>
+        private static int StatusAppliedCount(BattleResult r, string unitName, StatusKind kind)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied
+                    && r.Events[i].TargetId == id && r.Events[i].Status == kind) n++;
+            return n;
+        }
+
         private sealed class RedirectProbe
         {
             public int Fires;       // PassiveTrigger events for the definition under test

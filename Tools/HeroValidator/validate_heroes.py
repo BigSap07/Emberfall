@@ -70,7 +70,7 @@ TARGET_MODES = {
     "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
     # the enemy carrying the most PENDING DoT, as against HighestDoTDealtEnemy
     # which is the one that has DEALT the most.
-    "HighestPendingDoTEnemy",
+    "HighestPendingDoTEnemy", "LowestEnergyEnemy",
 }
 
 # ---------------------------------------------------------------------------

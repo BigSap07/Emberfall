@@ -489,6 +489,29 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int MoveDuration;
 
+        /// <summary>
+        /// Rounds to put on the status TransferStatus relocates. Zero (the default) keeps the
+        /// entry's own remaining clock, which is what every transfer authored before this did.
+        ///
+        /// The single-kind sibling of MoveDuration, and it was missed when that one was built.
+        /// Zella's shipped `Nothing Stays Settled` says "transfer its Residue and recorded action
+        /// history to the highest-HP enemy FOR 2 ROUNDS" and her content has never carried the
+        /// duration, because there was no field to put it in.
+        /// </summary>
+        public int TransferDuration;
+
+        /// <summary>
+        /// Stamps the relocated or applied entry so ExtendStatus will not lengthen it.
+        ///
+        /// A fact about the ENTRY rather than about whoever tries to extend it, so it travels with
+        /// the status: "Transferred Residue cannot be extended" is a property the transferred copy
+        /// carries for the rest of its life, not a rule about one caster.
+        ///
+        /// Refused silently at the extend site - the entry is skipped and not counted - so the
+        /// event that reports an extension reports what actually moved.
+        /// </summary>
+        public bool PreventExtend;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -571,6 +594,8 @@ namespace Emberfall.Core.Data
             e.ScaleByLastMoved = j.GetBool("scaleByLastMoved", false);
             e.ScaleByLastDamage = j.GetBool("scaleByLastDamage", false);
             e.MoveDuration = Math.Max(0, j.GetInt("moveDuration", 0));
+            e.TransferDuration = Math.Max(0, j.GetInt("transferDuration", 0));
+            e.PreventExtend = j.GetBool("preventExtend", false);
             return e;
         }
 
@@ -656,6 +681,25 @@ namespace Emberfall.Core.Data
             c.ConditionCounterIndex = ConditionCounterIndex;
             c.ConditionCounterIndex2 = ConditionCounterIndex2;
             c.ConditionCounterIndex3 = ConditionCounterIndex3;
+            // THE NINE THIS METHOD USED TO DROP, and the drop was live. Clone is not a debug
+            // helper: ApplyTalentOverrides and ApplyTalentAppends rebuild the modified ability
+            // through it, so a hero who SELECTS a talent that touches an ability loses every
+            // field missing from this list on that ability - silently, and only for the players
+            // who pick that talent. Vaelis's talent I appends to his basic, whose LinkUnits sets
+            // linkMutual and linkTransfer, so Departure stopped being a mutual link for anyone
+            // who took it; his talent II overrides the two MoveBuffs effects that carry
+            // moveDuration, which is the field talent II exists to modify.
+            //
+            // Enumerated against the field list rather than recalled: 81 fields, 72 were copied.
+            c.LinkTransfer = LinkTransfer;
+            c.LinkMutual = LinkMutual;
+            c.LinkAmountPower = LinkAmountPower;
+            c.LinkFromCaster = LinkFromCaster;
+            c.ScaleByLastMoved = ScaleByLastMoved;
+            c.ScaleByLastDamage = ScaleByLastDamage;
+            c.MoveDuration = MoveDuration;
+            c.TransferDuration = TransferDuration;
+            c.PreventExtend = PreventExtend;
             return c;
         }
     }
