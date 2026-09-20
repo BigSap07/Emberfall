@@ -308,9 +308,13 @@ namespace Emberfall.Core.Combat
                     for (int i = 0; i < subject.Statuses.Count; i++)
                     {
                         StatusKind k = subject.Statuses[i].Kind;
-                        // Exclude inert / counter kinds that are neither buff nor debuff.
+                        // Exclude inert / counter kinds that are neither buff nor debuff. Linked
+                        // joins the list for the same reason Mark and Ledger are on it: a binding
+                        // is a claim about two units, not something good happening to one, and a
+                        // kit asking "does it have a buff on it" is not asking about a link.
                         if (k == StatusKind.None || k == StatusKind.Resolve || k == StatusKind.Resolve2
-                            || k == StatusKind.Ledger || k == StatusKind.Mark || k == StatusKind.MarkAlt)
+                            || k == StatusKind.Ledger || k == StatusKind.Mark || k == StatusKind.MarkAlt
+                            || k == StatusKind.Linked)
                             continue;
                         if (!StatusInfo.IsHarmful(k)) return true;
                     }
@@ -453,12 +457,22 @@ namespace Emberfall.Core.Combat
             private bool _inReflect;
 
             /// <summary>
-            /// True while a Covered share is being delivered to a protector, bounding the redirect
-            /// to one hop. Not latent: two units covering each other is an ordinary thing for a
-            /// player to build, and without this the first hit between them passes a share back and
-            /// forth until the stack gives out. Same shape as _inRedirect and _inReflect.
+            /// True while a share of a hit is being delivered somewhere other than where it landed,
+            /// bounding every such move to ONE HOP. Shared by the Covered path and by both halves
+            /// of StatusKind.Linked, which is why it is no longer named for Cover alone.
+            ///
+            /// Not latent: two units covering each other is an ordinary thing for a player to
+            /// build, and a pair of units linked to each other is the entire shape of Talren's
+            /// active. Without this the first hit between either pair passes a share back and forth
+            /// until the stack gives out.
+            ///
+            /// ONE GUARD FOR ALL THREE, and that is the conservative choice stated rather than left
+            /// to be discovered. A Covered hop landing on a protector who is himself Linked does
+            /// not then echo, and a link redirect landing on a partner who is Covered does not
+            /// split again. Separate guards would let a chain of alternating mechanics run as deep
+            /// as the pairings allowed. Same shape as _inReflect.
             /// </summary>
-            private bool _inCover;
+            private bool _inRedirect;
 
             /// <summary>True while an OnAllyWouldDie broadcast is being delivered, bounding the
             /// interception to one attempt per hit.</summary>
@@ -557,6 +571,45 @@ namespace Emberfall.Core.Combat
             /// effect condition on the target of the previous effect via ConditionSubject.LastTarget.
             /// </summary>
             private CombatUnit _lastTarget;
+
+            // ---------- linked targeting ----------
+
+            /// <summary>
+            /// Whether any StatusKind.Linked entry has been created in this battle.
+            ///
+            /// THE WHOLE REASON THE LINK WORK CANNOT MOVE AN EXISTING FINGERPRINT. Three of the
+            /// four link mechanics sit inside the damage funnel, which every point of damage in the
+            /// game passes through, and a funnel that walked a status list twice more per hit would
+            /// be a cost paid by every battle ever resolved. This bool is set exactly once, by
+            /// LinkUnits, and every link dispatch point tests it first - so a battle in which
+            /// nothing creates a link pays one already-loaded bool comparison and returns.
+            ///
+            /// One-way on purpose: it is never cleared when the last link expires. A link that
+            /// came and went leaves the guard open for the rest of that battle, which costs the
+            /// list walks it was meant to save and cannot change an outcome. Clearing it would
+            /// need a live count kept in step with expiry, dispel, death, MoveStatus and
+            /// TransferStatus, and getting that wrong would silently disable a live link.
+            /// </summary>
+            private bool _anyLinks;
+
+            /// <summary>
+            /// What the most recent hit actually took off a bar, or 0 at an ability boundary.
+            /// EffectKind.EchoDamage's whole input - see that member for why it reads a realised
+            /// number rather than recomputing one.
+            /// </summary>
+            private int _lastDamageDealt;
+
+            /// <summary>
+            /// The far end of the link whose dispatch is in flight, or null outside one. Resolves
+            /// TargetMode.LinkedUnit during a link trigger, so a passive answering "my partner was
+            /// hit" can aim an effect at the partner without re-deriving which body that is.
+            ///
+            /// The same window pattern _defeated and _thresholdUnit use, and null outside it for
+            /// the same reason: "the unit I am linked to" has a referent inside a link dispatch
+            /// that it does not have on an ordinary turn. Outside a dispatch the mode falls back to
+            /// reading the caster's own entry - see ResolveTargets.
+            /// </summary>
+            private CombatUnit _linkPartner;
 
             public Sim(BattleRequest request)
             {
@@ -845,6 +898,7 @@ namespace Emberfall.Core.Combat
                 p.PerTargetPerRound = src.PerTargetPerRound;
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
+                p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
                 p.OutputModStatus = src.OutputModStatus;
                 p.OutputModPerStack = src.OutputModPerStack;
                 p.OutputModScope = src.OutputModScope;
@@ -1562,6 +1616,12 @@ namespace Emberfall.Core.Combat
                 if (ability == null) return;
                 CombatUnit prevLastTarget = _lastTarget;
                 _lastTarget = null;
+                // Cleared and restored on exactly the same boundary _lastTarget uses, and for the
+                // same reason: an EchoDamage authored with no damage ahead of it in its own ability
+                // must read zero rather than a number from a previous turn. An echo that could pick
+                // up a stale reading would be a different ability every time it fired.
+                int prevLastDamage = _lastDamageDealt;
+                _lastDamageDealt = 0;
                 for (int i = 0; i < ability.Effects.Count; i++)
                 {
                     // No relic reshapes an effect any more. Both legendary relics in the current
@@ -1709,7 +1769,11 @@ namespace Emberfall.Core.Combat
 
                         ApplyEffect(caster, target, landed, ability, depth);
                         _lastTarget = target;
-                        if (IsBattleOver()) { if (depth > 0) _lastTarget = prevLastTarget; return; }
+                        if (IsBattleOver())
+                        {
+                            if (depth > 0) { _lastTarget = prevLastTarget; _lastDamageDealt = prevLastDamage; }
+                            return;
+                        }
                     }
 
                     // An effect whose condition held for nobody did not happen, so it does not pay
@@ -1772,7 +1836,10 @@ namespace Emberfall.Core.Combat
                 // set: AfterBasicAttack passives need to see the basic's last target via
                 // ConditionSubject.LastTarget, and the caller restores it once it is done.
                 if (depth > 0)
+                {
                     _lastTarget = prevLastTarget;
+                    _lastDamageDealt = prevLastDamage;
+                }
             }
 
             private void ApplyEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
@@ -2538,6 +2605,61 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    case EffectKind.LinkUnits:
+                    {
+                        // Binds two units. The whole of the linked-targeting primitive's creation
+                        // half: everything else in this pass READS a link, and this is the only
+                        // thing that makes one.
+                        if (!target.Alive) break;
+                        List<CombatUnit> partners = ResolveTargets(source, effect.SecondaryTarget, target,
+                                                                   effect.TargetStatus);
+                        if (partners.Count == 0) break;
+                        CombatUnit partner = partners[0];
+                        // A unit cannot be linked to itself. The transfer would deliver a share of
+                        // a hit back to the body that took it, which is not a redirect and not an
+                        // echo - it is a hit resolving twice.
+                        if (!partner.Alive || partner == target) break;
+
+                        int duration = Math.Max(1, effect.Duration);
+                        StampLink(source, target, partner, effect, duration);
+                        // MUTUAL: the reverse entry, so both bodies carry a link naming the other.
+                        // Two entries rather than one bidirectional one - see EffectDef.LinkMutual
+                        // for why breaking one half has to leave the other standing.
+                        if (effect.LinkMutual) StampLink(source, partner, target, effect, duration);
+                        break;
+                    }
+
+                    case EffectKind.EchoDamage:
+                    {
+                        // Repeats a fraction of what the previous damage in this ability actually
+                        // took off a bar. Paid through DealRawDamage, not ApplyDamageEffect: the
+                        // number has already been through Defense, crit, variance and the aspect
+                        // chart once, and sending it round again would apply every one of them
+                        // twice. That is what makes this an echo rather than a second attack.
+                        //
+                        // Zero when nothing has been damaged yet in this ability, because
+                        // _lastDamageDealt is cleared at every ability boundary - so an echo
+                        // authored ahead of its own damage does nothing rather than repeating
+                        // something from a previous turn.
+                        if (!target.Alive) break;
+                        if (_lastDamageDealt <= 0) break;
+                        int echoed = (int)Math.Round(_lastDamageDealt * effect.Power, MidpointRounding.AwayFromZero);
+                        if (echoed <= 0) break;
+                        string echoVfx = ability != null ? ability.Vfx : "impact";
+                        string echoName = ability != null ? ability.Name : "";
+
+                        // AN ECHO DOES NOT BECOME THE THING LATER ECHOES READ. The funnel writes
+                        // _lastDamageDealt for every hit it carries, so without this an echo aimed
+                        // at AllEnemies would read its own previous landing for the second enemy
+                        // and compound down the line - the third body taking a fraction of a
+                        // fraction of a fraction. Every target of one echo repeats the SAME blow,
+                        // which is what "echoes 40% of its damage" says.
+                        int spoken = _lastDamageDealt;
+                        DealRawDamage(source.Id, target, echoed, false, echoVfx, StatusKind.None, 1f, echoName);
+                        _lastDamageDealt = spoken;
+                        break;
+                    }
+
                     case EffectKind.LedgerDeposit:
                     {
                         // Deposits an amount into existing Ledger entries on the target from the
@@ -2615,6 +2737,33 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private void ApplyDamageEffect(CombatUnit source, CombatUnit target, EffectDef effect, AbilityDef ability, int depth)
             {
+                // -2. THE LINK HEARS THAT ITS PARTNER WAS AIMED AT, before anything about the blow
+                // has been decided - before the miss check, before Block, before the crit roll. A
+                // hit that goes on to miss or to be Blocked was still aimed, which is the whole
+                // distinction between this trigger and OnLinkedUnitHit below the funnel.
+                //
+                // This is the one targeting-side hook in the engine and it is deliberately narrow:
+                // it fires for a DAMAGE effect only, never for a heal, a buff or a cleanse naming a
+                // target. ResolveTargets is the common point all of those pass through, and firing
+                // a passive from inside it means firing between targets being chosen and the effect
+                // resolving, where a passive that kills the chosen target leaves the caller holding
+                // a corpse it has already committed to acting on. The same argument
+                // OnEnemyDamagedAlly settled the same way, and "an attack aimed at" is what the
+                // abilities asking for this actually say.
+                //
+                // Gated on _anyLinks, so a battle with no link pays one bool test per damage
+                // effect and nothing else - which is what keeps every existing fingerprint where
+                // it is, since this sits on the hottest path in the simulation.
+                if (_anyLinks)
+                {
+                    DispatchLinkPassive(target, source.Id, PassiveTrigger.OnLinkedUnitTargeted, depth);
+                    // A passive answering the aim can kill the target, or the caster, or end the
+                    // fight. Each of those makes the blow that was about to land meaningless, so it
+                    // does not land - the same three tests the Hits loop in ApplyEffect applies
+                    // between repeats.
+                    if (!target.Alive || !source.Alive || IsBattleOver()) return;
+                }
+
                 // -1. Accuracy / Evasion - a miss check before anything else. EvasionUp on the
                 // defender and AccuracyDown on the attacker both contribute to the miss chance.
                 // Both default to 0, so hitChance is 1.0f and Chance(1f) returns true on line 41
@@ -2856,6 +3005,65 @@ namespace Emberfall.Core.Combat
                      + missingTerm;
             }
 
+            /// <summary>
+            /// Moves `share` of a hit off `target` and onto `destination`, through this same
+            /// funnel, bounded to one hop. Returns false when the caller must stop processing the
+            /// original hit - the whole of it moved, or the target did not survive the recursion.
+            ///
+            /// THE ONE REDIRECT PATH, called twice: once by Covered, where the destination is
+            /// whoever applied the ward, and once by StatusKind.Linked with LinkTransfer.Redirect,
+            /// where it is the far end of the link. The two mechanics differ only in how they name
+            /// a body, which is why they could not justify two implementations of the same split.
+            ///
+            /// Extracted verbatim from the Covered block it used to be written inline in. Six
+            /// effects in heroes.json apply Covered, so this is the only part of the linked-
+            /// targeting work that shipped content reaches, and it had to move without changing:
+            /// same AwayFromZero rounding, same clamp of share to 1.0, same refusal of a zero or
+            /// negative move, same two early exits in the same order.
+            /// </summary>
+            private bool RedirectShare(int sourceId, CombatUnit target, CombatUnit destination, float share,
+                                       ref int damage, string vfx, StatusKind dotKind,
+                                       float aspectFactor, string abilityName)
+            {
+                if (destination == null || !destination.Alive || destination == target) return true;
+                if (share <= 0f) return true;
+                if (share > 1f) share = 1f;
+                int moved = (int)Math.Round(damage * share, MidpointRounding.AwayFromZero);
+                if (moved <= 0) return true;
+
+                damage -= moved;
+                _inRedirect = true;
+                DealRawDamage(sourceId, destination, moved, false, vfx, dotKind, aspectFactor, abilityName);
+                _inRedirect = false;
+                if (damage <= 0) return false;
+                if (!target.Alive) return false;
+                return true;
+            }
+
+            /// <summary>
+            /// The deepest live link on `holder` whose transfer mode matches, and the id of the
+            /// body on its far end. Zero and -1 when there is none.
+            ///
+            /// Deepest wins and the shares do NOT sum, which is CoverFraction's rule adopted
+            /// deliberately rather than by accident: two links each taking a share could otherwise
+            /// between them move more than the whole hit, and a holder that took nothing from a
+            /// blow aimed squarely at it is not something any of the four descriptions asks for.
+            /// </summary>
+            private static float LinkFraction(CombatUnit holder, LinkTransfer mode, out int partnerId)
+            {
+                partnerId = -1;
+                float best = 0f;
+                for (int i = 0; i < holder.Statuses.Count; i++)
+                {
+                    StatusInstance link = holder.Statuses[i];
+                    if (link.Kind != StatusKind.Linked) continue;
+                    if (link.LinkTransfer != mode) continue;
+                    if (link.Magnitude <= 0f || link.LinkedToId < 0) continue;
+                    if (link.Magnitude > best) { best = link.Magnitude; partnerId = link.LinkedToId; }
+                }
+                return best;
+            }
+
             /// <summary>Single funnel for every point of damage in the game.</summary>
             private void DealRawDamage(int sourceId, CombatUnit target, int damage, bool critical, string vfx, StatusKind dotKind,
                                         float aspectFactor, string abilityName)
@@ -2933,28 +3141,47 @@ namespace Emberfall.Core.Combat
                 // meets only the remainder - which is what "25% of damage they take is redirected
                 // to Rovan before Shields are checked" says.
                 //
-                // Bounded by _inCover: the redirected part goes through this same funnel, so a
+                // Bounded by _inRedirect: the redirected part goes through this same funnel, so a
                 // protector who is itself Covered would otherwise pass its share on again. One hop,
                 // the same rule Mirrored Wound holds to.
-                if (!_inCover)
+                //
+                // THE ARITHMETIC MOVED INTO RedirectShare AND DID NOT CHANGE. Covered is authored
+                // by six effects in heroes.json, so this is the one part of the link work that is
+                // reachable by shipped content, and it is a pure extraction: the same rounding, the
+                // same clamp, the same guard, the same two early returns, in the same order. The
+                // Linked redirect immediately below is the second caller, which is what "one path,
+                // used twice" means here.
+                if (!_inRedirect)
                 {
                     int protectorId;
                     float share = target.CoverFraction(out protectorId);
                     CombatUnit protector = share > 0f ? FindUnit(protectorId) : null;
-                    if (protector != null && protector.Alive && protector != target)
-                    {
-                        if (share > 1f) share = 1f;
-                        int moved = (int)Math.Round(damage * share, MidpointRounding.AwayFromZero);
-                        if (moved > 0)
-                        {
-                            damage -= moved;
-                            _inCover = true;
-                            DealRawDamage(sourceId, protector, moved, false, vfx, dotKind, aspectFactor, abilityName);
-                            _inCover = false;
-                            if (damage <= 0) return;
-                            if (!target.Alive) return;
-                        }
-                    }
+                    if (!RedirectShare(sourceId, target, protector, share, ref damage,
+                                       vfx, dotKind, aspectFactor, abilityName)) return;
+                }
+
+                // LINKED REDIRECT, the second use of that same path. Covered names its destination
+                // with the applier's id; a Link names it with LinkedToId, which is the only
+                // difference between the two mechanics. Nysera's "an attack aimed at her lands on
+                // the other half of the pair" is this at a magnitude of 1.0, where the whole hit
+                // moves and the `damage <= 0` return inside RedirectShare leaves her untouched.
+                //
+                // AFTER Cover rather than before it, and the order is a decision: Cover is the
+                // shipped mechanic and its position relative to the shield pool is already
+                // documented and measured, so the new rule takes the slot behind it rather than
+                // displacing it. With the shared guard, at most one of the two ever fires on a
+                // single hit anyway - whichever is reached first wins and the other sees
+                // _inRedirect set on the recursive call, not on this one. So the ordering decides
+                // which mechanic acts when a body carries BOTH, and Cover wins that.
+                //
+                // Gated on _anyLinks so a battle with no link in it walks no status list here.
+                if (_anyLinks && !_inRedirect)
+                {
+                    int partnerId;
+                    float share = LinkFraction(target, LinkTransfer.Redirect, out partnerId);
+                    CombatUnit partner = share > 0f ? FindUnit(partnerId) : null;
+                    if (!RedirectShare(sourceId, target, partner, share, ref damage,
+                                       vfx, dotKind, aspectFactor, abilityName)) return;
                 }
 
                 if (target.Shield > 0f)
@@ -3172,6 +3399,60 @@ namespace Emberfall.Core.Combat
                 {
                     CombatUnit dealer = FindUnit(sourceId);
                     if (dealer != null) dealer.DamagedThisRound.Add(target.Id);
+                }
+
+                // What actually came off the bar, for EffectKind.EchoDamage to repeat a fraction
+                // of. Written here rather than where the damage was rolled because the whole point
+                // of the echo is that it reads a realised number: everything above this line -
+                // Guard, Cover, a link redirect, the shield pool, a mitigating Ledger - has already
+                // taken its part out.
+                _lastDamageDealt = damage;
+
+                // ---------- the far end of a link hears about the hit ----------
+                //
+                // Both halves are gated on _anyLinks, so a battle with no link walks nothing here.
+                // Placed AFTER the Damage event and after LastAttackerId is written, and BEFORE
+                // the death check, which is three decisions worth stating:
+                //
+                //   After the event, so the record reads as cause then consequence: the blow that
+                //   caused an echo appears ahead of the echo it caused.
+                //
+                //   After LastAttackerId, so ConditionSubject.LastAttacker resolves to whoever
+                //   landed the blow while the trigger is in flight.
+                //
+                //   Before the death check, so a hit that kills the holder still reaches the
+                //   partner. "A later hit on one strikes the other" does not stop being true
+                //   because the first one died of it, and deferring the echo past the death branch
+                //   would mean the corpse's link had already been cleared.
+                if (_anyLinks)
+                {
+                    // ECHO: the partner takes a share AS WELL, and the holder keeps the full hit.
+                    // The same split arithmetic Redirect uses with the opposite bookkeeping -
+                    // nothing is subtracted from `damage` here, which is the entire difference
+                    // between "instead" and "as well".
+                    if (!_inRedirect)
+                    {
+                        int echoId;
+                        float echoShare = LinkFraction(target, LinkTransfer.Echo, out echoId);
+                        CombatUnit echoTo = echoShare > 0f ? FindUnit(echoId) : null;
+                        if (echoTo != null && echoTo.Alive && echoTo != target)
+                        {
+                            if (echoShare > 1f) echoShare = 1f;
+                            int copied = (int)Math.Round(damage * echoShare, MidpointRounding.AwayFromZero);
+                            if (copied > 0)
+                            {
+                                _inRedirect = true;
+                                DealRawDamage(sourceId, echoTo, copied, false, vfx, dotKind, aspectFactor, abilityName);
+                                _inRedirect = false;
+                            }
+                        }
+                    }
+
+                    // And the trigger, for a passive that wants to decide the consequence itself
+                    // rather than take the engine's echo. Raised for every point of damage the
+                    // funnel carries, an echoed share included - the partner really was hit.
+                    DispatchLinkPassive(target, sourceId, PassiveTrigger.OnLinkedUnitHit, 0);
+                    if (!target.Alive || IsBattleOver()) return;
                 }
 
                 if (target.Hp <= 0f)
@@ -3861,6 +4142,16 @@ namespace Emberfall.Core.Combat
                         }
                     }
                     if (passive.TriggerSourceIsSelf && _broadcastSourceId != owner.Id) continue;
+                    // The side half of the same filter. Read here rather than as a condition
+                    // because no EffectCondition can ask which line a unit stands on - see
+                    // PassiveDef.TriggerSourceIsAlly. An unset flag is the untouched path: false
+                    // short-circuits before the lookup, so no existing passive pays for this.
+                    if (passive.TriggerSourceIsAlly)
+                    {
+                        if (_broadcastSourceId < 0 || _broadcastSourceId == owner.Id) continue;
+                        CombatUnit actor = FindUnit(_broadcastSourceId);
+                        if (actor == null || actor.IsPlayer != owner.IsPlayer) continue;
+                    }
                     if (passive.Effects.Count == 0) continue;
                     if (depth >= MaxPassiveDepth) continue;
 
@@ -3970,6 +4261,73 @@ namespace Emberfall.Core.Combat
                     if (IsBattleOver()) return;
                     TriggerPassive(side[i], trigger, depth);
                 }
+            }
+
+            /// <summary>
+            /// Fires one trigger on every living unit holding a StatusKind.Linked entry that names
+            /// `subject`, wherever that unit stands.
+            ///
+            /// THE THIRD DISPATCH SHAPE IN THIS ENGINE, and it is not a broadcast. A broadcast is
+            /// scoped to a SIDE, and a link is not a side: Rovan's partner is an ally, Talren binds
+            /// two enemies to each other, and Vaelis binds herself to an enemy. Asking
+            /// BroadcastPassive to serve those would mean guessing which side to walk and being
+            /// wrong for at least one of them, so this walks the units once and lets the entry
+            /// itself say who cares.
+            ///
+            /// `actorId` is whoever did the thing - the attacker who aimed or landed the blow - and
+            /// is published as `_broadcastSourceId` so TriggerSourceIsSelf and TriggerSourceIsAlly
+            /// can filter on it. `_linkPartner` is set to the subject rather than to the holder,
+            /// because TargetMode.LinkedUnit asked from inside a holder's passive means "the far
+            /// end", and from the holder's point of view the far end IS the subject.
+            ///
+            /// Walks a snapshot and restores every window field, exactly as BroadcastPassive does
+            /// and for the same reasons: a passive firing inside the loop can kill somebody, and a
+            /// dispatch nested inside another must not leave the outer one's fields rewritten.
+            ///
+            /// Callers gate on _anyLinks before entering, so this costs a battle with no links
+            /// nothing at all.
+            /// </summary>
+            private void DispatchLinkPassive(CombatUnit subject, int actorId, PassiveTrigger trigger, int depth)
+            {
+                if (subject == null) return;
+
+                List<CombatUnit> holders = null;
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive || u == subject) continue;
+                    bool bound = false;
+                    for (int s = 0; s < u.Statuses.Count; s++)
+                    {
+                        StatusInstance link = u.Statuses[s];
+                        if (link.Kind == StatusKind.Linked && link.LinkedToId == subject.Id) { bound = true; break; }
+                    }
+                    if (!bound) continue;
+                    if (holders == null) holders = new List<CombatUnit>();
+                    holders.Add(u);
+                }
+                if (holders == null) return;
+
+                CombatUnit prevSubject = _broadcastSubject;
+                CombatUnit prevVictim = _broadcastVictim;
+                CombatUnit prevPartner = _linkPartner;
+                int prevSourceId = _broadcastSourceId;
+                _broadcastSubject = subject;
+                _broadcastVictim = subject;
+                _linkPartner = subject;
+                _broadcastSourceId = actorId;
+
+                for (int i = 0; i < holders.Count; i++)
+                {
+                    if (IsBattleOver()) break;
+                    if (!holders[i].Alive) continue;
+                    TriggerPassive(holders[i], trigger, depth);
+                }
+
+                _broadcastSourceId = prevSourceId;
+                _linkPartner = prevPartner;
+                _broadcastVictim = prevVictim;
+                _broadcastSubject = prevSubject;
             }
 
             // ------------------------------------------------------------------ turn order effects
@@ -4276,6 +4634,40 @@ namespace Emberfall.Core.Combat
                         return result;
                     }
 
+                    // BEFORE THE ANCHOR, for the identical reason BroadcastVictim is: a Link names
+                    // one specific body and that body may stand on either side - an ally for a ward,
+                    // an enemy for a paired mark. A Taunt holder answering here would hand back a
+                    // unit the link was never bound to, which would make the mode mean nothing.
+                    //
+                    // Two sources, in order. Inside a link dispatch _linkPartner is already the far
+                    // end and is read straight: a passive answering "my partner was hit" does not
+                    // have to re-derive which body that was, and reading the caster's own entry
+                    // instead would pick the wrong one from a unit holding two links. Outside a
+                    // dispatch it falls back to the caster's own first live link.
+                    //
+                    // Resolves to NOBODY when there is no link, rather than to a front-enemy
+                    // fallback. "The unit I am linked to" has no referent when nothing is linked,
+                    // and quietly aiming a bound effect at whoever happens to be in front would be
+                    // the mode answering a question it was not asked.
+                    case TargetMode.LinkedUnit:
+                    {
+                        if (_linkPartner != null && _linkPartner.Alive && _linkPartner != excluded)
+                        {
+                            result.Add(_linkPartner);
+                            return result;
+                        }
+                        for (int i = 0; i < caster.Statuses.Count; i++)
+                        {
+                            StatusInstance link = caster.Statuses[i];
+                            if (link.Kind != StatusKind.Linked || link.LinkedToId < 0) continue;
+                            CombatUnit partner = FindUnit(link.LinkedToId);
+                            if (partner == null || !partner.Alive || partner == excluded) continue;
+                            result.Add(partner);
+                            return result;
+                        }
+                        return result;
+                    }
+
                 }
 
                 // Every remaining mode targets a single enemy, and the anchor overrides all of them
@@ -4364,6 +4756,28 @@ namespace Emberfall.Core.Combat
                         if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
                         {
                             result.Add(remembered);
+                            return result;
+                        }
+                        mode = TargetMode.FrontEnemy;
+                        break;
+                    }
+
+                    // The one before the current one. A sibling of LastTarget in every respect -
+                    // same anchor rule, same four gates, same FrontEnemy fallback - reading
+                    // PreviousTargetId instead of LastTargetId.
+                    //
+                    // The two fields are genuinely different and this is the mode that shows why:
+                    // ApplyDamageEffect overwrites LastTargetId as it sets a hit up, so by the time
+                    // anything asks, "last" already names the body being hit right now. Previous is
+                    // the one before that, and is only written when the target actually CHANGES, so
+                    // an ability hitting the same body twice does not shuffle its own history and
+                    // leave Previous pointing at that same body.
+                    case TargetMode.PreviousTarget:
+                    {
+                        CombatUnit earlier = FindUnit(caster.PreviousTargetId);
+                        if (earlier != null && earlier.Alive && earlier != excluded && earlier.IsPlayer != caster.IsPlayer)
+                        {
+                            result.Add(earlier);
                             return result;
                         }
                         mode = TargetMode.FrontEnemy;
@@ -4696,6 +5110,72 @@ namespace Emberfall.Core.Combat
                 }
             }
 
+            /// <summary>
+            /// Writes one half of a link: a StatusKind.Linked entry on `holder` naming `partner`,
+            /// applied by `source`.
+            ///
+            /// Three units, which is why this could not be an ApplyStatus. SourceId stays the hero
+            /// that created the binding, exactly as it does for a Mark or a Ledger, so "my link"
+            /// means the same thing "my mark" does; LinkedToId is the far end.
+            ///
+            /// Entries are told apart by (kind, source, partner), not by (kind, source) the way
+            /// AddOrRefresh tells statuses apart. That is the one place a link genuinely differs
+            /// from every other status: one hero can legitimately hold Talren bound to two separate
+            /// enemies at once, and folding the second binding into the first would silently
+            /// replace one partner with the other. So an existing entry naming the SAME partner is
+            /// refreshed, and one naming a different partner is left alone and a second entry
+            /// added.
+            ///
+            /// Sets `_anyLinks`. That bool is the gate every link dispatch point in the funnel
+            /// tests first, and this is the only thing in the engine that opens it.
+            /// </summary>
+            private void StampLink(CombatUnit source, CombatUnit holder, CombatUnit partner,
+                                   EffectDef effect, int duration)
+            {
+                StatusInstance entry = null;
+                for (int i = 0; i < holder.Statuses.Count; i++)
+                {
+                    StatusInstance s = holder.Statuses[i];
+                    if (s.Kind != StatusKind.Linked) continue;
+                    if (s.SourceId != source.Id || s.LinkedToId != partner.Id) continue;
+                    entry = s;
+                    break;
+                }
+
+                if (entry == null)
+                {
+                    entry = new StatusInstance();
+                    entry.Kind = StatusKind.Linked;
+                    entry.SourceId = source.Id;
+                    holder.Statuses.Add(entry);
+                }
+
+                // Refresh keeps the stronger and the longer, the rule AddOrRefresh already holds
+                // to, so re-binding a pair cannot weaken a link already standing.
+                entry.LinkedToId = partner.Id;
+                if (effect.Magnitude > entry.Magnitude) entry.Magnitude = effect.Magnitude;
+                if (duration > entry.RoundsLeft) entry.RoundsLeft = duration;
+                entry.LinkTransfer = effect.LinkTransfer;
+                entry.Charges = effect.Charges;
+                if (effect.UsesPerRound > 0)
+                {
+                    entry.UsesPerRound = effect.UsesPerRound;
+                    entry.UsesThisRound = 0;
+                }
+
+                _anyLinks = true;
+
+                BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, holder.Id);
+                e.Status = StatusKind.Linked;
+                e.Duration = entry.RoundsLeft;
+                // The partner's id rather than a stack depth. Every other StatusApplied writes
+                // CountOf here, but a link's identity is WHO it names, and a screen or a check
+                // reading two Linked entries apart has no other way to tell them apart - a
+                // StatusKind carries no per-instance name. No existing battle records a Linked
+                // event, so nothing that reads Value for a stack depth is affected.
+                e.Value = partner.Id;
+            }
+
             private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status, bool removeFromSource)
             {
                 if (to == null || status == null) return;
@@ -4731,6 +5211,16 @@ namespace Emberfall.Core.Combat
                     landed.AutoReleaseSplitHeal = status.AutoReleaseSplitHeal;
                     landed.FunnelSource = status.FunnelSource;
                     landed.FunnelConvert = status.FunnelConvert;
+                    // The link's far end travels too, for the same reason the ledger's balance
+                    // does: a link that lost the body it named on the way across would be a link
+                    // to nobody, and the entry would silently go inert rather than move.
+                    //
+                    // A moved link is NOT re-pointed at its new carrier. If a Link naming B moves
+                    // from A to C, C is now linked to B. That is what moving a binding means, and
+                    // it is also what makes moving one onto the partner itself (C == B) produce a
+                    // self-link, which the funnel refuses - see RedirectShare's destination test.
+                    landed.LinkedToId = status.LinkedToId;
+                    landed.LinkTransfer = status.LinkTransfer;
                     break;
                 }
 

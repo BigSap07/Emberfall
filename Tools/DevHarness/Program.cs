@@ -66,6 +66,7 @@ namespace Emberfall.DevHarness
             CheckLastTargetAndTalentAppends(content);
             CheckFunnelBankingPrimitives(content);
             CheckBatchFiveEngineGaps(content);
+            CheckLinkedTargeting(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -5103,7 +5104,8 @@ namespace Emberfall.DevHarness
                                "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
                                "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
                                "BroadcastVictim",
-                               "HighestMyMarkStacksEnemy" },
+                               "HighestMyMarkStacksEnemy",
+                               "PreviousTarget", "LinkedUnit" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5113,7 +5115,8 @@ namespace Emberfall.DevHarness
                                "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
                                "HpTransfer", "ShieldTransfer", "LedgerIncrement",
                                "RedirectLethal", "SnapshotEnergy", "TransferStatus",
-                               "SnapshotHp", "LedgerDeposit" },
+                               "SnapshotHp", "LedgerDeposit",
+                               "LinkUnits", "EchoDamage" },
                 Enum.GetNames(typeof(EffectKind)));
             ok &= CheckEnumSet("StatusKind",
                 new string[] { "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -5133,10 +5136,107 @@ namespace Emberfall.DevHarness
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
-                               "Resolve2" },
+                               "Resolve2", "Linked" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
+
+            CheckValidatorFileParity();
             Line("");
+        }
+
+        /// <summary>
+        /// The same claim as above, made against the FILE instead of against a copy of it.
+        ///
+        /// THE CHECK ABOVE COULD NOT SEE A DRIFT AND ONE HAD ALREADY HAPPENED. It compares a list
+        /// hardcoded in this harness against the C# enum, which answers "does the harness know what
+        /// the enum contains" and NOT the question its own label asks - whether validate_heroes.py
+        /// does. `HighestMyMarkStacksEnemy` was in Enums.cs and in the harness list and had never
+        /// been added to the python file, so a kit authoring it validated as a bad TargetMode while
+        /// this section reported parity. Found while extending the same three sets.
+        ///
+        /// So the python source is read and its sets parsed. A guard whose subject it never looks
+        /// at is worth nothing, which is a lesson this project has already paid for once - see the
+        /// role-ordinal scan that passed by comparing nothing.
+        ///
+        /// Degrades to a [note] when the file is not found next to the binary, the same way the
+        /// aspect source scan does and for the same reason: the harness can be run from a directory
+        /// with no repository above it. The hardcoded comparison above does not degrade.
+        /// </summary>
+        private static void CheckValidatorFileParity()
+        {
+            string path = FindToolSource("HeroValidator", "validate_heroes.py");
+            if (path == null)
+            {
+                Line("  [note] validate_heroes.py not found next to this binary, so the file-level "
+                     + "parity read did not run. The hardcoded comparison above still did.");
+                return;
+            }
+
+            string text = File.ReadAllText(path);
+            bool ok = true;
+            ok &= CheckEnumSet("TargetMode (validate_heroes.py)",
+                               ParsePythonSet(text, "TARGET_MODES"), Enum.GetNames(typeof(TargetMode)));
+            ok &= CheckEnumSet("EffectKind (validate_heroes.py)",
+                               ParsePythonSet(text, "EFFECT_KINDS"), Enum.GetNames(typeof(EffectKind)));
+            ok &= CheckEnumSet("StatusKind (validate_heroes.py)",
+                               ParsePythonSet(text, "STATUS_KINDS"), Enum.GetNames(typeof(StatusKind)));
+            ok &= CheckEnumSet("Aspect (validate_heroes.py)",
+                               ParsePythonSet(text, "ASPECTS"), Enum.GetNames(typeof(Aspect)));
+            ok &= CheckEnumSet("HeroRole (validate_heroes.py)",
+                               ParsePythonSet(text, "HERO_ROLES"), Enum.GetNames(typeof(HeroRole)));
+            Check(ok, "validate_heroes.py's own five enum sets, read from the file, match Enums.cs");
+        }
+
+        /// <summary>
+        /// The double-quoted names inside a `NAME = { ... }` literal in a python source.
+        ///
+        /// Deliberately simple and deliberately loud about it: it takes everything between the
+        /// first `{` after the name and the matching `}`, then every "quoted" token in that span.
+        /// It does not understand python. A set built by any other means - a comprehension, a union
+        /// of two names, a value read from a file - parses as empty here, and an empty expected set
+        /// fails the comparison rather than passing it, which is the direction a parser this naive
+        /// has to fail in.
+        /// </summary>
+        private static string[] ParsePythonSet(string text, string name)
+        {
+            List<string> found = new List<string>();
+            int at = text.IndexOf(name + " = {", StringComparison.Ordinal);
+            if (at < 0) return found.ToArray();
+            int open = text.IndexOf('{', at);
+            int close = text.IndexOf('}', open);
+            if (open < 0 || close < 0) return found.ToArray();
+            string body = text.Substring(open + 1, close - open - 1);
+            int i = 0;
+            while (i < body.Length)
+            {
+                int q1 = body.IndexOf('"', i);
+                if (q1 < 0) break;
+                int q2 = body.IndexOf('"', q1 + 1);
+                if (q2 < 0) break;
+                string token = body.Substring(q1 + 1, q2 - q1 - 1);
+                if (token.Length > 0) found.Add(token);
+                i = q2 + 1;
+            }
+            return found.ToArray();
+        }
+
+        /// <summary>FindEngineSource's sibling, for a file under Tools/&lt;folder&gt; instead of
+        /// Assets/Scripts/Core/Combat.</summary>
+        private static string FindToolSource(string folder, string fileName)
+        {
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            for (int r = 0; r < roots.Length; r++)
+            {
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName,
+                        Path.Combine("Tools", Path.Combine(folder, fileName)));
+                    if (File.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
+            }
+            return null;
         }
 
         private static bool CheckEnumSet(string label, string[] expected, string[] actual)
@@ -5351,7 +5451,18 @@ namespace Emberfall.DevHarness
                 // can say a hit was strong or weak without recomputing the chart.
                 "float aspectFactor, string abilityName)",
                 "DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);",
-                "DealRawDamage(sourceId, protector, moved, false, vfx, dotKind, aspectFactor, abilityName);",
+                // The redirect and the echo. All three carry the SAME aspectFactor through to the
+                // body the share lands on rather than re-deriving one from that body's own aspect,
+                // which is deliberate and is the reason these lines are listed rather than the
+                // scan being relaxed: a redirected or echoed share is part of the blow that was
+                // struck, so it keeps that blow's chart reading. Re-deriving would make a link a
+                // second attack wearing a redirect's name, and would be an aspect rule.
+                //
+                // The old inline Covered line - `DealRawDamage(sourceId, protector, moved, ...)` -
+                // is gone, replaced by the RedirectShare call below that Covered and Linked share.
+                "DealRawDamage(sourceId, destination, moved, false, vfx, dotKind, aspectFactor, abilityName);",
+                "vfx, dotKind, aspectFactor, abilityName)) return;",
+                "DealRawDamage(sourceId, echoTo, copied, false, vfx, dotKind, aspectFactor, abilityName);",
                 "e.AspectFactor = aspectFactor;",
             });
             ScanForAspectReads("CombatUnit.cs", new string[] {
@@ -14693,10 +14804,16 @@ namespace Emberfall.DevHarness
                     "OnLedgerCapped", "OnTurnDebtThreshold",
                     "OnShieldBreak", "OnEnemyHpBelowThreshold", "OnStackThreshold",
                     "OnAllyShieldBreak", "OnAllyLedgerBanked", "OnEnemyHealed",
-                    "OnFunnelConvertFired", "OnAppliedAllyStatusExpired"
+                    "OnFunnelConvertFired", "OnAppliedAllyStatusExpired",
+                    // Extended by the linked-targeting pass rather than answered by a second list
+                    // of its own. This is the one place PassiveTrigger's membership is asserted,
+                    // and two full copies of the same enum would be two things to keep in step -
+                    // which is the argument this codebase has already made about
+                    // AllEnemiesWithStatus and about the mark bank.
+                    "OnLinkedUnitTargeted", "OnLinkedUnitHit"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (39 members)");
+            Check(ok, "PassiveTrigger enum parity (41 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -15112,6 +15229,819 @@ namespace Emberfall.DevHarness
             }
             Check(passiveFires >= 1,
                   "OnAppliedAllyStatusExpired: counter's passive fired (" + passiveFires + " times)");
+        }
+
+        // ================================================================= linked targeting
+        //
+        // ONE PRIMITIVE, FOUR USES. Two units bound together so that an action on one causes an
+        // effect on the other: Talren's echo and his recorded pair, Vaelis's ally-hit relay,
+        // Nysera's redirect, and Rovan's Covered ward - which already existed and now shares the
+        // redirect path rather than owning a private copy of it.
+        //
+        // EVERY ARENA BELOW PROVES A NUMBER, not that something happened. A passive that fired is
+        // not evidence that a redirect moved the right share, and "the partner took damage" is not
+        // evidence that it took the authored fraction of the right amount. So each check counts
+        // damage per body and compares it against what the authored fraction says it must be, or
+        // against a control run of the same arena with the mechanic removed.
+
+        private static void CheckLinkedTargeting(ContentDatabase live)
+        {
+            Line("LINKED TARGETING (one primitive: two units bound so an action on one reaches the other)");
+            CheckLinkOrdinalPins();
+            CheckLinkNoShippedUsage(live);
+            CheckLinkEnumParity();
+            CheckLinkRedirectArena();
+            CheckLinkEchoArena();
+            CheckEchoDamageArena();
+            CheckPreviousTargetArena();
+            CheckLinkAllyHitArena();
+            CheckLinkTargetedVersusHitArena();
+            CheckCoverAndLinkAreOnePath();
+            Line("");
+        }
+
+        /// <summary>
+        /// Appended, never inserted - the rule every enum in this project follows, and the one with
+        /// teeth here is StatusKind: BattleEvent.Status is written into the permanent record of
+        /// every battle ever resolved, so renumbering a member rewrites what past battles said with
+        /// no simulation change at all.
+        /// </summary>
+        private static void CheckLinkOrdinalPins()
+        {
+            Check((int)StatusKind.Resolve2 == 47,
+                  "StatusKind.Resolve2 still at 47 (got " + (int)StatusKind.Resolve2 + ")");
+            Check((int)StatusKind.Linked == 48,
+                  "StatusKind.Linked appended at 48 (got " + (int)StatusKind.Linked + ")");
+            Check((int)StatusKind.Covered == 33,
+                  "and Covered keeps 33, because the redirect it owns is now shared code rather than "
+                  + "a moved member (got " + (int)StatusKind.Covered + ")");
+
+            Check((int)EffectKind.LedgerDeposit == 27,
+                  "EffectKind.LedgerDeposit still at 27 (got " + (int)EffectKind.LedgerDeposit + ")");
+            Check((int)EffectKind.LinkUnits == 28 && (int)EffectKind.EchoDamage == 29,
+                  "EffectKind.LinkUnits at 28 and EchoDamage at 29 (got "
+                  + (int)EffectKind.LinkUnits + ", " + (int)EffectKind.EchoDamage + ")");
+
+            Check((int)TargetMode.HighestMyMarkStacksEnemy == 28,
+                  "TargetMode.HighestMyMarkStacksEnemy still at 28 (got "
+                  + (int)TargetMode.HighestMyMarkStacksEnemy + ")");
+            Check((int)TargetMode.PreviousTarget == 29 && (int)TargetMode.LinkedUnit == 30,
+                  "TargetMode.PreviousTarget at 29 and LinkedUnit at 30 (got "
+                  + (int)TargetMode.PreviousTarget + ", " + (int)TargetMode.LinkedUnit + ")");
+
+            Check((int)PassiveTrigger.OnAppliedAllyStatusExpired == 38,
+                  "PassiveTrigger.OnAppliedAllyStatusExpired still at 38 (got "
+                  + (int)PassiveTrigger.OnAppliedAllyStatusExpired + ")");
+            Check((int)PassiveTrigger.OnLinkedUnitTargeted == 39 && (int)PassiveTrigger.OnLinkedUnitHit == 40,
+                  "PassiveTrigger.OnLinkedUnitTargeted at 39 and OnLinkedUnitHit at 40 (got "
+                  + (int)PassiveTrigger.OnLinkedUnitTargeted + ", " + (int)PassiveTrigger.OnLinkedUnitHit + ")");
+
+            Check((int)LinkTransfer.None == 0 && (int)LinkTransfer.Redirect == 1 && (int)LinkTransfer.Echo == 2,
+                  "LinkTransfer is None/Redirect/Echo at 0/1/2, with None the default so an entry "
+                  + "created without a transfer named is inert at the funnel");
+
+            Check((int)BattleEventType.Damage == 6 && (int)BattleEventType.StatusApplied == 10
+                  && (int)BattleEventType.BattleEnd == 20,
+                  "BattleEventType is untouched for another pass - a link reuses StatusApplied and an "
+                  + "echo reuses Damage, so no fingerprint field moves");
+        }
+
+        /// <summary>
+        /// THE STANDING GUARD. Three of these four mechanics sit inside the damage funnel, which
+        /// every point of damage in the game passes through, so "no existing battle moved" rests on
+        /// shipped content reaching none of it. The day a hero authors one of these, this check
+        /// fails and the no-fingerprints-move claim has to be re-earned rather than assumed.
+        ///
+        /// Covered is deliberately NOT counted. Six effects in heroes.json apply it and it is meant
+        /// to keep working: the redirect arithmetic moved into RedirectShare without changing, and
+        /// the 24-stage fingerprint sweep plus the existing cover arena are what prove that.
+        /// </summary>
+        private static void CheckLinkNoShippedUsage(ContentDatabase db)
+        {
+            int linkedStatus = 0, linkUnits = 0, echoDamage = 0;
+            int previousTarget = 0, linkedUnitMode = 0, linkTransfer = 0, linkMutual = 0;
+            int targetedTrigger = 0, hitTrigger = 0, sourceIsAlly = 0;
+
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
+                if (def.Active != null) all.AddRange(def.Active.Effects);
+                for (int pi = 0; pi < def.Passives.Count; pi++)
+                {
+                    PassiveDef p = def.Passives[pi];
+                    if (p.Trigger == PassiveTrigger.OnLinkedUnitTargeted) targetedTrigger++;
+                    if (p.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger++;
+                    if (p.TriggerSourceIsAlly) sourceIsAlly++;
+                    all.AddRange(p.Effects);
+                }
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                {
+                    for (int ti = 0; ti < hero.Talents.Count; ti++)
+                    {
+                        PassiveDef t = hero.Talents[ti];
+                        if (t.Trigger == PassiveTrigger.OnLinkedUnitTargeted) targetedTrigger++;
+                        if (t.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger++;
+                        if (t.TriggerSourceIsAlly) sourceIsAlly++;
+                        all.AddRange(t.Effects);
+                    }
+                }
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef eff = all[e];
+                    if (eff.Kind == EffectKind.LinkUnits) linkUnits++;
+                    if (eff.Kind == EffectKind.EchoDamage) echoDamage++;
+                    if (eff.Status == StatusKind.Linked || eff.ConditionStatus == StatusKind.Linked
+                        || eff.TargetStatus == StatusKind.Linked) linkedStatus++;
+                    if (eff.Target == TargetMode.PreviousTarget
+                        || eff.SecondaryTarget == TargetMode.PreviousTarget) previousTarget++;
+                    if (eff.Target == TargetMode.LinkedUnit
+                        || eff.SecondaryTarget == TargetMode.LinkedUnit) linkedUnitMode++;
+                    if (eff.LinkTransfer != LinkTransfer.None) linkTransfer++;
+                    if (eff.LinkMutual) linkMutual++;
+                }
+            }
+
+            Check(linkUnits == 0, "no shipped effect uses EffectKind.LinkUnits (" + linkUnits + ")");
+            Check(echoDamage == 0, "no shipped effect uses EffectKind.EchoDamage (" + echoDamage + ")");
+            Check(linkedStatus == 0, "no shipped effect names StatusKind.Linked (" + linkedStatus + ")");
+            Check(previousTarget == 0, "no shipped effect targets PreviousTarget (" + previousTarget + ")");
+            Check(linkedUnitMode == 0, "no shipped effect targets LinkedUnit (" + linkedUnitMode + ")");
+            Check(linkTransfer == 0, "no shipped effect sets a LinkTransfer (" + linkTransfer + ")");
+            Check(linkMutual == 0, "no shipped effect sets LinkMutual (" + linkMutual + ")");
+            Check(targetedTrigger == 0,
+                  "no shipped passive triggers on OnLinkedUnitTargeted (" + targetedTrigger + ")");
+            Check(hitTrigger == 0,
+                  "no shipped passive triggers on OnLinkedUnitHit (" + hitTrigger + ")");
+            Check(sourceIsAlly == 0,
+                  "no shipped passive sets TriggerSourceIsAlly (" + sourceIsAlly + ")");
+        }
+
+        /// <summary>
+        /// LinkTransfer alone. PassiveTrigger's two new members are asserted where that enum's
+        /// membership has always been asserted - CheckBatchFiveEnumParity, now at 41 - rather than
+        /// in a second full copy of the list here.
+        /// </summary>
+        private static void CheckLinkEnumParity()
+        {
+            bool ok = CheckEnumSet("LinkTransfer",
+                new string[] { "None", "Redirect", "Echo" },
+                Enum.GetNames(typeof(LinkTransfer)));
+            Check(ok, "LinkTransfer enum parity (3 members)");
+        }
+
+        // ---- shared arena scaffolding ------------------------------------------------------
+
+        /// <summary>Total Damage-event value landed on one unit, by name, so an arena's proof can
+        /// be "this body took exactly this much" rather than "something happened".</summary>
+        private static int DamageTo(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == id) total += e.Value;
+            }
+            return total;
+        }
+
+        /// <summary>Damage events landed on one unit, counted rather than summed.</summary>
+        private static int HitsOn(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == id) n++;
+            }
+            return n;
+        }
+
+        /// <summary>Damage events landed on one unit BY one named attacker.</summary>
+        private static int HitsBy(BattleResult r, string attackerName, string victimName)
+        {
+            int src = -1, dst = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == attackerName) src = r.Units[i].Id;
+                if (r.Units[i].Name == victimName) dst = r.Units[i].Id;
+            }
+            if (src < 0 || dst < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.SourceId == src && e.TargetId == dst) n++;
+            }
+            return n;
+        }
+
+        // ---- arena: Nysera - an attack aimed at one half of a pair lands on the other --------
+
+        /// <summary>
+        /// A Redirect link at magnitude 1.0 moves the WHOLE hit, and the proof is that the two
+        /// enemies swap totals exactly: with the link, the front enemy takes zero and the back one
+        /// takes what the front one took in the control run.
+        ///
+        /// The control is the same arena with the link never created, so the only difference
+        /// between the two runs is the mechanic. Both runs use the same seed and a zero-variance
+        /// balance, so an equal total is an exact equality rather than an approximation.
+        /// </summary>
+        private static void CheckLinkRedirectArena()
+        {
+            BattleResult linked = RunRedirectLinkArena(true);
+            BattleResult plain = RunRedirectLinkArena(false);
+            if (linked == null || plain == null) { Check(false, "link redirect arena built"); return; }
+
+            int frontPlain = DamageTo(plain, "LinkFront");
+            int backPlain = DamageTo(plain, "LinkBack");
+            int frontLinked = DamageTo(linked, "LinkFront");
+            int backLinked = DamageTo(linked, "LinkBack");
+
+            Check(frontPlain > 0 && backPlain == 0,
+                  "control: with no link the striker's blows all land on the front enemy ("
+                  + frontPlain + " to the front, " + backPlain + " to the back)");
+            Check(frontLinked == 0,
+                  "Nysera: a full Redirect link leaves the aimed-at body untouched (" + frontLinked + ")");
+            Check(backLinked == frontPlain,
+                  "and the partner takes exactly what the front enemy took without the link ("
+                  + backLinked + " against " + frontPlain + ")");
+        }
+
+        private static BattleResult RunRedirectLinkArena(bool withLink)
+        {
+            // The link is created by a BattleStart passive on the striker: target FrontEnemy,
+            // secondary FrontEnemy. ResolveTargets is handed the primary target as `excluded` when
+            // it resolves the secondary, so "the front enemy" a second time means "the next one
+            // along" - which is how a pair is named without inventing a SecondEnemy mode.
+            string link = withLink
+                ? @"{ ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+                      ""linkTransfer"": ""Redirect"", ""magnitude"": 1.0, ""duration"": 99 }"
+                : @"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                      ""magnitude"": 0, ""duration"": 99, ""chance"": 1 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_rd_striker"", ""name"": ""RedirectStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkrd_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lkrd_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lkrd_setup"", ""name"": ""Bind The Pair"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + link + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_rd_front"", ""name"": ""LinkFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkrdf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_rd_back"", ""name"": ""LinkBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkrdb"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lkrd_ch"", ""name"": ""LinkRedirect"", ""stages"": [
+    { ""id"": ""lkrd_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lk_rd_front"", ""level"": 1 }, { ""id"": ""lk_rd_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "link redirect");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_rd_striker"), 1));
+            return RunWith(db, db.GetStage("lkrd_arena"), 7711, team);
+        }
+
+        // ---- arena: Talren's active - a later hit on one strikes the other -------------------
+
+        /// <summary>
+        /// An Echo link COPIES a share instead of moving it, so the aimed-at body keeps its full
+        /// hit and the partner takes the authored fraction on top. Two numbers carry the check: the
+        /// front enemy's total is unchanged against the control, and the partner's total is exactly
+        /// half of it at a magnitude of 0.5.
+        ///
+        /// It also proves the one-hop bound, and that is what the mutual link is here for. Both
+        /// enemies carry an Echo link naming the other, so an unbounded implementation would send
+        /// the echo back and forth until the stack gave out. The front enemy taking exactly the
+        /// control's total - not a penny more - is that bound measured rather than asserted.
+        /// </summary>
+        private static void CheckLinkEchoArena()
+        {
+            BattleResult echoed = RunEchoLinkArena(true);
+            BattleResult plain = RunEchoLinkArena(false);
+            if (echoed == null || plain == null) { Check(false, "link echo arena built"); return; }
+
+            int frontPlain = DamageTo(plain, "EchoFront");
+            int backPlain = DamageTo(plain, "EchoBack");
+            int frontEcho = DamageTo(echoed, "EchoFront");
+            int backEcho = DamageTo(echoed, "EchoBack");
+            int hitsPlain = HitsOn(plain, "EchoFront");
+            int expected = (frontPlain / hitsPlain) / 2 * hitsPlain;
+
+            Check(frontPlain > 0 && backPlain == 0,
+                  "control: with no link only the front enemy is hit (" + frontPlain + " / " + backPlain + ")");
+            Check(frontEcho == frontPlain,
+                  "Talren: an Echo link copies rather than moves - the aimed-at body still takes the "
+                  + "whole blow (" + frontEcho + " against the control's " + frontPlain + ")");
+            Check(backEcho == expected,
+                  "and the partner takes exactly half of each blow at magnitude 0.5 (" + backEcho
+                  + " against " + expected + " over " + hitsPlain + " hits)");
+            Check(frontEcho == frontPlain,
+                  "ONE HOP: both enemies are linked to each other, so an unbounded echo would bounce "
+                  + "between them - the front enemy's total is the control's exactly, not more");
+        }
+
+        private static BattleResult RunEchoLinkArena(bool withLink)
+        {
+            string link = withLink
+                ? @"{ ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+                      ""linkTransfer"": ""Echo"", ""linkMutual"": true, ""magnitude"": 0.5, ""duration"": 99 }"
+                : @"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+                      ""magnitude"": 0, ""duration"": 99, ""chance"": 1 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_ec_striker"", ""name"": ""EchoStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkec_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lkec_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lkec_setup"", ""name"": ""Record The Pair"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + link + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_ec_front"", ""name"": ""EchoFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkecf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_ec_back"", ""name"": ""EchoBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkecb"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lkec_ch"", ""name"": ""LinkEcho"", ""stages"": [
+    { ""id"": ""lkec_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lk_ec_front"", ""level"": 1 }, { ""id"": ""lk_ec_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "link echo");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_ec_striker"), 1));
+            return RunWith(db, db.GetStage("lkec_arena"), 7722, team);
+        }
+
+        // ---- arena: Talren's basic - an echo of damage already dealt -------------------------
+
+        /// <summary>
+        /// EffectKind.EchoDamage repeats a fraction of what the PREVIOUS effect in the same ability
+        /// actually took off a bar. The proof is arithmetic on two totals: the second enemy's is
+        /// exactly 40% of the first's, per hit, which can only be true if the echo read the
+        /// realised number rather than recomputing one - the two enemies have different Defense, so
+        /// a recomputed hit would land on a different figure.
+        /// </summary>
+        private static void CheckEchoDamageArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_ed_striker"", ""name"": ""EchoCaster"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 500, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lked_basic"", ""name"": ""Split Strike"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 },
+          { ""kind"": ""EchoDamage"", ""target"": ""LowestHpEnemy"", ""power"": 0.4 }
+        ] },
+      ""active"": { ""id"": ""lked_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            // The second enemy carries real Defense. If the echo recomputed the hit instead of
+            // repeating the realised one, that Defense would change the number and the 40%
+            // equality below would fail.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_ed_big"", ""name"": ""EchoPrimary"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkedb"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_ed_small"", ""name"": ""EchoSecondary"", ""aspect"": ""Ember"",
+      ""hp"": 4000000, ""attack"": 1, ""defense"": 600, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkeds"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lked_ch"", ""name"": ""EchoDamage"", ""stages"": [
+    { ""id"": ""lked_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lk_ed_big"", ""level"": 1 }, { ""id"": ""lk_ed_small"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "echo damage");
+            if (db == null) { Check(false, "EchoDamage arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_ed_striker"), 1));
+            BattleResult r = RunWith(db, db.GetStage("lked_arena"), 7733, team);
+            if (r == null) { Check(false, "EchoDamage arena ran"); return; }
+
+            int primary = DamageTo(r, "EchoPrimary");
+            int secondary = DamageTo(r, "EchoSecondary");
+            int turns = HitsOn(r, "EchoPrimary");
+            int perHit = turns > 0 ? primary / turns : 0;
+            int expected = (int)Math.Round(perHit * 0.4, MidpointRounding.AwayFromZero) * turns;
+
+            Check(primary > 0 && turns > 0,
+                  "EchoDamage arena: the primary blow landed (" + primary + " over " + turns + " turns)");
+            Check(secondary == expected,
+                  "Talren: the echo is exactly 40% of the damage the blow actually dealt ("
+                  + secondary + " against " + expected + ")");
+            Check(secondary > 0 && secondary < primary,
+                  "and it is a fraction of that blow rather than a second full one ("
+                  + secondary + " against " + primary + ")");
+        }
+
+        // ---- arena: PreviousTarget ------------------------------------------------------------
+
+        /// <summary>
+        /// PreviousTarget names the body hit BEFORE the current one, and the arena is built so that
+        /// body is never the front enemy - which is what the mode falls back to when it resolves to
+        /// nobody. A bystander sitting in slot 0 takes ZERO in the treatment run and takes the whole
+        /// third effect in the control that targets FrontEnemy instead. The bystander's total is the
+        /// number that tells the two apart.
+        /// </summary>
+        private static void CheckPreviousTargetArena()
+        {
+            BattleResult prev = RunPreviousTargetArena("PreviousTarget");
+            BattleResult front = RunPreviousTargetArena("FrontEnemy");
+            if (prev == null || front == null) { Check(false, "PreviousTarget arena built"); return; }
+
+            int bystanderPrev = DamageTo(prev, "PtBystander");
+            int bystanderFront = DamageTo(front, "PtBystander");
+            int bigPrev = DamageTo(prev, "PtBig");
+            int bigFront = DamageTo(front, "PtBig");
+            int smallPrev = DamageTo(prev, "PtSmall");
+
+            Check(bystanderFront > 0,
+                  "control: aimed at FrontEnemy, the third effect lands on the bystander in slot 0 ("
+                  + bystanderFront + ")");
+            Check(bystanderPrev == 0,
+                  "PreviousTarget does not fall through to the front enemy - the bystander takes "
+                  + "nothing (" + bystanderPrev + ")");
+            Check(smallPrev > 0 && bigPrev > bigFront,
+                  "and the extra blow lands on the body hit before the current one, which is the "
+                  + "highest-HP enemy (" + bigPrev + " against the control's " + bigFront + ")");
+        }
+
+        private static BattleResult RunPreviousTargetArena(string thirdTarget)
+        {
+            // Three effects a turn. HighestHpEnemy is always PtBig and LowestHpEnemy always
+            // PtSmall - their HP totals are far enough apart that no amount of chip damage
+            // reorders them - so the caster's history is deterministic: it hits PtBig, then
+            // PtSmall, and "the one before this" is PtBig every turn from the first.
+            //
+            // PtBystander sits in slot 0 and is never named by either of the first two effects, so
+            // it is the control's only source of damage and the treatment's proof of absence.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_pt_striker"", ""name"": ""HistoryStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkpt_basic"", ""name"": ""Three Blows"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""HighestHpEnemy"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": """ + thirdTarget + @""", ""power"": 0.5 }
+        ] },
+      ""active"": { ""id"": ""lkpt_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_pt_by"", ""name"": ""PtBystander"", ""aspect"": ""Ember"",
+      ""hp"": 3000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkptby"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_pt_big"", ""name"": ""PtBig"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkptbg"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_pt_small"", ""name"": ""PtSmall"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkptsm"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lkpt_ch"", ""name"": ""PreviousTarget"", ""stages"": [
+    { ""id"": ""lkpt_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""lk_pt_by"", ""level"": 1 }, { ""id"": ""lk_pt_big"", ""level"": 1 },
+      { ""id"": ""lk_pt_small"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "previous target");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_pt_striker"), 1));
+            return RunWith(db, db.GetStage("lkpt_arena"), 7744, team);
+        }
+
+        // ---- arena: Vaelis - when an ALLY hits the unit I am bound to -----------------------
+
+        /// <summary>
+        /// The link trigger plus TriggerSourceIsAlly. The watcher binds herself to the enemy and
+        /// answers only blows landed by somebody else on her own side.
+        ///
+        /// THE COUNT IS THE POINT AND IT IS A DIFFERENTIAL. The arena is run twice, differing only
+        /// in whether the watcher's own basic attacks the bound enemy. Her passive fires the SAME
+        /// number of times in both, and that number is the ally's hit count - so the extra blows
+        /// she landed herself were seen and excluded, rather than the filter being untested because
+        /// nothing ever hit from the wrong side.
+        /// </summary>
+        private static void CheckLinkAllyHitArena()
+        {
+            BattleResult idle = RunAllyHitArena(false);
+            BattleResult busy = RunAllyHitArena(true);
+            if (idle == null || busy == null) { Check(false, "link ally-hit arena built"); return; }
+
+            int firesIdle = CountPassiveFires(idle, "lkah_react");
+            int firesBusy = CountPassiveFires(busy, "lkah_react");
+            int allyHitsIdle = HitsBy(idle, "AllyHitter", "BoundFoe");
+            int allyHitsBusy = HitsBy(busy, "AllyHitter", "BoundFoe");
+            int selfHitsBusy = HitsBy(busy, "LinkWatcher", "BoundFoe");
+
+            Check(allyHitsIdle > 0 && firesIdle == allyHitsIdle,
+                  "Vaelis: the watcher's passive fires once for each ally blow on the bound enemy ("
+                  + firesIdle + " fires against " + allyHitsIdle + " ally hits)");
+            Check(selfHitsBusy > 0,
+                  "and in the second run she lands blows on it herself (" + selfHitsBusy + ")");
+            Check(firesBusy == allyHitsBusy,
+                  "which she does NOT answer - the fire count is still the ally's alone ("
+                  + firesBusy + " fires against " + allyHitsBusy + " ally hits and "
+                  + selfHitsBusy + " of her own)");
+        }
+
+        private static BattleResult RunAllyHitArena(bool watcherAttacks)
+        {
+            // A Heal on Self keeps the watcher's turn from touching the enemy at all in the first
+            // run. In the second she attacks it, which is the case the ally filter has to exclude.
+            string watcherBasic = watcherAttacks
+                ? @"{ ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 }"
+                : @"{ ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_ah_watcher"", ""name"": ""LinkWatcher"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkah_basic"", ""name"": ""Watch"",
+        ""effects"": [ " + watcherBasic + @" ] },
+      ""active"": { ""id"": ""lkah_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lkah_setup"", ""name"": ""Departure"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99 }
+        ] },
+      ""passive2"": { ""id"": ""lkah_react"", ""name"": ""Answer The Bond"", ""trigger"": ""OnLinkedUnitHit"",
+        ""oncePerBattle"": false, ""triggerSourceIsAlly"": true,
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0, ""duration"": 2, ""chance"": 1 }
+        ] } },
+    { ""id"": ""lk_ah_ally"", ""name"": ""AllyHitter"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 200, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkaha_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lkaha_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_ah_foe"", ""name"": ""BoundFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkahf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lkah_ch"", ""name"": ""AllyHit"", ""stages"": [
+    { ""id"": ""lkah_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lk_ah_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "link ally hit");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_ah_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("lk_ah_ally"), 1));
+            return RunWith(db, db.GetStage("lkah_arena"), 7755, team);
+        }
+
+        // ---- arena: targeted is not hit --------------------------------------------------------
+
+        /// <summary>
+        /// The two link triggers are different moments, and an enemy that dodges everything is what
+        /// separates them. The bound foe carries EvasionUp at 1.0, so every blow aimed at it misses:
+        /// the targeted trigger fires once per attempt and the hit trigger fires not at all, with
+        /// zero damage anywhere in the record.
+        ///
+        /// If the two were one trigger with a flag, or if "targeted" had been built on the funnel
+        /// like "hit", both counts here would be zero and the distinction would not exist.
+        /// </summary>
+        private static void CheckLinkTargetedVersusHitArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_tv_watcher"", ""name"": ""AimWatcher"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lktv_basic"", ""name"": ""Watch"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""lktv_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lktv_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99 }
+        ] },
+      ""passive2"": { ""id"": ""lktv_aim"", ""name"": ""Answer The Aim"", ""trigger"": ""OnLinkedUnitTargeted"",
+        ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0, ""duration"": 2, ""chance"": 1 }
+        ] } },
+    { ""id"": ""lk_tv_ally"", ""name"": ""AimHitter"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 200, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lktva_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lktva_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lktv_hitwatch"", ""name"": ""Unused"", ""trigger"": ""None"",
+        ""effects"": [] } }
+  ]
+}";
+            // EvasionUp at 1.0 makes hitChance exactly 0, and DeterministicRng.Chance(0) returns
+            // false without drawing - so every attempt is a clean miss and the RNG stream is
+            // untouched by the arrangement.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_tv_foe"", ""name"": ""UnhittableFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lktvf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""lktvf_dodge"", ""name"": ""Untouchable"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""EvasionUp"",
+            ""magnitude"": 1.0, ""duration"": 99, ""chance"": 1 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lktv_ch"", ""name"": ""TargetedVsHit"", ""stages"": [
+    { ""id"": ""lktv_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lk_tv_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      "targeted versus hit");
+            if (db == null) { Check(false, "targeted-versus-hit arena built"); return; }
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_tv_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("lk_tv_ally"), 1));
+            BattleResult r = RunWith(db, db.GetStage("lktv_arena"), 7766, team);
+            if (r == null) { Check(false, "targeted-versus-hit arena ran"); return; }
+
+            int aimFires = CountPassiveFires(r, "lktv_aim");
+            int damageDone = DamageTo(r, "UnhittableFoe");
+
+            Check(damageDone == 0,
+                  "the bound enemy dodges every blow, so nothing lands on it at all ("
+                  + damageDone + " damage)");
+            Check(aimFires > 0,
+                  "OnLinkedUnitTargeted still fires - the blows were AIMED at the bound enemy even "
+                  + "though none landed (" + aimFires + " fires)");
+        }
+
+        // ---- Covered and Linked are the same redirect -------------------------------------------
+
+        /// <summary>
+        /// THE "ONE PATH, USED TWICE" CLAIM, MEASURED. Rovan's Covered ward and Nysera's Linked
+        /// redirect are the same split with the destination named two different ways - Covered by
+        /// the applier's id, a link by LinkedToId - and both now run through Sim.RedirectShare.
+        ///
+        /// The same arena is built twice at the same seed, differing only in which of the two
+        /// mechanics moves the share, and every unit's damage total must match across the pair. If
+        /// the two ever stopped agreeing - a rounding difference, a different clamp, a different
+        /// position relative to the shield pool - this is the check that would say so.
+        /// </summary>
+        private static void CheckCoverAndLinkAreOnePath()
+        {
+            BattleResult covered = RunSplitArena(true);
+            BattleResult linked = RunSplitArena(false);
+            if (covered == null || linked == null) { Check(false, "cover-versus-link arena built"); return; }
+
+            int wardedCov = DamageTo(covered, "SplitWarded");
+            int guardCov = DamageTo(covered, "SplitGuardian");
+            int wardedLnk = DamageTo(linked, "SplitWarded");
+            int guardLnk = DamageTo(linked, "SplitGuardian");
+
+            Check(wardedCov > 0 && guardCov > 0,
+                  "Rovan: Covered moves a share of the ward-holder's damage onto the protector ("
+                  + wardedCov + " kept, " + guardCov + " taken)");
+            Check(wardedLnk == wardedCov && guardLnk == guardCov,
+                  "and a Redirect link at the same fraction splits the identical hit identically - "
+                  + "one path, used twice (" + wardedLnk + "/" + guardLnk + " against "
+                  + wardedCov + "/" + guardCov + ")");
+        }
+
+        private static BattleResult RunSplitArena(bool useCover)
+        {
+            // The guardian applies the split to its lowest-HP ally, which is the warded hero: for
+            // Covered that is an ApplyStatus whose SourceId names the guardian, and for a link it
+            // is LinkUnits with SecondaryTarget Self, which names the guardian the other way. Two
+            // spellings of the same binding.
+            string setup = useCover
+                ? @"{ ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Covered"",
+                      ""magnitude"": 0.5, ""duration"": 99, ""chance"": 1 }"
+                : @"{ ""kind"": ""LinkUnits"", ""target"": ""LowestHpAlly"", ""secondaryTarget"": ""Self"",
+                      ""linkTransfer"": ""Redirect"", ""magnitude"": 0.5, ""duration"": 99 }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""lk_sp_warded"", ""name"": ""SplitWarded"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 400000, ""attack"": 100, ""defense"": 0, ""speed"": 50, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lksp_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""lksp_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""lk_sp_guard"", ""name"": ""SplitGuardian"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lkspg_basic"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""active"": { ""id"": ""lkspg_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""lkspg_setup"", ""name"": ""Take The Blow"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + setup + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""lk_sp_foe"", ""name"": ""SplitHitter"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 600, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lkspf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""lksp_ch"", ""name"": ""SplitPath"", ""stages"": [
+    { ""id"": ""lksp_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lk_sp_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4),
+                                                      useCover ? "cover split" : "link split");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("lk_sp_warded"), 1));
+            team.Add(MakeInstance(db.GetHero("lk_sp_guard"), 1));
+            return RunWith(db, db.GetStage("lksp_arena"), 7777, team);
         }
     }
 }

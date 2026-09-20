@@ -403,6 +403,31 @@ namespace Emberfall.Core.Data
         /// <summary>Counter index for Condition3 (StatusStacksAtLeast). Same semantics.</summary>
         public int ConditionCounterIndex3;
 
+        // ---------- linked targeting ----------
+
+        /// <summary>
+        /// What the StatusKind.Linked entry EffectKind.LinkUnits creates does to damage arriving at
+        /// its holder. None (the default) makes the link a pure record that only the two link
+        /// triggers read. Stored on the StatusInstance.
+        ///
+        /// Read by LinkUnits and by nothing else, which is why it is its own field rather than a
+        /// reuse of Status or Record: those name WHAT the entry is, this names what the engine does
+        /// with it at the funnel, and one effect can legitimately want the entry without the
+        /// transfer.
+        /// </summary>
+        public LinkTransfer LinkTransfer = LinkTransfer.None;
+
+        /// <summary>
+        /// When true, LinkUnits writes the reverse entry as well, so both bodies carry a link
+        /// naming the other. False (the default) writes one entry, on the Target, naming the
+        /// SecondaryTarget.
+        ///
+        /// Two entries rather than one bidirectional entry, so that a Dispel, a Cleanse or a death
+        /// can break one half and leave the other standing - which is what a description means when
+        /// it says the mark sits on both.
+        /// </summary>
+        public bool LinkMutual;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -478,6 +503,8 @@ namespace Emberfall.Core.Data
             e.ConditionCounterIndex = Math.Max(0, j.GetInt("conditionCounterIndex", 0));
             e.ConditionCounterIndex2 = Math.Max(0, j.GetInt("conditionCounterIndex2", 0));
             e.ConditionCounterIndex3 = Math.Max(0, j.GetInt("conditionCounterIndex3", 0));
+            e.LinkTransfer = EnumUtil.Parse(j.GetString("linkTransfer", "None"), LinkTransfer.None);
+            e.LinkMutual = j.GetBool("linkMutual", false);
             return e;
         }
 
@@ -743,6 +770,28 @@ namespace Emberfall.Core.Data
         /// attacker, etc.) is the passive owner.</summary>
         public bool TriggerSourceIsSelf;
 
+        /// <summary>
+        /// When true, fires only if the source that caused the dispatch is on the OWNER'S OWN SIDE
+        /// and is not the owner itself. The sibling of TriggerSourceIsSelf, read at the same place
+        /// and from the same `_broadcastSourceId`.
+        ///
+        /// It exists because "when an ALLY hits the unit I am bound to" is not expressible with the
+        /// two filters that were here: TriggerSourceIsSelf is the wrong half, and no condition can
+        /// ask about a unit's side - ConditionSubject.LastAttacker names the attacker but every
+        /// EffectCondition then asks about its HP, its statuses or its stats, never about which
+        /// line it stands on.
+        ///
+        /// Excludes the owner deliberately. Every ally-facing broadcast in this engine excludes the
+        /// unit that already has its own owner-centric trigger for the same event, and a hero
+        /// answering its OWN blow is a different ability from one answering an ally's.
+        ///
+        /// Setting both flags is authorable and always false, since a source cannot be the owner
+        /// and not the owner at once. That is a content error this does not try to catch: it makes
+        /// the passive inert rather than wrong, which is the same way a mis-authored condition
+        /// behaves everywhere else here.
+        /// </summary>
+        public bool TriggerSourceIsAlly;
+
         // ---------- batch three: resolve-to-stat scaling ----------
 
         /// <summary>Which stacking status on the owner adds to a base stat. None means no scaling
@@ -792,6 +841,7 @@ namespace Emberfall.Core.Data
             p.OutputModScope = EnumUtil.Parse(j.GetString("outputModScope", "AllDamage"), OutputModScope.AllDamage);
             p.OutputModMarkedOnly = j.GetBool("outputModMarkedOnly", false);
             p.TriggerSourceIsSelf = j.GetBool("triggerSourceIsSelf", false);
+            p.TriggerSourceIsAlly = j.GetBool("triggerSourceIsAlly", false);
             p.StatModStatus = EnumUtil.Parse(j.GetString("statModStatus", "None"), StatusKind.None);
             p.StatModPerStack = j.GetFloat("statModPerStack", 0f);
             p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);

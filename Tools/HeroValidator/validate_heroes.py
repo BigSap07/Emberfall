@@ -21,6 +21,7 @@ EFFECT_KINDS = {
     "Interrupt", "ExtendStatus", "ConsumeTurnDebt",
     "HpTransfer", "ShieldTransfer", "LedgerIncrement", "RedirectLethal",
     "SnapshotEnergy", "TransferStatus", "SnapshotHp", "LedgerDeposit",
+    "LinkUnits", "EchoDamage",
 }
 STATUS_KINDS = {
     "None", "AttackUp", "AttackDown", "DefenseUp", "DefenseDown",
@@ -41,6 +42,7 @@ STATUS_KINDS = {
     "Disrupted", "MaxHpUp", "HolyDamageUp",
     "HealSuppression", "StatusGainSuppression",
     "Resolve2",
+    "Linked",
 }
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {
@@ -57,6 +59,12 @@ TARGET_MODES = {
     "DefeatedUnit", "ThresholdUnit", "BroadcastSubject",
     "ThreeLowestHpAllies", "HighestDamageDealtEnemy", "HighestDoTDamageEnemy",
     "BroadcastVictim",
+    # HighestMyMarkStacksEnemy was in Enums.cs and the harness's own parity list but had
+    # never been added here, so a kit authoring it validated as a bad TargetMode. Found and
+    # fixed while adding the two below, because the harness parity check compares its own
+    # hardcoded list against the C# enum and therefore cannot see this file drift.
+    "HighestMyMarkStacksEnemy",
+    "PreviousTarget", "LinkedUnit",
 }
 
 # ---------------------------------------------------------------------------

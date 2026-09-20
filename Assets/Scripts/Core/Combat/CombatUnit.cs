@@ -131,6 +131,24 @@ namespace Emberfall.Core.Combat
         /// <summary>When true and FunnelSource is HealIntercept, the intercepted heal amount is
         /// dealt as damage to the holder immediately instead of being banked into Stored.</summary>
         public bool FunnelConvert;
+
+        // ---------- linked targeting ----------
+        //
+        // The one pair of fields on this class that describe a unit OTHER than the holder and the
+        // applier. See StatusKind.Linked for why a link needs both and cannot reuse SourceId.
+        //
+        // Both travel with the entry through MoveStatus and TransferStatus, the same discipline
+        // Stored and the four record fields already keep: a link that forgot which body it named
+        // when it changed carrier would be a link to nobody.
+
+        /// <summary>The unit id on the other end of a StatusKind.Linked entry, or -1 on every
+        /// other kind and on a link that never named one.</summary>
+        public int LinkedToId = -1;
+
+        /// <summary>What this link does to damage arriving at the holder. None on every other
+        /// kind, so an entry that is not a Link is inert at the funnel by construction rather
+        /// than by a kind test.</summary>
+        public LinkTransfer LinkTransfer = LinkTransfer.None;
     }
 
     /// <summary>Mutable battle-time state for one combatant.</summary>
