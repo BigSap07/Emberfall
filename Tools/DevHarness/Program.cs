@@ -5149,7 +5149,7 @@ namespace Emberfall.DevHarness
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
-                               "Resolve2", "Linked", "HealingReduction" },
+                               "Resolve2", "Linked", "HealingReduction", "Restricted" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
@@ -14849,10 +14849,12 @@ namespace Emberfall.DevHarness
                     // batch eight: the round's own boundary, and the far end of an enemy cast.
                     "RoundStart", "OnEnemyActiveResolved",
                     // cast cancellation: the declaration window, open to both sides
-                    "OnCastDeclared"
+                    "OnCastDeclared",
+                    // the displaced primitives: a unit turning on a different body
+                    "OnEnemyChangedTarget"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (49 members)");
+            Check(ok, "PassiveTrigger enum parity (50 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -16117,6 +16119,7 @@ namespace Emberfall.DevHarness
             CheckTargetRestriction(live);
             CheckBatchEightGaps(live);
             CheckCastCancellation(live);
+            CheckDisplacedPrimitives(live);
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -18802,6 +18805,310 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+        // ---- the three Displaced primitives: an applied ban, a named caster, a target change ---
+
+        private static void CheckDisplacedPrimitives(ContentDatabase live)
+        {
+            Line("DISPLACED PRIMITIVES (a restriction that arrives mid-battle, a window that names");
+            Line("                      its caster, and somebody hearing a unit turn on another body)");
+            CheckDisplacedPins();
+            CheckNoShippedDisplacedUse(live);
+            CheckAppliedRestrictionBindsAndExpires();
+            CheckDeclarationNamesItsCaster();
+            CheckTargetChangeIsHeard();
+            Line("");
+        }
+
+        private static void CheckDisplacedPins()
+        {
+            Check((int)StatusKind.HealingReduction == 49 && (int)StatusKind.Restricted == 50,
+                  "StatusKind.HealingReduction still at 49, Restricted appended at 50");
+            Check((int)PassiveTrigger.OnCastDeclared == 48
+                  && (int)PassiveTrigger.OnEnemyChangedTarget == 49,
+                  "PassiveTrigger.OnCastDeclared still at 48, OnEnemyChangedTarget appended at 49");
+            Check((int)BattleEventType.CastCancelled == 21 && (int)EffectKind.CancelCast == 30
+                  && (int)TargetMode.SwapDelayedUnit == 37,
+                  "BattleEventType, EffectKind and TargetMode are untouched by this pass - the "
+                  + "applied restriction is a status carrying two fields, not a new effect kind");
+        }
+
+        private static void CheckNoShippedDisplacedUse(ContentDatabase live)
+        {
+            int uses = 0;
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                List<AbilityDef> abilities = AllAbilitiesOf(live.Heroes[h]);
+                for (int a = 0; a < abilities.Count; a++)
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                        if (abilities[a].Effects[e].Status == StatusKind.Restricted
+                            || abilities[a].Effects[e].TargetBanKind != TargetBan.None) uses++;
+                for (int p = 0; p < live.Heroes[h].Passives.Count; p++)
+                    if (live.Heroes[h].Passives[p].Trigger == PassiveTrigger.OnEnemyChangedTarget) uses++;
+            }
+            Check(uses == 0,
+                  uses == 0
+                    ? "no shipped content applies a restriction or answers a target change, so the "
+                      + "three additions cannot move a fingerprint between them"
+                    : uses + " shipped use(s) - the fingerprint claims need re-earning");
+        }
+
+        /// <summary>
+        /// A RESTRICTION THAT ARRIVES AND LEAVES. The passive-declared form is measured by the
+        /// arenas above and is untouched; this is the entry-borne one, and the point of it is the
+        /// second half: when the status expires the holder goes back to the body it was avoiding.
+        /// </summary>
+        private static void CheckAppliedRestrictionBindsAndExpires()
+        {
+            DispProbe applied = RunAppliedBanArena(2);
+            DispProbe never = RunAppliedBanArena(0);
+            if (applied == null || never == null) { Check(false, "applied-ban arena built"); return; }
+
+            Check(never.Front > 0 && never.Back == 0,
+                  "control: with no restriction applied every blow lands on the front enemy ("
+                  + never.Front + " / " + never.Back + ")");
+            Check(applied.Back > 0,
+                  "a Restricted entry carrying TargetBan.LastTarget moves the holder off the body "
+                  + "it just hit (" + applied.Front + " front, " + applied.Back + " back) - the "
+                  + "rule arrived mid-battle, which a passive-declared one cannot do");
+            Check(applied.AfterExpiry > 0,
+                  "AND IT LEAVES WITH THE STATUS: after the entry expires the holder goes back to "
+                  + "hitting one body (" + applied.AfterExpiry + " consecutive blow(s) on the same "
+                  + "target in the last round), which is what makes it a state rather than a "
+                  + "property");
+        }
+
+        private sealed class DispProbe
+        {
+            public int Front;
+            public int Back;
+            public int AfterExpiry;   // consecutive same-target blows once the entry is gone
+        }
+
+        private static DispProbe RunAppliedBanArena(int duration)
+        {
+            // The hero is the one restricted, so the arena measures where ITS blows land. A
+            // BattleStart passive applies the entry to the hero itself for `duration` rounds; at
+            // zero nothing is applied and the control falls out of the same content.
+            string applier = duration > 0
+                ? @"""passive1"": { ""id"": ""ab_seed"", ""name"": ""Seed"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+          ""duration"": " + duration + @", ""chance"": 1, ""bypassResist"": true,
+          ""targetBan"": ""LastTarget"" } ] },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ab_hero"", ""name"": ""AbHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      " + applier + @"
+      ""basic"": { ""id"": ""ab_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""ab_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ab_front"", ""name"": ""AbFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""abf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""ab_back"", ""name"": ""AbBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""abb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ab_ch"", ""name"": ""AppliedBan"", ""stages"": [
+    { ""id"": ""ab_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""ab_front"", ""level"": 1 }, { ""id"": ""ab_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(5), "applied ban");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ab_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("ab_arena"), 9971, team);
+            if (r == null) return null;
+
+            int frontId = -1, backId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "AbFront") frontId = r.Units[i].Id;
+                if (r.Units[i].Name == "AbBack") backId = r.Units[i].Id;
+            }
+
+            DispProbe p = new DispProbe();
+            int last = -1, run = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                if (e.TargetId == frontId) p.Front += e.Value;
+                else if (e.TargetId == backId) p.Back += e.Value;
+                else continue;
+                // the longest run of blows on one body - it can only lengthen once the rule is gone
+                if (e.TargetId == last) { run++; if (run > p.AfterExpiry) p.AfterExpiry = run; }
+                else { run = 1; last = e.TargetId; }
+            }
+            if (p.AfterExpiry < 2) p.AfterExpiry = 0;   // a run of one is not a run
+            return p;
+        }
+
+        /// <summary>
+        /// The declaration window names its caster. A passive answering it tests a status on the
+        /// caster and aims at BroadcastSubject, and both only work if the subject is set.
+        /// </summary>
+        private static void CheckDeclarationNamesItsCaster()
+        {
+            int marked = RunCasterNamedArena(true);
+            int unmarked = RunCasterNamedArena(false);
+            Check(marked > 0,
+                  "a passive answering OnCastDeclared can test the CASTER's statuses and aim at it "
+                  + "(" + marked + " damage into the caster) - with no subject it could do neither");
+            Check(unmarked == 0,
+                  "control: with the caster not carrying the status the same passive pays nothing ("
+                  + unmarked + "), so it is reading the caster rather than firing on any cast");
+        }
+
+        private static int RunCasterNamedArena(bool markCaster)
+        {
+            string mark = markCaster
+                ? @"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+                      ""duration"": 99, ""chance"": 1, ""bypassResist"": true },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""cn_hero"", ""name"": ""CnHero"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""cn_answer"", ""name"": ""Name It"", ""trigger"": ""OnCastDeclared"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0,
+          ""condition"": ""HasStatus"", ""conditionStatus"": ""Restricted"",
+          ""conditionOn"": ""BroadcastSubject"" } ] },
+      ""basic"": { ""id"": ""cn_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cn_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""cn_caster"", ""name"": ""CnCaster"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""passive"": { ""id"": ""cn_self"", ""name"": ""Self"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + mark + @"
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""basic"": { ""id"": ""cnb"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cn_enemy_active"", ""name"": ""Sing"", ""energyCost"": 0,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""cn_ch"", ""name"": ""CasterNamed"", ""stages"": [
+    { ""id"": ""cn_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""cn_caster"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "caster named");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("cn_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("cn_arena"), 9972, team);
+            return r == null ? -1 : DamageTo(r, "CnCaster");
+        }
+
+        /// <summary>
+        /// Somebody hears a unit turn on a different body - and does not hear its first blow,
+        /// because acquiring a target is not changing one.
+        /// </summary>
+        private static void CheckTargetChangeIsHeard()
+        {
+            BattleResult switching = RunTargetChangeArena(true);
+            BattleResult steady = RunTargetChangeArena(false);
+            if (switching == null || steady == null)
+            { Check(false, "target-change arena built"); return; }
+
+            int heard = CountPassiveFires(switching, "tc_watch");
+            int quiet = CountPassiveFires(steady, "tc_watch");
+            Check(heard > 0,
+                  "OnEnemyChangedTarget fires when an enemy turns on a different body ("
+                  + heard + " time(s))");
+            Check(quiet == 0,
+                  "and not once against an enemy that hits the same body every turn (" + quiet
+                  + " fires) - its FIRST blow is not a change either, which is the line the trigger "
+                  + "draws");
+        }
+
+        private static BattleResult RunTargetChangeArena(bool switching)
+        {
+            // THE SWITCHER IS MADE TO SWITCH BY THE OTHER PRIMITIVE IN THIS PASS. Aiming it at
+            // the lowest-HP ally does not switch anything: the body it just hit is the lowest, so
+            // it stays there. A Restricted entry carrying TargetBan.LastTarget forbids exactly
+            // that, so the foe alternates - which is both the arena it needed and the combination
+            // the hero waiting on these two will author.
+            string restrict = switching
+                ? @"""passive"": { ""id"": ""tc_ban"", ""name"": ""Displaced"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+          ""duration"": 99, ""chance"": 1, ""bypassResist"": true, ""targetBan"": ""LastTarget"" } ] },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""tc_watcher"", ""name"": ""TcWatcher"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""tc_watch"", ""name"": ""Watch"", ""trigger"": ""OnEnemyChangedTarget"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""basic"": { ""id"": ""tcw"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcwa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tc_a"", ""name"": ""TcA"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 40000, ""attack"": 10, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tca"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcaa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tc_b"", ""name"": ""TcB"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 40000, ""attack"": 10, ""defense"": 0, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tcb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcba"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""tc_foe"", ""name"": ""TcFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      " + restrict + @"
+      ""basic"": { ""id"": ""tcf"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""tc_ch"", ""name"": ""TargetChange"", ""stages"": [
+    { ""id"": ""tc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""tc_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(5), "target change");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("tc_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("tc_a"), 1));
+            team.Add(MakeInstance(db.GetHero("tc_b"), 1));
+            return RunWith(db, db.GetStage("tc_arena"), 9973, team);
+        }
 
         // ---- cast cancellation: an active with a state between declaration and resolution -----
 

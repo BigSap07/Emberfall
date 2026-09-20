@@ -1241,8 +1241,19 @@ namespace Emberfall.Core.Combat
                     // The declaration window, open to everybody. OnEnemyActive above is the same
                     // moment shown to one side; this is the side-neutral hook, and anything it
                     // raises resolves before the cast does.
-                    for (int ci = 0; ci < _units.Count && !IsBattleOver(); ci++)
-                        if (_units[ci].Alive) TriggerPassive(_units[ci], PassiveTrigger.OnCastDeclared, 0);
+                    // WITH THE CASTER AS THE SUBJECT. Raised without one, the window told every
+                    // unit that a cast was happening and gave none of them a way to say whose -
+                    // so a passive could not test the caster's statuses and could not aim at it.
+                    {
+                        CombatUnit prevCastSubject = _broadcastSubject;
+                        int prevCastSource = _broadcastSourceId;
+                        _broadcastSubject = unit;
+                        _broadcastSourceId = unit.Id;
+                        for (int ci = 0; ci < _units.Count && !IsBattleOver(); ci++)
+                            if (_units[ci].Alive) TriggerPassive(_units[ci], PassiveTrigger.OnCastDeclared, 0);
+                        _broadcastSourceId = prevCastSource;
+                        _broadcastSubject = prevCastSubject;
+                    }
 
                     if (!unit.Alive || IsBattleOver()) { ClearCast(); ExpireStatuses(unit); return; }
 
@@ -2344,6 +2355,18 @@ namespace Emberfall.Core.Combat
                         // Disrupted: StoredCap carries the turn shift fraction, raw rather than
                         // Attack-scaled. Zero means no shift, so an effect that does not set it
                         // is a drain-only Disrupted.
+                        // A Restricted entry carries its rule, the way a Disrupted one carries
+                        // its drain. Stamped here so two restrictions from two sources are two
+                        // entries rather than one field they fight over.
+                        if (effect.Status == StatusKind.Restricted && effect.TargetBanKind != TargetBan.None)
+                            for (int ri = 0; ri < target.Statuses.Count; ri++)
+                            {
+                                StatusInstance rs = target.Statuses[ri];
+                                if (rs.Kind != StatusKind.Restricted || rs.SourceId != source.Id) continue;
+                                rs.BanKind = effect.TargetBanKind;
+                                rs.BanStatus = effect.TargetBanStatus;
+                            }
+
                         if (effect.Status == StatusKind.Disrupted && effect.StoredCap > 0f)
                             for (int di = 0; di < target.Statuses.Count; di++)
                             {
@@ -3408,8 +3431,23 @@ namespace Emberfall.Core.Combat
                 // PreviousTargetId first, and only when the target actually changes: an ability
                 // that hits the same body twice in a row must not shuffle its own history and
                 // report itself as having switched.
+                bool changedTarget = source.LastTargetId >= 0 && source.LastTargetId != target.Id;
                 if (source.LastTargetId != target.Id) source.PreviousTargetId = source.LastTargetId;
                 source.LastTargetId = target.Id;
+                // AND SOMEBODY CAN HEAR IT NOW. The line above is the engine's own definition of a
+                // target having changed and was until now the only thing that knew. The switcher
+                // is the source and the body it has turned on is the subject; a unit's first blow
+                // is excluded, because acquiring a target is not changing one.
+                if (changedTarget)
+                {
+                    CombatUnit prevTcSubject = _broadcastSubject;
+                    int prevTcSource = _broadcastSourceId;
+                    _broadcastSubject = target;
+                    _broadcastSourceId = source.Id;
+                    BroadcastPassive(!source.IsPlayer, PassiveTrigger.OnEnemyChangedTarget, 0, null);
+                    _broadcastSourceId = prevTcSource;
+                    _broadcastSubject = prevTcSubject;
+                }
                 string vfx = ability != null ? ability.Vfx : "impact";
                 string abilityName = ability != null ? ability.Name : "";
                 DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
@@ -5409,7 +5447,7 @@ namespace Emberfall.Core.Combat
             private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded,
                                                     StatusKind targetStatus)
             {
-                if (caster == null || caster.TargetBan == TargetBan.None || _targetBanRelaxed)
+                if (caster == null || _targetBanRelaxed || !HasAnyTargetBan(caster))
                     return ResolveTargetsInner(caster, mode, excluded, targetStatus);
 
                 int before = _targetBanRejections;
@@ -6243,6 +6281,8 @@ namespace Emberfall.Core.Combat
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
+                    landed.BanKind = status.BanKind;
+                    landed.BanStatus = status.BanStatus;
 
                     // AND THE LEDGER'S RULES, NOT ONLY ITS BALANCE. These nine were the third
                     // field-by-field copy in this engine found dropping fields, and the only one
@@ -6327,13 +6367,43 @@ namespace Emberfall.Core.Combat
             /// `_targetBanRejections` counts the refusals so the fallback can tell "the ban emptied
             /// this" apart from "this mode had no answer anyway".
             /// </summary>
+            /// <summary>Whether this unit is restricted at all, by either form. One enum test for
+            /// the standing form and, only if that is None, a walk of a status list that is empty
+            /// of Restricted entries for every unit in shipped content.</summary>
+            private bool HasAnyTargetBan(CombatUnit caster)
+            {
+                if (caster.TargetBan != TargetBan.None) return true;
+                for (int i = 0; i < caster.Statuses.Count; i++)
+                    if (caster.Statuses[i].Kind == StatusKind.Restricted
+                        && caster.Statuses[i].BanKind != TargetBan.None) return true;
+                return false;
+            }
+
             private bool TargetBanned(CombatUnit caster, CombatUnit unit)
             {
-                if (caster == null || unit == null || caster.TargetBan == TargetBan.None) return false;
+                if (caster == null || unit == null) return false;
                 if (_targetBanRelaxed) return false;
 
+                // THE STANDING FORM AND THE APPLIED ONE, in that order, and the first match wins.
+                // A passive-declared ban is a property of the unit and was the only shape there
+                // was; an entry-borne one arrives mid-battle and leaves with its status. Both are
+                // the same question asked of the same candidate, so they share the switch below
+                // rather than growing a second copy of it that could disagree.
+                TargetBan kind = caster.TargetBan;
+                StatusKind banStatus = caster.TargetBanStatus;
+                if (kind == TargetBan.None)
+                    for (int i = 0; i < caster.Statuses.Count; i++)
+                    {
+                        StatusInstance rs = caster.Statuses[i];
+                        if (rs.Kind != StatusKind.Restricted || rs.BanKind == TargetBan.None) continue;
+                        kind = rs.BanKind;
+                        banStatus = rs.BanStatus;
+                        break;
+                    }
+                if (kind == TargetBan.None) return false;
+
                 bool banned;
-                switch (caster.TargetBan)
+                switch (kind)
                 {
                     case TargetBan.LastTarget:
                         banned = caster.LastTargetId >= 0 && unit.Id == caster.LastTargetId;
@@ -6342,8 +6412,7 @@ namespace Emberfall.Core.Combat
                         banned = caster.LastRoundTargetId >= 0 && unit.Id == caster.LastRoundTargetId;
                         break;
                     case TargetBan.CarryingStatus:
-                        banned = caster.TargetBanStatus != StatusKind.None
-                                 && unit.Has(caster.TargetBanStatus);
+                        banned = banStatus != StatusKind.None && unit.Has(banStatus);
                         break;
                     default:
                         banned = false;

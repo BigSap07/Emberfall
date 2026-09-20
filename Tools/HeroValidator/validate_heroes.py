@@ -47,6 +47,8 @@ STATUS_KINDS = {
     "Linked",
     # batch eight: the partial sibling of HealSuppression.
     "HealingReduction",
+    # a restriction that arrives mid-battle and leaves with its entry.
+    "Restricted",
 }
 # A standing rule forbidding a unit one class of target. Declared on a passive as
 # "targetBan"; the harness reads this set out of this file and compares it to Enums.cs,

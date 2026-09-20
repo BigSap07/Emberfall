@@ -1244,7 +1244,24 @@ namespace Emberfall.Core.Data
         /// Harmful, so a Cleanse takes it and a Dispel does not - the same side of that line as
         /// every other stat-down.
         /// </summary>
-        HealingReduction
+        HealingReduction,
+
+        /// <summary>
+        /// A target restriction the holder carries for as long as the entry lives.
+        ///
+        /// TARGETBAN WAS THE RIGHT RULE ATTACHED TO THE WRONG THING. It is adopted from a
+        /// PassiveDef in CombatUnit.AddPassive and written nowhere else, so it is a standing
+        /// property of a unit decided at battle start - and the first clause that wanted one
+        /// wanted it to ARRIVE mid-battle, last two rounds and leave.
+        ///
+        /// The shape is copied from Disrupted, which had the same problem and solved it: a status
+        /// instance carrying its own parameters, read at the site that enforces them. The entry's
+        /// BanKind and BanStatus are what TargetBanned reads, exactly as InterceptDisrupted reads
+        /// the Magnitude and StoredCap off a Disrupted entry.
+        ///
+        /// Harmful: it is done TO a unit, so a Cleanse takes it and a Dispel does not.
+        /// </summary>
+        Restricted
     }
 
     /// <summary>
@@ -1761,7 +1778,23 @@ namespace Emberfall.Core.Data
         /// Anything this raises resolves BEFORE the cast does, which is what makes "damage that
         /// lands before the cast it answers" a matter of ordering rather than of a new mechanism.
         /// </summary>
-        OnCastDeclared
+        OnCastDeclared,
+
+        /// <summary>
+        /// An enemy has aimed at a different body than the one it last hit. Broadcast to the side
+        /// opposite the switcher, with the switcher as the broadcast SOURCE and the body it has
+        /// just turned on as the SUBJECT - so "the targeted ally" is nameable and "the enemy that
+        /// changed" is testable, which are the two halves every clause asking for this wants.
+        ///
+        /// Raised where PreviousTargetId is written, which is the engine's own definition of the
+        /// target having changed and was until now the only thing that knew: the field updates
+        /// silently inside DealRawDamage and is readable only by the picker, through
+        /// SubjectIsNotMyPreviousTarget. An observer had no hook at all.
+        ///
+        /// A unit's FIRST blow does not raise it. Acquiring a target is not changing one, and
+        /// LastTargetId being unset is the difference; every clause in the roster says "changes".
+        /// </summary>
+        OnEnemyChangedTarget
     }
 
     /// <summary>
@@ -2311,6 +2344,8 @@ namespace Emberfall.Core.Data
                 // Partial healing reduction, on the same side of the line as HealSuppression's
                 // total: done TO a unit, so a Cleanse takes it and an Umbra source locks it.
                 || kind == StatusKind.HealingReduction
+                // A restriction is done TO a unit, so it sits with Provoked and Vulnerable.
+                || kind == StatusKind.Restricted
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
                 || kind == StatusKind.Disrupted
                 // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
@@ -2402,6 +2437,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.StatusGainSuppression: return "Gain Suppression";
                 case StatusKind.Resolve2: return "Resolve II";
                 case StatusKind.Linked: return "Linked";
+                case StatusKind.Restricted: return "Displaced";
             }
             return kind.ToString();
         }
@@ -2462,6 +2498,7 @@ namespace Emberfall.Core.Data
                 // per-instance display name, so a bar cannot say WHO the holder is bound to. That
                 // is the same UI problem Mark carries and it is not made worse here.
                 case StatusKind.Linked: return "LNK";
+                case StatusKind.Restricted: return "DSP";
             }
             return "?";
         }

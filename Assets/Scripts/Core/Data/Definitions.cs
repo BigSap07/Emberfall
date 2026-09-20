@@ -544,6 +544,14 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool ScaleByLastShift;
 
+        /// <summary>
+        /// The restriction a Restricted entry carries, and the status TargetBan.CarryingStatus
+        /// names. Read at apply time and stamped onto the entry, the way Disrupted's Magnitude and
+        /// StoredCap are.
+        /// </summary>
+        public TargetBan TargetBanKind = TargetBan.None;
+        public StatusKind TargetBanStatus = StatusKind.None;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -630,6 +638,8 @@ namespace Emberfall.Core.Data
             e.TransferMagnitude = j.GetFloat("transferMagnitude", 0f);
             e.AttackCap = j.GetFloat("attackCap", 0f);
             e.ScaleByLastShift = j.GetBool("scaleByLastShift", false);
+            e.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
+            e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
             return e;
         }
@@ -737,6 +747,8 @@ namespace Emberfall.Core.Data
             c.TransferMagnitude = TransferMagnitude;
             c.AttackCap = AttackCap;
             c.ScaleByLastShift = ScaleByLastShift;
+            c.TargetBanKind = TargetBanKind;
+            c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
             return c;
         }
