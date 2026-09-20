@@ -62,11 +62,11 @@ edrin_the_distant_bell|2|9721f3df40910a63
 edrin_the_distant_bell|3|76385382ced97ede
 edrin_the_distant_bell|4|4eb629b06d72bd18
 edrin_the_distant_bell|5|0412388ef6005121
-elyra_the_patient_warden|1|3bd9fe2b9227a405
-elyra_the_patient_warden|2|09ff87f785eac6a7
-elyra_the_patient_warden|3|0c38d45c5fcd917e
-elyra_the_patient_warden|4|6b829fb88bd6e913
-elyra_the_patient_warden|5|b30289c19f4bb2dc
+elyra_the_patient_warden|1|7edb1e675087d41d
+elyra_the_patient_warden|2|ad736e5977ddb0df
+elyra_the_patient_warden|3|e01fcd6df943c40c
+elyra_the_patient_warden|4|6e97da13ccc037f8
+elyra_the_patient_warden|5|138a19f466d50376
 hale_the_relentless_hunter|1|ded282993dd0389e
 hale_the_relentless_hunter|2|79143cbd08dc82de
 hale_the_relentless_hunter|3|5f8838647dd28ad7
