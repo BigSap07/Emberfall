@@ -2,837 +2,94 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-13, not against the rest of this document.
-
-### `main`'s harness is DELIBERATELY RED on exactly one check
-
-1. **The CEIL band check.** Removing the six engine-owned aspect rules moved every difficulty
-   number in the game, and the retune is deliberately deferred rather than smeared across the
-   change that caused it. **Closes at a single retune after the roster's abilities are
-   authored** - not before. Retuning against placeholder kits would bake a measurement of the
-   wrong game into `campaign.json`.
-
-**A second failure is a regression.** If the count goes to two, something broke - treat it as a
-real finding and diagnose it rather than adding it to this list.
-
-Previously three checks were red (role coverage, summon pity, CEIL). The 94-hero import closed
-the first two: all ten roles are now filled, and 91 non-starter heroes satisfy the pity
-guarantee.
-
-### Open: `engine/linked-targeting` — unmerged
-
-**The linked-targeting primitive. Engine only; no hero is authored on it.** One concept covering
-the four uses the 14-hero survey identified, so it is a primitive rather than a mechanism built
-for whoever asked first: **two units bound together so that an action on one causes an effect on
-the other.** `StatusKind.Linked` is the binding, and it is the only status in the enum that names
-a THIRD unit — `SourceId` is still the hero that created it, and `StatusInstance.LinkedToId` is
-the partner, which for Talren are three different bodies.
-
-- **All 24 stage fingerprints are unmoved: 72 of 72 byte-identical** (24 stages × 3 seeds, the
-  set `CheckEffectHitResistNoOp` reproduces, dumped as text before and after and compared). The
-  harness report is a strict superset — 43 new checks, no existing line changed except the
-  PassiveTrigger parity label, which reads 41 members instead of 39. The 11 red checks are the
-  same 11, line for line: the CEIL band plus ten guards the authored batch-five kits already
-  tripped.
-- **Three of the four uses touch the damage funnel, and that is what the `_anyLinks` bool is
-  for.** Every link dispatch point tests one bool that is false until a link is created, so a
-  battle with no link in it pays nothing. Redirect, echo and the hit trigger all sit inside
-  `DealRawDamage`, which every point of damage in the game passes through; without the gate the
-  cost would be paid by every battle ever resolved.
-- **Rovan's Covered and Nysera's Linked redirect are one path, and the harness measures the
-  claim rather than asserting it.** `Sim.RedirectShare` is the split; Covered names its
-  destination with the applier's id and a link names it with `LinkedToId`, which is the entire
-  difference. The arithmetic was extracted from the Covered block **without changing** — same
-  rounding, same clamp, same two early exits in the same order — which mattered because
-  **Covered is authored by six effects in `heroes.json`** and is the one part of this work that
-  shipped content reaches. `CheckCoverAndLinkAreOnePath` runs the same arena twice at the same
-  seed, once with each mechanic, and asserts every unit's damage total matches.
-- **Redirect and Echo are the same split with opposite bookkeeping.** Redirect subtracts the
-  moved share from the holder; Echo does not. That is the whole of "instead" versus "as well",
-  and it is why they are one `LinkTransfer` enum rather than two mechanics. A third member,
-  `None`, is a real authoring and not an absence: Vaelis's binding exists so her passive can hear
-  about a hit on the far end, and a link that also moved damage would be a different ability.
-- **`_inCover` became `_inRedirect` and is now shared by all three.** One guard, so a Covered hop
-  onto a Linked protector does not then echo and a link redirect onto a Covered partner does not
-  split again. Separate guards would let alternating mechanics chain as deep as the pairings
-  allowed, and a pair of units linked to each other is exactly Talren's active. The echo arena
-  builds that mutual pair deliberately and proves the bound with a number: the front enemy's
-  total is the control's exactly, not more.
-- **What a redirect moves is the damage, not the calculation.** `DealRawDamage` is handed a
-  number already through the attacker's crit roll, the aspect chart and the HOLDER's Defense, so
-  redirecting it does not re-run any of that against the partner. That is precisely how Covered
-  has always behaved; a link that recomputed would be a second differently-shaped redirect rather
-  than the same one twice. The aspect source scan lists the three new lines that carry
-  `aspectFactor` into a redirected or echoed share, because keeping the original blow's chart
-  reading is a decision and the scan is meant to make one say so out loud.
-- **"Targeted" and "hit" are two triggers, not one with a flag.** `OnLinkedUnitTargeted` fires at
-  the top of `ApplyDamageEffect` before the miss check; `OnLinkedUnitHit` fires below the funnel
-  once damage has landed. An arena whose bound enemy carries `EvasionUp` at 1.0 separates them
-  with counts: the aim trigger fires four times and nothing lands at all.
-  - **The targeted half is deliberately narrow and covers DAMAGE effects only.** A heal, a buff
-    and a cleanse all name a target too, and `ResolveTargets` is the point they share — but
-    firing a passive from inside targeting means firing between targets being chosen and the
-    effect resolving, where a passive that kills the target leaves the caller holding a corpse it
-    has committed to acting on. Same argument `OnEnemyDamagedAlly` settled the same way.
-- **Neither is a broadcast, which is a third dispatch shape.** `Sim.DispatchLinkPassive` walks the
-  units looking for an entry naming the subject, because a link is not a side: Rovan's partner is
-  an ally, Talren binds two enemies to each other, and a side-scoped dispatch would be wrong for
-  at least one of them.
-- **`PassiveDef.TriggerSourceIsAlly`, because no condition can ask which side a unit is on.**
-  Vaelis's "when an ALLY hits the bound enemy" needed it: `TriggerSourceIsSelf` is the wrong
-  half, and `ConditionSubject.LastAttacker` names the attacker while every `EffectCondition` then
-  asks about its HP, statuses or stats. The arena is a differential — the same fight run twice,
-  differing only in whether the watcher attacks the bound enemy herself — and her fire count is
-  the ally's alone in both, so the filter is measured excluding something rather than untested.
-- **`EffectKind.EchoDamage` reads a realised number, not a recomputed one.** It repeats a fraction
-  of `_lastDamageDealt`, which is what the last hit actually took off a bar after Guard, Cover,
-  the pool and the Ledger, and it pays through `DealRawDamage` so the pipeline is not applied
-  twice. Cleared at every ability boundary exactly as `_lastTarget` is. The arena gives the echo's
-  victim real Defense, so a recomputed hit would land on a different figure and the 40% equality
-  would fail.
-  - **An echo does not become what later echoes read.** The funnel writes `_lastDamageDealt` for
-    every hit it carries, so without saving and restoring it an echo aimed at `AllEnemies` would
-    compound down the line — the third body taking a fraction of a fraction of a fraction.
-- **`TargetMode.PreviousTarget` and `TargetMode.LinkedUnit`.** Previous is a sibling of
-  `LastTarget` in every respect and sits in the same post-anchor family; `LinkedUnit` resolves
-  BEFORE the anchor alongside `BroadcastVictim`, because a link names one specific body that may
-  stand on either side and a Taunt holder intercepting it would make the mode mean nothing. The
-  PreviousTarget arena puts a bystander in slot 0 that the mode's FrontEnemy fallback would hit:
-  it takes zero in the treatment and the whole third effect in the control.
-- **A drift was found in `validate_heroes.py` and the check that should have caught it could
-  not.** `CheckEnumParity` compares a list hardcoded in the harness against the C# enum, which
-  answers whether the harness knows the enum and NOT the question its label asks.
-  `HighestMyMarkStacksEnemy` was in `Enums.cs` and in the harness list and had never reached the
-  python file, so a kit authoring it validated as a bad TargetMode while the section reported
-  parity. Fixed, and `CheckValidatorFileParity` now **reads `validate_heroes.py` itself** and
-  parses its five sets — the same lesson the role-ordinal scan that passed by comparing nothing
-  already taught once.
-- **No new `BattleEventType` for a sixth pass.** A link reuses `StatusApplied` and an echo reuses
-  `Damage`. The one deviation is recorded rather than left to be found: a Linked `StatusApplied`
-  writes the PARTNER'S ID into `Value` where every other status writes a stack depth, because a
-  link's identity is who it names and a `StatusKind` carries no per-instance name. No existing
-  battle records a Linked event, so nothing reading `Value` for a stack depth is affected.
-- **Not built, and named rather than approximated:** targeting-time redirection. Nysera's
-  "an attack aimed at her is redirected" is served at the funnel at a magnitude of 1.0, which
-  produces the same outcome; a second, targeting-level redirect would be two ways to say one
-  thing, which this engine has refused before (see the absent `AllEnemiesWithStatus`). The
-  visible cost is that the log shows the blow aimed at her and the damage landing on the partner.
-
-### Open: `engine/nine-gaps` — unmerged, off `engine/linked-targeting`
-
-**All nine gaps the blocked authoring attempt named. Engine only; still no hero authored.** 72 of
-72 fingerprints unmoved, the same 11 harness reds line for line, 42 new checks with a count-based
-arena per gap. It sits on `engine/linked-targeting` and needs it.
-
-- **Gap 1, charges.** `SpendLinkCharge` decrements and removes at zero, emitting `StatusExpired`
-  the way a spent Guard charge does. 0 charges stays UNLIMITED, which every link authored before
-  this has. Spent BEFORE the share is delivered, so a one-charge link cannot fire again from
-  inside the recursion its own delivery starts.
-- **Gap 2, a flat echo.** `StatusInstance.LinkAmount`, Attack-scaled once at creation like Burn's
-  magnitude and the Ledger's cap. An echo pays `share + flat`. **Echo only** — a redirect is a
-  SPLIT that must create no value, and a flat addend on one would hand the destination more than
-  was ever struck.
-- **Gap 3, the attacker filter.** `LinkFromCasterOnly`, the same test and deliberately the same
-  spelling as the Ledger's `BankFromCaster`, folded into `FindLink` so every link reader honours
-  it at once.
-- **Gap 4, the other end and the set.** `OtherLinkedUnit` is the caster's highest-HP partner
-  excluding the one the dispatch is about — one mode for both shapes that asked, because with two
-  records "highest HP among one" IS the other one, and with three it is the sentence a talent asks
-  for in as many words. `AllLinkedUnits` is the set, deduplicated.
-- **Gap 5, attacker-keyed deflect.** `LinkTransfer.Deflect`, its own rule beside `RedirectShare`
-  rather than a loosened Provoked: Provoked's same-side refusal is correct for what Provoked means
-  and is untouched. It fires FIRST in the funnel, ahead of Guard, and that placement is the rule's
-  meaning rather than a convenience — the blow never reaches this body, so none of the victim's
-  own defences may spend themselves on it.
-- **Gap 6, four triggers.** `OnTargeted`, `OnStatusGained` (TriggerStatus-filtered, and
-  deliberately NOT raised by MoveStatus or TransferStatus — a status changing carrier is its own
-  event with its own record), `OnLinkEchoFired` on the link's creator, `OnRedirectReceived` on the
-  protector. The last fires for Covered as well as for a link, because they are one path and a
-  trigger serving only one would be the two drifting apart at the first opportunity.
-- **Gap 7, the moved amount.** `ScaleByLastMoved` reading `_lastMoved`, a **Dictionary keyed per
-  caster from the start**, joining `_lastLedgerRelease` rather than the three single-field scalars
-  beside it. `LastMovedAboveHpFraction` is the threshold half. A second scalar,
-  `ScaleByLastDamage`, reads the broadcast-window `_lastDamageDealt`.
-  - **What the arena can and cannot prove, stated rather than glossed.** It proves the scalar
-    tracks the amount: halving the ward's share halves the follow-up strike, and the strike equals
-    the share. It does NOT prove the per-caster keying, and no arena can — every write immediately
-    precedes its own read, so one global would answer identically in any ordering a battle can
-    produce. The keying is structural, against a failure mode this harness cannot construct.
-- **Gap 8, the causing unit.** `TargetMode.BroadcastSource` and `ConditionSubject.BroadcastSource`.
-  Distinct from `LastAttacker`, which resolves through the subject's `LastAttackerId` and so
-  answers correctly only for a broadcast raised by a hit, naming the wrong body for one raised by
-  a heal or a shield.
-- **Gap 9, the wrong sign.** `SubjectNotDamagedByMeThisRound`, the exact mirror of
-  `AlreadyDamagedSubjectThisRound`. **A general `negate` flag was rejected**: three fields that
-  silently re-point all forty conditions, including the twenty-odd whose negation nobody has
-  reasoned about — what "not TurnProgressAbove" means for a unit with no position left, or "not
-  StoredRoleMatches" when nothing was recorded.
-
-**A bug in the previous pass, found by an arena rather than by reading.** `DispatchLinkPassive`
-was handed depth 0 at the funnel, matching the broadcasts beside it — but a passive answering "my
-partner was hit" by striking its OTHER partner walks straight back in at 0 again. The gap-4 arena
-overflowed the stack the first time it authored that with `oncePerBattle` false, which is the
-natural shape of the link triggers rather than an exotic case. `_linkDispatchDepth` bounds it and
-is handed to `TriggerPassive` as the depth, so one cap governs instead of two that could disagree.
-
-**`ScaleByLastRemoval` carried a COUNT where every description says an amount, and that was the
-real defect.** Verified before repairing, on real content at level 40: Cyrra's active healed **791**
-before the `ScaledTerm` change (0.8 × Attack, the flag inert) and **1** after (0.8 × one entry
-removed). Her text says *"the removed damage is converted into healing equal to 100% of that
-amount"*; her talent I says *"converts only 60% of its removed damage"*. **Audited the whole
-roster: two users, both hers, both wanting an amount, and nothing anywhere reading it as a
-count** — which is what made changing the meaning the right repair rather than adding a sibling
-scalar. A sibling would have left the mis-named one in place for the next author to reach for.
-- `_lastRemovedStacks` became `_lastRemovedValue`, summed at all three removal sites (Cleanse,
-  Dispel, RemoveStatus) as `RemainingDotDamage` — per-tick Magnitude × rounds left. Zero for
-  anything carrying no damage, rather than a stand-in nobody authored.
-- The JSON key keeps its spelling. `scaleByLastRemoval` always meant "scale by what the last
-  removal took"; only the unit was wrong, and renaming it would have broken the two effects the
-  repair exists to fix.
-- `CheckRemovedValueScalar` measures it: a Burn of known magnitude and duration stripped and
-  converted, healing **3216** at two rounds and **1608** at one. Halving the duration halves the
-  heal, which is what proves it reads the REMAINING damage rather than one tick or a constant.
-
-**Cyrra's active was stripping the FRONT enemy, not the most-burdened one.** `HighestDoTDamageEnemy`
-meant "the enemy that has DEALT the most DoT this round"; her text asks for *"the enemy with the
-highest remaining Burden damage"*. Different question — and because she converts what the removed
-DoT would have dealt into healing, the pick decided how much she healed, not merely where she aimed.
-- **Audited both damage-dealt modes.** `HighestDamageDealtEnemy` has one user, Hale, and he reads it
-  correctly: *"move Quarry to the enemy that dealt the most damage that round"*. `HighestDoTDamageEnemy`
-  had only Cyrra, who wanted the opposite. **So the meaning was sound and its use was wrong** — the
-  reverse of the `ScaleByLastRemoval` case, and the audit is what told them apart.
-- **Worse than a near miss.** `DoTDamageDealtThisRound` resets for everybody at `BeginRound` and only
-  fills when a unit carrying that enemy's Burn takes its own turn, so at Cyrra's turn it is normally
-  zero across the whole enemy line and the mode collapses onto the first living body. She was not
-  stripping the wrong burning enemy; she was stripping the front one, and often one carrying nothing.
-- **Added `TargetMode.HighestPendingDoTEnemy`** — the enemy carrying the most DoT damage still
-  queued on it, ranked with `Sim.RemainingDotDamage`, the same helper `_lastRemovedValue` sums when a
-  removal happens, so "which enemy has the most to remove" and "how much was removed" cannot drift
-  apart. Nobody when no enemy carries any, rather than falling through to the front body.
-- **Renamed `HighestDoTDamageEnemy` to `HighestDoTDealtEnemy`**, same ordinal, meaning untouched.
-  That name was the trap and it caught somebody; it now cannot be misread for the carried-DoT
-  question sitting next to it. No content uses it.
-- **A new guard, because the rename made a silent failure live.** `EnumUtil.Parse` falls back to the
-  default rather than throwing, so a file still naming the old spelling would aim at the front enemy
-  without a word. `CheckTargetModeStringsParse` reads the content JSON as text — the parsed database
-  is where the evidence has already been destroyed — and asserts every authored target string
-  round-trips through `TargetMode`. It read 554 strings, and asserts it read some before reporting,
-  for the reason the role scan does.
-
-**The sweep was blind to all of single-target targeting, and the Cyrra fix is what found it.**
-Correcting her mode moved **none** of her sweep lines. Measured, not assumed, by reverting her and
-re-running. Two faults in the arena, both now repaired, and all 105 baseline lines move as a result:
-- **The warden's Taunt was permanent** — re-applied every turn — and **the anchor overrides every
-  single-enemy target mode there is**. Every hero that picks one enemy was resolving onto the warden
-  regardless of what its kit asked for. Its Taunt is now a BattleStart application lasting two
-  rounds and never renewed: the anchor path is still exercised, and the rest of the fight lets a kit
-  aim where it says it aims.
-- **Every enemy carried identical DoT**, so a carried-DoT pick and a front-enemy fallthrough
-  resolved to the same body. The back enemy now carries a long shallow self-Burn nobody else has,
-  which costs it about 2000 HP of 300000 across a fight and makes a whole axis of targeting visible.
-- **Re-verified after the repair:** reverting Cyrra's mode now moves exactly her five lines and
-  nobody else's. That is the sweep doing the job it was built for, on the change that exposed it.
-
-**Shipped: the authored-hero sweep, and the reason it had to exist.** The 24-stage fingerprint
-sweep fields a fresh profile, which deploys three starters — so it measured **three of the
-twenty-one authored heroes**. "0 of 72 fingerprints moved" was therefore true of a change that
-altered two other heroes outright. The criterion was weaker than it read.
-- `Tools/DevHarness/hero-sweep-baseline.txt`, 105 lines: every authored hero × 5 seeds, in one
-  fixed arena, hashed FNV-1a over the whole event stream with the hero id in plain text.
-- **A golden file, deliberately.** The stage sweep re-runs a seed twice and asserts the two agree,
-  which proves reproducibility within one build and says nothing about whether this build differs
-  from the last. Only a committed record answers that. It sits beside `doc-lint-baseline.txt`.
-- **A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE** — which hero,
-  which clause, why the new behaviour is right. `EMBERFALL_REGEN_HERO_SWEEP=1` exists so an
-  intended change lands in one step; reaching for it to quiet a surprise is how a guard stops
-  guarding.
-- **Neutral purpose-built fillers, not heroes from the roster.** Four stat-sticks with no passive,
-  no talent and an unaffordable active, loaded from their own database and handed over on the
-  `HeroInstance`, so they never enter `heroes.json`. Real heroes as fillers would mean a change to
-  any filler's kit moved all 21 lines at once. A standing check asserts no two heroes share a
-  fingerprint at the same seed, which is what proves each line measures its subject rather than
-  the squad around it.
-- **Real balance, not a zero-variance one** — the opposite of what the small mechanic arenas use
-  and right for the opposite reason. Those isolate one rule and want no noise; this wants
-  sensitivity, so every hit draws from the RNG stream and a change that merely shifts consumption
-  moves the hash instead of hiding inside a zeroed term.
-- **Cost, measured:** 105 battles, **~25 ms**, against a harness that runs in 6.9 s. Full
-  build-check went 9.0 s to **10.4 s**. The baseline file is 4.6 KB.
-- **The honest limit, stated in the check's own output:** it covers each hero's behaviour IN THAT
-  ARENA — one squad, one enemy line, five seeds. A clause needing a Taunt enemy, a particular
-  aspect matchup, a second copy of its own hero or an ally it does not have here is still
-  unmeasured. It raises coverage from three heroes to twenty-one; it is not proof that a kit does
-  everything its description says.
-
-**THE OTHER BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
-honour the `ScaleBy*` family through a shared `ScaledTerm`. They read it nowhere before, so a Heal
-or Shield authoring one of those flags computed off plain Attack and the flag did nothing at all.
-**Six shipped effects author one, across four heroes, and TWO ARE LIVE ABILITIES** —
-`brenna_deep_resolve` (passive1, a Shield off `scaleByLastBanked`) and `cyrra_bury_the_burden`
-(active, a Heal off `scaleByLastRemoval`). The other four are talents, inert until selected. Every
-battle Brenna or Cyrra fights changes; no fingerprint moves only because neither stands in the
-sweep's starter squad, which is coverage rather than safety. The count is pinned, so another
-cannot appear unnoticed. Left in rather than reverted, because the flags are authored
-intent and silently ignoring them is the older bug.
-
-**The pin moved from 6 to 7 when Rovan was authored**, which is what a pin is for.
-`rovan_deflected_conversion` is a live passive Shield off `scaleByLastDamage` and the first entry
-on that list written AFTER the flag started working, rather than caught by it. An eighth still
-means somebody authored a flag that used to be inert.
-
-### Open: `content/batch-six-four-heroes` — unmerged, off `engine/nine-gaps`
-
-Two things shipped on it, in order: the three loose ends the nine-gap pass left unwired, and
-then the four heroes those fixes unblocked.
-
-**First, the three loose ends.**
-
-Three of the eleven were the same mistake in the nine-gap pass — a mechanism built, its hook left
-unwired — and they are fixed here. 72 of 72 fingerprints unmoved, 105 sweep lines unchanged, the
-same 11 harness reds, three new count-based arenas.
-
-- **A link's charge is now spent by the TRIGGER path.** `SpendLinkCharge` was called only from the
-  Redirect, Echo and Deflect funnel branches, so a link read by `OnLinkedUnitHit` kept its charge
-  and answered every hit for the link's whole life. `TriggerPassive` now reports whether anything
-  fired — one caller reads it — and `DispatchLinkPassive` takes a charge **only when a passive
-  actually answered**. A holder with nothing listening, or whose listener was refused by its own
-  once-per-round clock, has not used its record and does not pay for the event. Measured: one fire
-  against the uncharged control's five, one `Linked` expiry, and **zero** expiries in a third run
-  where the link is charged and nobody listens.
-- **`EffectKind.EchoDamage` now raises `OnEchoFired`** on its caster, and the trigger is renamed
-  from `OnLinkEchoFired` and widened to cover both routes — same ordinal, nothing authors it.
-  "Whenever his attack triggers against a secondary target through Redirecting Shot **or** Change
-  the Course" is one sentence and one passive; a trigger that heard the link half and not the
-  effect half split one description in two. Measured: four fires against four echoes, and zero in
-  a one-enemy control where the echo never fires.
-- **`Deflect` now goes through `RedirectShare`** instead of calling the funnel itself, which is the
-  divergence the extraction existed to end. **Covered's six shipped effects are unaffected: the
-  helper's body is untouched, this adds a third caller.** Two deliberate consequences of going
-  through it — the share is delivered with `critical` false, as Cover's and Redirect's always have
-  been, and the rule owner is recorded as the link's creator. The remainder is still discarded
-  after the call, which is the one thing a deflect does that a ward does not. Measured: four
-  `OnRedirectReceived` fires against four shares, and the aimed-at hero still takes zero.
-
-### Then, on the same branch: the four heroes ARE authored
-
-Talren, Vaelis, Nysera and Rovan carry full kits. The ten clauses two passes stopped on were
-closed three ways — **three engine additions, five description edits, two authoring idioms** — and
-what could not be closed is named at the end rather than approximated into the content.
-
-**72 of 72 stage fingerprints unmoved**, and that claim is now reproducible rather than
-remembered: `EMBERFALL_DUMP_STAGE_FP=1` prints all 72, so before-and-after is a diff of two runs.
-**The sweep went from 105 lines to 125** — the four new kits, each distinct from every other hero
-at every seed. Harness reds went from 11 to 32; all 21 new ones are dormancy tripwires reading
-"no shipped effect uses X", and every one of them now has a user, which is what authoring these
-four means. No check that measures behaviour is red.
-
-#### Three built, and each one is measured
-
-- **The redirect's OWNER hears it: `PassiveTrigger.OnRedirectSent`.** A redirect has three parties
-  — the body it came off, the body it landed on, and the hero whose ward or link moved it — and
-  only the second had a hook. Raised in `RedirectShare` beside `OnRedirectReceived`, with
-  `_lastMoved` for the owner already holding the share, and **skipped when the owner IS the
-  destination**, which is every ordinary Covered ward: that unit has already been told, and firing
-  both would have one hero answer one event twice. Measured at four fires against four shares in
-  the split arena and zero in the ward control.
-- **`moveDuration`: a moved status can be re-clocked as it lands.** Zero keeps the entry's own
-  remaining rounds, which is every move authored before this and the guarantee that a move creates
-  no value. Six abilities move an UNKNOWN set of statuses and name a duration in the same breath,
-  and the remove-and-reapply idiom cannot serve them — an `ApplyStatus` has to name the kind it
-  applies, and these do not know it. Magnitude, `Stored`, charges and every record still cross
-  untouched: only the clock is authored. Measured at 1 round against the control's 6, same
-  magnitude both ways.
-- **`EffectCondition.SubjectRoleIs`: the engine can ask what a unit IS.** It could test HP,
-  statuses, stacks, energy, speed, shields, action history, turn position and what a mark recorded,
-  and it could not ask whether a body is a Mender. The nearest thing, `StoredRoleMatches`, compares
-  a role somebody previously WROTE DOWN against a constant. Reads `CombatUnit.Role`, rebuilt from
-  content every battle, so it reaches no save byte. Measured by a role-gated bonus landing on the
-  Bulwark and not on the Striker in the same blow.
-
-#### Five description edits, in `import/Heroes.json`
-
-Pinoy's words, changed only where the clause asked for something the engine does not have and the
-nearest true sentence is as good a hero. Each is a REWORDING, not a deletion.
-
-- **Talren II** recorded "one additional enemy with the lowest HP" — a third body that the first
-  two records must not already have taken, and nothing can exclude an already-recorded body from a
-  pick. Now records **the highest-HP enemy**, which no other clause of his competes for, and the
-  extra strike goes to the recorded target with the highest present HP.
-- **Nysera's first passive** read "each Absence increases her damage **against enemies below 50%
-  HP** by 5%". `OutputModStatus` filters on marks and nothing else, and expressing the HP gate as
-  a separate additive hit runs into the linear-per-stack problem instead. Now "each Absence
-  increases her damage by 5%", which is the in-pipeline modifier and so rides a crit.
-- **Rovan's basic** turned part of a Deflected enemy's blow into a Shield on him **instead** — an
-  attacker-keyed damage REDUCTION, which nothing in the engine does (`Vulnerable` is source-keyed
-  and only increases). The "instead" is gone: he gains a Shield equal to 20% of the damage dealt,
-  the first time that enemy damages an ally each round.
-- **Rovan III** sent the expiring Shield to the next-lowest-HP ally "instead of returning it to
-  himself". `ApplyDelta` moves numeric fields only, so a talent cannot override a `TargetMode`.
-  Now he **also** grants that ally a Shield worth 8% of his Max HP, and the return still happens.
-- **Vaelis's first passive and talent III.** A fact about one unit cannot be stored on another —
-  `RecordFact` writes the subject's fact onto the subject's own entry — so "records the triggering
-  ally's role" and then "an ally in a different role than the previously recorded role" could not
-  be brought together. The passive now names its three role groups outright
-  (Bulwark/Vanguard, Mender/Warden, any damage role), which `SubjectRoleIs` banks into three
-  counters at the moment Departure triggers, and talent III fires **from a Mender or Warden ally**.
-
-#### Two closed by authoring rather than by engine work
-
-- **Linear per-stack scaling.** `PerStack` is `Power x (1 + p*n)` and "35% of Attack per Route" is
-  `0.35n`. Talren III is three gated effects at 0.35 each, one per Route threshold — the shape
-  Kael's Rubble already uses. No engine change, and no description change either.
-- **`EnergyGain` reads no `ScaleBy*`.** Rovan II grants "8 Energy for every 10% Max HP Shield
-  moved, up to 16", which is two grants gated on `LastMovedAboveHpFraction` at 0.10 and 0.20. The
-  cap is that there are two of them.
-
-#### The three live approximations, measured before and after
-
-Each was a shipped clause saying "when damage is redirected" wired to `OnDamaged`, which fires on
-every blow. `CheckRedirectApproximations` runs each on the real roster in the sweep arena, twice —
-as it ships, and with the same definition patched back in memory to what it replaced. The pair is
-the evidence; a fire count alone says nothing.
-
-- **Marrow II, "the attacker loses 5 Energy":** 105 fires against 110 blows before — every blow
-  that did not kill him — and **16** after. Eighty-nine drains the clause never asked for.
-- **Nereia's first passive, "receives redirected damage OR heals an ally below 40% HP":** one
-  `OnDamaged` passive counting 171 blows and **no heal at all**. Now two halves of one sentence:
-  **22** on shares received, **87** on heals to an ally under 40%.
-- **Nereia III, "80% of the redirected damage":** it was 80% of ATTACK, the flag absent. 19275
-  total across five seeds before, **12255** after, now that `scaleByLastRedirect` reads what
-  Change of Course actually moved.
-
-#### The sweep's seed is keyed to the hero ID now, and that cost one regenerate
-
-The seed was `4400000 + index * 97 + seed`, and the list is sorted by id — so **authoring a hero
-re-seeded every hero alphabetically after it**. These four moved twenty lines belonging to Rheia,
-Seraphine, Velis and Zella, whose kits nobody had touched. Measured rather than assumed: with the
-four still placeholders, the same engine change moved **exactly Nereia's five lines and nobody
-else's**, which is also the proof that the Marrow/Nereia rewiring touched only its own heroes.
-Marrow's own lines did not move because his is a talent and the sweep selects none.
-
-A guard that cries wolf on every insertion gets regenerated, and a baseline regenerated to quiet a
-surprise has stopped guarding. Keyed to the id, a hero's seeds are its own for as long as it keeps
-its id. Every line in the baseline moved once, on this pass, and that is the last time an
-insertion moves one.
-
-#### Named, not approximated
-
-- **Nereia III's cap.** "This damage cannot exceed 15% of Nereia's Max HP" has no field to live
-  in: `MaxHpCap` ceilings the `TargetMaxHpRatio` term against the TARGET's health, and nothing
-  bounds an amount against the CASTER's. Measured before leaving it: at level 40 in the sweep
-  arena the cap is 1955 and the largest single hit the talent dealt is 1383, so it does not bind
-  there — but it is uncapped, and an overkill big enough would pass it.
-- **Vaelis's basic re-arms on a stale body.** "If Vaelis attacked a different enemy on his previous
-  turn" is guarded with `SubjectIsMyPreviousTarget`, which tests that a previous target EXISTS.
-  `PreviousTargetId` is only written when the target actually changes, so on a turn where he
-  strikes the same body as last turn the engine cannot tell that from having struck it once, and
-  Departure re-arms on the older body. The engine's own target history collapses repeats; the
-  difference is not expressible against it.
-- **Nysera's concealment chain is unexercised by the sweep arena.** `AUTHORED-KIT EXERCISE` reports
-  `nysera_unaccounted_for 0`: her Mark goes on the highest-Attack enemy, that enemy aims at the
-  lowest-HP ally, and at level 40 she is never it — so Vanishing Mark's condition is false all 80
-  times its trigger reaches her. The concealment rule itself is engine code with its own arena;
-  what is unmeasured is her chain through it. `vaelis_opening_moves 0` is the same kind of fact:
-  no enemy dies in that arena.
-
-#### Tooling repaired along the way
-
-- **The enum-string scan covered one enum of fourteen.** It existed because a `TargetMode` rename
-  made a silent failure live — `EnumUtil.Parse` falls back to the default rather than throwing —
-  and the same trap is set on `condition`, `trigger`, `status` and eleven others: a misspelled
-  condition never gates, a misspelled trigger never fires, and both look authored. It is
-  structural now rather than textual, because `kind` means `EffectKind` inside an effect and
-  something else on a unit. **554 strings scanned before, 2534 now**, all of them members.
-- **`validate_heroes.py` was blind to every hero using the nested `skills` block.** `_get_skills`
-  returned that block wholesale, so an engine-format hero carrying one had no `basicAttack` as far
-  as the validator could see — it reported that, then checked the star shape against a hero it
-  could not read. Seven heroes were authored that way before anyone noticed. The block is an
-  overlay that cannot shadow a flat slot now: 70 findings became 62, and all seven read OK.
-- **`AUTHORED-KIT EXERCISE`**, a report and deliberately not a guard. The sweep proves a line is a
-  kit's own and has not moved; it cannot say the kit DID anything, because a passive wired to a
-  trigger nothing raises fingerprints exactly like one that fires every round. Four kits on six
-  triggers this roster had never used is where that distinction matters most.
-
-### Open: `content/batch-seven-four-heroes` — unmerged, off `content/batch-six-four-heroes`
-
-Kiva, Sylven, Merek and Oris carry full kits, and Zella's shipped `Nothing Stays Settled` was
-repaired alongside them. Off batch six with `main` merged in, so the roster source file is
-tracked here.
-
-**The 72 stage fingerprints MOVED for the first time in these passes, and the reason is Kiva.**
-She is one of the three starters the 24-stage sweep deploys, so replacing her placeholder with a
-real kit necessarily moves every stage battle. Attributed rather than assumed: reverting Kiva
-alone to her placeholder and re-running reproduces batch six's 72 fingerprints **byte for byte**,
-so nothing else in this pass — five engine changes, three other heroes, Zella — moves a stage
-battle. **The sweep went 125 → 145 lines**, the twenty being the four new kits, with no existing
-line moved.
-
-#### Four gaps built, each measured
-
-- **`TargetMode.LowestEnergyEnemy`.** The enum had `HighestEnergyEnemy` and `LowestEnergyAlly` and
-  never the third corner. Two of Oris's clauses ask for it by name.
-- **`transferDuration`.** The single-kind sibling of `moveDuration`, missed when that was built.
-  Measured at 2 rounds against a control's 7.
-- **`preventExtend`.** Stamps the entry, not the caster, so the refusal travels with the status.
-  Refused silently: a skipped entry is not counted, so the extension event still reports what
-  actually moved.
-- **`OnKill` fires inside the defeat window.** It used to fire after `Statuses.Clear()` and after
-  `_defeated` had been restored, so it could not ask one question about the body it had just
-  killed. Raised at the call site rather than moved into the `!_inDefeatDispatch` block, because
-  that block is skipped for a re-entrant death and OnKill must still fire for one. Measured: a
-  payout gated on the corpse's mark pays out, and pays nothing when the mark is absent.
-
-**Nothing authors OnKill in shipped content, and that was measured rather than asserted:** with
-all four gaps built and the content untouched, 72 of 72 stage fingerprints and 125 of 125 sweep
-lines were unchanged.
-
-#### Two things the build found that were not on the list
-
-- **`EffectDef.Clone()` was dropping nine fields.** Clone is not a debug helper — talent overrides
-  and appends rebuild a modified ability through it — so a field missing from it is silently lost
-  for exactly the players who select that talent. Vaelis's talent I appends to a basic whose
-  `LinkUnits` sets `linkMutual` and `linkTransfer`, so Departure stopped being a mutual link for
-  anyone who took it; his talent II overrides the two `MoveBuffs` effects carrying `moveDuration`,
-  the field that talent is about. A reflection guard now sets all 81 public fields to non-default
-  values, clones, and compares, so this class of bug cannot come back.
-- **`TransferStatus` refused a corpse, which is the only thing content uses it for.** `!target.Alive`
-  turned away every transfer off a defeated body — and `TargetMode.DefeatedUnit` is the only target
-  Zella's and Sylven's transfers name. **Her passive has been in the game since batch five and has
-  never once moved a status.** The pre-clear defeat window exists precisely so a status can survive
-  its carrier's death; the door into it was bolted. Now the one dead unit accepted is the one the
-  window is currently about, so every other transfer refuses a corpse exactly as before.
-
-#### Zella's repair, measured — and why her sweep lines did not move
-
-Her text: *"transfer its Residue and recorded action history to the highest-HP enemy **for 2
-rounds**. Transferred Residue **cannot be extended**."* Neither clause was in her content, because
-`TransferStatus` had no field for either, and the omission was silent.
-
-On her real kit, in an arena where a body actually dies, with the two fields stripped back off in
-memory for the control:
-
-- the transfer fires in both runs (1 / 1)
-- **BEFORE: the moved Residue landed with 6 rounds. AFTER: 2.**
-- **BEFORE: an ExtendStatus stretched it — 1 entry. AFTER: 0**, with the other Burn on the same
-  body still extended, so the refusal is the entry's and not the caster's.
-
-**Her five sweep lines did not move, and that is a fact about the arena rather than the repair.**
-The sweep's enemies have 180,000 HP and more; nothing dies in it, so `OnEnemyDefeated` is never
-raised and her passive is never reached. The authored-kit exercise report says the same about
-Sylven's `persistent_edge 0`. **The sweep is blind to the whole defeat-triggered family** — Kiva's
-two talents, Zella, Sylven, Vaelis, Merek, Rovan — which is the same shape of blindness the Cyrra
-pass found in single-target targeting. It is named here and deliberately NOT fixed in this commit:
-giving the arena a killable body moves all 145 lines, and this commit's claim that nothing but the
-four new kits moved would stop being checkable.
-
-#### One reorder, asked rather than chosen
-
-Sylven's Bleed *"records the target's last positive effect **before** it takes damage"*, and the
-engine recorded after the tick. Put to the author as a four-line reorder or a two-word edit; the
-reorder was chosen, so the record is now taken on the board as it stood before the tick landed and
-a Shield the Bleed destroys is still what gets recorded. No Burn in shipped content carries a
-`TickRecord`, so nothing moved underneath anyone.
-
-#### One scalar, because Sylven's core needed it
-
-`LedgerDeposit` kept its own inline list of `ScaleBy` flags and had never gained
-`ScaleByLastRemoval`, so a Scar Record deposited "the Bleed's remaining damage" would have banked
-a number from a different question. **Not** routed through the shared `ScaledTerm`, which would be
-the tidier fix: the inline list multiplies by Power for release and banked and does not for
-redirect, and `brenna_deep_resolve` is a shipped `LedgerDeposit` authoring `scaleByLastRedirect`.
-Sharing the resolver would have changed a live passive. The divergence is left standing and named.
-
-#### Five description edits, in `import/Heroes.json`
-
-Eight of the file's 374 descriptions moved; the diff is eight lines.
-
-- **Merek's basic** drained 15 Energy after an active resolved. Casting sets Energy to 0, so it
-  took nothing from an empty bar: now a 10% turn-progress delay. **His talent I fell with it** —
-  it answered "when Anticipated removes Energy" and gated on an absolute Energy threshold, which
-  is a gap left unbuilt.
-- **Kiva's talent II** named an ability she does not have: *No Way Back* → *Cut the Escort*.
-- **Kiva's basic** gave Forsaken immunity to redirection "from another enemy"; nothing in
-  `enemies.json` applies Covered or creates a link, so it guarded nothing. Forsaken is a marker,
-  which is what the rest of her kit reads it as.
-- **Oris** measured time in "% of the normal turn interval" where every other hero says "% turn
-  progress", and the engine has one primitive behind both.
-- **Oris's talent III** asked for the enemy whose Energy moved most during the sequence — per-unit
-  delta tracking plus a ranking mode, the most expensive gap on the list, for one talent. It now
-  names the body the second altered attack struck, which is that body.
-
-#### Ten sub-clauses authored as nothing, each blocked on a gap left unbuilt
-
-Named rather than approximated into the content, and listed in `Tools/_author_batch_seven.py`:
-Kiva's "since Kiva's last turn" and her "up to 130% of Attack" cap; Merek's two swap riders (one
-of them his whole talent II), his recorded-progress payout, and his round-start designation;
-Merek's basic answering `OnEnemyActive`, which is raised before the cast resolves where his text
-says after; Oris's talent II, both halves gating on absolute Energy; Oris's "once every 2 rounds";
-Sylven's Healing Reduction and his "+20% on a transferred Bleed".
-
-### Then, on the same branch: the sweep can see a defeat
-
-**All 145 sweep lines moved, and the cause is the arena.** The commit contains one source file
-and the baseline it regenerates — no content, no engine — so nothing else could have moved one.
-Proved rather than argued: the PREVIOUS harness binary, run against this same content, still
-reports *"all 145 sweep fingerprints match"*. Old arena plus this content is the old baseline; new
-arena plus the same content is 145 new lines.
-
-**Nothing ever died in it.** Every body in the enemy line had 180,000 HP or more, so
-`OnEnemyDefeated` was raised in none of the 145 runs and the sweep was blind to every clause that
-answers a defeat. Three shipped passives live there — Zella's `Nothing Stays Settled`, Sylven's
-`Persistent Edge`, Vaelis's `Opening Moves` — and all three read **0** in the exercise report.
-Zella's had been inert in the engine for two batches and the sweep had no opinion about the repair,
-because it had never once reached the rule.
-
-**The self-buffer is now the body that dies, rather than a sixth body being added.**
-`_cfg.MaxTeamSize` caps an enemy line at five and takes the first five, so a sixth entry is not a
-sixth enemy — it is the warden silently dropped, and with it the Taunt anchor and the long shallow
-Burn the previous two repairs to this arena put there. That was tried first and measured: the line
-kept five bodies and the warden was gone. The straggler carries the buffer's self-AttackUp, so the
-buff-gained path is raised as often as before; it stands first in the line and lowest in HP, which
-is what makes it the body `FrontEnemy` and `LowestHpEnemy` clauses find, so the corpse carries the
-marks and Bleeds that the defeat clauses then read.
-
-**It dies on a schedule, not on hero damage, and that is the part worth stating.** Hero output in
-this arena is far smaller and far more varied than it looks — a whole fight puts about 7,000 damage
-into a front body — so no fixed HP both survives a Striker's opening blow and falls to a Mender's
-whole fight. Measured at 15,000, 40,000 and 80,000 authored HP: nothing died at any of them. It now
-carries a `TurnStart` passive that deals four times its own Attack to itself, so it falls on its
-second turn in **every** run regardless of who is standing opposite, and a new check asserts that
-per run rather than in aggregate — one hero failing to finish it is exactly the failure this is
-tuned against. Self-damage rather than a self-Burn, deliberately: a heavy Burn on it would have
-made it the enemy carrying the most pending DoT and taken that distinction off the warden, undoing
-the Cyrra repair.
-
-**What now fires that did not:** `zella_nothing_stays_settled` 0 → **5**, `sylven_persistent_edge`
-0 → **5**, `vaelis_opening_moves` 0 → **5**, once per seed. Rovan's `OnAllyDefeated` half already
-fired and still does (18). **Kiva's and Merek's defeat clauses are talents and still cannot fire
-here**, and no arena change fixes that: the sweep selects no talent, which is why the exercise
-report excludes them.
-
-The 72 stage fingerprints are untouched — the hero-sweep arena is not the campaign — and the harness
-red list is identical, line for line, at 35.
-
-### Open: `engine/target-restriction` — unmerged, off `main`
-
-**A rule saying a unit may not pick a particular body.** Engine only; no hero is authored on it.
-**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, both dumped and
-diffed against `main` rather than recalled — which is the claim that matters, because this sits on
-the path every fingerprint measures and all 29 authored heroes and every enemy resolve targets
-through it.
-
-**The primitive, not one clause.** Three descriptions say a unit may not pick something — the same
-target twice in a row, a unit carrying a status, the unit it picked last round — and all three are
-one shape: a predicate on a candidate, owned by the picker, asked at pick time. `TargetBan` is
-`None / LastTarget / LastRoundTarget / CarryingStatus`, declared on a `PassiveDef` and adopted onto
-the unit the way `OutputModStatus` already is, because a rule of this kind is a property of the
-unit and not of one ability.
-
-`LastRoundTarget` needed a third memory. `LastTargetId` is overwritten as each blow is set up, so
-it names the body being hit right now; `PreviousTargetId` is the last DIFFERENT body and is not
-written at all when a unit hits the same one twice. `LastRoundTargetId` is snapshotted in
-`BeginRound`. The arena proves the two are not one rule twice: over the same fight, `LastTarget`
-changes body **7** times and `LastRoundTarget` **3**.
-
-#### Where it sits: with concealment, before the anchor, and able to veto it
-
-The filter rides with `Concealed` at all eleven single-target sites — one helper, `Rejected`, asks
-both questions — and is applied to the Provoked branch and to the Taunt anchor as well.
-
-**A Taunt holder the picker may not pick stops answering for its side.** That is the placement
-concealment already has in the same method, for the same reason; a restriction the anchor outranked
-would be a rule any enemy could suspend by taunting, and a compulsion to attack a body you are
-forbidden to attack is a contradiction the engine already resolves in favour of the exclusion.
-Measured: with the front enemy taunting, the control puts 1608 into it and 0 into the back body;
-with the restriction naming the taunter, 0 and 1608.
-
-**It governs picks, not sweeps.** `AllEnemies` takes a side rather than picking, and a ban that
-thinned a sweep would be damage immunity wearing a targeting rule's clothes — again the rule
-concealment already set. `RandomEnemy` is the one single-target mode that goes through the
-multi-target collector, so it filters before the draw: the roll is over the legal set.
-
-#### What a unit with no legal target does: it picks anyway
-
-The restriction is dropped for that one pick. The alternatives were a turn that evaporates and a
-pick made arbitrarily; a fight where one side cannot act does not end, it runs to `maxRounds` and
-reports a result no decision produced, and an arbitrary pick is not definable in a simulation that
-must replay identically. **This is exactly the trade concealment makes one method down** — "the
-last body is always targetable" — decided the same way and for the same reason.
-
-The retry runs only when the ban actually refused somebody, so a mode that legitimately resolves to
-nobody does not resolve twice, and only for a unit carrying a restriction at all, so nothing in
-shipped content reaches the second call and no mode that draws from the RNG stream can draw twice.
-Measured: with every enemy carrying the forbidden status, the blow lands for **1608**, the same as
-the unrestricted control — the rule is dropped, not bent.
-
-#### It was not a second copy. It was a third, and now the audit is standing
-
-Asked before merge whether `ClonePassive` and `EffectDef.Clone` were the complete set, the answer
-was no. Searching for the SIGNATURE of the bug — a run of assignments whose left and right sides
-name the same member — turns up sixteen such runs in six files. Split by whether the copy is
-same-type or a projection:
-
-**Same-type copies, where every field must be assigned — four of them, now all complete:**
-
-| copier | type | was |
-|---|---|---|
-| `EffectDef.Clone` | EffectDef, 81 fields | dropped 9 |
-| `ClonePassive` | PassiveDef, 26 fields | dropped 3, then 2 more |
-| `CloneAbility` | AbilityDef, 7 fields | complete |
-| `MoveStatus`'s carry block | StatusInstance, 32 fields | **dropped 9** |
-
-**`MoveStatus` is the one shipped content can reach.** `Ledger` is not harmful, so `MoveBuffs`
-moves it; Vaelis's active moves positive effects between two enemies and Sylven's Scar Record IS a
-Ledger. A moved one arrived with its stored damage and with `AutoRelease` off, along with every
-other rule about how it banks and what it mitigates — **a record that still remembered the number
-and had forgotten it was supposed to pay it out.** The carry block's own comment promised that
-everything the entry recorded travels with it; what it recorded did, what it was told to do with
-it did not. Measured now: a Ledger left alone pays 500 into its holder, and a Ledger moved to
-another body pays the same 500 into the new one.
-
-The other two, `Overrides` and `Appends` on `ClonePassive`, no passive in content carries — a
-passive that is the TARGET of a talent is not itself a talent. Copied anyway, because "complete
-except where somebody has checked that it does not matter" is how the other three got into the
-state they were in.
-
-**Cross-type projections are deliberately NOT in the table** — `CombatUnit.FromDef`,
-`StatMath.Build`, `CampaignWaveGenerator.BuildBattle` (21 fields) and `ProvingGenerator.GhostOf`
-all read one type and write another, and a field they leave behind may be correct. They are named
-here so the next reader knows they were looked at rather than missed.
-
-The audit that found the third one is kept as a check: it reads each type's public fields and each
-copier's body out of the sources and asserts every field is assigned — 149 fields across the four —
-with the four `AddOrRefresh` sets whitelisted for `MoveStatus` and a list counted as copied when
-the body adds to it.
-
-### Open: `content/batch-eight-unblock` — unmerged, off `main`
-
-**Every clause batch seven authored as nothing is authored now.** 72 of 72 stage fingerprints
-unmoved; **5 of 145 sweep lines moved, all of them Merek's**, and that is the whole of the
-movement in this pass.
-
-#### Ten gaps, built because a clause asked and not because enough clauses asked
-
-The judgement that some of these were not worth building for a single want was withdrawn, so
-where a gap serves one clause it was built anyway and is marked here:
-
-| gap | built as | wants |
-|---|---|---|
-| absolute Energy | `EnergyAtLeast` / `EnergyBelow` | Oris II, both halves |
-| partial healing reduction | `StatusKind.HealingReduction`, read beside `HealSuppression` | Sylven III, Demos |
-| readable turn-shift amount | `_lastTurnShift` per caster + `scaleByLastShift` | Merek p1 — **one clause** |
-| naming the unit a swap moved | `SwapAdvancedUnit` / `SwapDelayedUnit` | Merek's active and II |
-| magnitude change on transfer | `transferMagnitude` | Sylven p1 — **one clause** |
-| healed-or-shielded since my turn | `SubjectHealedSinceMyTurn` / `SubjectShieldedSinceMyTurn` | Kiva's active — **one clause** |
-| a cap in the caster's currency | `attackCap` | Kiva's active, Merek p1 |
-| the round's own boundary | `PassiveTrigger.RoundStart` | Merek p2 — **one clause** |
-| the far end of an enemy cast | `PassiveTrigger.OnEnemyActiveResolved` | Merek's basic — **one clause** |
-| a cadence on a one-off blow | **no engine work** — `PassiveLimit.EveryNRounds` already existed, and the talent carries both the marker it reads and the limit | Oris III |
-
-**`SubjectRoleIs` stays at ordinal 40.** The first attempt inserted the four new conditions before
-it and moved it to 44; ten shipped effects of Vaelis's read that member, so they were moved to the
-end of the enum and a pin now asserts it.
-
-#### What moved, and what did not
-
-**Merek's five lines**, for four changed clauses at once: First Claim is designated at the start of
-the round rather than at his turn (`merek_first_claim` 25 → 28 fires), Anticipated answers the far
-end of a cast, the swap now marks the body it pushed back, and his basic carries the
-recorded-progress blow (`merek_unsettled_timing` fires twice in the sweep).
-
-**Kiva is a starter and her stage fingerprints did not move**, which is worth stating rather than
-assuming: her changed gate is "shielded or healed since my last turn", and she acts before the
-arena's healer every round, so the stamp it reads is always the previous round's and the gate is
-false either way. The `attackCap` under it does not bind at that scale either.
-
-**Sylven's and Oris's lines did not move** because everything they gained is a talent, and the
-sweep selects none.
-
-#### Two gaps from the list that are NOT here
-
-Gaps 12 and 13 of the batch-seven survey — redirect immunity and Energy-delta ranking — serve
-clauses that no longer exist: batch seven's description edits removed Kiva's "cannot receive
-damage redirection" (nothing in `enemies.json` can protect another enemy, so it guarded nothing)
-and reworded Oris III away from "the enemy whose Energy changed the most". Building them would
-mean restoring two clauses of Pinoy's text that were deliberately retired. Named here rather than
-done quietly; if those clauses come back, both gaps are still unbuilt.
-
-### Open: `engine/cast-cancellation` — unmerged, off `main`
-
-**An active is now a thing with a state between declaration and resolution.** Engine only.
-**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, dumped and diffed
-against `origin/main` — and this is the first pass where that was in genuine doubt, because it
-changes the turn loop rather than something hanging off it.
-
-**The declaration event already existed.** `AbilityCast` has been emitted before a single effect
-ran for the life of the project; what it did not do was leave anything behind that could be
-stopped. Three fields on the simulation are that thing — the caster, the ability, and whether it
-has been cancelled — set at declaration, readable by anything that wants to answer a cast, and
-cleared on every exit from the turn. **No event is added to an existing battle and none is
-reordered**, which is why the two numbers above hold.
-
-#### The three decisions, and why
-
-- **Declaration is the caster and the ability, not the targets.** Targeting in this engine is
-  per-effect and happens as each effect runs: `AllEnemies` resolves at the second effect against
-  whoever is standing by then, and half the roster depends on that. Snapshotting "the cast's
-  target" at declaration would mean moving targeting out of the effects and into the declaration,
-  which is a different engine and would move every fingerprint in the game.
-- **A cancelled cast refunds nothing.** The energy is spent at declaration, three lines before the
-  window opens, and it stays spent. That is what makes an interrupt worth a turn rather than a
-  delay, it is the reading `EffectKind.Interrupt` already has — it empties a bar and gives nothing
-  back — and a refund would be the only path in the engine that hands energy to a unit nobody
-  granted it to.
-- **A cast that loses its target mid-flight is not cancelled by that.** Only `CancelCast` cancels
-  one. A body that is gone resolves to nobody for the effect that wanted it and the rest of the
-  ability carries on, which is exactly what every AoE that kills something with its first effect
-  has always done. Cancelling on target loss would change the behaviour of shipped content.
-
-#### What it buys, and it is four things rather than one
-
-`CancelCast` is the interrupt. `PassiveTrigger.OnCastDeclared` is the window, raised on **every**
-living unit rather than broadcast to one side — `OnEnemyActive` is the same moment shown to the
-caster's opponents, and a declaration is a fact about the board. Anything the window raises
-resolves before the cast does, so "damage that lands before the cast it answers" is an ordering
-rather than a new mechanism. `PassiveDef.TriggerAbilityId` names the ability a reaction answers,
-because an id is the only thing that identifies one uniquely. `EffectCondition.SubjectIsCasting`
-lets an ordinary effect ask whether the body in front of it is mid-cast, which is "an ability that
-changes based on what the enemy is about to do".
-
-`BattleEventType.CastCancelled` is appended at 21, the only place a member can go: the fingerprint
-folds `(int)Type`. Three older guards claimed the event enum was "untouched"; their pins were
-right and their prose was not, and both now say what they actually guarantee.
-
-### Open: `engine/displaced-primitives` — unmerged, off `main`
-
-**The three things Dahlia was stopped on.** Engine only. **72 of 72 stage fingerprints unmoved,
-145 of 145 sweep lines unchanged**, dumped and diffed against `origin/main`.
-
-- **A restriction that arrives mid-battle.** `TargetBan` was the right rule attached to the wrong
-  thing: adopted from a `PassiveDef` in `AddPassive` and written nowhere else, so it was a standing
-  property decided at battle start. `StatusKind.Restricted` carries `BanKind` and `BanStatus` on
-  the ENTRY — the shape `Disrupted` already uses, where a status instance holds its own parameters
-  and the site that enforces them reads it there. **The passive-declared form is untouched** and
-  its arenas still pass; `TargetBanned` consults the standing form first and the entries only if
-  there is none, so the two share one switch rather than growing a second copy that could disagree.
-  Measured: the holder moves off the body it just hit while the entry lives, and goes back to a
-  three-blow run on one body once it expires.
-- **The declaration window names its caster.** `OnCastDeclared` was raised with no broadcast
-  context, so a passive could neither test the caster nor aim at it. Two lines. Measured: a passive
-  gated on a status on the caster pays 1608 into it and nothing when the caster is bare.
-- **A target change is heard.** `PreviousTargetId` updates silently inside `DealRawDamage` and was
-  readable only by the picker. `OnEnemyChangedTarget` is raised where that line already decides a
-  change happened, with the switcher as the SOURCE and the body it turned on as the SUBJECT. **A
-  unit's first blow is not a change** — acquiring a target is not changing one.
-
-The target-change arena is worth noting: aiming an enemy at the lowest-HP ally does not make it
-switch, because the body it just hit is the lowest and it stays there. It is made to switch by a
-`Restricted` entry from the same pass — which is both the arena that was needed and the exact
-combination the hero waiting on these will author.
+Current state, checked against the repo on 2026-09-20, not against the rest of this document.
+
+### All thirty 5-star heroes are authored
+
+`heroes.json` carries 94 heroes. **The thirty 5-stars have real kits** — a basic, an active, the
+two described passives (usually authored as more than two, one per trigger a described passive
+answers) and three talents each, 90 talents in total. The remaining 64 are 1-4 star placeholders
+carrying a one-effect basic and a one-effect active, and their designs are already written in
+`import/Heroes.json` waiting to be authored.
+
+Nothing in this document is blocked on 5-star authoring any more, and **no branch is open.**
+Everything the eleven records under **Already done** describes is on `main` and observable in
+the files.
+
+The engine grew to meet those kits rather than the kits being trimmed to fit the engine. That was
+the standing rule of the authoring passes and it is why the roster authored cleanly: where a
+description could not be said, the pass built the thing that says it and recorded the measurement.
+Nothing in the thirty was reworded to avoid an engine change.
+
+### `main`'s harness is RED on 35 checks, and 34 of them are one kind of red
+
+**34 are dormancy tripwires that content has since adopted, and they are kept red on purpose.**
+Each was written the same way and for the same reason: an engine pass that could not move a
+fingerprint asserted *why* it could not — "no shipped effect uses `ScaleByLastDamage`", "no
+shipped passive triggers on `OnTargeted`" — so the claim was a measurement rather than a promise.
+Every one of them goes red the moment a kit adopts that feature, which is exactly what thirty
+authored kits did. The red is the ledger entry: it names the feature and lists the adopters.
+
+They are not failures and **they must not be cleared by deleting the check.** Two of them were
+converted rather than deleted when Dahlia became their sole occupant — they now assert that she is
+the *only* user, so they still go red if a second kit adopts the feature without saying what moved.
+That conversion is the pattern to follow for the rest, one at a time, when a feature's adoption is
+deliberate and its fingerprint consequences have been stated.
+
+**A 35th is the real one: the CEIL band check.** First miss is `1-12` at CEIL 90.5% against the
+finale band [55%, 72%]. Removing the six engine-owned aspect rules moved every difficulty number
+in the game, and the retune was deliberately deferred rather than smeared across the change that
+caused it. **It closes at a single retune, and its stated precondition is now met.**
+
+**A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
+to this list.
+
+### Next
+
+1. **The retune.** Its precondition was "after the roster's abilities are authored", and the part
+   that the measurement actually fields is done: all three starters (`kael_the_unyielding`,
+   `kiva_the_forsaken_oath`, `isara_the_second_chance`) are authored 5-stars, so the stage sweep
+   is no longer measuring placeholder kits. **One judgement is owed before it starts, and it is a
+   human's:** the 5-body column of the CEIL table fields heroes beyond the starters, and 64 of
+   those are still placeholders. Retuning now tunes chapter difficulty against a real starting
+   trio and a partly-stubbed bench. That may be the right trade — the bench is not what a new
+   player fields — but it should be chosen, not discovered afterwards.
+2. **The 64 placeholder kits**: 26 four-star, 18 three-star, 12 two-star, 8 one-star. Designs are
+   written and waiting in `import/Heroes.json`. Four- and three-star entries carry full skill
+   descriptions; two- and one-star entries carry empty active descriptions, which is the star
+   contract rather than missing work. This is also what closes `validate_heroes.py`'s 57 findings,
+   every one of which is a placeholder missing the passives or talents its star shape requires.
+
+### Two instrument limits, both load-bearing, neither visible in the checks
+
+The harness is strong where it measures and silent where it does not. These two silences are
+worth more than most of the green lines, because a green run does not distinguish "this works"
+from "this was never run".
+
+- **No authored talent is measured by either fingerprint instrument.** `SelectedTalent` defaults
+  to 0, the hero-sweep's `MakeInstance` never sets it, and a fresh profile leaves it 0 — so the
+  150 sweep lines and the 72 stage fingerprints are all measurements of kits with **no talent
+  selected**. 90 authored talents across 30 heroes, and a talent could be broken, dead or wired to
+  the wrong passive index without moving a single line. Five are measured by dedicated arenas
+  (Marrow's talent II, Nereia's talent III, and Dahlia's three); **the other 85 have never been
+  run.** A talent that changes a number is invisible here; a talent that appends to the wrong
+  ability is invisible here. The sweep baseline is not a guard on talents and must not be cited as
+  one.
+- **The source sprite material exists on one machine and is outside version control.**
+  `D:\Emberfall\import\sprites` is **4.9 GB across 26 per-hero zips**, sibling to the repo rather
+  than inside it — the repo's own `import/` holds only the tracked `Heroes.json`. The *processed*
+  output is tracked (794 files under `Assets/Resources/Sprites/Units`), so the game builds from a
+  fresh clone, but **the material that produced it does not survive this disk.** Coverage is also
+  uneven: the 26 zips cover 25 of the 30 authored 5-stars, and Hale, Kael, Kiva, Marrow and
+  Seraphine have no zip there at all — `.gitignore` records that Kael's set exists only on the
+  `feat/sprite-sheet-player` branch. `/Assets/_Incoming/` is ignored for a stated and still-valid
+  reason (committing raw sheets doubles history permanently and git cannot forget a blob later),
+  so the answer is not "commit them" — it is that a deliberate off-repo backup does not currently
+  exist and one disk failure is the whole of the risk.
 
 ### Placeholder-period notes (until abilities are authored)
 
-- **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a
+- **`validate_heroes.py` is red on 57 findings, all of them star-shape.** Every hero still on a
   placeholder is missing passives and/or talents the star contract requires. This is the expected
   state while abilities are placeholders and closes as real kits are authored: it was 86 before
   any kit was written and 70 before this pass. Every authored hero now reads OK, including the
@@ -1097,9 +354,11 @@ combination the hero waiting on these will author.
     may BLOCK" requirement. The five unchanged rows are 1-1 to 1-5, which are over-geared enough to
     sit at 100% either way. Chapter 1 CEILs fall from a 64.5-90% band to 0-49%; 2-2 goes 89% to 3%,
     2-5 goes 90.5% to 0%; the smallest move is 2-7 at -2.5 points. Eleven stages now open below a
-    90% FLOOR, against zero before. **The harness is
-    committed red on exactly one check** - the CEIL band - and the retune was deliberately NOT
-    landed with it, so the cost is legible as one number rather than smeared across a tuning pass.
+    90% FLOOR, against zero before. **That change committed the
+    harness red on exactly one check** - the CEIL band - and the retune was deliberately NOT
+    landed with it, so the cost is legible as one number rather than smeared across a tuning
+    pass. It is still the only red of its kind; the other 34 on `main` today are dormancy
+    tripwires that authored content has since adopted. See **Now / Next**.
   - **The Lumen anchor is the bulk of it**, and that was visible before the change: across the 144
     battles of shipped content it fired 1177 times and put 36.2% of all damage onto a Lumen body.
     Removing it stops routing single-target enemy damage onto Orrin, the line's only tank, and
@@ -1747,6 +1006,878 @@ this project before:
   evidentiary account, including the two starter events' actual `events.json` windows and the
   DevHarness EVENTS section (46 checks) that proves the activity hooks, the isolation between
   events, and the milestone-versus-currency claim semantics.
+
+### The eleven efforts that finished the 5-star roster
+
+Recorded here as they landed, in order. Each was a branch while it was live; what follows is
+what is now observable in the files, and the branch names are gone because the work is not.
+
+### The linked-targeting primitive
+
+**The linked-targeting primitive. Engine only; no hero is authored on it.** One concept covering
+the four uses the 14-hero survey identified, so it is a primitive rather than a mechanism built
+for whoever asked first: **two units bound together so that an action on one causes an effect on
+the other.** `StatusKind.Linked` is the binding, and it is the only status in the enum that names
+a THIRD unit — `SourceId` is still the hero that created it, and `StatusInstance.LinkedToId` is
+the partner, which for Talren are three different bodies.
+
+- **All 24 stage fingerprints are unmoved: 72 of 72 byte-identical** (24 stages × 3 seeds, the
+  set `CheckEffectHitResistNoOp` reproduces, dumped as text before and after and compared). The
+  harness report is a strict superset — 43 new checks, no existing line changed except the
+  PassiveTrigger parity label, which reads 41 members instead of 39. The 11 red checks are the
+  same 11, line for line: the CEIL band plus ten guards the authored batch-five kits already
+  tripped.
+- **Three of the four uses touch the damage funnel, and that is what the `_anyLinks` bool is
+  for.** Every link dispatch point tests one bool that is false until a link is created, so a
+  battle with no link in it pays nothing. Redirect, echo and the hit trigger all sit inside
+  `DealRawDamage`, which every point of damage in the game passes through; without the gate the
+  cost would be paid by every battle ever resolved.
+- **Rovan's Covered and Nysera's Linked redirect are one path, and the harness measures the
+  claim rather than asserting it.** `Sim.RedirectShare` is the split; Covered names its
+  destination with the applier's id and a link names it with `LinkedToId`, which is the entire
+  difference. The arithmetic was extracted from the Covered block **without changing** — same
+  rounding, same clamp, same two early exits in the same order — which mattered because
+  **Covered is authored by six effects in `heroes.json`** and is the one part of this work that
+  shipped content reaches. `CheckCoverAndLinkAreOnePath` runs the same arena twice at the same
+  seed, once with each mechanic, and asserts every unit's damage total matches.
+- **Redirect and Echo are the same split with opposite bookkeeping.** Redirect subtracts the
+  moved share from the holder; Echo does not. That is the whole of "instead" versus "as well",
+  and it is why they are one `LinkTransfer` enum rather than two mechanics. A third member,
+  `None`, is a real authoring and not an absence: Vaelis's binding exists so her passive can hear
+  about a hit on the far end, and a link that also moved damage would be a different ability.
+- **`_inCover` became `_inRedirect` and is now shared by all three.** One guard, so a Covered hop
+  onto a Linked protector does not then echo and a link redirect onto a Covered partner does not
+  split again. Separate guards would let alternating mechanics chain as deep as the pairings
+  allowed, and a pair of units linked to each other is exactly Talren's active. The echo arena
+  builds that mutual pair deliberately and proves the bound with a number: the front enemy's
+  total is the control's exactly, not more.
+- **What a redirect moves is the damage, not the calculation.** `DealRawDamage` is handed a
+  number already through the attacker's crit roll, the aspect chart and the HOLDER's Defense, so
+  redirecting it does not re-run any of that against the partner. That is precisely how Covered
+  has always behaved; a link that recomputed would be a second differently-shaped redirect rather
+  than the same one twice. The aspect source scan lists the three new lines that carry
+  `aspectFactor` into a redirected or echoed share, because keeping the original blow's chart
+  reading is a decision and the scan is meant to make one say so out loud.
+- **"Targeted" and "hit" are two triggers, not one with a flag.** `OnLinkedUnitTargeted` fires at
+  the top of `ApplyDamageEffect` before the miss check; `OnLinkedUnitHit` fires below the funnel
+  once damage has landed. An arena whose bound enemy carries `EvasionUp` at 1.0 separates them
+  with counts: the aim trigger fires four times and nothing lands at all.
+  - **The targeted half is deliberately narrow and covers DAMAGE effects only.** A heal, a buff
+    and a cleanse all name a target too, and `ResolveTargets` is the point they share — but
+    firing a passive from inside targeting means firing between targets being chosen and the
+    effect resolving, where a passive that kills the target leaves the caller holding a corpse it
+    has committed to acting on. Same argument `OnEnemyDamagedAlly` settled the same way.
+- **Neither is a broadcast, which is a third dispatch shape.** `Sim.DispatchLinkPassive` walks the
+  units looking for an entry naming the subject, because a link is not a side: Rovan's partner is
+  an ally, Talren binds two enemies to each other, and a side-scoped dispatch would be wrong for
+  at least one of them.
+- **`PassiveDef.TriggerSourceIsAlly`, because no condition can ask which side a unit is on.**
+  Vaelis's "when an ALLY hits the bound enemy" needed it: `TriggerSourceIsSelf` is the wrong
+  half, and `ConditionSubject.LastAttacker` names the attacker while every `EffectCondition` then
+  asks about its HP, statuses or stats. The arena is a differential — the same fight run twice,
+  differing only in whether the watcher attacks the bound enemy herself — and her fire count is
+  the ally's alone in both, so the filter is measured excluding something rather than untested.
+- **`EffectKind.EchoDamage` reads a realised number, not a recomputed one.** It repeats a fraction
+  of `_lastDamageDealt`, which is what the last hit actually took off a bar after Guard, Cover,
+  the pool and the Ledger, and it pays through `DealRawDamage` so the pipeline is not applied
+  twice. Cleared at every ability boundary exactly as `_lastTarget` is. The arena gives the echo's
+  victim real Defense, so a recomputed hit would land on a different figure and the 40% equality
+  would fail.
+  - **An echo does not become what later echoes read.** The funnel writes `_lastDamageDealt` for
+    every hit it carries, so without saving and restoring it an echo aimed at `AllEnemies` would
+    compound down the line — the third body taking a fraction of a fraction of a fraction.
+- **`TargetMode.PreviousTarget` and `TargetMode.LinkedUnit`.** Previous is a sibling of
+  `LastTarget` in every respect and sits in the same post-anchor family; `LinkedUnit` resolves
+  BEFORE the anchor alongside `BroadcastVictim`, because a link names one specific body that may
+  stand on either side and a Taunt holder intercepting it would make the mode mean nothing. The
+  PreviousTarget arena puts a bystander in slot 0 that the mode's FrontEnemy fallback would hit:
+  it takes zero in the treatment and the whole third effect in the control.
+- **A drift was found in `validate_heroes.py` and the check that should have caught it could
+  not.** `CheckEnumParity` compares a list hardcoded in the harness against the C# enum, which
+  answers whether the harness knows the enum and NOT the question its label asks.
+  `HighestMyMarkStacksEnemy` was in `Enums.cs` and in the harness list and had never reached the
+  python file, so a kit authoring it validated as a bad TargetMode while the section reported
+  parity. Fixed, and `CheckValidatorFileParity` now **reads `validate_heroes.py` itself** and
+  parses its five sets — the same lesson the role-ordinal scan that passed by comparing nothing
+  already taught once.
+- **No new `BattleEventType` for a sixth pass.** A link reuses `StatusApplied` and an echo reuses
+  `Damage`. The one deviation is recorded rather than left to be found: a Linked `StatusApplied`
+  writes the PARTNER'S ID into `Value` where every other status writes a stack depth, because a
+  link's identity is who it names and a `StatusKind` carries no per-instance name. No existing
+  battle records a Linked event, so nothing reading `Value` for a stack depth is affected.
+- **Not built, and named rather than approximated:** targeting-time redirection. Nysera's
+  "an attack aimed at her is redirected" is served at the funnel at a magnitude of 1.0, which
+  produces the same outcome; a second, targeting-level redirect would be two ways to say one
+  thing, which this engine has refused before (see the absent `AllEnemiesWithStatus`). The
+  visible cost is that the log shows the blow aimed at her and the damage landing on the partner.
+
+### The nine gaps that blocked the first authoring passes
+
+**All nine gaps the blocked authoring attempt named. Engine only; still no hero authored.** 72 of
+72 fingerprints unmoved, the same 11 harness reds line for line, 42 new checks with a count-based
+arena per gap. Several of the nine read the linked-targeting primitive above and were built on
+top of it.
+
+- **Gap 1, charges.** `SpendLinkCharge` decrements and removes at zero, emitting `StatusExpired`
+  the way a spent Guard charge does. 0 charges stays UNLIMITED, which every link authored before
+  this has. Spent BEFORE the share is delivered, so a one-charge link cannot fire again from
+  inside the recursion its own delivery starts.
+- **Gap 2, a flat echo.** `StatusInstance.LinkAmount`, Attack-scaled once at creation like Burn's
+  magnitude and the Ledger's cap. An echo pays `share + flat`. **Echo only** — a redirect is a
+  SPLIT that must create no value, and a flat addend on one would hand the destination more than
+  was ever struck.
+- **Gap 3, the attacker filter.** `LinkFromCasterOnly`, the same test and deliberately the same
+  spelling as the Ledger's `BankFromCaster`, folded into `FindLink` so every link reader honours
+  it at once.
+- **Gap 4, the other end and the set.** `OtherLinkedUnit` is the caster's highest-HP partner
+  excluding the one the dispatch is about — one mode for both shapes that asked, because with two
+  records "highest HP among one" IS the other one, and with three it is the sentence a talent asks
+  for in as many words. `AllLinkedUnits` is the set, deduplicated.
+- **Gap 5, attacker-keyed deflect.** `LinkTransfer.Deflect`, its own rule beside `RedirectShare`
+  rather than a loosened Provoked: Provoked's same-side refusal is correct for what Provoked means
+  and is untouched. It fires FIRST in the funnel, ahead of Guard, and that placement is the rule's
+  meaning rather than a convenience — the blow never reaches this body, so none of the victim's
+  own defences may spend themselves on it.
+- **Gap 6, four triggers.** `OnTargeted`, `OnStatusGained` (TriggerStatus-filtered, and
+  deliberately NOT raised by MoveStatus or TransferStatus — a status changing carrier is its own
+  event with its own record), `OnLinkEchoFired` on the link's creator, `OnRedirectReceived` on the
+  protector. The last fires for Covered as well as for a link, because they are one path and a
+  trigger serving only one would be the two drifting apart at the first opportunity.
+- **Gap 7, the moved amount.** `ScaleByLastMoved` reading `_lastMoved`, a **Dictionary keyed per
+  caster from the start**, joining `_lastLedgerRelease` rather than the three single-field scalars
+  beside it. `LastMovedAboveHpFraction` is the threshold half. A second scalar,
+  `ScaleByLastDamage`, reads the broadcast-window `_lastDamageDealt`.
+  - **What the arena can and cannot prove, stated rather than glossed.** It proves the scalar
+    tracks the amount: halving the ward's share halves the follow-up strike, and the strike equals
+    the share. It does NOT prove the per-caster keying, and no arena can — every write immediately
+    precedes its own read, so one global would answer identically in any ordering a battle can
+    produce. The keying is structural, against a failure mode this harness cannot construct.
+- **Gap 8, the causing unit.** `TargetMode.BroadcastSource` and `ConditionSubject.BroadcastSource`.
+  Distinct from `LastAttacker`, which resolves through the subject's `LastAttackerId` and so
+  answers correctly only for a broadcast raised by a hit, naming the wrong body for one raised by
+  a heal or a shield.
+- **Gap 9, the wrong sign.** `SubjectNotDamagedByMeThisRound`, the exact mirror of
+  `AlreadyDamagedSubjectThisRound`. **A general `negate` flag was rejected**: three fields that
+  silently re-point all forty conditions, including the twenty-odd whose negation nobody has
+  reasoned about — what "not TurnProgressAbove" means for a unit with no position left, or "not
+  StoredRoleMatches" when nothing was recorded.
+
+**A bug in the previous pass, found by an arena rather than by reading.** `DispatchLinkPassive`
+was handed depth 0 at the funnel, matching the broadcasts beside it — but a passive answering "my
+partner was hit" by striking its OTHER partner walks straight back in at 0 again. The gap-4 arena
+overflowed the stack the first time it authored that with `oncePerBattle` false, which is the
+natural shape of the link triggers rather than an exotic case. `_linkDispatchDepth` bounds it and
+is handed to `TriggerPassive` as the depth, so one cap governs instead of two that could disagree.
+
+**`ScaleByLastRemoval` carried a COUNT where every description says an amount, and that was the
+real defect.** Verified before repairing, on real content at level 40: Cyrra's active healed **791**
+before the `ScaledTerm` change (0.8 × Attack, the flag inert) and **1** after (0.8 × one entry
+removed). Her text says *"the removed damage is converted into healing equal to 100% of that
+amount"*; her talent I says *"converts only 60% of its removed damage"*. **Audited the whole
+roster: two users, both hers, both wanting an amount, and nothing anywhere reading it as a
+count** — which is what made changing the meaning the right repair rather than adding a sibling
+scalar. A sibling would have left the mis-named one in place for the next author to reach for.
+- `_lastRemovedStacks` became `_lastRemovedValue`, summed at all three removal sites (Cleanse,
+  Dispel, RemoveStatus) as `RemainingDotDamage` — per-tick Magnitude × rounds left. Zero for
+  anything carrying no damage, rather than a stand-in nobody authored.
+- The JSON key keeps its spelling. `scaleByLastRemoval` always meant "scale by what the last
+  removal took"; only the unit was wrong, and renaming it would have broken the two effects the
+  repair exists to fix.
+- `CheckRemovedValueScalar` measures it: a Burn of known magnitude and duration stripped and
+  converted, healing **3216** at two rounds and **1608** at one. Halving the duration halves the
+  heal, which is what proves it reads the REMAINING damage rather than one tick or a constant.
+
+**Cyrra's active was stripping the FRONT enemy, not the most-burdened one.** `HighestDoTDamageEnemy`
+meant "the enemy that has DEALT the most DoT this round"; her text asks for *"the enemy with the
+highest remaining Burden damage"*. Different question — and because she converts what the removed
+DoT would have dealt into healing, the pick decided how much she healed, not merely where she aimed.
+- **Audited both damage-dealt modes.** `HighestDamageDealtEnemy` has one user, Hale, and he reads it
+  correctly: *"move Quarry to the enemy that dealt the most damage that round"*. `HighestDoTDamageEnemy`
+  had only Cyrra, who wanted the opposite. **So the meaning was sound and its use was wrong** — the
+  reverse of the `ScaleByLastRemoval` case, and the audit is what told them apart.
+- **Worse than a near miss.** `DoTDamageDealtThisRound` resets for everybody at `BeginRound` and only
+  fills when a unit carrying that enemy's Burn takes its own turn, so at Cyrra's turn it is normally
+  zero across the whole enemy line and the mode collapses onto the first living body. She was not
+  stripping the wrong burning enemy; she was stripping the front one, and often one carrying nothing.
+- **Added `TargetMode.HighestPendingDoTEnemy`** — the enemy carrying the most DoT damage still
+  queued on it, ranked with `Sim.RemainingDotDamage`, the same helper `_lastRemovedValue` sums when a
+  removal happens, so "which enemy has the most to remove" and "how much was removed" cannot drift
+  apart. Nobody when no enemy carries any, rather than falling through to the front body.
+- **Renamed `HighestDoTDamageEnemy` to `HighestDoTDealtEnemy`**, same ordinal, meaning untouched.
+  That name was the trap and it caught somebody; it now cannot be misread for the carried-DoT
+  question sitting next to it. No content uses it.
+- **A new guard, because the rename made a silent failure live.** `EnumUtil.Parse` falls back to the
+  default rather than throwing, so a file still naming the old spelling would aim at the front enemy
+  without a word. `CheckTargetModeStringsParse` reads the content JSON as text — the parsed database
+  is where the evidence has already been destroyed — and asserts every authored target string
+  round-trips through `TargetMode`. It read 554 strings, and asserts it read some before reporting,
+  for the reason the role scan does.
+
+**The sweep was blind to all of single-target targeting, and the Cyrra fix is what found it.**
+Correcting her mode moved **none** of her sweep lines. Measured, not assumed, by reverting her and
+re-running. Two faults in the arena, both now repaired, and all 105 baseline lines move as a result:
+- **The warden's Taunt was permanent** — re-applied every turn — and **the anchor overrides every
+  single-enemy target mode there is**. Every hero that picks one enemy was resolving onto the warden
+  regardless of what its kit asked for. Its Taunt is now a BattleStart application lasting two
+  rounds and never renewed: the anchor path is still exercised, and the rest of the fight lets a kit
+  aim where it says it aims.
+- **Every enemy carried identical DoT**, so a carried-DoT pick and a front-enemy fallthrough
+  resolved to the same body. The back enemy now carries a long shallow self-Burn nobody else has,
+  which costs it about 2000 HP of 300000 across a fight and makes a whole axis of targeting visible.
+- **Re-verified after the repair:** reverting Cyrra's mode now moves exactly her five lines and
+  nobody else's. That is the sweep doing the job it was built for, on the change that exposed it.
+
+**Shipped: the authored-hero sweep, and the reason it had to exist.** The 24-stage fingerprint
+sweep fields a fresh profile, which deploys three starters — so it measured **three of the
+twenty-one authored heroes**. "0 of 72 fingerprints moved" was therefore true of a change that
+altered two other heroes outright. The criterion was weaker than it read.
+- `Tools/DevHarness/hero-sweep-baseline.txt`, 105 lines: every authored hero × 5 seeds, in one
+  fixed arena, hashed FNV-1a over the whole event stream with the hero id in plain text.
+- **A golden file, deliberately.** The stage sweep re-runs a seed twice and asserts the two agree,
+  which proves reproducibility within one build and says nothing about whether this build differs
+  from the last. Only a committed record answers that. It sits beside `doc-lint-baseline.txt`.
+- **A MOVED LINE IS A BEHAVIOUR CHANGE AND NEEDS A STATED REASON, NOT A REGENERATE** — which hero,
+  which clause, why the new behaviour is right. `EMBERFALL_REGEN_HERO_SWEEP=1` exists so an
+  intended change lands in one step; reaching for it to quiet a surprise is how a guard stops
+  guarding.
+- **Neutral purpose-built fillers, not heroes from the roster.** Four stat-sticks with no passive,
+  no talent and an unaffordable active, loaded from their own database and handed over on the
+  `HeroInstance`, so they never enter `heroes.json`. Real heroes as fillers would mean a change to
+  any filler's kit moved all 21 lines at once. A standing check asserts no two heroes share a
+  fingerprint at the same seed, which is what proves each line measures its subject rather than
+  the squad around it.
+- **Real balance, not a zero-variance one** — the opposite of what the small mechanic arenas use
+  and right for the opposite reason. Those isolate one rule and want no noise; this wants
+  sensitivity, so every hit draws from the RNG stream and a change that merely shifts consumption
+  moves the hash instead of hiding inside a zeroed term.
+- **Cost, measured:** 105 battles, **~25 ms**, against a harness that runs in 6.9 s. Full
+  build-check went 9.0 s to **10.4 s**. The baseline file is 4.6 KB.
+- **The honest limit, stated in the check's own output:** it covers each hero's behaviour IN THAT
+  ARENA — one squad, one enemy line, five seeds. A clause needing a Taunt enemy, a particular
+  aspect matchup, a second copy of its own hero or an ally it does not have here is still
+  unmeasured. It raises coverage from three heroes to twenty-one; it is not proof that a kit does
+  everything its description says.
+
+**THE OTHER BEHAVIOUR CHANGE, and it is larger than it first looked.** `Heal` and `Shield` now
+honour the `ScaleBy*` family through a shared `ScaledTerm`. They read it nowhere before, so a Heal
+or Shield authoring one of those flags computed off plain Attack and the flag did nothing at all.
+**Six shipped effects author one, across four heroes, and TWO ARE LIVE ABILITIES** —
+`brenna_deep_resolve` (passive1, a Shield off `scaleByLastBanked`) and `cyrra_bury_the_burden`
+(active, a Heal off `scaleByLastRemoval`). The other four are talents, inert until selected. Every
+battle Brenna or Cyrra fights changes; no fingerprint moves only because neither stands in the
+sweep's starter squad, which is coverage rather than safety. The count is pinned, so another
+cannot appear unnoticed. Left in rather than reverted, because the flags are authored
+intent and silently ignoring them is the older bug.
+
+**The pin moved from 6 to 7 when Rovan was authored**, which is what a pin is for.
+`rovan_deflected_conversion` is a live passive Shield off `scaleByLastDamage` and the first entry
+on that list written AFTER the flag started working, rather than caught by it. An eighth still
+means somebody authored a flag that used to be inert.
+
+### Batch six: three gaps built
+
+Two things shipped on it, in order: the three loose ends the nine-gap pass left unwired, and
+then the four heroes those fixes unblocked.
+
+**First, the three loose ends.**
+
+Three of the eleven were the same mistake in the nine-gap pass — a mechanism built, its hook left
+unwired — and they are fixed here. 72 of 72 fingerprints unmoved, 105 sweep lines unchanged, the
+same 11 harness reds, three new count-based arenas.
+
+- **A link's charge is now spent by the TRIGGER path.** `SpendLinkCharge` was called only from the
+  Redirect, Echo and Deflect funnel branches, so a link read by `OnLinkedUnitHit` kept its charge
+  and answered every hit for the link's whole life. `TriggerPassive` now reports whether anything
+  fired — one caller reads it — and `DispatchLinkPassive` takes a charge **only when a passive
+  actually answered**. A holder with nothing listening, or whose listener was refused by its own
+  once-per-round clock, has not used its record and does not pay for the event. Measured: one fire
+  against the uncharged control's five, one `Linked` expiry, and **zero** expiries in a third run
+  where the link is charged and nobody listens.
+- **`EffectKind.EchoDamage` now raises `OnEchoFired`** on its caster, and the trigger is renamed
+  from `OnLinkEchoFired` and widened to cover both routes — same ordinal, nothing authors it.
+  "Whenever his attack triggers against a secondary target through Redirecting Shot **or** Change
+  the Course" is one sentence and one passive; a trigger that heard the link half and not the
+  effect half split one description in two. Measured: four fires against four echoes, and zero in
+  a one-enemy control where the echo never fires.
+- **`Deflect` now goes through `RedirectShare`** instead of calling the funnel itself, which is the
+  divergence the extraction existed to end. **Covered's six shipped effects are unaffected: the
+  helper's body is untouched, this adds a third caller.** Two deliberate consequences of going
+  through it — the share is delivered with `critical` false, as Cover's and Redirect's always have
+  been, and the rule owner is recorded as the link's creator. The remainder is still discarded
+  after the call, which is the one thing a deflect does that a ward does not. Measured: four
+  `OnRedirectReceived` fires against four shares, and the aimed-at hero still takes zero.
+
+### Batch six: Talren, Vaelis, Nysera and Rovan authored
+
+Talren, Vaelis, Nysera and Rovan carry full kits. The ten clauses two passes stopped on were
+closed three ways — **three engine additions, five description edits, two authoring idioms** — and
+what could not be closed is named at the end rather than approximated into the content.
+
+**72 of 72 stage fingerprints unmoved**, and that claim is now reproducible rather than
+remembered: `EMBERFALL_DUMP_STAGE_FP=1` prints all 72, so before-and-after is a diff of two runs.
+**The sweep went from 105 lines to 125** — the four new kits, each distinct from every other hero
+at every seed. Harness reds went from 11 to 32; all 21 new ones are dormancy tripwires reading
+"no shipped effect uses X", and every one of them now has a user, which is what authoring these
+four means. No check that measures behaviour is red.
+
+#### Three built, and each one is measured
+
+- **The redirect's OWNER hears it: `PassiveTrigger.OnRedirectSent`.** A redirect has three parties
+  — the body it came off, the body it landed on, and the hero whose ward or link moved it — and
+  only the second had a hook. Raised in `RedirectShare` beside `OnRedirectReceived`, with
+  `_lastMoved` for the owner already holding the share, and **skipped when the owner IS the
+  destination**, which is every ordinary Covered ward: that unit has already been told, and firing
+  both would have one hero answer one event twice. Measured at four fires against four shares in
+  the split arena and zero in the ward control.
+- **`moveDuration`: a moved status can be re-clocked as it lands.** Zero keeps the entry's own
+  remaining rounds, which is every move authored before this and the guarantee that a move creates
+  no value. Six abilities move an UNKNOWN set of statuses and name a duration in the same breath,
+  and the remove-and-reapply idiom cannot serve them — an `ApplyStatus` has to name the kind it
+  applies, and these do not know it. Magnitude, `Stored`, charges and every record still cross
+  untouched: only the clock is authored. Measured at 1 round against the control's 6, same
+  magnitude both ways.
+- **`EffectCondition.SubjectRoleIs`: the engine can ask what a unit IS.** It could test HP,
+  statuses, stacks, energy, speed, shields, action history, turn position and what a mark recorded,
+  and it could not ask whether a body is a Mender. The nearest thing, `StoredRoleMatches`, compares
+  a role somebody previously WROTE DOWN against a constant. Reads `CombatUnit.Role`, rebuilt from
+  content every battle, so it reaches no save byte. Measured by a role-gated bonus landing on the
+  Bulwark and not on the Striker in the same blow.
+
+#### Five description edits, in `import/Heroes.json`
+
+Pinoy's words, changed only where the clause asked for something the engine does not have and the
+nearest true sentence is as good a hero. Each is a REWORDING, not a deletion.
+
+- **Talren II** recorded "one additional enemy with the lowest HP" — a third body that the first
+  two records must not already have taken, and nothing can exclude an already-recorded body from a
+  pick. Now records **the highest-HP enemy**, which no other clause of his competes for, and the
+  extra strike goes to the recorded target with the highest present HP.
+- **Nysera's first passive** read "each Absence increases her damage **against enemies below 50%
+  HP** by 5%". `OutputModStatus` filters on marks and nothing else, and expressing the HP gate as
+  a separate additive hit runs into the linear-per-stack problem instead. Now "each Absence
+  increases her damage by 5%", which is the in-pipeline modifier and so rides a crit.
+- **Rovan's basic** turned part of a Deflected enemy's blow into a Shield on him **instead** — an
+  attacker-keyed damage REDUCTION, which nothing in the engine does (`Vulnerable` is source-keyed
+  and only increases). The "instead" is gone: he gains a Shield equal to 20% of the damage dealt,
+  the first time that enemy damages an ally each round.
+- **Rovan III** sent the expiring Shield to the next-lowest-HP ally "instead of returning it to
+  himself". `ApplyDelta` moves numeric fields only, so a talent cannot override a `TargetMode`.
+  Now he **also** grants that ally a Shield worth 8% of his Max HP, and the return still happens.
+- **Vaelis's first passive and talent III.** A fact about one unit cannot be stored on another —
+  `RecordFact` writes the subject's fact onto the subject's own entry — so "records the triggering
+  ally's role" and then "an ally in a different role than the previously recorded role" could not
+  be brought together. The passive now names its three role groups outright
+  (Bulwark/Vanguard, Mender/Warden, any damage role), which `SubjectRoleIs` banks into three
+  counters at the moment Departure triggers, and talent III fires **from a Mender or Warden ally**.
+
+#### Two closed by authoring rather than by engine work
+
+- **Linear per-stack scaling.** `PerStack` is `Power x (1 + p*n)` and "35% of Attack per Route" is
+  `0.35n`. Talren III is three gated effects at 0.35 each, one per Route threshold — the shape
+  Kael's Rubble already uses. No engine change, and no description change either.
+- **`EnergyGain` reads no `ScaleBy*`.** Rovan II grants "8 Energy for every 10% Max HP Shield
+  moved, up to 16", which is two grants gated on `LastMovedAboveHpFraction` at 0.10 and 0.20. The
+  cap is that there are two of them.
+
+#### The three live approximations, measured before and after
+
+Each was a shipped clause saying "when damage is redirected" wired to `OnDamaged`, which fires on
+every blow. `CheckRedirectApproximations` runs each on the real roster in the sweep arena, twice —
+as it ships, and with the same definition patched back in memory to what it replaced. The pair is
+the evidence; a fire count alone says nothing.
+
+- **Marrow II, "the attacker loses 5 Energy":** 105 fires against 110 blows before — every blow
+  that did not kill him — and **16** after. Eighty-nine drains the clause never asked for.
+- **Nereia's first passive, "receives redirected damage OR heals an ally below 40% HP":** one
+  `OnDamaged` passive counting 171 blows and **no heal at all**. Now two halves of one sentence:
+  **22** on shares received, **87** on heals to an ally under 40%.
+- **Nereia III, "80% of the redirected damage":** it was 80% of ATTACK, the flag absent. 19275
+  total across five seeds before, **12255** after, now that `scaleByLastRedirect` reads what
+  Change of Course actually moved.
+
+#### The sweep's seed is keyed to the hero ID now, and that cost one regenerate
+
+The seed was `4400000 + index * 97 + seed`, and the list is sorted by id — so **authoring a hero
+re-seeded every hero alphabetically after it**. These four moved twenty lines belonging to Rheia,
+Seraphine, Velis and Zella, whose kits nobody had touched. Measured rather than assumed: with the
+four still placeholders, the same engine change moved **exactly Nereia's five lines and nobody
+else's**, which is also the proof that the Marrow/Nereia rewiring touched only its own heroes.
+Marrow's own lines did not move because his is a talent and the sweep selects none.
+
+A guard that cries wolf on every insertion gets regenerated, and a baseline regenerated to quiet a
+surprise has stopped guarding. Keyed to the id, a hero's seeds are its own for as long as it keeps
+its id. Every line in the baseline moved once, on this pass, and that is the last time an
+insertion moves one.
+
+#### Named, not approximated
+
+- **Nereia III's cap.** "This damage cannot exceed 15% of Nereia's Max HP" has no field to live
+  in: `MaxHpCap` ceilings the `TargetMaxHpRatio` term against the TARGET's health, and nothing
+  bounds an amount against the CASTER's. Measured before leaving it: at level 40 in the sweep
+  arena the cap is 1955 and the largest single hit the talent dealt is 1383, so it does not bind
+  there — but it is uncapped, and an overkill big enough would pass it.
+- **Vaelis's basic re-arms on a stale body.** "If Vaelis attacked a different enemy on his previous
+  turn" is guarded with `SubjectIsMyPreviousTarget`, which tests that a previous target EXISTS.
+  `PreviousTargetId` is only written when the target actually changes, so on a turn where he
+  strikes the same body as last turn the engine cannot tell that from having struck it once, and
+  Departure re-arms on the older body. The engine's own target history collapses repeats; the
+  difference is not expressible against it.
+- **Nysera's concealment chain is unexercised by the sweep arena.** `AUTHORED-KIT EXERCISE` reports
+  `nysera_unaccounted_for 0`: her Mark goes on the highest-Attack enemy, that enemy aims at the
+  lowest-HP ally, and at level 40 she is never it — so Vanishing Mark's condition is false all 80
+  times its trigger reaches her. The concealment rule itself is engine code with its own arena;
+  what is unmeasured is her chain through it. `vaelis_opening_moves 0` is the same kind of fact:
+  no enemy dies in that arena.
+
+#### Tooling repaired along the way
+
+- **The enum-string scan covered one enum of fourteen.** It existed because a `TargetMode` rename
+  made a silent failure live — `EnumUtil.Parse` falls back to the default rather than throwing —
+  and the same trap is set on `condition`, `trigger`, `status` and eleven others: a misspelled
+  condition never gates, a misspelled trigger never fires, and both look authored. It is
+  structural now rather than textual, because `kind` means `EffectKind` inside an effect and
+  something else on a unit. **554 strings scanned before, 2534 now**, all of them members.
+- **`validate_heroes.py` was blind to every hero using the nested `skills` block.** `_get_skills`
+  returned that block wholesale, so an engine-format hero carrying one had no `basicAttack` as far
+  as the validator could see — it reported that, then checked the star shape against a hero it
+  could not read. Seven heroes were authored that way before anyone noticed. The block is an
+  overlay that cannot shadow a flat slot now: 70 findings became 62, and all seven read OK.
+- **`AUTHORED-KIT EXERCISE`**, a report and deliberately not a guard. The sweep proves a line is a
+  kit's own and has not moved; it cannot say the kit DID anything, because a passive wired to a
+  trigger nothing raises fingerprints exactly like one that fires every round. Four kits on six
+  triggers this roster had never used is where that distinction matters most.
+
+### Batch seven: four gaps built, and Kiva, Sylven, Merek and Oris authored
+
+Kiva, Sylven, Merek and Oris carry full kits, and Zella's shipped `Nothing Stays Settled` was
+repaired alongside them. Off batch six with `main` merged in, so the roster source file is
+tracked here.
+
+**The 72 stage fingerprints MOVED for the first time in these passes, and the reason is Kiva.**
+She is one of the three starters the 24-stage sweep deploys, so replacing her placeholder with a
+real kit necessarily moves every stage battle. Attributed rather than assumed: reverting Kiva
+alone to her placeholder and re-running reproduces batch six's 72 fingerprints **byte for byte**,
+so nothing else in this pass — five engine changes, three other heroes, Zella — moves a stage
+battle. **The sweep went 125 → 145 lines**, the twenty being the four new kits, with no existing
+line moved.
+
+#### Four gaps built, each measured
+
+- **`TargetMode.LowestEnergyEnemy`.** The enum had `HighestEnergyEnemy` and `LowestEnergyAlly` and
+  never the third corner. Two of Oris's clauses ask for it by name.
+- **`transferDuration`.** The single-kind sibling of `moveDuration`, missed when that was built.
+  Measured at 2 rounds against a control's 7.
+- **`preventExtend`.** Stamps the entry, not the caster, so the refusal travels with the status.
+  Refused silently: a skipped entry is not counted, so the extension event still reports what
+  actually moved.
+- **`OnKill` fires inside the defeat window.** It used to fire after `Statuses.Clear()` and after
+  `_defeated` had been restored, so it could not ask one question about the body it had just
+  killed. Raised at the call site rather than moved into the `!_inDefeatDispatch` block, because
+  that block is skipped for a re-entrant death and OnKill must still fire for one. Measured: a
+  payout gated on the corpse's mark pays out, and pays nothing when the mark is absent.
+
+**Nothing authors OnKill in shipped content, and that was measured rather than asserted:** with
+all four gaps built and the content untouched, 72 of 72 stage fingerprints and 125 of 125 sweep
+lines were unchanged.
+
+#### Two things the build found that were not on the list
+
+- **`EffectDef.Clone()` was dropping nine fields.** Clone is not a debug helper — talent overrides
+  and appends rebuild a modified ability through it — so a field missing from it is silently lost
+  for exactly the players who select that talent. Vaelis's talent I appends to a basic whose
+  `LinkUnits` sets `linkMutual` and `linkTransfer`, so Departure stopped being a mutual link for
+  anyone who took it; his talent II overrides the two `MoveBuffs` effects carrying `moveDuration`,
+  the field that talent is about. A reflection guard now sets all 81 public fields to non-default
+  values, clones, and compares, so this class of bug cannot come back.
+- **`TransferStatus` refused a corpse, which is the only thing content uses it for.** `!target.Alive`
+  turned away every transfer off a defeated body — and `TargetMode.DefeatedUnit` is the only target
+  Zella's and Sylven's transfers name. **Her passive has been in the game since batch five and has
+  never once moved a status.** The pre-clear defeat window exists precisely so a status can survive
+  its carrier's death; the door into it was bolted. Now the one dead unit accepted is the one the
+  window is currently about, so every other transfer refuses a corpse exactly as before.
+
+#### Zella's repair, measured — and why her sweep lines did not move
+
+Her text: *"transfer its Residue and recorded action history to the highest-HP enemy **for 2
+rounds**. Transferred Residue **cannot be extended**."* Neither clause was in her content, because
+`TransferStatus` had no field for either, and the omission was silent.
+
+On her real kit, in an arena where a body actually dies, with the two fields stripped back off in
+memory for the control:
+
+- the transfer fires in both runs (1 / 1)
+- **BEFORE: the moved Residue landed with 6 rounds. AFTER: 2.**
+- **BEFORE: an ExtendStatus stretched it — 1 entry. AFTER: 0**, with the other Burn on the same
+  body still extended, so the refusal is the entry's and not the caster's.
+
+**Her five sweep lines did not move, and that is a fact about the arena rather than the repair.**
+The sweep's enemies have 180,000 HP and more; nothing dies in it, so `OnEnemyDefeated` is never
+raised and her passive is never reached. The authored-kit exercise report says the same about
+Sylven's `persistent_edge 0`. **The sweep is blind to the whole defeat-triggered family** — Kiva's
+two talents, Zella, Sylven, Vaelis, Merek, Rovan — which is the same shape of blindness the Cyrra
+pass found in single-target targeting. It is named here and deliberately NOT fixed in this commit:
+giving the arena a killable body moves all 145 lines, and this commit's claim that nothing but the
+four new kits moved would stop being checkable.
+
+#### One reorder, asked rather than chosen
+
+Sylven's Bleed *"records the target's last positive effect **before** it takes damage"*, and the
+engine recorded after the tick. Put to the author as a four-line reorder or a two-word edit; the
+reorder was chosen, so the record is now taken on the board as it stood before the tick landed and
+a Shield the Bleed destroys is still what gets recorded. No Burn in shipped content carries a
+`TickRecord`, so nothing moved underneath anyone.
+
+#### One scalar, because Sylven's core needed it
+
+`LedgerDeposit` kept its own inline list of `ScaleBy` flags and had never gained
+`ScaleByLastRemoval`, so a Scar Record deposited "the Bleed's remaining damage" would have banked
+a number from a different question. **Not** routed through the shared `ScaledTerm`, which would be
+the tidier fix: the inline list multiplies by Power for release and banked and does not for
+redirect, and `brenna_deep_resolve` is a shipped `LedgerDeposit` authoring `scaleByLastRedirect`.
+Sharing the resolver would have changed a live passive. The divergence is left standing and named.
+
+#### Five description edits, in `import/Heroes.json`
+
+Eight of the file's 374 descriptions moved; the diff is eight lines.
+
+- **Merek's basic** drained 15 Energy after an active resolved. Casting sets Energy to 0, so it
+  took nothing from an empty bar: now a 10% turn-progress delay. **His talent I fell with it** —
+  it answered "when Anticipated removes Energy" and gated on an absolute Energy threshold, which
+  is a gap left unbuilt.
+- **Kiva's talent II** named an ability she does not have: *No Way Back* → *Cut the Escort*.
+- **Kiva's basic** gave Forsaken immunity to redirection "from another enemy"; nothing in
+  `enemies.json` applies Covered or creates a link, so it guarded nothing. Forsaken is a marker,
+  which is what the rest of her kit reads it as.
+- **Oris** measured time in "% of the normal turn interval" where every other hero says "% turn
+  progress", and the engine has one primitive behind both.
+- **Oris's talent III** asked for the enemy whose Energy moved most during the sequence — per-unit
+  delta tracking plus a ranking mode, the most expensive gap on the list, for one talent. It now
+  names the body the second altered attack struck, which is that body.
+
+#### Ten sub-clauses authored as nothing, each blocked on a gap left unbuilt
+
+Named rather than approximated into the content, and listed in `Tools/_author_batch_seven.py`:
+Kiva's "since Kiva's last turn" and her "up to 130% of Attack" cap; Merek's two swap riders (one
+of them his whole talent II), his recorded-progress payout, and his round-start designation;
+Merek's basic answering `OnEnemyActive`, which is raised before the cast resolves where his text
+says after; Oris's talent II, both halves gating on absolute Energy; Oris's "once every 2 rounds";
+Sylven's Healing Reduction and his "+20% on a transferred Bleed".
+
+### The sweep can see a defeat
+
+**All 145 sweep lines moved, and the cause is the arena.** The commit contains one source file
+and the baseline it regenerates — no content, no engine — so nothing else could have moved one.
+Proved rather than argued: the PREVIOUS harness binary, run against this same content, still
+reports *"all 145 sweep fingerprints match"*. Old arena plus this content is the old baseline; new
+arena plus the same content is 145 new lines.
+
+**Nothing ever died in it.** Every body in the enemy line had 180,000 HP or more, so
+`OnEnemyDefeated` was raised in none of the 145 runs and the sweep was blind to every clause that
+answers a defeat. Three shipped passives live there — Zella's `Nothing Stays Settled`, Sylven's
+`Persistent Edge`, Vaelis's `Opening Moves` — and all three read **0** in the exercise report.
+Zella's had been inert in the engine for two batches and the sweep had no opinion about the repair,
+because it had never once reached the rule.
+
+**The self-buffer is now the body that dies, rather than a sixth body being added.**
+`_cfg.MaxTeamSize` caps an enemy line at five and takes the first five, so a sixth entry is not a
+sixth enemy — it is the warden silently dropped, and with it the Taunt anchor and the long shallow
+Burn the previous two repairs to this arena put there. That was tried first and measured: the line
+kept five bodies and the warden was gone. The straggler carries the buffer's self-AttackUp, so the
+buff-gained path is raised as often as before; it stands first in the line and lowest in HP, which
+is what makes it the body `FrontEnemy` and `LowestHpEnemy` clauses find, so the corpse carries the
+marks and Bleeds that the defeat clauses then read.
+
+**It dies on a schedule, not on hero damage, and that is the part worth stating.** Hero output in
+this arena is far smaller and far more varied than it looks — a whole fight puts about 7,000 damage
+into a front body — so no fixed HP both survives a Striker's opening blow and falls to a Mender's
+whole fight. Measured at 15,000, 40,000 and 80,000 authored HP: nothing died at any of them. It now
+carries a `TurnStart` passive that deals four times its own Attack to itself, so it falls on its
+second turn in **every** run regardless of who is standing opposite, and a new check asserts that
+per run rather than in aggregate — one hero failing to finish it is exactly the failure this is
+tuned against. Self-damage rather than a self-Burn, deliberately: a heavy Burn on it would have
+made it the enemy carrying the most pending DoT and taken that distinction off the warden, undoing
+the Cyrra repair.
+
+**What now fires that did not:** `zella_nothing_stays_settled` 0 → **5**, `sylven_persistent_edge`
+0 → **5**, `vaelis_opening_moves` 0 → **5**, once per seed. Rovan's `OnAllyDefeated` half already
+fired and still does (18). **Kiva's and Merek's defeat clauses are talents and still cannot fire
+here**, and no arena change fixes that: the sweep selects no talent, which is why the exercise
+report excludes them.
+
+The 72 stage fingerprints are untouched — the hero-sweep arena is not the campaign — and the harness
+red list is identical, line for line, at 35.
+
+### Target restriction, and the field-by-field copier audit
+
+**A rule saying a unit may not pick a particular body.** Engine only; no hero is authored on it.
+**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, both dumped and
+diffed against `main` rather than recalled — which is the claim that matters, because this sits on
+the path every fingerprint measures and all 29 authored heroes and every enemy resolve targets
+through it.
+
+**The primitive, not one clause.** Three descriptions say a unit may not pick something — the same
+target twice in a row, a unit carrying a status, the unit it picked last round — and all three are
+one shape: a predicate on a candidate, owned by the picker, asked at pick time. `TargetBan` is
+`None / LastTarget / LastRoundTarget / CarryingStatus`, declared on a `PassiveDef` and adopted onto
+the unit the way `OutputModStatus` already is, because a rule of this kind is a property of the
+unit and not of one ability.
+
+`LastRoundTarget` needed a third memory. `LastTargetId` is overwritten as each blow is set up, so
+it names the body being hit right now; `PreviousTargetId` is the last DIFFERENT body and is not
+written at all when a unit hits the same one twice. `LastRoundTargetId` is snapshotted in
+`BeginRound`. The arena proves the two are not one rule twice: over the same fight, `LastTarget`
+changes body **7** times and `LastRoundTarget` **3**.
+
+#### Where it sits: with concealment, before the anchor, and able to veto it
+
+The filter rides with `Concealed` at all eleven single-target sites — one helper, `Rejected`, asks
+both questions — and is applied to the Provoked branch and to the Taunt anchor as well.
+
+**A Taunt holder the picker may not pick stops answering for its side.** That is the placement
+concealment already has in the same method, for the same reason; a restriction the anchor outranked
+would be a rule any enemy could suspend by taunting, and a compulsion to attack a body you are
+forbidden to attack is a contradiction the engine already resolves in favour of the exclusion.
+Measured: with the front enemy taunting, the control puts 1608 into it and 0 into the back body;
+with the restriction naming the taunter, 0 and 1608.
+
+**It governs picks, not sweeps.** `AllEnemies` takes a side rather than picking, and a ban that
+thinned a sweep would be damage immunity wearing a targeting rule's clothes — again the rule
+concealment already set. `RandomEnemy` is the one single-target mode that goes through the
+multi-target collector, so it filters before the draw: the roll is over the legal set.
+
+#### What a unit with no legal target does: it picks anyway
+
+The restriction is dropped for that one pick. The alternatives were a turn that evaporates and a
+pick made arbitrarily; a fight where one side cannot act does not end, it runs to `maxRounds` and
+reports a result no decision produced, and an arbitrary pick is not definable in a simulation that
+must replay identically. **This is exactly the trade concealment makes one method down** — "the
+last body is always targetable" — decided the same way and for the same reason.
+
+The retry runs only when the ban actually refused somebody, so a mode that legitimately resolves to
+nobody does not resolve twice, and only for a unit carrying a restriction at all, so nothing in
+shipped content reaches the second call and no mode that draws from the RNG stream can draw twice.
+Measured: with every enemy carrying the forbidden status, the blow lands for **1608**, the same as
+the unrestricted control — the rule is dropped, not bent.
+
+#### It was not a second copy. It was a third, and now the audit is standing
+
+Asked before merge whether `ClonePassive` and `EffectDef.Clone` were the complete set, the answer
+was no. Searching for the SIGNATURE of the bug — a run of assignments whose left and right sides
+name the same member — turns up sixteen such runs in six files. Split by whether the copy is
+same-type or a projection:
+
+**Same-type copies, where every field must be assigned — four of them, now all complete:**
+
+| copier | type | was |
+|---|---|---|
+| `EffectDef.Clone` | EffectDef, 81 fields | dropped 9 |
+| `ClonePassive` | PassiveDef, 26 fields | dropped 3, then 2 more |
+| `CloneAbility` | AbilityDef, 7 fields | complete |
+| `MoveStatus`'s carry block | StatusInstance, 32 fields | **dropped 9** |
+
+**`MoveStatus` is the one shipped content can reach.** `Ledger` is not harmful, so `MoveBuffs`
+moves it; Vaelis's active moves positive effects between two enemies and Sylven's Scar Record IS a
+Ledger. A moved one arrived with its stored damage and with `AutoRelease` off, along with every
+other rule about how it banks and what it mitigates — **a record that still remembered the number
+and had forgotten it was supposed to pay it out.** The carry block's own comment promised that
+everything the entry recorded travels with it; what it recorded did, what it was told to do with
+it did not. Measured now: a Ledger left alone pays 500 into its holder, and a Ledger moved to
+another body pays the same 500 into the new one.
+
+The other two, `Overrides` and `Appends` on `ClonePassive`, no passive in content carries — a
+passive that is the TARGET of a talent is not itself a talent. Copied anyway, because "complete
+except where somebody has checked that it does not matter" is how the other three got into the
+state they were in.
+
+**Cross-type projections are deliberately NOT in the table** — `CombatUnit.FromDef`,
+`StatMath.Build`, `CampaignWaveGenerator.BuildBattle` (21 fields) and `ProvingGenerator.GhostOf`
+all read one type and write another, and a field they leave behind may be correct. They are named
+here so the next reader knows they were looked at rather than missed.
+
+The audit that found the third one is kept as a check: it reads each type's public fields and each
+copier's body out of the sources and asserts every field is assigned — 149 fields across the four —
+with the four `AddOrRefresh` sets whitelisted for `MoveStatus` and a list counted as copied when
+the body adds to it.
+
+### Batch eight: ten gaps built because a clause asked
+
+**Every clause batch seven authored as nothing is authored now.** 72 of 72 stage fingerprints
+unmoved; **5 of 145 sweep lines moved, all of them Merek's**, and that is the whole of the
+movement in this pass.
+
+#### Ten gaps, built because a clause asked and not because enough clauses asked
+
+The judgement that some of these were not worth building for a single want was withdrawn, so
+where a gap serves one clause it was built anyway and is marked here:
+
+| gap | built as | wants |
+|---|---|---|
+| absolute Energy | `EnergyAtLeast` / `EnergyBelow` | Oris II, both halves |
+| partial healing reduction | `StatusKind.HealingReduction`, read beside `HealSuppression` | Sylven III, Demos |
+| readable turn-shift amount | `_lastTurnShift` per caster + `scaleByLastShift` | Merek p1 — **one clause** |
+| naming the unit a swap moved | `SwapAdvancedUnit` / `SwapDelayedUnit` | Merek's active and II |
+| magnitude change on transfer | `transferMagnitude` | Sylven p1 — **one clause** |
+| healed-or-shielded since my turn | `SubjectHealedSinceMyTurn` / `SubjectShieldedSinceMyTurn` | Kiva's active — **one clause** |
+| a cap in the caster's currency | `attackCap` | Kiva's active, Merek p1 |
+| the round's own boundary | `PassiveTrigger.RoundStart` | Merek p2 — **one clause** |
+| the far end of an enemy cast | `PassiveTrigger.OnEnemyActiveResolved` | Merek's basic — **one clause** |
+| a cadence on a one-off blow | **no engine work** — `PassiveLimit.EveryNRounds` already existed, and the talent carries both the marker it reads and the limit | Oris III |
+
+**`SubjectRoleIs` stays at ordinal 40.** The first attempt inserted the four new conditions before
+it and moved it to 44; ten shipped effects of Vaelis's read that member, so they were moved to the
+end of the enum and a pin now asserts it.
+
+#### What moved, and what did not
+
+**Merek's five lines**, for four changed clauses at once: First Claim is designated at the start of
+the round rather than at his turn (`merek_first_claim` 25 → 28 fires), Anticipated answers the far
+end of a cast, the swap now marks the body it pushed back, and his basic carries the
+recorded-progress blow (`merek_unsettled_timing` fires twice in the sweep).
+
+**Kiva is a starter and her stage fingerprints did not move**, which is worth stating rather than
+assuming: her changed gate is "shielded or healed since my last turn", and she acts before the
+arena's healer every round, so the stamp it reads is always the previous round's and the gate is
+false either way. The `attackCap` under it does not bind at that scale either.
+
+**Sylven's and Oris's lines did not move** because everything they gained is a talent, and the
+sweep selects none.
+
+#### Two gaps from the list that are NOT here
+
+Gaps 12 and 13 of the batch-seven survey — redirect immunity and Energy-delta ranking — serve
+clauses that no longer exist: batch seven's description edits removed Kiva's "cannot receive
+damage redirection" (nothing in `enemies.json` can protect another enemy, so it guarded nothing)
+and reworded Oris III away from "the enemy whose Energy changed the most". Building them would
+mean restoring two clauses of Pinoy's text that were deliberately retired. Named here rather than
+done quietly; if those clauses come back, both gaps are still unbuilt.
+
+### Cast cancellation
+
+**An active is now a thing with a state between declaration and resolution.** Engine only.
+**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, dumped and diffed
+against `origin/main` — and this is the first pass where that was in genuine doubt, because it
+changes the turn loop rather than something hanging off it.
+
+**The declaration event already existed.** `AbilityCast` has been emitted before a single effect
+ran for the life of the project; what it did not do was leave anything behind that could be
+stopped. Three fields on the simulation are that thing — the caster, the ability, and whether it
+has been cancelled — set at declaration, readable by anything that wants to answer a cast, and
+cleared on every exit from the turn. **No event is added to an existing battle and none is
+reordered**, which is why the two numbers above hold.
+
+#### The three decisions, and why
+
+- **Declaration is the caster and the ability, not the targets.** Targeting in this engine is
+  per-effect and happens as each effect runs: `AllEnemies` resolves at the second effect against
+  whoever is standing by then, and half the roster depends on that. Snapshotting "the cast's
+  target" at declaration would mean moving targeting out of the effects and into the declaration,
+  which is a different engine and would move every fingerprint in the game.
+- **A cancelled cast refunds nothing.** The energy is spent at declaration, three lines before the
+  window opens, and it stays spent. That is what makes an interrupt worth a turn rather than a
+  delay, it is the reading `EffectKind.Interrupt` already has — it empties a bar and gives nothing
+  back — and a refund would be the only path in the engine that hands energy to a unit nobody
+  granted it to.
+- **A cast that loses its target mid-flight is not cancelled by that.** Only `CancelCast` cancels
+  one. A body that is gone resolves to nobody for the effect that wanted it and the rest of the
+  ability carries on, which is exactly what every AoE that kills something with its first effect
+  has always done. Cancelling on target loss would change the behaviour of shipped content.
+
+#### What it buys, and it is four things rather than one
+
+`CancelCast` is the interrupt. `PassiveTrigger.OnCastDeclared` is the window, raised on **every**
+living unit rather than broadcast to one side — `OnEnemyActive` is the same moment shown to the
+caster's opponents, and a declaration is a fact about the board. Anything the window raises
+resolves before the cast does, so "damage that lands before the cast it answers" is an ordering
+rather than a new mechanism. `PassiveDef.TriggerAbilityId` names the ability a reaction answers,
+because an id is the only thing that identifies one uniquely. `EffectCondition.SubjectIsCasting`
+lets an ordinary effect ask whether the body in front of it is mid-cast, which is "an ability that
+changes based on what the enemy is about to do".
+
+`BattleEventType.CastCancelled` is appended at 21, the only place a member can go: the fingerprint
+folds `(int)Type`. Three older guards claimed the event enum was "untouched"; their pins were
+right and their prose was not, and both now say what they actually guarantee.
+
+### The three Displaced primitives
+
+**The three things Dahlia was stopped on.** Engine only. **72 of 72 stage fingerprints unmoved,
+145 of 145 sweep lines unchanged**, dumped and diffed against `origin/main`.
+
+- **A restriction that arrives mid-battle.** `TargetBan` was the right rule attached to the wrong
+  thing: adopted from a `PassiveDef` in `AddPassive` and written nowhere else, so it was a standing
+  property decided at battle start. `StatusKind.Restricted` carries `BanKind` and `BanStatus` on
+  the ENTRY — the shape `Disrupted` already uses, where a status instance holds its own parameters
+  and the site that enforces them reads it there. **The passive-declared form is untouched** and
+  its arenas still pass; `TargetBanned` consults the standing form first and the entries only if
+  there is none, so the two share one switch rather than growing a second copy that could disagree.
+  Measured: the holder moves off the body it just hit while the entry lives, and goes back to a
+  three-blow run on one body once it expires.
+- **The declaration window names its caster.** `OnCastDeclared` was raised with no broadcast
+  context, so a passive could neither test the caster nor aim at it. Two lines. Measured: a passive
+  gated on a status on the caster pays 1608 into it and nothing when the caster is bare.
+- **A target change is heard.** `PreviousTargetId` updates silently inside `DealRawDamage` and was
+  readable only by the picker. `OnEnemyChangedTarget` is raised where that line already decides a
+  change happened, with the switcher as the SOURCE and the body it turned on as the SUBJECT. **A
+  unit's first blow is not a change** — acquiring a target is not changing one.
+
+The target-change arena is worth noting: aiming an enemy at the lowest-HP ally does not make it
+switch, because the body it just hit is the lowest and it stays there. It is made to switch by a
+`Restricted` entry from the same pass — which is both the arena that was needed and the exact
+combination the hero waiting on these will author.
+
+
+### Dahlia, the four gaps she needed, and two dead clauses found on the way
+
+**The thirtieth 5-star, and the pass that finished the roster.** Four engine additions, each
+because her description could not otherwise be said, and two live defects found while measuring:
+
+- **`PassiveTrigger.OnEnemyEnergyDrained`.** "Whenever an enemy loses Energy because of Dahlia"
+  names the CAUSER, and `AddEnergy` already carries the granter's id, so the trigger fires on the
+  drainer at the one funnel every energy change passes through - a loss, across the line, and only
+  when the bar actually moved. A re-entrancy flag guards it against a passive that itself drains.
+- **A kit may carry more than five passives.** Four named JSON slots was a ceiling, not a design:
+  a described passive becomes one authored passive per trigger it answers, and Dahlia's two
+  described passives and one active want eight between them. `ReadPassives` reads a `passives`
+  list after the named slots, so every existing hero parses identically and keeps its indices.
+- **A talent may name a passive past the second.** Talents address a passive BY POSITION and the
+  two spellings were hardcoded; `PassiveSlotIndex` resolves `passiveN` for any N, digit for digit
+  the same for the two that already worked.
+- **`LastAttacker` means something at `OnDamaged`.** The victim is its own broadcast subject
+  there now, which is what that subject already meant at `OnEnemyDamagedAlly` a few lines below.
+  Without it every ALLY of a body being hit could ask who was hitting it and the body itself
+  could not.
+
+**Two clauses that had never once paid out**, both found by measuring rather than by reading:
+
+- **`scaleByLastDamage` inside a triggered passive always read zero.** `ResolveAbility` cleared
+  `_lastDamageDealt` on entry at EVERY depth. For an ability a unit chose that is right - an echo
+  with no damage ahead of it must not read a number from a previous turn - but a passive is the
+  opposite case: it is running BECAUSE damage landed, and that flag was built to mean exactly that
+  blow. Only the outermost ability clears it now. Measured: a passive answering a blow banks 900
+  sized off it against 402 for a control sized off Attack, and reverting the one line takes the
+  first to 0 and leaves the control untouched.
+- **Rovan's Deflection Strike shield.** `rovan_deflected_conversion` gated both conditions on
+  `BroadcastSource` at `OnEnemyDamagedAlly`, a trigger that sets no source id, so the condition
+  was false every time and the passive banked nothing for its whole life. It reads `LastAttacker`
+  now - the idiom Caldus already used at the same trigger, resolved through the victim's
+  `LastAttackerId`. **0 shield before, 3744 after**, five seeds at level 40. Both halves were
+  required: either fix alone still pays zero.
+
+Her kit is the roster's only user of the restriction, the cast-cancellation window and the
+target-change trigger, which is why the two tripwires guarding those now assert that she is their
+SOLE occupant rather than that nobody uses them. Ten arena checks cover her clauses, each an A/B
+against the same five seeds with one clause patched out, because she has four clauses that heal
+and a total cannot attribute itself.
+
+**Two arena premises were wrong before they were right**, and both are recorded where they were
+fixed. The ban read as broken by five "repeats" that were all one enemy anchored at
+`LowestHpEnemy`, whose candidate list a ban empties - and an emptied list falls back to the
+unrestricted pick rather than costing the enemy its turn, so a Displaced enemy with nowhere else
+to go does repeat. Her second-lowest heal read as dead when it was in fact landing on an ally
+standing at full HP.
+
+**Displaced bypasses Effect Resist.** Her text creates the state rather than rolling for it, and
+the harness caught it rolling at 0.82 against `the_unmade`.
+
 
 ## `build-order-1-3` landed. This section is history, not status
 
