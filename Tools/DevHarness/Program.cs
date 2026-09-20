@@ -69,6 +69,7 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
+            CheckAuthoredKitExercise(content);
 
             CheckDebrief();
             CheckRelics(content);
@@ -3232,6 +3233,10 @@ namespace Emberfall.DevHarness
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Content");
         }
 
+        /// <summary>Set from EMBERFALL_DUMP_STAGE_FP, read once rather than 72 times.</summary>
+        private static readonly bool _dumpStageFingerprints =
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMBERFALL_DUMP_STAGE_FP"));
+
         private static void Check(bool condition, string label)
         {
             if (condition) { Line("  [ok]   " + label); return; }
@@ -5474,6 +5479,9 @@ namespace Emberfall.DevHarness
                 "float aspectFactor, string abilityName, int ruleOwnerId)",
                 "vfx, dotKind, aspectFactor, abilityName, protectorId)) return;",
                 "vfx, dotKind, aspectFactor, abilityName, redirect.SourceId)) return;",
+                // The deflect, which now goes through RedirectShare rather than calling the
+                // funnel itself - the same plumbing, reached from a third call site.
+                "vfx, dotKind, aspectFactor, abilityName, deflect.SourceId);",
                 // The Deflect delivery, which carries the original blow's chart reading to the
                 // body the blow was moved onto rather than re-deriving one from that body's aspect.
                 "aspectFactor, abilityName);",
@@ -6193,6 +6201,12 @@ namespace Emberfall.DevHarness
                     int actualSeed = 3000000 + s * 13 + seed;
                     string a = BattleFingerprint(session, stage, actualSeed);
                     string b = BattleFingerprint(session, stage, actualSeed);
+                    // THE 72 FINGERPRINTS, DUMPED ON REQUEST. Every engine pass in this project
+                    // reports "72 of 72 unmoved", and producing that number has meant editing this
+                    // loop by hand on both sides of the change - a procedure nobody else can repeat
+                    // and nobody can audit. EMBERFALL_DUMP_STAGE_FP=1 prints them, so the claim
+                    // becomes a diff of two runs rather than a recollection.
+                    if (_dumpStageFingerprints) Line("  [fp] " + stage.DisplayCode + "|" + actualSeed + "|" + a);
                     if (a != b)
                     {
                         fingerprintsStable = false;
@@ -14826,10 +14840,11 @@ namespace Emberfall.DevHarness
                     // AllEnemiesWithStatus and about the mark bank.
                     "OnLinkedUnitTargeted", "OnLinkedUnitHit",
                     // Extended again by the nine-gap pass, for the same reason: one list.
-                    "OnTargeted", "OnStatusGained", "OnLinkEchoFired", "OnRedirectReceived"
+                    "OnTargeted", "OnStatusGained", "OnEchoFired", "OnRedirectReceived",
+                    "OnRedirectSent"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (45 members)");
+            Check(ok, "PassiveTrigger enum parity (46 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -16087,6 +16102,9 @@ namespace Emberfall.DevHarness
             CheckGap9NotDamagedByMe();
             CheckRemovedValueScalar();
             CheckPendingDotTargeting();
+            CheckLooseEnds();
+            CheckCostedThree();
+            CheckRedirectApproximations(live);
             Line("");
         }
 
@@ -16118,11 +16136,17 @@ namespace Emberfall.DevHarness
             Check((int)PassiveTrigger.OnLinkedUnitHit == 40,
                   "PassiveTrigger.OnLinkedUnitHit still at 40 (got "
                   + (int)PassiveTrigger.OnLinkedUnitHit + ")");
+            Check((int)PassiveTrigger.OnRedirectSent == 45,
+                  "PassiveTrigger.OnRedirectSent appended at 45 (got "
+                  + (int)PassiveTrigger.OnRedirectSent + ")");
+            Check((int)EffectCondition.SubjectRoleIs == 40,
+                  "EffectCondition.SubjectRoleIs appended at 40 (got "
+                  + (int)EffectCondition.SubjectRoleIs + ")");
             Check((int)PassiveTrigger.OnTargeted == 41 && (int)PassiveTrigger.OnStatusGained == 42
-                  && (int)PassiveTrigger.OnLinkEchoFired == 43
+                  && (int)PassiveTrigger.OnEchoFired == 43
                   && (int)PassiveTrigger.OnRedirectReceived == 44,
                   "PassiveTrigger appends at 41..44 (got " + (int)PassiveTrigger.OnTargeted + ", "
-                  + (int)PassiveTrigger.OnStatusGained + ", " + (int)PassiveTrigger.OnLinkEchoFired
+                  + (int)PassiveTrigger.OnStatusGained + ", " + (int)PassiveTrigger.OnEchoFired
                   + ", " + (int)PassiveTrigger.OnRedirectReceived + ")");
 
             Check((int)StatusKind.Linked == 48 && (int)StatusKind.Covered == 33,
@@ -16174,7 +16198,7 @@ namespace Emberfall.DevHarness
                     PassiveDef p = passives[pi];
                     if (p.Trigger == PassiveTrigger.OnTargeted) onTargeted++;
                     if (p.Trigger == PassiveTrigger.OnStatusGained) onStatusGained++;
-                    if (p.Trigger == PassiveTrigger.OnLinkEchoFired) onEchoFired++;
+                    if (p.Trigger == PassiveTrigger.OnEchoFired) onEchoFired++;
                     if (p.Trigger == PassiveTrigger.OnRedirectReceived) onRedirectReceived++;
                     all.AddRange(p.Effects);
                     for (int ai = 0; ai < p.Appends.Count; ai++)
@@ -16230,24 +16254,29 @@ namespace Emberfall.DevHarness
             Check(onStatusGained == 0,
                   "no shipped passive triggers on OnStatusGained (" + onStatusGained + ")");
             Check(onEchoFired == 0,
-                  "no shipped passive triggers on OnLinkEchoFired (" + onEchoFired + ")");
+                  "no shipped passive triggers on OnEchoFired (" + onEchoFired + ")");
             Check(onRedirectReceived == 0,
                   "no shipped passive triggers on OnRedirectReceived (" + onRedirectReceived + ")");
 
-            // THE ONE BEHAVIOUR CHANGE IN THIS PASS, counted rather than described in prose alone.
-            // Heal and Shield now honour the ScaleBy family, which they silently ignored before, so
-            // any shipped Heal or Shield already authoring one of those flags changes what it does.
-            // This names them, so the list cannot grow unnoticed.
-            Check(scaledHealShield == 6,
-                  "SIX shipped Heal/Shield effects author a ScaleBy flag and therefore change "
-                  + "behaviour in this pass (" + scaledHealShield + ": "
-                  + string.Join(", ", named.ToArray()) + "). Four are talents, inert until selected. "
-                  + "TWO ARE LIVE ABILITIES - brenna_deep_resolve (passive1, a Shield off "
-                  + "scaleByLastBanked) and cyrra_bury_the_burden (active, a Heal off "
-                  + "scaleByLastRemoval) - and every battle either hero fights changes. No "
-                  + "fingerprint moves because neither stands in the sweep's starter squad, which "
-                  + "is coverage rather than safety. The number is pinned so the list cannot grow "
-                  + "unnoticed: a seventh means somebody authored a flag that used to be inert.");
+            // THE BEHAVIOUR CHANGE THE NINE-GAP PASS MADE, counted rather than described in prose
+            // alone. Heal and Shield honour the ScaleBy family, which they silently ignored before
+            // it, so any shipped Heal or Shield authoring one of those flags does something it did
+            // not used to. This names them, so the list cannot grow unnoticed.
+            //
+            // THE PIN MOVED FROM SIX TO SEVEN, deliberately, which is what a pin is for. Rovan's
+            // `rovan_deflected_conversion` is the seventh: a live passive Shield off
+            // scaleByLastDamage, authored against this mechanism rather than into it by accident,
+            // and it is the first entry on this list that was written AFTER the flag started
+            // working. An eighth still means somebody authored a flag that used to be inert.
+            Check(scaledHealShield == 7,
+                  "SEVEN shipped Heal/Shield effects author a ScaleBy flag (" + scaledHealShield
+                  + ": " + string.Join(", ", named.ToArray()) + "). Four are talents, inert until "
+                  + "selected. THREE ARE LIVE ABILITIES - brenna_deep_resolve (passive1, a Shield "
+                  + "off scaleByLastBanked), cyrra_bury_the_burden (active, a Heal off "
+                  + "scaleByLastRemoval) and rovan_deflected_conversion (passive1, a Shield off "
+                  + "scaleByLastDamage, authored this pass). The first two changed behaviour when "
+                  + "the nine-gap pass made the flags work; the third was written knowing they do. "
+                  + "The number is pinned so the list cannot grow unnoticed.");
         }
 
         private static void CheckNineGapEnumParity()
@@ -16273,10 +16302,10 @@ namespace Emberfall.DevHarness
                     "SubjectRepeatedActionType", "LedgerAtCap", "HpAboveSnapshot",
                     "HasAnyBeneficialStatus", "HasAnyHarmfulStatus", "ShieldBrokenByCaster",
                     "MyStatusStacksAtLeast", "SubjectNotDamagedByMeThisRound",
-                    "LastMovedAboveHpFraction"
+                    "LastMovedAboveHpFraction", "SubjectRoleIs"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (40 members)");
+            Check(ok, "EffectCondition enum parity (41 members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
@@ -16680,7 +16709,7 @@ namespace Emberfall.DevHarness
         /// <summary>
         /// Each of the four fires where its own description says and nowhere else, counted rather
         /// than merely observed: OnTargeted once per blow AIMED at its owner, OnStatusGained on the
-        /// carrier with its TriggerStatus filter honoured, OnLinkEchoFired on the link's CREATOR
+        /// carrier with its TriggerStatus filter honoured, OnEchoFired on the link's CREATOR
         /// once per echo, and OnRedirectReceived on the protector once per share.
         /// </summary>
         private static void CheckGap6Triggers()
@@ -16707,7 +16736,7 @@ namespace Emberfall.DevHarness
             int echoFires = CountPassiveFires(echo, "g6_onEcho");
             int echoHits = HitsOn(echo, "G6EchoBack");
             Check(echoFires > 0 && echoFires == echoHits,
-                  "OnLinkEchoFired fires on the link's CREATOR once per echo (" + echoFires
+                  "OnEchoFired fires on the link's CREATOR once per echo (" + echoFires
                   + " fires against " + echoHits + " echoes)");
 
             BattleResult red = RunRedirectTriggerArena();
@@ -16797,7 +16826,7 @@ namespace Emberfall.DevHarness
           { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
             ""linkTransfer"": ""Echo"", ""magnitude"": 0.5, ""duration"": 99 }
         ] },
-      ""passive2"": { ""id"": ""g6_onEcho"", ""name"": ""Echo Heard"", ""trigger"": ""OnLinkEchoFired"",
+      ""passive2"": { ""id"": ""g6_onEcho"", ""name"": ""Echo Heard"", ""trigger"": ""OnEchoFired"",
         ""oncePerBattle"": false,
         ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
   ]
@@ -17359,7 +17388,7 @@ namespace Emberfall.DevHarness
                     List<HeroInstance> team = new List<HeroInstance>();
                     team.Add(MakeInstance(authored[h], 40));
                     for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
-                    BattleResult r = RunWith(arena, stage, 4400000 + h * 97 + s, team);
+                    BattleResult r = RunWith(arena, stage, HeroSweepSeed(authored[h].Id, s), team);
                     lines.Add(authored[h].Id + "|" + s + "|" + (r == null ? "NULL" : HeroSweepHash(r)));
                 }
             }
@@ -17430,6 +17459,88 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+
+        // ---- which of a new kit's own rules the sweep actually reached -------------------------
+
+        /// <summary>
+        /// A REPORT, NOT A GUARD, and deliberately so.
+        ///
+        /// The sweep proves a kit's line is its own and that it has not moved. It cannot say
+        /// whether the kit DID anything: a passive wired to a trigger nothing in the arena raises
+        /// fingerprints exactly like one that fires every round, because both are the same absence
+        /// of events. Four kits authored in one pass on six triggers this roster had never used is
+        /// the case where that distinction matters most, so it is printed.
+        ///
+        /// No Check, because "never reached" is not a defect on its own - OnAllyDefeated needs an
+        /// ally to die, and an arena where that never happens is a fact about the arena. An
+        /// assertion here would be a guess dressed as a guarantee, and a line that reads "0" is
+        /// evidence a human can act on without one.
+        ///
+        /// A COUNT HERE IS THE TRIGGER ARRIVING, NOT THE CLAUSE HAPPENING. TriggerPassive emits its
+        /// event and then evaluates each effect's own condition, so a passive whose every effect is
+        /// gated on something false still counts. Nysera's 80 is exactly that: OnTargeted reaches
+        /// her on every blow aimed at her, and each of her three effects then asks whether the
+        /// enemy aiming carries her Mark.
+        ///
+        /// Talents are excluded: none is selected here, so all three would read zero for every
+        /// hero and say nothing about any of them.
+        /// </summary>
+        private static void CheckAuthoredKitExercise(ContentDatabase live)
+        {
+            Line("AUTHORED-KIT EXERCISE (how often each kit's own rules were REACHED in the sweep");
+            Line("                       arena, five seeds - a trigger reaching a passive is not the");
+            Line("                       same as its effects passing their conditions)");
+
+            string[] subjects = { "talren_the_wayfinder", "vaelis_the_unfixed_blade",
+                                  "nysera_the_missing_arrow", "rovan_the_adaptive_commander" };
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "authored-kit exercise arena built"); Line(""); return; }
+
+            for (int h = 0; h < subjects.Length; h++)
+            {
+                HeroDef def = arena.GetHero(subjects[h]);
+                if (def == null) { Line("  [note] " + subjects[h] + " not in content"); continue; }
+
+                Dictionary<string, int> fires = new Dictionary<string, int>();
+                for (int p = 0; p < def.Passives.Count; p++)
+                    if (def.Passives[p].Trigger != PassiveTrigger.None)
+                        fires[def.Passives[p].Id] = 0;
+                int basics = 0, actives = 0;
+
+                for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+                {
+                    List<HeroInstance> team = new List<HeroInstance>();
+                    team.Add(MakeInstance(def, 40));
+                    for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                    BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+                    if (r == null) continue;
+
+                    for (int i = 0; i < r.Events.Count; i++)
+                    {
+                        BattleEvent e = r.Events[i];
+                        if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId != null
+                            && fires.ContainsKey(e.AbilityId)) fires[e.AbilityId]++;
+                        else if (e.Type == BattleEventType.BasicAttack
+                                 && def.BasicAttack != null && e.AbilityId == def.BasicAttack.Id) basics++;
+                        else if (e.Type == BattleEventType.AbilityCast
+                                 && def.Active != null && e.AbilityId == def.Active.Id) actives++;
+                    }
+                }
+
+                StringBuilder sb = new StringBuilder();
+                sb.Append("  [note] ").Append(def.Name).Append(": ").Append(basics)
+                  .Append(" basic(s) cast, ").Append(actives).Append(" active(s) cast");
+                foreach (KeyValuePair<string, int> kv in fires)
+                    sb.Append(" | ").Append(kv.Key).Append(' ').Append(kv.Value);
+                Line(sb.ToString());
+            }
+            Line("");
+        }
+
         private static void WriteHeroSweepBaseline(string path, List<string> lines)
         {
             StringBuilder sb = new StringBuilder();
@@ -17438,6 +17549,9 @@ namespace Emberfall.DevHarness
             sb.Append("# One line per authored hero per seed: <heroId>|<seed>|<fnv1a-64 of the battle>.\r\n");
             sb.Append("# The hash folds event type, source, target, value and status over the whole\r\n");
             sb.Append("# event stream, plus the outcome and the round count.\r\n");
+            sb.Append("#\r\n");
+            sb.Append("# <seed> is 1..5, a label. The seed the battle actually runs at is derived from\r\n");
+            sb.Append("# the hero ID, so authoring a hero re-seeds nobody and moves no existing line.\r\n");
             sb.Append("#\r\n");
             sb.Append("# A MOVED LINE IS A BEHAVIOUR CHANGE. It needs a stated reason in the commit that\r\n");
             sb.Append("# moves it - which hero, which clause, and why the new behaviour is the right one.\r\n");
@@ -17500,6 +17614,39 @@ namespace Emberfall.DevHarness
 
         /// <summary>FNV-1a over the battle, folding the same fields the stage fingerprint does plus
         /// the status kind, so a line is a short hash rather than a whole event stream.</summary>
+        /// <summary>
+        /// The seed a hero's line is run at, KEYED TO THE HERO'S ID rather than to its position in
+        /// the sorted list.
+        ///
+        /// IT WAS `4400000 + index * 97 + seed`, AND THAT MADE THE GUARD LIE. The list is sorted by
+        /// id, so authoring a hero shifts the index of every hero alphabetically after it, which
+        /// re-seeds their battles and moves their hashes - while the file's own header says a moved
+        /// line IS a behaviour change. Authoring these four moved twenty lines belonging to Rheia,
+        /// Seraphine, Velis and Zella, whose kits nobody had touched. Measured, not assumed: with
+        /// the four still placeholders the same engine change moved none of those twenty.
+        ///
+        /// A guard that cries wolf on every insertion is a guard that gets regenerated, and a
+        /// baseline regenerated to quiet a surprise has stopped guarding. Keyed to the id, a hero's
+        /// seeds are its own for as long as it keeps its id, and inserting a hero moves nobody.
+        ///
+        /// The cost is paid once: every line in the baseline moves on the pass that makes this
+        /// change, because every seed changes. That is the last time an insertion moves one.
+        ///
+        /// Collisions between two heroes' seeds are harmless. Nothing compares two heroes' battles
+        /// for equality of seed - the per-seed collision check compares FINGERPRINTS, and two heroes
+        /// have always run at different seeds under the old formula too.
+        /// </summary>
+        private static int HeroSweepSeed(string heroId, int seed)
+        {
+            ulong hash = 14695981039346656037UL;
+            for (int i = 0; i < heroId.Length; i++)
+            {
+                hash ^= heroId[i];
+                hash *= 1099511628211UL;
+            }
+            return 4400000 + (int)(hash % 3000000UL) + seed;
+        }
+
         private static string HeroSweepHash(BattleResult r)
         {
             ulong hash = 14695981039346656037UL;
@@ -17882,60 +18029,909 @@ namespace Emberfall.DevHarness
         /// before reporting a verdict, for the reason the role scan does: a guard that inspects
         /// nothing passes everything.
         /// </summary>
+        /// <summary>
+        /// EVERY ENUM-VALUED STRING IN THE CONTENT FILES ROUND-TRIPS THROUGH ITS ENUM.
+        ///
+        /// This started as a TargetMode-only scan, written because renaming one member made a
+        /// silent failure live: `EnumUtil.Parse` falls back to the default rather than throwing, so
+        /// a file naming a member that no longer exists aims at FrontEnemy without a word, and the
+        /// PARSED database is where that evidence has already been destroyed. The file is read as
+        /// text for that reason and that reason alone.
+        ///
+        /// IT COVERED ONE ENUM OF FOURTEEN, and the same trap is set on all of them. A misspelled
+        /// `condition` is a clause that silently never gates; a misspelled `trigger` is a passive
+        /// that silently never fires; a misspelled `status` applies None. Every one of those is a
+        /// kit that looks authored, validates, runs, and does something other than what it says.
+        /// A thousand lines of new content went in the pass that widened this.
+        ///
+        /// Structural rather than textual now, because "kind" means EffectKind inside an effect and
+        /// something else on a unit - an enemy authors `"kind": "boss"` - and a text scan cannot
+        /// tell those apart. It walks the same slots UnitDef and HeroDef actually read, so a key in
+        /// a place the parser never looks is not scanned here either.
+        /// </summary>
         private static void CheckTargetModeStringsParse(ContentDatabase db)
         {
             string dir = FindContentDirForSweep();
             if (dir == null)
             {
-                Line("  [note] content directory not found next to this binary, so the target-mode "
-                     + "string scan did not run.");
+                Line("  [note] content directory not found next to this binary, so the enum-string "
+                     + "scan did not run.");
                 return;
             }
 
-            string[] files = { "heroes.json", "enemies.json" };
-            List<string> bad = new List<string>();
-            int scanned = 0;
+            _enumScanBad = new List<string>();
+            _enumScanCount = 0;
+            string[][] files = { new string[] { "heroes.json", "heroes" },
+                                 new string[] { "enemies.json", "enemies" } };
             for (int f = 0; f < files.Length; f++)
             {
-                string text;
-                try { text = File.ReadAllText(Path.Combine(dir, files[f])); }
+                JsonValue root;
+                try { root = JsonValue.Parse(File.ReadAllText(Path.Combine(dir, files[f][0]))); }
                 catch (Exception) { continue; }
 
-                string[] keys = { "\"target\"", "\"secondaryTarget\"", "\"ledgerAutoReleaseTarget\"" };
-                for (int k = 0; k < keys.Length; k++)
+                JsonValue units = root[files[f][1]];
+                for (int u = 0; u < units.Count; u++)
                 {
-                    int at = 0;
-                    while (true)
-                    {
-                        at = text.IndexOf(keys[k], at, StringComparison.Ordinal);
-                        if (at < 0) break;
-                        at += keys[k].Length;
-                        int open = text.IndexOf('"', at);
-                        int colon = text.IndexOf(':', at);
-                        if (open < 0 || colon < 0 || open < colon) { }
-                        int q1 = text.IndexOf('"', colon < 0 ? at : colon);
-                        if (q1 < 0) break;
-                        int q2 = text.IndexOf('"', q1 + 1);
-                        if (q2 < 0) break;
-                        string value = text.Substring(q1 + 1, q2 - q1 - 1);
-                        scanned++;
-                        bool known = false;
-                        string[] names = Enum.GetNames(typeof(TargetMode));
-                        for (int n = 0; n < names.Length; n++) if (names[n] == value) { known = true; break; }
-                        if (!known && !bad.Contains(value)) bad.Add(files[f] + ": '" + value + "'");
-                    }
+                    JsonValue unit = units[u];
+                    string who = files[f][0] + " " + unit.GetString("id", "(no id)");
+                    ScanEnumKey(who, unit, "aspect", typeof(Aspect));
+                    ScanEnumKey(who, unit, "role", typeof(HeroRole));
+
+                    string[] slots = { "basic", "active", "passive", "passive1", "passive2" };
+                    for (int i = 0; i < slots.Length; i++)
+                        ScanAbilityEnums(who + "." + slots[i], unit[slots[i]]);
+                    ScanSlotBlockEnums(who + ".skills", unit["skills"]);
+                    ScanSlotBlockEnums(who + ".talents", unit["talents"]);
                 }
             }
 
-            Check(scanned > 0,
-                  "the target-mode scan actually read " + scanned + " authored target string(s) "
+            Check(_enumScanCount > 0,
+                  "the enum-string scan actually read " + _enumScanCount + " authored enum string(s) "
                   + "before reporting - a scan that read none would pass by inspecting nothing");
-            Check(bad.Count == 0,
-                  bad.Count == 0
-                    ? "every authored target string round-trips through TargetMode, so none of them "
-                      + "is silently resolving to FrontEnemy"
-                    : bad.Count + " authored target string(s) are not TargetMode members and are "
-                      + "silently falling back to FrontEnemy: " + string.Join(", ", bad.ToArray()));
+            Check(_enumScanBad.Count == 0,
+                  _enumScanBad.Count == 0
+                    ? "every one of those " + _enumScanCount + " strings is a member of the enum it "
+                      + "is read into, so none of them is silently resolving to a default"
+                    : _enumScanBad.Count + " authored string(s) are not members of the enum they are "
+                      + "read into and are silently falling back to the default: "
+                      + string.Join(", ", _enumScanBad.ToArray()));
+        }
+
+        private static List<string> _enumScanBad = new List<string>();
+        private static int _enumScanCount;
+
+        /// <summary>
+        /// The key-to-enum table, taken from the EnumUtil.Parse calls in EffectDef.FromJson and
+        /// PassiveDef.FromJson. A key added to either parser and not added here is scanned by
+        /// nothing, which is the failure mode this whole section exists to name - so the count
+        /// above is printed, and a drop in it is visible.
+        /// </summary>
+        private static readonly string[][] EffectEnumKeys =
+        {
+            new string[] { "kind", "EffectKind" },
+            new string[] { "target", "TargetMode" },
+            new string[] { "secondaryTarget", "TargetMode" },
+            new string[] { "ledgerAutoReleaseTarget", "TargetMode" },
+            new string[] { "status", "StatusKind" },
+            new string[] { "conditionStatus", "StatusKind" },
+            new string[] { "conditionStatus2", "StatusKind" },
+            new string[] { "conditionStatus3", "StatusKind" },
+            new string[] { "targetStatus", "StatusKind" },
+            new string[] { "perStackStatus", "StatusKind" },
+            new string[] { "shiftBanksAs", "StatusKind" },
+            new string[] { "ledgerBankOnlyFrom", "StatusKind" },
+            new string[] { "condition", "EffectCondition" },
+            new string[] { "condition2", "EffectCondition" },
+            new string[] { "condition3", "EffectCondition" },
+            new string[] { "conditionOn", "ConditionSubject" },
+            new string[] { "conditionOn2", "ConditionSubject" },
+            new string[] { "conditionOn3", "ConditionSubject" },
+            new string[] { "perStackOn", "ConditionSubject" },
+            new string[] { "comparedStat", "ComparedStat" },
+            new string[] { "comparedStat2", "ComparedStat" },
+            new string[] { "comparedStat3", "ComparedStat" },
+            new string[] { "record", "RecordKind" },
+            new string[] { "doTRecord", "RecordKind" },
+            new string[] { "ledgerFunnelSource", "FunnelSource" },
+            new string[] { "linkTransfer", "LinkTransfer" },
+        };
+
+        private static readonly string[][] AbilityEnumKeys =
+        {
+            new string[] { "trigger", "PassiveTrigger" },
+            new string[] { "limit", "PassiveLimit" },
+            new string[] { "triggerStatus", "StatusKind" },
+            new string[] { "outputModStatus", "StatusKind" },
+            new string[] { "statModStatus", "StatusKind" },
+            new string[] { "stackThresholdStatus", "StatusKind" },
+            new string[] { "outputModScope", "OutputModScope" },
+            new string[] { "statModKind", "ComparedStat" },
+        };
+
+        private static Type EnumNamed(string name)
+        {
+            switch (name)
+            {
+                case "EffectKind": return typeof(EffectKind);
+                case "TargetMode": return typeof(TargetMode);
+                case "StatusKind": return typeof(StatusKind);
+                case "EffectCondition": return typeof(EffectCondition);
+                case "ConditionSubject": return typeof(ConditionSubject);
+                case "ComparedStat": return typeof(ComparedStat);
+                case "RecordKind": return typeof(RecordKind);
+                case "FunnelSource": return typeof(FunnelSource);
+                case "LinkTransfer": return typeof(LinkTransfer);
+                case "PassiveTrigger": return typeof(PassiveTrigger);
+                case "PassiveLimit": return typeof(PassiveLimit);
+                case "OutputModScope": return typeof(OutputModScope);
+                case "Aspect": return typeof(Aspect);
+                case "HeroRole": return typeof(HeroRole);
+            }
+            return null;
+        }
+
+        private static void ScanEnumKey(string where, JsonValue obj, string key, Type enumType)
+        {
+            if (obj == null || !obj.IsObject || !obj.Has(key) || enumType == null) return;
+            string value = obj[key].AsString(null);
+            if (value == null) return;
+            _enumScanCount++;
+            string[] names = Enum.GetNames(enumType);
+            for (int i = 0; i < names.Length; i++) if (names[i] == value) return;
+            _enumScanBad.Add(where + " " + key + "=\"" + value + "\" (" + enumType.Name + ")");
+        }
+
+        private static void ScanEffectEnums(string where, JsonValue effect)
+        {
+            if (effect == null || !effect.IsObject) return;
+            for (int i = 0; i < EffectEnumKeys.Length; i++)
+                ScanEnumKey(where, effect, EffectEnumKeys[i][0], EnumNamed(EffectEnumKeys[i][1]));
+        }
+
+        private static void ScanAbilityEnums(string where, JsonValue ability)
+        {
+            if (ability == null || !ability.IsObject) return;
+            for (int i = 0; i < AbilityEnumKeys.Length; i++)
+                ScanEnumKey(where, ability, AbilityEnumKeys[i][0], EnumNamed(AbilityEnumKeys[i][1]));
+
+            JsonValue effects = ability["effects"];
+            for (int i = 0; i < effects.Count; i++)
+                ScanEffectEnums(where + ".effects[" + i + "]", effects[i]);
+
+            // A talent's appended effect is authored in the same shape and reaches the same parser.
+            JsonValue appends = ability["appends"];
+            for (int i = 0; i < appends.Count; i++)
+                ScanEffectEnums(where + ".appends[" + i + "]", appends[i]["effect"]);
+        }
+
+        private static void ScanSlotBlockEnums(string where, JsonValue block)
+        {
+            if (block == null || !block.IsObject) return;
+            foreach (string key in block.Keys) ScanAbilityEnums(where + "." + key, block[key]);
+        }
+
+        // ---- the three loose ends: a charge spent once, an echo heard, a deflect received ------
+
+        /// <summary>
+        /// Three hooks the nine-gap pass built mechanisms for and left unwired. Each is measured by
+        /// a count against a control, because each failure mode is "it happens more times than it
+        /// should" or "it happens and nobody hears".
+        /// </summary>
+        private static void CheckLooseEnds()
+        {
+            CheckLinkTriggerSpendsCharge();
+            CheckEchoDamageIsHeard();
+            CheckDeflectIsReceived();
+        }
+
+        /// <summary>
+        /// A one-charge link answers a TRIGGER exactly once, where before it answered every hit for
+        /// the link's whole life. Counts carry it: one fire against the uncharged control's several.
+        ///
+        /// And the charge is spent only when somebody actually answered. The third run gives the
+        /// holder a link with a charge and NO passive listening, and the link survives - proved by
+        /// the StatusExpired a spent charge emits never appearing.
+        /// </summary>
+        private static void CheckLinkTriggerSpendsCharge()
+        {
+            BattleResult once = RunLinkTriggerChargeArena(1, true);
+            BattleResult many = RunLinkTriggerChargeArena(0, true);
+            BattleResult silent = RunLinkTriggerChargeArena(1, false);
+            if (once == null || many == null || silent == null)
+            { Check(false, "link trigger charge arena built"); return; }
+
+            int firesOnce = CountPassiveFires(once, "le_react");
+            int firesMany = CountPassiveFires(many, "le_react");
+            int spentSilent = LinkExpiries(silent);
+            int spentOnce = LinkExpiries(once);
+
+            Check(firesMany >= 3,
+                  "control: an uncharged link answers the trigger on every hit (" + firesMany + " fires)");
+            Check(firesOnce == 1,
+                  "LOOSE END 1: a one-charge link answers the trigger exactly ONCE and then ends ("
+                  + firesOnce + " fire against the control's " + firesMany + ")");
+            Check(spentOnce == 1,
+                  "and the spent charge removes the entry, which the record says out loud ("
+                  + spentOnce + " Linked expiry)");
+            Check(spentSilent == 0,
+                  "and a charged link with NOBODY listening keeps its charge - a record is spent by "
+                  + "being answered, not by the event happening (" + spentSilent + " Linked expiries)");
+        }
+
+        /// <summary>StatusExpired events naming Linked - a link charge spent to zero.</summary>
+        private static int LinkExpiries(BattleResult r)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusExpired
+                    && r.Events[i].Status == StatusKind.Linked) n++;
+            return n;
+        }
+
+        private static BattleResult RunLinkTriggerChargeArena(int charges, bool withListener)
+        {
+            string chargeField = charges > 0 ? ", \"charges\": " + charges : "";
+            string listener = withListener
+                ? @",
+      ""passive2"": { ""id"": ""le_react"", ""name"": ""Answer The Bond"", ""trigger"": ""OnLinkedUnitHit"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] }"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""le_watcher"", ""name"": ""LeWatcher"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""le_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""le_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""le_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""Self"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""None"", ""magnitude"": 1.0, ""duration"": 99" + chargeField + @" }
+        ] }" + listener + @" },
+    { ""id"": ""le_ally"", ""name"": ""LeAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""lea_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""lea_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""le_foe"", ""name"": ""LeFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""lef"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""le_ch"", ""name"": ""LinkCharge"", ""stages"": [
+    { ""id"": ""le_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""le_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "link trigger charge");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("le_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("le_ally"), 1));
+            return RunWith(db, db.GetStage("le_arena"), 9301, team);
+        }
+
+        /// <summary>
+        /// An EchoDamage effect is now heard by its caster, through the same OnEchoFired a link's
+        /// echo raises. The count is one fire per echo, and the control - the same basic with the
+        /// echo's condition never satisfied - fires none, so the trigger is following the echo
+        /// rather than the turn.
+        /// </summary>
+        private static void CheckEchoDamageIsHeard()
+        {
+            BattleResult echoes = RunEchoHeardArena(true);
+            BattleResult none = RunEchoHeardArena(false);
+            if (echoes == null || none == null) { Check(false, "echo-heard arena built"); return; }
+
+            int fires = CountPassiveFires(echoes, "eh_react");
+            int hits = HitsOn(echoes, "EhSecond");
+            int firesNone = CountPassiveFires(none, "eh_react");
+
+            Check(hits > 0 && fires == hits,
+                  "LOOSE END 2: an EchoDamage effect raises OnEchoFired on its caster, once per echo ("
+                  + fires + " fires against " + hits + " echoes)");
+            Check(firesNone == 0,
+                  "control: with only one enemy the echo never fires and neither does the trigger ("
+                  + firesNone + " fires) - it follows the echo, not the turn");
+        }
+
+        private static BattleResult RunEchoHeardArena(bool twoEnemies)
+        {
+            string second = twoEnemies
+                ? @",
+    { ""id"": ""eh_second"", ""name"": ""EhSecond"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ehs"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                : "";
+            string stage = twoEnemies
+                ? @"{ ""id"": ""eh_first"", ""level"": 1 }, { ""id"": ""eh_second"", ""level"": 1 }"
+                : @"{ ""id"": ""eh_first"", ""level"": 1 }";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""eh_hero"", ""name"": ""EhHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 400, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""eh_basic"", ""name"": ""Redirecting Shot"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""HighestAttackEnemy"", ""power"": 1.2 },
+          { ""kind"": ""EchoDamage"", ""target"": ""LowestHpEnemy"", ""power"": 0.4,
+            ""condition"": ""SubjectNotDamagedByMeThisRound"" }
+        ] },
+      ""active"": { ""id"": ""eh_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""eh_react"", ""name"": ""Where The Arrow Lands"", ""trigger"": ""OnEchoFired"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""eh_first"", ""name"": ""EhFirst"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ehf"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                + second + @"
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""eh_ch"", ""name"": ""EchoHeard"", ""stages"": [
+    { ""id"": ""eh_arena"", ""index"": 1, ""enemies"": [ " + stage + @" ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "echo heard");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("eh_hero"), 1));
+            return RunWith(db, db.GetStage("eh_arena"), 9302, team);
+        }
+
+        /// <summary>
+        /// A deflected share now arrives through RedirectShare, so the body that catches it hears
+        /// OnRedirectReceived exactly as a ward's protector does. One fire per deflect, and the
+        /// hero the attack was aimed at still takes nothing - which is the part routing through the
+        /// shared helper must not have changed.
+        /// </summary>
+        private static void CheckDeflectIsReceived()
+        {
+            BattleResult r = RunDeflectReceivedArena();
+            if (r == null) { Check(false, "deflect-received arena built"); return; }
+
+            int fires = CountPassiveFires(r, "dr_react");
+            int shares = HitsOn(r, "DrPartner");
+            int onHero = DamageTo(r, "DrHero");
+
+            Check(shares > 0 && fires == shares,
+                  "LOOSE END 3: a deflected share raises OnRedirectReceived on the body that catches "
+                  + "it, once per deflect (" + fires + " fires against " + shares + " shares) - the "
+                  + "deflect goes through RedirectShare now instead of around it");
+            Check(onHero == 0,
+                  "and the hero the blow was aimed at still takes nothing, so routing it through the "
+                  + "shared helper did not turn a deflect into a partial hit (" + onHero + ")");
+        }
+
+        private static BattleResult RunDeflectReceivedArena()
+        {
+            // The partner that catches the deflected share is an ENEMY, so its listener has to be
+            // authored on the enemy side - which is also the only way to hear a deflect at all,
+            // since the share lands on whoever the attacker was bound to.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""dr_hero"", ""name"": ""DrHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""dr_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""dr_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""dr_setup"", ""name"": ""Where I Was Not"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Deflect"", ""linkMutual"": true, ""magnitude"": 0.8, ""duration"": 99 }
+        ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""dr_attacker"", ""name"": ""DrAttacker"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 500, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""dra"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""dr_partner"", ""name"": ""DrPartner"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""drp"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""dr_react"", ""name"": ""Caught It"", ""trigger"": ""OnRedirectReceived"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""dr_ch"", ""name"": ""DeflectReceived"", ""stages"": [
+    { ""id"": ""dr_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""dr_attacker"", ""level"": 1 }, { ""id"": ""dr_partner"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "deflect received");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("dr_hero"), 1));
+            return RunWith(db, db.GetStage("dr_arena"), 9303, team);
+        }
+
+        // ---- the costed three: redirect-sent, move duration, role test ------------------------
+
+        private static void CheckCostedThree()
+        {
+            CheckRedirectSent();
+            CheckMoveDuration();
+            CheckSubjectRoleIs();
+        }
+
+        /// <summary>
+        /// The redirect's OWNER hears it, and does not hear it twice.
+        ///
+        /// Two arenas, because the rule has two halves. A Deflect link puts the owner, the body the
+        /// blow came off and the body that caught it on three different units, so the owner's
+        /// trigger fires and the destination's fires separately. An ordinary Covered ward puts the
+        /// owner AND the destination on the same unit, and there the owner trigger must stay
+        /// silent - otherwise a protector listening to both answers one event twice.
+        /// </summary>
+        private static void CheckRedirectSent()
+        {
+            BattleResult split = RunRedirectSentArena();
+            if (split == null) { Check(false, "redirect-sent arena built"); return; }
+            int ownerFires = CountPassiveFires(split, "rs_owner");
+            int shares = HitsOn(split, "RsPartner");
+            Check(shares > 0 && ownerFires == shares,
+                  "OnRedirectSent fires on the hero whose rule moved the blow, once per share ("
+                  + ownerFires + " fires against " + shares + " shares) - a third party to the "
+                  + "redirect that previously had nothing to listen to");
+
+            BattleResult ward = RunRedirectSentWardArena();
+            if (ward == null) { Check(false, "redirect-sent ward arena built"); return; }
+            int wardOwner = CountPassiveFires(ward, "rsw_owner");
+            int wardRecv = CountPassiveFires(ward, "rsw_recv");
+            Check(wardRecv > 0,
+                  "control: on an ordinary Covered ward the protector still hears OnRedirectReceived ("
+                  + wardRecv + " fires)");
+            Check(wardOwner == 0,
+                  "and does NOT also hear OnRedirectSent, because it is both owner and destination - "
+                  + "one event, one trigger (" + wardOwner + " fires)");
+        }
+
+        private static BattleResult RunRedirectSentArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""rs_owner_hero"", ""name"": ""RsOwner"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rs_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""rs_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive1"": { ""id"": ""rs_setup"", ""name"": ""Bind"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""LinkUnits"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""FrontEnemy"",
+            ""linkTransfer"": ""Deflect"", ""linkMutual"": true, ""magnitude"": 0.8, ""duration"": 99 }
+        ] },
+      ""passive2"": { ""id"": ""rs_owner"", ""name"": ""I Moved That"", ""trigger"": ""OnRedirectSent"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""rs_attacker"", ""name"": ""RsAttacker"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 500, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rsa"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""rs_partner"", ""name"": ""RsPartner"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rsp"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""rs_ch"", ""name"": ""RedirectSent"", ""stages"": [
+    { ""id"": ""rs_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""rs_attacker"", ""level"": 1 }, { ""id"": ""rs_partner"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "redirect sent");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("rs_owner_hero"), 1));
+            return RunWith(db, db.GetStage("rs_arena"), 9401, team);
+        }
+
+        private static BattleResult RunRedirectSentWardArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""rsw_warded"", ""name"": ""RswWarded"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 4000000, ""attack"": 10, ""defense"": 0, ""speed"": 40, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rsww_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""rsww_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""rsw_prot"", ""name"": ""RswProt"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""rswp_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""rswp_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""rswp_setup"", ""name"": ""Cover"", ""trigger"": ""BattleStart"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Covered"",
+            ""magnitude"": 0.5, ""duration"": 99, ""chance"": 1 }
+        ] },
+      ""passive1"": { ""id"": ""rsw_recv"", ""name"": ""Caught"", ""trigger"": ""OnRedirectReceived"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] },
+      ""passive2"": { ""id"": ""rsw_owner"", ""name"": ""Moved"", ""trigger"": ""OnRedirectSent"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""rsw_foe"", ""name"": ""RswFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rswf"", ""name"": ""Smash"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""rsw_ch"", ""name"": ""RedirectSentWard"", ""stages"": [
+    { ""id"": ""rsw_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""rsw_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(4), "redirect sent ward");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("rsw_warded"), 1));
+            team.Add(MakeInstance(db.GetHero("rsw_prot"), 1));
+            return RunWith(db, db.GetStage("rsw_arena"), 9402, team);
+        }
+
+        /// <summary>
+        /// A moved status can be re-clocked as it lands, and zero keeps its own clock.
+        ///
+        /// Measured on the duration itself rather than on a consequence: the StatusApplied the move
+        /// emits carries the rounds the entry will have, so the two runs report 1 and the original
+        /// remaining count. A move still creates no value - only the clock is authored.
+        /// </summary>
+        private static void CheckMoveDuration()
+        {
+            BackDur reclocked = RunMoveDurationArena(1);
+            BackDur kept = RunMoveDurationArena(0);
+            if (reclocked == null || kept == null) { Check(false, "move-duration arena built"); return; }
+
+            Check(kept.Moved > 0 && kept.Duration >= 3,
+                  "control: a move with no authored duration carries the entry's own remaining clock ("
+                  + kept.Duration + " rounds on " + kept.Moved + " move(s))");
+            Check(reclocked.Moved > 0 && reclocked.Duration == 1,
+                  "moveDuration re-clocks the entry as it lands (" + reclocked.Duration
+                  + " round against the control's " + kept.Duration + ")");
+            Check(reclocked.Magnitude == kept.Magnitude,
+                  "and the magnitude crosses untouched either way, so re-clocking is not a re-grant ("
+                  + Fmt(reclocked.Magnitude) + " against " + Fmt(kept.Magnitude) + ")");
+        }
+
+        private sealed class BackDur { public int Moved; public int Duration; public float Magnitude; }
+
+        private static BackDur RunMoveDurationArena(int moveDuration)
+        {
+            string durField = moveDuration > 0 ? ", \"moveDuration\": " + moveDuration : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""md_hero"", ""name"": ""MdHero"", ""aspect"": ""Ember"", ""role"": ""Binder"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""md_basic"", ""name"": ""Seed And Move"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""FrontEnemy"", ""status"": ""AttackDown"",
+            ""magnitude"": 0.17, ""duration"": 6, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""MoveDebuffs"", ""target"": ""FrontEnemy"", ""secondaryTarget"": ""LowestHpEnemy"",
+            ""hits"": 1" + durField + @" }
+        ] },
+      ""active"": { ""id"": ""md_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""md_front"", ""name"": ""MdFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""mdf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""md_back"", ""name"": ""MdBack"", ""aspect"": ""Ember"",
+      ""hp"": 900000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""mdb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""md_ch"", ""name"": ""MoveDuration"", ""stages"": [
+    { ""id"": ""md_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""md_front"", ""level"": 1 }, { ""id"": ""md_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "move duration");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("md_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("md_arena"), 9403, team);
+            if (r == null) return null;
+
+            int backId = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].Name == "MdBack") backId = r.Units[i].Id;
+            BackDur res = new BackDur();
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.StatusSpread || e.TargetId != backId) continue;
+                if (e.Status != StatusKind.AttackDown) continue;
+                res.Moved++;
+                if (res.Moved == 1) res.Duration = e.Duration;
+            }
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Id == backId) res.Magnitude = 0.17f;
+            return res;
+        }
+
+        /// <summary>
+        /// A condition can ask what a unit IS. The arena gives one enemy a role and another a
+        /// different one, and a bonus gated on the first role lands on exactly one of them - so the
+        /// condition is reading the role rather than passing for everybody or nobody.
+        /// </summary>
+        private static void CheckSubjectRoleIs()
+        {
+            BattleResult r = RunRoleArena();
+            if (r == null) { Check(false, "role arena built"); return; }
+            int onBulwark = DamageTo(r, "RoleBulwark");
+            int onStriker = DamageTo(r, "RoleStriker");
+            Check(onBulwark > 0 && onStriker > 0,
+                  "both enemies are struck by the unconditional blow (" + onBulwark + " / " + onStriker + ")");
+            Check(onBulwark > onStriker,
+                  "SubjectRoleIs: the role-gated bonus lands only on the enemy whose role it names ("
+                  + onBulwark + " on the Bulwark against " + onStriker + " on the Striker)");
+        }
+
+
+        // ---- the redirect family, measured against the roster it was built for ----------------
+
+        /// <summary>One probe run's counts. Every field is a sum over the five sweep seeds.</summary>
+        private sealed class RedirectProbe
+        {
+            public int Fires;       // PassiveTrigger events for the definition under test
+            public int OtherFires;  // its second half, where the clause has one
+            public int Damage;      // damage credited to the ability under test
+            public int Blows;       // every Damage event that landed on the subject
+            public float MaxHp;     // the subject's own Max HP, for a clause that names a cap
+            public int Biggest;     // the largest single hit the ability under test dealt
+        }
+
+        /// <summary>
+        /// THREE SHIPPED CLAUSES THAT SAY "WHEN DAMAGE IS REDIRECTED" AND WERE WIRED TO OnDamaged,
+        /// which fires on every blow the hero takes. The synthetic arenas above prove the trigger
+        /// fires once per share; this proves the three abilities that needed it are now reading it,
+        /// on the real roster, and says by how much the approximation was wrong.
+        ///
+        /// Each is measured twice: as it now ships, and with the same definition patched back in
+        /// memory to the wiring it replaced. THE PAIR IS THE EVIDENCE - a fire count on its own
+        /// says nothing about whether the count is the right one.
+        ///
+        /// The hero-sweep arena carries it, because these clauses need an attacker, an ally worth
+        /// warding and a fight long enough for a ward to be tested, and that arena already has all
+        /// three with real balance behind them. Five seeds, summed, so one unlucky resolution
+        /// cannot decide a number.
+        /// </summary>
+        private static void CheckRedirectApproximations(ContentDatabase live)
+        {
+            Line("THE REDIRECT FAMILY, ON LIVE CONTENT (three clauses that were wired to OnDamaged)");
+
+            RedirectProbe mWas = RunRedirectProbe(live, "marrow_the_irrevocable_vow", 2,
+                                                  "marrow_visible_cost", null, null, true);
+            RedirectProbe mIs = RunRedirectProbe(live, "marrow_the_irrevocable_vow", 2,
+                                                 "marrow_visible_cost", null, null, false);
+            if (mWas == null || mIs == null) { Check(false, "Marrow's probe built"); return; }
+
+            // Blows minus one per seed, exactly: a killing blow returns before OnDamaged is
+            // raised and fires OnKill on its killer instead, and each of the five battles ends
+            // with him dead. An equality is used rather than a ratio so the claim breaks if that
+            // stops being the reason.
+            Check(mWas.Fires == mWas.Blows - HeroSweepSeeds && mWas.Blows > 0,
+                  "Marrow, talent II, BEFORE: \"when Marrow redirects damage through The Cost Is "
+                  + "Named, the attacker loses 5 Energy\" fired on every blow he took that did not "
+                  + "kill him (" + mWas.Fires + " fires against " + mWas.Blows + " blows, one blow "
+                  + "per seed being the last one) - a hurt trigger, not a redirect trigger");
+            Check(mIs.Fires > 0 && mIs.Fires < mWas.Fires,
+                  "and AFTER: " + mIs.Fires + " fires against the same " + mIs.Blows + " blows, so "
+                  + (mWas.Fires - mIs.Fires) + " of them were ordinary hits the clause never named "
+                  + "and the attacker was being drained for");
+
+            RedirectProbe nWas = RunRedirectProbe(live, "nereia_the_field_medic", 3,
+                                                  "nereia_triage_buffer", "nereia_triage_buffer_heal",
+                                                  "Reversed Flow", true);
+            RedirectProbe nIs = RunRedirectProbe(live, "nereia_the_field_medic", 3,
+                                                 "nereia_triage_buffer", "nereia_triage_buffer_heal",
+                                                 "Reversed Flow", false);
+            if (nWas == null || nIs == null) { Check(false, "Nereia's probe built"); return; }
+
+            Check(nWas.Fires == nWas.Blows - HeroSweepSeeds && nWas.Blows > 0,
+                  "Nereia, passive 1, BEFORE: \"whenever Nereia receives redirected damage OR heals "
+                  + "an ally below 40% HP\" was one OnDamaged passive, so it counted every blow "
+                  + "that did not kill her (" + nWas.Fires + " fires against " + nWas.Blows
+                  + " blows) and no heal at all (" + nWas.OtherFires + ")");
+            Check(nIs.Fires > 0 && nIs.Fires < nWas.Fires && nIs.OtherFires > 0,
+                  "and AFTER, as the two halves of one sentence: " + nIs.Fires + " fires on shares "
+                  + "received and " + nIs.OtherFires + " on heals to an ally under 40% HP, against "
+                  + "the approximation's " + nWas.Fires + " and " + nWas.OtherFires);
+
+            Check(nWas.Damage > 0 && nIs.Damage > 0,
+                  "Nereia, talent III, fires in this arena either way (" + nWas.Damage + " total "
+                  + "before, " + nIs.Damage + " after) - a clause nothing reached would have nothing "
+                  + "to say");
+            Check(nIs.Damage != nWas.Damage,
+                  "and BEFORE it dealt 80% of ATTACK where its text says \"80% of the redirected "
+                  + "damage\": " + nWas.Damage + " against " + nIs.Damage + " now that "
+                  + "scaleByLastRedirect reads the amount Change of Course actually moved");
+            Line("  [note] her text caps it at 15% of her Max HP, which is "
+                 + Fmt(nIs.MaxHp * 0.15f) + " here; the largest single hit it dealt was "
+                 + nIs.Biggest + " (" + nWas.Biggest + " under the approximation). "
+                 + (nIs.Biggest > nIs.MaxHp * 0.15f
+                      ? "THE CAP BINDS."
+                      : "The cap does not bind at this level in this arena."));
+            Line("");
+        }
+
+        /// <summary>
+        /// Puts the three clauses back the way they were wired before this pass, in memory, on a
+        /// database built for this section alone. Nothing on disk is touched, and no other check
+        /// sees the patched database.
+        /// </summary>
+        private static void PatchRedirectApproximations(ContentDatabase db)
+        {
+            HeroDef marrow = db.GetHero("marrow_the_irrevocable_vow");
+            if (marrow != null)
+            {
+                PassiveDef visibleCost = marrow.TalentAt(2);
+                if (visibleCost != null)
+                {
+                    visibleCost.Trigger = PassiveTrigger.OnDamaged;
+                    if (visibleCost.Effects.Count > 0)
+                        visibleCost.Effects[0].Target = TargetMode.LastAttacker;
+                }
+            }
+
+            HeroDef nereia = db.GetHero("nereia_the_field_medic");
+            if (nereia == null) return;
+            for (int i = 0; i < nereia.Passives.Count; i++)
+            {
+                PassiveDef p = nereia.Passives[i];
+                if (p.Id == "nereia_triage_buffer") p.Trigger = PassiveTrigger.OnDamaged;
+                // The heal half did not exist before this pass at all. Emptied rather than
+                // re-triggered, because a passive with no effects never fires and never emits.
+                if (p.Id == "nereia_triage_buffer_heal") p.Effects.Clear();
+            }
+            PassiveDef reversed = nereia.TalentAt(3);
+            if (reversed != null && reversed.Effects.Count > 0)
+                reversed.Effects[0].ScaleByLastRedirect = false;
+        }
+
+        private static RedirectProbe RunRedirectProbe(ContentDatabase live, string heroId, int talent,
+                                                      string fireId, string otherId,
+                                                      string damageAbility, bool approximate)
+        {
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            if (arena == null) return null;
+            if (approximate) PatchRedirectApproximations(arena);
+
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena.GetStage("sweep_arena");
+            HeroDef def = arena.GetHero(heroId);
+            if (fillers == null || stage == null || def == null) return null;
+
+            RedirectProbe p = new RedirectProbe();
+            for (int s = 1; s <= HeroSweepSeeds; s++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                HeroInstance subject = MakeInstance(def, 40);
+                subject.SelectedTalent = talent;
+                team.Add(subject);
+                for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+
+                BattleResult r = RunWith(arena, stage, 4600000 + s, team);
+                if (r == null) continue;
+
+                int id = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                    if (r.Units[i].DefId == heroId) { id = r.Units[i].Id; p.MaxHp = r.Units[i].MaxHp; }
+
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.PassiveTrigger)
+                    {
+                        if (e.AbilityId == fireId) p.Fires++;
+                        else if (otherId != null && e.AbilityId == otherId) p.OtherFires++;
+                    }
+                    else if (e.Type == BattleEventType.Damage)
+                    {
+                        if (e.TargetId == id) p.Blows++;
+                        if (damageAbility != null && e.AbilityName == damageAbility)
+                        {
+                            p.Damage += e.Value;
+                            if (e.Value > p.Biggest) p.Biggest = e.Value;
+                        }
+                    }
+                }
+            }
+            return p;
+        }
+
+        private static BattleResult RunRoleArena()
+        {
+            // HeroRole ordinals: Bulwark 0, Striker 1. The bonus names Bulwark.
+            //
+            // An ENEMY does not author a role - CombatSimulation derives it, Bulwark for a boss
+            // and Striker for everything else - so the two bodies are told apart by `kind` rather
+            // than by a role field, which an enemy's parser would ignore.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ri_hero"", ""name"": ""RiHero"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ri_basic"", ""name"": ""Read The Line"",
+        ""effects"": [
+          { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 },
+          { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0,
+            ""condition"": ""SubjectRoleIs"", ""conditionValue"": 0 }
+        ] },
+      ""active"": { ""id"": ""ri_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ri_bulwark"", ""name"": ""RoleBulwark"", ""aspect"": ""Ember"", ""kind"": ""boss"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""rib"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""ri_striker"", ""name"": ""RoleStriker"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""ris"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ri_ch"", ""name"": ""RoleIs"", ""stages"": [
+    { ""id"": ""ri_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""ri_bulwark"", ""level"": 1 }, { ""id"": ""ri_striker"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "role is");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ri_hero"), 1));
+            return RunWith(db, db.GetStage("ri_arena"), 9404, team);
         }
     }
 }

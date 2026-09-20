@@ -760,7 +760,25 @@ namespace Emberfall.Core.Data
         /// False when the caster has moved nothing, rather than true-by-vacuity at a threshold of
         /// zero: a clause gated on how much moved did not happen if nothing moved.
         /// </summary>
-        LastMovedAboveHpFraction
+        LastMovedAboveHpFraction,
+
+        /// <summary>
+        /// The subject's HeroRole is the one named by ConditionValue, read as a role ordinal.
+        ///
+        /// THE ONE QUESTION THE ENGINE COULD NOT ASK ABOUT A UNIT. It can test HP, statuses, stack
+        /// depth, energy, speed, shields, action history, turn position and what a mark recorded,
+        /// and it could not ask what a unit IS. The nearest thing, StoredRoleMatches, compares a
+        /// role somebody previously RECORDED against a constant - so a kit could ask "is this the
+        /// role I wrote down" and never "is this a Mender".
+        ///
+        /// Reads CombatUnit.Role, which is rebuilt from content at the start of every battle and
+        /// reaches no save byte, so this costs nothing to store and cannot go stale.
+        ///
+        /// ConditionValue is a role ordinal, the same way StoredRoleMatches already takes one.
+        /// That is a raw number in JSON rather than a name, which is ugly and is the existing
+        /// convention; changing it would mean changing both.
+        /// </summary>
+        SubjectRoleIs
     }
 
     /// <summary>
@@ -1572,16 +1590,23 @@ namespace Emberfall.Core.Data
         OnStatusGained,
 
         /// <summary>
-        /// A link the owner CREATED just fired its echo. Not a broadcast - it is raised directly
-        /// on the link's SourceId, which is the one unit the event is about. _broadcastSubject and
-        /// _broadcastVictim are the body the echo landed on, so an effect can aim at it, and
-        /// `_lastMoved` for the owner holds the echoed amount.
+        /// AN ECHO THE OWNER CAUSED just struck a second body - either a StatusKind.Linked entry
+        /// the owner created firing its echo at the funnel, or an EffectKind.EchoDamage the owner
+        /// resolved. Not a broadcast: it is raised directly on the one unit the event is about,
+        /// the link's SourceId or the effect's caster. _broadcastSubject and _broadcastVictim are
+        /// the body the echo landed on, so an effect can aim at it, and `_lastMoved` for the owner
+        /// holds the echoed amount.
         ///
-        /// "Whenever my attack triggers against a secondary target" had no hook at all: the echo
-        /// happens inside DealRawDamage with nothing raised, so a hero could cause one and never
-        /// learn it had happened. Fires once per echo, an echo that killed its victim included.
+        /// RENAMED FROM OnLinkEchoFired AND WIDENED TO COVER BOTH, because the kit that wants it
+        /// wants both in one passive: "whenever his attack triggers against a secondary target
+        /// through Redirecting Shot OR Change the Course" is one sentence, and those two abilities
+        /// echo by the two different routes. A trigger that heard the link half and not the effect
+        /// half would have split one description across two passives, or left half of it silent -
+        /// which is what it did before this. Same ordinal; nothing authors it.
+        ///
+        /// Fires once per echo, an echo that killed its victim included.
         /// </summary>
-        OnLinkEchoFired,
+        OnEchoFired,
 
         /// <summary>
         /// The owner RECEIVED a redirected share - a Covered ward's split or a link's Redirect -
@@ -1599,7 +1624,26 @@ namespace Emberfall.Core.Data
         /// drifting apart at their first opportunity. No shipped Covered has a listener, so the
         /// dispatch walks an empty passive list in every existing battle.
         /// </summary>
-        OnRedirectReceived
+        OnRedirectReceived,
+
+        /// <summary>
+        /// A redirect the owner's OWN RULE performed just moved a share of a blow - a Covered ward
+        /// it applied, a Linked entry it created, a Deflect it placed on an attacker. Raised on
+        /// that owner, with _broadcastSubject and _broadcastVictim set to the body the share came
+        /// OFF and _broadcastSourceId to the attacker, and with `_lastMoved` for the owner holding
+        /// the share itself.
+        ///
+        /// THE THIRD PARTY TO A REDIRECT. The move has a body it came off, a body it landed on and
+        /// a hero whose decision moved it, and only the second had a hook - so "when I redirect
+        /// damage" had nothing to listen to at all. Six abilities across five heroes ask for it,
+        /// three of them already shipped and currently approximated onto OnDamaged, which fires on
+        /// every hit the hero takes rather than on the redirects it caused.
+        ///
+        /// NOT raised when the owner is also the destination, which is every ordinary Covered ward:
+        /// that unit has already been told by OnRedirectReceived, and raising both on one body
+        /// would have a hero listening to each answer a single event twice.
+        /// </summary>
+        OnRedirectSent
     }
 
     /// <summary>

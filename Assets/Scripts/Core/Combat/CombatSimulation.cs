@@ -263,6 +263,12 @@ namespace Emberfall.Core.Combat
                     return rec != null && rec.StoredRoleSet && rec.StoredRole == (HeroRole)(int)effect.ConditionValue;
                 }
 
+                // What the subject IS, as against what somebody wrote down about it. Pure - it
+                // reads a field rebuilt from content at battle start - so it lives in the static
+                // evaluator with the rest of the unit questions.
+                case EffectCondition.SubjectRoleIs:
+                    return subject.Role == (HeroRole)(int)effect.ConditionValue;
+
                 // A running minimum is only meaningful once something has been recorded, and the
                 // unset sentinel is negative precisely so "never recorded" and "recorded 0%" are
                 // different answers rather than the same one.
@@ -2399,7 +2405,9 @@ namespace Emberfall.Core.Combat
                             // status row, so moving the entry alone would hand the recipient a
                             // marker with nothing behind it.
                             if (entry.Kind == StatusKind.Shield) continue;
-                            MoveStatus(target, to, entry, true);
+                            // MoveDuration re-clocks the entry as it lands; 0 keeps its own, which
+                            // is every move authored before this one.
+                            MoveStatus(target, to, entry, true, effect.MoveDuration);
                             moved++;
                         }
                         break;
@@ -2818,6 +2826,32 @@ namespace Emberfall.Core.Combat
                         int spoken = _lastDamageDealt;
                         DealRawDamage(source.Id, target, echoed, false, echoVfx, StatusKind.None, 1f, echoName);
                         _lastDamageDealt = spoken;
+
+                        // AND THE CASTER HEARS IT. An EchoDamage struck a second body and raised
+                        // nothing, so a hero could cause one and never learn it had happened -
+                        // which left "whenever his attack triggers against a secondary target
+                        // through Redirecting Shot or Change the Course" hearing only the half
+                        // that echoes through a link. Same trigger for both routes, because that
+                        // sentence is one passive.
+                        //
+                        // Raised after the hit lands, on the caster, with the struck body as the
+                        // subject so an effect can aim at it. `depth` is threaded, so a passive
+                        // that answers an echo by echoing again is bounded by MaxPassiveDepth the
+                        // way any passive calling a passive is.
+                        NoteMoved(source.Id, echoed);
+                        if (source.Alive && !IsBattleOver())
+                        {
+                            CombatUnit prevSubjectEd = _broadcastSubject;
+                            CombatUnit prevVictimEd = _broadcastVictim;
+                            int prevSourceEd = _broadcastSourceId;
+                            _broadcastSubject = target;
+                            _broadcastVictim = target;
+                            _broadcastSourceId = source.Id;
+                            TriggerPassive(source, PassiveTrigger.OnEchoFired, depth);
+                            _broadcastSourceId = prevSourceEd;
+                            _broadcastVictim = prevVictimEd;
+                            _broadcastSubject = prevSubjectEd;
+                        }
                         break;
                     }
 
@@ -3271,6 +3305,40 @@ namespace Emberfall.Core.Combat
                     _broadcastSubject = prevSubject;
                 }
 
+                // AND THE UNIT WHOSE RULE MOVED IT hears that it moved. A redirect has three
+                // parties - the body it came off, the body it landed on, and the hero whose ward or
+                // link did the moving - and only the second had a hook. That left the whole
+                // "when I redirect damage" family with nothing to listen to, and the roster has
+                // five of them: Marrow, Nereia twice, Linnet, Ruma, Toren.
+                //
+                // A SECOND TRIGGER RATHER THAN A SUBJECT ON THE FIRST, because the owner needs to
+                // FIRE, and a subject only lets somebody already firing ask a question. The owner
+                // is usually not the destination and often not on the same side as either of the
+                // other two.
+                //
+                // Skipped when the owner IS the destination, which is every Covered ward: a
+                // protector that caught its own ward's share has already been told by
+                // OnRedirectReceived, and firing both on one unit would make a hero that listens to
+                // each answer one event twice.
+                //
+                // `_lastMoved[ruleOwnerId]` was set just above, so ScaleByLastMoved on the owner
+                // reads the share - which is what "damage equal to 80% of the redirected damage"
+                // needs and had no way to say.
+                CombatUnit ruleOwner = FindUnit(ruleOwnerId);
+                if (ruleOwner != null && ruleOwner.Alive && ruleOwner != destination && !IsBattleOver())
+                {
+                    CombatUnit prevSubject = _broadcastSubject;
+                    CombatUnit prevVictim = _broadcastVictim;
+                    int prevSourceId = _broadcastSourceId;
+                    _broadcastSubject = target;
+                    _broadcastVictim = target;
+                    _broadcastSourceId = sourceId;
+                    TriggerPassive(ruleOwner, PassiveTrigger.OnRedirectSent, 0);
+                    _broadcastSourceId = prevSourceId;
+                    _broadcastVictim = prevVictim;
+                    _broadcastSubject = prevSubject;
+                }
+
                 if (damage <= 0) return false;
                 if (!target.Alive) return false;
                 return true;
@@ -3325,6 +3393,19 @@ namespace Emberfall.Core.Combat
             /// spent Guard charge does. Returns nothing: a link that ends still fired this time,
             /// which is what "ends AFTER triggering once" says.
             /// </summary>
+            /// <summary>The holder's first Linked entry naming `partnerId`, or null. The entry the
+            /// trigger dispatch just answered, so its charge can be the one taken.</summary>
+            private static StatusInstance FindLinkTo(CombatUnit holder, int partnerId)
+            {
+                if (holder == null) return null;
+                for (int i = 0; i < holder.Statuses.Count; i++)
+                {
+                    StatusInstance link = holder.Statuses[i];
+                    if (link.Kind == StatusKind.Linked && link.LinkedToId == partnerId) return link;
+                }
+                return null;
+            }
+
             private void SpendLinkCharge(CombatUnit holder, StatusInstance link)
             {
                 if (link == null || link.Charges <= 0) return;
@@ -3378,20 +3459,34 @@ namespace Emberfall.Core.Combat
                             CombatUnit partner = FindUnit(deflect.LinkedToId);
                             if (partner != null && partner.Alive && partner != target && partner != attacker)
                             {
-                                float share = deflect.Magnitude > 1f ? 1f : deflect.Magnitude;
-                                int moved = (int)Math.Round(damage * share, MidpointRounding.AwayFromZero);
                                 SpendLinkCharge(attacker, deflect);
-                                if (moved > 0)
-                                {
-                                    _inRedirect = true;
-                                    DealRawDamage(sourceId, partner, moved, critical, vfx, dotKind,
-                                                  aspectFactor, abilityName);
-                                    _inRedirect = false;
-                                    NoteMoved(target.Id, moved);
-                                }
+                                // THROUGH RedirectShare, not past it. The deflect used to call
+                                // DealRawDamage itself, which is the same divergence the extraction
+                                // of this helper was meant to end: two mechanics moving a share of a
+                                // blow, with only one of them announcing it. Routing it here gives
+                                // the deflect the identical rounding, the identical clamp, the
+                                // identical one-hop bound and - the point - the same
+                                // OnRedirectReceived on whoever catches the share.
+                                //
+                                // RedirectShare's BODY IS UNTOUCHED by this, which is what keeps
+                                // Covered's six shipped effects where they are: this adds a third
+                                // caller, it does not change what the helper does for the two that
+                                // were already there.
+                                //
+                                // Two consequences of going through it rather than around it, both
+                                // deliberate. The share is delivered with `critical` false, as
+                                // Cover's and Redirect's shares always have been - a moved share is
+                                // not itself a critical hit. And the rule owner is recorded as the
+                                // link's creator, so ScaleByLastMoved on that hero reads what the
+                                // deflect moved on their behalf.
+                                RedirectShare(sourceId, target, partner, deflect.Magnitude, ref damage,
+                                              vfx, dotKind, aspectFactor, abilityName, deflect.SourceId);
                                 // The blow is GONE from this body whatever the share was, which is
                                 // what "instead" means: an 80% deflect is not a 20% hit that still
-                                // lands. A share of zero is a clean dodge, and the charge is spent
+                                // lands. Returning here discards the remainder RedirectShare left
+                                // behind, which is the one thing a deflect does that a ward does
+                                // not - and is why the helper's return value is ignored rather than
+                                // obeyed. A share of zero is a clean dodge, and the charge is spent
                                 // either way because the deflect is what answered the attack.
                                 return;
                             }
@@ -3808,7 +3903,7 @@ namespace Emberfall.Core.Combat
                                     _broadcastSubject = echoTo;
                                     _broadcastVictim = echoTo;
                                     _broadcastSourceId = sourceId;
-                                    TriggerPassive(owner, PassiveTrigger.OnLinkEchoFired, 0);
+                                    TriggerPassive(owner, PassiveTrigger.OnEchoFired, 0);
                                     _broadcastSourceId = prevSourceE;
                                     _broadcastVictim = prevVictimE;
                                     _broadcastSubject = prevSubjectE;
@@ -4459,16 +4554,27 @@ namespace Emberfall.Core.Combat
             /// path at all, so an IsBattleOver test before the first passive would suppress an
             /// OnKill passive that fires today and move every fingerprint containing one.
             /// </summary>
-            private void TriggerPassive(CombatUnit owner, PassiveTrigger trigger, int depth)
+            /// <summary>
+            /// Fires every passive on `owner` that answers `trigger`, and reports whether any of
+            /// them did.
+            ///
+            /// The return value is new and exactly one caller reads it: DispatchLinkPassive, which
+            /// has to know whether a link's record was actually SPENT before taking a charge off
+            /// it. "The next time this body is attacked, do X" is a claim about X happening, so a
+            /// holder with nothing listening must not burn its charge on an event it ignored.
+            /// Every other call site ignores the value and is unchanged by it.
+            /// </summary>
+            private bool TriggerPassive(CombatUnit owner, PassiveTrigger trigger, int depth)
             {
-                if (owner == null || !owner.Alive) return;
+                bool firedAny = false;
+                if (owner == null || !owner.Alive) return false;
 
                 for (int i = 0; i < owner.Passives.Count; i++)
                 {
                     // Between passives only. A passive that killed its owner, or ended the fight,
                     // stops the ones behind it rather than resolving into a decided battle - the
                     // same rule ResolveAbility already applies between an effect's own targets.
-                    if (i > 0 && (!owner.Alive || IsBattleOver())) return;
+                    if (i > 0 && (!owner.Alive || IsBattleOver())) return firedAny;
 
                     PassiveDef passive = owner.Passives[i];
                     if (passive == null || passive.Trigger != trigger) continue;
@@ -4533,6 +4639,7 @@ namespace Emberfall.Core.Combat
                     if (passive.OncePerBattle) owner.MarkPassiveFired(i);
                     if (passive.Limit != PassiveLimit.Unlimited) owner.MarkPassiveRound(i, _round);
 
+                    firedAny = true;
                     BattleEvent e = Emit(BattleEventType.PassiveTrigger, owner.Id, owner.Id);
                     e.AbilityId = passive.Id;
                     e.AbilityName = passive.Name;
@@ -4563,6 +4670,7 @@ namespace Emberfall.Core.Combat
                     _perTargetLimit = prevLimit;
                     _perTargetPerRound = prevPerRound;
                 }
+                return firedAny;
             }
 
             /// <summary>
@@ -4714,7 +4822,24 @@ namespace Emberfall.Core.Combat
                 {
                     if (IsBattleOver()) break;
                     if (!holders[i].Alive) continue;
-                    TriggerPassive(holders[i], trigger, effectiveDepth);
+                    bool fired = TriggerPassive(holders[i], trigger, effectiveDepth);
+
+                    // THE RECORD IS SPENT BY BEING ANSWERED. A link's Charges were stamped from the
+                    // day links existed and taken only by the funnel's Redirect, Echo and Deflect
+                    // branches, so a link read by a TRIGGER kept its charge and fired again on the
+                    // next hit - "the next time either recorded target is attacked" and "the next
+                    // allied hit against it" were both unbounded, which is the shape both kits the
+                    // trigger was built for actually need.
+                    //
+                    // Spent only when a passive ACTUALLY FIRED, which is what TriggerPassive's
+                    // return value is for. A holder with nothing listening, or whose listener was
+                    // refused by its own once-per-round clock, has not used its record and must not
+                    // pay for the event. That is also what lets one link serve two separate
+                    // watchers without the first to be asked silently consuming it.
+                    //
+                    // Charges of 0 are unlimited, as everywhere else, so every link authored before
+                    // this keeps firing exactly as it did.
+                    if (fired) SpendLinkCharge(holders[i], FindLinkTo(holders[i], subject.Id));
                 }
                 _linkDispatchDepth--;
 
@@ -5657,11 +5782,32 @@ namespace Emberfall.Core.Combat
 
             private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status, bool removeFromSource)
             {
+                MoveStatus(from, to, status, removeFromSource, 0);
+            }
+
+            /// <summary>
+            /// `newDuration` of 0 keeps the entry's own RoundsLeft, which is what every caller did
+            /// before this and what makes a move create no value. A positive value RE-CLOCKS the
+            /// entry as it lands.
+            ///
+            /// Six abilities in the roster move a set of statuses and name a duration in the same
+            /// breath - "moves its debuffs to the highest-HP enemy FOR 2 ROUNDS", "transfers its
+            /// buffs to the lowest-HP enemy FOR 1 ROUND" - and the set is unknown at authoring
+            /// time, so the remove-and-reapply idiom Seraphine uses cannot serve them: you cannot
+            /// re-apply statuses you cannot name, and doing so would lose whatever they recorded.
+            ///
+            /// It is still a move rather than a grant: magnitude, Stored, charges and every record
+            /// cross untouched. Only the clock is authored, and only when an effect says so.
+            /// </summary>
+            private void MoveStatus(CombatUnit from, CombatUnit to, StatusInstance status,
+                                    bool removeFromSource, int newDuration)
+            {
                 if (to == null || status == null) return;
 
                 if (removeFromSource && from != null) from.Statuses.Remove(status);
 
-                to.AddOrRefresh(status.Kind, status.RoundsLeft, status.Magnitude, status.SourceId);
+                int rounds = newDuration > 0 ? newDuration : status.RoundsLeft;
+                to.AddOrRefresh(status.Kind, rounds, status.Magnitude, status.SourceId);
 
                 // EVERYTHING THE ENTRY RECORDED TRAVELS WITH IT. A ledger that forgets its balance
                 // when it changes carrier is not a ledger, and a record that forgets what it
@@ -5707,7 +5853,10 @@ namespace Emberfall.Core.Combat
 
                 BattleEvent e = Emit(BattleEventType.StatusSpread, from != null ? from.Id : -1, to.Id);
                 e.Status = status.Kind;
-                e.Duration = status.RoundsLeft;
+                // The clock the entry LANDED with, which is the one it left with unless the move
+                // re-clocked it. Reporting the old number would have the record disagree with the
+                // board for every authored move duration.
+                e.Duration = rounds;
                 e.Value = status.SourceId;
             }
 
