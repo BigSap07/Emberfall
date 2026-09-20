@@ -730,6 +730,19 @@ namespace Emberfall.Core.Combat
             /// TriggerPassive(OnStatusExpired) so a passive with TriggerStatus can filter.</summary>
             private readonly List<StatusKind> _expiredKinds = new List<StatusKind>();
 
+            /// <summary>
+            /// Who applied the statuses that just expired on one carrier, distinct, for the life of
+            /// one expiry sweep.
+            ///
+            /// An expiry broadcast is the one window with no single causer: a unit can shed two
+            /// entries from two different heroes in the same sweep, and the broadcast goes out once
+            /// per SIDE rather than once per applier. _broadcastSourceId therefore carries the
+            /// applier only when there is exactly one, and a passive asking "did I apply it" is
+            /// answered from this list instead - which is exact however many there were, and does
+            /// not multiply the firings by re-broadcasting per applier.
+            /// </summary>
+            private readonly List<int> _expiredSourceIds = new List<int>();
+
             /// <summary>The status kind being applied right now, or None outside an application.
             /// Read by the OnStatusGained TriggerStatus filter, and a single value rather than a
             /// list because an application lands one kind at a time where an expiry sweep can
@@ -1305,8 +1318,11 @@ namespace Emberfall.Core.Combat
                     // asks for, and it is also the only ordering that lets an answer matter.
                     {
                         CombatUnit prevSubject = _broadcastSubject;
+                        int prevActiveSrc = _broadcastSourceId;
                         _broadcastSubject = unit;
+                        _broadcastSourceId = unit.Id;
                         BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActive, 0, null);
+                        _broadcastSourceId = prevActiveSrc;
                         _broadcastSubject = prevSubject;
                     }
                     // The declaration window, open to everybody. OnEnemyActive above is the same
@@ -1354,7 +1370,12 @@ namespace Emberfall.Core.Combat
                     // The far side of the caster's own Active, mirroring AfterBasicAttack. No
                     // shipped passive answers it, so this walks an empty listener set today.
                     if (unit.Alive && !IsBattleOver())
+                    {
+                        int prevCastSrc = _broadcastSourceId;
+                        _broadcastSourceId = unit.Id;
                         TriggerPassive(unit, PassiveTrigger.AfterActiveCast, 0);
+                        _broadcastSourceId = prevCastSrc;
+                    }
 
                     // AND THE OTHER END OF THE CAST. OnEnemyActive is raised before it, on purpose,
                     // so a passive answering it acts on the board the caster is about to hit; this
@@ -1365,8 +1386,11 @@ namespace Emberfall.Core.Combat
                     if (unit.Alive && !IsBattleOver())
                     {
                         CombatUnit prevResolved = _broadcastSubject;
+                        int prevResolvedSrc = _broadcastSourceId;
                         _broadcastSubject = unit;
+                        _broadcastSourceId = unit.Id;
                         BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyActiveResolved, 0, null);
+                        _broadcastSourceId = prevResolvedSrc;
                         _broadcastSubject = prevResolved;
                     }
                 }
@@ -1386,7 +1410,10 @@ namespace Emberfall.Core.Combat
                     {
                         // -1: a unit's own basic-attack refill has no granter, so it never redirects.
                         AddEnergy(unit, _cfg.EnergyPerBasicAttack, -1);
+                        int prevBasicSrc = _broadcastSourceId;
+                        _broadcastSourceId = unit.Id;
                         TriggerPassive(unit, PassiveTrigger.AfterBasicAttack, 0);
+                        _broadcastSourceId = prevBasicSrc;
                     }
                     _lastTarget = prevLastTarget;
                 }
@@ -1398,10 +1425,13 @@ namespace Emberfall.Core.Combat
                 if (unit.Alive && !IsBattleOver())
                 {
                     CombatUnit prevSubject = _broadcastSubject;
+                    int prevEndSrc = _broadcastSourceId;
                     _broadcastSubject = unit;
+                    _broadcastSourceId = unit.Id;
                     BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAllyTurnEnd, 0, unit);
                     if (unit.Alive && !IsBattleOver())
                         BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyTurnEnd, 0, null);
+                    _broadcastSourceId = prevEndSrc;
                     _broadcastSubject = prevSubject;
                 }
 
@@ -1505,7 +1535,10 @@ namespace Emberfall.Core.Combat
                             {
                                 CombatUnit prevSubject = _broadcastSubject;
                                 _broadcastSubject = unit;
+                                int prevDotSrc = _broadcastSourceId;
+                                _broadcastSourceId = burnSource.Id;
                                 BroadcastPassive(burnSource.IsPlayer, PassiveTrigger.OnAppliedDoTTick, 0, null);
+                                _broadcastSourceId = prevDotSrc;
                                 _broadcastSubject = prevSubject;
                                 if (!unit.Alive || IsBattleOver()) return;
                             }
@@ -1544,6 +1577,7 @@ namespace Emberfall.Core.Combat
                 bool expiredFromEnemy = false;
                 bool sameSideExpired = false;
                 _expiredKinds.Clear();
+                _expiredSourceIds.Clear();
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
                     StatusInstance s = unit.Statuses[i];
@@ -1644,6 +1678,7 @@ namespace Emberfall.Core.Combat
                         CombatUnit source = FindUnit(s.SourceId);
                         if (source != null)
                         {
+                            if (!_expiredSourceIds.Contains(source.Id)) _expiredSourceIds.Add(source.Id);
                             if (source.IsPlayer != unit.IsPlayer)
                             {
                                 if (source.IsPlayer) expiredFromPlayer = true;
@@ -1670,11 +1705,16 @@ namespace Emberfall.Core.Combat
                 if (expiredFromPlayer || expiredFromEnemy)
                 {
                     CombatUnit prevSubject = _broadcastSubject;
+                    int prevExpSrc = _broadcastSourceId;
                     _broadcastSubject = unit;
+                    // One applier means a name; several mean the question is answered from the
+                    // list instead, and BroadcastSource resolves to nobody rather than to a guess.
+                    _broadcastSourceId = _expiredSourceIds.Count == 1 ? _expiredSourceIds[0] : -1;
                     if (expiredFromPlayer)
                         BroadcastPassive(true, PassiveTrigger.OnAppliedStatusExpired, 0, null);
                     if (expiredFromEnemy)
                         BroadcastPassive(false, PassiveTrigger.OnAppliedStatusExpired, 0, null);
+                    _broadcastSourceId = prevExpSrc;
                     _broadcastSubject = prevSubject;
                 }
 
@@ -1685,8 +1725,11 @@ namespace Emberfall.Core.Combat
                 if (sameSideExpired)
                 {
                     CombatUnit prevSubject = _broadcastSubject;
+                    int prevAllyExpSrc = _broadcastSourceId;
                     _broadcastSubject = unit;
+                    _broadcastSourceId = _expiredSourceIds.Count == 1 ? _expiredSourceIds[0] : -1;
                     BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAppliedAllyStatusExpired, 0, null);
+                    _broadcastSourceId = prevAllyExpSrc;
                     _broadcastSubject = prevSubject;
                 }
             }
@@ -2009,7 +2052,10 @@ namespace Emberfall.Core.Combat
                 // condition on it via TargetMode.BroadcastSubject / ConditionSubject.BroadcastSubject.
                 CombatUnit prevSubject = _broadcastSubject;
                 _broadcastSubject = unit;
+                int prevRepaidSrc = _broadcastSourceId;
+                _broadcastSourceId = unit.Id;
                 BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnTurnDebtRepaid, 0, null);
+                _broadcastSourceId = prevRepaidSrc;
                 _broadcastSubject = prevSubject;
             }
 
@@ -2333,8 +2379,11 @@ namespace Emberfall.Core.Combat
 
                         {
                             CombatUnit prevSubject = _broadcastSubject;
+                            int prevShieldSrc = _broadcastSourceId;
                             _broadcastSubject = target;
+                            _broadcastSourceId = source.Id;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShielded, depth, target);
+                            _broadcastSourceId = prevShieldSrc;
                             _broadcastSubject = prevSubject;
                         }
                         break;
@@ -2562,7 +2611,10 @@ namespace Emberfall.Core.Combat
                             _broadcastSubject = target;
                             StatusKind prevBuff = _broadcastBuff;
                             _broadcastBuff = effect.Status;
+                            int prevBuffSrc = _broadcastSourceId;
+                            _broadcastSourceId = source.Id;
                             BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyBuffGained, depth, null);
+                            _broadcastSourceId = prevBuffSrc;
                             _broadcastBuff = prevBuff;
                             _broadcastSubject = prevSubject;
                         }
@@ -2582,7 +2634,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = cleansedValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = cleansedValue; FireRemoval(source, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
@@ -2609,7 +2661,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = dispelledValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = dispelledValue; FireRemoval(source, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -2708,7 +2760,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) { _lastRemovedValue = strippedValue; TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth); }
+                        if (removed > 0) { _lastRemovedValue = strippedValue; FireRemoval(source, depth); }
                         break;
                     }
 
@@ -3046,8 +3098,11 @@ namespace Emberfall.Core.Combat
                             if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
                             {
                                 CombatUnit prevSubject = _broadcastSubject;
+                                int prevLcSrc = _broadcastSourceId;
                                 _broadcastSubject = target;
+                                _broadcastSourceId = source.Id;
                                 BroadcastPassive(source.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSourceId = prevLcSrc;
                                 _broadcastSubject = prevSubject;
                             }
                         }
@@ -3296,8 +3351,11 @@ namespace Emberfall.Core.Combat
                             if (wasBelow && led.StoredCap > 0f && led.Stored >= led.StoredCap)
                             {
                                 CombatUnit prevSubject = _broadcastSubject;
+                                int prevLcSrc = _broadcastSourceId;
                                 _broadcastSubject = target;
+                                _broadcastSourceId = source.Id;
                                 BroadcastPassive(source.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSourceId = prevLcSrc;
                                 _broadcastSubject = prevSubject;
                             }
                             if (source.IsPlayer == target.IsPlayer)
@@ -3305,7 +3363,10 @@ namespace Emberfall.Core.Combat
                                 _lastLedgerBankedStored = led.Stored;
                                 CombatUnit prevSubjectB = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc3365 = _broadcastSourceId;
+                                _broadcastSourceId = led.SourceId;
                                 BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSourceId = prevBcSrc3365;
                                 _broadcastSubject = prevSubjectB;
                             }
                         }
@@ -3398,7 +3459,12 @@ namespace Emberfall.Core.Combat
                                      - source.SumMagnitude(StatusKind.AccuracyDown);
                 if (!_rng.Chance(hitChance))
                 {
-                    TriggerPassive(target, PassiveTrigger.OnDodge, depth);
+                    {
+                        int prevDodgeSrc = _broadcastSourceId;
+                        _broadcastSourceId = source.Id;
+                        TriggerPassive(target, PassiveTrigger.OnDodge, depth);
+                        _broadcastSourceId = prevDodgeSrc;
+                    }
                     return;
                 }
 
@@ -3411,7 +3477,12 @@ namespace Emberfall.Core.Combat
                 // nothing about any existing seeded battle's RNG stream.
                 if (_rng.Chance(target.EffectiveBlock))
                 {
-                    TriggerPassive(target, PassiveTrigger.OnBlock, depth);
+                    {
+                        int prevBlockSrc = _broadcastSourceId;
+                        _broadcastSourceId = source.Id;
+                        TriggerPassive(target, PassiveTrigger.OnBlock, depth);
+                        _broadcastSourceId = prevBlockSrc;
+                    }
                     return;
                 }
 
@@ -3551,7 +3622,10 @@ namespace Emberfall.Core.Combat
                                 {
                                     CombatUnit prevSubject = _broadcastSubject;
                                     _broadcastSubject = target;
+                                    int prevBcSrc3621 = _broadcastSourceId;
+                                    _broadcastSourceId = ledSource.Id;
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSourceId = prevBcSrc3621;
                                     _broadcastSubject = prevSubject;
                                 }
                             }
@@ -3561,7 +3635,10 @@ namespace Emberfall.Core.Combat
                                 _lastLedgerBankedStored = led.Stored;
                                 CombatUnit prevSubjectBDR = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc3631 = _broadcastSourceId;
+                                _broadcastSourceId = led.SourceId;
                                 BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSourceId = prevBcSrc3631;
                                 _broadcastSubject = prevSubjectBDR;
                             }
                         }
@@ -3607,7 +3684,13 @@ namespace Emberfall.Core.Combat
                 string abilityName = ability != null ? ability.Name : "";
                 DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
 
-                if (critical && source.Alive) TriggerPassive(source, PassiveTrigger.OnCriticalHit, depth);
+                if (critical && source.Alive)
+                {
+                    int prevCritSrc = _broadcastSourceId;
+                    _broadcastSourceId = source.Id;
+                    TriggerPassive(source, PassiveTrigger.OnCriticalHit, depth);
+                    _broadcastSourceId = prevCritSrc;
+                }
             }
 
             /// <summary>
@@ -3732,6 +3815,25 @@ namespace Emberfall.Core.Combat
             }
 
             private readonly Dictionary<string, int> _ignoreDefenseUses = new Dictionary<string, int>();
+
+            /// <summary>The three removal sites raise one trigger and name one causer.</summary>
+            private void FireRemoval(CombatUnit source, int depth)
+            {
+                if (source == null) return;
+                int prev = _broadcastSourceId;
+                _broadcastSourceId = source.Id;
+                TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                _broadcastSourceId = prev;
+            }
+
+            /// <summary>Both delay sites raise one trigger and name the unit that caused the delay.</summary>
+            private void FireTurnDelayed(CombatUnit source)
+            {
+                int prev = _broadcastSourceId;
+                _broadcastSourceId = source.Id;
+                TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+                _broadcastSourceId = prev;
+            }
 
             private float ScaledTerm(EffectDef effect, CombatUnit source)
             {
@@ -4068,7 +4170,10 @@ namespace Emberfall.Core.Combat
                                 {
                                     CombatUnit prevSubject = _broadcastSubject;
                                     _broadcastSubject = target;
+                                    int prevBcSrc4154 = _broadcastSourceId;
+                                    _broadcastSourceId = ledSource.Id;
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSourceId = prevBcSrc4154;
                                     _broadcastSubject = prevSubject;
                                 }
                             }
@@ -4078,7 +4183,10 @@ namespace Emberfall.Core.Combat
                                 _lastLedgerBankedStored = led.Stored;
                                 CombatUnit prevSubjectB = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc4164 = _broadcastSourceId;
+                                _broadcastSourceId = led.SourceId;
                                 BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSourceId = prevBcSrc4164;
                                 _broadcastSubject = prevSubjectB;
                             }
                         }
@@ -4161,7 +4269,10 @@ namespace Emberfall.Core.Combat
                             CombatUnit prevVictimSB = _broadcastVictim;
                             _shieldBreakerId = sourceId;
                             _broadcastVictim = target;
+                            int prevSbSrc = _broadcastSourceId;
+                            _broadcastSourceId = sourceId;
                             TriggerPassive(target, PassiveTrigger.OnShieldBreak, 0);
+                            _broadcastSourceId = prevSbSrc;
                             // Ally-side broadcast: the broken unit's allies hear about
                             // the break, so an applier like Darian can react. No shipped
                             // passive uses OnAllyShieldBreak, so the broadcast walks
@@ -4169,8 +4280,11 @@ namespace Emberfall.Core.Combat
                             if (target.Alive && !IsBattleOver())
                             {
                                 CombatUnit prevSubject2 = _broadcastSubject;
+                                int prevAsbSrc = _broadcastSourceId;
                                 _broadcastSubject = target;
+                                _broadcastSourceId = sourceId;
                                 BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShieldBreak, 0, target);
+                                _broadcastSourceId = prevAsbSrc;
                                 _broadcastSubject = prevSubject2;
                             }
                             _shieldBreakerId = prevBreaker;
@@ -4203,7 +4317,10 @@ namespace Emberfall.Core.Combat
                                 {
                                     CombatUnit prevSubject = _broadcastSubject;
                                     _broadcastSubject = target;
+                                    int prevBcSrc4295 = _broadcastSourceId;
+                                    _broadcastSourceId = ledSource.Id;
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSourceId = prevBcSrc4295;
                                     _broadcastSubject = prevSubject;
                                 }
                             }
@@ -4213,7 +4330,10 @@ namespace Emberfall.Core.Combat
                                 _lastLedgerBankedStored = led.Stored;
                                 CombatUnit prevSubjectB = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc4305 = _broadcastSourceId;
+                                _broadcastSourceId = led.SourceId;
                                 BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSourceId = prevBcSrc4305;
                                 _broadcastSubject = prevSubjectB;
                             }
                         }
@@ -4250,13 +4370,19 @@ namespace Emberfall.Core.Combat
                                 {
                                     CombatUnit prevSubject = _broadcastSubject;
                                     _broadcastSubject = applier;
+                                    int prevBcSrc4342 = _broadcastSourceId;
+                                    _broadcastSourceId = applier.Id;
                                     BroadcastPassive(applier.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSourceId = prevBcSrc4342;
                                     _broadcastSubject = prevSubject;
                                 }
                                 _lastLedgerBankedStored = led2.Stored;
                                 CombatUnit prevSubjectB2 = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc4348 = _broadcastSourceId;
+                                _broadcastSourceId = led2.SourceId;
                                 BroadcastPassive(applier.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                                _broadcastSourceId = prevBcSrc4348;
                                 _broadcastSubject = prevSubjectB2;
                             }
                         }
@@ -4316,7 +4442,10 @@ namespace Emberfall.Core.Combat
                             {
                                 CombatUnit prevSubject = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc4408 = _broadcastSourceId;
+                                _broadcastSourceId = ledSource.Id;
                                 BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSourceId = prevBcSrc4408;
                                 _broadcastSubject = prevSubject;
                             }
                         }
@@ -4326,7 +4455,10 @@ namespace Emberfall.Core.Combat
                             _lastLedgerBankedStored = led.Stored;
                             CombatUnit prevSubjectBD = _broadcastSubject;
                             _broadcastSubject = target;
+                            int prevBcSrc4418 = _broadcastSourceId;
+                            _broadcastSourceId = led.SourceId;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                            _broadcastSourceId = prevBcSrc4418;
                             _broadcastSubject = prevSubjectBD;
                         }
                     }
@@ -4467,7 +4599,10 @@ namespace Emberfall.Core.Combat
                         CombatUnit prevVictim = _broadcastVictim;
                         _broadcastSubject = target;
                         _broadcastVictim = target;
+                        int prevWdSrc = _broadcastSourceId;
+                        _broadcastSourceId = sourceId;
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyWouldDie, 0, target);
+                        _broadcastSourceId = prevWdSrc;
                         _broadcastSubject = prevSubject;
                         _broadcastVictim = prevVictim;
                         _inDeathCheck = false;
@@ -4478,7 +4613,10 @@ namespace Emberfall.Core.Combat
                     // same test that guarded the block before.
                     if (target.Hp > 0f)
                     {
+                        int prevHtSrc = _broadcastSourceId;
+                        _broadcastSourceId = sourceId;
                         TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
+                        _broadcastSourceId = prevHtSrc;
                         return;
                     }
 
@@ -4530,8 +4668,11 @@ namespace Emberfall.Core.Combat
                         // OnEnemyDefeated. Split rather than one trigger with a condition, because
                         // the two cases in the roster are opposite and a passive that had to test
                         // which one it got would be answering a question content already knows.
+                        int prevDefSrc = _broadcastSourceId;
+                        _broadcastSourceId = sourceId;
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyDefeated, 0, target);
                         BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyDefeated, 0, null);
+                        _broadcastSourceId = prevDefSrc;
 
                         _broadcastSubject = prevSubject;
                         _broadcastVictim = prevVictim;
@@ -4565,7 +4706,10 @@ namespace Emberfall.Core.Combat
                         _broadcastSubject = target;
                         _broadcastVictim = target;
                         _defeated = target;
+                        int prevKillSrc = _broadcastSourceId;
+                        _broadcastSourceId = killer.Id;
                         TriggerPassive(killer, PassiveTrigger.OnKill, 0);
+                        _broadcastSourceId = prevKillSrc;
                         _defeated = prevKillDefeated;
                         _broadcastVictim = prevKillVictim;
                         _broadcastSubject = prevKillSubject;
@@ -4591,8 +4735,11 @@ namespace Emberfall.Core.Combat
                 // condition subject consults, and no shipped passive at OnDamaged names one.
                 {
                     CombatUnit prevDmgSubject = _broadcastSubject;
+                    int prevDmgSrc = _broadcastSourceId;
                     _broadcastSubject = target;
+                    _broadcastSourceId = sourceId;
                     TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+                    _broadcastSourceId = prevDmgSrc;
                     _broadcastSubject = prevDmgSubject;
                 }
 
@@ -4606,7 +4753,10 @@ namespace Emberfall.Core.Combat
                     CombatUnit prevVictim = _broadcastVictim;
                     _broadcastSubject = target;
                     _broadcastVictim = target;
+                    int prevEdaSrc = _broadcastSourceId;
+                    _broadcastSourceId = sourceId;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnEnemyDamagedAlly, 0, target);
+                    _broadcastSourceId = prevEdaSrc;
                     _broadcastSubject = prevSubject;
                     _broadcastVictim = prevVictim;
                 }
@@ -4621,7 +4771,10 @@ namespace Emberfall.Core.Combat
                     CombatUnit prevVictim = _broadcastVictim;
                     _broadcastSubject = target;
                     _broadcastVictim = target;
+                    int prevAhtSrc = _broadcastSourceId;
+                    _broadcastSourceId = sourceId;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
+                    _broadcastSourceId = prevAhtSrc;
                     _broadcastSubject = prevSubject;
                     _broadcastVictim = prevVictim;
                 }
@@ -4633,7 +4786,10 @@ namespace Emberfall.Core.Combat
                     CombatUnit prevVictim = _broadcastVictim;
                     _broadcastSubject = target;
                     _broadcastVictim = target;
+                    int prevEhtSrc = _broadcastSourceId;
+                    _broadcastSourceId = sourceId;
                     BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyHpBelowThreshold, 0, null);
+                    _broadcastSourceId = prevEhtSrc;
                     _broadcastSubject = prevSubject;
                     _broadcastVictim = prevVictim;
                 }
@@ -4647,7 +4803,12 @@ namespace Emberfall.Core.Combat
                 // under it, which keeps the passive's behaviour identical with and without a relic.
                 ApplyMirroredWound(sourceId, target, damage);
 
-                TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
+                {
+                    int prevHt2Src = _broadcastSourceId;
+                    _broadcastSourceId = sourceId;
+                    TriggerPassive(target, PassiveTrigger.OnHpBelowThreshold, 0);
+                    _broadcastSourceId = prevHt2Src;
+                }
             }
 
             /// <summary>
@@ -4717,8 +4878,11 @@ namespace Emberfall.Core.Combat
                         if (convertSource != null && convertSource.Alive && !IsBattleOver())
                         {
                             CombatUnit prevSubjectC = _broadcastSubject;
+                            int prevFcSrc = _broadcastSourceId;
                             _broadcastSubject = target;
+                            _broadcastSourceId = convertSource.Id;
                             BroadcastPassive(convertSource.IsPlayer, PassiveTrigger.OnFunnelConvertFired, 0, null);
+                            _broadcastSourceId = prevFcSrc;
                             _broadcastSubject = prevSubjectC;
                         }
                         if (!target.Alive) return;
@@ -4740,7 +4904,10 @@ namespace Emberfall.Core.Combat
                             {
                                 CombatUnit prevSubject = _broadcastSubject;
                                 _broadcastSubject = target;
+                                int prevBcSrc4864 = _broadcastSourceId;
+                                _broadcastSourceId = ledSource.Id;
                                 BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                _broadcastSourceId = prevBcSrc4864;
                                 _broadcastSubject = prevSubject;
                             }
                         }
@@ -4750,7 +4917,10 @@ namespace Emberfall.Core.Combat
                             _lastLedgerBankedStored = led.Stored;
                             CombatUnit prevSubjectBHI = _broadcastSubject;
                             _broadcastSubject = target;
+                            int prevBcSrc4874 = _broadcastSourceId;
+                            _broadcastSourceId = led.SourceId;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyLedgerBanked, 0, target);
+                            _broadcastSourceId = prevBcSrc4874;
                             _broadcastSubject = prevSubjectBHI;
                         }
                     }
@@ -4781,7 +4951,10 @@ namespace Emberfall.Core.Combat
                             CombatUnit prevVictim = _broadcastVictim;
                             _broadcastSubject = target;
                             _broadcastVictim = target;
+                            int prevHaSrc = _broadcastSourceId;
+                            _broadcastSourceId = healer.Id;
                             TriggerPassive(healer, PassiveTrigger.OnHealApplied, 0);
+                            _broadcastSourceId = prevHaSrc;
                             _broadcastSubject = prevSubject;
                             _broadcastVictim = prevVictim;
                         }
@@ -4811,7 +4984,10 @@ namespace Emberfall.Core.Combat
                             CombatUnit prevVictim = _broadcastVictim;
                             _broadcastSubject = target;
                             _broadcastVictim = target;
+                            int prevEhSrc = _broadcastSourceId;
+                            _broadcastSourceId = healer.Id;
                             BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyHealed, 0, null);
+                            _broadcastSourceId = prevEhSrc;
                             _broadcastSubject = prevSubject;
                             _broadcastVictim = prevVictim;
                         }
@@ -4846,7 +5022,10 @@ namespace Emberfall.Core.Combat
                                 {
                                     CombatUnit prevSubject = _broadcastSubject;
                                     _broadcastSubject = target;
+                                    int prevBcSrc4976 = _broadcastSourceId;
+                                    _broadcastSourceId = ledSource.Id;
                                     BroadcastPassive(ledSource.IsPlayer, PassiveTrigger.OnLedgerCapped, 0, null);
+                                    _broadcastSourceId = prevBcSrc4976;
                                     _broadcastSubject = prevSubject;
                                 }
                             }
@@ -5030,7 +5209,10 @@ namespace Emberfall.Core.Combat
 
                 CombatUnit prev = _thresholdUnit;
                 _thresholdUnit = unit;
+                int prevEetSrc = _broadcastSourceId;
+                _broadcastSourceId = unit.Id;
                 BroadcastPassive(!unit.IsPlayer, PassiveTrigger.OnEnemyEnergyThreshold, 0, null);
+                _broadcastSourceId = prevEetSrc;
                 _thresholdUnit = prev;
             }
 
@@ -5185,6 +5367,18 @@ namespace Emberfall.Core.Combat
             /// holder with nothing listening must not burn its charge on an event it ignored.
             /// Every other call site ignores the value and is unchanged by it.
             /// </summary>
+            /// <summary>
+            /// Whether `owner` is the cause of the window now open. Reads the single source id,
+            /// and the expiry sweep's list of appliers for the one window that can have several -
+            /// see _expiredSourceIds. A list that is empty outside an expiry costs one count test.
+            /// </summary>
+            private bool BroadcastCausedBy(CombatUnit owner)
+            {
+                if (owner == null) return false;
+                if (_broadcastSourceId == owner.Id) return true;
+                return _expiredSourceIds.Count > 1 && _expiredSourceIds.Contains(owner.Id);
+            }
+
             private bool TriggerPassive(CombatUnit owner, PassiveTrigger trigger, int depth)
             {
                 bool firedAny = false;
@@ -5250,7 +5444,7 @@ namespace Emberfall.Core.Combat
                             owner.RemoveStacks(sk, passive.StackThresholdCount);
                         }
                     }
-                    if (passive.TriggerSourceIsSelf && _broadcastSourceId != owner.Id) continue;
+                    if (passive.TriggerSourceIsSelf && !BroadcastCausedBy(owner)) continue;
                     // The side half of the same filter. Read here rather than as a condition
                     // because no EffectCondition can ask which line a unit stands on - see
                     // PassiveDef.TriggerSourceIsAlly. An unset flag is the untouched path: false
@@ -5585,7 +5779,7 @@ namespace Emberfall.Core.Combat
                     BankTurnDebt(source, target, banksAs, realised, cap, rate, debtDuration);
                 }
 
-                if (destination > at && source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+                if (destination > at && source != null) FireTurnDelayed(source);
             }
 
             /// <summary>
@@ -5637,7 +5831,10 @@ namespace Emberfall.Core.Combat
                     _thresholdUnit = target;
                     CombatUnit prevSubject = _broadcastSubject;
                     _broadcastSubject = target;
+                    int prevTdtSrc = _broadcastSourceId;
+                    _broadcastSourceId = source.Id;
                     BroadcastPassive(source.IsPlayer, PassiveTrigger.OnTurnDebtThreshold, 0, null);
+                    _broadcastSourceId = prevTdtSrc;
                     _broadcastSubject = prevSubject;
                     _thresholdUnit = prev;
                 }
@@ -5681,7 +5878,7 @@ namespace Emberfall.Core.Combat
                 e.Status = StatusKind.None;
                 e.Value = earliest - latest;
 
-                if (source != null) TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+                if (source != null) FireTurnDelayed(source);
             }
 
             // ------------------------------------------------------------------ targeting

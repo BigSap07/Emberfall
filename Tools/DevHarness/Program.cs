@@ -70,7 +70,9 @@ namespace Emberfall.DevHarness
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
             CheckPerTargetBudgetIsPerFiring();
-            CheckSourceFilteredPassivesCanFire(content);
+            CheckSourceFilterFiresForItsCauser(content);
+            CheckTriggerContextParity();
+            CheckNoContentReadsAnUnsetField(content);
             CheckPerTargetBudgetLandsWholeFirings(content);
             CheckTalentCompletionPrimitives();
             CheckNoTalentIsEmpty(content);
@@ -17898,52 +17900,311 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// A PASSIVE THAT ASKS WHO CAUSED IT, AT A TRIGGER THAT NEVER SAYS.
+        /// A SOURCE-FILTERED PASSIVE FIRING, on the kit that could not fire at all.
         ///
-        /// TriggerSourceIsSelf and TriggerSourceIsAlly are answered from _broadcastSourceId, and
-        /// only some broadcasts set one. A passive carrying either flag at a trigger that sets no
-        /// source id compares against a field that is not about this event, so it can never fire -
-        /// not rarely, never - and it does so in total silence.
+        /// Both of Rheia's passives carry triggerSourceIsSelf at OnEnemyBuffGained - "whenever an
+        /// enemy gains a status FROM RHEIA'S ABILITIES" - and that window published the subject and
+        /// the status and not the applier, so the filter compared her id against a field belonging
+        /// to some earlier event and refused every firing.
         ///
-        /// FOUND BY ACCIDENT while measuring something else: rheia_adaptive_reasoning would not
-        /// fire in an arena built to make it fire, and a control watcher standing beside her in the
-        /// same fight answered the same trigger 30 times. The same shape as Rovan's dead shield,
-        /// which read BroadcastSource at a trigger that sets no source.
-        ///
-        /// NOT FIXED HERE. This pass is the per-target budget and nothing else, so that every line
-        /// it moves has one possible cause. This check exists so the finding cannot be lost.
+        /// Two runs of one arena decide it. Her own Active puts AttackUp on the enemy line, which
+        /// is a buff SHE caused; the enemy also buffs itself every turn, which is a buff she did
+        /// not. The filter has to say yes to the first and no to the second, so the count proves
+        /// both halves - it is neither zero nor every buff in the fight.
         /// </summary>
-        private static void CheckSourceFilteredPassivesCanFire(ContentDatabase live)
+        private static void CheckSourceFilterFiresForItsCauser(ContentDatabase live)
         {
-            // The triggers whose broadcast sets _broadcastSourceId. Everything else leaves it as
-            // whatever the last window that cared put there, which is not about this event.
-            List<PassiveTrigger> sourced = new List<PassiveTrigger>(new PassiveTrigger[] {
-                PassiveTrigger.OnAllyHealed, PassiveTrigger.OnLinkedUnitHit,
-                PassiveTrigger.OnLinkedUnitTargeted, PassiveTrigger.OnEnemyChangedTarget,
-                PassiveTrigger.OnEnemyEnergyDrained, PassiveTrigger.OnCastDeclared,
-                PassiveTrigger.OnStatusGained, PassiveTrigger.OnRedirectReceived,
-                PassiveTrigger.OnRedirectSent });
+            int[] r = RunRheiaSourceArena();
+            if (r == null) { Check(false, "source-filter arena built"); return; }
+            Check(r[0] > 0,
+                  "rheia_adaptive_reasoning fires " + r[0] + " time(s) when SHE is the one who put "
+                  + "the status on the enemy - it fired zero times in any arena before this pass, "
+                  + "because the window never named who caused it");
+            Check(r[0] < r[1],
+                  "and not for the " + r[1] + " buff(s) gained in the fight overall (" + r[0]
+                  + " of them hers), so the filter is answering rather than waved through");
+        }
 
-            List<string> dead = new List<string>();
+        /// <summary>{firings of her source-filtered passive, buffs gained by enemies}</summary>
+        private static int[] RunRheiaSourceArena()
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""sf_foe"", ""name"": ""SfFoe"", ""aspect"": ""Ember"",
+      ""hp"": 400000, ""attack"": 60, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""sf_b"", ""name"": ""Bolster"",
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
+            ""magnitude"": 0.01, ""duration"": 1, ""chance"": 1 },
+          { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackDown"",
+            ""magnitude"": 0.01, ""duration"": 3, ""chance"": 1, ""bypassResist"": true },
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.2 }
+        ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""sf_ch"", ""name"": ""Sf"", ""stages"": [
+    { ""id"": ""sf_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""sf_foe"", ""level"": 40 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, balance, "source filter");
+            if (db == null) return null;
+            HeroDef rheia = db.GetHero("rheia_the_revision_scribe");
+            StageDef stage = db.GetStage("sf_arena");
+            if (rheia == null || stage == null) return null;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(rheia, 40));
+            BattleResult r = RunWith(db, stage, 5180, team);
+            if (r == null) return null;
+
+            int fires = 0, buffs = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger
+                    && r.Events[i].AbilityId == "rheia_adaptive_reasoning") fires++;
+                if (r.Events[i].Type == BattleEventType.StatusApplied
+                    && !StatusInfo.IsHarmful(r.Events[i].Status))
+                {
+                    UnitSnapshot u = r.FindUnit(r.Events[i].TargetId);
+                    if (u != null && !u.IsPlayer) buffs++;
+                }
+            }
+            return new int[] { fires, buffs };
+        }
+
+        private struct TriggerCtx
+        {
+            public PassiveTrigger Trigger;
+            public bool Source;
+            public bool Subject;
+        }
+
+        private static TriggerCtx C(PassiveTrigger t, bool source, bool subject)
+        {
+            TriggerCtx c = new TriggerCtx();
+            c.Trigger = t; c.Source = source; c.Subject = subject;
+            return c;
+        }
+
+        /// <summary>
+        /// WHAT EACH TRIGGER PUBLISHES ABOUT THE EVENT THAT RAISED IT.
+        ///
+        /// A broadcast opens a window and fills in some fields: who caused it, and who it was
+        /// about. Not every window can fill in both - "the round began" has no causer - and a
+        /// passive that asks for a field its own trigger never sets is reading a value left behind
+        /// by some earlier, unrelated event. Four dead passives were found that way, one at a time
+        /// and each by accident: Rovan's shield, both of Rheia's, and Elyra's.
+        ///
+        /// This table is the contract, and CheckTriggerContextParity below makes it impossible to
+        /// add a trigger without answering for it. It is derived from the broadcast sites rather
+        /// than wished for: a `false` here means no site sets that field before raising it.
+        /// </summary>
+        private static List<TriggerCtx> TriggerContextTable()
+        {
+            return new List<TriggerCtx>(new TriggerCtx[] {
+                // Nothing broadcasts None; it is the unset value on a talent that carries no rule
+                // of its own, and it publishes nothing because it never opens a window.
+                C(PassiveTrigger.None, false, false),
+                C(PassiveTrigger.AfterActiveCast, true, false),
+                C(PassiveTrigger.AfterBasicAttack, true, false),
+                C(PassiveTrigger.BattleStart, false, false),
+                C(PassiveTrigger.OnAllyDefeated, true, true),
+                C(PassiveTrigger.OnAllyHealed, true, true),
+                C(PassiveTrigger.OnAllyHpBelowThreshold, true, true),
+                C(PassiveTrigger.OnAllyLedgerBanked, true, true),
+                C(PassiveTrigger.OnAllyShieldBreak, true, true),
+                C(PassiveTrigger.OnAllyShielded, true, true),
+                C(PassiveTrigger.OnAllyTurnEnd, true, true),
+                C(PassiveTrigger.OnAllyWouldDie, true, true),
+                C(PassiveTrigger.OnAppliedAllyStatusExpired, true, true),
+                C(PassiveTrigger.OnAppliedDoTTick, true, true),
+                C(PassiveTrigger.OnAppliedStatusExpired, true, true),
+                C(PassiveTrigger.OnBlock, true, false),
+                C(PassiveTrigger.OnCastDeclared, true, true),
+                C(PassiveTrigger.OnCriticalHit, true, false),
+                C(PassiveTrigger.OnDamaged, true, true),
+                C(PassiveTrigger.OnDodge, true, false),
+                C(PassiveTrigger.OnEchoFired, true, true),
+                C(PassiveTrigger.OnEnemyActive, true, true),
+                C(PassiveTrigger.OnEnemyActiveResolved, true, true),
+                C(PassiveTrigger.OnEnemyBuffGained, true, true),
+                C(PassiveTrigger.OnEnemyChangedTarget, true, true),
+                C(PassiveTrigger.OnEnemyDamagedAlly, true, true),
+                C(PassiveTrigger.OnEnemyDefeated, true, true),
+                C(PassiveTrigger.OnEnemyEnergyDrained, true, true),
+                C(PassiveTrigger.OnEnemyEnergyThreshold, true, false),
+                C(PassiveTrigger.OnEnemyHealed, true, true),
+                C(PassiveTrigger.OnEnemyHpBelowThreshold, true, true),
+                C(PassiveTrigger.OnEnemyTurnEnd, true, true),
+                C(PassiveTrigger.OnFunnelConvertFired, true, true),
+                C(PassiveTrigger.OnHealApplied, true, true),
+                C(PassiveTrigger.OnHpBelowThreshold, true, false),
+                C(PassiveTrigger.OnKill, true, true),
+                C(PassiveTrigger.OnLedgerCapped, true, true),
+                C(PassiveTrigger.OnLinkedUnitHit, true, true),
+                C(PassiveTrigger.OnLinkedUnitTargeted, true, true),
+                C(PassiveTrigger.OnRedirectReceived, true, true),
+                C(PassiveTrigger.OnRedirectSent, true, true),
+                C(PassiveTrigger.OnShieldBreak, true, false),
+                C(PassiveTrigger.OnStackThreshold, false, false),
+                C(PassiveTrigger.OnStatusExpired, false, false),
+                C(PassiveTrigger.OnStatusGained, true, false),
+                C(PassiveTrigger.OnStatusRemoved, true, false),
+                C(PassiveTrigger.OnTargeted, true, false),
+                C(PassiveTrigger.OnTurnDebtRepaid, true, true),
+                C(PassiveTrigger.OnTurnDebtThreshold, true, true),
+                C(PassiveTrigger.OnTurnDelayed, true, false),
+                C(PassiveTrigger.RoundStart, false, false),
+                C(PassiveTrigger.TurnStart, false, false),
+            });
+        }
+
+        /// <summary>
+        /// The table answers for EVERY trigger, so a new one cannot be added in silence. The same
+        /// argument as the enum parity checks: two lists that must agree, and a test that says so.
+        /// </summary>
+        private static void CheckTriggerContextParity()
+        {
+            List<TriggerCtx> table = TriggerContextTable();
+            string[] names = Enum.GetNames(typeof(PassiveTrigger));
+            List<string> missing = new List<string>();
+            for (int i = 0; i < names.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < table.Count; j++)
+                    if (table[j].Trigger.ToString() == names[i]) { found = true; break; }
+                if (!found) missing.Add(names[i]);
+            }
+            List<string> dupes = new List<string>();
+            for (int i = 0; i < table.Count; i++)
+                for (int j = i + 1; j < table.Count; j++)
+                    if (table[i].Trigger == table[j].Trigger) dupes.Add(table[i].Trigger.ToString());
+            Check(missing.Count == 0 && dupes.Count == 0,
+                  missing.Count == 0 && dupes.Count == 0
+                    ? "the trigger-context table answers for all " + names.Length + " triggers, once each"
+                    : "trigger-context table: " + missing.Count + " missing ("
+                      + string.Join(", ", missing.ToArray()) + "), " + dupes.Count + " duplicated");
+        }
+
+        /// <summary>
+        /// NO SHIPPED CONTENT READS A FIELD ITS TRIGGER DOES NOT SET.
+        ///
+        /// The standing version of four findings that each arrived by accident. It walks every
+        /// authored passive and talent, works out which context fields its filters and its effects
+        /// read, and asks the table whether the trigger it answers publishes them.
+        ///
+        /// A talent's APPENDS are checked against the passive they are appended TO, because an
+        /// appended effect resolves inside that passive's window and not the talent's - and an
+        /// append onto a basic or an active resolves in no window at all, so a broadcast field
+        /// read from there is unanswerable by construction.
+        ///
+        /// This is the check that should have caught Rovan a month ago. It fails the build; it
+        /// does not wait to be noticed.
+        /// </summary>
+        private static void CheckNoContentReadsAnUnsetField(ContentDatabase live)
+        {
+            List<TriggerCtx> table = TriggerContextTable();
+            List<string> bad = new List<string>();
+
             for (int h = 0; h < live.Heroes.Count; h++)
             {
                 HeroDef def = live.Heroes[h];
                 if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+
                 for (int p = 0; p < def.Passives.Count; p++)
+                    InspectPassive(def, def.Passives[p], def.Passives[p].Trigger, table, bad, "");
+
+                for (int t = 1; t <= def.Talents.Count; t++)
                 {
-                    PassiveDef pd = def.Passives[p];
-                    if (!pd.TriggerSourceIsSelf && !pd.TriggerSourceIsAlly) continue;
-                    if (sourced.Contains(pd.Trigger)) continue;
-                    dead.Add(def.Id + "/" + pd.Id + " (" + pd.Trigger + ", "
-                             + (pd.TriggerSourceIsSelf ? "source-is-self" : "source-is-ally") + ")");
+                    PassiveDef talent = def.TalentAt(t);
+                    if (talent == null) continue;
+                    string where = def.Id + " talent " + RomanOf(t) + "/" + talent.Name;
+                    // Its own effects answer its own trigger.
+                    for (int e = 0; e < talent.Effects.Count; e++)
+                        InspectEffect(talent.Effects[e], talent.Trigger, table, bad, where);
+                    // Its appends answer the trigger of whatever they are appended to.
+                    for (int a = 0; a < talent.Appends.Count; a++)
+                    {
+                        string slot = (talent.Appends[a].Ability ?? "").ToLowerInvariant();
+                        PassiveTrigger host = PassiveTrigger.None;
+                        int pi = HarnessPassiveSlot(slot);
+                        if (pi >= 0 && pi < def.Passives.Count) host = def.Passives[pi].Trigger;
+                        InspectEffect(talent.Appends[a].Effect, host, table, bad,
+                                      where + " -> " + slot);
+                    }
                 }
             }
-            Check(dead.Count == 0,
-                  dead.Count == 0
-                    ? "every passive filtering on who caused its trigger answers a trigger that says"
-                    : dead.Count + " shipped passive(s) filter on WHO caused a trigger whose "
-                      + "broadcast sets no source id, so they can never fire at all: "
-                      + string.Join(", ", dead.ToArray()));
+
+            Check(bad.Count == 0,
+                  bad.Count == 0
+                    ? "no authored passive, talent or append reads a broadcast field its own "
+                      + "trigger leaves unset - every filter and every subject is answerable"
+                    : bad.Count + " authored read(s) ask a trigger for something it never sets, so "
+                      + "they answer against a field from an unrelated event: "
+                      + string.Join("; ", bad.ToArray()));
+        }
+
+        private static void InspectPassive(HeroDef def, PassiveDef p, PassiveTrigger trig,
+                                           List<TriggerCtx> table, List<string> bad, string unused)
+        {
+            string where = def.Id + "/" + p.Id;
+            if ((p.TriggerSourceIsSelf || p.TriggerSourceIsAlly) && !Publishes(table, trig, true))
+                bad.Add(where + " filters on who caused " + trig + ", which sets no source");
+            for (int e = 0; e < p.Effects.Count; e++)
+                InspectEffect(p.Effects[e], trig, table, bad, where);
+        }
+
+        private static void InspectEffect(EffectDef e, PassiveTrigger trig, List<TriggerCtx> table,
+                                          List<string> bad, string where)
+        {
+            if (e == null) return;
+            bool src = e.Target == TargetMode.BroadcastSource
+                    || e.SecondaryTarget == TargetMode.BroadcastSource
+                    || e.ConditionOn == ConditionSubject.BroadcastSource
+                    || e.ConditionOn2 == ConditionSubject.BroadcastSource
+                    || e.ConditionOn3 == ConditionSubject.BroadcastSource;
+            bool sub = e.Target == TargetMode.BroadcastSubject || e.Target == TargetMode.BroadcastVictim
+                    || e.SecondaryTarget == TargetMode.BroadcastSubject
+                    || e.ConditionOn == ConditionSubject.BroadcastSubject
+                    || e.ConditionOn2 == ConditionSubject.BroadcastSubject
+                    || e.ConditionOn3 == ConditionSubject.BroadcastSubject;
+            if (src && !Publishes(table, trig, true))
+                bad.Add(where + " reads BroadcastSource at " + trig + ", which sets no source");
+            if (sub && !Publishes(table, trig, false))
+                bad.Add(where + " reads the broadcast subject at " + trig + ", which sets none");
+        }
+
+        /// <summary>"passive1" -> 0, "passive7" -> 6, anything else -> -1. The harness's own copy
+        /// of the engine's PassiveSlotIndex, which is private to the simulation.</summary>
+        private static int HarnessPassiveSlot(string ability)
+        {
+            if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
+            string tail = ability.Substring(7);
+            if (tail.Length == 0) return -1;
+            int n = 0;
+            for (int i = 0; i < tail.Length; i++)
+            {
+                if (tail[i] < '0' || tail[i] > '9') return -1;
+                n = n * 10 + (tail[i] - '0');
+            }
+            return n >= 1 ? n - 1 : -1;
+        }
+
+        private static bool Publishes(List<TriggerCtx> table, PassiveTrigger trig, bool wantSource)
+        {
+            for (int i = 0; i < table.Count; i++)
+                if (table[i].Trigger == trig) return wantSource ? table[i].Source : table[i].Subject;
+            return false;
         }
 
         /// <summary>
@@ -19958,13 +20219,19 @@ namespace Emberfall.DevHarness
         {
             int repaired = RunRovanProbe(live, false);
             int broken = RunRovanProbe(live, true);
-            Check(broken == 0,
-                  "BEFORE: conditioned on BroadcastSource at a trigger that sets no source id, the "
-                  + "shield banks " + broken + " across five seeds - the passive fires and pays "
-                  + "nothing");
+            // The premise of this line has CHANGED, and deliberately. OnEnemyDamagedAlly now
+            // names the attacker, so the subject his kit was originally written against resolves
+            // to somebody and the old authoring pays out too. It is kept as the record of what was
+            // actually wrong: not the word he used, but a window that published everything about
+            // the blow except who threw it.
+            Check(broken > 0,
+                  "BEFORE: the same kit conditioned on BroadcastSource - the word Rovan was "
+                  + "authored with - now banks " + broken + " across five seeds where it banked 0. "
+                  + "The trap was the trigger, not the word, and setting the source removed it");
             Check(repaired > 0,
                   "AFTER: conditioned on LastAttacker, the idiom Caldus uses at the same trigger, "
-                  + "it banks " + repaired);
+                  + "it banks " + repaired + " - both readings are now live, so the repair stands "
+                  + "on being the clearer one rather than on being the only one that works");
         }
 
         private static int RunRovanProbe(ContentDatabase live, bool putItBack)
