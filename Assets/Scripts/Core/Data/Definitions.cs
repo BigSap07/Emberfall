@@ -544,6 +544,14 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool ScaleByLastShift;
 
+        /// <summary>
+        /// The restriction a Restricted entry carries, and the status TargetBan.CarryingStatus
+        /// names. Read at apply time and stamped onto the entry, the way Disrupted's Magnitude and
+        /// StoredCap are.
+        /// </summary>
+        public TargetBan TargetBanKind = TargetBan.None;
+        public StatusKind TargetBanStatus = StatusKind.None;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -630,6 +638,8 @@ namespace Emberfall.Core.Data
             e.TransferMagnitude = j.GetFloat("transferMagnitude", 0f);
             e.AttackCap = j.GetFloat("attackCap", 0f);
             e.ScaleByLastShift = j.GetBool("scaleByLastShift", false);
+            e.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
+            e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
             return e;
         }
@@ -737,6 +747,8 @@ namespace Emberfall.Core.Data
             c.TransferMagnitude = TransferMagnitude;
             c.AttackCap = AttackCap;
             c.ScaleByLastShift = ScaleByLastShift;
+            c.TargetBanKind = TargetBanKind;
+            c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
             return c;
         }
@@ -1124,6 +1136,13 @@ namespace Emberfall.Core.Data
         ///   "passive":  { ... }                          - the single flat key, every shipped unit
         ///   "passive1": { ... }, "passive2": { ... }      - flat, two named slots
         ///   "skills": { "passive1": ..., "passive2": ... } - nested, as the new roster authors it
+        ///   "passives": [ { ... }, { ... } ]               - the overflow list, read last
+        ///
+        /// THE FIFTH SHAPE EXISTS BECAUSE FOUR NAMED SLOTS IS A CEILING, NOT A DESIGN. A described
+        /// passive routinely becomes several authored ones - one per trigger it answers - and the
+        /// named slots ran out at five while a single hero's two described passives and one active
+        /// wanted seven between them. The list is read after the named slots and appended in
+        /// order, so a hero using only the named ones is parsed exactly as before.
         ///
         /// A unit authoring only the first - which is every hero and every enemy in content today -
         /// gets a one-element list, so nothing about how its passive resolves changes.
@@ -1142,6 +1161,12 @@ namespace Emberfall.Core.Data
             JsonValue skills = j["skills"];
             AddPassive(PassiveDef.FromJson(skills["passive1"]));
             AddPassive(PassiveDef.FromJson(skills["passive2"]));
+
+            // The overflow list, last so the named slots keep the indices they have always had -
+            // talents address a passive BY INDEX, and reading this first would renumber every
+            // talent in the file. Empty on every unit in content until a kit needs a sixth.
+            List<JsonValue> extra = j.GetList("passives");
+            for (int i = 0; i < extra.Count; i++) AddPassive(PassiveDef.FromJson(extra[i]));
         }
 
         private void AddPassive(PassiveDef passive)

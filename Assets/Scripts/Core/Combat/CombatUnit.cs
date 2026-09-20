@@ -127,6 +127,16 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public bool NoExtend;
 
+        /// <summary>
+        /// The restriction this entry imposes on its holder while it lives, and the status a
+        /// CarryingStatus ban names. None on every entry that is not a Restricted one.
+        ///
+        /// The same arrangement Disrupted has: the rule's parameters ride on the instance, so two
+        /// restrictions from two sources are two entries rather than one field they fight over.
+        /// </summary>
+        public TargetBan BanKind = TargetBan.None;
+        public StatusKind BanStatus = StatusKind.None;
+
         /// <summary>Fraction of Stored that auto-release pays as healing to the applier, on top
         /// of the damage to the holder. Zero means no split heal, the existing behaviour.</summary>
         public float AutoReleaseSplitHeal;

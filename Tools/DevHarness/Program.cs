@@ -5149,7 +5149,7 @@ namespace Emberfall.DevHarness
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
-                               "Resolve2", "Linked", "HealingReduction" },
+                               "Resolve2", "Linked", "HealingReduction", "Restricted" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
@@ -14849,10 +14849,14 @@ namespace Emberfall.DevHarness
                     // batch eight: the round's own boundary, and the far end of an enemy cast.
                     "RoundStart", "OnEnemyActiveResolved",
                     // cast cancellation: the declaration window, open to both sides
-                    "OnCastDeclared"
+                    "OnCastDeclared",
+                    // the displaced primitives: a unit turning on a different body
+                    "OnEnemyChangedTarget",
+                    // and the drain heard on the unit that caused it
+                    "OnEnemyEnergyDrained"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (49 members)");
+            Check(ok, "PassiveTrigger enum parity (51 members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -16117,6 +16121,11 @@ namespace Emberfall.DevHarness
             CheckTargetRestriction(live);
             CheckBatchEightGaps(live);
             CheckCastCancellation(live);
+            CheckDisplacedPrimitives(live);
+            CheckPassiveReadsTheBlowThatTriggeredIt();
+            CheckRovanShieldPaysOut(live);
+            CheckDahliaKit(live);
+            CheckDahliaTalents(live);
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -17534,7 +17543,7 @@ namespace Emberfall.DevHarness
                                   "nysera_the_missing_arrow", "rovan_the_adaptive_commander",
                                   "kiva_the_forsaken_oath", "sylven_the_unfading_blade",
                                   "merek_the_sequence_thief", "oris_the_unwritten_path",
-                                  "zella_the_slow_argument" };
+                                  "zella_the_slow_argument", "dahlia_the_wayward_hymn" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -18803,6 +18812,786 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+
+        /// <summary>
+        /// A PASSIVE TRIGGERED BY A BLOW CAN SIZE ITSELF OFF THAT BLOW.
+        ///
+        /// ResolveAbility clears _lastDamageDealt at every ability boundary, which is right for a
+        /// Basic or an Active - an echo with no damage ahead of it in its own ability must read
+        /// zero rather than a number from a previous turn - and was wrong for a passive, which is
+        /// running BECAUSE damage landed. ScaleByLastDamage was built to mean "the blow that just
+        /// happened", and the boundary made the one flag that reads it always read nothing.
+        ///
+        /// Two runs: the answering passive sized off the blow, and a control sized off Attack. If
+        /// the scalar were still zeroed the first would pay nothing at all.
+        /// </summary>
+        private static void CheckPassiveReadsTheBlowThatTriggeredIt()
+        {
+            int scaled = RunBlowScalarArena(true);
+            int flat = RunBlowScalarArena(false);
+            Check(flat > 0, "control: the same passive sized off Attack pays " + flat);
+            Check(scaled > 0,
+                  "a passive answering a blow sizes itself off THAT BLOW (" + scaled
+                  + ") - it read zero before, because the ability boundary cleared the scalar on "
+                  + "the way into the passive that the blow had just triggered");
+        }
+
+        private static int RunBlowScalarArena(bool scaleOffTheBlow)
+        {
+            string sizing = scaleOffTheBlow
+                ? @"""power"": 0.5, ""scaleByLastDamage"": true"
+                : @"""power"": 0.5";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""bs_hero"", ""name"": ""BsHero"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9500000, ""attack"": 200, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""bs_answer"", ""name"": ""Answer The Blow"",
+        ""trigger"": ""OnEnemyDamagedAlly"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Shield"", ""target"": ""Self"", ""duration"": 9, " + sizing + @" } ] },
+      ""basic"": { ""id"": ""bs_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""bs_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""bs_ally"", ""name"": ""BsAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bsa"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""bsaa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""bs_foe"", ""name"": ""BsFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 600, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bsf"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""bs_ch"", ""name"": ""BlowScalar"", ""stages"": [
+    { ""id"": ""bs_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""bs_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "blow scalar");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("bs_hero"), 1));
+            team.Add(MakeInstance(db.GetHero("bs_ally"), 1));
+            BattleResult r = RunWith(db, db.GetStage("bs_arena"), 9974, team);
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].Name == "BsHero") id = r.Units[i].Id;
+            int banked = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.ShieldGain && r.Events[i].TargetId == id)
+                    banked += r.Events[i].Value;
+            return banked;
+        }
+
+        /// <summary>
+        /// ROVAN'S DEFLECTION STRIKE SHIELD, WHICH HAD NEVER PAID OUT.
+        ///
+        /// `rovan_deflected_conversion` answers OnEnemyDamagedAlly and gated both its conditions on
+        /// ConditionSubject.BroadcastSource. Nothing sets _broadcastSourceId at that trigger: it is
+        /// a field initialised to -1 and saved-and-restored around every window that does set one,
+        /// so outside one it resolves to nobody and a condition about it is false. The passive
+        /// fired 58 times in the sweep and banked nothing.
+        ///
+        /// Caldus answers the same trigger with ConditionSubject.LastAttacker, which resolves
+        /// through _broadcastSubject.LastAttackerId - and the broadcast subject there IS the victim,
+        /// whose LastAttackerId the blow set one line earlier. Three clauses of his do it that way,
+        /// in a kit authored before Rovan's.
+        ///
+        /// Measured on his real kit against a control with the condition put back.
+        /// </summary>
+        private static void CheckRovanShieldPaysOut(ContentDatabase live)
+        {
+            int repaired = RunRovanProbe(live, false);
+            int broken = RunRovanProbe(live, true);
+            Check(broken == 0,
+                  "BEFORE: conditioned on BroadcastSource at a trigger that sets no source id, the "
+                  + "shield banks " + broken + " across five seeds - the passive fires and pays "
+                  + "nothing");
+            Check(repaired > 0,
+                  "AFTER: conditioned on LastAttacker, the idiom Caldus uses at the same trigger, "
+                  + "it banks " + repaired);
+        }
+
+        private static int RunRovanProbe(ContentDatabase live, bool putItBack)
+        {
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            if (arena == null) return -1;
+            HeroDef rovan = arena.GetHero("rovan_the_adaptive_commander");
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena.GetStage("sweep_arena");
+            if (rovan == null || fillers == null || stage == null) return -1;
+
+            if (putItBack)
+                for (int p = 0; p < rovan.Passives.Count; p++)
+                {
+                    if (rovan.Passives[p].Id != "rovan_deflected_conversion") continue;
+                    for (int e = 0; e < rovan.Passives[p].Effects.Count; e++)
+                    {
+                        rovan.Passives[p].Effects[e].ConditionOn = ConditionSubject.BroadcastSource;
+                        rovan.Passives[p].Effects[e].ConditionOn2 = ConditionSubject.BroadcastSource;
+                    }
+                }
+
+            int banked = 0;
+            for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                team.Add(MakeInstance(rovan, 40));
+                for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                BattleResult r = RunWith(arena, stage, HeroSweepSeed(rovan.Id, seed), team);
+                if (r == null) continue;
+                int id = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                    if (r.Units[i].DefId == rovan.Id) id = r.Units[i].Id;
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.ShieldGain && r.Events[i].TargetId == id)
+                        banked += r.Events[i].Value;
+            }
+            return banked;
+        }
+
+        /// <summary>
+        /// DAHLIA, CLAUSE BY CLAUSE, in an arena built to raise the things her kit answers: an
+        /// enemy that casts, an enemy that swings, and five bodies for a Displaced enemy to be
+        /// forced off.
+        ///
+        /// Every check is an A/B against the same seeds with one piece of her own kit patched out
+        /// in memory, because the event list alone cannot attribute a heal to a clause - she has
+        /// four of them that heal. Removing the clause and re-running is the only reading that
+        /// cannot be talked into agreeing.
+        /// </summary>
+        private static void CheckDahliaKit(ContentDatabase live)
+        {
+            Line("DAHLIA - THE WAYWARD HYMN (each clause against the same arena with that clause removed)");
+
+            HeroDef probe = live == null ? null : live.GetHero("dahlia_the_wayward_hymn");
+            if (probe == null) { Check(false, "dahlia_the_wayward_hymn is in content"); Line(""); return; }
+
+            DahliaRun full = RunDahlia(DahliaPatch.None);
+            if (full == null) { Check(false, "Dahlia arena built"); Line(""); return; }
+
+            // 1. The state lands at all.
+            Check(full.DisplacedApplied > 0,
+                  "Scattered Choir puts Displaced on the highest-Energy enemy (" + full.DisplacedApplied
+                  + " application(s) across the seeds)");
+
+            // 2. And it binds while it is held. The ban is the status's whole content, so this asks
+            //    the one question that distinguishes a Displaced enemy from an ordinary one:
+            //    did it ever hit the same body twice running while it carried the state.
+            Check(full.RepeatsWhileDisplaced == 0 && full.RepeatsWhenFree > 0,
+                  "a Displaced enemy never repeats the body it last landed on ("
+                  + full.RepeatsWhileDisplaced + " repeat(s) while displaced) and the same enemies "
+                  + "repeat freely without the state (" + full.RepeatsWhenFree + ")");
+            Line("  [note] Counted over the blow that picks freely. A Displaced enemy whose attack "
+                 + "is anchored - LowestHpEnemy, FrontEnemy, a Taunt - has one candidate, and "
+                 + "banning it empties the list, which falls back to the unrestricted pick rather "
+                 + "than costing the enemy its turn. Displaced restricts a choice; it cannot "
+                 + "invent one, and it never silences an enemy that has nowhere else to go.");
+
+            // 3. The cast it declares does not resolve.
+            DahliaRun noSilence = RunDahlia(DahliaPatch.DropSilence);
+            Check(full.CastsCancelled > 0 && noSilence.CastsCancelled == 0,
+                  "a Displaced enemy's declared Active is cancelled (" + full.CastsCancelled
+                  + " cancelled, " + noSilence.CastsCancelled + " with the clause removed)");
+
+            // 4. Broken Rhythm answers the same declaration, and answers it FIRST - the silence
+            //    clause strips Displaced, and a passive ordered after it would find nothing to
+            //    test. Measured as damage Dahlia put into the caster at the declaration.
+            DahliaRun noAnswer = RunDahlia(DahliaPatch.DropAnswer);
+            Check(full.DahliaDamage > noAnswer.DahliaDamage,
+                  "Broken Rhythm answers the attempt before the silence removes the state - Dahlia "
+                  + "deals " + full.DahliaDamage + " with it and " + noAnswer.DahliaDamage
+                  + " without, so it reads the state the clause after it takes away");
+
+            // 5. The reaction to being hit by a Displaced enemy, which is authored twice on purpose:
+            //    the broadcast at OnEnemyDamagedAlly excludes the body that was hit, so the version
+            //    that pays when DAHLIA is the one hit has to hang off OnDamaged instead.
+            DahliaRun noChoir = RunDahlia(DahliaPatch.DropChoirReactions);
+            Check(full.DahliaHealing > noChoir.DahliaHealing,
+                  "a Displaced enemy attacking pays the body it hit - " + full.DahliaHealing
+                  + " healed with both halves of the clause, " + noChoir.DahliaHealing + " without");
+
+            // 6. Tempo. Three drains buy one larger heal on the next Basic, and the counter is spent
+            //    rather than kept: without the payout clause the same battle heals less.
+            DahliaRun noTempo = RunDahlia(DahliaPatch.DropTempoPayout);
+            Check(full.DahliaHealing > noTempo.DahliaHealing,
+                  "Tempo pays out on the Basic that spends it (" + full.DahliaHealing + " healed with "
+                  + "the payout, " + noTempo.DahliaHealing + " without) - the counter is fed by her "
+                  + "own drains through OnEnemyEnergyDrained");
+
+            Line("");
+        }
+
+        /// <summary>
+        /// HER THREE TALENTS, each against the same arena with no talent selected.
+        ///
+        /// Talents are the part of a kit the sweep cannot see: none is selected there, so every
+        /// talent-shaped clause reads zero in the exercise report whether it works or not. Two of
+        /// these also exercise the new address form - a talent naming a passive past the second,
+        /// which had no way to be said before this pass.
+        /// </summary>
+        private static void CheckDahliaTalents(ContentDatabase live)
+        {
+            Line("DAHLIA'S TALENTS (each selected against the same arena, measured against no selection)");
+
+            DahliaRun none = RunDahliaTalent(0);
+            DahliaRun t1 = RunDahliaTalent(1);
+            DahliaRun t2 = RunDahliaTalent(2);
+            DahliaRun t3 = RunDahliaTalent(3);
+            if (none == null || t1 == null || t2 == null || t3 == null)
+            { Check(false, "Dahlia talent arena built"); Line(""); return; }
+
+            // I. Displaced lasts a round longer, and the switch it watches also drains. The
+            //    override reaches the Active by name; the drain reaches the FOURTH passive by
+            //    index, which is the address that did not exist before this pass.
+            Check(t1.DisplacedRounds > none.DisplacedRounds,
+                  "Restless Chorus holds Displaced a round longer (" + t1.DisplacedRounds
+                  + " round(s) applied across the seeds against " + none.DisplacedRounds + ")");
+            Check(t1.EnemyEnergyDrops > none.EnemyEnergyDrops,
+                  "and takes Energy off the enemy that switched (" + t1.EnemyEnergyDrops
+                  + " drain(s) against " + none.EnemyEnergyDrops + ") - the effect is appended to "
+                  + "passive4, a slot a talent could not name until this pass");
+
+            // II. The second-lowest ally is healed alongside the lowest, through Broken Rhythm
+            //     only - so it shows up in battles where an enemy declared and nowhere else.
+            Check(t2.DahliaHeals > none.DahliaHeals,
+                  "Shared Rhythm heals the second-lowest ally alongside the lowest ("
+                  + t2.DahliaHeals + " heal(s) landed for " + t2.DahliaHealing + " against "
+                  + none.DahliaHeals + " for " + none.DahliaHealing + ")");
+
+            // III. Fires when Displaced RAN OUT and not when it was taken away. Her own silence
+            //      clause removes the state, and a removal is not an expiry anywhere in this
+            //      engine - which is the whole reason this talent needs no flag of its own.
+            Check(t3.TalentIIIHits > 0,
+                  "Final Cadence answers a Displaced state that expired (" + t3.TalentIIIHits
+                  + " hit(s), " + none.TalentIIIHits + " with no talent selected)");
+
+            DahliaRun t3NoSilence = RunDahliaTalent(3, DahliaPatch.DropSilence);
+            Check(t3NoSilence.TalentIIIHits > t3.TalentIIIHits,
+                  "and answers more of them when nothing cancels first (" + t3NoSilence.TalentIIIHits
+                  + " hit(s) with the silence clause removed against " + t3.TalentIIIHits
+                  + " with it) - a cancelled cast strips the state, and a strip is not an expiry");
+
+            Line("");
+        }
+
+        private enum DahliaPatch { None, DropSilence, DropAnswer, DropChoirReactions, DropTempoPayout }
+
+        private sealed class DahliaRun
+        {
+            public int DisplacedApplied;
+            public int CastsCancelled;
+            public int DahliaDamage;
+            public int DahliaHealing;
+            public int RepeatsWhileDisplaced;
+            public int RepeatsWhenFree;
+            public int DisplacedRounds;     // duration carried by every Displaced application
+            public int EnemyEnergyDrops;    // how often an enemy's bar went DOWN without casting
+            public int TalentIIIHits;       // Final Cadence's own damage, by name
+            public int DahliaHeals;         // how many heals she landed, not how much
+        }
+
+        private static DahliaRun RunDahlia(DahliaPatch patch) { return RunDahlia(patch, 0); }
+
+        private static DahliaRun RunDahliaTalent(int talent) { return RunDahlia(DahliaPatch.None, talent); }
+
+        private static DahliaRun RunDahliaTalent(int talent, DahliaPatch patch) { return RunDahlia(patch, talent); }
+
+        private static DahliaRun RunDahlia(DahliaPatch patch, int talent)
+        {
+            ContentDatabase arena = BuildDahliaArena();
+            if (arena == null) return null;
+            HeroDef dahlia = arena.GetHero("dahlia_the_wayward_hymn");
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena.GetStage("dahlia_arena");
+            if (dahlia == null || fillers == null || stage == null) return null;
+
+            if (patch != DahliaPatch.None)
+            {
+                string drop = patch == DahliaPatch.DropSilence ? "dahlia_scattered_choir_silence"
+                            : patch == DahliaPatch.DropAnswer ? "dahlia_broken_rhythm_answer"
+                            : patch == DahliaPatch.DropTempoPayout ? "dahlia_keep_them_moving_cadence"
+                            : null;
+                for (int p = dahlia.Passives.Count - 1; p >= 0; p--)
+                {
+                    string id = dahlia.Passives[p].Id;
+                    bool go = drop != null ? id == drop
+                            : id == "dahlia_scattered_choir_answer" || id == "dahlia_scattered_choir_answer_self";
+                    if (go) dahlia.Passives.RemoveAt(p);
+                }
+            }
+
+            DahliaRun run = new DahliaRun();
+            for (int seed = 1; seed <= 5; seed++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                HeroInstance her = MakeInstance(dahlia, 40);
+                her.SelectedTalent = talent;
+                team.Add(her);
+                for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                BattleResult r = RunWith(arena, stage, 7100 + seed * 31, team);
+                if (r == null) continue;
+
+                int dahliaId = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                    if (r.Units[i].DefId == "dahlia_the_wayward_hymn") dahliaId = r.Units[i].Id;
+
+                Dictionary<int, bool> displaced = new Dictionary<int, bool>();
+                Dictionary<int, int> lastHit = new Dictionary<int, int>();
+                Dictionary<int, int> lastEnergy = new Dictionary<int, int>();
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Restricted)
+                    { run.DisplacedApplied++; displaced[e.TargetId] = true; }
+                    if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Restricted)
+                        displaced[e.TargetId] = false;
+                    if (e.Type == BattleEventType.CastCancelled) run.CastsCancelled++;
+                    if (e.Type == BattleEventType.Damage && e.SourceId == dahliaId)
+                    {
+                        run.DahliaDamage += e.Value;
+                        if (e.AbilityName == "Final Cadence") run.TalentIIIHits++;
+                    }
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Restricted)
+                        run.DisplacedRounds += e.Duration;
+
+                    // A bar going DOWN on an enemy that did not just declare. The declaration is
+                    // excluded because paying a cast cost is not being drained, and it is the only
+                    // other way an enemy's energy falls in this arena.
+                    if (e.Type == BattleEventType.EnergyChanged)
+                    {
+                        UnitSnapshot eu = r.FindUnit(e.TargetId);
+                        if (eu != null && !eu.IsPlayer)
+                        {
+                            int was;
+                            bool cast = i > 0 && r.Events[i - 1].Type == BattleEventType.AbilityCast
+                                        && r.Events[i - 1].SourceId == e.TargetId;
+                            if (lastEnergy.TryGetValue(e.TargetId, out was) && e.Value < was && !cast)
+                                run.EnemyEnergyDrops++;
+                            lastEnergy[e.TargetId] = e.Value;
+                        }
+                    }
+                    if (e.Type == BattleEventType.Heal && e.SourceId == dahliaId)
+                    { run.DahliaHealing += e.Value; run.DahliaHeals++; }
+
+                    // A repeat is the same attacker landing on the same body twice running. Counted
+                    // separately for the window the state is held and everything outside it, which
+                    // is what makes the first number mean "the ban held" rather than "nobody
+                    // repeated anything in this fight".
+                    //
+                    // BLOWS THAT HAD A CHOICE TO MAKE. Two things here pick no target the ban can
+                    // move: a line-wide Active, which resolves against everybody, and a blow
+                    // anchored at LowestHpEnemy, whose candidate list is one body - banning that
+                    // one empties the list, and an emptied list falls back to the unrestricted
+                    // pick rather than costing the enemy its turn. Both are tracked so the mark
+                    // stays right and neither is counted, because neither is a choice repeated.
+                    //
+                    // Not a guess: counting them read 5 repeats out of this arena, and every one
+                    // was DhSwinger, anchored at LowestHpEnemy, hitting the same body it had no
+                    // alternative to. The enemy that picks freely is DhCaster.
+                    if (e.Type == BattleEventType.Damage && e.SourceId >= 0 && e.SourceId != dahliaId)
+                    {
+                        UnitSnapshot su = r.FindUnit(e.SourceId);
+                        if (su != null && !su.IsPlayer)
+                        {
+                            int prev;
+                            bool isDisplaced = displaced.ContainsKey(e.SourceId) && displaced[e.SourceId];
+                            bool hadAChoice = e.AbilityName == "Jab";
+                            if (hadAChoice && lastHit.TryGetValue(e.SourceId, out prev) && prev == e.TargetId)
+                            {
+                                if (isDisplaced) run.RepeatsWhileDisplaced++;
+                                else run.RepeatsWhenFree++;
+                            }
+                            lastHit[e.SourceId] = e.TargetId;
+                        }
+                    }
+                }
+            }
+            return run;
+        }
+
+        /// <summary>
+        /// Live heroes, so the kit under test is the shipped one, against an enemy line built to
+        /// raise what she answers: one body that casts an Active and one that only swings.
+        /// </summary>
+        private static ContentDatabase BuildDahliaArena()
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""dh_caster"", ""name"": ""DhCaster"", ""aspect"": ""Ember"",
+      ""hp"": 400000, ""attack"": 600, ""defense"": 100, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dh_c_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.6 } ] },
+      ""active"": { ""id"": ""dh_c_active"", ""name"": ""Chorus Breaker"", ""energyCost"": 100,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 0.5 } ] } },
+    { ""id"": ""dh_swinger"", ""name"": ""DhSwinger"", ""aspect"": ""Tide"",
+      ""hp"": 400000, ""attack"": 500, ""defense"": 100, ""speed"": 210, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dh_s_basic"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 0.8 } ] } },
+    { ""id"": ""dh_spray"", ""name"": ""DhSpray"", ""aspect"": ""Verdant"",
+      ""hp"": 400000, ""attack"": 200, ""defense"": 100, ""speed"": 150, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""dh_p_basic"", ""name"": ""Scatter"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""RandomEnemy"", ""power"": 0.45, ""hits"": 2 } ] } },
+    { ""id"": ""dh_straggler"", ""name"": ""DhStraggler"", ""aspect"": ""Gale"",
+      ""hp"": 3000, ""attack"": 300, ""defense"": 90, ""speed"": 120, ""critChance"": 0, ""critDamage"": 1.5,
+      ""passive"": { ""id"": ""dh_strag_bleed"", ""name"": ""Bleeding Out"", ""trigger"": ""TurnStart"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 4.0 } ] },
+      ""basic"": { ""id"": ""dh_strag"", ""name"": ""Urge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.4 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""dh_ch"", ""name"": ""Dahlia"", ""stages"": [
+    { ""id"": ""dahlia_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""dh_caster"", ""level"": 40 },
+      { ""id"": ""dh_swinger"", ""level"": 40 },
+      { ""id"": ""dh_spray"", ""level"": 40 },
+      { ""id"": ""dh_straggler"", ""level"": 40 } ] } ] } ]
+}";
+            return LoadSyntheticContent(heroes, enemies, campaign, balance, "dahlia arena");
+        }
+
+        // ---- the three Displaced primitives: an applied ban, a named caster, a target change ---
+
+        private static void CheckDisplacedPrimitives(ContentDatabase live)
+        {
+            Line("DISPLACED PRIMITIVES (a restriction that arrives mid-battle, a window that names");
+            Line("                      its caster, and somebody hearing a unit turn on another body)");
+            CheckDisplacedPins();
+            CheckNoShippedDisplacedUse(live);
+            CheckAppliedRestrictionBindsAndExpires();
+            CheckDeclarationNamesItsCaster();
+            CheckTargetChangeIsHeard();
+            Line("");
+        }
+
+        private static void CheckDisplacedPins()
+        {
+            Check((int)StatusKind.HealingReduction == 49 && (int)StatusKind.Restricted == 50,
+                  "StatusKind.HealingReduction still at 49, Restricted appended at 50");
+            Check((int)PassiveTrigger.OnCastDeclared == 48
+                  && (int)PassiveTrigger.OnEnemyChangedTarget == 49,
+                  "PassiveTrigger.OnCastDeclared still at 48, OnEnemyChangedTarget appended at 49");
+            Check((int)BattleEventType.CastCancelled == 21 && (int)EffectKind.CancelCast == 30
+                  && (int)TargetMode.SwapDelayedUnit == 37,
+                  "BattleEventType, EffectKind and TargetMode are untouched by this pass - the "
+                  + "applied restriction is a status carrying two fields, not a new effect kind");
+        }
+
+        /// <summary>
+        /// WHO USES THE RESTRICTION, and it is now somebody.
+        ///
+        /// This began as a zero-use tripwire: nothing applied a restriction or answered a target
+        /// change, which is what made "the three additions cannot move a fingerprint" a fact rather
+        /// than a hope. Dahlia is the first kit to use all three, so the claim is re-earned in the
+        /// only way it can be - by NAMING the users. The 72 stage fingerprints still cannot move
+        /// because she is in no campaign stage, and the 145 sweep lines that predate her cannot
+        /// move because no other hero touches any of this.
+        ///
+        /// Still a tripwire, and a tighter one than before: the moment a SECOND kit adopts any of
+        /// it, this goes red and whoever adopted it has to say what moved.
+        /// </summary>
+        private static void CheckNoShippedDisplacedUse(ContentDatabase live)
+        {
+            List<string> users = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                bool used = false;
+                List<AbilityDef> abilities = AllAbilitiesOf(live.Heroes[h]);
+                for (int a = 0; a < abilities.Count; a++)
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                        if (abilities[a].Effects[e].Status == StatusKind.Restricted
+                            || abilities[a].Effects[e].TargetBanKind != TargetBan.None) used = true;
+                for (int p = 0; p < live.Heroes[h].Passives.Count; p++)
+                    if (live.Heroes[h].Passives[p].Trigger == PassiveTrigger.OnEnemyChangedTarget) used = true;
+                if (used) users.Add(live.Heroes[h].Id);
+            }
+            bool onlyDahlia = users.Count == 1 && users[0] == "dahlia_the_wayward_hymn";
+            Check(onlyDahlia,
+                  onlyDahlia
+                    ? "Dahlia is the only kit that applies a restriction or answers a target change,"
+                      + " so no stage fingerprint and no sweep line that predates her can move"
+                    : users.Count + " kit(s) use it (" + string.Join(", ", users.ToArray())
+                      + ") - the fingerprint claims need re-earning");
+        }
+
+        /// <summary>
+        /// A RESTRICTION THAT ARRIVES AND LEAVES. The passive-declared form is measured by the
+        /// arenas above and is untouched; this is the entry-borne one, and the point of it is the
+        /// second half: when the status expires the holder goes back to the body it was avoiding.
+        /// </summary>
+        private static void CheckAppliedRestrictionBindsAndExpires()
+        {
+            DispProbe applied = RunAppliedBanArena(2);
+            DispProbe never = RunAppliedBanArena(0);
+            if (applied == null || never == null) { Check(false, "applied-ban arena built"); return; }
+
+            Check(never.Front > 0 && never.Back == 0,
+                  "control: with no restriction applied every blow lands on the front enemy ("
+                  + never.Front + " / " + never.Back + ")");
+            Check(applied.Back > 0,
+                  "a Restricted entry carrying TargetBan.LastTarget moves the holder off the body "
+                  + "it just hit (" + applied.Front + " front, " + applied.Back + " back) - the "
+                  + "rule arrived mid-battle, which a passive-declared one cannot do");
+            Check(applied.AfterExpiry > 0,
+                  "AND IT LEAVES WITH THE STATUS: after the entry expires the holder goes back to "
+                  + "hitting one body (" + applied.AfterExpiry + " consecutive blow(s) on the same "
+                  + "target in the last round), which is what makes it a state rather than a "
+                  + "property");
+        }
+
+        private sealed class DispProbe
+        {
+            public int Front;
+            public int Back;
+            public int AfterExpiry;   // consecutive same-target blows once the entry is gone
+        }
+
+        private static DispProbe RunAppliedBanArena(int duration)
+        {
+            // The hero is the one restricted, so the arena measures where ITS blows land. A
+            // BattleStart passive applies the entry to the hero itself for `duration` rounds; at
+            // zero nothing is applied and the control falls out of the same content.
+            string applier = duration > 0
+                ? @"""passive1"": { ""id"": ""ab_seed"", ""name"": ""Seed"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+          ""duration"": " + duration + @", ""chance"": 1, ""bypassResist"": true,
+          ""targetBan"": ""LastTarget"" } ] },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ab_hero"", ""name"": ""AbHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      " + applier + @"
+      ""basic"": { ""id"": ""ab_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""active"": { ""id"": ""ab_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ab_front"", ""name"": ""AbFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""abf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""ab_back"", ""name"": ""AbBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""abb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ab_ch"", ""name"": ""AppliedBan"", ""stages"": [
+    { ""id"": ""ab_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""ab_front"", ""level"": 1 }, { ""id"": ""ab_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(5), "applied ban");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ab_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("ab_arena"), 9971, team);
+            if (r == null) return null;
+
+            int frontId = -1, backId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "AbFront") frontId = r.Units[i].Id;
+                if (r.Units[i].Name == "AbBack") backId = r.Units[i].Id;
+            }
+
+            DispProbe p = new DispProbe();
+            int last = -1, run = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage) continue;
+                if (e.TargetId == frontId) p.Front += e.Value;
+                else if (e.TargetId == backId) p.Back += e.Value;
+                else continue;
+                // the longest run of blows on one body - it can only lengthen once the rule is gone
+                if (e.TargetId == last) { run++; if (run > p.AfterExpiry) p.AfterExpiry = run; }
+                else { run = 1; last = e.TargetId; }
+            }
+            if (p.AfterExpiry < 2) p.AfterExpiry = 0;   // a run of one is not a run
+            return p;
+        }
+
+        /// <summary>
+        /// The declaration window names its caster. A passive answering it tests a status on the
+        /// caster and aims at BroadcastSubject, and both only work if the subject is set.
+        /// </summary>
+        private static void CheckDeclarationNamesItsCaster()
+        {
+            int marked = RunCasterNamedArena(true);
+            int unmarked = RunCasterNamedArena(false);
+            Check(marked > 0,
+                  "a passive answering OnCastDeclared can test the CASTER's statuses and aim at it "
+                  + "(" + marked + " damage into the caster) - with no subject it could do neither");
+            Check(unmarked == 0,
+                  "control: with the caster not carrying the status the same passive pays nothing ("
+                  + unmarked + "), so it is reading the caster rather than firing on any cast");
+        }
+
+        private static int RunCasterNamedArena(bool markCaster)
+        {
+            string mark = markCaster
+                ? @"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+                      ""duration"": 99, ""chance"": 1, ""bypassResist"": true },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""cn_hero"", ""name"": ""CnHero"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""cn_answer"", ""name"": ""Name It"", ""trigger"": ""OnCastDeclared"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""BroadcastSubject"", ""power"": 1.0,
+          ""condition"": ""HasStatus"", ""conditionStatus"": ""Restricted"",
+          ""conditionOn"": ""BroadcastSubject"" } ] },
+      ""basic"": { ""id"": ""cn_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cn_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""cn_caster"", ""name"": ""CnCaster"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 50, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""passive"": { ""id"": ""cn_self"", ""name"": ""Self"", ""trigger"": ""BattleStart"",
+        ""effects"": [ " + mark + @"
+          { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""basic"": { ""id"": ""cnb"", ""name"": ""Poke"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""cn_enemy_active"", ""name"": ""Sing"", ""energyCost"": 0,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""cn_ch"", ""name"": ""CasterNamed"", ""stages"": [
+    { ""id"": ""cn_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""cn_caster"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "caster named");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("cn_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("cn_arena"), 9972, team);
+            return r == null ? -1 : DamageTo(r, "CnCaster");
+        }
+
+        /// <summary>
+        /// Somebody hears a unit turn on a different body - and does not hear its first blow,
+        /// because acquiring a target is not changing one.
+        /// </summary>
+        private static void CheckTargetChangeIsHeard()
+        {
+            BattleResult switching = RunTargetChangeArena(true);
+            BattleResult steady = RunTargetChangeArena(false);
+            if (switching == null || steady == null)
+            { Check(false, "target-change arena built"); return; }
+
+            int heard = CountPassiveFires(switching, "tc_watch");
+            int quiet = CountPassiveFires(steady, "tc_watch");
+            Check(heard > 0,
+                  "OnEnemyChangedTarget fires when an enemy turns on a different body ("
+                  + heard + " time(s))");
+            Check(quiet == 0,
+                  "and not once against an enemy that hits the same body every turn (" + quiet
+                  + " fires) - its FIRST blow is not a change either, which is the line the trigger "
+                  + "draws");
+        }
+
+        private static BattleResult RunTargetChangeArena(bool switching)
+        {
+            // THE SWITCHER IS MADE TO SWITCH BY THE OTHER PRIMITIVE IN THIS PASS. Aiming it at
+            // the lowest-HP ally does not switch anything: the body it just hit is the lowest, so
+            // it stays there. A Restricted entry carrying TargetBan.LastTarget forbids exactly
+            // that, so the foe alternates - which is both the arena it needed and the combination
+            // the hero waiting on these two will author.
+            string restrict = switching
+                ? @"""passive"": { ""id"": ""tc_ban"", ""name"": ""Displaced"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Restricted"",
+          ""duration"": 99, ""chance"": 1, ""bypassResist"": true, ""targetBan"": ""LastTarget"" } ] },"
+                : "";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""tc_watcher"", ""name"": ""TcWatcher"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""tc_watch"", ""name"": ""Watch"", ""trigger"": ""OnEnemyChangedTarget"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""basic"": { ""id"": ""tcw"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcwa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tc_a"", ""name"": ""TcA"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 40000, ""attack"": 10, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tca"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcaa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""tc_b"", ""name"": ""TcB"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 40000, ""attack"": 10, ""defense"": 0, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tcb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""tcba"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""tc_foe"", ""name"": ""TcFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 400, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      " + restrict + @"
+      ""basic"": { ""id"": ""tcf"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""tc_ch"", ""name"": ""TargetChange"", ""stages"": [
+    { ""id"": ""tc_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""tc_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(5), "target change");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("tc_watcher"), 1));
+            team.Add(MakeInstance(db.GetHero("tc_a"), 1));
+            team.Add(MakeInstance(db.GetHero("tc_b"), 1));
+            return RunWith(db, db.GetStage("tc_arena"), 9973, team);
+        }
+
         // ---- cast cancellation: an active with a state between declaration and resolution -----
 
         private static void CheckCastCancellation(ContentDatabase live)
@@ -18840,28 +19629,41 @@ namespace Emberfall.DevHarness
         private static void CheckNoShippedCastUse(ContentDatabase live)
         {
             int uses = 0;
+            int dahliaUses = 0;
             for (int h = 0; h < live.Heroes.Count; h++)
             {
+                int mine = 0;
                 List<AbilityDef> abilities = AllAbilitiesOf(live.Heroes[h]);
                 for (int a = 0; a < abilities.Count; a++)
                     for (int e = 0; e < abilities[a].Effects.Count; e++)
                         if (abilities[a].Effects[e].Kind == EffectKind.CancelCast
                             || abilities[a].Effects[e].Condition == EffectCondition.SubjectIsCasting)
-                            uses++;
+                            mine++;
                 for (int p = 0; p < live.Heroes[h].Passives.Count; p++)
                     if (live.Heroes[h].Passives[p].Trigger == PassiveTrigger.OnCastDeclared
                         || !string.IsNullOrEmpty(live.Heroes[h].Passives[p].TriggerAbilityId))
-                        uses++;
+                        mine++;
+                uses += mine;
+                if (live.Heroes[h].Id == "dahlia_the_wayward_hymn") dahliaUses += mine;
             }
             for (int n = 0; n < live.Enemies.Count; n++)
                 for (int p = 0; p < live.Enemies[n].Passives.Count; p++)
                     if (live.Enemies[n].Passives[p].Trigger == PassiveTrigger.OnCastDeclared) uses++;
 
-            Check(uses == 0,
+            // As with the restriction one section down: a zero-use tripwire that Dahlia is now
+            // the sole occupant of. Her two OnCastDeclared passives and the CancelCast in one of
+            // them are the entire shipped use, and she is in no campaign stage, so the turn-loop
+            // claim the cast-cancellation pass made still holds everywhere it was made.
+            bool onlyHers = uses == dahliaUses && dahliaUses > 0;
+            Check(uses == 0 || onlyHers,
                   uses == 0
                     ? "no shipped content cancels a cast, answers a declaration or names an ability "
                       + "id, which is why the turn loop can change without a fingerprint moving"
-                    : uses + " shipped use(s) - the fingerprint claims above need re-earning");
+                    : onlyHers
+                      ? "Dahlia is the only kit that cancels a cast or answers a declaration ("
+                        + uses + " use(s), all hers), so the turn loop's fingerprint claims stand"
+                      : uses + " shipped use(s) beyond Dahlia's " + dahliaUses
+                        + " - the fingerprint claims above need re-earning");
         }
 
         /// <summary>

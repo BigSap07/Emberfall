@@ -2825,8 +2825,8 @@
             "target": "Self",
             "condition": "HasMyMark",
             "condition2": "StatusUseAvailable",
-            "conditionOn": "BroadcastSource",
-            "conditionOn2": "BroadcastSource",
+            "conditionOn": "LastAttacker",
+            "conditionOn2": "LastAttacker",
             "conditionStatus2": "Mark",
             "duration": 2,
             "power": 0.2,
@@ -6827,27 +6827,307 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "dahlia_the_wayward_hymn_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "dahlia_offbeat_chime",
+        "name": "Offbeat Chime",
+        "description": "Deals 105% of Attack damage to the enemy with the highest Energy and reduces that enemy's Energy by 10. If the target has more Energy than Dahlia, the lowest-HP ally is healed for 45% of Attack.",
+        "vfx": "bolt",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestEnergyEnemy",
+            "power": 1.05
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "flat": -10
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.45,
+            "condition": "CasterStatBelowTarget",
+            "comparedStat": "Energy",
+            "conditionOn": "LastTarget"
           }
         ]
       },
       "active": {
-        "id": "dahlia_the_wayward_hymn_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "dahlia_scattered_choir",
+        "name": "Scattered Choir",
         "energyCost": 100,
+        "description": "Deals 165% of Attack damage to all enemies and creates a Displaced state on the enemy with the highest Energy for 2 rounds. Displaced enemies cannot target the same ally twice in a row. Whenever a Displaced enemy attacks an ally, that ally gains 10 Energy and Dahlia heals them for 70% of Attack. If the Displaced enemy uses an Active Skill while Displaced, cancel the skill and remove Displaced.",
+        "vfx": "burst",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.65
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestEnergyEnemy",
+            "status": "Restricted",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 2,
+            "targetBan": "LastTarget"
           }
         ]
+      },
+      "passive": {
+        "id": "dahlia_keep_them_moving_stats",
+        "name": "Keep Them Moving",
+        "trigger": "BattleStart",
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SpeedUp",
+            "chance": 1,
+            "duration": 99,
+            "magnitude": 0.08
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "EffectHitUp",
+            "chance": 1,
+            "duration": 99,
+            "magnitude": 0.08
+          }
+        ]
+      },
+      "passive1": {
+        "id": "dahlia_keep_them_moving_tempo",
+        "name": "Keep Them Moving",
+        "trigger": "OnEnemyEnergyDrained",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "counterIndex": 5,
+            "hits": 1,
+            "maxStacks": 3
+          }
+        ]
+      },
+      "passive2": {
+        "id": "dahlia_keep_them_moving_cadence",
+        "name": "Keep Them Moving",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.8,
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 5,
+            "conditionValue": 3,
+            "conditionOn": "Caster",
+            "consumesResolve": true,
+            "counterIndex": 5
+          }
+        ]
+      },
+      "skills": {
+        "passive1": {
+          "id": "dahlia_broken_rhythm_switch",
+          "name": "Broken Rhythm",
+          "trigger": "OnEnemyChangedTarget",
+          "limit": "OncePerRound",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "flat": 10,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            },
+            {
+              "kind": "Shield",
+              "target": "BroadcastSubject",
+              "selfHpRatio": 0.06,
+              "duration": 2,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            }
+          ]
+        },
+        "passive2": {
+          "id": "dahlia_broken_rhythm_answer",
+          "name": "Broken Rhythm",
+          "trigger": "OnCastDeclared",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSource",
+              "power": 0.75,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            },
+            {
+              "kind": "Heal",
+              "target": "LowestHpAlly",
+              "power": 0.9,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            }
+          ]
+        }
+      },
+      "passives": [
+        {
+          "id": "dahlia_scattered_choir_answer",
+          "name": "Scattered Choir",
+          "trigger": "OnEnemyDamagedAlly",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "BroadcastSubject",
+              "flat": 10,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "LastAttacker"
+            },
+            {
+              "kind": "Heal",
+              "target": "BroadcastSubject",
+              "power": 0.7,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "LastAttacker"
+            }
+          ]
+        },
+        {
+          "id": "dahlia_scattered_choir_answer_self",
+          "name": "Scattered Choir",
+          "trigger": "OnDamaged",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "flat": 10,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "LastAttacker"
+            },
+            {
+              "kind": "Heal",
+              "target": "Self",
+              "power": 0.7,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "LastAttacker"
+            }
+          ]
+        },
+        {
+          "id": "dahlia_scattered_choir_silence",
+          "name": "Scattered Choir",
+          "trigger": "OnCastDeclared",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "CancelCast",
+              "target": "BroadcastSource",
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "BroadcastSource",
+              "status": "Restricted",
+              "hits": 1,
+              "condition": "HasStatus",
+              "conditionStatus": "Restricted",
+              "conditionOn": "BroadcastSource"
+            }
+          ]
+        }
+      ],
+      "talents": {
+        "talentI": {
+          "id": "dahlia_restless_chorus",
+          "name": "Restless Chorus",
+          "description": "Displaced lasts 1 additional round. The first time a Displaced enemy changes its attack target each round, that enemy also loses 10 Energy.",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "duration",
+              "delta": 1
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive4",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "BroadcastSource",
+                "flat": -10,
+                "condition": "HasStatus",
+                "conditionStatus": "Restricted",
+                "conditionOn": "BroadcastSource"
+              }
+            }
+          ]
+        },
+        "talentII": {
+          "id": "dahlia_shared_rhythm",
+          "name": "Shared Rhythm",
+          "description": "Whenever Dahlia heals an ally through Broken Rhythm, the ally with the second-lowest HP is also healed for 40% of Attack.",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive5",
+              "effect": {
+                "kind": "Heal",
+                "target": "SecondLowestHpAlly",
+                "power": 0.4,
+                "condition": "HasStatus",
+                "conditionStatus": "Restricted",
+                "conditionOn": "BroadcastSource"
+              }
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "dahlia_final_cadence",
+          "name": "Final Cadence",
+          "description": "When Displaced ends without the enemy having its Active Skill canceled, Dahlia deals 120% of Attack damage to that enemy and immediately restores 20 Energy to the ally with the lowest Energy.",
+          "trigger": "OnAppliedStatusExpired",
+          "triggerStatus": "Restricted",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 1.2
+            },
+            {
+              "kind": "EnergyGain",
+              "target": "LowestEnergyAlly",
+              "flat": 20
+            }
+          ]
+        }
       }
     },
     {

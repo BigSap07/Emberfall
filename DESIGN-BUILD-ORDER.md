@@ -803,6 +803,33 @@ changes based on what the enemy is about to do".
 folds `(int)Type`. Three older guards claimed the event enum was "untouched"; their pins were
 right and their prose was not, and both now say what they actually guarantee.
 
+### Open: `engine/displaced-primitives` — unmerged, off `main`
+
+**The three things Dahlia was stopped on.** Engine only. **72 of 72 stage fingerprints unmoved,
+145 of 145 sweep lines unchanged**, dumped and diffed against `origin/main`.
+
+- **A restriction that arrives mid-battle.** `TargetBan` was the right rule attached to the wrong
+  thing: adopted from a `PassiveDef` in `AddPassive` and written nowhere else, so it was a standing
+  property decided at battle start. `StatusKind.Restricted` carries `BanKind` and `BanStatus` on
+  the ENTRY — the shape `Disrupted` already uses, where a status instance holds its own parameters
+  and the site that enforces them reads it there. **The passive-declared form is untouched** and
+  its arenas still pass; `TargetBanned` consults the standing form first and the entries only if
+  there is none, so the two share one switch rather than growing a second copy that could disagree.
+  Measured: the holder moves off the body it just hit while the entry lives, and goes back to a
+  three-blow run on one body once it expires.
+- **The declaration window names its caster.** `OnCastDeclared` was raised with no broadcast
+  context, so a passive could neither test the caster nor aim at it. Two lines. Measured: a passive
+  gated on a status on the caster pays 1608 into it and nothing when the caster is bare.
+- **A target change is heard.** `PreviousTargetId` updates silently inside `DealRawDamage` and was
+  readable only by the picker. `OnEnemyChangedTarget` is raised where that line already decides a
+  change happened, with the switcher as the SOURCE and the body it turned on as the SUBJECT. **A
+  unit's first blow is not a change** — acquiring a target is not changing one.
+
+The target-change arena is worth noting: aiming an enemy at the lowest-HP ally does not make it
+switch, because the body it just hit is the lowest and it stays there. It is made to switch by a
+`Restricted` entry from the same pass — which is both the arena that was needed and the exact
+combination the hero waiting on these will author.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a

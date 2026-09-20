@@ -995,9 +995,9 @@ namespace Emberfall.Core.Combat
                         ApplyDelta(aclone.Effects[ov.EffectIndex], ov.Field, ov.Delta);
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (ab == "passive1" || ab == "passive2")
+                    else if (PassiveSlotIndex(ab) >= 0)
                     {
-                        int pi = ab == "passive1" ? 0 : 1;
+                        int pi = PassiveSlotIndex(ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef passive = unit.Passives[pi];
 
@@ -1041,15 +1041,42 @@ namespace Emberfall.Core.Combat
                         aclone.Effects.Add(ap.Effect.Clone());
                         if (ab == "basic") unit.Basic = aclone; else unit.Active = aclone;
                     }
-                    else if (ab == "passive1" || ab == "passive2")
+                    else if (PassiveSlotIndex(ab) >= 0)
                     {
-                        int pi = ab == "passive1" ? 0 : 1;
+                        int pi = PassiveSlotIndex(ab);
                         if (pi >= unit.Passives.Count) continue;
                         PassiveDef pclone = ClonePassive(unit.Passives[pi]);
                         pclone.Effects.Add(ap.Effect.Clone());
                         unit.Passives[pi] = pclone;
                     }
                 }
+            }
+
+            /// <summary>
+            /// "passive1" -> 0, "passive2" -> 1, "passive7" -> 6, anything else -> -1.
+            ///
+            /// The two named cases are what this replaces and they resolve identically, digit for
+            /// digit. The reason it generalises at all: a talent addresses a passive BY POSITION in
+            /// the unit's list, the list is no longer capped at the named JSON slots, and a talent
+            /// that wants to touch the sixth passive had no way to say so.
+            ///
+            /// Returns -1 rather than throwing on a name it does not understand, because the
+            /// surrounding loop already treats an unresolvable slot as an override content may
+            /// have authored against a kit that does not have it - the same tolerance TalentAt
+            /// applies to an out-of-range selection.
+            /// </summary>
+            private static int PassiveSlotIndex(string ability)
+            {
+                if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
+                string tail = ability.Substring(7);
+                if (tail.Length == 0) return -1;
+                int n = 0;
+                for (int i = 0; i < tail.Length; i++)
+                {
+                    if (tail[i] < '0' || tail[i] > '9') return -1;
+                    n = n * 10 + (tail[i] - '0');
+                }
+                return n >= 1 ? n - 1 : -1;
             }
 
             private static AbilityDef CloneAbility(AbilityDef src)
@@ -1241,8 +1268,19 @@ namespace Emberfall.Core.Combat
                     // The declaration window, open to everybody. OnEnemyActive above is the same
                     // moment shown to one side; this is the side-neutral hook, and anything it
                     // raises resolves before the cast does.
-                    for (int ci = 0; ci < _units.Count && !IsBattleOver(); ci++)
-                        if (_units[ci].Alive) TriggerPassive(_units[ci], PassiveTrigger.OnCastDeclared, 0);
+                    // WITH THE CASTER AS THE SUBJECT. Raised without one, the window told every
+                    // unit that a cast was happening and gave none of them a way to say whose -
+                    // so a passive could not test the caster's statuses and could not aim at it.
+                    {
+                        CombatUnit prevCastSubject = _broadcastSubject;
+                        int prevCastSource = _broadcastSourceId;
+                        _broadcastSubject = unit;
+                        _broadcastSourceId = unit.Id;
+                        for (int ci = 0; ci < _units.Count && !IsBattleOver(); ci++)
+                            if (_units[ci].Alive) TriggerPassive(_units[ci], PassiveTrigger.OnCastDeclared, 0);
+                        _broadcastSourceId = prevCastSource;
+                        _broadcastSubject = prevCastSubject;
+                    }
 
                     if (!unit.Alive || IsBattleOver()) { ClearCast(); ExpireStatuses(unit); return; }
 
@@ -1904,7 +1942,20 @@ namespace Emberfall.Core.Combat
                 // must read zero rather than a number from a previous turn. An echo that could pick
                 // up a stale reading would be a different ability every time it fired.
                 int prevLastDamage = _lastDamageDealt;
-                _lastDamageDealt = 0;
+                // ZEROED FOR AN ABILITY A UNIT CHOSE, KEPT FOR ONE A BLOW TRIGGERED.
+                //
+                // The reason for clearing it is above and still holds for a Basic or an Active: an
+                // echo authored with no damage ahead of it in its own ability must read zero rather
+                // than a number from a previous turn. A PASSIVE is the opposite case. It is running
+                // because damage just landed, that damage is the whole of its context, and
+                // ScaleByLastDamage was built in the nine-gap pass to mean exactly "the blow that
+                // just happened" - so zeroing it at the passive's own boundary made the one flag
+                // that reads it always read nothing.
+                //
+                // Not hypothetical: rovan_deflected_conversion is a Shield sized at 20% of
+                // scaleByLastDamage inside an OnEnemyDamagedAlly passive, and it has been banking
+                // zero for its whole life on top of a condition that could not pass either.
+                if (depth == 0) _lastDamageDealt = 0;
                 // Cleared and restored on the same boundary, for the same reason: an effect that
                 // reads "the body the swap moved" must read this ability's swap or nobody, never
                 // a body a previous turn moved.
@@ -2344,6 +2395,18 @@ namespace Emberfall.Core.Combat
                         // Disrupted: StoredCap carries the turn shift fraction, raw rather than
                         // Attack-scaled. Zero means no shift, so an effect that does not set it
                         // is a drain-only Disrupted.
+                        // A Restricted entry carries its rule, the way a Disrupted one carries
+                        // its drain. Stamped here so two restrictions from two sources are two
+                        // entries rather than one field they fight over.
+                        if (effect.Status == StatusKind.Restricted && effect.TargetBanKind != TargetBan.None)
+                            for (int ri = 0; ri < target.Statuses.Count; ri++)
+                            {
+                                StatusInstance rs = target.Statuses[ri];
+                                if (rs.Kind != StatusKind.Restricted || rs.SourceId != source.Id) continue;
+                                rs.BanKind = effect.TargetBanKind;
+                                rs.BanStatus = effect.TargetBanStatus;
+                            }
+
                         if (effect.Status == StatusKind.Disrupted && effect.StoredCap > 0f)
                             for (int di = 0; di < target.Statuses.Count; di++)
                             {
@@ -3408,8 +3471,23 @@ namespace Emberfall.Core.Combat
                 // PreviousTargetId first, and only when the target actually changes: an ability
                 // that hits the same body twice in a row must not shuffle its own history and
                 // report itself as having switched.
+                bool changedTarget = source.LastTargetId >= 0 && source.LastTargetId != target.Id;
                 if (source.LastTargetId != target.Id) source.PreviousTargetId = source.LastTargetId;
                 source.LastTargetId = target.Id;
+                // AND SOMEBODY CAN HEAR IT NOW. The line above is the engine's own definition of a
+                // target having changed and was until now the only thing that knew. The switcher
+                // is the source and the body it has turned on is the subject; a unit's first blow
+                // is excluded, because acquiring a target is not changing one.
+                if (changedTarget)
+                {
+                    CombatUnit prevTcSubject = _broadcastSubject;
+                    int prevTcSource = _broadcastSourceId;
+                    _broadcastSubject = target;
+                    _broadcastSourceId = source.Id;
+                    BroadcastPassive(!source.IsPlayer, PassiveTrigger.OnEnemyChangedTarget, 0, null);
+                    _broadcastSourceId = prevTcSource;
+                    _broadcastSubject = prevTcSubject;
+                }
                 string vfx = ability != null ? ability.Vfx : "impact";
                 string abilityName = ability != null ? ability.Name : "";
                 DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
@@ -4322,7 +4400,21 @@ namespace Emberfall.Core.Combat
                 // -1: energy from being hit is the victim's own regen, not something the attacker
                 // granted. A Tide attacker must not redirect its victim's line's energy.
                 AddEnergy(target, _cfg.EnergyOnDamaged, -1);
-                TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+
+                // The victim is its own subject here, so ConditionSubject.LastAttacker resolves at
+                // OnDamaged to the unit that just hit it - the same thing it already means at
+                // OnEnemyDamagedAlly eight lines below, which reads the victim's LastAttackerId
+                // through exactly this field. Without it a passive on the body being hit cannot
+                // ask anything about who is hitting it, while every ALLY of that body can.
+                //
+                // Reads nothing and changes nothing on its own: it moves a field that only a
+                // condition subject consults, and no shipped passive at OnDamaged names one.
+                {
+                    CombatUnit prevDmgSubject = _broadcastSubject;
+                    _broadcastSubject = target;
+                    TriggerPassive(target, PassiveTrigger.OnDamaged, 0);
+                    _broadcastSubject = prevDmgSubject;
+                }
 
                 // The victim's own allies hear about it; the victim does not, because OnDamaged
                 // one line up is already its own version of this news. Raised only for damage that
@@ -4612,7 +4704,36 @@ namespace Emberfall.Core.Combat
                 // shipped content applies TurnDebt, so this branch is unreachable today.
                 if (amount > 0 && energyBefore >= 0)
                     CheckEnergyThreshold(unit, energyBefore);
+
+                // --- and the mirror of it: somebody took Energy off an enemy ---
+                // After the clamp, so "lost Energy" means the bar actually moved rather than a
+                // drain that hit an empty one. Across the line only - a unit paying its own cast
+                // cost, or an ally handing energy about, is not a drain and never reaches here.
+                //
+                // Re-entrancy is why the flag exists rather than a depth count: the passive this
+                // fires can itself drain, and a Tempo that feeds itself is an endless battle
+                // rather than a wrong number. One drain answers one trigger.
+                if (amount < 0 && energyBefore > 0 && unit.Energy != energyBefore
+                    && sourceId >= 0 && !_inDrainTrigger)
+                {
+                    CombatUnit drainer = FindUnit(sourceId);
+                    if (drainer != null && drainer.Alive && drainer.IsPlayer != unit.IsPlayer)
+                    {
+                        _inDrainTrigger = true;
+                        CombatUnit prevDrSubject = _broadcastSubject;
+                        int prevDrSource = _broadcastSourceId;
+                        _broadcastSubject = unit;
+                        _broadcastSourceId = drainer.Id;
+                        TriggerPassive(drainer, PassiveTrigger.OnEnemyEnergyDrained, 0);
+                        _broadcastSourceId = prevDrSource;
+                        _broadcastSubject = prevDrSubject;
+                        _inDrainTrigger = false;
+                    }
+                }
             }
+
+            /// <summary>Guards the drain trigger against a passive that drains. See AddEnergy.</summary>
+            private bool _inDrainTrigger;
 
             /// <summary>
             /// The original clamping AddEnergy, returning what it would otherwise have thrown away.
@@ -5409,7 +5530,7 @@ namespace Emberfall.Core.Combat
             private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded,
                                                     StatusKind targetStatus)
             {
-                if (caster == null || caster.TargetBan == TargetBan.None || _targetBanRelaxed)
+                if (caster == null || _targetBanRelaxed || !HasAnyTargetBan(caster))
                     return ResolveTargetsInner(caster, mode, excluded, targetStatus);
 
                 int before = _targetBanRejections;
@@ -6243,6 +6364,8 @@ namespace Emberfall.Core.Combat
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
+                    landed.BanKind = status.BanKind;
+                    landed.BanStatus = status.BanStatus;
 
                     // AND THE LEDGER'S RULES, NOT ONLY ITS BALANCE. These nine were the third
                     // field-by-field copy in this engine found dropping fields, and the only one
@@ -6327,13 +6450,43 @@ namespace Emberfall.Core.Combat
             /// `_targetBanRejections` counts the refusals so the fallback can tell "the ban emptied
             /// this" apart from "this mode had no answer anyway".
             /// </summary>
+            /// <summary>Whether this unit is restricted at all, by either form. One enum test for
+            /// the standing form and, only if that is None, a walk of a status list that is empty
+            /// of Restricted entries for every unit in shipped content.</summary>
+            private bool HasAnyTargetBan(CombatUnit caster)
+            {
+                if (caster.TargetBan != TargetBan.None) return true;
+                for (int i = 0; i < caster.Statuses.Count; i++)
+                    if (caster.Statuses[i].Kind == StatusKind.Restricted
+                        && caster.Statuses[i].BanKind != TargetBan.None) return true;
+                return false;
+            }
+
             private bool TargetBanned(CombatUnit caster, CombatUnit unit)
             {
-                if (caster == null || unit == null || caster.TargetBan == TargetBan.None) return false;
+                if (caster == null || unit == null) return false;
                 if (_targetBanRelaxed) return false;
 
+                // THE STANDING FORM AND THE APPLIED ONE, in that order, and the first match wins.
+                // A passive-declared ban is a property of the unit and was the only shape there
+                // was; an entry-borne one arrives mid-battle and leaves with its status. Both are
+                // the same question asked of the same candidate, so they share the switch below
+                // rather than growing a second copy of it that could disagree.
+                TargetBan kind = caster.TargetBan;
+                StatusKind banStatus = caster.TargetBanStatus;
+                if (kind == TargetBan.None)
+                    for (int i = 0; i < caster.Statuses.Count; i++)
+                    {
+                        StatusInstance rs = caster.Statuses[i];
+                        if (rs.Kind != StatusKind.Restricted || rs.BanKind == TargetBan.None) continue;
+                        kind = rs.BanKind;
+                        banStatus = rs.BanStatus;
+                        break;
+                    }
+                if (kind == TargetBan.None) return false;
+
                 bool banned;
-                switch (caster.TargetBan)
+                switch (kind)
                 {
                     case TargetBan.LastTarget:
                         banned = caster.LastTargetId >= 0 && unit.Id == caster.LastTargetId;
@@ -6342,8 +6495,7 @@ namespace Emberfall.Core.Combat
                         banned = caster.LastRoundTargetId >= 0 && unit.Id == caster.LastRoundTargetId;
                         break;
                     case TargetBan.CarryingStatus:
-                        banned = caster.TargetBanStatus != StatusKind.None
-                                 && unit.Has(caster.TargetBanStatus);
+                        banned = banStatus != StatusKind.None && unit.Has(banStatus);
                         break;
                     default:
                         banned = false;
