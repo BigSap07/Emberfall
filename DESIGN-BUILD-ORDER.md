@@ -613,6 +613,98 @@ report excludes them.
 The 72 stage fingerprints are untouched — the hero-sweep arena is not the campaign — and the harness
 red list is identical, line for line, at 35.
 
+### Open: `engine/target-restriction` — unmerged, off `main`
+
+**A rule saying a unit may not pick a particular body.** Engine only; no hero is authored on it.
+**72 of 72 stage fingerprints unmoved and 145 of 145 sweep lines unchanged**, both dumped and
+diffed against `main` rather than recalled — which is the claim that matters, because this sits on
+the path every fingerprint measures and all 29 authored heroes and every enemy resolve targets
+through it.
+
+**The primitive, not one clause.** Three descriptions say a unit may not pick something — the same
+target twice in a row, a unit carrying a status, the unit it picked last round — and all three are
+one shape: a predicate on a candidate, owned by the picker, asked at pick time. `TargetBan` is
+`None / LastTarget / LastRoundTarget / CarryingStatus`, declared on a `PassiveDef` and adopted onto
+the unit the way `OutputModStatus` already is, because a rule of this kind is a property of the
+unit and not of one ability.
+
+`LastRoundTarget` needed a third memory. `LastTargetId` is overwritten as each blow is set up, so
+it names the body being hit right now; `PreviousTargetId` is the last DIFFERENT body and is not
+written at all when a unit hits the same one twice. `LastRoundTargetId` is snapshotted in
+`BeginRound`. The arena proves the two are not one rule twice: over the same fight, `LastTarget`
+changes body **7** times and `LastRoundTarget` **3**.
+
+#### Where it sits: with concealment, before the anchor, and able to veto it
+
+The filter rides with `Concealed` at all eleven single-target sites — one helper, `Rejected`, asks
+both questions — and is applied to the Provoked branch and to the Taunt anchor as well.
+
+**A Taunt holder the picker may not pick stops answering for its side.** That is the placement
+concealment already has in the same method, for the same reason; a restriction the anchor outranked
+would be a rule any enemy could suspend by taunting, and a compulsion to attack a body you are
+forbidden to attack is a contradiction the engine already resolves in favour of the exclusion.
+Measured: with the front enemy taunting, the control puts 1608 into it and 0 into the back body;
+with the restriction naming the taunter, 0 and 1608.
+
+**It governs picks, not sweeps.** `AllEnemies` takes a side rather than picking, and a ban that
+thinned a sweep would be damage immunity wearing a targeting rule's clothes — again the rule
+concealment already set. `RandomEnemy` is the one single-target mode that goes through the
+multi-target collector, so it filters before the draw: the roll is over the legal set.
+
+#### What a unit with no legal target does: it picks anyway
+
+The restriction is dropped for that one pick. The alternatives were a turn that evaporates and a
+pick made arbitrarily; a fight where one side cannot act does not end, it runs to `maxRounds` and
+reports a result no decision produced, and an arbitrary pick is not definable in a simulation that
+must replay identically. **This is exactly the trade concealment makes one method down** — "the
+last body is always targetable" — decided the same way and for the same reason.
+
+The retry runs only when the ban actually refused somebody, so a mode that legitimately resolves to
+nobody does not resolve twice, and only for a unit carrying a restriction at all, so nothing in
+shipped content reaches the second call and no mode that draws from the RNG stream can draw twice.
+Measured: with every enemy carrying the forbidden status, the blow lands for **1608**, the same as
+the unrestricted control — the rule is dropped, not bent.
+
+#### It was not a second copy. It was a third, and now the audit is standing
+
+Asked before merge whether `ClonePassive` and `EffectDef.Clone` were the complete set, the answer
+was no. Searching for the SIGNATURE of the bug — a run of assignments whose left and right sides
+name the same member — turns up sixteen such runs in six files. Split by whether the copy is
+same-type or a projection:
+
+**Same-type copies, where every field must be assigned — four of them, now all complete:**
+
+| copier | type | was |
+|---|---|---|
+| `EffectDef.Clone` | EffectDef, 81 fields | dropped 9 |
+| `ClonePassive` | PassiveDef, 26 fields | dropped 3, then 2 more |
+| `CloneAbility` | AbilityDef, 7 fields | complete |
+| `MoveStatus`'s carry block | StatusInstance, 32 fields | **dropped 9** |
+
+**`MoveStatus` is the one shipped content can reach.** `Ledger` is not harmful, so `MoveBuffs`
+moves it; Vaelis's active moves positive effects between two enemies and Sylven's Scar Record IS a
+Ledger. A moved one arrived with its stored damage and with `AutoRelease` off, along with every
+other rule about how it banks and what it mitigates — **a record that still remembered the number
+and had forgotten it was supposed to pay it out.** The carry block's own comment promised that
+everything the entry recorded travels with it; what it recorded did, what it was told to do with
+it did not. Measured now: a Ledger left alone pays 500 into its holder, and a Ledger moved to
+another body pays the same 500 into the new one.
+
+The other two, `Overrides` and `Appends` on `ClonePassive`, no passive in content carries — a
+passive that is the TARGET of a talent is not itself a talent. Copied anyway, because "complete
+except where somebody has checked that it does not matter" is how the other three got into the
+state they were in.
+
+**Cross-type projections are deliberately NOT in the table** — `CombatUnit.FromDef`,
+`StatMath.Build`, `CampaignWaveGenerator.BuildBattle` (21 fields) and `ProvingGenerator.GhostOf`
+all read one type and write another, and a field they leave behind may be correct. They are named
+here so the next reader knows they were looked at rather than missed.
+
+The audit that found the third one is kept as a check: it reads each type's public fields and each
+copier's body out of the sources and asserts every field is assigned — 149 fields across the four —
+with the four `AddOrRefresh` sets whitelisted for `MoveStatus` and a list counted as copied when
+the body adds to it.
+
 ### Placeholder-period notes (until abilities are authored)
 
 - **`validate_heroes.py` is red on 62 findings, all of them star-shape.** Every hero still on a

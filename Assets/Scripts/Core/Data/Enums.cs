@@ -1671,6 +1671,36 @@ namespace Emberfall.Core.Data
     /// first one to test that promise.
     /// </summary>
     /// <summary>
+    /// A standing rule forbidding a unit one class of target.
+    ///
+    /// THE PRIMITIVE, NOT ONE HERO'S CLAUSE. Three descriptions in the roster say a unit may not
+    /// pick something - "cannot pick the same target twice in a row", "cannot pick a unit carrying
+    /// X", "cannot pick the unit it picked last round" - and each of them is the same shape: a
+    /// predicate on a candidate, owned by the unit doing the picking, asked at pick time. Building
+    /// any one of them as its own rule would have produced three rules that had to agree about the
+    /// anchor, about concealment and about what happens when nothing is left.
+    ///
+    /// Declared on a PassiveDef and adopted onto the unit the way OutputModStatus already is,
+    /// because a rule of this kind is a property of the unit rather than of one ability: "Kest
+    /// cannot change targets while his target lives" is true of Kest, not of his Basic Attack.
+    /// </summary>
+    public enum TargetBan
+    {
+        /// <summary>No restriction. Every unit in shipped content.</summary>
+        None,
+
+        /// <summary>The body this unit's last attack landed on - CombatUnit.LastTargetId.</summary>
+        LastTarget,
+
+        /// <summary>The body it was aimed at as the previous round ended - LastRoundTargetId. A
+        /// sibling of LastTarget with a round's granularity rather than a blow's.</summary>
+        LastRoundTarget,
+
+        /// <summary>Any body carrying the status named by TargetBanStatus, whoever applied it.</summary>
+        CarryingStatus
+    }
+
+    /// <summary>
     /// What kind of outgoing value a per-stack output modifier scales.
     /// </summary>
     public enum OutputModScope
