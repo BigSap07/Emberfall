@@ -69,7 +69,11 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
+            CheckNoTalentIsEmpty(content);
+            CheckTalentTargetsResolve(content);
+            CheckAuthoredTalentSweep(content);
             CheckAuthoredKitExercise(content);
+            ReportTalentExercise();
 
             CheckDebrief();
             CheckRelics(content);
@@ -17385,7 +17389,471 @@ namespace Emberfall.DevHarness
         private const string HeroSweepBaselineFile = "hero-sweep-baseline.txt";
         private const int HeroSweepSeeds = 5;
 
-        private static void CheckAuthoredHeroSweep(ContentDatabase live)
+          /// <summary>
+        /// A TALENT THAT IS AUTHORED AS NOTHING. No trigger with effects, no overrides, no
+        /// appends: the slot has an id and a name and does not contain a rule.
+        ///
+        /// Unreachable by any arena, because there is nothing to reach. This is the cheapest of
+        /// the three talent checks and the only one that needs no battle at all, and it went red
+        /// the first time it was run - three of the ninety were shells.
+        /// </summary>
+        private static void CheckNoTalentIsEmpty(ContentDatabase live)
+        {
+            List<string> empty = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+                for (int t = 1; t <= def.Talents.Count; t++)
+                {
+                    PassiveDef p = def.TalentAt(t);
+                    if (p == null) continue;
+                    bool hasRule = (p.Trigger != PassiveTrigger.None && p.Effects.Count > 0)
+                                   || p.Overrides.Count > 0 || p.Appends.Count > 0;
+                    if (!hasRule) empty.Add(def.Id + " " + RomanOf(t) + " (" + p.Name + ")");
+                }
+            }
+            Check(empty.Count == 0,
+                  empty.Count == 0
+                    ? "every authored talent contains a rule - a trigger with effects, an override "
+                      + "or an append"
+                    : empty.Count + " talent(s) are authored as an id and a name with NO RULE IN "
+                      + "THEM, so no arena can ever reach them: " + string.Join(", ", empty.ToArray()));
+        }
+
+        /// <summary>
+        /// EVERY OVERRIDE AND APPEND HAS TO LAND SOMEWHERE THAT EXISTS.
+        ///
+        /// `ApplyTalentOverrides` says so itself: "An override with no matching ability or effect
+        /// index is silently ignored - content may name a slot the hero has not authored yet." That
+        /// tolerance is right for the engine and invisible to everything else. A talent naming
+        /// `passive2` effect 2 on a passive with two effects is dropped on the floor, and until the
+        /// talent sweep existed nothing anywhere would have said so.
+        ///
+        /// Resolved exactly the way the engine resolves it, including the two fields that live on
+        /// the ability rather than on an effect - `energyCost` and `threshold` - which are legal
+        /// with any index. The passive bound is `Passives.Count + 1` because the selected talent is
+        /// appended to that list before the overrides are applied, so the engine can see one more
+        /// slot than the def authored.
+        ///
+        /// This is the check the two Clone defects would have wanted: both only ever reached a
+        /// player who had picked a talent, and both were found by accident.
+        /// </summary>
+        private static void CheckTalentTargetsResolve(ContentDatabase live)
+        {
+            List<string> broken = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+                for (int t = 1; t <= def.Talents.Count; t++)
+                {
+                    PassiveDef p = def.TalentAt(t);
+                    if (p == null) continue;
+                    string who = def.Id + " " + RomanOf(t);
+
+                    for (int i = 0; i < p.Overrides.Count; i++)
+                    {
+                        TalentOverrideDef ov = p.Overrides[i];
+                        string ab = (ov.Ability ?? "").ToLowerInvariant();
+                        string field = (ov.Field ?? "").ToLowerInvariant();
+                        int count = TalentEffectCount(def, ab);
+                        if (count < 0) { broken.Add(who + " overrides unknown slot '" + ov.Ability + "'"); continue; }
+                        if (field == "energycost" || field == "threshold") continue;
+                        if (ov.EffectIndex < 0 || ov.EffectIndex >= count)
+                            broken.Add(who + " overrides " + ab + " effect " + ov.EffectIndex
+                                       + " but it has " + count + " - DROPPED");
+                    }
+                    for (int i = 0; i < p.Appends.Count; i++)
+                    {
+                        string ab = (p.Appends[i].Ability ?? "").ToLowerInvariant();
+                        if (TalentEffectCount(def, ab) < 0)
+                            broken.Add(who + " appends to unknown slot '" + p.Appends[i].Ability + "'");
+                    }
+                }
+            }
+            Check(broken.Count == 0,
+                  broken.Count == 0
+                    ? "every talent override and append names an ability and an effect that exist, "
+                      + "so none of them is silently dropped at unit-build time"
+                    : broken.Count + " talent target(s) do not resolve and are SILENTLY DROPPED by "
+                      + "ApplyTalentOverrides: " + string.Join("; ", broken.ToArray()));
+        }
+
+        /// <summary>Effects in the slot a talent names, or -1 if the slot does not exist.</summary>
+        private static int TalentEffectCount(HeroDef def, string ability)
+        {
+            if (ability == "basic") return def.BasicAttack == null ? -1 : def.BasicAttack.Effects.Count;
+            if (ability == "active") return def.Active == null ? -1 : def.Active.Effects.Count;
+            if (string.IsNullOrEmpty(ability) || !ability.StartsWith("passive")) return -1;
+            string tail = ability.Substring(7);
+            if (tail.Length == 0) return -1;
+            int n = 0;
+            for (int i = 0; i < tail.Length; i++)
+            {
+                if (tail[i] < '0' || tail[i] > '9') return -1;
+                n = n * 10 + (tail[i] - '0');
+            }
+            int pi = n - 1;
+            // +1: the selected talent is appended to the unit's passive list before the overrides
+            // are applied, so the engine sees one slot more than the def authored.
+            if (pi < 0 || pi >= def.Passives.Count + 1) return -1;
+            return pi < def.Passives.Count ? def.Passives[pi].Effects.Count : 0;
+        }
+
+        /// <summary>
+        /// Whether this talent could not land WHEREVER it was run: nothing in it at all, or every
+        /// override and append it carries names a slot that does not exist. Those two have checks
+        /// of their own, and counting them again as "the arena could not light it" would blame the
+        /// arena for a defect in the content.
+        /// </summary>
+        private static bool TalentIsStructurallyDead(HeroDef def, PassiveDef t)
+        {
+            if (t == null) return true;
+            bool hasRule = (t.Trigger != PassiveTrigger.None && t.Effects.Count > 0)
+                           || t.Overrides.Count > 0 || t.Appends.Count > 0;
+            if (!hasRule) return true;
+            if (t.Trigger != PassiveTrigger.None && t.Effects.Count > 0) return false;
+
+            for (int i = 0; i < t.Overrides.Count; i++)
+            {
+                TalentOverrideDef ov = t.Overrides[i];
+                string ab = (ov.Ability ?? "").ToLowerInvariant();
+                string field = (ov.Field ?? "").ToLowerInvariant();
+                int count = TalentEffectCount(def, ab);
+                if (count < 0) continue;
+                if (field == "energycost" || field == "threshold") return false;
+                if (ov.EffectIndex >= 0 && ov.EffectIndex < count) return false;
+            }
+            for (int i = 0; i < t.Appends.Count; i++)
+                if (TalentEffectCount(def, (t.Appends[i].Ability ?? "").ToLowerInvariant()) >= 0) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// What a dark talent is waiting for, in the talent's own terms rather than a guess: the
+        /// trigger it answers, or the first condition its appended effects test, or - for a talent
+        /// that only shifts a number - the ability whose number it shifts.
+        /// </summary>
+        private static string TalentGate(PassiveDef t)
+        {
+            if (t == null) return "nothing - it is missing";
+            if (t.Trigger != PassiveTrigger.None && t.Effects.Count > 0)
+                return t.Trigger.ToString() + (t.TriggerStatus != StatusKind.None
+                                               ? " on " + t.TriggerStatus : "");
+            for (int i = 0; i < t.Appends.Count; i++)
+            {
+                EffectDef e = t.Appends[i].Effect;
+                if (e != null && e.Condition != EffectCondition.None)
+                    return e.Condition.ToString() + " inside " + t.Appends[i].Ability;
+            }
+            if (t.Appends.Count > 0) return "its host " + t.Appends[0].Ability + " to resolve";
+            if (t.Overrides.Count > 0) return "its host " + t.Overrides[0].Ability
+                                              + " to resolve and the number to matter";
+            return "an arena that reaches it";
+        }
+
+        private const string TalentSweepBaselineFile = "talent-sweep-baseline.txt";
+
+        /// <summary>
+        /// Seeds per talent, and deliberately more than the hero sweep's five.
+        ///
+        /// The hero sweep asks whether a kit MOVED, and five seeds answer that: a kit that changed
+        /// changes them all. This asks whether a talent does anything at all, and many of them are
+        /// gated - on a kill, on a mark the hero has to land first, on an ally dropping below a
+        /// threshold - so a seed where the gate never opens says nothing about the talent. More
+        /// seeds would be the obvious way to raise that, and it was measured rather than assumed:
+        /// at 5 seeds 31 talents show no effect, at 15 it is still 31, at 30 it is 30 - one talent
+        /// bought for 2,250 extra baseline lines and 0.6s. The gates these talents wait on are
+        /// structural, not statistical; an arena that never raises OnLedgerCapped never raises it.
+        /// So this stays at five, matching the hero sweep line for line, and the way to light the
+        /// dark ones is a better arena or a repaired talent rather than more dice.
+        /// </summary>
+        private const int TalentSweepSeeds = 5;
+
+        /// <summary>
+        /// EVERY AUTHORED TALENT, EXECUTED, in the arena the hero sweep already uses.
+        ///
+        /// WHY A SECOND SWEEP RATHER THAN A WIDER FIRST ONE. The hero sweep fields each kit with
+        /// SelectedTalent 0, and so does a fresh profile, so its 150 lines and the 72 stage
+        /// fingerprints were all measurements of heroes with no talent chosen: 90 authored talents,
+        /// 85 of them never once executed, and a talent appended to the wrong passive index moved
+        /// nothing anywhere. Both Clone defects found this month were in exactly that blind spot -
+        /// they only reached players who had picked a talent.
+        ///
+        /// Folding the talents into the hero sweep - each hero once per selection - would have
+        /// rewritten all 150 existing lines into a 600-line file, and a rewritten baseline cannot
+        /// tell "the new selection did this" from "content moved underneath us". Keeping them apart
+        /// means the old 150 stay byte-identical and every line here is new by construction, so the
+        /// cause of a difference is never in question. It also keeps the two questions separate:
+        /// the hero sweep asks whether a KIT moved, this asks whether a TALENT does anything.
+        ///
+        /// THE COMPARISON IS THE TEST. Each talent runs on the same hero, the same arena and the
+        /// SAME SEED as that hero's no-talent line, so a talent that changes nothing produces the
+        /// same fingerprint as not picking it. That is the one failure the old instrument could not
+        /// see, and it is a plain inequality here rather than an inspection of wiring.
+        /// </summary>
+        private static void CheckAuthoredTalentSweep(ContentDatabase live)
+        {
+            Line("AUTHORED-TALENT SWEEP (every talent executed, against the same hero with none selected)");
+
+            List<HeroDef> authored = new List<HeroDef>();
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef h = live.Heroes[i];
+                if (h.BasicAttack != null && h.BasicAttack.Id.Contains("placeholder")) continue;
+                authored.Add(h);
+            }
+            authored.Sort(delegate (HeroDef a, HeroDef b) { return string.CompareOrdinal(a.Id, b.Id); });
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "talent-sweep arena built"); Line(""); return; }
+
+            int talentCount = 0;
+            for (int h = 0; h < authored.Count; h++)
+            {
+                HeroDef def = arena.GetHero(authored[h].Id);
+                if (def != null) talentCount += def.Talents.Count;
+            }
+            Check(talentCount > 0,
+                  talentCount + " authored talent(s) across " + authored.Count + " hero(es), each run at "
+                  + TalentSweepSeeds + " seeds");
+            if (talentCount == 0) { Line(""); return; }
+
+            List<string> lines = new List<string>();
+            List<string> gated = new List<string>();
+            List<string> twins = new List<string>();
+            Dictionary<string, bool> isLive = new Dictionary<string, bool>();
+            _talentExercise = new List<string>();
+
+            for (int h = 0; h < authored.Count; h++)
+            {
+                HeroDef def = arena.GetHero(authored[h].Id);
+                if (def == null) continue;
+
+                // The hero with nothing picked, once per seed, kept to compare against. Same arena,
+                // same seed and same squad as the hero sweep's own line for this hero.
+                string[] bare = new string[TalentSweepSeeds + 1];
+                for (int s = 1; s <= TalentSweepSeeds; s++) bare[s] = RunTalentLine(arena, stage, fillers, def, 0, s);
+
+                string report = def.Name;
+                for (int t = 1; t <= def.Talents.Count; t++)
+                {
+                    PassiveDef talent = def.TalentAt(t);
+                    int moved = 0;
+                    int fires = 0;
+                    for (int s = 1; s <= TalentSweepSeeds; s++)
+                    {
+                        string hash = RunTalentLine(arena, stage, fillers, def, t, s);
+                        lines.Add(def.Id + "|" + t + "|" + s + "|" + hash);
+                        if (hash != bare[s] && hash != "NULL") moved++;
+                        fires += _lastTalentFires;
+                    }
+                    isLive[def.Id + "|" + t] = moved > 0;
+                    if (moved == 0 && !TalentIsStructurallyDead(def, talent))
+                        gated.Add(def.Id + " " + RomanOf(t) + " needs " + TalentGate(talent));
+                    report += " | " + RomanOf(t) + " " + TalentShape(talent)
+                            + (TalentIsPassiveShaped(talent) ? " fires " + fires : "")
+                            + " moved " + moved + "/" + TalentSweepSeeds
+                            + (moved == 0 ? " <- DARK: " + (TalentIsStructurallyDead(def, talent)
+                                                            ? "cannot land" : TalentGate(talent)) : "");
+                }
+
+                // Two talents of one hero producing the same fight is not proof of a defect, but it
+                // is never what three distinct descriptions are supposed to do.
+                for (int a = 1; a <= def.Talents.Count; a++)
+                    for (int b = a + 1; b <= def.Talents.Count; b++)
+                    {
+                        if (!isLive[def.Id + "|" + a] || !isLive[def.Id + "|" + b]) continue;
+                        bool same = true;
+                        for (int s = 1; s <= TalentSweepSeeds && same; s++)
+                            if (FindTalentLine(lines, def.Id, a, s) != FindTalentLine(lines, def.Id, b, s)) same = false;
+                        if (same) twins.Add(def.Id + " " + RomanOf(a) + "/" + RomanOf(b));
+                    }
+
+                _talentExercise.Add(report);
+            }
+
+            // THE DARK ONES, SPLIT BY CAUSE, because "this talent did nothing" is three different
+            // findings and a red that lumps them together is a red nobody can act on. The two
+            // structural causes have checks of their own above and are subtracted here, so what is
+            // left is the honest measure of what this ARENA cannot light - and each is named with
+            // the gate it is waiting on.
+            Check(gated.Count == 0,
+                  gated.Count == 0
+                    ? "every one of the " + talentCount + " talents changes the fight it is picked "
+                      + "for - none produces the same fingerprint as leaving it unpicked"
+                    : gated.Count + " of " + talentCount + " talents are EXECUTED but never observed "
+                      + "doing anything here - each waits on something this arena does not raise, "
+                      + "and each is named with what it waits on: " + string.Join(", ", gated.ToArray()));
+
+            // Only among talents that DO something. Two dead talents being identical is the dead
+            // check's finding, not this one's, and counting it twice would make this red decorative.
+            Check(twins.Count == 0,
+                  twins.Count == 0
+                    ? "no two LIVE talents of one hero produce the same fight at every seed"
+                    : twins.Count + " live talent pair(s) are indistinguishable from each other: "
+                      + string.Join(", ", twins.ToArray()));
+
+            string dir = FindToolDir("DevHarness");
+            string path = dir == null ? null : Path.Combine(dir, TalentSweepBaselineFile);
+            bool regen = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMBERFALL_REGEN_TALENT_SWEEP"));
+            if (path == null)
+            {
+                Line("  [note] Tools/DevHarness not found next to this binary, so the talent sweep could"
+                     + " not be compared against its baseline. The " + lines.Count
+                     + " fingerprints were still produced.");
+                Line("");
+                return;
+            }
+            if (regen || !File.Exists(path))
+            {
+                WriteTalentSweepBaseline(path, lines);
+                Line("  [note] " + (regen ? "EMBERFALL_REGEN_TALENT_SWEEP is set" : "no baseline existed")
+                     + " - wrote " + lines.Count + " fingerprints to " + TalentSweepBaselineFile
+                     + ". A regenerate is a CLAIM that every moved line was intended.");
+                Line("");
+                return;
+            }
+            CompareTalentSweepBaseline(path, lines);
+            Line("");
+        }
+
+        /// <summary>One run, and the talent's own fire count from it, left in _lastTalentFires.</summary>
+        private static int _lastTalentFires;
+        private static List<string> _talentExercise;
+
+        private static string RunTalentLine(ContentDatabase arena, StageDef stage, List<HeroDef> fillers,
+                                            HeroDef def, int talent, int seed)
+        {
+            _lastTalentFires = 0;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroInstance subject = MakeInstance(def, 40);
+            subject.SelectedTalent = talent;
+            team.Add(subject);
+            for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+            BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+            if (r == null) return "NULL";
+
+            PassiveDef picked = talent >= 1 ? def.TalentAt(talent) : null;
+            if (picked != null && !string.IsNullOrEmpty(picked.Id))
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.PassiveTrigger
+                        && r.Events[i].AbilityId == picked.Id) _lastTalentFires++;
+            return HeroSweepHash(r);
+        }
+
+        private static string FindTalentLine(List<string> lines, string heroId, int talent, int seed)
+        {
+            string key = heroId + "|" + talent + "|" + seed + "|";
+            for (int i = 0; i < lines.Count; i++)
+                if (lines[i].StartsWith(key)) return lines[i].Substring(key.Length);
+            return null;
+        }
+
+        private static string RomanOf(int n) { return n == 1 ? "I" : n == 2 ? "II" : n == 3 ? "III" : n.ToString(); }
+
+        /// <summary>
+        /// What a talent IS, because "executed" means three different things across the roster: a
+        /// talent carrying its own trigger fires like any passive and can be counted; one carrying
+        /// appends or overrides never fires at all and is only visible in the fight it changes.
+        /// </summary>
+        private static string TalentShape(PassiveDef t)
+        {
+            if (t == null) return "[missing]";
+            List<string> parts = new List<string>();
+            if (t.Trigger != PassiveTrigger.None && t.Effects.Count > 0) parts.Add("passive");
+            if (t.Overrides.Count > 0) parts.Add("overrides");
+            if (t.Appends.Count > 0) parts.Add("appends");
+            if (parts.Count == 0) return "[EMPTY]";
+            return "[" + string.Join("+", parts.ToArray()) + "]";
+        }
+
+        private static bool TalentIsPassiveShaped(PassiveDef t)
+        {
+            return t != null && t.Trigger != PassiveTrigger.None && t.Effects.Count > 0;
+        }
+
+        private static void WriteTalentSweepBaseline(string path, List<string> lines)
+        {
+            List<string> outp = new List<string>();
+            outp.Add("# Authored-talent sweep. One line per hero, talent and seed, in the same arena");
+            outp.Add("# and at the same seeds as hero-sweep-baseline.txt, with that talent SELECTED.");
+            outp.Add("# heroId|talent|seed|fingerprint");
+            outp.Add("#");
+            outp.Add("# A line moving is a behaviour change in that talent and needs a stated reason in");
+            outp.Add("# the commit that moves it, NOT a regenerate. Regenerate with");
+            outp.Add("# EMBERFALL_REGEN_TALENT_SWEEP=1.");
+            for (int i = 0; i < lines.Count; i++) outp.Add(lines[i]);
+            File.WriteAllLines(path, outp.ToArray());
+        }
+
+        private static void CompareTalentSweepBaseline(string path, List<string> lines)
+        {
+            Dictionary<string, string> baseline = new Dictionary<string, string>();
+            string[] raw = File.ReadAllLines(path);
+            for (int i = 0; i < raw.Length; i++)
+            {
+                string t = raw[i].Trim();
+                if (t.Length == 0 || t[0] == '#') continue;
+                int cut = t.LastIndexOf('|');
+                if (cut <= 0) continue;
+                baseline[t.Substring(0, cut)] = t.Substring(cut + 1);
+            }
+            List<string> moved = new List<string>();
+            List<string> added = new List<string>();
+            Dictionary<string, bool> seen = new Dictionary<string, bool>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int cut = lines[i].LastIndexOf('|');
+                string key = lines[i].Substring(0, cut);
+                string hash = lines[i].Substring(cut + 1);
+                seen[key] = true;
+                string was;
+                if (!baseline.TryGetValue(key, out was)) { added.Add(key); continue; }
+                if (was != hash) moved.Add(key);
+            }
+            List<string> gone = new List<string>();
+            foreach (KeyValuePair<string, string> kv in baseline)
+                if (!seen.ContainsKey(kv.Key)) gone.Add(kv.Key);
+
+            Check(moved.Count == 0,
+                  moved.Count == 0
+                    ? "all " + lines.Count + " talent fingerprints match " + TalentSweepBaselineFile
+                    : moved.Count + " of " + lines.Count + " talent fingerprints MOVED: "
+                      + string.Join(", ", moved.ToArray()));
+            Check(added.Count == 0,
+                  added.Count == 0
+                    ? "no talent entry is missing from the baseline"
+                    : added.Count + " talent entr(ies) are not in the baseline: "
+                      + string.Join(", ", added.ToArray()));
+            Check(gone.Count == 0,
+                  gone.Count == 0
+                    ? "no baseline entry has lost its talent"
+                    : gone.Count + " baseline entr(ies) no longer exist: "
+                      + string.Join(", ", gone.ToArray()));
+        }
+
+        /// <summary>
+        /// The talent half of the exercise report, printed rather than summarised: one line per
+        /// hero naming each talent's SHAPE, how often it fired if it is the kind that can fire, and
+        /// how many of the five seeds it changed. A talent reading "moved 0/5" did nothing.
+        /// </summary>
+        private static void ReportTalentExercise()
+        {
+            Line("AUTHORED-TALENT EXERCISE (what each talent IS, and what it did when it was picked)");
+            Line("                         [passive] fires on its own trigger and is counted; [appends]");
+            Line("                         and [overrides] never fire - they are only visible in the");
+            Line("                         fight they change, which is what 'moved' counts.");
+            if (_talentExercise == null) { Line("  [note] the talent sweep did not run"); Line(""); return; }
+            for (int i = 0; i < _talentExercise.Count; i++) Line("  " + _talentExercise[i]);
+            Line("");
+        }
+
+      private static void CheckAuthoredHeroSweep(ContentDatabase live)
         {
             Line("AUTHORED-HERO SWEEP (every authored kit in one fixed arena, against a committed baseline)");
 
