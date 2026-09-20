@@ -31,6 +31,19 @@ DST_H = 260
 
 # Hero configs: (short_name, hero_id, source_dir, manifest_prefix_override)
 # manifest_prefix_override handles the Nereia/Celen name mismatch
+#
+# WHICH FILE HOLDS THE BASIC ATTACK VARIES BY DELIVERY, and it is not derivable: most exports
+# ship <hero>_basic1.png, but Kael and Marrow ship <hero>_basic.png with no digit, and Kael's
+# second basic is <hero>_basic_2.png with an underscore the "basic2" token does not match. Set
+# CLIP_MAP["basic"] / ["basic2"] per hero before calling process_hero - match by ROLE, never by
+# filename, which is the one note the original PowerShell importer carried that still bites.
+#
+# The five Ember 5-stars were wired this way on 2026-09-20:
+#   Seraphine -> seraphine_the_closed_volume   basic1
+#   Kael      -> kael_the_unyielding           basic   (and basic_2 for the second basic)
+#   Kiva      -> kiva_the_forsaken_oath        basic1
+#   Hale      -> hale_the_relentless_hunter    basic1
+#   Marrow    -> marrow_the_irrevocable_vow    basic
 HEROES = [
     {
         "short": "Nereia",

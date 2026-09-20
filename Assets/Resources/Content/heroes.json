@@ -32,8 +32,8 @@
         "scale": 1.01,
         "sigil": null,
         "sprite": "hale_the_relentless_hunter",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.554,
+        "spriteFootFraction": 0.219,
         "spriteMirror": true
       },
       "basic": {
@@ -256,8 +256,8 @@
         "scale": 1.08,
         "sigil": null,
         "sprite": "kael_the_unyielding",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.55,
+        "spriteFootFraction": 0.223,
         "spriteMirror": true
       },
       "basic": {
@@ -552,8 +552,8 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "kiva_the_forsaken_oath",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.508,
+        "spriteFootFraction": 0.238,
         "spriteMirror": true
       },
       "basic": {
@@ -824,8 +824,8 @@
         "scale": 1.05,
         "sigil": null,
         "sprite": "marrow_the_irrevocable_vow",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.535,
+        "spriteFootFraction": 0.231,
         "spriteMirror": true
       },
       "basic": {
@@ -1113,8 +1113,8 @@
         "scale": 1.02,
         "sigil": null,
         "sprite": "seraphine_the_closed_volume",
-        "spriteBodyFraction": 0.53,
-        "spriteFootFraction": 0.23,
+        "spriteBodyFraction": 0.527,
+        "spriteFootFraction": 0.235,
         "spriteMirror": true
       },
       "basic": {
