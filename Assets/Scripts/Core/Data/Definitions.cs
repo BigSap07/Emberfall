@@ -792,6 +792,26 @@ namespace Emberfall.Core.Data
     /// An override with no matching ability or effect index is silently ignored - content may
     /// name a slot the hero has not authored yet, which is the same tolerance TalentAt already
     /// applies to an out-of-range selection.
+    ///
+    /// AND THE SILENCE STAYS, DELIBERATELY, because it was asked whether this should refuse
+    /// loudly instead. It should not, HERE. Eight authored targets did survive authoring because
+    /// nothing said a word, so the question is a fair one - but the cost of answering it in the
+    /// engine is paid by players rather than by authors:
+    ///
+    ///   - SelectedTalent is SAVE state and the effect list it indexes is CONTENT. A balance patch
+    ///     that shortens an effect list invalidates an index that was legal when the player picked
+    ///     it. Refusing here turns that patch into a crash at battle start for everyone holding
+    ///     that talent, which is a worse failure than a talent doing less than its text.
+    ///   - Run() is a pure function with no logging channel, by design - it returns an event list
+    ///     and the screen reads it. A warning would be the first impurity in it, and a throw would
+    ///     take the idle resolver down with the battle screen.
+    ///
+    /// The loudness belongs where the mistake is MADE, not where it lands, and that is build time:
+    /// CheckTalentTargetsResolve fails on an index that does not exist, and
+    /// CheckTalentOverridesNameALiveField fails on one that exists but names a field the effect
+    /// never reads - the quieter half of the same fault, and the half that looks alive.
+    ///
+    /// Nothing relies on the drop today: as of this pass every authored target resolves.
     /// </summary>
     public sealed class TalentOverrideDef
     {
