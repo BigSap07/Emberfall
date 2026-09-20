@@ -557,27 +557,234 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "kiva_the_forsaken_oath_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "kiva_cut_the_escort",
+        "name": "Cut the Escort",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "LowestHpEnemy",
+            "power": 1.25
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpEnemy",
+            "chance": 1,
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       },
       "active": {
-        "id": "kiva_the_forsaken_oath_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "kiva_sever_the_return",
+        "name": "Sever the Return",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 2.45
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "EnemyWithMyMark",
+            "condition": "HasShield",
+            "conditionOn": "Target",
+            "hits": 1,
+            "status": "Shield"
+          },
+          {
+            "kind": "Damage",
+            "target": "EnemyWithMyMark",
+            "condition": "HasShield",
+            "conditionOn": "Target",
+            "power": 0.0,
+            "targetMissingHpRatio": 0.1
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "EnemyWithMyMark",
+            "bypassResist": true,
+            "chance": 1,
+            "condition": "StatusStacksAtLeast",
+            "condition2": "LacksStatus",
+            "conditionOn": "Caster",
+            "conditionOn2": "Target",
+            "conditionStatus2": "HealSuppression",
+            "conditionValue": 1,
+            "consumesResolve": true,
+            "duration": 1,
+            "status": "HealSuppression"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "EnemyWithMyMark",
+            "condition": "StatusStacksAtLeast",
+            "condition2": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionOn2": "Target",
+            "conditionStatus2": "HealSuppression",
+            "conditionValue": 1,
+            "consumesResolve": true,
+            "flat": -15
           }
         ]
+      },
+      "passive": {
+        "id": "kiva_abandoned_support_stats",
+        "name": "Abandoned Support",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.1,
+            "status": "AttackUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.1,
+            "status": "SpeedUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "Focus"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "kiva_broken_links",
+        "name": "Abandoned Support",
+        "trigger": "OnEnemyBuffGained",
+        "limit": "OncePerRound",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "duration": 99,
+            "maxStacks": 2
+          }
+        ]
+      },
+      "passive2": {
+        "id": "kiva_severance_paid",
+        "name": "Severance Paid",
+        "trigger": "AfterBasicAttack",
+        "perTargetLimit": 1,
+        "perTargetPerRound": true,
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "condition": "HasMyMark",
+            "condition2": "StatusStacksAtLeast",
+            "conditionOn": "LastTarget",
+            "conditionOn2": "Caster",
+            "conditionValue2": 1,
+            "consumesResolve": true,
+            "duration": 1,
+            "status": "HealSuppression"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "condition": "HasMyMark",
+            "condition2": "HasStatus",
+            "conditionOn": "LastTarget",
+            "conditionOn2": "LastTarget",
+            "conditionStatus2": "HealSuppression",
+            "consumesResolve": true,
+            "flat": -15
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "kiva_no_safe_escort",
+          "name": "No Safe Escort",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "bypassResist": true,
+                "chance": 1,
+                "duration": 2,
+                "magnitude": 1.0,
+                "status": "BlockDown"
+              }
+            }
+          ]
+        },
+        "talentII": {
+          "id": "kiva_cut_the_last_line",
+          "name": "Cut the Last Line",
+          "trigger": "OnKill",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "ApplyStatus",
+              "target": "HighestHpEnemy",
+              "chance": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "Defeated",
+              "duration": 2,
+              "status": "Mark"
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "kiva_unclaimed_victory",
+          "name": "Unclaimed Victory",
+          "trigger": "OnKill",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Shield",
+              "target": "Self",
+              "condition": "HasMyMark",
+              "condition2": "StatusStacksAtLeast",
+              "conditionOn": "Defeated",
+              "conditionOn2": "Caster",
+              "conditionValue2": 1,
+              "duration": 2,
+              "selfHpRatio": 0.12
+            },
+            {
+              "kind": "Shield",
+              "target": "Self",
+              "condition": "HasMyMark",
+              "condition2": "StatusStacksAtLeast",
+              "conditionOn": "Defeated",
+              "conditionOn2": "Caster",
+              "conditionValue2": 2,
+              "duration": 2,
+              "selfHpRatio": 0.12
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "Self",
+              "condition": "HasMyMark",
+              "conditionOn": "Defeated",
+              "hits": 10,
+              "status": "Resolve"
+            }
+          ]
+        }
       }
     },
     {
@@ -5390,27 +5597,198 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "sylven_the_unfading_blade_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "sylven_open_wound",
+        "name": "Open Wound",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "FrontEnemy",
+            "bypassResist": true,
+            "chance": 1,
+            "doTRecord": "LastPositiveStatus",
+            "duration": 2,
+            "magnitude": 0.35,
+            "status": "Burn"
           }
         ]
       },
       "active": {
-        "id": "sylven_the_unfading_blade_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "sylven_collect_the_wound",
+        "name": "Collect the Wound",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "HighestPendingDoTEnemy",
+            "power": 2.15
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestPendingDoTEnemy",
+            "chance": 1,
+            "duration": 3,
+            "ledgerAutoRelease": true,
+            "status": "Ledger",
+            "storedCap": 3.0
+          },
+          {
+            "kind": "RecordFact",
+            "target": "HighestPendingDoTEnemy",
+            "record": "LastPositiveStatus",
+            "status": "Ledger"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "HighestPendingDoTEnemy",
+            "hits": 1,
+            "status": "Burn"
+          },
+          {
+            "kind": "LedgerDeposit",
+            "target": "HighestPendingDoTEnemy",
+            "power": 1.0,
+            "scaleByLastRemoval": true
           }
         ]
+      },
+      "passive": {
+        "id": "sylven_persistent_edge_stats",
+        "name": "Persistent Edge",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.1,
+            "status": "AttackUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "SpeedUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "Focus"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "sylven_persistent_edge",
+        "name": "Persistent Edge",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "TransferStatus",
+            "target": "DefeatedUnit",
+            "secondaryTarget": "HighestHpEnemy",
+            "status": "Ledger",
+            "transferDuration": 2
+          },
+          {
+            "kind": "TransferStatus",
+            "target": "DefeatedUnit",
+            "preventExtend": true,
+            "secondaryTarget": "HighestHpEnemy",
+            "status": "Burn",
+            "transferDuration": 2
+          }
+        ]
+      },
+      "passive2": {
+        "id": "sylven_wounds_remember",
+        "name": "Wounds Remember",
+        "trigger": "OnEnemyBuffGained",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Dispel",
+            "target": "BroadcastSubject",
+            "condition": "StoredStatusMatches",
+            "conditionOn": "BroadcastSubject",
+            "conditionStatus": "Ledger",
+            "hits": 1
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "condition": "StoredStatusMatches",
+            "conditionOn": "BroadcastSubject",
+            "conditionStatus": "Ledger",
+            "hits": 1,
+            "status": "Ledger"
+          },
+          {
+            "kind": "Damage",
+            "target": "BroadcastSubject",
+            "condition": "StoredStatusMatches",
+            "conditionOn": "BroadcastSubject",
+            "conditionStatus": "Ledger",
+            "power": 1.0
+          },
+          {
+            "kind": "RecordFact",
+            "target": "BroadcastSubject",
+            "record": "LastPositiveStatus",
+            "status": "Ledger"
+          }
+        ]
+      },
+      "talents": {
+        "talentI": {
+          "id": "sylven_lasting_evidence",
+          "name": "Lasting Evidence",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "duration",
+              "delta": 1
+            },
+            {
+              "ability": "active",
+              "effectIndex": 1,
+              "field": "storedCap",
+              "delta": 1.2
+            }
+          ]
+        },
+        "talentII": {
+          "id": "sylven_inherited_injury",
+          "name": "Inherited Injury",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "HighestHpEnemy",
+                "flat": -10
+              }
+            }
+          ]
+        },
+        "talentIII": {
+          "id": "sylven_nothing_heals_cleanly",
+          "name": "Nothing Heals Cleanly",
+          "trigger": "None",
+          "effects": []
+        }
       }
     },
     {
@@ -6486,27 +6864,191 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "merek_the_sequence_thief_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "merek_interjecting_clause",
+        "name": "Interjecting Clause",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestEnergyEnemy",
+            "power": 1.15
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestEnergyEnemy",
+            "chance": 1,
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       },
       "active": {
-        "id": "merek_the_sequence_thief_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "merek_stolen_interval",
+        "name": "Stolen Interval",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.9
+          },
+          {
+            "kind": "SwapTurnOrder",
+            "target": "FrontEnemy"
           }
         ]
+      },
+      "passive": {
+        "id": "merek_unsettled_timing_stats",
+        "name": "Unsettled Timing",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "AttackUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.1,
+            "status": "EffectHitUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "SkillDamageUp"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "merek_anticipated",
+        "name": "Interjecting Clause (Anticipated)",
+        "trigger": "OnEnemyActive",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "TurnShift",
+            "target": "BroadcastSubject",
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject",
+            "magnitude": -0.1
+          }
+        ]
+      },
+      "passive2": {
+        "id": "merek_first_claim",
+        "name": "Priority Inversion",
+        "trigger": "TurnStart",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestSpeedEnemy",
+            "chance": 1,
+            "duration": 1,
+            "status": "MarkAlt"
+          }
+        ]
+      },
+      "skills": {
+        "passive1": {
+          "id": "merek_priority_inversion",
+          "name": "Priority Inversion",
+          "trigger": "OnEnemyActive",
+          "limit": "OncePerRound",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "TurnShift",
+              "target": "LowestEnergyAlly",
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject",
+              "conditionStatus": "MarkAlt",
+              "magnitude": 0.2
+            }
+          ]
+        }
+      },
+      "talents": {
+        "talentI": {
+          "id": "merek_borrowed_minute",
+          "name": "Borrowed Minute",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "flat": 5
+              }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "TurnShift",
+                "target": "BroadcastSubject",
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "magnitude": -0.08
+              }
+            }
+          ]
+        },
+        "talentII": {
+          "id": "merek_reordered_agenda",
+          "name": "Reordered Agenda",
+          "trigger": "None",
+          "effects": []
+        },
+        "talentIII": {
+          "id": "merek_no_first_move",
+          "name": "No First Move",
+          "trigger": "OnEnemyDefeated",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "AllEnemies",
+              "condition": "HasMyMark",
+              "condition2": "SubjectHasNotActedThisRound",
+              "conditionOn": "Defeated",
+              "conditionOn2": "Defeated",
+              "conditionStatus": "MarkAlt",
+              "flat": -12
+            },
+            {
+              "kind": "Damage",
+              "target": "HighestEnergyEnemy",
+              "condition": "HasMyMark",
+              "condition2": "SubjectHasNotActedThisRound",
+              "conditionOn": "Defeated",
+              "conditionOn2": "Defeated",
+              "conditionStatus": "MarkAlt",
+              "power": 1.15
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "HighestEnergyEnemy",
+              "chance": 1,
+              "condition": "HasMyMark",
+              "condition2": "SubjectHasNotActedThisRound",
+              "conditionOn": "Defeated",
+              "conditionOn2": "Defeated",
+              "conditionStatus": "MarkAlt",
+              "duration": 2,
+              "status": "Mark"
+            }
+          ]
+        }
       }
     },
     {
@@ -6546,27 +7088,240 @@
         "spriteMirror": false
       },
       "basic": {
-        "id": "oris_the_unwritten_path_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "oris_unfinished_note",
+        "name": "Unfinished Note",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "LowestEnergyEnemy",
+            "condition": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "MarkAlt",
+            "power": 1.5
+          },
+          {
+            "kind": "TurnShift",
+            "target": "Self",
+            "condition": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "MarkAlt",
+            "magnitude": 0.1
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "condition": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "MarkAlt",
+            "hits": 1,
+            "status": "MarkAlt"
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestEnergyEnemy",
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 2,
+            "conditionOn": "Caster",
+            "conditionValue": 1,
+            "power": 1.5
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "HighestEnergyEnemy",
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 2,
+            "conditionOn": "Caster",
+            "conditionValue": 1,
+            "flat": -20
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "condition": "StatusStacksAtLeast",
+            "conditionCounterIndex": 2,
+            "conditionOn": "Caster",
+            "conditionValue": 1,
+            "consumesResolve": true,
+            "counterIndex": 2,
+            "duration": 3,
+            "status": "MarkAlt"
+          },
+          {
+            "kind": "Damage",
+            "target": "LowestEnergyEnemy",
+            "condition": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "Mark",
+            "power": 1.25
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestSpeedEnemy",
+            "condition": "LacksStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "Mark",
+            "power": 1.25
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "condition": "HasStatus",
+            "conditionOn": "Caster",
+            "conditionStatus": "Mark",
+            "hits": 1,
+            "status": "Mark"
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "comparedStat": "Speed",
+            "condition": "CasterStatBelowTarget",
+            "conditionOn": "LastTarget",
+            "power": 0.45
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "comparedStat": "Speed",
+            "condition": "CasterStatBelowTarget",
+            "conditionOn": "LastTarget",
+            "flat": -10
           }
         ]
       },
       "active": {
-        "id": "oris_the_unwritten_path_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "oris_improvise_the_way",
+        "name": "Improvise the Way",
         "energyCost": 100,
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.1
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 20.0,
+            "status": "Disrupted",
+            "storedCap": 0.15,
+            "usesPerRound": 1
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "counterIndex": 2,
+            "duration": 3,
+            "maxStacks": 1
           }
         ]
+      },
+      "passive": {
+        "id": "oris_restless_hands_stats",
+        "name": "Restless Hands",
+        "trigger": "BattleStart",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.08,
+            "status": "SpeedUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.06,
+            "status": "EffectHitUp"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 99,
+            "magnitude": 0.06,
+            "status": "SkillDamageUp"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "oris_restless_hands",
+        "name": "Restless Hands",
+        "trigger": "OnTurnDelayed",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "duration": 2,
+            "status": "Mark"
+          }
+        ]
+      },
+      "passive2": {
+        "id": "oris_no_fixed_refrain",
+        "name": "No Fixed Refrain",
+        "trigger": "None",
+        "oncePerBattle": false,
+        "effects": []
+      },
+      "talents": {
+        "talentI": {
+          "id": "oris_quicker_fingering",
+          "name": "Quicker Fingering",
+          "trigger": "None",
+          "effects": [],
+          "overrides": [
+            {
+              "ability": "basic",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.3
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 3,
+              "field": "power",
+              "delta": 0.3
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "magnitude",
+              "delta": 0.05
+            }
+          ]
+        },
+        "talentII": {
+          "id": "oris_change_the_key",
+          "name": "Change the Key",
+          "trigger": "None",
+          "effects": []
+        },
+        "talentIII": {
+          "id": "oris_open_ending",
+          "name": "Open Ending",
+          "trigger": "None",
+          "effects": [],
+          "appends": [
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "Damage",
+                "target": "LastTarget",
+                "condition": "HasStatus",
+                "conditionOn": "Caster",
+                "conditionStatus": "MarkAlt",
+                "power": 0.9
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -6729,18 +7484,22 @@
         "id": "zella_nothing_stays_settled",
         "name": "Nothing Stays Settled",
         "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
         "effects": [
           {
             "kind": "TransferStatus",
             "target": "DefeatedUnit",
+            "preventExtend": true,
+            "secondaryTarget": "HighestHpEnemy",
             "status": "Burn",
-            "secondaryTarget": "HighestHpEnemy"
+            "transferDuration": 2
           },
           {
             "kind": "TransferStatus",
             "target": "DefeatedUnit",
+            "secondaryTarget": "HighestHpEnemy",
             "status": "Mark",
-            "secondaryTarget": "HighestHpEnemy"
+            "transferDuration": 2
           }
         ]
       },

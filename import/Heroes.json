@@ -185,7 +185,7 @@
         "basicAttack": {
           "id": "kiva_basic",
           "name": "Cut the Escort",
-          "description": "Deals 125% of Attack damage to the enemy with the lowest HP and applies Forsaken for 2 rounds. Forsaken targets cannot receive damage redirection or protection from another enemy."
+          "description": "Deals 125% of Attack damage to the enemy with the lowest HP and applies Forsaken for 2 rounds."
         },
         "activeSkill": {
           "id": "kiva_active",
@@ -213,7 +213,7 @@
         "talentII": {
           "id": "kiva_talent_ii",
           "name": "Cut the Last Line",
-          "description": "No Way Back applies Forsaken to the enemy with the highest HP if its primary target is defeated."
+          "description": "Cut the Escort applies Forsaken to the enemy with the highest HP if its primary target is defeated."
         },
         "talentIII": {
           "id": "kiva_talent_iii",
@@ -3632,7 +3632,7 @@
         "basicAttack": {
           "id": "merek_basic",
           "name": "Interjecting Clause",
-          "description": "Deals 115% of Attack damage to the enemy with the highest Energy and applies Anticipated for 2 rounds. When an Anticipated enemy uses an active skill, it loses 15 Energy after the skill resolves."
+          "description": "Deals 115% of Attack damage to the enemy with the highest Energy and applies Anticipated for 2 rounds. When an Anticipated enemy uses an active skill, it is delayed by 10% turn progress after the skill resolves."
         },
         "activeSkill": {
           "id": "merek_active",
@@ -3655,7 +3655,7 @@
         "talentI": {
           "id": "merek_talentI",
           "name": "Borrowed Minute",
-          "description": "When Anticipated removes Energy, Merek gains 5 Energy. If it leaves the target below 20 Energy, delay that target by 8% turn progress."
+          "description": "When Anticipated delays an enemy, Merek gains 5 Energy and that enemy is delayed by a further 8% turn progress."
         },
         "talentII": {
           "id": "merek_talentII",
@@ -3711,7 +3711,7 @@
         "activeSkill": {
           "id": "oris_improvise_the_way",
           "name": "Improvise the Way",
-          "description": "Deals 210% of Attack damage to all enemies and disrupts their rhythm for 2 rounds. While disrupted, the first enemy each round that would gain Energy instead loses 20 Energy and has its next action delayed by 15% of the normal turn interval. Oris then advances the next ally's turn by 15% of the normal turn interval.",
+          "description": "Deals 210% of Attack damage to all enemies and disrupts their rhythm for 2 rounds. While disrupted, the first enemy each round that would gain Energy instead loses 20 Energy and has its next action delayed by 15% turn progress. Oris then advances the next ally's turn by 15% turn progress.",
           "energyCost": 100
         },
         "passive1": {
@@ -3722,14 +3722,14 @@
         "passive2": {
           "id": "oris_no_fixed_refrain",
           "name": "No Fixed Refrain",
-          "description": "After Oris uses his Active Skill, his next two attacks use a different firing sequence. The first attack deals 150% of Attack damage to the enemy with the highest Energy and removes 20 Energy; the second deals 150% of Attack damage to the enemy with the lowest Energy and advances Oris's turn by 10% of the normal turn interval. This sequence ends after both attacks occur or after 2 rounds."
+          "description": "After Oris uses his Active Skill, his next two attacks use a different firing sequence. The first attack deals 150% of Attack damage to the enemy with the highest Energy and removes 20 Energy; the second deals 150% of Attack damage to the enemy with the lowest Energy and advances Oris's turn by 10% turn progress. This sequence ends after both attacks occur or after 2 rounds."
         }
       },
       "talents": {
         "talentI": {
           "id": "oris_quicker_fingering",
           "name": "Quicker Fingering",
-          "description": "The altered attacks from No Fixed Refrain deal 20% additional damage. The second altered attack advances Oris's turn by an additional 5% of the normal turn interval."
+          "description": "The altered attacks from No Fixed Refrain deal 20% additional damage. The second altered attack advances Oris's turn by an additional 5% turn progress."
         },
         "talentII": {
           "id": "oris_change_the_key",
@@ -3739,7 +3739,7 @@
         "talentIII": {
           "id": "oris_open_ending",
           "name": "Open Ending",
-          "description": "After No Fixed Refrain completes, Oris immediately uses an additional 90% Attack damage attack against the enemy whose Energy changed the most during the sequence. This can occur once every 2 rounds."
+          "description": "After No Fixed Refrain completes, Oris immediately uses an additional 90% Attack damage attack against the enemy the second altered attack struck. This can occur once every 2 rounds."
         }
       }
     },
