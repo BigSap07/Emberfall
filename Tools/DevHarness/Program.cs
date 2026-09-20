@@ -16121,6 +16121,7 @@ namespace Emberfall.DevHarness
             CheckCastCancellation(live);
             CheckDisplacedPrimitives(live);
             CheckPassiveReadsTheBlowThatTriggeredIt();
+            CheckRovanShieldPaysOut(live);
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -18886,6 +18887,73 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < r.Events.Count; i++)
                 if (r.Events[i].Type == BattleEventType.ShieldGain && r.Events[i].TargetId == id)
                     banked += r.Events[i].Value;
+            return banked;
+        }
+
+        /// <summary>
+        /// ROVAN'S DEFLECTION STRIKE SHIELD, WHICH HAD NEVER PAID OUT.
+        ///
+        /// `rovan_deflected_conversion` answers OnEnemyDamagedAlly and gated both its conditions on
+        /// ConditionSubject.BroadcastSource. Nothing sets _broadcastSourceId at that trigger: it is
+        /// a field initialised to -1 and saved-and-restored around every window that does set one,
+        /// so outside one it resolves to nobody and a condition about it is false. The passive
+        /// fired 58 times in the sweep and banked nothing.
+        ///
+        /// Caldus answers the same trigger with ConditionSubject.LastAttacker, which resolves
+        /// through _broadcastSubject.LastAttackerId - and the broadcast subject there IS the victim,
+        /// whose LastAttackerId the blow set one line earlier. Three clauses of his do it that way,
+        /// in a kit authored before Rovan's.
+        ///
+        /// Measured on his real kit against a control with the condition put back.
+        /// </summary>
+        private static void CheckRovanShieldPaysOut(ContentDatabase live)
+        {
+            int repaired = RunRovanProbe(live, false);
+            int broken = RunRovanProbe(live, true);
+            Check(broken == 0,
+                  "BEFORE: conditioned on BroadcastSource at a trigger that sets no source id, the "
+                  + "shield banks " + broken + " across five seeds - the passive fires and pays "
+                  + "nothing");
+            Check(repaired > 0,
+                  "AFTER: conditioned on LastAttacker, the idiom Caldus uses at the same trigger, "
+                  + "it banks " + repaired);
+        }
+
+        private static int RunRovanProbe(ContentDatabase live, bool putItBack)
+        {
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            if (arena == null) return -1;
+            HeroDef rovan = arena.GetHero("rovan_the_adaptive_commander");
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena.GetStage("sweep_arena");
+            if (rovan == null || fillers == null || stage == null) return -1;
+
+            if (putItBack)
+                for (int p = 0; p < rovan.Passives.Count; p++)
+                {
+                    if (rovan.Passives[p].Id != "rovan_deflected_conversion") continue;
+                    for (int e = 0; e < rovan.Passives[p].Effects.Count; e++)
+                    {
+                        rovan.Passives[p].Effects[e].ConditionOn = ConditionSubject.BroadcastSource;
+                        rovan.Passives[p].Effects[e].ConditionOn2 = ConditionSubject.BroadcastSource;
+                    }
+                }
+
+            int banked = 0;
+            for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                team.Add(MakeInstance(rovan, 40));
+                for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                BattleResult r = RunWith(arena, stage, HeroSweepSeed(rovan.Id, seed), team);
+                if (r == null) continue;
+                int id = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                    if (r.Units[i].DefId == rovan.Id) id = r.Units[i].Id;
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.ShieldGain && r.Events[i].TargetId == id)
+                        banked += r.Events[i].Value;
+            }
             return banked;
         }
 
