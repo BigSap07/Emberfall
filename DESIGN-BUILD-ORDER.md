@@ -60,21 +60,26 @@ to this list.
    contract rather than missing work. This is also what closes `validate_heroes.py`'s 57 findings,
    every one of which is a placeholder missing the passives or talents its star shape requires.
 
-### Two instrument limits, both load-bearing, neither visible in the checks
+### Instrument limits, load-bearing and not visible in the checks
 
 The harness is strong where it measures and silent where it does not. These two silences are
 worth more than most of the green lines, because a green run does not distinguish "this works"
 from "this was never run".
 
-- **No authored talent is measured by either fingerprint instrument.** `SelectedTalent` defaults
-  to 0, the hero-sweep's `MakeInstance` never sets it, and a fresh profile leaves it 0 — so the
-  150 sweep lines and the 72 stage fingerprints are all measurements of kits with **no talent
-  selected**. 90 authored talents across 30 heroes, and a talent could be broken, dead or wired to
-  the wrong passive index without moving a single line. Five are measured by dedicated arenas
-  (Marrow's talent II, Nereia's talent III, and Dahlia's three); **the other 85 have never been
-  run.** A talent that changes a number is invisible here; a talent that appends to the wrong
-  ability is invisible here. The sweep baseline is not a guard on talents and must not be cited as
-  one.
+- **Talents are measured now, and measuring them found ten broken ones.** This limit is closed
+  and the entry is kept because what closing it turned up is the point. `SelectedTalent` still
+  defaults to 0, so the 150 hero-sweep lines and the 72 stage fingerprints remain measurements of
+  kits with **no talent selected** - but a second sweep beside them runs all 90 talents at five
+  seeds each and pins 450 fingerprints in `talent-sweep-baseline.txt`, comparing each against the
+  same hero at the same seed with nothing picked. **59 of the 90 change the fight. The other 31
+  split three ways:** three are authored as an id and a name with no rule in them at all; seven
+  carry an override or append naming an effect index that does not exist, which
+  `ApplyTalentOverrides` silently drops; and 25 are wired correctly but wait on a gate the sweep
+  arena never opens - a kill, a mark, `OnLedgerCapped` - and are named in the report with what
+  each waits on. **Two residual limits stand.** An override naming a wrong but IN-RANGE effect
+  index still lands somewhere and is invisible at authoring time, though the baseline now pins it
+  against later drift. And the stage fingerprints still field no talents, so the campaign is still
+  measured without them.
 - **The source sprite material exists on one machine and is outside version control.**
   `D:\Emberfall\import\sprites` is **4.9 GB across 26 per-hero zips**, sibling to the repo rather
   than inside it — the repo's own `import/` holds only the tracked `Heroes.json`. The *processed*
