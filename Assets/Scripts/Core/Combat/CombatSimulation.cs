@@ -1915,7 +1915,20 @@ namespace Emberfall.Core.Combat
                 // must read zero rather than a number from a previous turn. An echo that could pick
                 // up a stale reading would be a different ability every time it fired.
                 int prevLastDamage = _lastDamageDealt;
-                _lastDamageDealt = 0;
+                // ZEROED FOR AN ABILITY A UNIT CHOSE, KEPT FOR ONE A BLOW TRIGGERED.
+                //
+                // The reason for clearing it is above and still holds for a Basic or an Active: an
+                // echo authored with no damage ahead of it in its own ability must read zero rather
+                // than a number from a previous turn. A PASSIVE is the opposite case. It is running
+                // because damage just landed, that damage is the whole of its context, and
+                // ScaleByLastDamage was built in the nine-gap pass to mean exactly "the blow that
+                // just happened" - so zeroing it at the passive's own boundary made the one flag
+                // that reads it always read nothing.
+                //
+                // Not hypothetical: rovan_deflected_conversion is a Shield sized at 20% of
+                // scaleByLastDamage inside an OnEnemyDamagedAlly passive, and it has been banking
+                // zero for its whole life on top of a condition that could not pass either.
+                if (depth == 0) _lastDamageDealt = 0;
                 // Cleared and restored on the same boundary, for the same reason: an effect that
                 // reads "the body the swap moved" must read this ability's swap or nobody, never
                 // a body a previous turn moved.

@@ -16120,6 +16120,7 @@ namespace Emberfall.DevHarness
             CheckBatchEightGaps(live);
             CheckCastCancellation(live);
             CheckDisplacedPrimitives(live);
+            CheckPassiveReadsTheBlowThatTriggeredIt();
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -18806,6 +18807,87 @@ namespace Emberfall.DevHarness
 
 
 
+
+
+
+        /// <summary>
+        /// A PASSIVE TRIGGERED BY A BLOW CAN SIZE ITSELF OFF THAT BLOW.
+        ///
+        /// ResolveAbility clears _lastDamageDealt at every ability boundary, which is right for a
+        /// Basic or an Active - an echo with no damage ahead of it in its own ability must read
+        /// zero rather than a number from a previous turn - and was wrong for a passive, which is
+        /// running BECAUSE damage landed. ScaleByLastDamage was built to mean "the blow that just
+        /// happened", and the boundary made the one flag that reads it always read nothing.
+        ///
+        /// Two runs: the answering passive sized off the blow, and a control sized off Attack. If
+        /// the scalar were still zeroed the first would pay nothing at all.
+        /// </summary>
+        private static void CheckPassiveReadsTheBlowThatTriggeredIt()
+        {
+            int scaled = RunBlowScalarArena(true);
+            int flat = RunBlowScalarArena(false);
+            Check(flat > 0, "control: the same passive sized off Attack pays " + flat);
+            Check(scaled > 0,
+                  "a passive answering a blow sizes itself off THAT BLOW (" + scaled
+                  + ") - it read zero before, because the ability boundary cleared the scalar on "
+                  + "the way into the passive that the blow had just triggered");
+        }
+
+        private static int RunBlowScalarArena(bool scaleOffTheBlow)
+        {
+            string sizing = scaleOffTheBlow
+                ? @"""power"": 0.5, ""scaleByLastDamage"": true"
+                : @"""power"": 0.5";
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""bs_hero"", ""name"": ""BsHero"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""startingHero"": true,
+      ""hp"": 9500000, ""attack"": 200, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""passive1"": { ""id"": ""bs_answer"", ""name"": ""Answer The Blow"",
+        ""trigger"": ""OnEnemyDamagedAlly"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Shield"", ""target"": ""Self"", ""duration"": 9, " + sizing + @" } ] },
+      ""basic"": { ""id"": ""bs_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""bs_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""bs_ally"", ""name"": ""BsAlly"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 9000000, ""attack"": 10, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bsa"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""bsaa"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""bs_foe"", ""name"": ""BsFoe"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 600, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""bsf"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LowestHpEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""bs_ch"", ""name"": ""BlowScalar"", ""stages"": [
+    { ""id"": ""bs_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""bs_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(3), "blow scalar");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("bs_hero"), 1));
+            team.Add(MakeInstance(db.GetHero("bs_ally"), 1));
+            BattleResult r = RunWith(db, db.GetStage("bs_arena"), 9974, team);
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].Name == "BsHero") id = r.Units[i].Id;
+            int banked = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.ShieldGain && r.Events[i].TargetId == id)
+                    banked += r.Events[i].Value;
+            return banked;
+        }
 
         // ---- the three Displaced primitives: an applied ban, a named caster, a target change ---
 
