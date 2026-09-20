@@ -864,6 +864,16 @@ namespace Emberfall.Core.Data
 
         /// <summary>Which stacking status on the owner drives the output modifier. None means no
         /// modifier — the whole system is inert.</summary>
+        /// <summary>
+        /// A standing target restriction this passive gives its owner. None on every passive in
+        /// shipped content, so no unit in any existing battle is restricted and the filter cannot
+        /// reject a candidate it was never asked about.
+        /// </summary>
+        public TargetBan TargetBanKind = TargetBan.None;
+
+        /// <summary>The status TargetBan.CarryingStatus names. Ignored by the other kinds.</summary>
+        public StatusKind TargetBanStatus = StatusKind.None;
+
         public StatusKind OutputModStatus = StatusKind.None;
 
         /// <summary>Per-stack multiplier added to outgoing damage or healing.</summary>
@@ -946,6 +956,8 @@ namespace Emberfall.Core.Data
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
             p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
+            p.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
+            p.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             p.OutputModStatus = EnumUtil.Parse(j.GetString("outputModStatus", "None"), StatusKind.None);
             p.OutputModPerStack = j.GetFloat("outputModPerStack", 0f);
             p.OutputModScope = EnumUtil.Parse(j.GetString("outputModScope", "AllDamage"), OutputModScope.AllDamage);

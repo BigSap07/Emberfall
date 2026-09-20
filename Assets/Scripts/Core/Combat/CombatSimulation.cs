@@ -1016,6 +1016,17 @@ namespace Emberfall.Core.Combat
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
                 p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
+                // THE SAME DEFECT EffectDef.Clone() HAD, found by running the same audit against
+                // this method while adding the two lines below it. ClonePassive rebuilds a passive
+                // a talent has appended to or overridden, and it was dropping the three fields an
+                // OnStackThreshold passive needs - the status it watches, the count it waits for
+                // and which counter it reads - so a talent touching such a passive silently turned
+                // its threshold off. 27 fields, 24 copied.
+                p.StackThresholdStatus = src.StackThresholdStatus;
+                p.StackThresholdCount = src.StackThresholdCount;
+                p.CounterIndex = src.CounterIndex;
+                p.TargetBanKind = src.TargetBanKind;
+                p.TargetBanStatus = src.TargetBanStatus;
                 p.OutputModStatus = src.OutputModStatus;
                 p.OutputModPerStack = src.OutputModPerStack;
                 p.OutputModScope = src.OutputModScope;
@@ -5146,8 +5157,45 @@ namespace Emberfall.Core.Combat
             /// EffectDef.TargetStatus, threaded rather than looked up, so this method stays a
             /// function of its arguments instead of reaching back into the effect.
             /// </summary>
+            /// <summary>
+            /// WHAT A UNIT WITH NO LEGAL TARGET DOES: it picks anyway, with the restriction set
+            /// aside for that one pick.
+            ///
+            /// The alternatives were a turn that evaporates and a pick made arbitrarily. A turn
+            /// that evaporates is the worse of the two by a distance: a fight where one side cannot
+            /// act does not end, it runs to maxRounds and reports a result no decision produced -
+            /// and the campaign's whole difficulty model is built on battles that resolve. An
+            /// arbitrary pick is not definable in a simulation that has to replay identically.
+            ///
+            /// So the restriction is dropped rather than the turn, which is EXACTLY the trade
+            /// concealment already makes one method down: "the last body is always targetable",
+            /// there for the same reason and decided the same way. A restriction is a tempo rule,
+            /// not a way to make a unit inert, and it costs the last banned body its protection.
+            ///
+            /// The retry runs only when the ban actually refused somebody - `_targetBanRejections`
+            /// is what distinguishes "the rule emptied this list" from "this mode had no answer
+            /// anyway", so a LinkedUnit with no link does not resolve twice - and only for a unit
+            /// carrying a restriction at all, so nothing in shipped content reaches the second call
+            /// and no mode that draws from the RNG stream can draw from it twice.
+            /// </summary>
             private List<CombatUnit> ResolveTargets(CombatUnit caster, TargetMode mode, CombatUnit excluded,
                                                     StatusKind targetStatus)
+            {
+                if (caster == null || caster.TargetBan == TargetBan.None || _targetBanRelaxed)
+                    return ResolveTargetsInner(caster, mode, excluded, targetStatus);
+
+                int before = _targetBanRejections;
+                List<CombatUnit> picked = ResolveTargetsInner(caster, mode, excluded, targetStatus);
+                if (picked.Count > 0 || _targetBanRejections == before) return picked;
+
+                _targetBanRelaxed = true;
+                List<CombatUnit> relaxed = ResolveTargetsInner(caster, mode, excluded, targetStatus);
+                _targetBanRelaxed = false;
+                return relaxed;
+            }
+
+            private List<CombatUnit> ResolveTargetsInner(CombatUnit caster, TargetMode mode, CombatUnit excluded,
+                                                         StatusKind targetStatus)
             {
                 List<CombatUnit> result = new List<CombatUnit>();
                 switch (mode)
@@ -5170,7 +5218,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (best == null || u.HpRatio < best.HpRatio) best = u;
                         }
                         if (best != null) result.Add(best);
@@ -5196,7 +5244,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (best == null || u.Energy < best.Energy
                                 || (u.Energy == best.Energy && u.Slot < best.Slot)) best = u;
                         }
@@ -5234,7 +5282,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (best == null || u.DebuffCount > best.DebuffCount
                                 || (u.DebuffCount == best.DebuffCount && u.Slot < best.Slot)) best = u;
                         }
@@ -5373,6 +5421,10 @@ namespace Emberfall.Core.Combat
                     CombatUnit provoker = FindUnit(p.SourceId);
                     if (provoker == null || !provoker.Alive || provoker == excluded) continue;
                     if (provoker.IsPlayer == caster.IsPlayer) continue;
+                    // A COMPULSION CANNOT REACH A BODY THE PICKER IS FORBIDDEN. Same placement as
+                    // concealment, and the same reasoning: a provoke that outranked the restriction
+                    // would let any enemy carrying Provoked walk a unit past its own rule.
+                    if (TargetBanned(caster, provoker)) continue;
                     if (FindTargetAnchor(!caster.IsPlayer) != null) break;   // the anchor answers instead
                     result.Add(provoker);
                     return result;
@@ -5393,6 +5445,11 @@ namespace Emberfall.Core.Combat
                 // costs the last concealed unit its hiding place and is the correct trade.
                 CombatUnit anchor = FindTargetAnchor(!caster.IsPlayer);
                 if (anchor == excluded) anchor = null;
+                // AND THE ANCHOR IS SUBJECT TO IT, exactly as it is to concealment. A Taunt holder
+                // the picker may not pick stops answering for its side rather than forcing a blow
+                // the picker's own rule forbids - which is the trade the paragraph above already
+                // made for a Concealed taunter.
+                if (anchor != null && TargetBanned(caster, anchor)) anchor = null;
                 if (anchor != null)
                 {
                     // No TargetAnchored event any more. It existed for the Lumen rule alone: a
@@ -5464,6 +5521,14 @@ namespace Emberfall.Core.Combat
                     {
                         List<CombatUnit> enemies = new List<CombatUnit>();
                         CollectSide(enemies, !caster.IsPlayer, excluded, true);
+                        // THE ONE SINGLE-TARGET PICK THAT GOES THROUGH THE MULTI-TARGET COLLECTOR,
+                        // so the restriction has to be applied here rather than inside it -
+                        // CollectSide also serves AllEnemies, which a ban must not thin. Filtered
+                        // BEFORE the draw, so the roll is over the legal set rather than over a
+                        // set it may have to reject afterwards; for a unit with no restriction the
+                        // list is untouched and the draw is the same one.
+                        for (int i = enemies.Count - 1; i >= 0; i--)
+                            if (TargetBanned(caster, enemies[i])) enemies.RemoveAt(i);
                         if (enemies.Count > 0) picked = enemies[_rng.Range(0, enemies.Count)];
                         break;
                     }
@@ -5481,7 +5546,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (!u.HasMarkFrom(markKind, caster.Id)) continue;
                             if (picked == null || u.Slot < picked.Slot) picked = u;
                         }
@@ -5498,7 +5563,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             int count = u.CountOfFrom(markKind, caster.Id);
                             if (count <= 0) continue;
                             if (count > bestCount || (count == bestCount && (picked == null || u.Slot < picked.Slot)))
@@ -5540,7 +5605,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (!u.Has(targetStatus)) continue;
                             if (picked == null || u.Slot < picked.Slot) picked = u;
                         }
@@ -5552,7 +5617,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (picked == null || u.DamageDealtThisRound > picked.DamageDealtThisRound
                                 || (u.DamageDealtThisRound == picked.DamageDealtThisRound && u.Slot < picked.Slot))
                                 picked = u;
@@ -5565,7 +5630,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (picked == null || u.DoTDamageDealtThisRound > picked.DoTDamageDealtThisRound
                                 || (u.DoTDamageDealtThisRound == picked.DoTDamageDealtThisRound && u.Slot < picked.Slot))
                                 picked = u;
@@ -5587,7 +5652,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             float pending = 0f;
                             for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s]);
                             if (pending <= 0f) continue;
@@ -5605,7 +5670,7 @@ namespace Emberfall.Core.Combat
                         for (int i = 0; i < _units.Count; i++)
                         {
                             CombatUnit u = _units[i];
-                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                            if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (picked == null) { picked = u; continue; }
                             if (mode == TargetMode.LowestHpEnemy && u.Hp < picked.Hp) picked = u;
                             else if (mode == TargetMode.HighestHpEnemy && u.Hp > picked.Hp) picked = u;
@@ -5643,7 +5708,7 @@ namespace Emberfall.Core.Combat
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Concealed(u)) continue;
+                    if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                     allies.Add(u);
                 }
                 allies.Sort(CompareByHpRatio);
@@ -5977,6 +6042,63 @@ namespace Emberfall.Core.Combat
             /// StatusKind.Stealth was declared for this in an earlier pass and left inert, so it
             /// costs no ordinal and no save byte.
             /// </summary>
+            /// <summary>
+            /// Concealment and the picker's own restriction, asked as one question because they
+            /// are the same kind of answer: this body is not a legal candidate for this pick.
+            ///
+            /// Every single-target site in the resolver asks it. The multi-target collectors do
+            /// not, which is deliberate and is the rule concealment already set: a restriction
+            /// governs what a unit PICKS, and AllEnemies picks nothing - it takes a side. A ban
+            /// that thinned a sweep would be damage immunity wearing a targeting rule's clothes.
+            /// </summary>
+            private bool Rejected(CombatUnit caster, CombatUnit unit)
+            {
+                return Concealed(unit) || TargetBanned(caster, unit);
+            }
+
+            /// <summary>
+            /// The picker's standing restriction, applied to one candidate.
+            ///
+            /// Returns false immediately for a unit carrying no restriction, which is every unit
+            /// in shipped content - so this is one enum comparison on a path that every hero and
+            /// every enemy walks, and it cannot reject a candidate it was never asked about.
+            ///
+            /// `_targetBanRelaxed` is the empty-list fallback, described on ResolveTargets.
+            /// `_targetBanRejections` counts the refusals so the fallback can tell "the ban emptied
+            /// this" apart from "this mode had no answer anyway".
+            /// </summary>
+            private bool TargetBanned(CombatUnit caster, CombatUnit unit)
+            {
+                if (caster == null || unit == null || caster.TargetBan == TargetBan.None) return false;
+                if (_targetBanRelaxed) return false;
+
+                bool banned;
+                switch (caster.TargetBan)
+                {
+                    case TargetBan.LastTarget:
+                        banned = caster.LastTargetId >= 0 && unit.Id == caster.LastTargetId;
+                        break;
+                    case TargetBan.LastRoundTarget:
+                        banned = caster.LastRoundTargetId >= 0 && unit.Id == caster.LastRoundTargetId;
+                        break;
+                    case TargetBan.CarryingStatus:
+                        banned = caster.TargetBanStatus != StatusKind.None
+                                 && unit.Has(caster.TargetBanStatus);
+                        break;
+                    default:
+                        banned = false;
+                        break;
+                }
+                if (banned) _targetBanRejections++;
+                return banned;
+            }
+
+            /// <summary>True while a pick is being retried with the restriction set aside.</summary>
+            private bool _targetBanRelaxed;
+
+            /// <summary>Candidates the restriction has refused during the pick in flight.</summary>
+            private int _targetBanRejections;
+
             private bool Concealed(CombatUnit unit)
             {
                 if (unit == null || !unit.Alive || !unit.Has(StatusKind.Stealth)) return false;

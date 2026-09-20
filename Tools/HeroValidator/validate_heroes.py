@@ -44,6 +44,10 @@ STATUS_KINDS = {
     "Resolve2",
     "Linked",
 }
+# A standing rule forbidding a unit one class of target. Declared on a passive as
+# "targetBan"; the harness reads this set out of this file and compares it to Enums.cs,
+# so adding a member there and not here is a failure rather than a silent drift.
+TARGET_BANS = {"None", "LastTarget", "LastRoundTarget", "CarryingStatus"}
 ASPECTS = {"Ember", "Tide", "Verdant", "Gale", "Umbra", "Lumen"}
 HERO_ROLES = {
     "Bulwark", "Striker", "Breaker", "Mender", "Warden", "Stalker",

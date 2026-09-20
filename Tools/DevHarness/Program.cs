@@ -16106,6 +16106,7 @@ namespace Emberfall.DevHarness
             CheckCostedThree();
             CheckRedirectApproximations(live);
             CheckBatchSevenGaps();
+            CheckTargetRestriction(live);
             CheckZellaTransferRepair(live);
             Line("");
         }
@@ -18202,6 +18203,8 @@ namespace Emberfall.DevHarness
         private static readonly string[][] AbilityEnumKeys =
         {
             new string[] { "trigger", "PassiveTrigger" },
+            new string[] { "targetBan", "TargetBan" },
+            new string[] { "targetBanStatus", "StatusKind" },
             new string[] { "limit", "PassiveLimit" },
             new string[] { "triggerStatus", "StatusKind" },
             new string[] { "outputModStatus", "StatusKind" },
@@ -18227,6 +18230,7 @@ namespace Emberfall.DevHarness
                 case "PassiveTrigger": return typeof(PassiveTrigger);
                 case "PassiveLimit": return typeof(PassiveLimit);
                 case "OutputModScope": return typeof(OutputModScope);
+                case "TargetBan": return typeof(TargetBan);
                 case "Aspect": return typeof(Aspect);
                 case "HeroRole": return typeof(HeroRole);
             }
@@ -18778,6 +18782,384 @@ namespace Emberfall.DevHarness
         }
 
 
+
+
+        // ---- the target restriction: a rule saying a unit may not pick a particular body -------
+
+        private static void CheckTargetRestriction(ContentDatabase live)
+        {
+            Line("TARGET RESTRICTION (a standing rule forbidding a unit one class of target)");
+            CheckTargetBanPins();
+            CheckTargetBanParity();
+            CheckNoShippedTargetBan(live);
+            CheckTargetBanPicksElsewhere();
+            CheckTargetBanRoundGranularity();
+            CheckTargetBanOutranksTheAnchor();
+            CheckTargetBanEmptyFallback();
+            CheckClonePassiveCoversEveryField();
+            Line("");
+        }
+
+        private static void CheckTargetBanPins()
+        {
+            Check((int)TargetBan.None == 0 && (int)TargetBan.LastTarget == 1
+                  && (int)TargetBan.LastRoundTarget == 2 && (int)TargetBan.CarryingStatus == 3,
+                  "TargetBan is None/LastTarget/LastRoundTarget/CarryingStatus at 0/1/2/3, with None"
+                  + " the default so a passive that declares no restriction is inert at the filter");
+            Check((int)StatusKind.Linked == 48 && (int)EffectKind.EchoDamage == 29
+                  && (int)TargetMode.LowestEnergyEnemy == 35
+                  && (int)PassiveTrigger.OnRedirectSent == 45,
+                  "StatusKind, EffectKind, TargetMode and PassiveTrigger are untouched by this pass -"
+                  + " a new enum of its own and two PassiveDef fields carry all of it, so no ordinal"
+                  + " moves and no fingerprint can move with one");
+        }
+
+        private static void CheckTargetBanParity()
+        {
+            bool ok = CheckEnumSet("TargetBan",
+                new string[] { "None", "LastTarget", "LastRoundTarget", "CarryingStatus" },
+                Enum.GetNames(typeof(TargetBan)));
+            Check(ok, "TargetBan enum parity (4 members)");
+
+            string path = FindToolSource("HeroValidator", "validate_heroes.py");
+            if (path == null)
+            {
+                Line("  [note] validate_heroes.py not found next to this binary, so its own copy of"
+                     + " TargetBan was not read. The comparison above still ran.");
+                return;
+            }
+            Check(CheckEnumSet("TargetBan (validate_heroes.py)",
+                               ParsePythonSet(File.ReadAllText(path), "TARGET_BANS"),
+                               Enum.GetNames(typeof(TargetBan))),
+                  "validate_heroes.py's TargetBan set, read from the file, matches Enums.cs - the"
+                  + " parity that HighestMyMarkStacksEnemy failed silently for two batches");
+        }
+
+        /// <summary>
+        /// Nothing in shipped content declares a restriction, which is what makes the 72 stage
+        /// fingerprints and the 145 sweep lines unmovable by this pass. Counted from the content
+        /// database rather than asserted, and printed, so the day something authors one the number
+        /// says so.
+        /// </summary>
+        private static void CheckNoShippedTargetBan(ContentDatabase live)
+        {
+            int declared = 0;
+            List<string> named = new List<string>();
+            for (int i = 0; i < live.Heroes.Count; i++) CountBans(live.Heroes[i], ref declared, named);
+            for (int i = 0; i < live.Enemies.Count; i++) CountBans(live.Enemies[i], ref declared, named);
+            Check(declared == 0,
+                  declared == 0
+                    ? "no shipped passive declares a target restriction, so every unit in every"
+                      + " existing battle reaches the filter with TargetBan.None and leaves it"
+                      + " unchanged"
+                    : declared + " shipped passive(s) declare one: " + string.Join(", ", named.ToArray()));
+        }
+
+        private static void CountBans(UnitDef def, ref int declared, List<string> named)
+        {
+            if (def == null) return;
+            for (int p = 0; p < def.Passives.Count; p++)
+            {
+                if (def.Passives[p] == null || def.Passives[p].TargetBanKind == TargetBan.None) continue;
+                declared++;
+                named.Add(def.Id + "/" + def.Passives[p].Name);
+            }
+        }
+
+        /// <summary>
+        /// A restricted unit picks a different body than an unrestricted control, for both of the
+        /// restrictions that name a body and for the one that names a status. Counts carry it: the
+        /// control puts everything into one enemy and the restricted run does not.
+        /// </summary>
+        private static void CheckTargetBanPicksElsewhere()
+        {
+            BanProbe free = RunBanArena("None", "None", 1, false, false);
+            BanProbe last = RunBanArena("LastTarget", "None", 1, false, false);
+            BanProbe carry = RunBanArena("CarryingStatus", "Burn", 1, true, false);
+            if (free == null || last == null || carry == null)
+            { Check(false, "restriction arenas built"); return; }
+
+            Check(free.Front > 0 && free.Back == 0,
+                  "control: with no restriction every blow lands on the front enemy ("
+                  + free.Front + " front, " + free.Back + " back)");
+            Check(last.Back > 0 && last.Front > 0,
+                  "TargetBan.LastTarget: the same kit cannot pick the body it just hit, so the blows"
+                  + " alternate (" + last.Front + " front, " + last.Back + " back)");
+            Check(carry.Front == 0 && carry.Back > 0,
+                  "TargetBan.CarryingStatus: with the front enemy carrying the named status every"
+                  + " blow goes past it (" + carry.Front + " front, " + carry.Back + " back)");
+            Check(free.Front + free.Back > 0 && last.Front + last.Back > 0,
+                  "and the restricted run lands as many blows as the control - a restriction moves"
+                  + " a pick, it does not cancel one (" + (free.Front + free.Back) + " against "
+                  + (last.Front + last.Back) + ")");
+        }
+
+        /// <summary>
+        /// The two body-naming restrictions are not the same rule at a different name. Two blows in
+        /// one ability: LastTarget forbids the body the FIRST blow just hit, so the second goes
+        /// elsewhere; LastRoundTarget forbids the body of the previous ROUND, so both blows of a
+        /// turn land together and the alternation happens a round at a time.
+        /// </summary>
+        private static void CheckTargetBanRoundGranularity()
+        {
+            BanProbe perBlow = RunBanArena("LastTarget", "None", 2, false, false);
+            BanProbe perRound = RunBanArena("LastRoundTarget", "None", 2, false, false);
+            if (perBlow == null || perRound == null)
+            { Check(false, "granularity arenas built"); return; }
+
+            Check(perBlow.Front > 0 && perBlow.Back > 0,
+                  "LastTarget splits a two-blow turn across two bodies (" + perBlow.Front + " / "
+                  + perBlow.Back + ")");
+            Check(perRound.Front > 0 && perRound.Back > 0,
+                  "LastRoundTarget also reaches both bodies over the fight (" + perRound.Front
+                  + " / " + perRound.Back + ")");
+            Check(perBlow.Switches > perRound.Switches,
+                  "but it changes body more often: " + perBlow.Switches + " switches against "
+                  + perRound.Switches + ", which is the difference between a blow's granularity and"
+                  + " a round's and the reason both members exist");
+        }
+
+        /// <summary>
+        /// WHERE THE FILTER SITS: before the anchor, and able to veto it.
+        ///
+        /// A Taunt holder the picker may not pick stops answering for its side rather than forcing
+        /// a blow the picker's own rule forbids. That is the placement concealment already has one
+        /// paragraph up in the same method - "a Concealed taunter stops answering for its side
+        /// rather than becoming an unhittable wall" - and a restriction that the anchor outranked
+        /// would be a rule any enemy could suspend by taunting.
+        /// </summary>
+        private static void CheckTargetBanOutranksTheAnchor()
+        {
+            BanProbe anchored = RunBanArena("None", "None", 1, true, true);
+            BanProbe vetoed = RunBanArena("CarryingStatus", "Burn", 1, true, true);
+            if (anchored == null || vetoed == null)
+            { Check(false, "anchor arenas built"); return; }
+
+            Check(anchored.Front > 0 && anchored.Back == 0,
+                  "control: the front enemy taunts, so every blow is anchored onto it ("
+                  + anchored.Front + " front, " + anchored.Back + " back)");
+            Check(vetoed.Front == 0 && vetoed.Back > 0,
+                  "the restriction vetoes the anchor: the same taunting body is forbidden and stops"
+                  + " answering for its side (" + vetoed.Front + " front, " + vetoed.Back + " back)");
+        }
+
+        /// <summary>
+        /// WHAT A UNIT WITH NO LEGAL TARGET DOES: it picks anyway, with the restriction set aside
+        /// for that one pick.
+        ///
+        /// Every enemy carries the forbidden status here, so the restriction empties the candidate
+        /// list. The blow still lands, and lands for exactly what the unrestricted control deals -
+        /// the rule is dropped, not bent. The alternative was a turn that evaporates, which in a
+        /// fight where one side cannot act means a battle that runs to maxRounds and reports a
+        /// result no decision produced.
+        /// </summary>
+        private static void CheckTargetBanEmptyFallback()
+        {
+            BanProbe free = RunBanArena("None", "None", 1, true, false, true);
+            BanProbe starved = RunBanArena("CarryingStatus", "Burn", 1, true, false, true);
+            if (free == null || starved == null)
+            { Check(false, "empty-list arenas built"); return; }
+
+            Check(free.Front + free.Back > 0,
+                  "control: with no restriction the blows land (" + (free.Front + free.Back) + ")");
+            Check(starved.Front + starved.Back > 0,
+                  "with EVERY enemy carrying the forbidden status the restriction empties the"
+                  + " candidate list, and the blow lands anyway ("
+                  + (starved.Front + starved.Back) + ") - the rule is dropped for that pick rather"
+                  + " than the turn being dropped");
+            Check(starved.Front + starved.Back == free.Front + free.Back,
+                  "and it lands for exactly what the unrestricted control deals ("
+                  + (starved.Front + starved.Back) + " against " + (free.Front + free.Back)
+                  + "), so the fallback drops the restriction rather than bending the pick");
+        }
+
+        /// <summary>
+        /// EVERY PUBLIC FIELD OF PassiveDef IS ASSIGNED BY ClonePassive, read out of the sources
+        /// rather than remembered.
+        ///
+        /// The reflection guard beside this one covers EffectDef.Clone, which was dropping nine
+        /// fields when it was written. ClonePassive is the same method for the other half of an
+        /// ability and it was dropping three - StackThresholdStatus, StackThresholdCount and
+        /// CounterIndex - so a talent appending to an OnStackThreshold passive silently turned its
+        /// threshold off. Found by running the EffectDef audit against it by hand while adding two
+        /// fields below them; this is that audit, kept.
+        ///
+        /// Source text rather than reflection, because ClonePassive is private to the simulation's
+        /// nested Sim and nothing outside can call it. The same shape as the aspect source scan and
+        /// the validate_heroes.py parity read: it degrades to a [note] when the files are not next
+        /// to the binary, and a scan that read nothing fails rather than passes.
+        /// </summary>
+        private static void CheckClonePassiveCoversEveryField()
+        {
+            string defs = FindEngineSource("Data", "Definitions.cs");
+            string sim = FindEngineSource("Combat", "CombatSimulation.cs");
+            if (defs == null || sim == null)
+            {
+                Line("  [note] engine sources not found next to this binary, so ClonePassive's field"
+                     + " coverage was not read.");
+                return;
+            }
+
+            string defsText = File.ReadAllText(defs);
+            int at = defsText.IndexOf("public sealed class PassiveDef", StringComparison.Ordinal);
+            int end = at < 0 ? -1 : defsText.IndexOf("\n    }", at, StringComparison.Ordinal);
+            List<string> fields = new List<string>();
+            if (at >= 0 && end > at)
+            {
+                string[] rows = defsText.Substring(at, end - at).Split('\n');
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    string row = rows[i].TrimEnd('\r');
+                    if (!row.StartsWith("        public ", StringComparison.Ordinal)) continue;
+                    if (row.Contains("(")) continue;                       // a method, not a field
+                    int semi = row.IndexOf(';');
+                    if (semi < 0) continue;
+                    string decl = row.Substring("        public ".Length, semi - "        public ".Length);
+                    int eq = decl.IndexOf('=');
+                    if (eq >= 0) decl = decl.Substring(0, eq);
+                    string[] parts = decl.Trim().Split(' ');
+                    if (parts.Length >= 2) fields.Add(parts[parts.Length - 1].Trim());
+                }
+            }
+
+            string simText = File.ReadAllText(sim);
+            int cat = simText.IndexOf("private static PassiveDef ClonePassive", StringComparison.Ordinal);
+            int cend = cat < 0 ? -1 : simText.IndexOf("return p;", cat, StringComparison.Ordinal);
+            string body = (cat >= 0 && cend > cat) ? simText.Substring(cat, cend - cat) : "";
+
+            List<string> missing = new List<string>();
+            for (int i = 0; i < fields.Count; i++)
+                if (body.IndexOf("p." + fields[i] + " =", StringComparison.Ordinal) < 0)
+                    missing.Add(fields[i]);
+
+            Check(fields.Count >= 20 && body.Length > 0,
+                  "read " + fields.Count + " public field(s) off PassiveDef and " + body.Length
+                  + " characters of ClonePassive - a scan that found neither would pass by"
+                  + " inspecting nothing");
+            Check(missing.Count == 0,
+                  missing.Count == 0
+                    ? "ClonePassive assigns every one of them, so a talent that rebuilds a passive"
+                      + " cannot silently drop part of it"
+                    : missing.Count + " PassiveDef field(s) are DROPPED by ClonePassive: "
+                      + string.Join(", ", missing.ToArray()));
+        }
+
+        /// <summary>The engine source file at Assets/Scripts/Core/&lt;folder&gt;/&lt;name&gt;, or null.</summary>
+        private static string FindEngineSource(string folder, string name)
+        {
+            DirectoryInfo dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            for (int i = 0; i < 8 && dir != null; i++)
+            {
+                string candidate = Path.Combine(dir.FullName,
+                    Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("Core",
+                        Path.Combine(folder, name)))));
+                if (File.Exists(candidate)) return candidate;
+                dir = dir.Parent;
+            }
+            return null;
+        }
+
+        private sealed class BanProbe
+        {
+            public int Front;      // damage into the front enemy
+            public int Back;       // damage into the back enemy
+            public int Switches;   // times consecutive blows changed body
+        }
+
+        /// <summary>
+        /// One arena, five shapes. Two enemies, the front one optionally burning and optionally
+        /// taunting, a hero whose basic strikes FrontEnemy once or twice, and a passive that
+        /// declares the restriction under test. `bothBurn` puts the status on both bodies, which is
+        /// how the candidate list is emptied.
+        /// </summary>
+        private static BanProbe RunBanArena(string ban, string banStatus, int blows,
+                                            bool frontBurns, bool frontTaunts, bool bothBurn = false)
+        {
+            string blow = @"{ ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }";
+            string blows2 = blows == 2 ? blow + ", " + blow : blow;
+            string banDecl = ban == "None" ? ""
+                : @", ""targetBan"": """ + ban + @""", ""targetBanStatus"": """ + banStatus + @"""";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""tb_hero"", ""name"": ""TbHero"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 300, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""tb_basic"", ""name"": ""Strike"", ""effects"": [ " + blows2 + @" ] },
+      ""active"": { ""id"": ""tb_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""passive"": { ""id"": ""tb_rule"", ""name"": ""The Rule"", ""trigger"": ""None""" + banDecl + @",
+        ""effects"": [] } }
+  ]
+}";
+            string frontExtras = "";
+            if (frontBurns || bothBurn || frontTaunts)
+            {
+                List<string> seeds = new List<string>();
+                if (frontBurns || bothBurn)
+                    seeds.Add(@"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Burn"",
+                        ""magnitude"": 0.001, ""duration"": 99, ""chance"": 1 }");
+                if (frontTaunts)
+                    seeds.Add(@"{ ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"",
+                        ""magnitude"": 1.0, ""duration"": 99, ""chance"": 1 }");
+                frontExtras = @", ""passive"": { ""id"": ""tb_front_seed"", ""name"": ""Seed"",
+        ""trigger"": ""BattleStart"", ""effects"": [ " + string.Join(", ", seeds.ToArray()) + @" ] }";
+            }
+            string backExtras = bothBurn
+                ? @", ""passive"": { ""id"": ""tb_back_seed"", ""name"": ""Seed"",
+        ""trigger"": ""BattleStart"", ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"",
+          ""status"": ""Burn"", ""magnitude"": 0.001, ""duration"": 99, ""chance"": 1 } ] }"
+                : "";
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""tb_front"", ""name"": ""TbFront"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tbf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] }" + frontExtras + @" },
+    { ""id"": ""tb_back"", ""name"": ""TbBack"", ""aspect"": ""Ember"",
+      ""hp"": 9000000, ""attack"": 1, ""defense"": 0, ""speed"": 9, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""tbb"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] }" + backExtras + @" }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""tb_ch"", ""name"": ""TargetBan"", ""stages"": [
+    { ""id"": ""tb_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""tb_front"", ""level"": 1 }, { ""id"": ""tb_back"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign,
+                                                      ZeroVarianceBalance(4), "target ban " + ban);
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("tb_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("tb_arena"), 9701, team);
+            if (r == null) return null;
+
+            int frontId = -1, backId = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].Name == "TbFront") frontId = r.Units[i].Id;
+                if (r.Units[i].Name == "TbBack") backId = r.Units[i].Id;
+            }
+
+            BanProbe p = new BanProbe();
+            int lastHit = -1;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.SourceId < 0) continue;
+                // the hero's own blows only - the seeded Burn ticks for 1 and would count as hits
+                if (e.Status == StatusKind.Burn) continue;
+                if (e.TargetId == frontId) p.Front += e.Value;
+                else if (e.TargetId == backId) p.Back += e.Value;
+                else continue;
+                if (lastHit >= 0 && lastHit != e.TargetId) p.Switches++;
+                lastHit = e.TargetId;
+            }
+            return p;
+        }
 
         // ---- Zella's transfer, on live content, before and after -----------------------------
 

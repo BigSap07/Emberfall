@@ -340,6 +340,24 @@ namespace Emberfall.Core.Combat
         public float DoTDamageDealtThisRound;
 
         /// <summary>Per-stack output modifier, copied from PassiveDef at build time.</summary>
+        /// <summary>The standing target restriction this unit carries, adopted from a passive
+        /// that declares one. None for every unit in shipped content.</summary>
+        public TargetBan TargetBan = TargetBan.None;
+
+        /// <summary>The status TargetBan.CarryingStatus names.</summary>
+        public StatusKind TargetBanStatus = StatusKind.None;
+
+        /// <summary>
+        /// LastTargetId as it stood when the previous round ended.
+        ///
+        /// A THIRD MEMORY, because the two that existed answer different questions. LastTargetId is
+        /// overwritten as each blow is set up, so by the time anything asks it names the body being
+        /// hit right now; PreviousTargetId is the last DIFFERENT body and is not written at all when
+        /// a unit hits the same one twice. Neither is "the one it went for last round", which is
+        /// what a restriction wanting a round's worth of distance has to read.
+        /// </summary>
+        public int LastRoundTargetId = -1;
+
         public StatusKind OutputModStatus = StatusKind.None;
         public float OutputModPerStack;
         public OutputModScope OutputModScope = OutputModScope.AllDamage;
@@ -408,6 +426,11 @@ namespace Emberfall.Core.Combat
         /// of it and leave the rest reading last round's answers.</summary>
         public void BeginRound()
         {
+            // Snapshotted as the round opens, so through the whole of this round it names the body
+            // this unit went for in the last one. Written for every unit in every battle and read
+            // only by a restriction, so it costs an int and changes nothing that does not ask.
+            LastRoundTargetId = LastTargetId;
+
             StatusesExpiredThisRound = false;
             ActedThisRound = false;
             DamagedThisRound.Clear();
@@ -772,6 +795,15 @@ namespace Emberfall.Core.Combat
             Passives.Add(passive);
             _passiveFired.Add(false);
             _passiveLastRound.Add(0);
+
+            // Adopted the way the output modifier is, and for the same reason: it is a rule the
+            // unit carries rather than one an ability performs. First declaration wins if two
+            // passives ever declare one, which is the same rule the modifiers below follow.
+            if (passive.TargetBanKind != TargetBan.None && TargetBan == TargetBan.None)
+            {
+                TargetBan = passive.TargetBanKind;
+                TargetBanStatus = passive.TargetBanStatus;
+            }
 
             if (passive.OutputModStatus != StatusKind.None)
             {
