@@ -28,6 +28,16 @@ namespace Emberfall.Game.Cloud
         /// <summary>401 means the access token has expired or been revoked. The one status that is
         /// worth one automatic retry, after a refresh.</summary>
         public bool IsUnauthorised { get { return Status == 401; } }
+
+        /// <summary>403 is a role refusal raised by a guild RPC - "only the leader can do that" -
+        /// and not a transport fault. The screens branch on it so a player who tapped something
+        /// their role does not allow is told which role does, rather than being shown a failure.
+        /// </summary>
+        public bool IsForbidden { get { return Status == 403; } }
+
+        /// <summary>429 is guild_post_message's rate limit and nothing else in this project. It is
+        /// an answer, not an error: the message was not sent and will be accepted shortly.</summary>
+        public bool IsRateLimited { get { return Status == 429; } }
     }
 
     /// <summary>

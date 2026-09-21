@@ -96,6 +96,7 @@ namespace Emberfall.DevHarness
             CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckAccounts(content);
+            CheckGuilds(contentDir);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
@@ -24976,6 +24977,410 @@ namespace Emberfall.DevHarness
 
             Check(!published.ToLoadout().IsGhost,
                   "a duel line is not flagged as a ghost - that flag means 'your own former line', which this is not");
+        }
+
+        // ================================================================== GUILDS
+
+        /// <summary>
+        /// The guild rules that can be proved without a network, plus one that compares this side
+        /// against the other.
+        ///
+        /// WHAT IS HERE IS EVERYTHING THAT DECIDES WHAT A SCREEN OFFERS. The permission matrix
+        /// decides whether a member is shown a Promote button, the validators decide whether a
+        /// message is sent at all, and the codec decides what a roster row says about who may
+        /// remove whom - and every one of those is a decision made before a request exists, so
+        /// every one of them is checkable here.
+        ///
+        /// WHAT IS NOT HERE, AND CANNOT BE: whether the database agrees. Row Level Security, the
+        /// cap's row lock and the chat rate limit are facts about a Postgres instance, and
+        /// Tools/supabase-guild-rules-test.py is what measures those against a real project. This
+        /// section proves the client offers the right things; that script proves the server
+        /// refuses the wrong ones with this code out of the way entirely.
+        ///
+        /// The LAST check is the join between the two, and it is the reason this takes a path: the
+        /// client's copies of the cap, the name bounds, the message ceiling and the chat cooldown
+        /// are duplicated from the migrations on purpose - neither can be the other's source - and
+        /// a duplicate nobody compares is a lie waiting to happen. So it reads the SQL.
+        /// </summary>
+        private static void CheckGuilds(string contentDir)
+        {
+            Line("");
+            Line("GUILDS - the client half, and whether it still agrees with the migrations");
+            CheckGuildCodeFormat();
+            CheckGuildRoleMatrix();
+            CheckGuildTypedInput();
+            CheckGuildChatWindow();
+            CheckGuildRowReading();
+            CheckGuildConstantsMatchTheMigrations(contentDir);
+        }
+
+        /// <summary>
+        /// A guild code is a friend code's alphabet, and this asserts it rather than assuming it.
+        ///
+        /// The interesting assertion is that the two are the SAME function. GuildRules could have
+        /// grown its own normaliser - the two codes are different things and live in different
+        /// tables - and the moment it did, one of them would have been fixed without the other.
+        /// The alphabet exists because of how people read six characters aloud, which is identical
+        /// for both, so there is one reader and this is the check that says so.
+        /// </summary>
+        private static void CheckGuildCodeFormat()
+        {
+            Check(GuildRules.NormaliseCode("abc-234") == "ABC234",
+                  "a guild code repairs case and a dash, exactly as a friend code does ("
+                  + GuildRules.NormaliseCode("abc-234") + ")");
+            Check(GuildRules.IsValidCode("ABC234"), "six characters from the alphabet is a guild code");
+            Check(!GuildRules.IsValidCode("ABC23"), "five characters is not");
+            Check(!GuildRules.IsValidCode("ABC2345"), "seven characters is not");
+            Check(!GuildRules.IsValidCode("ABCO23"), "and a code containing O is refused");
+            Check(GuildRules.NormaliseCode("ABC0I1") == "",
+                  "0, I and 1 are NOT read as O, I and L - a mistyped guild code is an error, never "
+                  + "a successful lookup of a different guild");
+            Check(GuildRules.FormatCode("ABC234") == "ABC-234", "a guild code is shown grouped");
+            Check(GuildRules.NormaliseCode(GuildRules.FormatCode("ABC234")) == "ABC234",
+                  "and what is shown can be typed straight back in");
+
+            // The one that matters if these ever fork.
+            Check(GuildRules.NormaliseCode("qr-s789") == FriendCode.Normalise("qr-s789")
+                  && GuildRules.IsValidCode("QRS789") == FriendCode.IsValid("QRS789"),
+                  "guild codes and friend codes are read by ONE implementation, not two agreeing ones");
+        }
+
+        /// <summary>
+        /// The whole permission matrix, as a table rather than as the cases a screen happens to
+        /// use.
+        ///
+        /// Written as a fingerprint over every combination, because the failure this is guarding
+        /// against is not "Promote is broken" - that would be noticed - but "somebody widened one
+        /// clause and an officer can now remove an officer". A per-case list would have to
+        /// anticipate which cell moved; a table notices any of them.
+        ///
+        /// The named checks under it are the cells whose value is load-bearing enough to be worth
+        /// reading in the output, and each one restates a policy in 0004 by name.
+        /// </summary>
+        private static void CheckGuildRoleMatrix()
+        {
+            GuildRole[] roles = { GuildRole.None, GuildRole.Member, GuildRole.Officer, GuildRole.Leader };
+            StringBuilder table = new StringBuilder();
+            for (int m = 0; m < roles.Length; m++)
+            {
+                for (int t = 0; t < roles.Length; t++)
+                {
+                    for (int s = 0; s < 2; s++)
+                    {
+                        bool self = s == 1;
+                        table.Append(GuildRules.CanRemove(roles[m], roles[t], self) ? '1' : '0');
+                        table.Append(GuildRules.CanPromote(roles[m], roles[t], self) ? '1' : '0');
+                        table.Append(GuildRules.CanDemote(roles[m], roles[t], self) ? '1' : '0');
+                        table.Append(GuildRules.CanMakeLeader(roles[m], roles[t], self) ? '1' : '0');
+                    }
+                }
+            }
+
+            // None/Member/Officer/Leader x the same x not-self,self, four verbs each. Recorded as
+            // a literal so ANY cell moving fails this line, not only the ones somebody thought of.
+            const string Expected =
+                "0000" + "0000" + "0000" + "0000" + "0000" + "0000" + "0000" + "0000" +
+                "0000" + "0000" + "0000" + "0000" + "0000" + "0000" + "0000" + "0000" +
+                "0000" + "0000" + "1000" + "0000" + "0000" + "0000" + "0000" + "0000" +
+                "0000" + "0000" + "1101" + "0000" + "1011" + "0000" + "0000" + "0000";
+            Check(table.ToString() == Expected,
+                  "the whole role matrix is unchanged - 32 combinations, four verbs each"
+                  + (table.ToString() == Expected ? "" : " (got " + table + ")"));
+
+            Check(GuildRules.CanRemove(GuildRole.Officer, GuildRole.Member, false)
+                  && !GuildRules.CanRemove(GuildRole.Officer, GuildRole.Officer, false),
+                  "AN OFFICER MAY REMOVE A MEMBER AND NOT A PEER - guild_members_remove_by_officer's "
+                  + "whole distinction");
+            Check(!GuildRules.CanRemove(GuildRole.Leader, GuildRole.Leader, false)
+                  && !GuildRules.CanRemove(GuildRole.Officer, GuildRole.Leader, false),
+                  "and NOBODY may remove a leader, including a leader");
+            Check(GuildRules.CanLeave(GuildRole.Member) && GuildRules.CanLeave(GuildRole.Officer)
+                  && !GuildRules.CanLeave(GuildRole.Leader),
+                  "a leader cannot leave - guild_members_leave_self carries role <> 'leader', which "
+                  + "is the whole of 'transfer or disband first'");
+            Check(GuildRules.CanSetRoles(GuildRole.Leader) && !GuildRules.CanSetRoles(GuildRole.Officer),
+                  "only the leader changes a role");
+            Check(GuildRules.CanDisband(GuildRole.Leader) && !GuildRules.CanDisband(GuildRole.Officer),
+                  "only the leader disbands");
+            Check(GuildRules.CanAnswerRequests(GuildRole.Leader)
+                  && GuildRules.CanAnswerRequests(GuildRole.Officer)
+                  && !GuildRules.CanAnswerRequests(GuildRole.Member),
+                  "a leader or an officer answers requests, and a member does not");
+
+            // THE ONE-GUILD RULE, this side of it. One answer for creating and joining because it
+            // is one constraint: guild_members.user_id is a primary key.
+            Check(GuildRules.CanJoinOrCreate(GuildRole.None)
+                  && !GuildRules.CanJoinOrCreate(GuildRole.Member)
+                  && !GuildRules.CanJoinOrCreate(GuildRole.Officer)
+                  && !GuildRules.CanJoinOrCreate(GuildRole.Leader),
+                  "A PLAYER IN A GUILD CAN NEITHER JOIN NOR CREATE ANOTHER - the same answer for "
+                  + "both, because it is the same primary key");
+
+            Check(GuildRules.ParseRole("leader") == GuildRole.Leader
+                  && GuildRules.ParseRole("officer") == GuildRole.Officer
+                  && GuildRules.ParseRole("member") == GuildRole.Member
+                  && GuildRules.ParseRole("") == GuildRole.None
+                  && GuildRules.ParseRole("Leader") == GuildRole.None,
+                  "a role parses from the wire's own lower-case spelling and from nothing else");
+            Check(GuildRules.RoleKey(GuildRole.Officer) == "officer"
+                  && GuildRules.RoleKey(GuildRole.None) == "",
+                  "and goes back out the way the CHECK constraint accepts it");
+        }
+
+        /// <summary>
+        /// What a player typed, refused here so they are told before a round trip.
+        ///
+        /// Every bound is the column's, and the trim matters as much as the length: the guilds
+        /// table carries `name = btrim(name)`, so a name with a trailing space is refused by the
+        /// database for a reason the player cannot see on their own screen. Validating the TRIMMED
+        /// string and sending that is what stops it ever being sent.
+        /// </summary>
+        private static void CheckGuildTypedInput()
+        {
+            string cleaned, problem;
+
+            Check(GuildRules.ValidateName("  The Long Watch  ", out cleaned, out problem)
+                  && cleaned == "The Long Watch",
+                  "a guild name is trimmed before it is measured or sent (\"" + cleaned + "\")");
+            Check(!GuildRules.ValidateName("ab", out cleaned, out problem),
+                  "two characters is not a guild name");
+            Check(!GuildRules.ValidateName("   ab   ", out cleaned, out problem),
+                  "and padding it with spaces does not make it one");
+            Check(GuildRules.ValidateName(new string('x', GuildRules.NameMax), out cleaned, out problem),
+                  GuildRules.NameMax + " characters is the longest name there is");
+            Check(!GuildRules.ValidateName(new string('x', GuildRules.NameMax + 1), out cleaned, out problem),
+                  "and one more is refused");
+            Check(!GuildRules.ValidateName("two\nlines", out cleaned, out problem),
+                  "a name carrying a newline is refused - the column refuses [[:cntrl:]] and every "
+                  + "label on these screens is single-line");
+
+            Check(GuildRules.ValidateDescription("", out cleaned, out problem),
+                  "a description may be empty");
+            Check(!GuildRules.ValidateDescription(new string('x', GuildRules.DescriptionMax + 1),
+                                                  out cleaned, out problem),
+                  "and stops at " + GuildRules.DescriptionMax);
+
+            Check(GuildRules.ValidateMessage("  hello  ", out cleaned, out problem) && cleaned == "hello",
+                  "a chat line is trimmed, so what is measured is what is stored");
+            Check(!GuildRules.ValidateMessage("   ", out cleaned, out problem),
+                  "a line of nothing but spaces is not a message");
+            Check(!GuildRules.ValidateMessage(null, out cleaned, out problem),
+                  "and neither is nothing at all");
+            Check(GuildRules.ValidateMessage(new string('x', GuildRules.MessageMax), out cleaned, out problem),
+                  GuildRules.MessageMax + " characters sends");
+            Check(!GuildRules.ValidateMessage(new string('x', GuildRules.MessageMax + 1),
+                                              out cleaned, out problem),
+                  "and " + (GuildRules.MessageMax + 1) + " does not");
+            Check(!GuildRules.ValidateMessage("two\nlines", out cleaned, out problem),
+                  "a message carrying a newline is refused before it is sent");
+            Check(GuildRules.HasControlCharacter("a\tb") && !GuildRules.HasControlCharacter("a b"),
+                  "a tab counts as a control character and a space does not");
+        }
+
+        /// <summary>
+        /// The chat window: what it keeps, in what order, and which end it drops.
+        ///
+        /// THE ORDER IS THE POINT. The read asks for newest first because that is the half an
+        /// index can answer; a screen reads oldest at the top. If the log ever stopped sorting,
+        /// the chat would render upside down and every message would still be present - which is
+        /// exactly the kind of fault that survives a glance at a screenshot.
+        ///
+        /// And the drop is from the OLD end. A window that trimmed the newest would silently hide
+        /// the message somebody just sent, which is the one line they are certain to look for.
+        /// </summary>
+        private static void CheckGuildChatWindow()
+        {
+            GuildChatLog log = new GuildChatLog();
+
+            List<GuildMessageEntry> newestFirst = new List<GuildMessageEntry>();
+            for (int i = 5; i >= 1; i--) newestFirst.Add(Msg(i, "line " + i));
+            log.Replace(newestFirst);
+
+            bool ascending = log.Count == 5;
+            for (int i = 1; i < log.Count && ascending; i++)
+                if (log.Messages[i].Id <= log.Messages[i - 1].Id) ascending = false;
+            Check(ascending, "a newest-first fetch is stored oldest-first, which is how it is read");
+            Check(log.Count == 5 && log.Messages[0].Body == "line 1"
+                  && log.Messages[4].Body == "line 5",
+                  "and every line survived the turn-around");
+            Check(log.NewestId == 5, "the newest id is the last one (" + log.NewestId + ")");
+
+            List<GuildMessageEntry> withDuplicates = new List<GuildMessageEntry>();
+            withDuplicates.Add(Msg(9, "nine"));
+            withDuplicates.Add(Msg(9, "nine again"));
+            withDuplicates.Add(Msg(8, "eight"));
+            log.Replace(withDuplicates);
+            Check(log.Count == 2, "a window carrying one id twice keeps it once (" + log.Count + ")");
+
+            List<GuildMessageEntry> overflowing = new List<GuildMessageEntry>();
+            for (int i = 1; i <= GuildRules.ChatWindow + 20; i++) overflowing.Add(Msg(i, "m" + i));
+            log.Replace(overflowing);
+            Check(log.Count == GuildRules.ChatWindow,
+                  "the window holds " + GuildRules.ChatWindow + " and no more (" + log.Count + ")");
+            Check(log.Messages[log.Count - 1].Id == GuildRules.ChatWindow + 20,
+                  "AND IT DROPS THE OLDEST, NOT THE NEWEST - the newest is the line somebody just "
+                  + "sent and came back to read");
+            Check(log.Messages[0].Id == 21, "so the window starts at 21 (" + log.Messages[0].Id + ")");
+
+            log.Replace(null);
+            Check(log.Count == 0 && log.NewestId == 0,
+                  "a failed fetch that answered nothing empties nothing it should not");
+        }
+
+        private static GuildMessageEntry Msg(long id, string body)
+        {
+            GuildMessageEntry entry = new GuildMessageEntry();
+            entry.Id = id;
+            entry.Body = body;
+            entry.UserId = "u" + id;
+            return entry;
+        }
+
+        /// <summary>
+        /// Reading a row off the wire, including the two things a hand-written parser gets wrong.
+        ///
+        /// The timestamp is the first: PostgREST renders `timestamptz` with an offset, and reading
+        /// it as a local time slides every "last seen" by the reader's own time zone - a bug that
+        /// is invisible in UTC and wrong by hours everywhere else. The check is that the same
+        /// instant written two ways parses to the same second.
+        ///
+        /// The second is the embed. A roster row carries its member's profile nested, because
+        /// PostgREST resolved the foreign key inline; a row whose embed is missing is still a
+        /// member and must not be dropped, or a roster loses a line over a display name.
+        /// </summary>
+        private static void CheckGuildRowReading()
+        {
+            long utc = GuildCodec.ParseTimestamp("2026-09-21T15:04:05+00:00");
+            long plusTwo = GuildCodec.ParseTimestamp("2026-09-21T17:04:05+02:00");
+            Check(utc > 0 && utc == plusTwo,
+                  "THE SAME INSTANT WRITTEN IN TWO ZONES PARSES TO ONE SECOND - the offset is read "
+                  + "rather than assumed, so 'last seen' does not slide with the device's zone");
+            Check(GuildCodec.ParseTimestamp("2026-09-21T15:04:05.123456+00:00") == utc,
+                  "and fractional seconds do not move it");
+            Check(GuildCodec.ParseTimestamp("") == 0 && GuildCodec.ParseTimestamp("not a date") == 0,
+                  "an unreadable timestamp is 0, which every caller renders as 'no stamp'");
+
+            const string roster = @"[
+              { ""user_id"": ""u-1"", ""role"": ""leader"", ""joined_at"": ""2026-09-01T10:00:00+00:00"",
+                ""last_seen"": ""2026-09-21T15:04:05+00:00"",
+                ""profiles"": { ""display_name"": ""Matthias"", ""friend_code"": ""ABC234"" } },
+              { ""user_id"": ""u-2"", ""role"": ""officer"", ""joined_at"": ""2026-09-02T10:00:00+00:00"",
+                ""last_seen"": ""2026-09-21T15:04:05+00:00"" },
+              { ""role"": ""member"" }
+            ]";
+            List<GuildMemberEntry> members = GuildCodec.ReadRows(roster,
+                delegate (JsonValue row) { return GuildCodec.ReadMember(row, "u-2"); });
+
+            Check(members.Count == 2,
+                  "a roster row with no user_id is dropped and the rest survive (" + members.Count + ")");
+            Check(members.Count == 2 && members[0].Role == GuildRole.Leader
+                  && members[1].Role == GuildRole.Officer,
+                  "each row's role arrives as the thing the permission matrix is asked about");
+            Check(members.Count == 2 && members[0].DisplayName == "Matthias"
+                  && members[0].FriendCode == "ABC234",
+                  "the embedded profile is read out of the row PostgREST nested it in");
+            Check(members.Count == 2 && members[1].DisplayName == "",
+                  "AND A MEMBER WITH NO EMBED IS STILL A MEMBER - a roster does not lose a line "
+                  + "over a missing display name");
+            Check(members.Count == 2 && !members[0].IsSelf && members[1].IsSelf,
+                  "and the reader works out which line is the caller's own");
+            Check(members.Count == 2 && members[0].PowerScore == -1,
+                  "power starts at -1, not 0 - 'no line published' and 'a line worth nothing' are "
+                  + "different sentences and the roster says different things for them");
+
+            const string chat = @"[
+              { ""id"": 412, ""user_id"": ""u-2"", ""body"": ""ready when you are"",
+                ""created_at"": ""2026-09-21T15:04:05+00:00"",
+                ""profiles"": { ""display_name"": ""Rival"" } },
+              { ""user_id"": ""u-1"", ""body"": ""no id, dropped"" }
+            ]";
+            List<GuildMessageEntry> lines = GuildCodec.ReadRows(chat,
+                delegate (JsonValue row) { return GuildCodec.ReadMessage(row, "u-2"); });
+            Check(lines.Count == 1 && lines[0].Id == 412 && lines[0].IsMine
+                  && lines[0].DisplayName == "Rival",
+                  "a chat row reads its id, its author and whether it is the caller's own");
+
+            Check(GuildCodec.ReadRows("{ not json", GuildCodec.ReadGuild).Count == 0,
+                  "and a response that is not an array reads as no rows rather than throwing");
+
+            GuildSummary guild = GuildCodec.ReadGuild(JsonValue.Parse(
+                @"{ ""id"": ""g-1"", ""name"": ""The Long Watch"", ""guild_code"": ""ABC234"",
+                    ""is_open"": true, ""member_count"": 7 }"));
+            Check(guild != null && guild.Name == "The Long Watch" && guild.IsOpen
+                  && guild.MemberCount == 7,
+                  "a guild from the code lookup carries how full it is, which is most of the "
+                  + "decision to apply");
+            GuildSummary noCount = GuildCodec.ReadGuild(JsonValue.Parse(
+                @"{ ""id"": ""g-1"", ""name"": ""The Long Watch"", ""guild_code"": ""ABC234"" }"));
+            Check(noCount != null && noCount.MemberCount == -1,
+                  "and a guild read without one says -1 rather than claiming it is empty");
+
+            Check(GuildRules.LastSeenLabel(1000, 1100) == "ONLINE"
+                  && GuildRules.LastSeenLabel(0, 1100) == ""
+                  && GuildRules.LastSeenLabel(1000, 1000 + 3600) == "1H AGO",
+                  "last seen reads as a sentence, and a stamp of 0 says nothing rather than 1970");
+        }
+
+        /// <summary>
+        /// THE JOIN BETWEEN THE TWO HALVES: the client's copies of four numbers, read back out of
+        /// the SQL that makes them true.
+        ///
+        /// GuildRules duplicates the cap, the name bounds, the description ceiling, the message
+        /// ceiling and the chat cooldown from 0004 and 0005, deliberately and for the reason
+        /// FriendCode's alphabet is duplicated: the database is what guarantees a rule, and the
+        /// client is what tells a player before a round trip, so neither can be the other's
+        /// source. What that reasoning does NOT excuse is the two drifting apart, which nothing
+        /// else in this project would notice - a cap of 30 on the server and 25 on the client
+        /// looks like a working game right up until a guild has 26 members and the roster says it
+        /// is full.
+        ///
+        /// So this reads the migration files and asserts the numbers appear in them. It is a
+        /// grep, not a parse, and that is enough for the failure being guarded against: somebody
+        /// changing one side without the other.
+        /// </summary>
+        private static void CheckGuildConstantsMatchTheMigrations(string contentDir)
+        {
+            string migrations;
+            try
+            {
+                migrations = Path.GetFullPath(Path.Combine(contentDir,
+                    Path.Combine("..", Path.Combine("..", Path.Combine("..",
+                        Path.Combine("Server", Path.Combine("supabase", "migrations")))))));
+            }
+            catch (Exception)
+            {
+                migrations = "";
+            }
+
+            string tables = Path.Combine(migrations, "0004_guilds.sql");
+            string calls = Path.Combine(migrations, "0005_guild_rpcs.sql");
+            if (!File.Exists(tables) || !File.Exists(calls))
+            {
+                // Not a failure. The harness is handed a content directory and is run from a build
+                // output; a checkout that has one without the other is a legitimate shape, and a
+                // check that cannot read its subject reports that rather than failing it.
+                Line("  [note] Server/supabase/migrations was not found beside the content directory,");
+                Line("         so the client's constants were not compared against the SQL this run.");
+                return;
+            }
+
+            string sql = File.ReadAllText(tables) + "\n" + File.ReadAllText(calls);
+
+            Check(sql.Contains("select " + GuildRules.MemberCap + ";"),
+                  "guild_member_cap() in the SQL is " + GuildRules.MemberCap
+                  + ", which is what GuildRules.MemberCap says");
+            Check(sql.Contains("char_length(name) between " + GuildRules.NameMin
+                               + " and " + GuildRules.NameMax),
+                  "the name bounds in the SQL are " + GuildRules.NameMin + " to " + GuildRules.NameMax);
+            Check(sql.Contains("char_length(description) <= " + GuildRules.DescriptionMax),
+                  "the description ceiling in the SQL is " + GuildRules.DescriptionMax);
+            Check(sql.Contains("char_length(body) between 1 and " + GuildRules.MessageMax),
+                  "the message ceiling in the SQL is " + GuildRules.MessageMax);
+            Check(sql.Contains("interval '" + GuildRules.ChatCooldownSeconds + " seconds'"),
+                  "the chat cooldown in the SQL is " + GuildRules.ChatCooldownSeconds + " seconds");
+            Check(sql.Contains("'^[2-9A-HJKMNP-TV-Z]{6}$'"),
+                  "and the guild code's CHECK restates the friend-code alphabet, so a stored code "
+                  + "is always one FriendCode can read");
         }
 
         /// <summary>Where two documents first disagree, with enough either side to see what

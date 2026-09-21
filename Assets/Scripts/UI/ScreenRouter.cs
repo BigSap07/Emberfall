@@ -24,7 +24,10 @@ namespace Emberfall.UI
         Forge,
         Account,
         Friends,
-        FriendTeam
+        FriendTeam,
+        Guild,
+        GuildRequests,
+        GuildChat
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -84,6 +87,9 @@ namespace Emberfall.UI
         public Screens.AccountScreen Account;
         public Screens.FriendsScreen Friends;
         public Screens.FriendTeamScreen FriendTeam;
+        public Screens.GuildScreen Guild;
+        public Screens.GuildRequestsScreen GuildRequests;
+        public Screens.GuildChatScreen GuildChat;
 
         public UIScreen Current { get; private set; }
 
@@ -108,13 +114,16 @@ namespace Emberfall.UI
             Proving = Create<Screens.ProvingScreen>();
             Forge = Create<Screens.ForgeScreen>();
 
-            // Built whether or not this build has a cloud. Each of the three renders an honest
+            // Built whether or not this build has a cloud. Each of the six renders an honest
             // empty state when GameApp.Cloud is null - "this build has no account service" rather
             // than a blank - which is cheaper and more useful than a router that sometimes has
-            // three fewer screens in it and a menu that sometimes has two fewer buttons.
+            // six fewer screens in it and a menu that sometimes has three fewer buttons.
             Account = Create<Screens.AccountScreen>();
             Friends = Create<Screens.FriendsScreen>();
             FriendTeam = Create<Screens.FriendTeamScreen>();
+            Guild = Create<Screens.GuildScreen>();
+            GuildRequests = Create<Screens.GuildRequestsScreen>();
+            GuildChat = Create<Screens.GuildChatScreen>();
         }
 
         /// <summary>
