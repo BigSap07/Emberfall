@@ -201,6 +201,17 @@ namespace Emberfall.Core.Combat
                     return caster != null && subject.LastDamagedRound > 0
                         && subject.LastDamagedRound >= caster.LastTurnRound;
 
+                // The same window with the caster's own blows taken out of it. An OR over entries,
+                // so the dictionary's enumeration order cannot change the answer.
+                case EffectCondition.SubjectDamagedByOtherSinceMyTurn:
+                {
+                    if (caster == null) return false;
+                    foreach (KeyValuePair<int, int> hit in subject.LastDamagedRoundBy)
+                        if (hit.Key != caster.Id && hit.Value > 0 && hit.Value >= caster.LastTurnRound)
+                            return true;
+                    return false;
+                }
+
                 // The heal and shield siblings of the line above, round-granular in exactly the
                 // same way and carrying the same approximation: two units acting inside one round
                 // are not ordered against each other by it.
@@ -605,6 +616,41 @@ namespace Emberfall.Core.Combat
             /// Keyed per caster from the start, the way _lastMoved is, so two units shifting in one
             /// round cannot answer for each other.</summary>
             private readonly Dictionary<int, float> _lastTurnShift = new Dictionary<int, float>();
+
+            /// <summary>
+            /// A delay authored against a unit that had already acted, held until the round it CAN
+            /// be spent in.
+            ///
+            /// A round is a speed sort walked once, so a unit that has taken its turn is not in
+            /// the remaining order and there is no place left to push it to. Every "delay that
+            /// enemy by X% turn progress" in the roster is written on a trigger that fires because
+            /// the enemy just acted - Merek's whole kit is - so the one moment the effect is
+            /// authored for was the one moment it could not land, and it silently did nothing for
+            /// its entire life.
+            ///
+            /// Held rather than dropped, and spent at the top of the next round before anybody
+            /// moves. "Delayed by 10% turn progress" is a claim about that unit's next turn, and
+            /// its next turn is in the next round; the alternative reading - that a delay bought
+            /// after the target acted is worth nothing - is not what any of the descriptions say.
+            ///
+            /// DELAYS ONLY. An advance aimed at a unit that has already acted is left alone: there
+            /// is no text in the roster asking for one to be carried, and carrying it would mean
+            /// "act sooner" quietly became "act sooner NEXT round", which is a different promise.
+            ///
+            /// One entry per authored delay rather than a per-target sum, so two delays land as
+            /// two moves next round exactly as they would have landed as two moves this round.
+            /// </summary>
+            private sealed class CarriedDelay
+            {
+                public CombatUnit Source;
+                public CombatUnit Target;
+                public float Fraction;
+                public StatusKind BanksAs;
+                public float Cap, Rate;
+                public int DebtDuration;
+            }
+
+            private readonly List<CarriedDelay> _carriedDelays = new List<CarriedDelay>();
             /// <summary>
             /// WHAT the last Cleanse, Dispel or RemoveStatus took off a unit, as a damage amount -
             /// not how many entries it took.
@@ -623,6 +669,41 @@ namespace Emberfall.Core.Combat
             /// by what the last removal took", and only the unit of measurement was wrong.
             /// </summary>
             private float _lastRemovedValue;
+
+            /// <summary>
+            /// The victim's HP fraction BEFORE the blow whose threshold broadcast is in flight, and
+            /// the reason OnAllyHpBelowThreshold and OnEnemyHpBelowThreshold can say "fell below"
+            /// rather than "was hit while low".
+            ///
+            /// A CROSSING NEEDS TWO READINGS AND ONLY ONE OF THEM SURVIVES THE BLOW. The watcher's
+            /// own Threshold decides how low counts, but "fell below 35%" is a claim about a
+            /// boundary being crossed, and the unit's live HpRatio alone cannot tell the crossing
+            /// from the twenty chip hits that follow it. So the ratio as the blow was set up is
+            /// carried here and compared against the ratio after it: strictly above, then at or
+            /// below, is a crossing; anything else is not.
+            ///
+            /// Set immediately before each of the two broadcasts and restored after, the same way
+            /// _broadcastSubject is, so a passive that deals damage while answering one of them
+            /// cannot leave a stale reading behind for the outer blow.
+            ///
+            /// A HEAL BACK OVER THE LINE RE-ARMS IT. Nothing is remembered between blows - the two
+            /// readings belong to one blow - so a unit healed from 20% to 60% and knocked to 30%
+            /// again has crossed twice and the watcher fires twice. That is the reading the text
+            /// asks for: an ally who recovered and fell again fell again.
+            /// </summary>
+            private float _thresholdCrossedFrom = -1f;
+
+            /// <summary>
+            /// The bodies THIS FIRING has taken a status off, read by
+            /// EffectCondition.SubjectLostStatusThisFiring.
+            ///
+            /// Cleared at the boundary of an ability a unit CHOSE and inherited by the passives it
+            /// wakes, which is the same rule _lastTarget and _lastDamageDealt follow and for the
+            /// same reason: a passive answering a Dispel is asking about the Dispel that woke it.
+            /// "Applies Fault Line to enemies from whom it removed a defensive effect" is a
+            /// question about one firing, and nothing in the condition vocabulary could ask it.
+            /// </summary>
+            private readonly List<int> _removedFromThisFiring = new List<int>();
 
             /// <summary>
             /// The damage a status entry would still have dealt had it not been removed:
@@ -932,7 +1013,37 @@ namespace Emberfall.Core.Combat
 
                 _order = TurnOrder();
                 _orderIndex = 0;
+                ApplyCarriedDelays();
                 _phase = Phase.Turns;
+            }
+
+            /// <summary>
+            /// Spends every delay held from a previous round, before anybody in this one moves.
+            ///
+            /// _orderIndex is set to -1 for the duration, which is not a trick: ApplyTurnShift
+            /// reads `_orderIndex + 1` as the first turn that has not happened, and at this point
+            /// nothing in the round has. Left at 0 the unit that sorts first could never be moved,
+            /// which is exactly the unit a delay bought last round is usually aimed at.
+            ///
+            /// The list is copied and emptied FIRST. A carried delay lands on a unit that is in
+            /// this round's order, so it cannot re-carry itself; taking the copy anyway means a
+            /// passive woken by one of these moves - OnTurnDelayed - can bank a delay for the
+            /// round after without it being spent inside this loop.
+            /// </summary>
+            private void ApplyCarriedDelays()
+            {
+                if (_carriedDelays.Count == 0) return;
+                List<CarriedDelay> due = new List<CarriedDelay>(_carriedDelays);
+                _carriedDelays.Clear();
+
+                int prevIndex = _orderIndex;
+                _orderIndex = -1;
+                for (int i = 0; i < due.Count; i++)
+                {
+                    CarriedDelay c = due[i];
+                    ApplyTurnShift(c.Source, c.Target, c.Fraction, c.BanksAs, c.Cap, c.Rate, c.DebtDuration);
+                }
+                _orderIndex = prevIndex;
             }
 
             private void CloseRound()
@@ -1943,6 +2054,13 @@ namespace Emberfall.Core.Combat
                         first = _shieldBreakerId >= 0 && caster != null && _shieldBreakerId == caster.Id;
                         break;
 
+                    // Whether an earlier effect of THIS firing took a status off this body. Sim
+                    // state for the same reason the three above are: the list belongs to the
+                    // ability in flight, and nothing a caller could pass in knows about it.
+                    case EffectCondition.SubjectLostStatusThisFiring:
+                        first = _removedFromThisFiring.Contains(subject.Id);
+                        break;
+
                     // Whether this body has a cast declared and not yet resolved. Sim state, so it
                     // is answered here rather than in the pure evaluator, the same way the
                     // turn-progress members are.
@@ -2044,6 +2162,8 @@ namespace Emberfall.Core.Combat
                     }
                     case EffectCondition.LastMovedAboveHpFraction:
                         return LastMovedAboveFraction(caster, subject2, gate2.ConditionValue);
+                    case EffectCondition.SubjectLostStatusThisFiring:
+                        return _removedFromThisFiring.Contains(subject2.Id);
                 }
 
                 if (gate2.ConditionOn == ConditionSubject.Defeated
@@ -2100,6 +2220,8 @@ namespace Emberfall.Core.Combat
                     }
                     case EffectCondition.LastMovedAboveHpFraction:
                         return LastMovedAboveFraction(caster, subject3, gate3.ConditionValue);
+                    case EffectCondition.SubjectLostStatusThisFiring:
+                        return _removedFromThisFiring.Contains(subject3.Id);
                 }
 
                 if (gate3.ConditionOn == ConditionSubject.Defeated
@@ -2217,7 +2339,27 @@ namespace Emberfall.Core.Combat
             {
                 if (ability == null) return;
                 CombatUnit prevLastTarget = _lastTarget;
-                _lastTarget = null;
+                // ZEROED FOR AN ABILITY A UNIT CHOSE, KEPT FOR ONE A PASSIVE IS ANSWERING, which is
+                // the same split _lastDamageDealt makes four lines down and for the same reason.
+                //
+                // A Basic or an Active must not read a body a previous turn struck: "the enemy I
+                // just hit" has to mean this ability's own target or nobody. A PASSIVE is the
+                // opposite case. It is running because a blow just landed, that blow's target is
+                // the whole of its context, and ConditionSubject.LastTarget was built to mean
+                // exactly "the body the ability that woke me struck". Clearing it at the passive's
+                // own boundary made every effect gated on that subject resolve to null and answer
+                // false - the comment at the foot of this method used to say so, and the repair is
+                // this one word.
+                //
+                // MEASURED, in the dark-talent arena: Elyra's Slow Growth fires 24 times and now
+                // banks 24 Patience where it banked 0, and Edrin's Guardian of What Remains fires
+                // 22 times and banks 22 Record where it banked 0. Both of their third talents wait
+                // on four of those stacks, and Kiva's Severance Paid is gated the same way.
+                if (depth == 0) _lastTarget = null;
+                // Cleared on the same boundary and inherited the same way: "this firing removed a
+                // status from that body" is a question about the ability a unit chose, and a
+                // passive it woke is part of that firing rather than a firing of its own.
+                if (depth == 0) _removedFromThisFiring.Clear();
                 // Cleared and restored on exactly the same boundary _lastTarget uses, and for the
                 // same reason: an EchoDamage authored with no damage ahead of it in its own ability
                 // must read zero rather than a number from a previous turn. An echo that could pick
@@ -2399,7 +2541,21 @@ namespace Emberfall.Core.Combat
                         // status carrying UsesPerRound, read through StatusUseAvailable, which is
                         // spent by the effect that reads it. That is where "this one line at most
                         // once" belongs, and no shipped kit asks for it here.
+                        // A SELF-AIMED EFFECT IS NOT A FIRING AGAINST A TARGET, so it neither pays
+                        // the budget nor can be refused by it. The field's own name is how many
+                        // times the passive may fire against one TARGET, and every description
+                        // behind it names an enemy: "this triggers once per enemy each round".
+                        // The caster is not one of those enemies.
+                        //
+                        // Not hypothetical. Rheia's Second Draft carries a budget of one per enemy
+                        // per round and two of its own effects - the 10 Energy beside the hit, the
+                        // Revision it spends - land on Rheia. The first firing of a round admitted
+                        // her own id and spent her slot against herself, and every LATER firing
+                        // that round, against a different enemy, found that slot gone and dropped
+                        // her Energy, her Revision and the DefenseUp her second talent appends.
+                        // A talent whose only effect is aimed at Self could not land at all.
                         if (_perTargetOwner != null && _perTargetLimit > 0
+                            && target != _perTargetOwner
                             && !_perTargetAdmitted.Contains(target.Id))
                         {
                             if (_perTargetOwner.PassiveFiresAgainst(_perTargetIndex, target.Id,
@@ -2478,28 +2634,10 @@ namespace Emberfall.Core.Combat
                 // set: AfterBasicAttack passives need to see the basic's last target via
                 // ConditionSubject.LastTarget, and the caller restores it once it is done.
                 //
-                // THAT SECOND HALF DOES NOT WORK TODAY, and it is written down here because this
-                // is where the next reader will look for it. TakeTurn does leave _lastTarget set
-                // across the AfterBasicAttack broadcast - but a passive's effects run inside a
-                // wrapper AbilityDef, so they enter ResolveAbility, and the line at the top of
-                // this method clears _lastTarget before any of them is evaluated. Every effect
-                // anywhere in a PASSIVE whose condition names ConditionSubject.LastTarget
-                // therefore resolves its subject to null and answers false, forever.
-                //
-                // MEASURED, in the dark-talent arena in Tools/DevHarness/Program.cs: Elyra's Slow
-                // Growth fires 24 times in a fight and grants zero Patience, and Edrin's Guardian
-                // of What Remains fires 22 times and grants zero Record. Both are gated exactly
-                // this way, and both of their third talents wait on four of the stacks their host
-                // can never hand them. Kiva's Severance Paid is gated this way too, and has a
-                // second independent reason to be inert.
-                //
-                // The repair is `if (depth == 0) _lastTarget = null;` on that line, which was
-                // built and run: Elyra then banks 24 Patience and her no-talent damage in that
-                // arena moves from 80,004 to 90,162, Edrin banks 22 Record and moves from 82,248
-                // to 84,384. It is not applied here because it moves what a hero does with NO
-                // talent selected, which is what hero-sweep-baseline.txt's 150 lines are a record
-                // of - ten of them would move - and that is a decision for whoever owns that
-                // baseline rather than a repair to fold into a talent pass.
+                // BOTH HALVES WORK NOW. TakeTurn leaves _lastTarget set across the AfterBasicAttack
+                // broadcast, and the clear at the top of this method is gated on depth == 0, so the
+                // wrapper AbilityDef a passive's effects run inside no longer wipes the field on
+                // its way in. The measurements that repair moved are at the top of this method.
                 if (depth > 0)
                 {
                     _lastTarget = prevLastTarget;
@@ -2689,8 +2827,20 @@ namespace Emberfall.Core.Combat
                                 if (led.Kind != StatusKind.Ledger || led.SourceId != source.Id) continue;
                                 if (effect.StoredCap > 0f)
                                 {
+                                    // THE TWO BASES ANSWER TO DIFFERENT BODIES, and the difference
+                                    // is in what the authored texts say rather than in a taste for
+                                    // symmetry. "Records up to 80% of my Attack" is a number about
+                                    // the applier; the holder is an enemy whose Attack has nothing
+                                    // to do with the size of the record. "Each ally can record up
+                                    // to 8% of THEIR Max HP" is a number about the holder, and one
+                                    // cap is being written onto five different bars.
+                                    //
+                                    // Resolved against `source` for both, Brenna's Stand Again gave
+                                    // every ally a cap of 8% of BRENNA's Max HP - a Bulwark's bar
+                                    // over a Marksman's ledger - which is neither the text nor a
+                                    // defensible approximation of it.
                                     float basis = effect.StoredCapBasis == "maxHp"
-                                        ? source.MaxHp : source.EffectiveAttack;
+                                        ? target.EffectiveMaxHp : source.EffectiveAttack;
                                     led.StoredCap = basis * effect.StoredCap;
                                 }
                                 else led.StoredCap = 0f;
@@ -2811,7 +2961,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = cleansedValue; FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = cleansedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
@@ -2838,7 +2988,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = dispelledValue; FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = dispelledValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -2937,7 +3087,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) { _lastRemovedValue = strippedValue; FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = strippedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
                         break;
                     }
 
@@ -3993,6 +4143,20 @@ namespace Emberfall.Core.Combat
 
             private readonly Dictionary<string, int> _ignoreDefenseUses = new Dictionary<string, int>();
 
+            /// <summary>
+            /// The three removal sites also record WHO they took it from, for
+            /// EffectCondition.SubjectLostStatusThisFiring.
+            ///
+            /// Once per body rather than once per status: the question the condition asks is
+            /// whether this firing stripped that enemy, and an ability that took two buffs off one
+            /// body did not strip it twice as far as any authored clause is concerned.
+            /// </summary>
+            private void NoteRemovedFrom(CombatUnit target)
+            {
+                if (target == null) return;
+                if (!_removedFromThisFiring.Contains(target.Id)) _removedFromThisFiring.Add(target.Id);
+            }
+
             /// <summary>The three removal sites raise one trigger and name one causer.</summary>
             private void FireRemoval(CombatUnit source, int depth)
             {
@@ -4650,6 +4814,12 @@ namespace Emberfall.Core.Combat
                     }
                 }
 
+                // Read before the bar moves, kept in a LOCAL rather than the field: this method
+                // re-enters itself through echoes, redirects and passives, and a field written
+                // here would be overwritten by the inner blow long before the outer one reaches
+                // its own broadcast. The field is set from this local at each broadcast instead.
+                float hpRatioBeforeBlow = target.HpRatio;
+
                 target.Hp -= damage;
                 BattleEvent e = Emit(BattleEventType.Damage, sourceId, target.Id);
                 e.Value = damage;
@@ -4675,6 +4845,11 @@ namespace Emberfall.Core.Combat
                 {
                     CombatUnit dealer = FindUnit(sourceId);
                     if (dealer != null) dealer.DamagedThisRound.Add(target.Id);
+                    // The same fact from the victim's side, kept per attacker so "somebody OTHER
+                    // than me hit this" can be asked at all. A sourceless tick - a Burn whose
+                    // applier is long dead - writes nothing, matching LastDamagedRound's own rule
+                    // that a blow needs a body behind it to be attributable.
+                    target.LastDamagedRoundBy[sourceId] = _round;
                 }
 
                 // What actually came off the bar, for EffectKind.EchoDamage to repeat a fraction
@@ -4950,8 +5125,11 @@ namespace Emberfall.Core.Combat
                 // And separately, that an ally has dropped low. A distinct question from being hit
                 // at all - a chip hit on a full bar is not what "when an ally falls below 35%" is
                 // asking about - so it is its own trigger rather than a condition on that one. The
-                // watcher's OWN Threshold decides how low counts, read where every other threshold
-                // passive reads it.
+                // watcher's OWN Threshold decides how low counts, read in TriggerPassive where
+                // every other threshold passive reads it, against the pair of readings carried in
+                // _thresholdCrossedFrom. Both of those were claims this comment made and the code
+                // did not: the broadcast went out on EVERY point of damage, whatever the watcher's
+                // Threshold said and however long the victim had already been below it.
                 {
                     CombatUnit prevSubject = _broadcastSubject;
                     CombatUnit prevVictim = _broadcastVictim;
@@ -4959,14 +5137,17 @@ namespace Emberfall.Core.Combat
                     _broadcastVictim = target;
                     int prevAhtSrc = _broadcastSourceId;
                     _broadcastSourceId = sourceId;
+                    float prevCrossAht = _thresholdCrossedFrom;
+                    _thresholdCrossedFrom = hpRatioBeforeBlow;
                     BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyHpBelowThreshold, 0, target);
+                    _thresholdCrossedFrom = prevCrossAht;
                     _broadcastSourceId = prevAhtSrc;
                     _broadcastSubject = prevSubject;
                     _broadcastVictim = prevVictim;
                 }
 
                 // Mirrored from the victim's side to the attacker's: that an enemy dropped below
-                // threshold. Same trigger shape, other audience.
+                // threshold. Same trigger shape, same crossing rule, other audience.
                 {
                     CombatUnit prevSubject = _broadcastSubject;
                     CombatUnit prevVictim = _broadcastVictim;
@@ -4974,7 +5155,10 @@ namespace Emberfall.Core.Combat
                     _broadcastVictim = target;
                     int prevEhtSrc = _broadcastSourceId;
                     _broadcastSourceId = sourceId;
+                    float prevCrossEht = _thresholdCrossedFrom;
+                    _thresholdCrossedFrom = hpRatioBeforeBlow;
                     BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyHpBelowThreshold, 0, null);
+                    _thresholdCrossedFrom = prevCrossEht;
                     _broadcastSourceId = prevEhtSrc;
                     _broadcastSubject = prevSubject;
                     _broadcastVictim = prevVictim;
@@ -5582,6 +5766,31 @@ namespace Emberfall.Core.Combat
                     if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
                     if (!LimitAllows(owner, i, passive)) continue;
                     if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
+
+                    // The ally/enemy pair of the line above, asked of the VICTIM rather than of the
+                    // watcher, and asked as a CROSSING rather than as a state.
+                    //
+                    // Neither of these read a Threshold at all before this. "When an ally falls
+                    // below 35% HP" fired on every point of damage any ally took at any HP, which
+                    // is a different sentence: it made Edrin's Still Here a once-per-round free
+                    // attack off the first scratch of the round, and Velis's Nothing Held Back a
+                    // permanent aura. Both now wait for the bar to actually cross the line.
+                    //
+                    // ONCE PER CROSSING falls out of the two readings rather than being counted:
+                    // strictly above the line before the blow, at or below it after. The twentieth
+                    // chip hit on a body that has been at 10% all fight was never a crossing, so
+                    // nothing has to remember that the first one was. A heal back over the line
+                    // re-arms it by the same arithmetic - a unit that recovered and fell again fell
+                    // again - and no bookkeeping has to be cleared for that to be true.
+                    //
+                    // Inclusive at the boundary, matching OnHpBelowThreshold one line up.
+                    if (trigger == PassiveTrigger.OnAllyHpBelowThreshold
+                        || trigger == PassiveTrigger.OnEnemyHpBelowThreshold)
+                    {
+                        if (_broadcastVictim == null) continue;
+                        if (_broadcastVictim.HpRatio > passive.Threshold) continue;
+                        if (_thresholdCrossedFrom <= passive.Threshold) continue;
+                    }
                     if (trigger == PassiveTrigger.OnTurnDebtThreshold && _thresholdUnit != null)
                     {
                         float debtStored = 0f;
@@ -5907,9 +6116,12 @@ namespace Emberfall.Core.Combat
             /// both were this operation with the decision made by the engine. They are gone, and
             /// this is the authored version - the effect makes the decision.
             ///
-            /// A unit that has already acted is not in the tail and is not moved, which is both the
-            /// termination argument for the round loop and the reason the "advances my own next
-            /// turn" family in the roster is a Speed buff rather than this.
+            /// A unit that has already acted is not in the tail and is not moved THIS round, which
+            /// is the termination argument for the round loop and the reason the "advances my own
+            /// next turn" family in the roster is a Speed buff rather than this. A DELAY aimed at
+            /// such a unit is carried to the top of the next round instead of being dropped - see
+            /// CarriedDelay - and that carry adds no entry to the live order either, so the
+            /// termination argument is untouched.
             ///
             /// Draws nothing from _rng, so a shift cannot desync a seeded replay.
             /// </summary>
@@ -5924,10 +6136,27 @@ namespace Emberfall.Core.Combat
                 if (_order == null || target == null || !target.Alive || fraction == 0f) return;
 
                 int first = _orderIndex + 1;
-                if (first >= _order.Count) return;
+                int at = first < _order.Count ? _order.IndexOf(target, first) : -1;
 
-                int at = _order.IndexOf(target, first);
-                if (at < 0) return;
+                // NOT IN THE REMAINING ORDER, which is a unit that has already acted this round.
+                // A delay carries to its next turn rather than evaporating - see CarriedDelay for
+                // why, and for why an advance does not.
+                if (at < 0)
+                {
+                    if (fraction < 0f)
+                    {
+                        CarriedDelay carry = new CarriedDelay();
+                        carry.Source = source;
+                        carry.Target = target;
+                        carry.Fraction = fraction;
+                        carry.BanksAs = banksAs;
+                        carry.Cap = cap;
+                        carry.Rate = rate;
+                        carry.DebtDuration = debtDuration;
+                        _carriedDelays.Add(carry);
+                    }
+                    return;
+                }
 
                 int tail = _order.Count - first;
                 float magnitude = fraction < 0f ? -fraction : fraction;

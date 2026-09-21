@@ -326,8 +326,16 @@ namespace Emberfall.Core.Data
         /// and a mirrored loop in ApplyHealValue handles them. Stored on the StatusInstance.</summary>
         public bool LedgerBankHeals;
 
-        /// <summary>"attack" (default) or "maxHp". Picks the basis for StoredCap scaling at Ledger
-        /// apply time: source.EffectiveAttack * StoredCap vs source.MaxHp * StoredCap.</summary>
+        /// <summary>
+        /// "attack" (default) or "maxHp". Picks the basis for StoredCap scaling at Ledger apply
+        /// time, AND with it which body the basis is read from: "attack" is the APPLIER's
+        /// EffectiveAttack, "maxHp" is the HOLDER's EffectiveMaxHp.
+        ///
+        /// That asymmetry is the authored texts rather than an oversight. "Records up to 80% of my
+        /// Attack" is the applier's number written onto whoever it lands on; "each ally can record
+        /// up to 8% of their Max HP" is one effect writing five different caps, one per bar. Read
+        /// from the applier for both, a Bulwark's Max HP sized a Marksman's ledger.
+        /// </summary>
         public string StoredCapBasis = "attack";
 
         /// <summary>When true, a Ledger's auto-release on expiry heals the holder (or the

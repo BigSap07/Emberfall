@@ -345,6 +345,20 @@ namespace Emberfall.Core.Combat
         public int LastHealedRound;
         public int LastShieldedRound;
 
+        /// <summary>
+        /// The most recent round this unit was damaged in, BY ATTACKER: attacker id to round.
+        ///
+        /// The per-attacker form of LastDamagedRound, and it has to be per-attacker because the
+        /// question it answers - "did somebody OTHER than me hit this since my turn" - is asked
+        /// relative to a caster and cannot be answered by a single scalar. A body hit by an ally
+        /// and then by Hale has a LastDamagedRound that names this round and says nothing about
+        /// which of the two put it there.
+        ///
+        /// Never cleared: a round number is already the comparison, so an entry from six rounds
+        /// ago answers false without having to be swept. At most one entry per unit in the fight.
+        /// </summary>
+        public readonly Dictionary<int, int> LastDamagedRoundBy = new Dictionary<int, int>();
+
         /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
         /// Two flags rather than a list: no description asks about more than the last two.</summary>
         public bool LastActionWasActive;
