@@ -4164,25 +4164,75 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "mika_the_salvage_pilot_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "mika_reclaimed_round",
+        "name": "Reclaimed Round",
+        "description": "Deals 165% Attack damage and applies Loose Parts for 2 rounds. The next ally to hit it gains 14 Energy.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.65
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "LinkUnits",
+            "target": "Self",
+            "duration": 2,
+            "secondaryTarget": "LastTarget"
           }
         ]
       },
       "active": {
-        "id": "mika_the_salvage_pilot_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "mika_parts_exchange",
+        "name": "Parts Exchange",
         "energyCost": 100,
+        "description": "Deals 295% Attack damage to enemies with Loose Parts, then moves Loose Parts to the highest-HP enemy for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "power": 2.95
+          },
+          {
+            "kind": "TransferStatus",
+            "target": "EnemyWithMyMark",
+            "secondaryTarget": "HighestHpEnemy",
+            "status": "Mark"
+          },
+          {
+            "kind": "LinkUnits",
+            "target": "Self",
+            "duration": 2,
+            "secondaryTarget": "HighestHpEnemy"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "mika_find_a_use",
+        "name": "Find a Use",
+        "description": "The first time each round an ally hits an enemy carrying Loose Parts, that ally gains 14 Energy and Mika gains a Shield equal to 45% Attack for 1 round.",
+        "trigger": "OnLinkedUnitHit",
+        "triggerSourceIsAlly": true,
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "BroadcastSource",
+            "flat": 14
+          },
+          {
+            "kind": "Shield",
+            "target": "Self",
+            "duration": 1,
+            "power": 0.45
           }
         ]
       }
@@ -4225,25 +4275,68 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "rhys_the_fence_walker_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "rhys_crossing_cut",
+        "name": "Crossing Cut",
+        "description": "Deals 145% Attack damage and gives the lowest-HP ally 45% of the HP they are missing, out of Rhys’s own, if they are below 50% HP.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.45
+          },
+          {
+            "kind": "HpTransfer",
+            "target": "LowestHpAlly",
+            "condition": "HpBelow",
+            "conditionOn": "Target",
+            "conditionValue": 0.5,
+            "targetMissingHpRatio": 0.45
           }
         ]
       },
       "active": {
-        "id": "rhys_the_fence_walker_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "rhys_change_sides",
+        "name": "Change Sides",
         "energyCost": 100,
+        "description": "Deals 270% Attack damage and swaps Rhys’s buffs with the target’s debuffs for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "FrontEnemy",
+            "power": 2.7
+          },
+          {
+            "kind": "MoveBuffs",
+            "target": "Self",
+            "hits": 3,
+            "moveDuration": 2,
+            "secondaryTarget": "LastTarget"
+          },
+          {
+            "kind": "MoveDebuffs",
+            "target": "LastTarget",
+            "hits": 3,
+            "moveDuration": 2,
+            "secondaryTarget": "Self"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "rhys_shared_peril",
+        "name": "Shared Peril",
+        "description": "The first time each round an enemy strikes an ally, Rhys stands in front of that ally for the rest of the round and takes 30% of every hit aimed at them.",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastVictim",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 1,
+            "magnitude": 0.3,
+            "status": "Covered"
           }
         ]
       }
@@ -4286,25 +4379,57 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "siofra_the_turncoat_oracle_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "siofra_bad_omen",
+        "name": "Bad Omen",
+        "description": "Deals 105% Attack damage and changes one buff on the target into its matching debuff, for whatever the buff had left.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.05
+          },
+          {
+            "kind": "InvertStatus",
+            "target": "LastTarget",
+            "hits": 1
           }
         ]
       },
       "active": {
-        "id": "siofra_the_turncoat_oracle_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "siofra_forecast_reversed",
+        "name": "Forecast Reversed",
         "energyCost": 100,
+        "description": "Deals 190% Attack damage to all enemies, reverses one modifier on each, and every enemy reversed loses 10 Energy.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.9
+          },
+          {
+            "kind": "InvertStatus",
+            "target": "AllEnemies",
+            "hits": 1
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "AllEnemies",
+            "flat": -10
+          }
+        ]
+      },
+      "passive1": {
+        "id": "siofra_prediction_cost",
+        "name": "Prediction Cost",
+        "description": "Whenever Siofra turns a buff into a debuff, that target loses 10 Energy, once per round.",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "flat": -10
           }
         ]
       }
@@ -4347,28 +4472,82 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "vanno_the_detour_king_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "vanno_wrong_turn",
+        "name": "Wrong Turn",
+        "description": "Deals 290% Attack damage and applies Misdirected for 2 rounds. The first buff a Misdirected enemy gains each round goes to one of Vanno’s allies instead.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.9
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       },
       "active": {
-        "id": "vanno_the_detour_king_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "vanno_road_not_taken",
+        "name": "Road Not Taken",
         "energyCost": 100,
+        "description": "Deals 360% Attack damage to a Misdirected enemy and moves its debuffs to the highest-HP enemy for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 3.6
+          },
+          {
+            "kind": "MoveDebuffs",
+            "target": "EnemyWithMyMark",
+            "hits": 3,
+            "moveDuration": 2,
+            "secondaryTarget": "HighestHpEnemy"
           }
         ]
-      }
+      },
+      "passive1": {
+        "id": "vanno_exit_unmarked",
+        "name": "Exit Unmarked",
+        "description": "When a Misdirected enemy falls, Vanno cannot be targeted until his next turn.",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "Defeated",
+            "duration": 1,
+            "status": "Stealth"
+          }
+        ]
+      },
+      "passives": [
+        {
+          "id": "vanno_wrong_turn_misdirect",
+          "name": "Wrong Turn",
+          "description": "The misdirection itself: a buff landing on a Misdirected enemy is taken off it and given to a random ally of Vanno’s, once per round.",
+          "trigger": "OnEnemyBuffGained",
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "effects": [
+            {
+              "kind": "MoveBuffs",
+              "target": "BroadcastSubject",
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject",
+              "hits": 1,
+              "moveDuration": 2,
+              "secondaryTarget": "RandomAlly"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "bren_the_extra_measure",

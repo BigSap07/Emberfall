@@ -15065,7 +15065,11 @@ namespace Emberfall.DevHarness
             Check(autoRelease.Count > 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
             Check(mitigates.Count == 0, "no shipped effect uses LedgerMitigates" + Detail(mitigates));
             Check(bankLimit.Count > 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
-            Check(hpTransfer.Count == 0, "no shipped effect uses HpTransfer" + Detail(hpTransfer));
+            // FLIPPED by the second 4-star batch. Rhys's Crossing Cut is the first shipped
+            // effect to move HP between two bodies, so the tripwire has fired once and is now
+            // the opposite claim - the mechanic IS reached, by this named ability, and this goes
+            // red the day that stops being true. See Used() for why that is not a deletion.
+            Check(hpTransfer.Count > 0, "shipped content uses HpTransfer" + Used(hpTransfer));
             Check(shieldTransfer.Count > 0, "no shipped effect uses ShieldTransfer" + Detail(shieldTransfer));
             Check(ledgerIncrement.Count > 0, "no shipped effect uses LedgerIncrement" + Detail(ledgerIncrement));
             Check(redirectLethal.Count > 0, "no shipped effect uses RedirectLethal" + Detail(redirectLethal));
@@ -21775,7 +21779,9 @@ namespace Emberfall.DevHarness
                                   "kest_the_bridgebreaker", "orelle_the_fever_warden",
                                   "tavia_the_signal_huntress",
                                   // The second 4-star batch, same reason.
-                                  "celen_the_open_hand" };
+                                  "celen_the_open_hand", "mika_the_salvage_pilot",
+                                  "rhys_the_fence_walker", "siofra_the_turncoat_oracle",
+                                  "vanno_the_detour_king" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

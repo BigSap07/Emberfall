@@ -122,6 +122,11 @@ merek_the_sequence_thief|2|06d0abdf3aa54e13
 merek_the_sequence_thief|3|f1e2328a5e488831
 merek_the_sequence_thief|4|7906ac5f2e950c41
 merek_the_sequence_thief|5|c49bfa49a2045201
+mika_the_salvage_pilot|1|2fef02dbf369673b
+mika_the_salvage_pilot|2|dc38b0e66995ff5c
+mika_the_salvage_pilot|3|1969afcccdb9f04f
+mika_the_salvage_pilot|4|d46107a9889df58f
+mika_the_salvage_pilot|5|84ac9c367c5c74b8
 mireth_the_erased_name|1|fa2ac2bc6fe9db78
 mireth_the_erased_name|2|d7ad0dead63acf30
 mireth_the_erased_name|3|44720a2b48afb1df
@@ -152,6 +157,11 @@ rheia_the_revision_scribe|2|fb95815953873e31
 rheia_the_revision_scribe|3|21e912b43fc91636
 rheia_the_revision_scribe|4|083655e30695c56e
 rheia_the_revision_scribe|5|fbaf547224c1dab5
+rhys_the_fence_walker|1|a009c234356ffa30
+rhys_the_fence_walker|2|bfe58702c3a7a207
+rhys_the_fence_walker|3|66c852657f46f08c
+rhys_the_fence_walker|4|2790d5ea24ff518d
+rhys_the_fence_walker|5|4b2f5b52d3803e21
 rovan_the_adaptive_commander|1|a28f54b84815db58
 rovan_the_adaptive_commander|2|ba0039c06fd7b4f7
 rovan_the_adaptive_commander|3|1da7e699aff770fe
@@ -162,6 +172,11 @@ seraphine_the_closed_volume|2|22fef8be39acf444
 seraphine_the_closed_volume|3|85bbd39654e865e4
 seraphine_the_closed_volume|4|254870a51d6f26db
 seraphine_the_closed_volume|5|9dd88f1483686c71
+siofra_the_turncoat_oracle|1|49f51e990969dcc3
+siofra_the_turncoat_oracle|2|36f89916a40db56f
+siofra_the_turncoat_oracle|3|f87adf1d442dcd18
+siofra_the_turncoat_oracle|4|89b1a91d6fa89b26
+siofra_the_turncoat_oracle|5|5d292fe57b7477c7
 sylven_the_unfading_blade|1|579d0fcaafd9503c
 sylven_the_unfading_blade|2|a6613247faf80386
 sylven_the_unfading_blade|3|2e3fe62cd6090420
@@ -182,6 +197,11 @@ vaelis_the_unfixed_blade|2|8d458e65e5af1006
 vaelis_the_unfixed_blade|3|02a325640f3c658a
 vaelis_the_unfixed_blade|4|12409441d041d49c
 vaelis_the_unfixed_blade|5|b521221a7caf424a
+vanno_the_detour_king|1|d69f6caa993ce864
+vanno_the_detour_king|2|b3381bdb55a34908
+vanno_the_detour_king|3|f0ad3cbb43c6bfd1
+vanno_the_detour_king|4|258e2f39fdf3a3fe
+vanno_the_detour_king|5|d3898771952f3d3d
 velis_the_hollow_vow|1|7aaa8b2c9aac3f52
 velis_the_hollow_vow|2|75187bbb7fc2106f
 velis_the_hollow_vow|3|ea440602f5b01c6c
