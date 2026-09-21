@@ -19718,11 +19718,13 @@ namespace Emberfall.DevHarness
 
             // WHAT THE RED ABOVE DOES AND DOES NOT CLAIM, said here rather than left to be
             // inferred. "Never observed doing anything HERE" is a statement about this arena, and
-            // 26 of the talents it names are proved to work in THE DARK TALENTS above, each in a
-            // fight built to open its own gate. What is left in this list after that is the
-            // honest measure of what one shared enemy line cannot raise.
-            Line("  [note] 26 of the talents named above are proved in THE DARK TALENTS section,"
-                 + " each in an arena built to raise its own gate. This red is about THIS arena.");
+            // 23 of the 27 talents it names are proved to work in THE DARK TALENTS above, each in
+            // a fight built to open its own gate. The four it does not cover are named in that
+            // section's own comment. What is left in this list after that is the honest measure
+            // of what one shared enemy line cannot raise.
+            Line("  [note] 23 of the 27 talents named above are proved in THE DARK TALENTS"
+                 + " section, each in an arena built to raise its own gate; the four it cannot"
+                 + " reach are named there. This red is about THIS arena.");
 
             // Only among talents that DO something. Two dead talents being identical is the dead
             // check's finding, not this one's, and counting it twice would make this red decorative.
