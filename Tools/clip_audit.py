@@ -129,6 +129,7 @@ def pacing_report():
 
     speeds = {}
     seeded = []
+    hand = 0
     own = 0
     attacks = 0
     stray = []
@@ -143,6 +144,8 @@ def pacing_report():
                     seeded.append("%s %s" % (hid, clip))
                 else:
                     own += 1
+                if a.get("impactSetBy") == "hand":
+                    hand += 1
             elif "impactFraction" in a:
                 stray.append("%s %s" % (hid, clip))
 
@@ -154,7 +157,8 @@ def pacing_report():
                  "" if len(who) > 6 else ": " + ", ".join(w.split("_")[0] for w in who)))
 
     print("")
-    print("attack clips with their own measured impact: %d of %d" % (own, attacks))
+    print("attack clips with their own impact: %d of %d   (%d set by hand off a contact sheet)"
+          % (own, attacks, hand))
     if seeded:
         print("  still on the seeded 0.5 (or absent): " + ", ".join(seeded))
     if stray:

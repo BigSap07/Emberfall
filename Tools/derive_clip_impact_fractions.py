@@ -128,6 +128,10 @@ def main():
         sidecar = json.load(io.open(path, encoding="utf-8"))
         anim = sidecar.get("defaultAnimation") or {}
         had = anim.get("impactFraction")
+        # A value a person chose off the contact sheet outranks anything this can measure, and
+        # says so in the file. Not even --force overrides it: the whole point of the mark is that
+        # re-running the deriver after a new delivery cannot silently undo a review.
+        by_hand = anim.get("impactSetBy") == "hand"
 
         value, frame, width = derive(png, sidecar)
         agrees = had is not None and abs(float(had) - value) < 0.0015
@@ -136,7 +140,8 @@ def main():
         elif agrees:
             reproduced += 1
 
-        should_write = write and (force or had is None or abs(float(had) - 0.5) < 1e-9)
+        should_write = (write and not by_hand
+                        and (force or had is None or abs(float(had) - 0.5) < 1e-9))
         if should_write:
             anim["impactFraction"] = value
             sidecar["defaultAnimation"] = anim
@@ -145,7 +150,8 @@ def main():
             rewritten += 1
 
         rows.append((hero, clip, had, value, frame, width,
-                     "same" if agrees else ("none" if had is None else "DIFFERS")))
+                     "HAND" if by_hand
+                     else ("same" if agrees else ("none" if had is None else "DIFFERS"))))
 
     print("%-32s %-7s %-8s %-8s %-6s %-6s %s"
           % ("hero", "clip", "was", "derived", "frame", "width", ""))
@@ -153,9 +159,11 @@ def main():
         print("%-32s %-7s %-8s %-8s %-6s %-6s %s"
               % (r[0][:32], r[1], "-" if r[2] is None else r[2], r[3], r[4], r[5], r[6]))
     print("")
-    print("%d clip(s): %d reproduce the committed value, %d had none, %d differ%s"
-          % (len(rows), reproduced, missing,
-             len(rows) - reproduced - missing,
+    hand = sum(1 for r in rows if r[6] == "HAND")
+    print("%d clip(s): %d hand-set and left alone, %d reproduce the committed value, "
+          "%d had none, %d differ%s"
+          % (len(rows), hand, reproduced, missing,
+             len(rows) - reproduced - missing - hand,
              ("; %d written" % rewritten) if rewritten else ""))
 
 

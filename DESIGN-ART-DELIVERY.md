@@ -250,6 +250,14 @@ One consequence for art already delivered: the three enemy defs that carry sprit
 is what this section has always said would happen. If any of them was drawn pre-compensated, it
 will now read reversed and wants a look.
 
+**State the strike frame for every attack clip.** One frame number per basic, basic2 and skill -
+the frame where the weapon connects or the effect is released - in the delivery manifest beside
+that clip's frame range. The game hangs the damage number, the flash and the hit reaction off it,
+and it is not derivable: it has been guessed from the art by measuring each frame's width, which
+is right for a side swing and wrong for an overhead one, where the raised weapon is widest at the
+top of the windup. Sixteen clips had to be set by hand off contact sheets because of it. A single
+integer per clip from the person who drew it removes the guess.
+
 ## 7. What the game does to the art at runtime
 
 The character isn't static once it's in a battle. Three effects apply directly to your image's

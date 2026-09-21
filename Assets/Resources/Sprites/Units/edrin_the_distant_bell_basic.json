@@ -10,7 +10,8 @@
     "end": 71,
     "fps": 30,
     "loop": true,
-    "impactFraction": 0.901,
-    "footFraction": 0.223
+    "impactFraction": 0.451,
+    "footFraction": 0.223,
+    "impactSetBy": "hand"
   }
 }
