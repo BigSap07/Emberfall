@@ -38,6 +38,12 @@ namespace Emberfall.EditorTools
         private const string PendingKey = "HubVerification.Pending";
         private const string OutputNameKey = "HubVerification.OutputName";
 
+        /// <summary>Which of the Hub's layers to open before the shot, and whether to pretend the
+        /// device has a notch. Both are parsed out of the trigger file and carried across the
+        /// domain reload that entering Play Mode causes, like everything else here.</summary>
+        private const string StateNameKey = "HubVerification.State";
+        private const string SafeAreaKey = "HubVerification.SafeArea";
+
         private const string TriggerPath = "Tools/Screenshots/.hub-trigger";
 
         /// <summary>Deliberately unlike anything the live install uses - this project ships as
@@ -70,15 +76,53 @@ namespace Emberfall.EditorTools
             string requested = File.ReadAllText(path).Trim().ToLowerInvariant();
             File.Delete(path);
 
-            // "<name>" or "<name>@<width>x<height>". The optional size pins the Game view before the
-            // run, so a capture is taken at a chosen aspect instead of whatever the editor window
-            // was last dragged to. Without it the logical canvas size silently follows the window -
-            // see GameViewSize for why that quietly invalidates a layout check.
+            // "<name>[@<width>x<height>][#<state>][#notch]".
+            //
+            // The optional size pins the Game view before the run, so a capture is taken at a
+            // chosen aspect instead of whatever the editor window was last dragged to. Without it
+            // the logical canvas size silently follows the window - see GameViewSize for why that
+            // quietly invalidates a layout check.
+            //
+            // A #state opens one of the Hub's layers before the shot - profile, account, settings,
+            // guild, claim, menu - because "nothing overlaps" is only proven for a state that was
+            // actually captured, and three of those layers cover most of the screen. #notch
+            // simulates a notched phone's safe area, which is the only way to check the inset
+            // without owning one.
+            string state = "";
+            bool notch = false;
+            string sizePart = "";
+
             int at = requested.IndexOf('@');
             if (at > 0)
             {
-                string size = requested.Substring(at + 1);
+                sizePart = requested.Substring(at + 1);
                 requested = requested.Substring(0, at);
+            }
+
+            // The tokens may ride on either half, so both are scanned. The name keeps only what is
+            // in front of its first '#', because the name becomes a FILE NAME and a state is not
+            // part of one.
+            string[] nameTokens = requested.Split('#');
+            string[] sizeTokens = sizePart.Split('#');
+            requested = nameTokens[0];
+            sizePart = sizeTokens[0];
+            for (int i = 1; i < nameTokens.Length; i++)
+            {
+                if (nameTokens[i] == "notch") notch = true;
+                else if (nameTokens[i].Length > 0) state = nameTokens[i];
+            }
+            for (int i = 1; i < sizeTokens.Length; i++)
+            {
+                if (sizeTokens[i] == "notch") notch = true;
+                else if (sizeTokens[i].Length > 0) state = sizeTokens[i];
+            }
+
+            SessionState.SetString(StateNameKey, state);
+            SessionState.SetString(SafeAreaKey, "");
+
+            if (sizePart.Length > 0)
+            {
+                string size = sizePart;
                 int by = size.IndexOf('x');
                 int w, h;
                 if (by > 0 && int.TryParse(size.Substring(0, by), out w) && int.TryParse(size.Substring(by + 1), out h))
@@ -88,6 +132,15 @@ namespace Emberfall.EditorTools
                         Debug.LogError("HubVerification: refusing to capture - the Game view could not be set to "
                                      + w + "x" + h + ", so the result would not be at the requested aspect.");
                         return;
+                    }
+
+                    if (notch)
+                    {
+                        // A 44pt cutout on each short edge and a 21pt home indicator, at 3x, which
+                        // is what a 2532x1170 phone reports in landscape. Symmetric on purpose: a
+                        // device can be held either way up, so a layout that only clears the side
+                        // the notch happens to be on today is not cleared at all.
+                        SessionState.SetString(SafeAreaKey, "132," + 63 + "," + (w - 264) + "," + (h - 63));
                     }
                 }
             }
@@ -134,6 +187,12 @@ namespace Emberfall.EditorTools
                     + "/" + SessionState.GetString(OrigProductKey, "?") + "' to '"
                     + ScratchCompany + "/" + ScratchProduct + "' before entering Play Mode.");
 
+            // The scratch profile is always a NEW account, so the first-run sequence fires on
+            // every capture and puts a welcome card over the screen being photographed. Suppressed
+            // for the run and cleared again in PumpRestore, next to the identity restore, so a
+            // crashed run cannot leave it set.
+            EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
+
             try
             {
                 ClearScratchSave();
@@ -169,6 +228,9 @@ namespace Emberfall.EditorTools
 
         private static void Stop()
         {
+            SafeAreaRect.Simulated = new Rect(0f, 0f, 0f, 0f);
+            SessionState.SetString(SafeAreaKey, "");
+            SessionState.SetString(StateNameKey, "");
             SessionState.SetBool(ActiveKey, false);
             SessionState.SetBool(RestoreKey, true);
             EditorApplication.isPlaying = false;
@@ -187,6 +249,7 @@ namespace Emberfall.EditorTools
             PlayerSettings.companyName = company;
             PlayerSettings.productName = product;
             AssetDatabase.SaveAssets();
+            EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, false);
             Debug.Log("HubVerification: identity restored to '" + company + "/" + product + "'.");
         }
 
@@ -222,6 +285,46 @@ namespace Emberfall.EditorTools
                 PlayerPrefs.Save();
                 Debug.Log("HubVerification: deleted a leftover scratch save mirrored in PlayerPrefs.");
             }
+        }
+
+        /// <summary>
+        /// Pretends the device has a notch, for the one capture that has to prove the safe-area
+        /// inset does something. Nothing but this tool ever writes SafeAreaRect.Simulated, it is
+        /// compiled out of any build, and Stop clears it - so a simulated notch cannot leak into
+        /// an ordinary editor session, let alone a player.
+        /// </summary>
+        private static void ApplySimulatedSafeArea()
+        {
+            string packed = SessionState.GetString(SafeAreaKey, "");
+            if (string.IsNullOrEmpty(packed)) { SafeAreaRect.Simulated = new Rect(0f, 0f, 0f, 0f); return; }
+
+            string[] parts = packed.Split(',');
+            float x, y, w, h;
+            if (parts.Length != 4
+                || !float.TryParse(parts[0], out x) || !float.TryParse(parts[1], out y)
+                || !float.TryParse(parts[2], out w) || !float.TryParse(parts[3], out h))
+            {
+                Debug.LogError("HubVerification: could not read the simulated safe area '" + packed
+                             + "', so the capture would silently be an ordinary one. Not applied.");
+                return;
+            }
+
+            SafeAreaRect.Simulated = new Rect(x, y, w, h);
+            Debug.Log("HubVerification: simulating a safe area of " + SafeAreaRect.Simulated
+                    + " against a " + Screen.width + "x" + Screen.height + " screen.");
+        }
+
+        /// <summary>Opens the Hub layer the trigger asked for, if it asked for one.</summary>
+        private static void OpenRequestedLayer()
+        {
+            string state = SessionState.GetString(StateNameKey, "");
+            if (string.IsNullOrEmpty(state)) return;
+
+            GameApp app = GameApp.Instance;
+            if (app == null || app.Router == null || app.Router.MainMenu == null) return;
+
+            app.Router.MainMenu.OpenLayerForCapture(state);
+            Debug.Log("HubVerification: opened the '" + state + "' layer for this capture.");
         }
 
         private static void ForceGameViewRepaint()
@@ -265,9 +368,17 @@ namespace Emberfall.EditorTools
                 // boot default, so this tool keeps working if that default ever changes.
                 GameApp.Instance.Router.Show(ScreenId.MainMenu);
                 Debug.Log("HubVerification: on the Hub screen.");
+
+                ApplySimulatedSafeArea();
+
                 SessionState.SetInt(StageKey, 1);
                 stage = 1;
             }
+
+            // The layer opens a few frames before the shot rather than in the same frame: a panel
+            // reparents a screen into itself and that screen's OnShow may start a coroutine, so a
+            // capture taken immediately would photograph a half-attached sheet.
+            if (stage == 1 && frame == 30) OpenRequestedLayer();
 
             if (stage == 1 && frame == 40) Canvas.ForceUpdateCanvases();
 

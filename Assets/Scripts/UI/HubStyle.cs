@@ -153,6 +153,93 @@ namespace Emberfall.UI
         public const float PanelPadX = 22f;
         public const float PanelPadY = 16f;
 
+        // ------------------------------------------------------------------ the HUD frame
+        //
+        // The Hub is four layers now - map, HUD frame, panels, popups - and everything below is
+        // the frame's half of that. It hugs the edges by construction: the only numbers here are
+        // a distance from an edge, a size, or a gap, and no element is placed anywhere else.
+
+        /// <summary>
+        /// The smallest a tap target is allowed to be, in logical canvas units, and the number is
+        /// derived rather than picked.
+        ///
+        /// The canvas scales with ScreenMatchMode.MatchWidthOrHeight at 0.5 against a 1920x1080
+        /// reference, so the logical canvas is the geometric blend of the two ratios. On the
+        /// narrowest phone this project targets - 2400x1080, 20:9 - that puts the logical canvas
+        /// at about 2147x966. The device itself is 1080 physical pixels tall at a density of
+        /// about 2.75, which is roughly 393dp, so one logical unit is about 0.41dp and the 44dp
+        /// floor lands at about 108 logical units. Every interactive rect in the frame is at
+        /// least this on both axes; where the ART is smaller than that (the rail's discs are 76)
+        /// the button's hit rect is still TouchMin and the disc is centred inside it.
+        /// </summary>
+        public const float TouchMin = 108f;
+
+        /// <summary>Distance from the safe-area edge to the nearest HUD element.</summary>
+        public const float HudEdge = UITheme.ScreenPadding;
+
+        /// <summary>
+        /// WHICH EDGE THE RAIL HUGS, and the one switch on this screen that is a judgement rather
+        /// than a measurement.
+        ///
+        /// It is on the RIGHT, as asked for. What a capture then shows is the cost: the painting
+        /// puts the Proving's gatehouse hard against the right edge of the map - it spans roughly
+        /// map-x 0.82 to 0.97 - and the rail's discs land on its right tower at every supported
+        /// aspect. No marker and no label is covered (HubMarkerClamp reserves the rail's column
+        /// for exactly that reason) and the gate's own door at 0.915 stays clear, but the tower
+        /// behind the rail is painted architecture with chrome on it.
+        ///
+        /// Flipping this to false moves the whole rail, its menu and the marker clamp's reserved
+        /// column to the LEFT edge, where the painting has a rock face and no structure until the
+        /// barracks at about 0.08. That is the one placement that satisfies "no HUD element covers
+        /// a building" outright. It is left as a switch rather than taken, because a right-hand
+        /// rail is what the brief asks for and which of the two rules wins is not this file's
+        /// call.
+        ///
+        /// static readonly rather than const deliberately: a const bool folds at compile time and
+        /// turns the branch it does not take into an unreachable-code warning on every build.
+        /// </summary>
+        public static readonly bool RailOnRightEdge = true;
+
+        /// <summary>The right-edge rail: a visible disc inside a TouchMin hit rect.</summary>
+        public const float RailDisc = 76f;
+        public const float RailGap = 14f;
+        /// <summary>Where the rail starts, measured from the top of the safe area: clear of the
+        /// currency pills, which end at (TopBarHeight + PillHeight) / 2.</summary>
+        public const float RailTop = 106f;
+
+        /// <summary>The pending-request dot on a rail button.</summary>
+        public const float BadgeDot = 36f;
+
+        /// <summary>The bottom navigation bar: five cells, centred, one row.</summary>
+        public const float NavIcon = 88f;
+        public const float NavCellWidth = 168f;
+        public const float NavCellHeight = 128f;
+        public const float NavCellGap = 12f;
+        /// <summary>Distance from the bottom of the safe area to the bottom of the nav row. This
+        /// edge is where phones put gesture bars, so it is deliberately larger than HudEdge.</summary>
+        public const float NavBottomMargin = 20f;
+        /// <summary>Everything stacked above the nav row measures from this one number.</summary>
+        public const float NavBarHeight = NavBottomMargin + NavCellHeight;
+
+        /// <summary>The idle chest and the bubble that hangs over it.</summary>
+        public const float ChestSize = TouchMin;
+        public const float ChestGlyphInset = 18f;
+        public const float BubbleWidth = 132f;
+        public const float BubbleHeight = 42f;
+        public const float BubbleLift = 8f;
+
+        /// <summary>A panel sheet and a popup plate: the two surfaces above the map.</summary>
+        public const int RadiusSheet = 22;
+        public const int RadiusPopup = 26;
+        public const float SheetHeaderHeight = 104f;
+        public const float TabHeight = 76f;
+        public const float TabGap = 10f;
+        public const float TabMinWidth = 200f;
+
+        /// <summary>How dark the map goes under an open panel or popup.</summary>
+        public const float PanelScrimAlpha = 0.72f;
+        public const float PopupScrimAlpha = 0.62f;
+
         // ------------------------------------------------------------------ shared components
 
         /// <summary>

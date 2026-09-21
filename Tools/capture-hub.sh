@@ -12,9 +12,15 @@
 # mtimes, so a touch changes nothing Unity acts on and permanently poisons the staleness check
 # below. Focusing the window is what actually makes the refresh run.
 #
-# Usage: Tools/capture-hub.sh [name] [WIDTHxHEIGHT]
-#   Tools/capture-hub.sh after              - capture at the Game view's current size
-#   Tools/capture-hub.sh a1080 1920x1080    - pin the Game view to 16:9 first
+# Usage: Tools/capture-hub.sh [name] [WIDTHxHEIGHT] [state[,notch]]
+#   Tools/capture-hub.sh after                              - the Game view's current size
+#   Tools/capture-hub.sh a1080 1920x1080                    - pin the Game view to 16:9 first
+#   Tools/capture-hub.sh a1080_profile 1920x1080 profile    - open a Hub layer before the shot
+#   Tools/capture-hub.sh a195_notch 2532x1170 ,notch        - simulate a notched safe area
+#
+# The state is one of the Hub's layers: profile, account, settings, guild, claim, menu. A layout
+# check that only ever photographs the bare Hub has not looked at three of the four layers the
+# screen is built from, which is where most of what can overlap actually lives.
 # Pin the size for any layout check. The logical canvas is a function of aspect, so an unpinned
 # capture only proves the layout works at whatever the editor window was last dragged to.
 set -euo pipefail
@@ -22,6 +28,7 @@ cd "$(dirname "$0")/.."
 
 WHICH="${1:-after}"
 SIZE="${2:-}"
+STATE="${3:-}"
 OUT="Tools/Screenshots/hub_${WHICH}.png"
 # BOTH assemblies. Runtime code compiles into Assembly-CSharp.dll and anything under
 # Assets/Editor into Assembly-CSharp-Editor.dll; checking only the first let an edited capture
@@ -50,6 +57,12 @@ for _ in $(seq 1 40); do
     echo "both assemblies are current"
     break
   fi
+  # Ask the editor to refresh from INSIDE itself rather than through the window manager.
+  # EditorApplication.update ticks unfocused, so RefreshOnDemand picks this up even when the
+  # window cannot be brought to the foreground - which is the ordinary case with two editors
+  # open, one per checkout. The focus attempt stays as a second route for an editor that
+  # predates that tool.
+  printf 'refresh' > Tools/Screenshots/.refresh-trigger
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools/focus-unity.ps1 >/dev/null 2>&1 || true
   sleep 5
 done
@@ -61,12 +74,19 @@ if [ -n "$(stale_report)" ]; then
 fi
 
 rm -f "$OUT"
+# The state rides on the trigger as #-separated tokens, which the editor side strips before the
+# name becomes a file name. "profile", "claim,notch" and ",notch" are all valid.
+TOKENS=""
+if [ -n "$STATE" ]; then
+  TOKENS=$(printf '#%s' $(echo "$STATE" | tr ',' ' '))
+fi
+
 if [ -n "$SIZE" ]; then
-  printf 'hub_%s@%s' "$WHICH" "$SIZE" > Tools/Screenshots/.hub-trigger
-  echo "triggered '$WHICH' capture at $SIZE..."
+  printf 'hub_%s@%s%s' "$WHICH" "$SIZE" "$TOKENS" > Tools/Screenshots/.hub-trigger
+  echo "triggered '$WHICH' capture at $SIZE ${STATE:+state=$STATE}..."
 else
-  printf 'hub_%s' "$WHICH" > Tools/Screenshots/.hub-trigger
-  echo "triggered '$WHICH' capture..."
+  printf 'hub_%s%s' "$WHICH" "$TOKENS" > Tools/Screenshots/.hub-trigger
+  echo "triggered '$WHICH' capture ${STATE:+state=$STATE}..."
 fi
 for _ in $(seq 1 60); do
   sleep 3

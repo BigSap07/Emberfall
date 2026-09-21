@@ -73,6 +73,12 @@ namespace Emberfall.UI
         private Action _onConfirm;
         private Action _onCancel;
 
+        /// <summary>This dialog's entry in the one back stack. A confirm answers the back gesture
+        /// the way its CANCEL button does, and a one-button notice answers it the way its only
+        /// button does - back is always the least destructive answer a dialog offers, and never a
+        /// fourth outcome the caller did not write.</summary>
+        private UiLayerStack.Layer _layer;
+
         public ModalPopup(RectTransform layer)
         {
             _root = UIBuilder.Node("Modal", layer);
@@ -140,16 +146,39 @@ namespace Emberfall.UI
             _root.SetAsLastSibling();
             _group.alpha = 1f;
             _panel.localScale = Vector3.one;
+
+            Game.GameApp app = Game.GameApp.Instance;
+            if (app != null && app.Layers != null && _layer == null)
+            {
+                bool hasCancel = _cancel.Root.gameObject.activeSelf;
+                _layer = app.Layers.Push("popup:modal",
+                                         hasCancel ? new Action(HandleCancel) : new Action(HandleConfirm));
+            }
         }
 
         public void Close()
         {
+            Forget();
             _root.gameObject.SetActive(false);
+        }
+
+        /// <summary>Drops this dialog's stack entry without running its close action again. Every
+        /// path out of the dialog goes through here first, so the one that came FROM the stack and
+        /// the ones that did not all leave the stack in the same state.</summary>
+        private void Forget()
+        {
+            UiLayerStack.Layer layer = _layer;
+            _layer = null;
+            if (layer == null) return;
+            Game.GameApp app = Game.GameApp.Instance;
+            if (app != null && app.Layers != null) app.Layers.Dismiss(layer);
         }
 
         private void HandleConfirm()
         {
             Action action = _onConfirm;
+            _onConfirm = null;
+            _onCancel = null;
             Close();
             if (action != null) action();
         }
@@ -157,6 +186,8 @@ namespace Emberfall.UI
         private void HandleCancel()
         {
             Action action = _onCancel;
+            _onConfirm = null;
+            _onCancel = null;
             Close();
             if (action != null) action();
         }

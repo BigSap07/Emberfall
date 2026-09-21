@@ -25,8 +25,30 @@ namespace Emberfall.Game
         public ScreenRouter Router { get; private set; }
         public Canvas RootCanvas { get; private set; }
         public RectTransform ScreenLayer { get; private set; }
+
+        /// <summary>The shared top bar's home: full bleed, inset to Screen.safeArea.</summary>
+        public RectTransform HudFrame { get; private set; }
+
+        /// <summary>
+        /// Where a panel is drawn: above every screen and above the top bar, below the popups.
+        ///
+        /// Above the top bar deliberately. A panel dims what it covers, and a HUD frame left
+        /// bright over a dimmed map would read as chrome floating on top of the sheet rather than
+        /// as the Hub waiting underneath it.
+        /// </summary>
+        public RectTransform PanelLayer { get; private set; }
+
         public RectTransform OverlayLayer { get; private set; }
         public Sfx Audio { get; private set; }
+
+        /// <summary>
+        /// Everything currently open over the current screen, newest last. Escape and the Android
+        /// back key close the topmost entry; see UiLayerStack for the rule in full.
+        /// </summary>
+        public UiLayerStack Layers { get; private set; }
+
+        /// <summary>The panel layer's host: the player panel and the guild panel are both this.</summary>
+        public PanelHost Panels { get; private set; }
 
         /// <summary>
         /// Accounts, cloud save, friends and guilds - or null, on a build with no Supabase config.
@@ -71,6 +93,10 @@ namespace Emberfall.Game
         /// two files in this project's earlier editor tooling, and they drifted.
         /// </summary>
         public const string GrantKaelOnBootKey = "Emberfall.GrantKaelOnBoot";
+
+        /// <summary>EditorPrefs key that suppresses the first-run sequence for a capture run. Set
+        /// and cleared by the capture tool around the run, never by anything that ships.</summary>
+        public const string SuppressFirstRunKey = "Emberfall.SuppressFirstRun";
 
         public static string BootStage = "not started";
         public static bool BootCompleted;
@@ -146,6 +172,7 @@ namespace Emberfall.Game
 #endif
 
             BootStage = "BuildCanvas";
+            Layers = new UiLayerStack();
             BuildCanvas();
             EnsureEventSystem();
 
@@ -154,7 +181,10 @@ namespace Emberfall.Game
 
             BootStage = "HudTopBar.Build";
             _topBar = new HudTopBar();
-            _topBar.Build(ScreenLayer.parent as RectTransform);
+            // Inside the safe frame, not on the raw canvas. The bar is the top half of the HUD
+            // frame on every screen in the game, and a plate anchored to the canvas corner puts
+            // the player's name under a notch on exactly the phones this project targets.
+            _topBar.Build(HudFrame);
 
             BootStage = "ScreenRouter.Build";
             GameObject routerHost = new GameObject("ScreenRouter");
@@ -162,12 +192,16 @@ namespace Emberfall.Game
             Router = routerHost.AddComponent<ScreenRouter>();
             Router.Build(this, ScreenLayer, OverlayLayer);
 
+            BootStage = "panels";
+            Panels = new PanelHost(this, PanelLayer);
+
             BootStage = "overlays";
             _toast = new Toast(OverlayLayer);
             _modal = new ModalPopup(OverlayLayer);
             Conflict = new ConflictChooser(OverlayLayer);
 
             _topBar.Root.SetAsLastSibling();
+            PanelLayer.SetAsLastSibling();
             OverlayLayer.SetAsLastSibling();
 
             BootStage = "first screen";
@@ -185,7 +219,15 @@ namespace Emberfall.Game
             // The only onboarding this game has, and only ever for a genuinely new install.
             // Keyed to freshStart rather than a saved flag so the save shape is untouched and an
             // existing player cannot be shown it - see FirstRun for that trade in full.
-            if (freshStart) FirstRun.Begin(this);
+            bool showFirstRun = freshStart;
+#if UNITY_EDITOR
+            // The capture tools run on a deliberately fresh scratch profile, which is exactly the
+            // account FirstRun exists for - so every automated screenshot of the Hub was a
+            // screenshot of a welcome card with the Hub behind it. The opt-out is editor-only and
+            // off unless a tool sets it, so a real first run is untouched.
+            if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false)) showFirstRun = false;
+#endif
+            if (showFirstRun) FirstRun.Begin(this);
 
             BootStage = "complete";
             BootCompleted = true;
@@ -339,6 +381,16 @@ namespace Emberfall.Game
             ScreenLayer = UIBuilder.Node("Screens", canvasRect);
             UIBuilder.FillParent(ScreenLayer, 0f);
 
+            // The safe frame. Everything that hugs an edge lives in one of these - this one for
+            // the shared top bar, one per screen for its own frame - so the inset is expressed
+            // once per layer rather than once per element. See SafeAreaRect.
+            HudFrame = UIBuilder.Node("HudFrame", canvasRect);
+            UIBuilder.FillParent(HudFrame, 0f);
+            SafeAreaRect.Attach(HudFrame);
+
+            PanelLayer = UIBuilder.Node("Panels", canvasRect);
+            UIBuilder.FillParent(PanelLayer, 0f);
+
             OverlayLayer = UIBuilder.Node("Overlay", canvasRect);
             UIBuilder.FillParent(OverlayLayer, 0f);
         }
@@ -393,6 +445,20 @@ namespace Emberfall.Game
         public void SetTopBarVisible(bool visible)
         {
             if (_topBar != null && _topBar.Root != null) _topBar.Root.gameObject.SetActive(visible);
+        }
+
+        /// <summary>
+        /// Shows or hides the bar's full-width backing plate, leaving the plate and the pills on it
+        /// exactly where they are.
+        ///
+        /// The Hub turns it off. Its HUD is a frame around a painting - two clusters of pills at
+        /// the top corners and nothing between them - and a 132-unit opaque band across the top of
+        /// the map is not a frame, it is a lid. Every other screen keeps it, because every other
+        /// screen is a page that needs its header seated on something.
+        /// </summary>
+        public void SetTopBarBackingVisible(bool visible)
+        {
+            if (_topBar != null) _topBar.SetBackingVisible(visible);
         }
 
         /// <summary>The battle screen hides the flat backdrop so the 3D arena shows through.</summary>
@@ -513,13 +579,66 @@ namespace Emberfall.Game
 
         private void Update()
         {
-            if (_saveTimer < 0f) return;
-            _saveTimer -= Time.unscaledDeltaTime;
-            if (_saveTimer <= 0f) SaveNow();
+            HandleBackKey();
 
 #if UNITY_EDITOR
             DebugSlowMotionToggle();
 #endif
+
+            if (_saveTimer < 0f) return;
+            _saveTimer -= Time.unscaledDeltaTime;
+            if (_saveTimer <= 0f) SaveNow();
+        }
+
+        /// <summary>
+        /// ONE BACK GESTURE FOR THE WHOLE GAME, in the order a player expects it.
+        ///
+        /// Android's hardware back button arrives through legacy Input as KeyCode.Escape, which is
+        /// also the desktop key, so this one handler is both and neither needs a platform branch.
+        /// The order is: the topmost open layer, then the screen history, then nothing.
+        ///
+        /// NOTHING is a real answer and the last branch is deliberate. On the bare Hub there is
+        /// no layer to close and no screen to go back to, and an idle game's home screen is not
+        /// something you back out of - a back press that quit the app from here would be a
+        /// data-losing accident waiting for a thumb.
+        ///
+        /// Battle is the one screen the key does not leave. A fight is a simulation being played
+        /// back, its result already decided, and walking out of one with a stray key press is not
+        /// a navigation - the screen's own controls are what end it.
+        /// </summary>
+        private void HandleBackKey()
+        {
+            if (!UnityEngine.Input.GetKeyDown(KeyCode.Escape)) return;
+            HandleBack();
+        }
+
+        /// <summary>
+        /// The back gesture itself, separated from the key that raises it.
+        ///
+        /// Public and returning a verdict so it can be exercised without a key press: the capture
+        /// tool opens a layer, calls this, and photographs the result, which is the only way to
+        /// show in a screenshot that back closed the topmost layer and left the Hub alone. It is
+        /// also what any future on-screen back button would call, rather than reimplementing the
+        /// order of these three branches.
+        ///
+        /// True means the press was consumed. False means nothing happened, which on the bare Hub
+        /// is the correct answer rather than a failure.
+        /// </summary>
+        public bool HandleBack()
+        {
+            if (Layers != null && Layers.CloseTop())
+            {
+                if (Audio != null) Audio.Tap();
+                return true;
+            }
+
+            if (Router == null || Router.Current == null) return false;
+            if (Router.Current.Id == ScreenId.MainMenu) return false;
+            if (Router.Current.Id == ScreenId.Battle) return false;
+
+            if (Audio != null) Audio.Tap();
+            Router.Back();
+            return true;
         }
 
 #if UNITY_EDITOR

@@ -50,16 +50,37 @@ namespace Emberfall.UI
         private RectTransform _window;   // the visible rect the marker must stay inside
         private RectTransform _tail;     // counter-shifted so it keeps pointing at the building
         private float _restX;            // the marker's x before any clamp, which is the truth
+        private float _leftInset;        // a column of the window the HUD frame has taken
+        private float _rightInset;       // and the same on the other edge
 
         private float _lastMapWidth = -1f;
         private float _lastWindowWidth = -1f;
 
         public void Bind(RectTransform marker, RectTransform window, RectTransform tail)
         {
+            Bind(marker, window, tail, 0f, 0f);
+        }
+
+        /// <summary>
+        /// The two insets reserve a column down one edge of the window for the HUD frame.
+        ///
+        /// They exist because the layered Hub put a vertical rail of icon buttons on an edge, and
+        /// the painting puts a structure at both of them: the Proving's gatehouse is at map-x
+        /// 0.915 and the barracks begins around 0.08, so a full-height rail lands on a marker at
+        /// whichever edge it is given. The rule the layers are built on is that the frame gives
+        /// way to the map rather than the other way round, so the plate slides until it clears the
+        /// rail's column and the tail stays on the building. The building itself is not moved and
+        /// cannot be - it is painted where it is painted.
+        /// </summary>
+        public void Bind(RectTransform marker, RectTransform window, RectTransform tail,
+                         float leftInset, float rightInset)
+        {
             _marker = marker;
             _map = marker.parent as RectTransform;
             _window = window;
             _tail = tail;
+            _leftInset = leftInset;
+            _rightInset = rightInset;
             _restX = marker.anchoredPosition.x;
             Apply();
         }
@@ -78,6 +99,10 @@ namespace Emberfall.UI
             Apply();
         }
 
+        /// <summary>Reused rather than allocated per call: GetWorldCorners fills a caller's array,
+        /// and this runs on every marker whenever the window resizes.</summary>
+        private static readonly Vector3[] Corners = new Vector3[4];
+
         private void Apply()
         {
             float mapWidth = _map.rect.width;
@@ -94,21 +119,29 @@ namespace Emberfall.UI
             float anchorX = (anchorFraction - 0.5f) * mapWidth;
             float restCentre = anchorX + _restX;
 
-            // The window expressed in the same space. The map is centred on the window - anchors
-            // 0.5/0.5, anchoredPosition zero - and neither carries a scale of its own, so the two
-            // rects share an origin and the window is simply narrower.
-            float limit = windowWidth * 0.5f - EdgeMargin - plateWidth * 0.5f;
+            // The window expressed in the same space, through its world corners rather than by
+            // assuming it is centred on the map. It is not, any more: the window a marker must
+            // stay inside is the SAFE AREA, and a notch takes its bite out of one side, so a
+            // centred-window assumption would clamp to the wrong edge on exactly the device the
+            // safe area exists for. Corners[0] is bottom-left and Corners[2] is top-right.
+            _window.GetWorldCorners(Corners);
+            float windowMin = _map.InverseTransformPoint(Corners[0]).x;
+            float windowMax = _map.InverseTransformPoint(Corners[2]).x;
+
+            float minCentre = windowMin + EdgeMargin + _leftInset + plateWidth * 0.5f;
+            float maxCentre = windowMax - EdgeMargin - _rightInset - plateWidth * 0.5f;
 
             float centre;
-            if (limit <= 0f)
+            if (maxCentre <= minCentre)
             {
-                // A plate wider than the window it must fit in. Centre it and let it overhang
-                // evenly rather than pinning it to one edge, which would cut one end off entirely.
-                centre = 0f;
+                // A plate wider than the room it must fit in. Centre it in the window and let it
+                // overhang evenly rather than pinning it to one edge, which would cut one end off
+                // entirely.
+                centre = (windowMin + windowMax) * 0.5f;
             }
             else
             {
-                centre = Mathf.Clamp(restCentre, -limit, limit);
+                centre = Mathf.Clamp(restCentre, minCentre, maxCentre);
             }
 
             float dx = centre - anchorX;

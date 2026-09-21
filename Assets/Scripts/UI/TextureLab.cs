@@ -851,6 +851,51 @@ namespace Emberfall.UI
             });
         }
 
+        /// <summary>
+        /// A sealed letter: the HUD rail's mail entry.
+        ///
+        /// Drawn rather than borrowed from the sigil set, because every sigil in that set is an
+        /// abstract emblem and an envelope has to read as the one object it is at 40 units wide.
+        /// The flap is two strokes meeting in the middle rather than a filled triangle, which is
+        /// what keeps it legible when the body underneath is solid.
+        /// </summary>
+        public static Sprite Envelope(int size)
+        {
+            return Mask("g_envelope_" + size, size, delegate (float u, float v)
+            {
+                bool body = u > 0.10f && u < 0.90f && v > 0.26f && v < 0.74f;
+                if (!body) return 0f;
+                float left = OnSegment(u, v, 0.10f, 0.74f, 0.50f, 0.46f, 0.045f);
+                float right = OnSegment(u, v, 0.90f, 0.74f, 0.50f, 0.46f, 0.045f);
+                float flap = Mathf.Max(left, right);
+                if (flap > 0f) return 0.35f;   // the flap is a seam in the plate, not a hole in it
+                return 1f;
+            });
+        }
+
+        /// <summary>
+        /// Three dots in a row: the overflow menu's own mark.
+        ///
+        /// Drawn rather than typed. It used to be a Text label reading "...", which sits on the
+        /// BASELINE of its line box and so hangs below the centre of the disc it is in, and which
+        /// also cannot be re-skinned by dropping a PNG into the HUD's sprite folder the way every
+        /// other glyph in the frame can.
+        /// </summary>
+        public static Sprite Ellipsis(int size)
+        {
+            return Mask("g_ellipsis_" + size, size, delegate (float u, float v)
+            {
+                float dy = v - 0.5f;
+                for (int i = 0; i < 3; i++)
+                {
+                    float cx = 0.24f + i * 0.26f;
+                    float dx = u - cx;
+                    if (dx * dx + dy * dy <= 0.095f * 0.095f) return 1f;
+                }
+                return 0f;
+            });
+        }
+
         /// <summary>Attack, and the weapon slot.</summary>
         public static Sprite Sword(int size)
         {
