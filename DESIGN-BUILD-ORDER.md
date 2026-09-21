@@ -34,22 +34,23 @@ the standing rule of the authoring passes and it is why the roster authored clea
 description could not be said, the pass built the thing that says it and recorded the measurement.
 Nothing in the thirty was reworded to avoid an engine change.
 
-### The harness is RED on 37 checks: 34 of one kind, a coverage note, and two bands
+### The harness is RED on 3 checks: a coverage note and two bands
 
-**34 are dormancy tripwires that content has since adopted, and they are kept red on purpose.**
-Each was written the same way and for the same reason: an engine pass that could not move a
-fingerprint asserted *why* it could not — "no shipped effect uses `ScaleByLastDamage`", "no
-shipped passive triggers on `OnTargeted`" — so the claim was a measurement rather than a promise.
-Every one of them goes red the moment a kit adopts that feature, which is exactly what thirty
-authored kits did. The red is the ledger entry: it names the feature and lists the adopters.
+**The 34 dormancy tripwires are GREEN now, turned around rather than deleted, and that flip is
+what took the count from 37 to 3.** Each opened as "no shipped content reaches X" - the claim an
+engine pass makes when it builds X and has to say that no existing battle could have moved. All 34
+fired when the roster was authored, which is what they exist to announce, and a fired tripwire is
+normally deleted, which throws away the only line that would ever notice X going unreached again.
+Each now asserts that X IS used and NAMES the content using it, so it goes red the day that
+content stops; twenty-eight of them had only counted usages and dropped the owner on the floor,
+and now carry a parallel label list. Seventeen features are still unreached and stay guarded as
+dormant: `LinkedUnit`, `AllLinkedUnits`, `OnLinkedUnitTargeted`, `OnFunnelConvertFired`,
+`linkAmountPower`, `linkFromCaster`, `ScaleByLastMoved`, `ShieldBrokenByCaster`, `EvasionUp`,
+`AccuracyDown`, `GuaranteedCrit`, `Interrupt`, `Splash`, `OnDodge`, `PerTarget`, `LedgerMitigates`
+and `HpTransfer`. The flip moved nothing it measures: all 72 stage fingerprints, all 150
+hero-sweep lines and all 450 talent-sweep lines are byte-identical across it.
 
-They are not failures and **they must not be cleared by deleting the check.** Two of them were
-converted rather than deleted when Dahlia became their sole occupant — they now assert that she is
-the *only* user, so they still go red if a second kit adopts the feature without saying what moved.
-That conversion is the pattern to follow for the rest, one at a time, when a feature's adoption is
-deliberate and its fingerprint consequences have been stated.
-
-**The 35th is a coverage note, not a tripwire and not a fault:** *"20 of 90 talents are EXECUTED
+**The first is a coverage note, not a tripwire and not a fault:** *"20 of 90 talents are EXECUTED
 but never observed doing anything here — each waits on something this arena does not provide."*
 The talent sweep runs every talent and fingerprints the result; twenty of them need a Taunt enemy,
 a particular aspect matchup, a second copy of their own hero or an ally the fixed arena does not
@@ -57,7 +58,7 @@ field, so they execute without changing anything measurable. It is red because t
 to call "nothing happened" a pass. It read 29 when the roster was authored, 27 after the
 dark-talent pass repaired six, and 20 after the kit-defect pass repaired eight more.
 
-**The 36th and 37th are the two balance instruments, and the kit-defect pass is what moved them.**
+**The second and third are the two balance instruments, and the kit-defect pass is what moved them.**
 Both were green after task 13's retune and both went red on repairs rather than on tuning:
 
 - *"every non-pinned stage's CEIL sits inside its target band"* now fails on ten stages, all of
@@ -76,10 +77,11 @@ Both were green after task 13's retune and both went red on repairs rather than 
   job by saying so. It is the under-geared instrument rather than the one content is tuned
   against — that is the geared curve above it.
 
-**A 38th failure would be a regression.** If the count goes above 37, diagnose it — do not add it
-to this list. The one caveat that is not a regression: these 34 are dormancy tripwires, so
-authoring the 64 lower-star kits will trip more of them as those kits adopt features. A new red
-that NAMES its adopters belongs on this list; anything else does not.
+**A 4th failure would be a regression.** If the count goes above 3, diagnose it — do not add it to
+this list. Two caveats that are not regressions: the seventeen still-dormant guards above will
+fire as the 64 lower-star kits adopt those features, and a turned-around tripwire goes red if the
+content it names stops using what it names. A new red that NAMES its adopters, or names what
+stopped, belongs on this list; anything else does not.
 
 ### Landed: eight kit defects, repaired
 
