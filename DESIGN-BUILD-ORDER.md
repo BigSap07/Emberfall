@@ -61,15 +61,16 @@ that NAMES its adopters belongs on this list; anything else does not.
 
 ### In flight: guilds, phase one, on branch `feat/guilds`
 
-**The database only, so far.** The branch carries three migrations and nothing else: no client,
-no screens, no harness section. That ordering is the point rather than an accident of scheduling
-— every rule guilds have is a rule about who may do what to whose rows, and a rule like that is
-either enforced by Postgres or it is not enforced. Writing the client first would have meant
-choosing which rules to trust the client for.
+A player can found a guild, hand out its code, let people in or leave it open, promote and
+demote, hand it over, remove somebody, leave, disband, talk to everybody in it, and go and fight
+any guildmate's line. The Hub has a GUILD button beside FRIENDS.
 
-**Four tables.** `guilds` (name, a short description, a six-character code, and whether requests
-auto-accept), `guild_members` (the role and a presence stamp), `guild_requests` and
-`guild_messages`. RLS on all four, `anon` revoked on all four.
+**The database was built first and alone, and the ordering is the point.** Every rule guilds
+have is a rule about who may do what to whose rows, and a rule like that is either enforced by
+Postgres or it is not enforced; writing the client first would have meant choosing which rules
+to trust the client for. Three migrations — `0004_guilds.sql`, `0005_guild_rpcs.sql` and
+`0006_guild_team_snapshots.sql` — with RLS on all four tables and `anon` revoked on all four.
+They are applied to the live project.
 
 **Three rules are constraints, not code.** *One guild per player* is `guild_members.user_id`
 being the primary key — two guilds accepting the same applicant in the same instant lock
@@ -80,11 +81,9 @@ and cannot be deferred to commit. *The alphabet a guild code is drawn from* is a
 restates it rather than trusting the generator, exactly as `profiles.friend_code` does.
 
 **Two rules are locks, not counts.** The 30-member cap takes the guild's own row `for update`
-before counting the roster, because two officers accepting two different applicants both read 29
-and both insert otherwise. The one-message-every-two-seconds chat limit takes the poster's
-membership row the same way, because two posts from one account in the same instant otherwise
-read the same "last posted" value and both pass. Neither row is being modified by the lock; each
-is being used as the thing the two callers have to agree about.
+before counting the roster; the one-message-every-two-seconds chat limit takes the poster's
+membership row the same way. Neither row is modified by the lock — each is the thing two callers
+have to agree about.
 
 **No table carries an INSERT grant, and `guild_members` carries no UPDATE grant either.**
 Creating, joining, accepting, promoting, transferring, posting and stamping presence are all
@@ -95,27 +94,50 @@ applied to five more rules.
 **Guilds are deliberately NOT readable by every signed-in user, and that is where this is
 tighter than `profiles`.** 0001's own note calls "any signed-in user may read any profile" the
 widest rule in those migrations and says the tightening, when there is a population to protect,
-is to expose an exact-match lookup instead. A guild table anybody can page is a list of every
-guild code in the project, and with auto-accept on, a list of codes is a list of guilds anyone
-can walk into — so guilds start at the tightening rather than arriving there later. `guilds` is
-readable by its own members and by somebody holding a request to it; finding any other guild goes
-through `guild_by_code()`, which resolves one exact code and cannot be asked for a second row.
+is an exact-match lookup. A guild table anybody can page is a list of every guild code in the
+project, and with auto-accept on, a list of codes is a list of guilds anyone can walk into — so
+guilds start at the tightening rather than arriving there later. `guilds` is readable by its own
+members and by somebody holding a request to it; any other guild is found through
+`guild_by_code()`, one exact code at a time.
 
-**A guildmate's team snapshot becomes readable by ADDING a policy, not by replacing 0003's.**
+**A guildmate's team snapshot became readable by ADDING a policy, not by replacing 0003's.**
 Permissive policies are OR'd, so friends keep their access without the new file restating a rule
-it does not own — and there is no window in which the old rule is gone and the new one is not yet
+it does not own, and there is no window in which the old rule is gone and the new one is not yet
 there. That one policy is the whole of what "guildmates may duel without being friends" needed:
 the combat engine is a pure function of its request, so who may fight whom reduces entirely to
-whose line may be read.
+whose line may be read. The duel reuses the friend team screen unchanged.
 
-**What the migrations do not decide, and what phase one excludes.** There is no guild shop, no
-currency, no raid, no reward, no guild level and no leaderboard, and nothing here adds economy of
-any kind. Chat has no edit and no delete for anybody, including a leader: moderation is a real
-feature with real rules and it is not this one.
+**Three instruments, and none substitutes for another.** The harness proves the CLIENT offers
+the right things — 62 new checks covering the whole role matrix as a table rather than as the
+cases a screen happens to use, the code alphabet, the validators, the chat window's ordering and
+overflow, and the row reader. `Tools/supabase-guild-rules-test.py` proves the SERVER refuses the
+wrong ones with the client out of the way entirely: **113 ok, 0 FAILED** against the live
+project, including a cap race where thirty accounts fire at one open guild from a thread barrier
+and exactly twenty-nine get in. And the editor run with a second real account is what shows the
+screens doing it, which is the only instrument that can see a layout.
 
-**Not yet applied to the live project, and not yet tested against it.** The rule test that proves
-these hold — the guild half of `Tools/supabase-rules-test.py` — is written after the SQL is
-pasted, because it has to run against a database that has it.
+**The last six harness checks read the SQL.** The client's copies of the cap, the name bounds,
+the description and message ceilings and the chat cooldown are duplicated from the migrations on
+purpose — neither side can be the other's source — and a duplicate nobody compares is a lie
+waiting to happen: a cap of 30 on the server and 25 on the client looks like a working game
+until a guild has 26 members.
+
+**Five faults were found by photographing real screens, and none of them could have been found
+any other way.** They all compiled and all passed the harness: a roster that put a member above
+the leader because `order=role.desc` sorts text and 'officer' beats 'leader' alphabetically; a
+chat that rendered backwards because a row's own background Image was sent to the front of the
+list; chat rows 230 units tall because `preferredHeight` was read before the label was placed; a
+screen that never loaded again after being left mid-load, because deactivating it killed the
+coroutine that would have cleared the in-flight latch; and a Hub badge reading "GUILD — SOON"
+directly beneath a working GUILD button.
+
+**Phase one excludes** a guild shop, currency, raids, rewards, guild levels and leaderboards,
+and nothing here adds economy of any kind. Chat has no edit and no delete for anybody, including
+a leader: moderation is a real feature with real rules and it is not this one.
+
+**What is not built:** a badge on the GUILD button counting pending requests, any notification
+that somebody joined or spoke, and a capture of the no-guild screen's "waiting on them" row —
+the flow exists and the rule test covers it, but no photograph does.
 
 ### Landed: placeholder mannequins for undrawn heroes
 
