@@ -188,6 +188,140 @@ restructuring of the whole project and not something a tool should cause. The de
 achieves what the asmdef was wanted for — nothing in a release build — more directly than an
 asmdef's `defineConstraints` would.
 
+### In flight: accounts, cloud save, friends and the friendly duel, on branch `feat/accounts`
+
+The branch carries a backend, the client half of one, three screens and one new thing a player can
+do. A player who has never seen a login screen now has an account, a save that survives losing the
+phone, a friend code, and a friend's line they can fight for nothing.
+
+**The backend is Supabase, reached over plain REST.** Three numbered migrations under
+`Server/supabase/migrations` create four tables - `profiles` (display name and a six-character
+friend code), `saves` (the SaveSerializer document unchanged, in a `jsonb` column, with its save
+version, a revision counter and the writing device beside it), `team_snapshots` (the resolved
+five-hero line a friend duels) and `friendships`. The Supabase C# SDK was considered and not
+taken: it is a NuGet package that would have to be vendored along with Newtonsoft, Postgrest-csharp
+and a websocket stack, and then proven against IL2CPP managed stripping on a device, because those
+libraries serialise by reflection. What the game actually needs is six auth endpoints and
+PostgREST, which is ordinary HTTP with two headers against a JSON reader the project already has.
+`SupabaseClient` records the reasoning and names the one thing that would reopen it - realtime
+subscriptions, which are the only shape this decision makes awkward.
+
+**Every table is protected twice, and the two locks answer different questions.** Row Level
+Security decides which *rows* a signed-in user may touch; grants decide which *verbs and columns* a
+role may use at all. Where a rule can be a missing privilege rather than a policy, it is one:
+`friend_code` carries no UPDATE grant, so no client statement can rewrite a friend code;
+`saves` grants SELECT only, so every write goes through `push_save` and the revision check cannot
+be gone around; `friendships` grants UPDATE on `status` alone, so accepting a request cannot also
+rewrite who the request is between.
+
+**Concurrency is compare-and-swap, in the database.** The caller sends the revision it believes is
+stored, the update lands only where that is still true, and the *new* revision is computed inside
+`push_save` rather than sent - so a client cannot skip, reuse or wind back a revision, because it
+never names one. A refusal comes back as a plain HTTP 409 through PostgREST's PT-prefixed SQLSTATE
+convention, so the client branches on a status rather than parsing a message.
+
+**Accounts are anonymous first.** The first launch with a network creates an anonymous user
+silently and the player never sees a login wall; an email can be attached later and keeps the same
+`auth.users` id, so nothing the player owns has to migrate when they convert. Anonymous users hold
+the `authenticated` role, so every policy applies to them unchanged. Signing out is *refused by the
+service* while an account is anonymous, not merely warned about in UI - an anonymous account is
+reachable only through the refresh token on that device, and discarding it destroys the player's
+access to their own save with nothing that can recover it. The Account screen dims the button and
+says why; `AccountService.SignOut` is what makes it true.
+
+**The conflict rule, in two sentences.** Nothing is ever silently overwritten: every case where
+both sides hold work the other does not ends by asking the player, with both saves described -
+there is no timestamp tie-break, no biggest-save-wins and no merge, because all three are ways of
+picking a loser without telling anybody. And a save from a newer build is refused rather than read,
+which is the same refusal `SaveSerializer.Deserialize` already makes, moved one step earlier so it
+happens before the document is parsed - which is why `save_version` is its own column rather than a
+field inside the blob. The load-bearing input is not a clock but a *base revision*: the cloud
+revision this device last agreed with, kept in device-local state rather than in the save, because
+a save copied to a second phone must not arrive claiming to have already synced.
+
+**`ConflictChooser` is the one screen that asks it, and it is its own overlay rather than a
+`ModalPopup` with a longer body.** A paragraph cannot put two saves beside each other, and a player
+choosing between "level 24, 31 stages, 11 heroes" and "level 24, 33 stages, 11 heroes" needs the
+two columns aligned or they are remembering rather than comparing. It has no default, no button
+styled as the safe one, no dismiss and no merge - each of those would be a way of answering the
+question without a person.
+
+**`CloudCoordinator` owns WHEN, and the three services own HOW.** It is the only object in the
+project that holds both a `GameApp` and a service: sign in at boot, sync on sign-in and on
+pause and quit and on Sync Now, publish the line, and ask the player when two saves disagree.
+Nothing blocks on it and nothing waits on it. A sync cut off at pause costs one sync and nothing
+else, by construction rather than by luck - the disk already holds the save, an upload that never
+lands leaves the cloud as it was, and the base revision only moves once the server has answered.
+
+**The published team line has exactly one hook: the local save.** Every action that can change what
+a friend sees - levelling, gear, relics, talents, the team itself - already ends in a
+`GameApp.SaveNow`, because that is how this project has recorded "something the player owns moved"
+since before there was a cloud. So hooking the save catches all of them, cannot be forgotten by a
+new screen, and cannot fire for a change that was not saved. It rebuilds the snapshot and compares
+it against the last published one, so claiming idle income touches no network.
+
+**Offline first is unchanged, and a build with no config has no cloud object at all.**
+`GameApp.Cloud` is null when `Assets/Resources/Config/supabase.json` is absent or unfilled, every
+caller checks for it, and the offline case is therefore the ABSENCE of the online code rather than
+a path through it. Nothing in the cloud path sits on the path of a battle, a summon or a level-up.
+
+**A duel needs no server logic, and that is measured rather than assumed.** The combat engine is a
+pure function of its request, so a friend's line fetched from `team_snapshots` and rebuilt into a
+`BattleLoadout` resolves the same fight on either device. The harness proves it the only way worth
+proving: a line published to the snapshot column and read back fights the same fight, *event for
+event*, as the same line built locally - and moving one hero's level by one changes the record, so
+the comparison is capable of failing. The duel is a fifth discriminator on the battle screen and
+the only one that costs nothing and pays nothing: no Brand, no Valor, no standing, no attempt, no
+write to the save. It is checked BEFORE the Proving branch, so it can never reach that spend point.
+It shows its seed, because the seed plus the two lines IS the fight.
+
+**Talents now reach the far side of a fight, which closes the one thing the snapshot recorded and
+could not pass on.** `LoadoutUnit` had no talent field, so a Proving ghost of your own team fought
+without the talents you had picked for it and a friend's line fought without theirs - the fight on
+offer was not the line it named. `LoadoutUnit.SelectedTalent` carries the selection and
+`CombatSimulation` resolves it on the opponent side with the same three lines it already ran on the
+player's. Generated Proving rosters stay at no talent: there is no player behind one to have picked
+anything. **Save version 14** records the selection on a pending opponent; a version 13 opponent has
+no key, reads as 0, and 0 is exactly what it fought with, so the default is the whole migration.
+
+**Where the code lives is itself a decision.** Everything that *decides* anything is in
+`Assets/Scripts/Core/Cloud`, engine-free - the conflict rule, the friend code alphabet, the
+snapshot builder and codec, the cloud row shape - so the harness exercises all of it on every
+build. Everything that *talks* is in `Assets/Scripts/Game/Cloud`, where `UnityWebRequest` lives. A
+rule that decides whether a player loses a week of progress has to be measured by something that
+runs every time, not demonstrated once against a live database.
+
+**Found and fixed on the way, a pre-existing save bug.** `SaveSerializer.Deserialize` read a hero's
+uid with `AllocateUid()` as the *default argument* to `GetString`. C# evaluates that argument
+before the call that may not use it, so the allocator ran for every hero on every load and
+`NextHeroUid` grew by the size of the roster each time. Nothing broke visibly - uids only ever
+skipped forward, so no hero was confused with another - which is why it survived. It matters now
+because a cloud save compares documents across devices, and a save that changes every time it is
+read is a save two devices can never agree about. The round-trip check that caught it is permanent.
+
+**Three instruments, and none substitutes for another.** The harness proves the *client* cannot
+lose a save: the conflict decision for every case, the save round trip through the cloud row shape,
+the friend code alphabet, the duel fingerprint, and the talent now travelling into the loadout the
+simulation consumes. `Tools/supabase-rules-test.py` proves the *server* cannot be talked into
+handing one over - it creates two throwaway anonymous users against the real project and checks
+each rule with the game client out of the way entirely, reporting **42 ok, 0 FAILED**.
+`Tools/accounts-live-drive.py` is the third and it proves neither: it is a second real player on
+the real project - create an account, publish a line, send a friend request, push a save from off
+the device - so the whole client can be watched doing the whole thing against real data, which is
+the only way the screens and the conflict chooser can be seen at all.
+
+**The harness is unchanged apart from the sections it gained: 36 failures before and after**, all
+150 hero-sweep fingerprints and all 450 talent-sweep fingerprints still matching their committed
+baselines, and all 24 stages still fingerprinting stably across sampled seeds. The sweeps could not
+move: a stage never carries a loadout, so the new opponent-talent branch is unreachable from one.
+
+**What is not built**: a badge on the Hub's Friends button counting pending requests, and any way
+to see a friend's line without opening their screen. Both are additions rather than gaps.
+`ShotOnDemand` is new beside `PlayModeScreenshot` and exists because the account screens cannot be
+reached by a schedule - a signed-in Account screen needs a live account, a pending friend request
+needs a second one, and the conflict chooser needs a third device to have written in between; all
+of it is lost the moment Play mode restarts, which is how `PlayModeScreenshot` begins.
+
 ### The clip data audit
 
 Every sprite delivery was read straight out of its zip and compared, per clip, against the tracked
