@@ -1267,10 +1267,9 @@
             "conditionOn2": "Target"
           },
           {
-            "kind": "ApplyStatus",
+            "kind": "TurnShift",
             "target": "AllEnemies",
-            "status": "MarkAlt",
-            "duration": 2,
+            "magnitude": 0.0,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
             "condition2": "LacksMyMark",
@@ -1278,9 +1277,10 @@
             "conditionOn2": "Target"
           },
           {
-            "kind": "TurnShift",
+            "kind": "ApplyStatus",
             "target": "AllEnemies",
-            "magnitude": 0.0,
+            "status": "MarkAlt",
+            "duration": 2,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
             "condition2": "LacksMyMark",
@@ -1312,21 +1312,21 @@
             "conditionOn2": "Target"
           },
           {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 15,
+            "condition": "HasMyMark",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "LastTarget",
+            "condition2": "LacksStatus",
+            "conditionStatus2": "BuffSuppression",
+            "conditionOn2": "LastTarget"
+          },
+          {
             "kind": "RemoveStatus",
             "target": "AllEnemies",
             "status": "MarkAlt",
             "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
-            "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
-            "conditionOn2": "Target"
-          },
-          {
-            "kind": "EnergyGain",
-            "target": "Self",
-            "flat": 15,
             "condition": "HasMyMark",
             "conditionStatus": "MarkAlt",
             "conditionOn": "Target",
@@ -1381,7 +1381,7 @@
           "overrides": [
             {
               "ability": "passive2",
-              "effectIndex": 2,
+              "effectIndex": 1,
               "field": "magnitude",
               "delta": -0.1
             }

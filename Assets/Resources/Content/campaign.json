@@ -46,6 +46,44 @@
   // left is a single unit's authored level — hence ch2_3's riptide_channeler at 35 rather than
   // 34, which is the only authored-roster change in the pass.
   //
+  // RE-TUNED A THIRD TIME, CHAPTER 2 ONLY, after fix/kit-defects. Ten chapter-2 stages had
+  // fallen out of the CEIL band and every one of them was too EASY - 2-2 through 2-8, 2-10,
+  // 2-11 at 94 to 100% against a ceiling of 92%, and the finale at 75.5% against 72%. The
+  // cause is not in this file: repairing seven talents and three kits made the five bodies the
+  // instrument fields finish more often at the same power. 2-1 and 2-9 were inside the band and
+  // were not touched, and no chapter-1 stage was touched at all.
+  //
+  // ceilingLevel did eight of the ten on its own, at +1 to +3. Where one level overshot the band
+  // the finest lever left is a single unit's authored level, exactly as the pass below found on
+  // ch2_3: ch2_2's channeler drops to 35 and ch2_6's second channeler rises to 48, each worth
+  // roughly half of what a whole ceiling level is worth. THAT LEVER ONLY EVER POINTS DOWN, or
+  // sideways under the roster's top, and the reason is a schema rule rather than taste -
+  // floorLevel has to equal the highest authored level in the roster, and raising a unit past
+  // the top means raising floorLevel with it, which shrinks the very delta the ceiling reading
+  // is made of. ch2_4 was tried that way first, at channeler 52 over floorLevel 51, and it broke
+  // both curve-schema checks; it is a ceiling level instead.
+  //
+  // Only a riptide_channeler moves a reading at all. +1 on ch2_4's hollow_husk and its grave_moth
+  // together moved its CEIL by half a point; +1 on the channeler alone moved it by seven. That is
+  // the AllEnemies rule above, measured again three stages later.
+  //
+  // ch2_12's OPENER WAS THE ONE STRUCTURAL FAULT, and it is the reason the pinned five-body
+  // FLOOR column could not discriminate. The chapter's authored openers climb 32, 36, 36, 51,
+  // 53, 51, 57, 55, 60, 70, 76 - and then the finale opened at 48 with two channelers at 35 and
+  // 30, below every stage in the back half of its own chapter while asking the highest
+  // recommendedPower in the game. Its roster and floorLevel both rise by 4 with ceilingLevel
+  // held, which by the arithmetic above leaves the CEIL reading untouched - the absolute ceiling
+  // level is authored + (ceilingLevel - floorLevel), so raising both ends of that subtraction by
+  // the same 4 cancels - and moves only the floor. The finale now opens at 51/39/34/53/53 and
+  // spans 3 levels, which is the shape ch1_12 already has at 4. The unarmored pinned line reads
+  // 75% at that opener against 100% everywhere else, and the geared line still opens at 97%.
+  //
+  // WHAT THIS PASS DID NOT TOUCH, and would be dishonest to: no recommendedPower moved. Every
+  // reading here is taken at the authored recommendedPower, and the simulated economy puts a
+  // real player at 1.5 to 3.2 times that. The band is met against the line the instrument
+  // fields, not against the player the economy produces; closing that gap is an economy
+  // decision and it is not made in this file.
+  //
   // Spawn order is slot order: the first entry stands in front. Note for task 11: at five
   // enemies, a single-target identity like Umbra's subtracts a fifth of the line instead of a
   // third - it dilutes here, by design debt, and is dealt with there, not in this file.
@@ -181,15 +219,15 @@
           "environment": "coast", "gold": 1080, "shards": 54, "accountXp": 175, "recommendedPower": 9003,
           "idleGoldPerHour": 930, "idleShardsPerHour": 38,
           "firstClearGold": 1800, "firstClearShards": 290,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 36, "ceilingLevel": 40,
-          "enemies": [ { "id": "grave_moth", "level": 36 }, { "id": "hollow_husk", "level": 36 }, { "id": "riptide_channeler", "level": 36 } ]
+          "waveCount": 12, "battleCount": 12, "floorLevel": 36, "ceilingLevel": 41,
+          "enemies": [ { "id": "grave_moth", "level": 36 }, { "id": "hollow_husk", "level": 36 }, { "id": "riptide_channeler", "level": 35 } ]
         },
         {
           "id": "ch2_3", "index": 3, "name": "Saltwind Rise", "subtitle": "Everything carries the smell of a place it left.",
           "environment": "coast", "gold": 1210, "shards": 60, "accountXp": 192, "recommendedPower": 9830,
           "idleGoldPerHour": 1000, "idleShardsPerHour": 41,
           "firstClearGold": 2000, "firstClearShards": 320,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 40, "ceilingLevel": 44,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 40, "ceilingLevel": 46,
           "enemies": [ { "id": "tidecaller_wretch", "level": 36 }, { "id": "grave_moth", "level": 40 }, { "id": "riptide_channeler", "level": 35 } ]
         },
         {
@@ -197,7 +235,7 @@
           "environment": "coast", "gold": 1360, "shards": 68, "accountXp": 212, "recommendedPower": 11647,
           "idleGoldPerHour": 1080, "idleShardsPerHour": 44,
           "firstClearGold": 2250, "firstClearShards": 360,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 58,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 61,
           "enemies": [ { "id": "riptide_channeler", "level": 51 }, { "id": "hollow_husk", "level": 45 }, { "id": "grave_moth", "level": 44 } ]
         },
         {
@@ -205,7 +243,7 @@
           "environment": "tidal", "gold": 1520, "shards": 76, "accountXp": 233, "recommendedPower": 13278,
           "idleGoldPerHour": 1160, "idleShardsPerHour": 48,
           "firstClearGold": 2500, "firstClearShards": 400,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 53, "ceilingLevel": 60,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 53, "ceilingLevel": 62,
           "enemies": [ { "id": "riptide_channeler", "level": 53 }, { "id": "tidecaller_wretch", "level": 43 }, { "id": "grave_moth", "level": 49 }, { "id": "grave_moth", "level": 49 } ]
         },
         {
@@ -213,15 +251,15 @@
           "environment": "tidal", "gold": 1700, "shards": 85, "accountXp": 256, "recommendedPower": 15653,
           "idleGoldPerHour": 1250, "idleShardsPerHour": 52,
           "firstClearGold": 2780, "firstClearShards": 445,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 59,
-          "enemies": [ { "id": "riptide_channeler", "level": 51 }, { "id": "riptide_channeler", "level": 47 }, { "id": "grave_moth", "level": 51 }, { "id": "grave_moth", "level": 51 } ]
+          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 60,
+          "enemies": [ { "id": "riptide_channeler", "level": 51 }, { "id": "riptide_channeler", "level": 48 }, { "id": "grave_moth", "level": 51 }, { "id": "grave_moth", "level": 51 } ]
         },
         {
           "id": "ch2_7", "index": 7, "name": "Kelp Vault", "subtitle": "Something owns what was once a road.",
           "environment": "tidal", "gold": 1900, "shards": 95, "accountXp": 280, "recommendedPower": 15993,
           "idleGoldPerHour": 1340, "idleShardsPerHour": 56,
           "firstClearGold": 3070, "firstClearShards": 490,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 57, "ceilingLevel": 62,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 57, "ceilingLevel": 63,
           "enemies": [ { "id": "riptide_channeler", "level": 57 }, { "id": "riptide_channeler", "level": 49 }, { "id": "grave_moth", "level": 48 }, { "id": "grave_moth", "level": 48 } ]
         },
         {
@@ -229,7 +267,7 @@
           "environment": "tidal", "gold": 2100, "shards": 105, "accountXp": 306, "recommendedPower": 17600,
           "idleGoldPerHour": 1430, "idleShardsPerHour": 60,
           "firstClearGold": 3380, "firstClearShards": 540,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 55, "ceilingLevel": 59,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 55, "ceilingLevel": 60,
           "enemies": [ { "id": "riptide_channeler", "level": 55 }, { "id": "riptide_channeler", "level": 51 }, { "id": "riptide_channeler", "level": 47 }, { "id": "hollow_husk", "level": 54 } ]
         },
         {
@@ -245,7 +283,7 @@
           "environment": "deep", "gold": 2600, "shards": 130, "accountXp": 365, "recommendedPower": 21900,
           "idleGoldPerHour": 1630, "idleShardsPerHour": 69,
           "firstClearGold": 4090, "firstClearShards": 660,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 70, "ceilingLevel": 74,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 70, "ceilingLevel": 75,
           "enemies": [ { "id": "riptide_channeler", "level": 70 }, { "id": "riptide_channeler", "level": 65 }, { "id": "riptide_channeler", "level": 60 }, { "id": "grave_moth", "level": 62 }, { "id": "hollow_husk", "level": 59 } ]
         },
         {
@@ -253,7 +291,7 @@
           "environment": "deep", "gold": 2880, "shards": 144, "accountXp": 398, "recommendedPower": 23749,
           "idleGoldPerHour": 1730, "idleShardsPerHour": 74,
           "firstClearGold": 4480, "firstClearShards": 725,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 76, "ceilingLevel": 81,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 76, "ceilingLevel": 82,
           "enemies": [ { "id": "riptide_channeler", "level": 76 }, { "id": "riptide_channeler", "level": 70 }, { "id": "riptide_channeler", "level": 65 }, { "id": "grave_moth", "level": 63 }, { "id": "grave_moth", "level": 61 } ]
         },
         {
@@ -262,8 +300,8 @@
           "environment": "deep", "gold": 3600, "shards": 180, "accountXp": 500, "recommendedPower": 26200,
           "idleGoldPerHour": 1850, "idleShardsPerHour": 78,
           "firstClearGold": 6100, "firstClearShards": 1040,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 49, "ceilingLevel": 55,
-          "enemies": [ { "id": "tideturned", "level": 48 }, { "id": "riptide_channeler", "level": 35 }, { "id": "riptide_channeler", "level": 30 }, { "id": "grave_moth", "level": 49 }, { "id": "hollow_husk", "level": 49 } ]
+          "waveCount": 12, "battleCount": 12, "floorLevel": 53, "ceilingLevel": 56,
+          "enemies": [ { "id": "tideturned", "level": 51 }, { "id": "riptide_channeler", "level": 39 }, { "id": "riptide_channeler", "level": 34 }, { "id": "grave_moth", "level": 53 }, { "id": "hollow_husk", "level": 53 } ]
         }
       ]
     }
