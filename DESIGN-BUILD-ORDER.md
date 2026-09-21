@@ -34,7 +34,7 @@ the standing rule of the authoring passes and it is why the roster authored clea
 description could not be said, the pass built the thing that says it and recorded the measurement.
 Nothing in the thirty was reworded to avoid an engine change.
 
-### The harness is RED on 3 checks: a coverage note and two bands
+### The harness is RED on 1 check: a coverage note
 
 **The 34 dormancy tripwires are GREEN now, turned around rather than deleted, and that flip is
 what took the count from 37 to 3.** Each opened as "no shipped content reaches X" - the claim an
@@ -50,7 +50,7 @@ dormant: `LinkedUnit`, `AllLinkedUnits`, `OnLinkedUnitTargeted`, `OnFunnelConver
 and `HpTransfer`. The flip moved nothing it measures: all 72 stage fingerprints, all 150
 hero-sweep lines and all 450 talent-sweep lines are byte-identical across it.
 
-**The first is a coverage note, not a tripwire and not a fault:** *"20 of 90 talents are EXECUTED
+**The one red is a coverage note, not a tripwire and not a fault:** *"20 of 90 talents are EXECUTED
 but never observed doing anything here — each waits on something this arena does not provide."*
 The talent sweep runs every talent and fingerprints the result; twenty of them need a Taunt enemy,
 a particular aspect matchup, a second copy of their own hero or an ally the fixed arena does not
@@ -58,26 +58,17 @@ field, so they execute without changing anything measurable. It is red because t
 to call "nothing happened" a pass. It read 29 when the roster was authored, 27 after the
 dark-talent pass repaired six, and 20 after the kit-defect pass repaired eight more.
 
-**The second and third are the two balance instruments, and the kit-defect pass is what moved them.**
-Both were green after task 13's retune and both went red on repairs rather than on tuning:
+**The two balance instruments are GREEN again, and the chapter-2 repass is what returned them.**
+Both went red on the kit-defect repairs rather than on tuning: five engine repairs turned on
+clauses several shipped kits had been authored around and had never once run, so the same line at
+the same power finished the same stages more often, and ten of the twelve chapter-2 stages left
+the CEIL band in the same direction - too easy. The repass moved `ceilingLevel` first and an
+authored level only where a level was too coarse, and it moved nothing in chapter 1: `1-6` through
+`1-12` read 90, 87.5, 88, 87, 82, 84 and 57 before it and after it. `2-1` at 90.5% and `2-9` at
+88.5% were already inside the band and were left alone. The pinned five-body curve discriminates
+between stages again for the same reason.
 
-- *"every non-pinned stage's CEIL sits inside its target band"* now fails on ten stages, all of
-  them in chapter 2, and all of them too EASY rather than too hard: nine ordinary stages read 94%
-  to 100% against a band of [78%, 92%], and `2-12` reads 76% against a finale band of [55%, 72%].
-  Chapter 1 is untouched and every one of its stages is still inside its band. The cause is named
-  and it is not the content: five engine repairs turned on clauses several shipped kits had been
-  authored around and that had never once run — Kael's whole second passive resolves now, Elyra
-  and Edrin bank the stacks their own passives grant, Brenna's allies record against their own
-  bars — so the same line at the same power finishes the same stages more often. **Retuning is a
-  separate decision and was not made here**; the numbers are the input to it, the way task 13's
-  table was.
-- *"the pinned five-body curve still discriminates between stages"* fails for the same reason and
-  says less: it compares the FLOOR reading across stages and every one of them is now 100%, where
-  `1-12` and `2-10` used to read 99.5%. A flat column measures nothing, so the check is doing its
-  job by saying so. It is the under-geared instrument rather than the one content is tuned
-  against — that is the geared curve above it.
-
-**A 4th failure would be a regression.** If the count goes above 3, diagnose it — do not add it to
+**A 2nd failure would be a regression.** If the count goes above 1, diagnose it — do not add it to
 this list. Two caveats that are not regressions: the seventeen still-dormant guards above will
 fire as the 64 lower-star kits adopt those features, and a turned-around tripwire goes red if the
 content it names stops using what it names. A new red that NAMES its adopters, or names what
