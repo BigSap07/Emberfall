@@ -11,27 +11,47 @@ namespace Emberfall.Dev
     /// <summary>
     /// The arena's chrome, built in code like every other screen in this project.
     ///
-    /// FLAT ON PURPOSE. This does not use the game's theme: a tool wants labels you can read at a
-    /// glance and hit targets you can find with a thumb, and dressing it in the game's frames would
-    /// make it harder to tell the tool from the thing being tested. The one thing it does borrow is
-    /// UITheme.Font, so text renders the same way it does everywhere else.
+    /// ONE CANVAS SETUP, NOT TWO. The scaler is the game's own - ScaleWithScreenSize at
+    /// UITheme.ReferenceResolution with match 0.5, read from UITheme rather than restated - so a
+    /// control that is thumb-sized in the game is thumb-sized here. The first version of this file
+    /// invented a second reference resolution (1600x900) and every offset in it was then written
+    /// in a coordinate space nothing else in the project uses.
     ///
-    /// ARENA FIRST. The battlefield is not a panel - it is the camera, and everything here is laid
-    /// over it. The top bar is one row, the log is four lines, and both drawers start closed, so
-    /// what is on screen at rest is the fight.
+    /// EVERYTHING IS ANCHORED TO AN EDGE. Nothing is positioned by measuring from the screen
+    /// origin: the bar stretches across the top, the log across the bottom, the drawers to their
+    /// own side at full height, and the corner buttons to their corners. Rows of controls are
+    /// HorizontalLayoutGroups, which is what fixes the hole the old bar had - a button hidden in
+    /// Manual mode used to leave its baked-in gap behind, because its neighbours' positions had
+    /// been computed once at build time.
+    ///
+    /// SAFE AREA. Everything hangs off one child rect that is resized to Screen.safeArea, so a
+    /// notch or a gesture bar eats into the chrome rather than covering it. The battlefield is
+    /// behind that rect and deliberately not inset: the fight should use the whole screen.
+    ///
+    /// FLAT ON PURPOSE. This does not use the game's theme beyond its font and its scaler. A tool
+    /// wants labels you can read at a glance, and dressing it in the game's frames would make it
+    /// harder to tell the tool from the thing being tested.
     /// </summary>
     public sealed class DevArenaUi
     {
-        public const float RefW = 1600f, RefH = 900f;
+        // The same numbers the game's own canvas uses. Not restated here - read from UITheme, so
+        // there is exactly one answer to "what is a pixel in this project".
+        public static Vector2 Reference { get { return UITheme.ReferenceResolution; } }
+        public const float Match = 0.5f;
+
+        public const float BarHeight = 72f;
+        public const float LogHeight = 132f;
+        public const float LogHeightExpanded = 372f;
+        public const float SetupWidth = 560f;
+        public const float RightWidth = 580f;
 
         public Canvas Canvas;
-        public RectTransform Root;
+        public RectTransform Root;      // the whole canvas
+        public RectTransform SafeArea;  // everything except the battlefield hangs off this
 
         // top bar
         public Button ModeButton;
-        public Text ModeLabel;
         public Button PlayButton;
-        public Text PlayLabel;
         public readonly List<Button> SpeedButtons = new List<Button>();
         public readonly float[] Speeds = { 0.25f, 0.5f, 1f, 2f, 4f };
         public Button NextActionButton;
@@ -40,6 +60,7 @@ namespace Emberfall.Dev
         public InputField SeedField;
         public Button RerollButton;
         public Button HelpButton;
+        public Button BackButton;
         public Text RoundLabel;
 
         // overlays
@@ -54,13 +75,14 @@ namespace Emberfall.Dev
         // log
         public RectTransform LogPanel;
         public RectTransform LogContent;
+        public ScrollRect LogScroll;
         public Button LogExpandButton;
-        public Text LogExpandLabel;
 
         // drawers
         public RectTransform SetupDrawer;
         public RectTransform RightDrawer;
-        public Button SetupTab, UnitTab, AnimTab, SetupClose, RightClose;
+        public Button SetupEdge, UnitEdge;
+        public Button UnitTab, AnimTab, SetupClose, RightClose;
         public RectTransform UnitPage, AnimPage;
         public RectTransform RosterContent;
         public InputField RosterSearch;
@@ -69,7 +91,8 @@ namespace Emberfall.Dev
 
         // unit page
         public Text UnitTitle, UnitStats, UnitStatuses;
-        public Button KillButton, ReviveButton, Hp10Button, Hp50Button, HpFullButton, EnergyFullButton, EnergyZeroButton;
+        public Button KillButton, ReviveButton, Hp10Button, Hp50Button, HpFullButton;
+        public Button EnergyFullButton, EnergyZeroButton;
 
         // animation page
         public RectTransform ClipRow;
@@ -82,13 +105,14 @@ namespace Emberfall.Dev
         public RectTransform HelpPanel;
         public Button HelpClose;
 
-        private static readonly Color Ink = new Color(0.92f, 0.94f, 0.98f, 1f);
-        private static readonly Color Dim = new Color(0.64f, 0.68f, 0.76f, 1f);
-        private static readonly Color Chrome = new Color(0.07f, 0.08f, 0.11f, 0.92f);
-        private static readonly Color Panelly = new Color(0.10f, 0.11f, 0.15f, 0.97f);
+        private static readonly Color Ink = new Color(0.93f, 0.95f, 0.98f, 1f);
+        private static readonly Color Dim = new Color(0.66f, 0.70f, 0.78f, 1f);
+        private static readonly Color Chrome = new Color(0.07f, 0.08f, 0.11f, 0.94f);
+        private static readonly Color Panelly = new Color(0.10f, 0.11f, 0.15f, 0.98f);
         private static readonly Color Live = new Color(0.16f, 0.46f, 0.72f, 1f);
+        private static readonly Color Warm = new Color(0.58f, 0.34f, 0.10f, 1f);
 
-        // ------------------------------------------------------------------ construction
+        // ================================================================== construction
 
         public void Build(Transform parent)
         {
@@ -100,9 +124,9 @@ namespace Emberfall.Dev
             Canvas.sortingOrder = 100;
             CanvasScaler scaler = canvasGo.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(RefW, RefH);
+            scaler.referenceResolution = Reference;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            scaler.matchWidthOrHeight = Match;
             Root = canvasGo.GetComponent<RectTransform>();
 
             if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)
@@ -112,12 +136,18 @@ namespace Emberfall.Dev
                 es.transform.SetParent(parent, false);
             }
 
+            // The battlefield overlay sits OUTSIDE the safe area: bars belong over their units,
+            // wherever those units are, and a notch is a better thing to lose a health bar behind
+            // than a reason to squeeze the whole fight inward.
             UnitLayer = Blank("UnitLayer", Root);
             Stretch(UnitLayer);
-            UnitLayer.GetComponent<RectTransform>();
+
+            SafeArea = Blank("SafeArea", Root);
+            Stretch(SafeArea);
 
             BuildTopBar();
             BuildLog();
+            BuildEdges();
             BuildActionBar();
             BuildToast();
             BuildSetupDrawer();
@@ -125,101 +155,195 @@ namespace Emberfall.Dev
             BuildHelp();
         }
 
+        /// <summary>Resizes the chrome rect to the device's safe area. Called every frame, because
+        /// it changes on rotation and on the editor's game-view size.</summary>
+        public void ApplySafeArea()
+        {
+            if (SafeArea == null) return;
+            Rect area = Screen.safeArea;
+            float w = Mathf.Max(1f, Screen.width), h = Mathf.Max(1f, Screen.height);
+            Vector2 min = new Vector2(area.xMin / w, area.yMin / h);
+            Vector2 max = new Vector2(area.xMax / w, area.yMax / h);
+            if (SafeArea.anchorMin == min && SafeArea.anchorMax == max) return;
+            SafeArea.anchorMin = min;
+            SafeArea.anchorMax = max;
+            SafeArea.offsetMin = Vector2.zero;
+            SafeArea.offsetMax = Vector2.zero;
+        }
+
+        // ------------------------------------------------------------------ top bar
+
         private void BuildTopBar()
         {
-            Image bar = Panel("TopBar", Root, Chrome);
+            Image bar = Panel("TopBar", SafeArea, Chrome);
             RectTransform r = bar.rectTransform;
-            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+            r.anchorMin = new Vector2(0f, 1f);
+            r.anchorMax = new Vector2(1f, 1f);
             r.pivot = new Vector2(0.5f, 1f);
-            r.offsetMin = new Vector2(0f, -60f); r.offsetMax = new Vector2(0f, 0f);
+            r.offsetMin = new Vector2(0f, -BarHeight);
+            r.offsetMax = Vector2.zero;
 
-            float x = 12f;
-            ModeButton = Btn("Mode", r, "MANUAL", 150f, ref x, Live);
-            ModeLabel = ModeButton.GetComponentInChildren<Text>();
-            x += 10f;
-            PlayButton = Btn("Play", r, "PLAY", 96f, ref x, Panelly);
-            PlayLabel = PlayButton.GetComponentInChildren<Text>();
+            // Left half: the controls, in a layout group so a button hidden in Manual mode takes
+            // its gap with it instead of leaving a hole where it used to sit.
+            RectTransform left = Blank("Left", r);
+            left.anchorMin = new Vector2(0f, 0f);
+            left.anchorMax = new Vector2(1f, 1f);
+            // The left row stops short of the right row's fixed block (round label, BACK, ?), so
+            // the two can never draw over each other however wide the screen is.
+            left.offsetMin = new Vector2(12f, 8f);
+            left.offsetMax = new Vector2(-(300f + 110f + 64f + 40f), -8f);
+            HorizontalLayoutGroup lg = left.gameObject.AddComponent<HorizontalLayoutGroup>();
+            lg.childAlignment = TextAnchor.MiddleLeft;
+            lg.spacing = 6f;
+            lg.childControlWidth = true;
+            lg.childControlHeight = true;
+            lg.childForceExpandWidth = false;
+            lg.childForceExpandHeight = true;
+
+            ModeButton = Btn("Mode", left, "MANUAL", 170f, Warm);
+            PlayButton = Btn("Play", left, "PLAY", 110f, Panelly);
             for (int i = 0; i < Speeds.Length; i++)
-                SpeedButtons.Add(Btn("Speed" + i, r, Speeds[i] + "x", 62f, ref x, Panelly));
-            x += 10f;
-            NextActionButton = Btn("NextAction", r, "NEXT ACTION", 150f, ref x, Panelly);
-            x += 10f;
-            EndRoundButton = Btn("EndRound", r, "END ROUND", 136f, ref x, Panelly);
-            ResetButton = Btn("Reset", r, "RESET", 96f, ref x, Panelly);
+                SpeedButtons.Add(Btn("Speed" + i, left, Speeds[i] + "x", 74f, Panelly));
+            NextActionButton = Btn("NextAction", left, "NEXT ACTION", 170f, Panelly);
+            EndRoundButton = Btn("EndRound", left, "END ROUND", 156f, Panelly);
+            ResetButton = Btn("Reset", left, "RESET", 108f, Panelly);
+            Gap(left, 10f);
+            Text seedCaption = Label("SeedCaption", left, "SEED", 18, Dim, TextAnchor.MiddleLeft);
+            Fixed(seedCaption.rectTransform, 58f, 40f);
+            SeedField = Field("Seed", left, "12345", 130f);
+            RerollButton = Btn("Reroll", left, "RE-ROLL", 116f, Panelly);
 
-            x += 14f;
-            Label("SeedCaption", r, "SEED", 16, Dim, TextAnchor.MiddleLeft, x, 54f);
-            x += 54f;
-            SeedField = Field("Seed", r, "12345", 110f, ref x);
-            RerollButton = Btn("Reroll", r, "RE-ROLL", 96f, ref x, Panelly);
+            // Right half: read-only status and the two corner buttons, right-aligned so they stay
+            // pinned to the edge at any width.
+            RectTransform right = Blank("Right", r);
+            right.anchorMin = new Vector2(0f, 0f);
+            right.anchorMax = new Vector2(1f, 1f);
+            right.offsetMin = new Vector2(12f, 8f);
+            right.offsetMax = new Vector2(-12f, -8f);
+            HorizontalLayoutGroup rg = right.gameObject.AddComponent<HorizontalLayoutGroup>();
+            rg.childAlignment = TextAnchor.MiddleRight;
+            rg.spacing = 6f;
+            rg.childControlWidth = true;
+            rg.childControlHeight = true;
+            rg.childForceExpandWidth = false;
+            rg.childForceExpandHeight = true;
 
-            HelpButton = Btn("Help", r, "?", 46f, Root, new Vector2(1f, 1f), new Vector2(-58f, -74f), Panelly);
-            RoundLabel = Label("Round", r, "ROUND 1", 18, Ink, TextAnchor.MiddleRight, -180f, 170f);
-            RectTransform rl = RoundLabel.rectTransform;
-            rl.anchorMin = new Vector2(1f, 0f); rl.anchorMax = new Vector2(1f, 1f);
-            rl.offsetMin = new Vector2(-190f, 0f); rl.offsetMax = new Vector2(-12f, 0f);
+            RoundLabel = Label("Round", right, "ROUND 1", 20, Ink, TextAnchor.MiddleRight);
+            Fixed(RoundLabel.rectTransform, 300f, 40f);
+            BackButton = Btn("Back", right, "BACK", 110f, Panelly);
+            HelpButton = Btn("Help", right, "?", 64f, Panelly);
+            Gap(right, 4f);
         }
+
+        // ------------------------------------------------------------------ log
 
         private void BuildLog()
         {
-            Image p = Panel("Log", Root, Chrome);
+            Image p = Panel("Log", SafeArea, Chrome);
             LogPanel = p.rectTransform;
-            LogPanel.anchorMin = new Vector2(0f, 0f); LogPanel.anchorMax = new Vector2(1f, 0f);
+            LogPanel.anchorMin = new Vector2(0f, 0f);
+            LogPanel.anchorMax = new Vector2(1f, 0f);
             LogPanel.pivot = new Vector2(0.5f, 0f);
-            LogPanel.offsetMin = new Vector2(0f, 0f); LogPanel.offsetMax = new Vector2(0f, 104f);
+            LogPanel.offsetMin = Vector2.zero;
+            LogPanel.offsetMax = new Vector2(0f, LogHeight);
 
-            LogContent = Blank("LogContent", LogPanel);
-            LogContent.anchorMin = new Vector2(0f, 0f); LogContent.anchorMax = new Vector2(1f, 1f);
-            LogContent.offsetMin = new Vector2(14f, 6f); LogContent.offsetMax = new Vector2(-130f, -6f);
+            // A viewport with a mask, so a fight that produces four hundred lines cannot paint them
+            // up the screen over the fight that produced them. The old log had no mask and did.
+            RectTransform view = Blank("LogView", LogPanel);
+            view.anchorMin = new Vector2(0f, 0f);
+            view.anchorMax = new Vector2(1f, 1f);
+            view.offsetMin = new Vector2(16f, 8f);
+            view.offsetMax = new Vector2(-170f, -8f);
+            view.gameObject.AddComponent<RectMask2D>();
+
+            LogContent = Blank("LogContent", view);
+            LogContent.anchorMin = new Vector2(0f, 0f);
+            LogContent.anchorMax = new Vector2(1f, 0f);
+            LogContent.pivot = new Vector2(0.5f, 0f);
+            // sizeDelta.x is Unity's 100 until something clears it, and a horizontally stretched
+            // rect reads that as "100 WIDER than my anchors" - so the column hung 50 units off each
+            // side and the first seven characters of every log line sat off the left of the screen.
+            LogContent.sizeDelta = new Vector2(0f, LogContent.sizeDelta.y);
             VerticalLayoutGroup v = LogContent.gameObject.AddComponent<VerticalLayoutGroup>();
             v.childAlignment = TextAnchor.LowerLeft;
+            v.childControlWidth = true;
+            v.childControlHeight = true;
             v.childForceExpandHeight = false;
             v.childForceExpandWidth = true;
             v.spacing = 1f;
+            ContentSizeFitter f = LogContent.gameObject.AddComponent<ContentSizeFitter>();
+            f.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            LogExpandButton = Btn("LogExpand", LogPanel, "EXPAND", 108f, Root,
-                                  new Vector2(1f, 0f), new Vector2(-70f, 78f), Panelly);
-            LogExpandLabel = LogExpandButton.GetComponentInChildren<Text>();
+            LogScroll = view.gameObject.AddComponent<ScrollRect>();
+            LogScroll.content = LogContent;
+            LogScroll.viewport = view;
+            LogScroll.horizontal = false;
+            LogScroll.movementType = ScrollRect.MovementType.Clamped;
+            LogScroll.scrollSensitivity = 30f;
+
+            LogExpandButton = Btn("LogExpand", LogPanel, "EXPAND", 150f, Panelly);
+            Corner(LogExpandButton, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-12f, -10f), 150f, 44f);
         }
+
+        // ------------------------------------------------------------------ drawer handles
+
+        private void BuildEdges()
+        {
+            SetupEdge = Btn("SetupEdge", SafeArea, "SETUP", 150f, Panelly);
+            Corner(SetupEdge, new Vector2(0f, 0f), new Vector2(0f, 0f),
+                   new Vector2(12f, LogHeight + 12f), 150f, 52f);
+
+            UnitEdge = Btn("UnitEdge", SafeArea, "UNIT", 150f, Panelly);
+            Corner(UnitEdge, new Vector2(1f, 0f), new Vector2(1f, 0f),
+                   new Vector2(-12f, LogHeight + 12f), 150f, 52f);
+        }
+
+        // ------------------------------------------------------------------ action bar
 
         private void BuildActionBar()
         {
-            Image p = Panel("ActionBar", Root, Panelly);
+            Image p = Panel("ActionBar", SafeArea, Panelly);
             ActionBar = p.rectTransform;
-            ActionBar.sizeDelta = new Vector2(268f, 86f);
             ActionBar.anchorMin = ActionBar.anchorMax = new Vector2(0f, 0f);
             ActionBar.pivot = new Vector2(0.5f, 0f);
+            ActionBar.sizeDelta = new Vector2(330f, 104f);
 
-            ActionTitle = Label("Who", ActionBar, "", 16, Dim, TextAnchor.UpperCenter, 0f, 260f);
+            ActionTitle = Label("Who", ActionBar, "", 17, Dim, TextAnchor.UpperCenter);
             RectTransform t = ActionTitle.rectTransform;
-            t.anchorMin = new Vector2(0f, 1f); t.anchorMax = new Vector2(1f, 1f);
+            t.anchorMin = new Vector2(0f, 1f);
+            t.anchorMax = new Vector2(1f, 1f);
             t.pivot = new Vector2(0.5f, 1f);
-            t.offsetMin = new Vector2(6f, -26f); t.offsetMax = new Vector2(-6f, -4f);
+            t.offsetMin = new Vector2(8f, -32f);
+            t.offsetMax = new Vector2(-8f, -6f);
 
-            float x = 8f;
-            BasicButton = Btn("Basic", ActionBar, "BASIC", 124f, ref x, Live);
-            ActiveButton = Btn("Active", ActionBar, "ACTIVE", 124f, ref x, Live);
-            foreach (Button b in new[] { BasicButton, ActiveButton })
-            {
-                RectTransform br = b.GetComponent<RectTransform>();
-                br.anchorMin = new Vector2(0f, 0f); br.anchorMax = new Vector2(0f, 0f);
-                br.pivot = new Vector2(0f, 0f);
-                br.sizeDelta = new Vector2(124f, 44f);
-            }
-            SetPos(BasicButton, 8f, 8f);
-            SetPos(ActiveButton, 138f, 8f);
+            RectTransform row = Blank("Row", ActionBar);
+            row.anchorMin = new Vector2(0f, 0f);
+            row.anchorMax = new Vector2(1f, 0f);
+            row.pivot = new Vector2(0.5f, 0f);
+            row.offsetMin = new Vector2(10f, 10f);
+            row.offsetMax = new Vector2(-10f, 66f);
+            HorizontalLayoutGroup g = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            g.spacing = 8f;
+            g.childControlWidth = true;
+            g.childControlHeight = true;
+            g.childForceExpandWidth = true;
+            g.childForceExpandHeight = true;
+
+            BasicButton = Btn("Basic", row, "BASIC", 150f, Live);
+            ActiveButton = Btn("Active", row, "ACTIVE", 150f, Live);
             ActionBar.gameObject.SetActive(false);
         }
 
         private void BuildToast()
         {
-            Image p = Panel("Toast", Root, new Color(0.45f, 0.13f, 0.09f, 0.95f));
+            Image p = Panel("Toast", SafeArea, new Color(0.46f, 0.14f, 0.09f, 0.96f));
             RectTransform r = p.rectTransform;
-            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.anchorMin = new Vector2(0.15f, 1f);
+            r.anchorMax = new Vector2(0.85f, 1f);
             r.pivot = new Vector2(0.5f, 1f);
-            r.sizeDelta = new Vector2(940f, 46f);
-            r.anchoredPosition = new Vector2(0f, -70f);
-            Toast = Label("ToastText", r, "", 18, Ink, TextAnchor.MiddleCenter, 0f, 0f);
+            r.offsetMin = new Vector2(0f, -(BarHeight + 66f));
+            r.offsetMax = new Vector2(0f, -(BarHeight + 12f));
+            Toast = Label("ToastText", r, "", 20, Ink, TextAnchor.MiddleCenter);
             Stretch(Toast.rectTransform);
             ToastGroup = p.gameObject.AddComponent<CanvasGroup>();
             ToastGroup.alpha = 0f;
@@ -230,113 +354,124 @@ namespace Emberfall.Dev
 
         private void BuildSetupDrawer()
         {
-            Image p = Panel("SetupDrawer", Root, Panelly);
+            Image p = Panel("SetupDrawer", SafeArea, Panelly);
             SetupDrawer = p.rectTransform;
-            SetupDrawer.anchorMin = new Vector2(0f, 0f); SetupDrawer.anchorMax = new Vector2(0f, 1f);
-            SetupDrawer.pivot = new Vector2(0f, 0.5f);
-            SetupDrawer.sizeDelta = new Vector2(430f, 0f);
-            SetupDrawer.offsetMin = new Vector2(-430f, 104f);
-            SetupDrawer.offsetMax = new Vector2(0f, -60f);
+            EdgeDrawer(SetupDrawer, true, SetupWidth);
 
-            Label("SetupTitle", SetupDrawer, "SETUP", 20, Ink, TextAnchor.UpperLeft, 14f, 200f)
-                .rectTransform.anchoredPosition = new Vector2(14f, -12f);
-            SetupClose = Btn("SetupClose", SetupDrawer, "CLOSE", 92f, Root,
-                             new Vector2(1f, 1f), new Vector2(-56f, -22f), Chrome);
+            RectTransform head = HeaderRow(SetupDrawer, "SETUP");
+            SetupClose = Btn("SetupClose", head, "CLOSE", 120f, Chrome);
 
-            BoardRows = Blank("BoardRows", SetupDrawer);
-            BoardRows.anchorMin = new Vector2(0f, 1f); BoardRows.anchorMax = new Vector2(1f, 1f);
-            BoardRows.pivot = new Vector2(0.5f, 1f);
-            BoardRows.offsetMin = new Vector2(10f, -404f); BoardRows.offsetMax = new Vector2(-10f, -44f);
-            VerticalLayoutGroup bv = BoardRows.gameObject.AddComponent<VerticalLayoutGroup>();
-            bv.spacing = 2f; bv.childForceExpandHeight = false; bv.childForceExpandWidth = true;
+            RectTransform body = Body(SetupDrawer);
+            VerticalLayoutGroup bv = body.gameObject.AddComponent<VerticalLayoutGroup>();
+            bv.childControlWidth = true;
+            bv.childControlHeight = true;
+            bv.spacing = 8f;
+            bv.childForceExpandHeight = false;
+            bv.childForceExpandWidth = true;
 
-            float bx = 10f;
-            SaveBoardButton = Btn("SaveBoard", SetupDrawer, "SAVE", 98f, ref bx, Chrome);
-            LoadBoardButton = Btn("LoadBoard", SetupDrawer, "LOAD", 98f, ref bx, Chrome);
-            ClearBoardButton = Btn("ClearBoard", SetupDrawer, "CLEAR", 98f, ref bx, Chrome);
-            ApplyBoardButton = Btn("ApplyBoard", SetupDrawer, "RESTART", 110f, ref bx, Live);
-            foreach (Button b in new[] { SaveBoardButton, LoadBoardButton, ClearBoardButton, ApplyBoardButton })
-                Pin(b, new Vector2(0f, 1f), new Vector2(0f, 1f));
-            SetPos(SaveBoardButton, 10f, -412f);
-            SetPos(LoadBoardButton, 116f, -412f);
-            SetPos(ClearBoardButton, 222f, -412f);
-            SetPos(ApplyBoardButton, 328f, -412f);
+            BoardRows = Blank("BoardRows", body);
+            VerticalLayoutGroup rows = BoardRows.gameObject.AddComponent<VerticalLayoutGroup>();
+            rows.childControlWidth = true;
+            rows.childControlHeight = true;
+            rows.spacing = 3f;
+            rows.childForceExpandHeight = false;
+            rows.childForceExpandWidth = true;
+            ContentSizeFitter rf = BoardRows.gameObject.AddComponent<ContentSizeFitter>();
+            rf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            RosterSearch = Field("RosterSearch", SetupDrawer, "search", 300f, ref bx);
-            Pin(RosterSearch, new Vector2(0f, 1f), new Vector2(0f, 1f));
-            SetPos(RosterSearch, 10f, -466f);
-            RosterSearch.GetComponent<RectTransform>().sizeDelta = new Vector2(410f, 40f);
+            RectTransform buttons = Row(body, 48f);
+            SaveBoardButton = Btn("SaveBoard", buttons, "SAVE", 120f, Chrome);
+            LoadBoardButton = Btn("LoadBoard", buttons, "LOAD", 120f, Chrome);
+            ClearBoardButton = Btn("ClearBoard", buttons, "CLEAR", 120f, Chrome);
+            ApplyBoardButton = Btn("ApplyBoard", buttons, "RESTART", 140f, Live);
 
-            RosterContent = Scroll("Roster", SetupDrawer, new Vector4(10f, 10f, -10f, -512f));
+            RectTransform search = Row(body, 48f);
+            RosterSearch = Field("RosterSearch", search, "", 480f);
+
+            RectTransform rosterHost = Blank("RosterHost", body);
+            LayoutElement grow = rosterHost.gameObject.AddComponent<LayoutElement>();
+            grow.flexibleHeight = 1f;
+            grow.minHeight = 120f;
+            RosterContent = Scroll("Roster", rosterHost);
+
             SetupDrawer.gameObject.SetActive(false);
         }
 
         private void BuildRightDrawer()
         {
-            Image p = Panel("RightDrawer", Root, Panelly);
+            Image p = Panel("RightDrawer", SafeArea, Panelly);
             RightDrawer = p.rectTransform;
-            RightDrawer.anchorMin = new Vector2(1f, 0f); RightDrawer.anchorMax = new Vector2(1f, 1f);
-            RightDrawer.pivot = new Vector2(1f, 0.5f);
-            RightDrawer.sizeDelta = new Vector2(450f, 0f);
-            RightDrawer.offsetMin = new Vector2(-450f, 104f);
-            RightDrawer.offsetMax = new Vector2(0f, -60f);
+            EdgeDrawer(RightDrawer, false, RightWidth);
 
-            float tx = 10f;
-            UnitTab = Btn("UnitTab", RightDrawer, "UNIT", 130f, ref tx, Live);
-            AnimTab = Btn("AnimTab", RightDrawer, "ANIMATION", 160f, ref tx, Chrome);
-            RightClose = Btn("RightClose", RightDrawer, "CLOSE", 92f, ref tx, Chrome);
-            foreach (Button b in new[] { UnitTab, AnimTab, RightClose }) Pin(b, new Vector2(0f, 1f), new Vector2(0f, 1f));
-            SetPos(UnitTab, 10f, -10f);
-            SetPos(AnimTab, 148f, -10f);
-            SetPos(RightClose, 316f, -10f);
+            RectTransform head = HeaderRow(RightDrawer, null);
+            UnitTab = Btn("UnitTab", head, "UNIT", 150f, Live);
+            AnimTab = Btn("AnimTab", head, "ANIMATION", 190f, Chrome);
+            RightClose = Btn("RightClose", head, "CLOSE", 120f, Chrome);
 
-            UnitPage = Blank("UnitPage", RightDrawer);
-            UnitPage.anchorMin = new Vector2(0f, 0f); UnitPage.anchorMax = new Vector2(1f, 1f);
-            UnitPage.offsetMin = new Vector2(10f, 10f); UnitPage.offsetMax = new Vector2(-10f, -58f);
+            RectTransform body = Body(RightDrawer);
 
-            UnitTitle = Label("UnitTitle", UnitPage, "no unit selected", 20, Ink, TextAnchor.UpperLeft, 0f, 0f);
-            Top(UnitTitle.rectTransform, 0f, 30f);
-            UnitStats = Label("UnitStats", UnitPage, "", 16, Dim, TextAnchor.UpperLeft, 0f, 0f);
-            Top(UnitStats.rectTransform, 34f, 190f);
-            UnitStatuses = Label("UnitStatuses", UnitPage, "", 16, Ink, TextAnchor.UpperLeft, 0f, 0f);
-            Top(UnitStatuses.rectTransform, 228f, 220f);
+            UnitPage = Blank("UnitPage", body);
+            Stretch(UnitPage);
+            VerticalLayoutGroup uv = UnitPage.gameObject.AddComponent<VerticalLayoutGroup>();
+            uv.childControlWidth = true;
+            uv.childControlHeight = true;
+            uv.spacing = 8f;
+            uv.childForceExpandHeight = false;
+            uv.childForceExpandWidth = true;
 
-            Hp10Button = EditBtn("Hp10", UnitPage, "HP 10%", 0f, -466f);
-            Hp50Button = EditBtn("Hp50", UnitPage, "HP 50%", 140f, -466f);
-            HpFullButton = EditBtn("HpFull", UnitPage, "HP FULL", 280f, -466f);
-            EnergyFullButton = EditBtn("EnFull", UnitPage, "ENERGY FULL", 0f, -516f);
-            EnergyZeroButton = EditBtn("EnZero", UnitPage, "ENERGY 0", 140f, -516f);
-            KillButton = EditBtn("Kill", UnitPage, "KILL", 280f, -516f);
-            ReviveButton = EditBtn("Revive", UnitPage, "REVIVE", 0f, -566f);
+            UnitTitle = Label("UnitTitle", UnitPage, "no unit selected", 22, Ink, TextAnchor.UpperLeft);
+            Fixed(UnitTitle.rectTransform, 0f, 32f);
+            UnitStats = Label("UnitStats", UnitPage, "", 18, Dim, TextAnchor.UpperLeft);
+            Fixed(UnitStats.rectTransform, 0f, 200f);
+            UnitStatuses = Label("UnitStatuses", UnitPage, "", 18, Ink, TextAnchor.UpperLeft);
+            LayoutElement statusGrow = UnitStatuses.gameObject.AddComponent<LayoutElement>();
+            statusGrow.flexibleHeight = 1f;
+            statusGrow.minHeight = 80f;
 
-            AnimPage = Blank("AnimPage", RightDrawer);
-            AnimPage.anchorMin = new Vector2(0f, 0f); AnimPage.anchorMax = new Vector2(1f, 1f);
-            AnimPage.offsetMin = new Vector2(10f, 10f); AnimPage.offsetMax = new Vector2(-10f, -58f);
+            RectTransform hpRow = Row(UnitPage, 48f);
+            Hp10Button = Btn("Hp10", hpRow, "HP 10%", 150f, Chrome);
+            Hp50Button = Btn("Hp50", hpRow, "HP 50%", 150f, Chrome);
+            HpFullButton = Btn("HpFull", hpRow, "HP FULL", 150f, Chrome);
+            RectTransform enRow = Row(UnitPage, 48f);
+            EnergyFullButton = Btn("EnFull", enRow, "ENERGY FULL", 180f, Chrome);
+            EnergyZeroButton = Btn("EnZero", enRow, "ENERGY 0", 150f, Chrome);
+            RectTransform lifeRow = Row(UnitPage, 48f);
+            KillButton = Btn("Kill", lifeRow, "KILL", 150f, Chrome);
+            ReviveButton = Btn("Revive", lifeRow, "REVIVE", 150f, Chrome);
+
+            AnimPage = Blank("AnimPage", body);
+            Stretch(AnimPage);
+            VerticalLayoutGroup av = AnimPage.gameObject.AddComponent<VerticalLayoutGroup>();
+            av.childControlWidth = true;
+            av.childControlHeight = true;
+            av.spacing = 8f;
+            av.childForceExpandHeight = false;
+            av.childForceExpandWidth = true;
 
             ClipRow = Blank("ClipRow", AnimPage);
-            ClipRow.anchorMin = new Vector2(0f, 1f); ClipRow.anchorMax = new Vector2(1f, 1f);
-            ClipRow.pivot = new Vector2(0.5f, 1f);
-            ClipRow.offsetMin = new Vector2(0f, -184f); ClipRow.offsetMax = new Vector2(0f, 0f);
             GridLayoutGroup g = ClipRow.gameObject.AddComponent<GridLayoutGroup>();
-            g.cellSize = new Vector2(134f, 40f);
-            g.spacing = new Vector2(6f, 6f);
+            g.cellSize = new Vector2(168f, 48f);
+            g.spacing = new Vector2(8f, 8f);
+            LayoutElement clipHeight = ClipRow.gameObject.AddComponent<LayoutElement>();
+            clipHeight.preferredHeight = 176f;
 
-            AnimPauseButton = EditBtn("AnimPause", AnimPage, "PAUSE", 0f, -196f);
-            AnimStepButton = EditBtn("AnimStep", AnimPage, "STEP", 140f, -196f);
-            AnimLoopButton = EditBtn("AnimLoop", AnimPage, "LOOP", 280f, -196f);
-            SoloButton = EditBtn("Solo", AnimPage, "SOLO", 0f, -246f);
-            DetailsButton = EditBtn("Details", AnimPage, "DETAILS", 140f, -246f);
+            RectTransform animRow = Row(AnimPage, 48f);
+            AnimPauseButton = Btn("AnimPause", animRow, "PAUSE", 150f, Chrome);
+            AnimStepButton = Btn("AnimStep", animRow, "STEP", 130f, Chrome);
+            AnimLoopButton = Btn("AnimLoop", animRow, "LOOP", 130f, Live);
+            RectTransform animRow2 = Row(AnimPage, 48f);
+            SoloButton = Btn("Solo", animRow2, "SOLO", 150f, Chrome);
+            DetailsButton = Btn("Details", animRow2, "DETAILS", 150f, Chrome);
 
-            AnimSpeedLabel = Label("AnimSpeedLabel", AnimPage, "clip speed 1.00x", 16, Dim,
-                                   TextAnchor.UpperLeft, 0f, 0f);
-            Top(AnimSpeedLabel.rectTransform, 300f, 24f);
+            AnimSpeedLabel = Label("AnimSpeedLabel", AnimPage, "clip speed 1.00x", 18, Dim, TextAnchor.UpperLeft);
+            Fixed(AnimSpeedLabel.rectTransform, 0f, 26f);
             AnimSpeed = MakeSlider("AnimSpeed", AnimPage, 0.05f, 2f, 1f);
-            Top(AnimSpeed.GetComponent<RectTransform>(), 330f, 30f);
 
             DetailsPanel = Blank("DetailsPanel", AnimPage);
-            DetailsPanel.anchorMin = new Vector2(0f, 0f); DetailsPanel.anchorMax = new Vector2(1f, 1f);
-            DetailsPanel.offsetMin = new Vector2(0f, 0f); DetailsPanel.offsetMax = new Vector2(0f, -376f);
-            ClipDetails = Label("ClipDetails", DetailsPanel, "", 15, Dim, TextAnchor.UpperLeft, 0f, 0f);
+            LayoutElement detailGrow = DetailsPanel.gameObject.AddComponent<LayoutElement>();
+            detailGrow.flexibleHeight = 1f;
+            detailGrow.minHeight = 120f;
+            ClipDetails = Label("ClipDetails", DetailsPanel, "", 16, Dim, TextAnchor.UpperLeft);
             Stretch(ClipDetails.rectTransform);
             DetailsPanel.gameObject.SetActive(false);
 
@@ -344,21 +479,69 @@ namespace Emberfall.Dev
             RightDrawer.gameObject.SetActive(false);
         }
 
+        /// <summary>A drawer: pinned to one side, running the full height between the bar and the
+        /// log, overlaying the battlefield rather than squeezing it.</summary>
+        private static void EdgeDrawer(RectTransform r, bool leftSide, float width)
+        {
+            r.anchorMin = new Vector2(leftSide ? 0f : 1f, 0f);
+            r.anchorMax = new Vector2(leftSide ? 0f : 1f, 1f);
+            r.pivot = new Vector2(leftSide ? 0f : 1f, 0.5f);
+            r.sizeDelta = new Vector2(width, 0f);
+            r.offsetMin = new Vector2(leftSide ? 0f : -width, LogHeight);
+            r.offsetMax = new Vector2(leftSide ? width : 0f, -BarHeight);
+        }
+
+        private RectTransform HeaderRow(RectTransform drawer, string title)
+        {
+            RectTransform head = Blank("Header", drawer);
+            head.anchorMin = new Vector2(0f, 1f);
+            head.anchorMax = new Vector2(1f, 1f);
+            head.pivot = new Vector2(0.5f, 1f);
+            head.offsetMin = new Vector2(12f, -64f);
+            head.offsetMax = new Vector2(-12f, -12f);
+            HorizontalLayoutGroup g = head.gameObject.AddComponent<HorizontalLayoutGroup>();
+            g.spacing = 8f;
+            g.childControlWidth = true;
+            g.childControlHeight = true;
+            g.childAlignment = TextAnchor.MiddleLeft;
+            g.childForceExpandWidth = false;
+            g.childForceExpandHeight = false;
+            if (!string.IsNullOrEmpty(title))
+            {
+                Text t = Label("Title", head, title, 22, Ink, TextAnchor.MiddleLeft);
+                Fixed(t.rectTransform, 160f, 44f);
+            }
+            return head;
+        }
+
+        private static RectTransform Body(RectTransform drawer)
+        {
+            RectTransform body = Blank("Body", drawer);
+            body.anchorMin = new Vector2(0f, 0f);
+            body.anchorMax = new Vector2(1f, 1f);
+            body.offsetMin = new Vector2(12f, 12f);
+            body.offsetMax = new Vector2(-12f, -76f);
+            return body;
+        }
+
         private void BuildHelp()
         {
-            Image p = Panel("Help", Root, new Color(0.05f, 0.05f, 0.08f, 0.97f));
+            Image p = Panel("Help", SafeArea, new Color(0.05f, 0.05f, 0.08f, 0.98f));
             HelpPanel = p.rectTransform;
-            HelpPanel.anchorMin = new Vector2(0.5f, 0.5f); HelpPanel.anchorMax = new Vector2(0.5f, 0.5f);
-            HelpPanel.sizeDelta = new Vector2(1060f, 620f);
-            HelpPanel.anchoredPosition = Vector2.zero;
+            HelpPanel.anchorMin = new Vector2(0.08f, 0.08f);
+            HelpPanel.anchorMax = new Vector2(0.92f, 0.92f);
+            HelpPanel.offsetMin = Vector2.zero;
+            HelpPanel.offsetMax = Vector2.zero;
 
-            Text t = Label("HelpText", HelpPanel, HelpText, 17, Ink, TextAnchor.UpperLeft, 0f, 0f);
+            Text t = Label("HelpText", HelpPanel, HelpText, 19, Ink, TextAnchor.UpperLeft);
             RectTransform tr = t.rectTransform;
-            tr.anchorMin = new Vector2(0f, 0f); tr.anchorMax = new Vector2(1f, 1f);
-            tr.offsetMin = new Vector2(26f, 70f); tr.offsetMax = new Vector2(-26f, -22f);
+            tr.anchorMin = new Vector2(0f, 0f);
+            tr.anchorMax = new Vector2(1f, 1f);
+            tr.offsetMin = new Vector2(32f, 80f);
+            tr.offsetMax = new Vector2(-32f, -26f);
 
-            HelpClose = Btn("HelpClose", HelpPanel, "CLOSE", 140f, Root,
-                            new Vector2(0.5f, 0f), new Vector2(0f, 20f), Live);
+            HelpClose = Btn("HelpClose", HelpPanel, "CLOSE", 180f, Live);
+            Corner(HelpClose, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 20f), 180f, 48f);
             HelpPanel.gameObject.SetActive(false);
         }
 
@@ -366,9 +549,9 @@ namespace Emberfall.Dev
             "DEV ARENA\n\n"
             + "This is the real battle view driving the real engine. CombatSimulation.Run is Begin()\n"
             + "plus StepNatural() until the fight ends, so AUTO is the game, not an imitation of it.\n\n"
-            + "MANUAL — tap any unit on either side, then BASIC or ACTIVE, then tap a target.\n"
-            + "The action plays out in real time. If the engine redirects or refuses your pick, a\n"
-            + "message says why.\n\n"
+            + "MANUAL - tap any unit on either side, then BASIC or ACTIVE, then tap a target. The\n"
+            + "action plays out in real time. If the engine redirects or refuses your pick, a message\n"
+            + "says why.\n\n"
             + "WHAT A HAND-DRIVEN ACTION IS\n"
             + "  It is a TURN. It ticks that unit's damage-over-time, repays its turn debt, fires its\n"
             + "  turn-start passives, resolves the ability, fires the after-action passives and\n"
@@ -382,11 +565,11 @@ namespace Emberfall.Dev
             + "  acted do not act; this engine has no other end-of-round work.\n"
             + "  KILL, REVIVE and the HP and ENERGY buttons are cheats, not events in the fiction.\n"
             + "  They move the number and fire no passive.\n\n"
-            + "ANCHORS — the ORANGE mark is where the engine puts the unit's feet. The RED line is\n"
+            + "ANCHORS - the ORANGE mark is where the engine puts the unit's feet. The RED line is\n"
             + "the bottom edge of the sprite frame itself. When they disagree, the clip's foot\n"
             + "fraction is wrong and the unit will float or sink in a real battle.";
 
-        // ------------------------------------------------------------------ small widgets
+        // ================================================================== widgets
 
         public static Image Panel(string name, Transform parent, Color colour)
         {
@@ -405,7 +588,7 @@ namespace Emberfall.Dev
         }
 
         public static Text Label(string name, Transform parent, string text, int size, Color colour,
-                                 TextAnchor anchor, float x, float width)
+                                 TextAnchor anchor)
         {
             GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             go.transform.SetParent(parent, false);
@@ -418,70 +601,105 @@ namespace Emberfall.Dev
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
-            RectTransform r = t.rectTransform;
-            r.anchorMin = new Vector2(0f, 0f); r.anchorMax = new Vector2(0f, 1f);
-            r.pivot = new Vector2(0f, 0.5f);
-            r.sizeDelta = new Vector2(width, 0f);
-            r.anchoredPosition = new Vector2(x, 0f);
+            // Fill the parent by default. A Text left on Unity's 100x100 default sits centred in
+            // whatever row it joins, and then reads as text with its start cut off.
+            Stretch(t.rectTransform);
             return t;
         }
 
-        public static Button Btn(string name, Transform parent, string text, float width,
-                                 ref float x, Color colour)
-        {
-            Button b = Btn(name, parent, text, width, parent, new Vector2(0f, 0.5f), new Vector2(x, 0f), colour);
-            x += width + 4f;
-            return b;
-        }
-
-        public static Button Btn(string name, Transform parent, string text, float width,
-                                 Transform unusedRoot, Vector2 anchor, Vector2 pos, Color colour)
+        /// <summary>
+        /// A button that works inside a layout group and outside one. Its size comes from a
+        /// LayoutElement, so a row can lay it out, and Corner() can pin it when there is no row.
+        /// </summary>
+        public static Button Btn(string name, Transform parent, string text, float width, Color colour)
         {
             Image img = Panel(name, parent, colour);
             RectTransform r = img.rectTransform;
-            r.anchorMin = r.anchorMax = anchor;
-            r.pivot = new Vector2(0f, 0.5f);
-            r.sizeDelta = new Vector2(width, 44f);
-            r.anchoredPosition = pos;
+            r.sizeDelta = new Vector2(width, 48f);
+            LayoutElement le = img.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.minWidth = width;
+            le.preferredHeight = 48f;
+
             Button b = img.gameObject.AddComponent<Button>();
             ColorBlock cb = b.colors;
-            cb.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
+            cb.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
             cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
             b.colors = cb;
-            Text t = Label(name + "Text", r, text, 17, Ink, TextAnchor.MiddleCenter, 0f, width);
+
+            Text t = Label(name + "Text", r, text, 18, Ink, TextAnchor.MiddleCenter);
             Stretch(t.rectTransform);
             return b;
         }
 
-        private static Button EditBtn(string name, Transform parent, string text, float x, float y)
+        /// <summary>Pins a widget to a corner of its parent. The only positioning in this file that
+        /// names a number, and it names it as an inset from an edge rather than from the origin.</summary>
+        public static void Corner(Component c, Vector2 anchor, Vector2 pivot, Vector2 inset,
+                                  float width, float height)
         {
-            Image img = Panel(name, parent, Chrome);
-            RectTransform r = img.rectTransform;
-            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
-            r.pivot = new Vector2(0f, 1f);
-            r.sizeDelta = new Vector2(134f, 42f);
-            r.anchoredPosition = new Vector2(x, y);
-            Button b = img.gameObject.AddComponent<Button>();
-            Text t = Label(name + "Text", r, text, 16, Ink, TextAnchor.MiddleCenter, 0f, 134f);
-            Stretch(t.rectTransform);
-            return b;
+            RectTransform r = c.GetComponent<RectTransform>();
+            r.anchorMin = r.anchorMax = anchor;
+            r.pivot = pivot;
+            r.sizeDelta = new Vector2(width, height);
+            r.anchoredPosition = inset;
+            LayoutElement le = r.GetComponent<LayoutElement>();
+            if (le != null) le.ignoreLayout = true;
         }
 
-        public static InputField Field(string name, Transform parent, string value, float width, ref float x)
+        public static RectTransform Row(Transform parent, float height)
+        {
+            RectTransform row = Blank("Row", parent);
+            HorizontalLayoutGroup g = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            g.spacing = 8f;
+            g.childControlWidth = true;
+            g.childControlHeight = true;
+            g.childAlignment = TextAnchor.MiddleLeft;
+            g.childForceExpandWidth = false;
+            // NOT expand-height. A horizontal group that force-expands height reports a flexible
+            // height of its own to whatever contains it, so every row in a drawer claimed a share
+            // of the leftover space and a row of 48-unit buttons came out 200 units tall.
+            g.childForceExpandHeight = false;
+            LayoutElement le = row.gameObject.AddComponent<LayoutElement>();
+            le.preferredHeight = height;
+            le.minHeight = height;
+            le.flexibleHeight = 0f;
+            return row;
+        }
+
+        private static void Gap(Transform parent, float width)
+        {
+            RectTransform g = Blank("Gap", parent);
+            LayoutElement le = g.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.minWidth = width;
+        }
+
+        public static void Fixed(RectTransform r, float width, float height)
+        {
+            LayoutElement le = r.GetComponent<LayoutElement>();
+            if (le == null) le = r.gameObject.AddComponent<LayoutElement>();
+            if (width > 0f) { le.preferredWidth = width; le.minWidth = width; }
+            le.preferredHeight = height;
+            le.minHeight = height;
+        }
+
+        public static InputField Field(string name, Transform parent, string value, float width)
         {
             Image img = Panel(name, parent, new Color(0.03f, 0.03f, 0.05f, 1f));
             RectTransform r = img.rectTransform;
-            r.anchorMin = r.anchorMax = new Vector2(0f, 0.5f);
-            r.pivot = new Vector2(0f, 0.5f);
-            r.sizeDelta = new Vector2(width, 40f);
-            r.anchoredPosition = new Vector2(x, 0f);
-            x += width + 4f;
+            r.sizeDelta = new Vector2(width, 44f);
+            LayoutElement le = img.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.minWidth = width;
+            le.preferredHeight = 44f;
 
-            Text t = Label(name + "Text", r, value, 17, Ink, TextAnchor.MiddleLeft, 8f, width - 16f);
+            Text t = Label(name + "Text", r, value, 18, Ink, TextAnchor.MiddleLeft);
             t.raycastTarget = true;
             RectTransform tr = t.rectTransform;
-            tr.anchorMin = new Vector2(0f, 0f); tr.anchorMax = new Vector2(1f, 1f);
-            tr.offsetMin = new Vector2(8f, 2f); tr.offsetMax = new Vector2(-8f, -2f);
+            tr.anchorMin = new Vector2(0f, 0f);
+            tr.anchorMax = new Vector2(1f, 1f);
+            tr.offsetMin = new Vector2(10f, 3f);
+            tr.offsetMax = new Vector2(-10f, -3f);
 
             InputField f = img.gameObject.AddComponent<InputField>();
             f.textComponent = t;
@@ -492,9 +710,9 @@ namespace Emberfall.Dev
         private static Slider MakeSlider(string name, Transform parent, float min, float max, float value)
         {
             RectTransform root = Blank(name, parent);
-            root.anchorMin = new Vector2(0f, 1f); root.anchorMax = new Vector2(1f, 1f);
-            root.pivot = new Vector2(0f, 1f);
-            root.sizeDelta = new Vector2(0f, 30f);
+            LayoutElement le = root.gameObject.AddComponent<LayoutElement>();
+            le.preferredHeight = 34f;
+            le.minHeight = 34f;
 
             Image track = Panel("Track", root, new Color(0.04f, 0.05f, 0.07f, 1f));
             Stretch(track.rectTransform);
@@ -512,20 +730,22 @@ namespace Emberfall.Dev
             return s;
         }
 
-        /// <summary>A vertical scroller with a content column that grows with its children.</summary>
-        public static RectTransform Scroll(string name, Transform parent, Vector4 padding)
+        /// <summary>A masked, scrolling column that fills whatever rect it is given.</summary>
+        public static RectTransform Scroll(string name, Transform parent)
         {
             RectTransform view = Blank(name, parent);
-            view.anchorMin = new Vector2(0f, 0f); view.anchorMax = new Vector2(1f, 1f);
-            view.offsetMin = new Vector2(padding.x, padding.y);
-            view.offsetMax = new Vector2(padding.z, padding.w);
+            Stretch(view);
             view.gameObject.AddComponent<RectMask2D>();
 
             RectTransform content = Blank(name + "Content", view);
-            content.anchorMin = new Vector2(0f, 1f); content.anchorMax = new Vector2(1f, 1f);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
             content.pivot = new Vector2(0.5f, 1f);
+            content.sizeDelta = new Vector2(0f, content.sizeDelta.y);   // see BuildLog
             VerticalLayoutGroup v = content.gameObject.AddComponent<VerticalLayoutGroup>();
-            v.spacing = 2f;
+            v.spacing = 3f;
+            v.childControlWidth = true;
+            v.childControlHeight = true;
             v.childForceExpandHeight = false;
             v.childForceExpandWidth = true;
             ContentSizeFitter f = content.gameObject.AddComponent<ContentSizeFitter>();
@@ -536,7 +756,7 @@ namespace Emberfall.Dev
             sr.viewport = view;
             sr.horizontal = false;
             sr.movementType = ScrollRect.MovementType.Clamped;
-            sr.scrollSensitivity = 26f;
+            sr.scrollSensitivity = 30f;
             return content;
         }
 
@@ -548,28 +768,9 @@ namespace Emberfall.Dev
             r.offsetMax = Vector2.zero;
         }
 
-        private static void Top(RectTransform r, float y, float height)
-        {
-            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
-            r.pivot = new Vector2(0.5f, 1f);
-            r.offsetMin = new Vector2(0f, -(y + height)); r.offsetMax = new Vector2(0f, -y);
-        }
-
-        private static void Pin(Component c, Vector2 anchorMin, Vector2 anchorMax)
-        {
-            RectTransform r = c.GetComponent<RectTransform>();
-            r.anchorMin = anchorMin; r.anchorMax = anchorMax;
-            r.pivot = new Vector2(0f, 1f);
-        }
-
-        private static void SetPos(Component c, float x, float y)
-        {
-            c.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, y);
-        }
-
         public static void SetLabel(Button b, string text)
         {
-            Text t = b.GetComponentInChildren<Text>();
+            Text t = b.GetComponentInChildren<Text>(true);
             if (t != null) t.text = text;
         }
 
@@ -581,6 +782,7 @@ namespace Emberfall.Dev
 
         public static Color Accent { get { return Live; } }
         public static Color Quiet { get { return Chrome; } }
+        public static Color Hot { get { return Warm; } }
         public static Color Text0 { get { return Ink; } }
         public static Color Text1 { get { return Dim; } }
     }

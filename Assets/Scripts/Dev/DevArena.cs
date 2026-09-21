@@ -58,6 +58,9 @@ namespace Emberfall.Dev
         private readonly List<Text> _logLines = new List<Text>();
         private readonly List<int[]> _logUnits = new List<int[]>();
         private bool _logExpanded;
+        private bool _scrollLogToEnd;
+        private string _environment = "ashen";
+        private float _builtAspect;
         private bool _showAnchors = true;
         private bool _solo;
         private bool _animPaused;
@@ -67,10 +70,19 @@ namespace Emberfall.Dev
         private int _highlightA = -1, _highlightB = -1;
         private float _highlightUntil;
 
+        /// <summary>
+        /// One unit's overlay, in two pieces that follow two different points.
+        ///
+        /// Root follows the unit's FEET, because that is what the ground line and the foot anchor
+        /// are about. HeadStack follows the unit's HEAD, because that is where a health bar
+        /// belongs - and it is placed by the same arithmetic BattleScreen uses, so a bar sits
+        /// exactly where it sits in a real battle rather than somewhere a dev tool decided.
+        /// </summary>
         private sealed class UnitWidget
         {
             public int Id;
             public RectTransform Root;
+            public RectTransform HeadStack;
             public Button Tap;
             public Image Frame;
             public Image HpFill;
@@ -81,11 +93,20 @@ namespace Emberfall.Dev
             public Image FootMark;
         }
 
+        /// <summary>The gap between a head and its bar, in world units. BattleScreen's number.</summary>
+        private const float BarWorldRise = 0.12f;
+        private const float BarStackHeight = 62f;
+
         // ================================================================== boot
 
         private void Start()
         {
             Application.targetFrameRate = 60;
+            // A workbench that stops when you look away is not a workbench: you alt-tab to the
+            // editor to change a number and want the fight still running when you come back. In
+            // the editor this is also what keeps the player loop ticking while the Game view is
+            // not the focused window.
+            Application.runInBackground = true;
 
             // Arriving from the hub's DEV button brings GameApp with it - it is DontDestroyOnLoad,
             // so loading this scene does not unload it. The arena wants the screen to itself.
@@ -121,7 +142,9 @@ namespace Emberfall.Dev
             BattleRequest req = _board.BuildRequest(_content, out problem);
             if (req == null) { Toast(problem); return; }
 
-            _stage.BuildWorld(req.Stage != null ? req.Stage.Environment : "ashen");
+            _environment = req.Stage != null ? req.Stage.Environment : "ashen";
+            _stage.BuildWorld(_environment);
+            _builtAspect = Aspect();
             _session = CombatSimulation.Begin(req);
             _stage.Populate(_session.Result);
             _cursor = 0;
@@ -132,6 +155,40 @@ namespace Emberfall.Dev
             Log("Fight open on " + (req.Stage != null ? req.Stage.Name : "?") + ", seed " + req.Seed
                 + ". " + (_auto ? "AUTO" : "MANUAL") + ".", -1, -1);
             RefreshChrome();
+        }
+
+        private static float Aspect()
+        {
+            return Screen.height <= 0 ? 1.778f : (float)Screen.width / Screen.height;
+        }
+
+        /// <summary>
+        /// The backdrop quad is sized off the live camera when the world is built, so a screen
+        /// whose aspect changes after that leaves bands down the sides. In the game that never
+        /// happens - the world is built once, at the device's resolution - but in a tool the whole
+        /// point is to look at the fight at several sizes, so the world is rebuilt when the shape
+        /// of the screen actually changes, and the bodies are put back the way the session says
+        /// they are rather than reset.
+        /// </summary>
+        private void RebuildForAspect()
+        {
+            if (_session == null || _stage == null) return;
+            _stage.BuildWorld(_environment);
+            _builtAspect = Aspect();
+            _stage.Populate(_session.Result);
+
+            IList<UnitView> views = _session.Units;
+            for (int i = 0; i < views.Count; i++)
+            {
+                UnitView v = views[i];
+                UnitActor a = _stage.Find(v.Id);
+                if (a == null) continue;
+                a.DisplayHp = v.Hp;
+                a.DisplayShield = v.Shield;
+                a.Energy = v.Energy;
+                if (!v.Alive) StartCoroutine(a.PlayDeath(8f));
+            }
+            BuildUnitWidgets();
         }
 
         /// <summary>
@@ -408,14 +465,9 @@ namespace Emberfall.Dev
                 int v;
                 if (int.TryParse(s, out v)) _board.Seed = v;
             });
-            if (Application.CanStreamedLevelBeLoaded(0))
-            {
-                Button back = DevArenaUi.Btn("Back", _ui.Root, "BACK", 96f, _ui.Root,
-                                             new Vector2(1f, 1f), new Vector2(-160f, -74f),
-                                             DevArenaUi.Quiet);
-                back.onClick.AddListener(delegate
-                { UnityEngine.SceneManagement.SceneManager.LoadScene(0); });
-            }
+            _ui.BackButton.gameObject.SetActive(Application.CanStreamedLevelBeLoaded(0));
+            _ui.BackButton.onClick.AddListener(delegate
+            { UnityEngine.SceneManagement.SceneManager.LoadScene(0); });
 
             _ui.HelpButton.onClick.AddListener(delegate
             { _ui.HelpPanel.gameObject.SetActive(!_ui.HelpPanel.gameObject.activeSelf); });
@@ -424,21 +476,17 @@ namespace Emberfall.Dev
             _ui.LogExpandButton.onClick.AddListener(delegate
             {
                 _logExpanded = !_logExpanded;
-                _ui.LogPanel.offsetMax = new Vector2(0f, _logExpanded ? 330f : 104f);
+                _ui.LogPanel.offsetMax = new Vector2(0f, _logExpanded
+                    ? DevArenaUi.LogHeightExpanded : DevArenaUi.LogHeight);
                 DevArenaUi.SetLabel(_ui.LogExpandButton, _logExpanded ? "COLLAPSE" : "EXPAND");
             });
 
-            _ui.SetupTab = DevArenaUi.Btn("SetupEdge", _ui.Root, "SETUP", 110f, _ui.Root,
-                                          new Vector2(0f, 0.5f), new Vector2(0f, 0f), DevArenaUi.Quiet);
-            _ui.SetupTab.onClick.AddListener(delegate { ToggleDrawer(_ui.SetupDrawer); });
+            _ui.SetupEdge.onClick.AddListener(delegate { ToggleDrawer(_ui.SetupDrawer); });
+            _ui.UnitEdge.onClick.AddListener(delegate { ToggleDrawer(_ui.RightDrawer); });
             _ui.UnitTab.onClick.AddListener(delegate { ShowRightPage(true); });
             _ui.AnimTab.onClick.AddListener(delegate { ShowRightPage(false); });
             _ui.SetupClose.onClick.AddListener(delegate { _ui.SetupDrawer.gameObject.SetActive(false); });
             _ui.RightClose.onClick.AddListener(delegate { _ui.RightDrawer.gameObject.SetActive(false); });
-
-            Button unitEdge = DevArenaUi.Btn("UnitEdge", _ui.Root, "UNIT", 110f, _ui.Root,
-                                             new Vector2(1f, 0.5f), new Vector2(-110f, 0f), DevArenaUi.Quiet);
-            unitEdge.onClick.AddListener(delegate { ToggleDrawer(_ui.RightDrawer); });
 
             _ui.SaveBoardButton.onClick.AddListener(delegate { _board.Save(); Toast("board saved to " + DevArenaBoard.DefaultPath); });
             _ui.LoadBoardButton.onClick.AddListener(delegate { if (_board.Load()) { BuildBoardRows(); StartFight(); } });
@@ -465,10 +513,7 @@ namespace Emberfall.Dev
             for (int i = 0; i < ClipIds.Length; i++)
             {
                 string clip = ClipIds[i];
-                float ignored = 0f;
-                Button b = DevArenaUi.Btn("Clip_" + clip, _ui.ClipRow, clip, 134f, ref ignored, DevArenaUi.Quiet);
-                RectTransform r = b.GetComponent<RectTransform>();
-                r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+                Button b = DevArenaUi.Btn("Clip_" + clip, _ui.ClipRow, clip, 168f, DevArenaUi.Quiet);
                 b.onClick.AddListener(delegate { _animClip = clip; PlayClip(clip); RefreshAnimPage(); });
             }
         }
@@ -515,7 +560,7 @@ namespace Emberfall.Dev
         private void RefreshChrome()
         {
             DevArenaUi.SetLabel(_ui.ModeButton, _auto ? "AUTO" : "MANUAL");
-            DevArenaUi.SetColour(_ui.ModeButton, _auto ? DevArenaUi.Accent : new Color(0.55f, 0.32f, 0.10f, 1f));
+            DevArenaUi.SetColour(_ui.ModeButton, _auto ? DevArenaUi.Accent : DevArenaUi.Hot);
             DevArenaUi.SetLabel(_ui.PlayButton, _playing ? "PAUSE" : "PLAY");
             _ui.PlayButton.gameObject.SetActive(_auto);
             _ui.NextActionButton.gameObject.SetActive(_auto);
@@ -641,8 +686,14 @@ namespace Emberfall.Dev
 
         private void BuildUnitWidgets()
         {
+            // BOTH pieces. The head stack is its own object under the overlay layer, not a child
+            // of Root, so forgetting it here leaves a second set of bars and names behind every
+            // time the board is rebuilt - which is exactly what a screen-size change does.
             for (int i = 0; i < _widgets.Count; i++)
+            {
                 if (_widgets[i].Root != null) Destroy(_widgets[i].Root.gameObject);
+                if (_widgets[i].HeadStack != null) Destroy(_widgets[i].HeadStack.gameObject);
+            }
             _widgets.Clear();
             if (_session == null) return;
 
@@ -652,48 +703,76 @@ namespace Emberfall.Dev
                 UnitView v = views[i];
                 UnitWidget w = new UnitWidget();
                 w.Id = v.Id;
+                int id = v.Id;
+
+                // --- the foot piece, at the unit's base ---------------------------------------
                 w.Root = DevArenaUi.Blank("Unit_" + v.Id, _ui.UnitLayer);
-                w.Root.sizeDelta = new Vector2(150f, 150f);
                 w.Root.anchorMin = w.Root.anchorMax = new Vector2(0f, 0f);
+                w.Root.pivot = new Vector2(0.5f, 0f);
+                w.Root.sizeDelta = new Vector2(180f, 240f);
 
                 Image tap = DevArenaUi.Panel("Tap", w.Root, new Color(1f, 1f, 1f, 0.01f));
-                tap.rectTransform.sizeDelta = new Vector2(132f, 150f);
-                tap.rectTransform.anchoredPosition = new Vector2(0f, 6f);
+                DevArenaUi.Stretch(tap.rectTransform);
                 w.Tap = tap.gameObject.AddComponent<Button>();
-                int id = v.Id;
                 w.Tap.onClick.AddListener(delegate { OnUnitTapped(id); });
 
-                w.Frame = DevArenaUi.Panel("Frame", w.Root, new Color(0.30f, 0.72f, 1f, 0f));
-                w.Frame.rectTransform.sizeDelta = new Vector2(136f, 6f);
-                w.Frame.rectTransform.anchoredPosition = new Vector2(0f, 84f);
+                w.GroundMark = DevArenaUi.Panel("Ground", w.Root, new Color(1f, 0.58f, 0.18f, 0.95f));
+                w.GroundMark.rectTransform.anchorMin = w.GroundMark.rectTransform.anchorMax =
+                    new Vector2(0.5f, 0f);
+                w.GroundMark.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                w.GroundMark.rectTransform.sizeDelta = new Vector2(56f, 4f);
+                w.GroundMark.raycastTarget = false;
+
+                w.FootMark = DevArenaUi.Panel("Foot", w.Root, new Color(1f, 0.30f, 0.30f, 0.65f));
+                w.FootMark.rectTransform.anchorMin = w.FootMark.rectTransform.anchorMax =
+                    new Vector2(0.5f, 0f);
+                w.FootMark.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                w.FootMark.rectTransform.sizeDelta = new Vector2(110f, 2f);
+                w.FootMark.raycastTarget = false;
+
+                // --- the head piece, above the unit's head ------------------------------------
+                w.HeadStack = DevArenaUi.Blank("Head_" + v.Id, _ui.UnitLayer);
+                w.HeadStack.anchorMin = w.HeadStack.anchorMax = new Vector2(0f, 0f);
+                w.HeadStack.pivot = new Vector2(0.5f, 0f);
+                w.HeadStack.sizeDelta = new Vector2(200f, BarStackHeight);
+
+                w.Frame = DevArenaUi.Panel("Frame", w.HeadStack, new Color(0.30f, 0.72f, 1f, 0f));
+                w.Frame.rectTransform.anchorMin = new Vector2(0f, 0f);
+                w.Frame.rectTransform.anchorMax = new Vector2(1f, 0f);
+                w.Frame.rectTransform.pivot = new Vector2(0.5f, 0f);
+                w.Frame.rectTransform.offsetMin = new Vector2(0f, 0f);
+                w.Frame.rectTransform.offsetMax = new Vector2(0f, 6f);
                 w.Frame.raycastTarget = false;
 
-                Image hpTrack = DevArenaUi.Panel("HpTrack", w.Root, new Color(0.05f, 0.05f, 0.07f, 0.85f));
-                hpTrack.rectTransform.sizeDelta = new Vector2(128f, 12f);
-                hpTrack.rectTransform.anchoredPosition = new Vector2(0f, 70f);
+                Image hpTrack = DevArenaUi.Panel("HpTrack", w.HeadStack,
+                                                 new Color(0.05f, 0.05f, 0.07f, 0.88f));
+                hpTrack.rectTransform.anchorMin = new Vector2(0f, 0f);
+                hpTrack.rectTransform.anchorMax = new Vector2(1f, 0f);
+                hpTrack.rectTransform.pivot = new Vector2(0.5f, 0f);
+                hpTrack.rectTransform.offsetMin = new Vector2(10f, 10f);
+                hpTrack.rectTransform.offsetMax = new Vector2(-10f, 24f);
                 hpTrack.raycastTarget = false;
                 w.ShieldFill = Fill(hpTrack.rectTransform, new Color(0.62f, 0.78f, 0.98f, 0.95f));
                 w.HpFill = Fill(hpTrack.rectTransform, v.IsPlayer
                     ? new Color(0.36f, 0.82f, 0.45f, 1f) : new Color(0.86f, 0.32f, 0.30f, 1f));
 
-                Image enTrack = DevArenaUi.Panel("EnTrack", w.Root, new Color(0.05f, 0.05f, 0.07f, 0.85f));
-                enTrack.rectTransform.sizeDelta = new Vector2(128f, 6f);
-                enTrack.rectTransform.anchoredPosition = new Vector2(0f, 60f);
+                Image enTrack = DevArenaUi.Panel("EnTrack", w.HeadStack,
+                                                 new Color(0.05f, 0.05f, 0.07f, 0.88f));
+                enTrack.rectTransform.anchorMin = new Vector2(0f, 0f);
+                enTrack.rectTransform.anchorMax = new Vector2(1f, 0f);
+                enTrack.rectTransform.pivot = new Vector2(0.5f, 0f);
+                enTrack.rectTransform.offsetMin = new Vector2(10f, 2f);
+                enTrack.rectTransform.offsetMax = new Vector2(-10f, 8f);
                 enTrack.raycastTarget = false;
                 w.EnergyFill = Fill(enTrack.rectTransform, new Color(0.98f, 0.80f, 0.32f, 1f));
 
-                w.Name = DevArenaUi.Label("Name", w.Root, v.Name, 14, DevArenaUi.Text0,
-                                          TextAnchor.MiddleCenter, 0f, 160f);
-                w.Name.rectTransform.anchorMin = w.Name.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                w.Name.rectTransform.sizeDelta = new Vector2(160f, 18f);
-                w.Name.rectTransform.anchoredPosition = new Vector2(0f, 88f);
-
-                w.GroundMark = DevArenaUi.Panel("Ground", w.Root, new Color(1f, 0.58f, 0.18f, 0.95f));
-                w.GroundMark.rectTransform.sizeDelta = new Vector2(46f, 3f);
-                w.GroundMark.raycastTarget = false;
-                w.FootMark = DevArenaUi.Panel("Foot", w.Root, new Color(1f, 0.30f, 0.30f, 0.6f));
-                w.FootMark.rectTransform.sizeDelta = new Vector2(88f, 2f);
-                w.FootMark.raycastTarget = false;
+                w.Name = DevArenaUi.Label("Name", w.HeadStack, v.Name, 18, DevArenaUi.Text0,
+                                          TextAnchor.MiddleCenter);
+                w.Name.rectTransform.anchorMin = new Vector2(0f, 0f);
+                w.Name.rectTransform.anchorMax = new Vector2(1f, 0f);
+                w.Name.rectTransform.pivot = new Vector2(0.5f, 0f);
+                w.Name.rectTransform.offsetMin = new Vector2(0f, 28f);
+                w.Name.rectTransform.offsetMax = new Vector2(0f, 52f);
 
                 _widgets.Add(w);
             }
@@ -715,25 +794,60 @@ namespace Emberfall.Dev
 
         private void LateUpdate()
         {
+            if (_ui != null) _ui.ApplySafeArea();
             if (_session == null || _stage == null || _ui == null) return;
+            if (Mathf.Abs(Aspect() - _builtAspect) > 0.01f) RebuildForAspect();
             RefreshChrome();
 
             float scale = _ui.Canvas != null ? _ui.Canvas.scaleFactor : 1f;
             if (scale <= 0f) scale = 1f;
+
+            if (_scrollLogToEnd)
+            {
+                _scrollLogToEnd = false;
+                if (_ui.LogScroll != null) _ui.LogScroll.verticalNormalizedPosition = 0f;
+            }
+            // The scroll rect owns both axes even with horizontal turned off, and it drifts the
+            // content sideways when the newest line is wider than the viewport - which reads as a
+            // log with its first twenty characters chopped off. Pin x every frame.
+            if (_ui.LogContent != null && _ui.LogContent.anchoredPosition.x != 0f)
+                _ui.LogContent.anchoredPosition =
+                    new Vector2(0f, _ui.LogContent.anchoredPosition.y);
+
+            // The same arithmetic BattleScreen uses. Orthographic gives one pixel scale for the
+            // whole field regardless of depth, so this is exact rather than an average, and the
+            // ceiling keeps a back-rank bar from leaving the screen and reading as a stray bar
+            // belonging to nobody.
+            Camera cam = _stage.Camera;
+            float pixelsPerWorldUnit = cam != null
+                ? Screen.height / (2f * Mathf.Max(0.01f, cam.orthographicSize)) : 100f;
+            float rise = BarWorldRise * pixelsPerWorldUnit / scale;
+            float ceiling = Screen.height / scale - BarStackHeight - DevArenaUi.BarHeight - 8f;
 
             for (int i = 0; i < _widgets.Count; i++)
             {
                 UnitWidget w = _widgets[i];
                 UnitActor a = _stage.Find(w.Id);
                 UnitView v = _session.Unit(w.Id);
-                if (a == null || v == null) { w.Root.gameObject.SetActive(false); continue; }
+                if (a == null || v == null)
+                {
+                    w.Root.gameObject.SetActive(false);
+                    w.HeadStack.gameObject.SetActive(false);
+                    continue;
+                }
 
                 bool visible = !_solo || w.Id == _selected;
                 w.Root.gameObject.SetActive(visible);
+                w.HeadStack.gameObject.SetActive(visible);
                 if (!visible) continue;
 
                 Vector3 basePoint = _stage.ScreenPoint(a.transform.position);
-                w.Root.anchoredPosition = new Vector2(basePoint.x / scale, basePoint.y / scale);
+                w.Root.anchoredPosition = new Vector2(basePoint.x / scale, basePoint.y / scale - 30f);
+
+                Vector3 headPoint = _stage.ScreenPoint(a.HeadPosition);
+                w.HeadStack.gameObject.SetActive(headPoint.z > 0f);
+                w.HeadStack.anchoredPosition = new Vector2(headPoint.x / scale,
+                    Mathf.Min(headPoint.y / scale + rise, ceiling));
 
                 float max = Mathf.Max(1f, v.MaxHp);
                 w.HpFill.fillAmount = Mathf.Clamp01(v.Hp / max);
@@ -751,14 +865,15 @@ namespace Emberfall.Dev
                 w.FootMark.gameObject.SetActive(_showAnchors);
                 if (_showAnchors)
                 {
-                    w.GroundMark.rectTransform.anchoredPosition = Vector2.zero;
+                    w.GroundMark.rectTransform.anchoredPosition = new Vector2(0f, 30f);
                     Renderer rend = a.GetComponentInChildren<Renderer>();
                     if (rend != null)
                     {
-                        Vector3 bottom = new Vector3(a.transform.position.x, rend.bounds.min.y, a.transform.position.z);
+                        Vector3 bottom = new Vector3(a.transform.position.x, rend.bounds.min.y,
+                                                     a.transform.position.z);
                         Vector3 sp = _stage.ScreenPoint(bottom);
                         w.FootMark.rectTransform.anchoredPosition =
-                            new Vector2(0f, sp.y / scale - basePoint.y / scale);
+                            new Vector2(0f, sp.y / scale - basePoint.y / scale + 30f);
                     }
                 }
             }
@@ -768,8 +883,13 @@ namespace Emberfall.Dev
                 UnitActor a = _stage.Find(_pendingActor >= 0 ? _pendingActor : _selected);
                 if (a != null)
                 {
+                    // Under the unit, but never under the log and never off either side.
                     Vector3 p = _stage.ScreenPoint(a.transform.position);
-                    _ui.ActionBar.anchoredPosition = new Vector2(p.x / scale, Mathf.Max(112f, p.y / scale - 104f));
+                    float half = _ui.ActionBar.sizeDelta.x * 0.5f + 8f;
+                    float w0 = Screen.width / scale;
+                    _ui.ActionBar.anchoredPosition = new Vector2(
+                        Mathf.Clamp(p.x / scale, half, w0 - half),
+                        Mathf.Max(DevArenaUi.LogHeight + 10f, p.y / scale - 118f));
                 }
             }
 
@@ -799,45 +919,38 @@ namespace Emberfall.Dev
 
         private void AddBoardHeading(string text)
         {
-            Text t = DevArenaUi.Label("Heading", _ui.BoardRows, text, 15, DevArenaUi.Text1,
-                                      TextAnchor.MiddleLeft, 0f, 400f);
-            LayoutElement le = t.gameObject.AddComponent<LayoutElement>();
-            le.preferredHeight = 22f;
+            Text t = DevArenaUi.Label("Heading", _ui.BoardRows, text, 17, DevArenaUi.Text1,
+                                      TextAnchor.MiddleLeft);
+            DevArenaUi.Fixed(t.rectTransform, 0f, 26f);
         }
 
         private void AddBoardRow(bool ally, int index)
         {
             DevArenaBoard.Slot slot = _board.At(ally, index);
-            RectTransform row = DevArenaUi.Blank("Row", _ui.BoardRows);
-            LayoutElement le = row.gameObject.AddComponent<LayoutElement>();
-            le.preferredHeight = 30f;
+            RectTransform row = DevArenaUi.Row(_ui.BoardRows, 40f);
 
             string name = slot.Empty ? "(empty)" : ShortName(slot.DefId);
-            float x = 0f;
-            Button pick = DevArenaUi.Btn("Pick", row, (index + 1) + "  " + name, 250f, ref x,
+            bool a2 = ally; int i2 = index;
+
+            Button pick = DevArenaUi.Btn("Pick", row, (index + 1) + "  " + name, 300f,
                                          _selectedSlotAlly == ally && _selectedSlotIndex == index
                                              ? DevArenaUi.Accent : DevArenaUi.Quiet);
-            pick.GetComponent<RectTransform>().sizeDelta = new Vector2(250f, 28f);
-            bool a2 = ally; int i2 = index;
             pick.onClick.AddListener(delegate
             {
                 _selectedSlotAlly = a2; _selectedSlotIndex = i2; BuildBoardRows();
             });
 
-            Button lvl = DevArenaUi.Btn("Lvl", row, "L" + slot.Level, 66f, ref x, DevArenaUi.Quiet);
-            lvl.GetComponent<RectTransform>().sizeDelta = new Vector2(66f, 28f);
+            Button lvl = DevArenaUi.Btn("Lvl", row, "L" + slot.Level, 84f, DevArenaUi.Quiet);
             lvl.onClick.AddListener(delegate
             {
                 slot.Level = slot.Level >= 80 ? 1 : slot.Level + 10;
                 BuildBoardRows();
             });
 
-            Button tal = DevArenaUi.Btn("Tal", row, TalentLabel(slot.Talent), 58f, ref x, DevArenaUi.Quiet);
-            tal.GetComponent<RectTransform>().sizeDelta = new Vector2(58f, 28f);
+            Button tal = DevArenaUi.Btn("Tal", row, TalentLabel(slot.Talent), 72f, DevArenaUi.Quiet);
             tal.onClick.AddListener(delegate { slot.Talent = (slot.Talent + 1) % 4; BuildBoardRows(); });
 
-            Button clr = DevArenaUi.Btn("Clr", row, "x", 30f, ref x, DevArenaUi.Quiet);
-            clr.GetComponent<RectTransform>().sizeDelta = new Vector2(30f, 28f);
+            Button clr = DevArenaUi.Btn("Clr", row, "x", 44f, DevArenaUi.Quiet);
             clr.onClick.AddListener(delegate
             {
                 DevArenaBoard.Slot s = _board.At(a2, i2);
@@ -871,13 +984,10 @@ namespace Emberfall.Dev
                     && h.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                 bool art = BattleAssets.UnitAnimClip(h.Visual.Sprite, "idle") != null;
-                float x = 0f;
                 Button b = DevArenaUi.Btn("Hero_" + h.Id, _ui.RosterContent,
-                                          (art ? "◆ " : "   ") + h.Name + "   " + h.Id, 400f, ref x,
+                                          (art ? "* " : "   ") + h.Name + "   " + h.Id, 500f,
                                           art ? DevArenaUi.Quiet : new Color(0.08f, 0.08f, 0.10f, 1f));
-                LayoutElement le = b.gameObject.AddComponent<LayoutElement>();
-                le.preferredHeight = 30f;
-                b.GetComponent<RectTransform>().sizeDelta = new Vector2(400f, 30f);
+                DevArenaUi.Fixed(b.GetComponent<RectTransform>(), 0f, 38f);
                 string id = h.Id;
                 b.onClick.AddListener(delegate
                 {
@@ -900,17 +1010,18 @@ namespace Emberfall.Dev
 
         private void Log(string text, int a, int b)
         {
-            Text t = DevArenaUi.Label("Line", _ui.LogContent, text, 16, DevArenaUi.Text0,
-                                      TextAnchor.MiddleLeft, 0f, 1400f);
+            Text t = DevArenaUi.Label("Line", _ui.LogContent, text, 18, DevArenaUi.Text0,
+                                      TextAnchor.MiddleLeft);
             t.raycastTarget = true;
-            LayoutElement le = t.gameObject.AddComponent<LayoutElement>();
-            le.preferredHeight = 20f;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            DevArenaUi.Fixed(t.rectTransform, 0f, 24f);
             Button tap = t.gameObject.AddComponent<Button>();
             int ia = a, ib = b;
             tap.onClick.AddListener(delegate { Highlight(ia, ib, 2.5f); });
 
             _logLines.Add(t);
             _logUnits.Add(new[] { a, b });
+            _scrollLogToEnd = true;
             while (_logLines.Count > 220)
             {
                 if (_logLines[0] != null) Destroy(_logLines[0].gameObject);
@@ -952,10 +1063,11 @@ namespace Emberfall.Dev
 
         private void FloatNumber(UnitActor actor, string text, Color colour)
         {
-            Text t = DevArenaUi.Label("Float", _ui.UnitLayer, text, 26, colour, TextAnchor.MiddleCenter, 0f, 200f);
+            Text t = DevArenaUi.Label("Float", _ui.UnitLayer, text, 30, colour, TextAnchor.MiddleCenter);
             RectTransform r = t.rectTransform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 0f);
-            r.sizeDelta = new Vector2(200f, 34f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = new Vector2(240f, 40f);
             StartCoroutine(FloatRoutine(t, actor));
         }
 

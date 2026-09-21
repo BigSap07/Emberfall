@@ -72,6 +72,13 @@ namespace UnityEngine
 
     public struct Vector2
     {
+        public static bool operator ==(Vector2 a, Vector2 b)
+        { return a.x == b.x && a.y == b.y; }
+        public static bool operator !=(Vector2 a, Vector2 b)
+        { return !(a == b); }
+        public override bool Equals(object other) { return other is Vector2 && this == (Vector2)other; }
+        public override int GetHashCode() { return x.GetHashCode() ^ (y.GetHashCode() << 2); }
+
         public float x, y;
         public Vector2(float x, float y) { this.x = x; this.y = y; }
         public static Vector2 zero { get { return new Vector2(0, 0); } }
@@ -397,6 +404,11 @@ namespace UnityEngine
 
     public static class Screen
     {
+        /// <summary>The part of the screen a notch or a gesture bar does not cover. Full-screen on
+        /// a device without either, which is why anything reading it must still handle the whole
+        /// rect being the answer.</summary>
+        public static Rect safeArea { get { return new Rect(0f, 0f, width, height); } }
+
         public static int width { get { return 1080; } }
         public static int height { get { return 1920; } }
         public static ScreenOrientation orientation { get; set; }
@@ -410,6 +422,9 @@ namespace UnityEngine
     {
         /// <summary>Whether a scene of that name is in the build's scene list. A development-only
         /// scene is absent from a release build, so anything that opens one has to ask first.</summary>
+        /// <summary>Whether the player keeps ticking without focus. In the editor it is also what
+        /// keeps the player loop running while the Game view is not the focused window.</summary>
+        public static bool runInBackground { get; set; }
         public static bool CanStreamedLevelBeLoaded(string levelName) { return false; }
         public static bool CanStreamedLevelBeLoaded(int levelIndex) { return false; }
 

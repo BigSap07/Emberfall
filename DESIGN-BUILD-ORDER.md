@@ -112,6 +112,33 @@ in the committed state and a build hook adds it only when the build carries
 from the files, including that the one shipped file which mentions the arena — the hub's `DEV`
 button — mentions it only inside the same guard.
 
+**The chrome is anchored, not placed.** The first version invented its own reference resolution
+(1600x900) and positioned every control by measuring from the screen origin, which is why it did
+not fit a 16:9 screen: a button hidden in Manual mode left its baked-in gap behind, the drawers
+were positioned off the edge they were anchored to, and the log had no mask and painted itself up
+over the fight. It now uses the game's own scaler - `ScaleWithScreenSize` at
+`UITheme.ReferenceResolution` with match 0.5, read from `UITheme` rather than restated - and every
+piece is anchored to an edge: the bar stretches across the top, the log across the bottom, the
+drawers to their own side at full height, and the four corner buttons to their corners. Rows of
+controls are `HorizontalLayoutGroup`s, so a hidden control takes its gap with it. Everything but
+the battlefield hangs off one rect sized to `Screen.safeArea`. Health bars are placed by the same
+arithmetic `BattleScreen` uses - `HeadPosition`, a 0.12-world-unit rise, and a ceiling clamp - so
+they sit where they sit in a real battle.
+
+Three traps are worth naming because each cost a capture cycle. A layout group only sizes its
+children when `childControlWidth/Height` is on; `childForceExpand` alone merely reserves the space
+and leaves the child at Unity's 100x100 default. A horizontal group with `childForceExpandHeight`
+reports a flexible height of its own, so every row in a drawer claimed a share of the leftover
+space and a row of 48-unit buttons came out 200 tall. And a rect stretched horizontally keeps
+`sizeDelta.x = 100` until something clears it, which hung the log column 50 units off each side
+and chopped the first seven characters off every line.
+
+**Verified at four sizes with pixels**: 1600x900, 1920x1080, 1280x720 and 2400x1080 (20:9),
+drawers closed and open, captured through `Assets/Editor/DevArenaShots.cs` which drives the Game
+view at a fixed resolution and writes PNGs to `Tools/DevArenaShots` (gitignored). The arena
+rebuilds its world when the screen's aspect changes, because `BattleStage` sizes the backdrop off
+the live camera once and a tool is looked at on several shapes.
+
 **Assets/Scripts/Dev has no asmdef, and could not have one.** `Assets/Scripts/Battle` depends on
 `Emberfall.UI`, which lives in the default assembly, and an asmdef assembly cannot reference the
 default assembly. Giving the arena one would mean giving Battle and UI one too, which is a

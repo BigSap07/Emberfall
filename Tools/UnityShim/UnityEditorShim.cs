@@ -160,6 +160,7 @@ namespace UnityEditor
         public static EditorWindow GetWindow(Type t, bool utility, string title, bool focus) { return null; }
         public static T GetWindow<T>(string title) where T : EditorWindow { return null; }
         public void Focus() { }
+        public void Show() { }
         public void Repaint() { }
         public Vector2 minSize { get; set; }
         public Vector2 maxSize { get; set; }
