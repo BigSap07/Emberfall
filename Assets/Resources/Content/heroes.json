@@ -765,6 +765,7 @@
               "condition2": "StatusStacksAtLeast",
               "conditionOn": "Defeated",
               "conditionOn2": "Caster",
+              "conditionStatus2": "Resolve",
               "conditionValue2": 1,
               "duration": 2,
               "selfHpRatio": 0.12
@@ -776,6 +777,7 @@
               "condition2": "StatusStacksAtLeast",
               "conditionOn": "Defeated",
               "conditionOn2": "Caster",
+              "conditionStatus2": "Resolve",
               "conditionValue2": 2,
               "duration": 2,
               "selfHpRatio": 0.12
@@ -5260,6 +5262,7 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 9,
               "effect": {
                 "kind": "Shield",
                 "target": "LowestHpAlly",
@@ -5522,6 +5525,7 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 6,
               "effect": {
                 "kind": "Heal",
                 "target": "LowestHpAlly",
@@ -5820,6 +5824,7 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 0,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "BroadcastSubject",
@@ -6794,6 +6799,7 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 0,
               "effect": {
                 "kind": "TurnShift",
                 "target": "LowestEnergyAlly",
@@ -9876,6 +9882,7 @@
           "appends": [
             {
               "ability": "passive1",
+              "atIndex": 0,
               "effect": {
                 "kind": "Dispel",
                 "target": "BroadcastSource",

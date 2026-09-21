@@ -192,8 +192,8 @@ isara_the_second_chance|1|4|b530a9e80e7cff1b
 isara_the_second_chance|1|5|0768ab7c6b0e3105
 isara_the_second_chance|2|1|adb320692b317fd1
 isara_the_second_chance|2|2|d2d24e93b7e0d75a
-isara_the_second_chance|2|3|c5f58eb34d05dc57
-isara_the_second_chance|2|4|80fcf64e5841251d
+isara_the_second_chance|2|3|c5df91c085927660
+isara_the_second_chance|2|4|cb6a3b5c9cf655ff
 isara_the_second_chance|2|5|c9a8fd0867a6f601
 isara_the_second_chance|3|1|7e02d041c90f11ed
 isara_the_second_chance|3|2|4bca07bf6a90c5c8
@@ -306,7 +306,7 @@ nereia_the_field_medic|3|3|bcb396105b8594cf
 nereia_the_field_medic|3|4|2639928b871484a4
 nereia_the_field_medic|3|5|731479190caa7cc9
 nysera_the_missing_arrow|1|1|6b21b64787a0ffae
-nysera_the_missing_arrow|1|2|2fb13497d4f6022a
+nysera_the_missing_arrow|1|2|e70769a0a1bf7dcc
 nysera_the_missing_arrow|1|3|a87da3a6681cbf93
 nysera_the_missing_arrow|1|4|1d65641b30b9908d
 nysera_the_missing_arrow|1|5|d4958644bf4f1acd
