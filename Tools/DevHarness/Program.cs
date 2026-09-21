@@ -47,6 +47,7 @@ namespace Emberfall.DevHarness
             CheckDispel(content);
             CheckAbilityPotency(content);
             CheckDeterminism(content);
+            CheckLiveSession(content);
             CheckEffectHitResistNoOp(content);
             CheckEffectHitResistDirection(content);
             CheckBypassResist();
@@ -3233,6 +3234,233 @@ namespace Emberfall.DevHarness
             return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "Passives/Talents");
         }
 
+
+
+        /// <summary>
+        /// THE LIVE SESSION IS THE SAME ENGINE.
+        ///
+        /// Run() is Begin() followed by StepNatural() until the fight ends, so the first assertion
+        /// here is the load-bearing one: a fight driven a step at a time produces the same record,
+        /// event for event, as the same fight resolved in one call. If that ever parts, the tool
+        /// stops being evidence about the game.
+        ///
+        /// The other two are about the one thing a hand-driven action may change - which body the
+        /// single-enemy pick lands on - and about the engine still winning where it should.
+        /// </summary>
+        private static void CheckLiveSession(ContentDatabase db)
+        {
+            Line("LIVE SESSION (the hand-driven door into the same engine)");
+
+            // ---- 1. stepped == resolved, event for event -------------------------------------
+            GameSession gs = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            StageDef stage = Opening(db.AllStages[0]);
+            int compared = 0, mismatchAt = -1;
+            string mismatchWhy = "";
+            for (int seed = 1; seed <= 5 && mismatchAt < 0; seed++)
+            {
+                BattleResult whole = CombatSimulation.Run(gs.BuildBattleRequest(stage, seed));
+                BattleSession live = CombatSimulation.Begin(gs.BuildBattleRequest(stage, seed));
+                int steps = 0;
+                while (!live.Finished && steps < 20000) { live.StepNatural(); steps++; }
+
+                if (whole.Events.Count != live.Events.Count)
+                {
+                    mismatchAt = 0;
+                    mismatchWhy = "seed " + seed + ": " + whole.Events.Count + " events resolved in one call, "
+                                  + live.Events.Count + " stepped";
+                    break;
+                }
+                for (int i = 0; i < whole.Events.Count; i++)
+                {
+                    string x = EventKey(whole.Events[i]);
+                    string y = EventKey(live.Events[i]);
+                    compared++;
+                    if (x == y) continue;
+                    mismatchAt = i;
+                    mismatchWhy = "seed " + seed + " event " + i + ": " + x + "  !=  " + y;
+                    break;
+                }
+            }
+            Check(mismatchAt < 0,
+                  mismatchAt < 0
+                      ? "a fight stepped one action at a time is byte-for-byte the fight Run() resolves ("
+                        + compared + " events over 5 seeds)"
+                      : "stepped and resolved fights diverge - " + mismatchWhy);
+
+            // ---- 2 and 3. the forced pick -----------------------------------------------------
+            ContentDatabase arena = BuildForcedTargetContent();
+            if (arena == null) { Line(""); return; }
+
+            HeroDef actor = arena.GetHero("fp_actor");
+            StageDef plain = arena.GetStage("fp_plain");
+            StageDef taunted = arena.GetStage("fp_taunt");
+            if (actor == null || plain == null || taunted == null)
+            { Check(false, "forced-target arena built"); Line(""); return; }
+
+            // A legal forced pick lands on the body that was named, not on the one FrontEnemy
+            // would have chosen.
+            {
+                BattleSession live = OpenArena(arena, plain, actor, 4242);
+                int front = EnemyIdAtSlot(live, 0);
+                int back = EnemyIdAtSlot(live, 2);
+                int me = ActorId(live);
+                ActionReport rep = live.Act(me, ManualChoice.Basic, back);
+                int hit = FirstDamageTargetAfter(live, rep.FirstEventIndex, me);
+
+                Check(rep.Accepted, "a hand-driven basic is accepted (" + rep.Refusal + ")");
+                Check(front != back && hit == back,
+                      "a forced target lands on the body that was named: the basic reads FrontEnemy "
+                      + "(slot 0, id " + front + ") and the blow landed on the forced id " + back
+                      + " (it hit " + hit + ")");
+                Check(NotesSay(rep, "landed on"),
+                      "and the session says so: " + Join(rep.TargetNotes));
+            }
+
+            // The engine still wins. A Taunt on the front enemy answers for its side even when
+            // somebody else was named, and the session reports the redirect rather than silently
+            // hitting a different unit.
+            {
+                BattleSession live = OpenArena(arena, taunted, actor, 4242);
+                int taunter = EnemyIdAtSlot(live, 0);
+                int back = EnemyIdAtSlot(live, 2);
+                int me = ActorId(live);
+                ActionReport rep = live.Act(me, ManualChoice.Basic, back);
+                int hit = FirstDamageTargetAfter(live, rep.FirstEventIndex, me);
+
+                Check(hit == taunter,
+                      "a Taunt anchor overrides a forced pick: " + back + " was named and the blow "
+                      + "landed on the taunter " + taunter + " (it hit " + hit + ")");
+                Check(NotesSay(rep, "redirected by Taunt"),
+                      "and the redirect is reported, not silent: " + Join(rep.TargetNotes));
+            }
+
+            // A hand-driven turn spends the natural one: the actor does not act twice in a round.
+            {
+                BattleSession live = OpenArena(arena, plain, actor, 4242);
+                int me = ActorId(live);
+                live.Act(me, ManualChoice.Basic, -1);
+                int guard = 0;
+                // Walk round 1 to its end. StepNatural crosses the boundary into round 2 on the
+                // step after the last turn, so the count is filtered by round rather than by when
+                // the loop happened to stop.
+                while (!live.Finished && live.Round <= 1 && guard++ < 40) live.StepNatural();
+                int inRoundOne = CountTurnStarts(live, me, 1);
+                Check(inRoundOne == 1,
+                      "a hand-driven turn spends that unit's natural turn for the round: the actor "
+                      + "took " + inRoundOne + " turn in round 1, not two");
+            }
+
+            Line("");
+        }
+
+        private static string EventKey(BattleEvent e)
+        {
+            return e.Type + "|" + e.Round + "|" + e.SourceId + "|" + e.TargetId + "|" + e.Value
+                   + "|" + (e.Critical ? "C" : "-") + "|" + e.Status + "|" + e.Duration
+                   + "|" + (e.AbilityId ?? "") + "|" + (e.Victory ? "V" : "-")
+                   + "|" + e.AspectFactor.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        private static BattleSession OpenArena(ContentDatabase db, StageDef stage, HeroDef hero, int seed)
+        {
+            BattleRequest req = new BattleRequest();
+            req.Content = db;
+            req.Stage = stage;
+            req.Seed = seed;
+            req.Team = new List<HeroInstance>();
+            req.Team.Add(MakeInstance(hero, 20));
+            return CombatSimulation.Begin(req);
+        }
+
+        private static int ActorId(BattleSession s)
+        {
+            IList<UnitView> us = s.Units;
+            for (int i = 0; i < us.Count; i++) if (us[i].IsPlayer) return us[i].Id;
+            return -1;
+        }
+
+        private static int EnemyIdAtSlot(BattleSession s, int slot)
+        {
+            IList<UnitView> us = s.Units;
+            for (int i = 0; i < us.Count; i++) if (!us[i].IsPlayer && us[i].Slot == slot) return us[i].Id;
+            return -1;
+        }
+
+        private static int FirstDamageTargetAfter(BattleSession s, int from, int sourceId)
+        {
+            IList<BattleEvent> ev = s.Events;
+            for (int i = from; i < ev.Count; i++)
+                if (ev[i].Type == BattleEventType.Damage && ev[i].SourceId == sourceId) return ev[i].TargetId;
+            return -1;
+        }
+
+        private static int CountTurnStarts(BattleSession s, int unitId, int round)
+        {
+            int n = 0;
+            IList<BattleEvent> ev = s.Events;
+            for (int i = 0; i < ev.Count; i++)
+                if (ev[i].Type == BattleEventType.TurnStart && ev[i].SourceId == unitId
+                    && ev[i].Round == round) n++;
+            return n;
+        }
+
+        private static bool NotesSay(ActionReport r, string fragment)
+        {
+            for (int i = 0; i < r.TargetNotes.Count; i++)
+                if (r.TargetNotes[i].IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
+        }
+
+        private static string Join(List<string> lines)
+        {
+            return lines.Count == 0 ? "(no notes)" : string.Join("; ", lines.ToArray());
+        }
+
+        /// <summary>
+        /// One actor whose basic reads FrontEnemy, against three enemies deep enough to survive it.
+        /// Two stages: one plain, one where the front enemy taunts at battle start, so the same
+        /// forced pick can be watched landing and being overridden.
+        /// </summary>
+        private static ContentDatabase BuildForcedTargetContent()
+        {
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""fp_actor"", ""name"": ""Forced Actor"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 500, ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""fp_basic"", ""name"": ""Jab"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""fp_plainfoe"", ""name"": ""Plain Foe"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""fp_foe_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""fp_taunter"", ""name"": ""Taunting Foe"", ""aspect"": ""Tide"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""fp_taunt_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""fp_taunt_passive"", ""name"": ""Stand Here"", ""trigger"": ""BattleStart"",
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""Taunt"", ""duration"": 99, ""chance"": 1 } ] } }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""fp_ch"", ""name"": ""Forced Arena"", ""stages"": [
+        { ""id"": ""fp_plain"", ""index"": 1, ""enemies"": [
+            { ""id"": ""fp_plainfoe"", ""level"": 20 },
+            { ""id"": ""fp_plainfoe"", ""level"": 20 },
+            { ""id"": ""fp_plainfoe"", ""level"": 20 } ] },
+        { ""id"": ""fp_taunt"", ""index"": 2, ""enemies"": [
+            { ""id"": ""fp_taunter"", ""level"": 20 },
+            { ""id"": ""fp_plainfoe"", ""level"": 20 },
+            { ""id"": ""fp_plainfoe"", ""level"": 20 } ] }
+    ] }
+  ]
+}";
+            return LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, ZeroVarianceBalance(8), "forced target");
+        }
 
         private static void Line(string text) { Console.WriteLine(text); }
 

@@ -44,6 +44,53 @@ caused it. **It closes at a single retune, and its stated precondition is now me
 **A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
 to this list.
 
+### In flight: the Dev Arena, on branch `tools/dev-arena`
+
+The branch carries two things. **A live battle session in the engine** — `CombatSimulation.Begin`
+returns a `BattleSession` holding a fight that has not finished, and `Run()` is now literally
+`Begin()` followed by `StepNatural()` until the fight ends. There is no second resolution path:
+a hand-driven action runs the same `TakeTurn` body a natural turn does, and the harness asserts
+that a fight stepped one action at a time is the same record, event for event, that `Run()`
+produces. **And a Dev Arena** — a runtime scene under `Assets/Scripts/Dev` that presents that
+session with the real battle presentation, so a fight can be driven by hand or watched playing
+itself, and switched between the two at any moment.
+
+**The semantics of a hand-driven action**, decided once and stated here because a tool that
+resolves actions differently from the game is worse than no tool:
+
+- It is a **turn**, not a free swing. It ticks that unit's damage-over-time, repays its turn debt,
+  fires its `TurnStart` passives, resolves the ability, fires the after-action passives, raises the
+  turn-end broadcasts and expires that unit's statuses — the whole pipeline, in order.
+- It **spends that unit's natural turn for the round**. A unit driven by hand does not then act
+  again when the walk reaches it. A unit that has *already* acted naturally can still be driven,
+  and that is an extra turn on purpose.
+- **Stun and Silence refuse out loud.** The natural path silently substitutes a basic for a
+  silenced active; a tool that did the same would hide the status from the person asking why the
+  active did not happen.
+- An active still **empties the bar**. The ignore-energy toggle lets a cast happen below cost; it
+  does not make the cast free.
+- A **forced target replaces the single-enemy pick made by that unit's own ability, and nothing
+  else.** Ally modes, link modes and every multi-target mode resolve as authored. `Provoked` and
+  the Taunt anchor still win, and a `Restricted` or `Concealed` body is refused. Each of those
+  outcomes is reported to the caller rather than swallowed.
+- **`EndRound` ends the round where it stands and opens the next.** Units that had not acted do
+  not act. This engine has no separate end-of-round work — durations come off in `ExpireStatuses`
+  at the close of each unit's own turn, and the per-round bookkeeping happens in `BeginRound` at
+  the top of the next round — so opening the next round *is* the round-end processing.
+- A **direct state edit** (set HP, set energy, kill, revive) is a cheat, not an event in the
+  fiction. It moves the number and emits the plain event so a view keeps up; it fires no passive
+  and opens no death dispatch. Nothing the game can do produces one.
+
+Applying a status by hand was considered and **not built**: statuses are constructed inside
+`Sim.ApplyEffect` with landing rolls, source stamping and per-stack rules, and `CombatUnit` has no
+add-a-status entry point. Exposing one would be a new engine surface rather than a tool feature.
+
+The change moved **nothing**: the whole harness output is byte-identical with the work stashed and
+restored, which includes all 72 stage fingerprints, the 150 hero-sweep lines and the 450
+talent-sweep lines, and the failure count stays at 36. No `BattleEventType` was added — the reason
+a refusal is an `ActionReport` returned to the caller rather than an event is that the record is
+the permanent thing, and "why did the engine refuse my pick" is a question about a tool.
+
 ### Next
 
 1. **The retune.** Its precondition was "after the roster's abilities are authored", and the part
