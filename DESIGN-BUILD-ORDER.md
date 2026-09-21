@@ -15,17 +15,18 @@ carrying a one-effect basic and a one-effect active, and their designs are alrea
 Nothing in this document is blocked on 5-star authoring any more. Everything the eleven records
 under **Already done** describes is on `main` and observable in the files.
 
-**One branch is open: `feat/guilds`.** The three efforts this section used to head "In flight" -
-the placeholder mannequins, the Dev Arena, and accounts with the friendly duel - are all on
-`main` now and their branches are merged; each is retitled below and their branch names are
-gone, because an unmerged branch is the only thing a pointer can say that the files cannot.
+**Two branches are open: `feat/guilds` and `fix/kit-defects`.** The three efforts this section
+used to head "In flight" - the placeholder mannequins, the Dev Arena, and accounts with the
+friendly duel - are all on `main` now and their branches are merged; each is retitled below and
+their branch names are gone, because an unmerged branch is the only thing a pointer can say that
+the files cannot.
 
 The engine grew to meet those kits rather than the kits being trimmed to fit the engine. That was
 the standing rule of the authoring passes and it is why the roster authored cleanly: where a
 description could not be said, the pass built the thing that says it and recorded the measurement.
 Nothing in the thirty was reworded to avoid an engine change.
 
-### The harness is RED on 35 checks, and 34 of them are one kind of red
+### The harness is RED on 37 checks: 34 of one kind, a coverage note, and two bands
 
 **34 are dormancy tripwires that content has since adopted, and they are kept red on purpose.**
 Each was written the same way and for the same reason: an engine pass that could not move a
@@ -40,24 +41,109 @@ the *only* user, so they still go red if a second kit adopts the feature without
 That conversion is the pattern to follow for the rest, one at a time, when a feature's adoption is
 deliberate and its fingerprint consequences have been stated.
 
-**The 35th used to be the CEIL band check, and it is GREEN now.** It failed on `1-12` at CEIL
-90.5% against the finale band [55%, 72%], with twenty of twenty-four stages reading 97% to 100%
-behind it. Task 13's retune was re-run against live code on branch `balance/retune` and closed it:
-every ordinary stage now sits inside [78%, 92%] and both finales inside [55%, 72%], by raising
-`ceilingLevel` per stage. See task 13's own entry for the table and the five `recommendedPower`
-derivations that went with it. That is why the count below is 35 rather than 36.
-
-**The 35th is a coverage note, not a tripwire and not a fault:** *"29 of 90 talents are EXECUTED
+**The 35th is a coverage note, not a tripwire and not a fault:** *"20 of 90 talents are EXECUTED
 but never observed doing anything here — each waits on something this arena does not provide."*
-The talent sweep runs every talent and fingerprints the result; twenty-nine of them need a Taunt
-enemy, a particular aspect matchup, a second copy of their own hero or an ally the fixed arena
-does not field, so they execute without changing anything measurable. It is red because the sweep
-refuses to call "nothing happened" a pass.
+The talent sweep runs every talent and fingerprints the result; twenty of them need a Taunt enemy,
+a particular aspect matchup, a second copy of their own hero or an ally the fixed arena does not
+field, so they execute without changing anything measurable. It is red because the sweep refuses
+to call "nothing happened" a pass. It read 29 when the roster was authored, 27 after the
+dark-talent pass repaired six, and 20 after the kit-defect pass repaired eight more.
 
-**A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
+**The 36th and 37th are the two balance instruments, and the kit-defect pass is what moved them.**
+Both were green after task 13's retune and both went red on repairs rather than on tuning:
+
+- *"every non-pinned stage's CEIL sits inside its target band"* now fails on ten stages, all of
+  them in chapter 2, and all of them too EASY rather than too hard: nine ordinary stages read 94%
+  to 100% against a band of [78%, 92%], and `2-12` reads 76% against a finale band of [55%, 72%].
+  Chapter 1 is untouched and every one of its stages is still inside its band. The cause is named
+  and it is not the content: five engine repairs turned on clauses several shipped kits had been
+  authored around and that had never once run — Kael's whole second passive resolves now, Elyra
+  and Edrin bank the stacks their own passives grant, Brenna's allies record against their own
+  bars — so the same line at the same power finishes the same stages more often. **Retuning is a
+  separate decision and was not made here**; the numbers are the input to it, the way task 13's
+  table was.
+- *"the pinned five-body curve still discriminates between stages"* fails for the same reason and
+  says less: it compares the FLOOR reading across stages and every one of them is now 100%, where
+  `1-12` and `2-10` used to read 99.5%. A flat column measures nothing, so the check is doing its
+  job by saying so. It is the under-geared instrument rather than the one content is tuned
+  against — that is the geared curve above it.
+
+**A 38th failure would be a regression.** If the count goes above 37, diagnose it — do not add it
 to this list. The one caveat that is not a regression: these 34 are dormancy tripwires, so
 authoring the 64 lower-star kits will trip more of them as those kits adopt features. A new red
 that NAMES its adopters belongs on this list; anything else does not.
+
+### Eight kit defects, repaired, on branch `fix/kit-defects`
+
+The dark-talent pass found defects in shipped kits it was not allowed to repair, because each of
+them moves the 150 hero-sweep lines. This branch moves them, deliberately, and states what moved
+and why. **Forty-four of the 150 hero-sweep lines and 138 of the 450 talent-sweep lines are
+rebaselined here**, across ten and fifteen heroes; the 24 stage fingerprints did not move, because
+none of these repairs touches an enemy.
+
+**Five were engine rules the engine claimed in a comment and did not keep.**
+
+- `ResolveAbility` cleared `_lastTarget` at every depth, and a passive's effects run inside a
+  wrapper ability — so every passive naming `LastTarget`, as a destination or as a condition
+  subject, resolved it to nobody. The clear is gated on depth 0 now, which is what the method's
+  own closing comment had always said it did. Elyra banks 24 Patience in the dark arena where she
+  banked none, Edrin banks 22 Record, Kael's What Breaks Forward lands at all, and Kiva's
+  Severance Paid has a body to aim at.
+- `OnAllyHpBelowThreshold` and `OnEnemyHpBelowThreshold` read no Threshold and fired on every
+  point of damage any ally took, at any health. Both now fire on the CROSSING their watcher's own
+  Threshold names, once per crossing; a heal back over the line re-arms it, because the rule is
+  two readings of one blow and nothing is remembered between blows. Four shipped passives change:
+  Edrin's Still Here, Aminah's No Wasted Recovery, Caldus's Final Verdict and Isara's What
+  Survives — which had no authored threshold at all and was taking the 0.5 default, so it is
+  given the 0.2 its own Seedling names.
+- A per-target budget charged the CASTER's own id when an effect aimed at Self landed, so a
+  budgeted passive dropped its Self-aimed lines on every firing after the first in a round. Rheia
+  lost her Energy, her Revision and her second talent's rider that way. A self-aimed effect pays
+  no per-target budget now.
+- A delay aimed at a unit that had already acted was dropped, and every "delay that enemy" clause
+  in the roster is written on a trigger that fires because the enemy just acted. Delays carry to
+  the top of the target's next round now. Advances deliberately do not: no text asks for one to be
+  carried. Merek, Aeron, Oris's Disrupted and Seraphine's third talent all land where they did not.
+- A Ledger's `storedCapBasis: "maxHp"` resolved against the APPLIER, so Brenna's "each ally can
+  record up to 8% of their Max HP" wrote a Bulwark's bar onto a Marksman's ledger. The maxHp basis
+  reads the holder now; the attack basis still reads the applier, because "80% of MY Attack" is a
+  number about the applier and the holder is an enemy.
+
+**Three were content that could not run.** Kiva's active and her Severance Paid gated on
+`StatusStacksAtLeast` with no status named, which answers false unconditionally — the same defect
+her third talent was repaired for. Edrin's Record carried no duration and took the default two
+rounds, so the four his third talent waits on could never be held at once. Nysera's Vanishing Mark
+removed its own mark in its first effect and then asked, twice, whether that mark was there.
+
+**Seven text mismatches, each followed back to `import/Heroes.json`.** Hale's Closing Radius asks
+whether an ALLY hit the Quarry rather than whether anybody did; Kael's Clear the Debris applies
+Fault Line where the active REMOVED something rather than where a mark already sat; Isolde's Final
+Revelation pays out the record rather than a slice of Attack; Mireth's No Record Remains fires
+below 30% for 80% of Attack and strips the Focus, once a battle; Rheia's Counterrevision reads
+DefenseDown and her Perfect Reversal costs her 10 Energy; Nysera's Last Known Position conceals
+her again on the kill it names. Two new `EffectCondition` members carry the first two — appended
+at 48 and 49, so no authored ordinal moves.
+
+**Two more defects of the same shape were found by a check written for the first eight** and
+repaired with them: Brenna's Survival of the Stubborn removed the Guard its next effect is gated
+on, and Kiva's Severance Paid consumed every Broken Link where its text says one.
+
+**The harness gained a KIT DEFECTS section of ten checks** — five synthetic arenas, one per engine
+repair, each asserting a count rather than a direction and each naming the number the old code
+produced; plus two shipped-content tripwires: no effect gates on `StatusStacksAtLeast` without
+naming a status or a counter, and no ability removes a named status a later effect of the same
+ability then reads. That second one is the defect shape that accounted for five of the six talents
+the dark pass repaired, two more here, and it reads talent appends at the index they declare.
+Five new dark-talent checks cover the four the previous pass could not build and Nysera's second
+concealment.
+
+**Two things stay dark and are named rather than cleared.** Kiva's Unclaimed Victory pays no
+Shield any more: repairing Severance Paid turned its spend on, and she banks at most one Broken
+Link a round while spending one on every basic against a Forsaken body — the same basic whose own
+mark banked it — so she opens every turn at zero. That is a rate her two descriptions name, not an
+engine fault, and changing either is a balance decision about Kiva. And Seraphine's Volume Closed
+asks about `MarkAlt` on `Target` inside an effect aimed at HERSELF, so the 15 Energy it promises
+cannot land; it is a wrong subject rather than a strip, and it is not repaired here.
 
 ### In flight: guilds, phase one, on branch `feat/guilds`
 

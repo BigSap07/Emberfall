@@ -83,6 +83,7 @@ namespace Emberfall.DevHarness
             CheckNoTalentIsEmpty(content);
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
+            CheckKitDefects(content);
             CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
             CheckAuthoredKitExercise(content);
@@ -17013,10 +17014,13 @@ namespace Emberfall.DevHarness
                     "SubjectIsCasting",
                     // the talent-completion pass: the two halves of "has this passive fired
                     // about this subject before"
-                    "PassiveFiredOnSubjectAtLeast", "PassiveFiredOnSubjectBelow"
+                    "PassiveFiredOnSubjectAtLeast", "PassiveFiredOnSubjectBelow",
+                    // the kit-defect pass: the two clauses two shipped talents needed and no
+                    // condition could say. Appended, so every ordinal above is untouched.
+                    "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (48 members)");
+            Check(ok, "EffectCondition enum parity (50 members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
@@ -18717,13 +18721,26 @@ namespace Emberfall.DevHarness
                   + "than no talent does (" + two[3] + " against " + none[3]
                   + ") - appended to Absence Has Weight it drained nobody, because that trigger "
                   + "names no subject to drain");
-            Check(three[2] > none[2],
-                  "No Record Remains adds " + (three[2] - none[2]) + " damage (" + three[2]
-                  + " against " + none[2] + "), landing on the enemy The Missing Page just hit");
+            // THE TALENT COSTS HER DAMAGE OVERALL, and that is the talent rather than a fault in
+            // it: stripping the Focus is half of what its text promises, and a Focused body is
+            // what The Missing Page fires on, so the rounds after the strip are quiet. The measure
+            // is therefore the strip and the blow that rides with it, not a battle-long total.
+            Check(three[4] == 1 && none[4] == 0,
+                  "No Record Remains strips the Focus off a body under 30% HP exactly once a battle"
+                  + " (" + three[4] + " against " + none[4] + ")");
+            Check(three[5] > 0 && none[5] == 0,
+                  "and lands its extra 80% of Attack on that same firing (" + three[5]
+                  + " damage against " + none[5] + ") - the two are one clause, so the blow is"
+                  + " gated on the strip having happened rather than on the health test twice");
+            Line("  [note] the battle-long total FALLS with the talent, " + three[2] + " against "
+                 + none[2] + ": the Focus it takes off is what The Missing Page needs to keep"
+                 + " firing, so the rounds after the strip are quiet. That is the talent, not a"
+                 + " fault in it.");
             Line("");
         }
 
-        /// <summary>{missing-page firings, absence firings, damage she dealt, enemy energy removed}</summary>
+        /// <summary>{missing-page firings, absence firings, damage she dealt, enemy energy removed,
+        /// Focus stripped off the enemy, damage of the blow that rode with the strip}</summary>
         private static int[] RunMirethArena(int talent)
         {
             string dir = FindContentDirForSweep();
@@ -18738,10 +18755,17 @@ namespace Emberfall.DevHarness
 
             // Buffs itself every turn, so a Focused body keeps handing her the trigger, and is
             // soft enough that she can push it under the health gates her talents ask about.
+            //
+            // 22,000 rather than the 26,000 this arena opened with, and the four thousand are the
+            // whole of what No Record Remains needed. At 26,000 the body bottomed out at 32.3% of
+            // its bar over thirty rounds, so a talent whose text says "below 30% HP" could not fire
+            // once - the arena had been built against a talent authored at 50%, which was itself
+            // the mismatch this pass repaired. At 22,000 she carries it to 20% and the gate is
+            // reachable without the body ever dying and ending the fight early.
             string enemies = @"{
   ""enemies"": [
     { ""id"": ""mi_foe"", ""name"": ""MiFoe"", ""aspect"": ""Ember"",
-      ""hp"": 26000, ""attack"": 45, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""hp"": 22000, ""attack"": 45, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
       ""basic"": { ""id"": ""mi_b"", ""name"": ""Bolster"",
         ""effects"": [
           { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
@@ -18771,7 +18795,8 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < r.Units.Count; i++)
                 if (r.Units[i].DefId == mireth.Id) mine = r.Units[i].Id;
 
-            int page = 0, absence = 0, dealt = 0, drained = 0;
+            int page = 0, absence = 0, dealt = 0, drained = 0, stripped = 0, afterStrip = 0;
+            bool justStripped = false;
             Dictionary<int, int> energy = new Dictionary<int, int>();
             for (int i = 0; i < r.Events.Count; i++)
             {
@@ -18781,6 +18806,13 @@ namespace Emberfall.DevHarness
                     if (e.AbilityId == "mireth_the_missing_page") page++;
                     else if (e.AbilityId == "mireth_absence_has_weight") absence++;
                 }
+                // The Focus she takes off, and the blow that follows it inside the same firing.
+                // Read as a pair on purpose: the talent is one clause and the two halves are only
+                // meaningful together.
+                if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Mark
+                    && e.SourceId == mine && e.TargetId != mine) { stripped++; justStripped = true; }
+                if (e.Type == BattleEventType.Damage && e.SourceId == mine && justStripped)
+                { afterStrip += e.Value; justStripped = false; }
                 if (e.Type == BattleEventType.Damage && e.SourceId == mine) dealt += e.Value;
                 if (e.Type == BattleEventType.EnergyChanged)
                 {
@@ -18791,7 +18823,7 @@ namespace Emberfall.DevHarness
                     energy[e.TargetId] = e.Value;
                 }
             }
-            return new int[] { page, absence, dealt, drained };
+            return new int[] { page, absence, dealt, drained, stripped, afterStrip };
         }
 
         private struct TriggerCtx
@@ -19203,6 +19235,600 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+        // ------------------------------------------------- the kit defects this pass repaired
+
+        /// <summary>
+        /// FIVE ENGINE REPAIRS, EACH IN THE SMALLEST ARENA THAT CAN TELL THE REPAIR FROM ITS ABSENCE.
+        ///
+        /// Every one of these was a rule the engine claimed in a comment and did not keep, found by
+        /// the dark-talent pass and left standing because repairing it moves the 150 hero-sweep
+        /// lines. They move here, deliberately.
+        ///
+        /// The bodies are synthetic rather than shipped, for the reason the dark arenas are: a
+        /// shipped kit measures the repair AND everything else its author wrote, and a check that
+        /// cannot say which of the two moved is not a check. Damage and speed variance are zeroed,
+        /// because each of these asserts a COUNT - one crossing, twenty-four grants, four delays -
+        /// and a count that moves with the dice is a count nobody can explain.
+        ///
+        /// Each check states the number the OLD code produced, so the check is a record of the
+        /// repair rather than only of the behaviour.
+        /// </summary>
+        private static void CheckKitDefects(ContentDatabase live)
+        {
+            Line("KIT DEFECTS (five engine repairs, each against the smallest arena that sees it)");
+
+            CheckLastTargetReachesAPassive();
+            CheckThresholdIsACrossing();
+            CheckSelfAimedEffectsPayNoBudget();
+            CheckDelayCarriesToTheNextRound();
+            CheckLedgerCapReadsItsHolder();
+            CheckNoStackConditionIsUnanswerable(live);
+            CheckNoAbilityStripsWhatItLaterReads(live);
+            Line("");
+        }
+
+        private const string KitBalance = @"{
+  ""defenseConstant"": 400, ""defensePerLevel"": 24,
+  ""energyMax"": 100, ""energyPerBasicAttack"": 28, ""energyOnDamaged"": 9,
+  ""maxRounds"": 12, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxTeamSize"": 5 }";
+
+        private static BattleResult RunKit(string label, string heroes, string enemies, string campaign,
+                                           string stageId, string[] team, int seed)
+        {
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, KitBalance, label);
+            if (db == null) return null;
+            StageDef stage = db.GetStage(stageId);
+            if (stage == null) return null;
+            List<HeroInstance> line = new List<HeroInstance>();
+            for (int i = 0; i < team.Length; i++)
+            {
+                HeroDef def = db.GetHero(team[i]);
+                if (def == null) return null;
+                line.Add(MakeInstance(def, 20));
+            }
+            return RunWith(db, stage, seed, line);
+        }
+
+        private static int KitFires(BattleResult r, string passiveId)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.PassiveTrigger && r.Events[i].AbilityId == passiveId) n++;
+            return n;
+        }
+
+        // ---------------------------------------------------------------- 1. LastTarget in a passive
+
+        private const string LtHeroes = @"{""heroes"":[
+  { ""id"":""k_reader"", ""name"":""Reader"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":4000, ""attack"":200, ""defense"":20, ""speed"":120, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_reader_b"", ""name"":""Jab"", ""effects"":[
+       { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":1.0 },
+       { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Mark"", ""duration"":2, ""chance"":1 } ] },
+    ""passive1"": { ""id"":""k_reader_p"", ""name"":""Reads It"", ""trigger"":""AfterBasicAttack"", ""oncePerBattle"":false,
+      ""effects"":[
+        { ""kind"":""Damage"", ""target"":""LastTarget"", ""power"":0.5 },
+        { ""kind"":""GainResolve"", ""target"":""Self"", ""maxStacks"":9, ""duration"":99,
+          ""condition"":""HasMyMark"", ""conditionOn"":""LastTarget"" } ] } }
+]}";
+        private const string LtEnemies = @"{""enemies"":[
+  { ""id"":""k_dummy"", ""name"":""Dummy"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":50, ""defense"":0,
+    ""speed"":20, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_dummy_b"", ""name"":""Prod"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.1 } ] } }
+]}";
+        private const string LtCampaign = @"{""chapters"":[{""id"":""k_ch"",""name"":""K"",""stages"":[
+  {""id"":""k_one"",""index"":1,""enemies"":[{""id"":""k_dummy"",""level"":20}]}
+]}]}";
+
+        /// <summary>
+        /// A PASSIVE INHERITS THE BODY THE BLOW THAT WOKE IT STRUCK, in both of the ways content can
+        /// ask for it: TargetMode.LastTarget as a destination and ConditionSubject.LastTarget as a
+        /// gate. One hero, one dummy, one AfterBasicAttack passive that uses both.
+        ///
+        /// ResolveAbility cleared _lastTarget at every depth, and a passive's effects run inside a
+        /// wrapper AbilityDef, so both resolved to nobody. The old numbers for this arena are 12
+        /// player damage events and 0 Resolve: the passive fired twelve times and did nothing at
+        /// all. The clear is gated on depth == 0 now.
+        /// </summary>
+        private static void CheckLastTargetReachesAPassive()
+        {
+            BattleResult r = RunKit("last-target", LtHeroes, LtEnemies, LtCampaign, "k_one",
+                                    new string[] { "k_reader" }, 7);
+            if (r == null) { Check(false, "last-target arena built"); return; }
+
+            int fires = KitFires(r, "k_reader_p"), resolve = 0, playerHits = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve) resolve++;
+                if (e.Type == BattleEventType.Damage && e.SourceId >= 0)
+                {
+                    UnitSnapshot s = r.FindUnit(e.SourceId);
+                    if (s != null && s.IsPlayer) playerHits++;
+                }
+            }
+
+            Check(fires == 12 && playerHits == 24,
+                  "a passive's TargetMode.LastTarget finds the body its basic struck: " + fires
+                  + " firing(s) and " + playerHits + " player blow(s), which is two per firing - the"
+                  + " basic's and the passive's. It was one per firing, because the wrapper ability"
+                  + " a passive resolves inside cleared the field on its way in");
+            Check(resolve == 9,
+                  "and ConditionSubject.LastTarget answers the same body: " + resolve
+                  + " Resolve banked against a maxStacks of 9, where it banked 0");
+        }
+
+        // ------------------------------------------------------------- 2. threshold crossings
+
+        private static string CrossHeroes(string threshold)
+        {
+            return @"{""heroes"":[
+  { ""id"":""k_watch"", ""name"":""Watch"", ""role"":""Warden"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":400000, ""attack"":100, ""defense"":0, ""speed"":50, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_watch_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] },
+    ""passive1"": { ""id"":""k_watch_p"", ""name"":""Sees It Fall"", ""trigger"":""OnAllyHpBelowThreshold"",
+      ""threshold"":" + threshold + @", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""EnergyGain"", ""target"":""Self"", ""flat"":1 } ] } },
+  { ""id"":""k_victim"", ""name"":""Victim"", ""role"":""Bulwark"", ""aspect"":""Ember"", ""stars"":5,
+    ""hp"":1000, ""attack"":10, ""defense"":0, ""speed"":40, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_victim_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] } },
+  { ""id"":""k_mender"", ""name"":""Mender"", ""role"":""Mender"", ""aspect"":""Ember"", ""stars"":5,
+    ""hp"":400000, ""attack"":100, ""defense"":0, ""speed"":30, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_mender_b"", ""name"":""Mend"", ""effects"":[
+      { ""kind"":""Heal"", ""target"":""LowestHpAlly"", ""power"":0.0, ""targetMaxHpRatio"":0.3,
+        ""condition"":""HpBelow"", ""conditionValue"":0.4, ""conditionOn"":""Target"" } ] } }
+]}";
+        }
+        private const string CrossEnemies = @"{""enemies"":[
+  { ""id"":""k_chip"", ""name"":""Chip"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":120, ""defense"":0,
+    ""speed"":200, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_chip_b"", ""name"":""Chip"", ""effects"":[ { ""kind"":""Damage"", ""target"":""LowestHpEnemy"", ""power"":0.5 } ] } },
+  { ""id"":""k_chip_hard"", ""name"":""ChipHard"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":120, ""defense"":0,
+    ""speed"":200, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_chip_hard_b"", ""name"":""Chip"", ""effects"":[ { ""kind"":""Damage"", ""target"":""LowestHpEnemy"", ""power"":1.0 } ] } }
+]}";
+        private const string CrossCampaign = @"{""chapters"":[{""id"":""k_ch2"",""name"":""K2"",""stages"":[
+  {""id"":""k_cross"",""index"":1,""enemies"":[{""id"":""k_chip"",""level"":20}]},
+  {""id"":""k_cross_hard"",""index"":2,""enemies"":[{""id"":""k_chip_hard"",""level"":20}]}
+]}]}";
+
+        private static int CrossFirings(string threshold, bool mender, out int blows)
+        {
+            string[] team = mender ? new string[] { "k_watch", "k_victim", "k_mender" }
+                                   : new string[] { "k_watch", "k_victim" };
+            BattleResult r = RunKit("threshold-crossing", CrossHeroes(threshold), CrossEnemies,
+                                    CrossCampaign, mender ? "k_cross_hard" : "k_cross", team, 7);
+            blows = 0;
+            if (r == null) return -1;
+            int victim = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == "k_victim") victim = r.Units[i].Id;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].TargetId == victim) blows++;
+            return KitFires(r, "k_watch_p");
+        }
+
+        /// <summary>
+        /// "WHEN AN ALLY FALLS BELOW 35% HP" IS A CROSSING, and neither this trigger nor its enemy
+        /// mirror read a Threshold at all before this pass: both fired on every point of damage any
+        /// ally took, at any health. Three runs of one arena say so in three different ways.
+        ///
+        /// A watcher at 50% fires ONCE over twelve blows that carry the victim from full to 43% -
+        /// the blow that crosses the line, and not the seven after it. A watcher at 5% fires NOT AT
+        /// ALL on the same twelve blows, which is the whole of "the Threshold is read": under the
+        /// old rule both of these fired twelve times. And with a mender who lifts the victim back
+        /// over the line when it drops under 40%, the 50% watcher fires THREE times on twelve
+        /// blows, because a unit that recovered and fell again fell again.
+        /// </summary>
+        private static void CheckThresholdIsACrossing()
+        {
+            int blowsHalf, blowsLow, blowsHeal;
+            int half = CrossFirings("0.5", false, out blowsHalf);
+            int low = CrossFirings("0.05", false, out blowsLow);
+            int healed = CrossFirings("0.5", true, out blowsHeal);
+            if (half < 0 || low < 0 || healed < 0) { Check(false, "threshold-crossing arena built"); return; }
+
+            Check(half == 1 && blowsHalf == 12,
+                  "a 50% watcher fires ONCE across " + blowsHalf + " blows that take the victim from"
+                  + " full to 43% (" + half + ") - it used to fire on every one of them");
+            Check(low == 0 && blowsLow == 12,
+                  "a 5% watcher on the same " + blowsLow + " blows fires " + low + " times, because"
+                  + " the victim never reaches 5% - which is the whole of 'the Threshold is read'");
+            Check(healed == 3,
+                  "and a heal back over the line re-arms it: with a mender lifting the victim above"
+                  + " 40% each time it drops under, the 50% watcher fires " + healed + " times on "
+                  + blowsHeal + " blows - once per crossing, counted by arithmetic rather than by"
+                  + " remembering anything");
+        }
+
+        // -------------------------------------------------- 3. self-aimed effects and the budget
+
+        private const string BudgetHeroes = @"{""heroes"":[
+  { ""id"":""k_budget"", ""name"":""Budget"", ""role"":""Breaker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":400000, ""attack"":100, ""defense"":0, ""speed"":200, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_budget_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] },
+    ""passive1"": { ""id"":""k_budget_p"", ""name"":""One Each"", ""trigger"":""OnEnemyBuffGained"",
+      ""oncePerBattle"":false, ""perTargetLimit"":1, ""perTargetPerRound"":true,
+      ""effects"":[
+        { ""kind"":""Damage"", ""target"":""BroadcastSubject"", ""power"":0.2 },
+        { ""kind"":""GainResolve"", ""target"":""Self"", ""maxStacks"":99, ""duration"":99 } ] } }
+]}";
+        private const string BudgetEnemies = @"{""enemies"":[
+  { ""id"":""k_buffA"", ""name"":""BuffA"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":50, ""defense"":0,
+    ""speed"":100, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_buffA_b"", ""name"":""Bolster"", ""effects"":[
+      { ""kind"":""ApplyStatus"", ""target"":""Self"", ""status"":""AttackUp"", ""magnitude"":0.01, ""duration"":1, ""chance"":1 } ] } },
+  { ""id"":""k_buffB"", ""name"":""BuffB"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":50, ""defense"":0,
+    ""speed"":90, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_buffB_b"", ""name"":""Bolster"", ""effects"":[
+      { ""kind"":""ApplyStatus"", ""target"":""Self"", ""status"":""AttackUp"", ""magnitude"":0.01, ""duration"":1, ""chance"":1 } ] } }
+]}";
+        private const string BudgetCampaign = @"{""chapters"":[{""id"":""k_ch3"",""name"":""K3"",""stages"":[
+  {""id"":""k_budget_s"",""index"":1,""enemies"":[{""id"":""k_buffA"",""level"":20},{""id"":""k_buffB"",""level"":20}]}
+]}]}";
+
+        /// <summary>
+        /// A SELF-AIMED EFFECT IS NOT A FIRING AGAINST A TARGET. One hero with a budget of one per
+        /// enemy per round, two enemies that buff themselves every turn, twelve rounds.
+        ///
+        /// The passive fires twenty-four times and the Self-aimed grant lands twenty-four times.
+        /// Under the old rule the FIRST firing of each round admitted the caster's own id to the
+        /// budget sheet and spent her slot against herself, so the second firing - against the
+        /// other enemy - found that slot gone and dropped the grant: twelve, not twenty-four. It is
+        /// why Rheia's Second Draft paid her Energy against one enemy a round and silently dropped
+        /// it against the next, and why a talent whose only effect is aimed at Self could not land.
+        /// </summary>
+        private static void CheckSelfAimedEffectsPayNoBudget()
+        {
+            BattleResult r = RunKit("self-aimed budget", BudgetHeroes, BudgetEnemies, BudgetCampaign,
+                                    "k_budget_s", new string[] { "k_budget" }, 7);
+            if (r == null) { Check(false, "self-aimed budget arena built"); return; }
+
+            int mine = -1, resolve = 0;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == "k_budget") mine = r.Units[i].Id;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve
+                    && e.TargetId == mine) resolve++;
+            }
+            int fires = KitFires(r, "k_budget_p");
+            Check(fires == 24 && resolve == 24,
+                  "a budgeted passive's Self-aimed effect lands on every firing: " + resolve
+                  + " grant(s) across " + fires + " firing(s), where the caster's own id used to be"
+                  + " charged to the per-target sheet and cost her every firing after the first in"
+                  + " a round");
+        }
+
+        // -------------------------------------------------------------- 4. the carried delay
+
+        private const string DelayHeroes = @"{""heroes"":[
+  { ""id"":""k_thief"", ""name"":""Thief"", ""role"":""Breaker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":400000, ""attack"":100, ""defense"":0, ""speed"":60, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_thief_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] },
+    ""passive1"": { ""id"":""k_thief_p"", ""name"":""Too Late"", ""trigger"":""OnEnemyActiveResolved"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""TurnShift"", ""target"":""BroadcastSubject"", ""magnitude"":-0.5 } ] } },
+  { ""id"":""k_filler"", ""name"":""Filler"", ""role"":""Bulwark"", ""aspect"":""Ember"", ""stars"":5,
+    ""hp"":400000, ""attack"":10, ""defense"":0, ""speed"":10, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_filler_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] } }
+]}";
+        private const string DelayEnemies = @"{""enemies"":[
+  { ""id"":""k_caster"", ""name"":""Caster"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":50, ""defense"":0,
+    ""speed"":300, ""critChance"":0, ""critDamage"":1.0, ""startEnergy"":100,
+    ""basic"": { ""id"":""k_caster_b"", ""name"":""Prod"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.05 } ] },
+    ""active"": { ""id"":""k_caster_a"", ""name"":""Surge"", ""energyCost"":100, ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.05 } ] } },
+  { ""id"":""k_slow"", ""name"":""Slow"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":50, ""defense"":0,
+    ""speed"":5, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_slow_b"", ""name"":""Prod"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.05 } ] } }
+]}";
+        private const string DelayCampaign = @"{""chapters"":[{""id"":""k_ch4"",""name"":""K4"",""stages"":[
+  {""id"":""k_delay"",""index"":1,""enemies"":[{""id"":""k_caster"",""level"":20},{""id"":""k_slow"",""level"":20}]}
+]}]}";
+
+        /// <summary>
+        /// A DELAY BOUGHT AFTER ITS TARGET HAS ACTED IS SPENT ON THAT UNIT'S NEXT ROUND.
+        ///
+        /// The arena is the exact shape the roster asks for and the one shape the old code could
+        /// not serve: a passive on OnEnemyActiveResolved, which by construction fires DURING the
+        /// enemy's own turn, so the body it wants to push is never in the remaining order. The
+        /// enemy casts in rounds 1, 4, 7 and 10; the four delays land in rounds 2, 5, 8 and 11,
+        /// each exactly one round after the firing that bought it. Before this they landed nowhere:
+        /// ApplyTurnShift found no position and returned, and Merek's whole kit was written on it.
+        /// </summary>
+        private static void CheckDelayCarriesToTheNextRound()
+        {
+            BattleResult r = RunKit("carried delay", DelayHeroes, DelayEnemies, DelayCampaign,
+                                    "k_delay", new string[] { "k_thief", "k_filler" }, 7);
+            if (r == null) { Check(false, "carried-delay arena built"); return; }
+
+            int round = 0;
+            List<int> fired = new List<int>();
+            List<int> landed = new List<int>();
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.RoundStart) round = e.Value;
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "k_thief_p") fired.Add(round);
+                if (e.Type == BattleEventType.TurnOrderShift) landed.Add(round);
+            }
+
+            bool paired = fired.Count == landed.Count && fired.Count == 4;
+            for (int i = 0; paired && i < fired.Count; i++)
+                if (landed[i] != fired[i] + 1) paired = false;
+
+            Check(paired,
+                  "every delay aimed at a body that had already acted lands at the top of its next"
+                  + " round: " + fired.Count + " firing(s) in rounds " + Join(fired) + " and "
+                  + landed.Count + " shift(s) in rounds " + Join(landed)
+                  + " - the old code found no position in the remaining order and dropped all four");
+        }
+
+        private static string Join(List<int> xs)
+        {
+            string s = "";
+            for (int i = 0; i < xs.Count; i++) s += (i > 0 ? "/" : "") + xs[i];
+            return s.Length == 0 ? "-" : s;
+        }
+
+        // --------------------------------------------------- 5. the ledger cap reads its holder
+
+        private const string CapHeroes = @"{""heroes"":[
+  { ""id"":""k_wall"", ""name"":""Wall"", ""role"":""Bulwark"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":1000, ""attack"":100, ""defense"":0, ""speed"":300, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_wall_b"", ""name"":""Ward"", ""effects"":[
+      { ""kind"":""ApplyStatus"", ""target"":""AllAllies"", ""status"":""Ledger"", ""magnitude"":1.0, ""duration"":1,
+        ""storedCap"":0.1, ""storedCapBasis"":""maxHp"", ""ledgerAutoRelease"":true, ""ledgerAutoReleaseAsHeal"":true } ] } },
+  { ""id"":""k_big"", ""name"":""Big"", ""role"":""Bulwark"", ""aspect"":""Ember"", ""stars"":5,
+    ""hp"":100000, ""attack"":10, ""defense"":0, ""speed"":10, ""critChance"":0, ""critDamage"":1.5, ""growth"":0.1,
+    ""basic"": { ""id"":""k_big_b"", ""name"":""Tap"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.01 } ] } }
+]}";
+        private const string CapEnemies = @"{""enemies"":[
+  { ""id"":""k_hammer"", ""name"":""Hammer"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":2000, ""defense"":0,
+    ""speed"":100, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""k_hammer_b"", ""name"":""Smash"", ""effects"":[ { ""kind"":""Damage"", ""target"":""HighestHpEnemy"", ""power"":1.0 } ] } }
+]}";
+        private const string CapCampaign = @"{""chapters"":[{""id"":""k_ch5"",""name"":""K5"",""stages"":[
+  {""id"":""k_cap"",""index"":1,""enemies"":[{""id"":""k_hammer"",""level"":20}]}
+]}]}";
+
+        /// <summary>
+        /// "EACH ALLY CAN RECORD UP TO 8% OF THEIR MAX HP" IS ONE EFFECT WRITING FIVE DIFFERENT CAPS.
+        ///
+        /// A tiny applier hands a Ledger capped at 10% of Max HP to the whole line, and one ally has
+        /// a hundred times the applier's bar. Resolved against the applier - which is what the code
+        /// did - every cap in the line was 10% of the SMALL body's Max HP, so the big ally's record
+        /// could never exceed a few hundred points however hard it was hit. It now records against
+        /// its own bar, and the largest single release is far past anything the applier's bar could
+        /// have allowed.
+        ///
+        /// The attack basis is deliberately NOT changed and is asserted nowhere here: "records up to
+        /// 80% of MY Attack" is a number about the applier, and the holder is an enemy.
+        /// </summary>
+        private static void CheckLedgerCapReadsItsHolder()
+        {
+            BattleResult r = RunKit("ledger cap", CapHeroes, CapEnemies, CapCampaign, "k_cap",
+                                    new string[] { "k_wall", "k_big" }, 7);
+            if (r == null) { Check(false, "ledger-cap arena built"); return; }
+
+            int biggest = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Heal && r.Events[i].Value > biggest)
+                    biggest = r.Events[i].Value;
+
+            float wallMax = 0f, bigMax = 0f;
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                if (r.Units[i].DefId == "k_wall") wallMax = r.Units[i].MaxHp;
+                if (r.Units[i].DefId == "k_big") bigMax = r.Units[i].MaxHp;
+            }
+            int applierCap = (int)(wallMax * 0.1f);
+
+            Check(biggest > applierCap * 4 && biggest == 6180,
+                  "a maxHp-based Ledger cap is read off the HOLDER: the biggest single release is "
+                  + biggest + ", where the applier's own bar of " + (int)wallMax + " would have"
+                  + " capped it at " + applierCap + " (the holder's bar is " + (int)bigMax + ")");
+        }
+
+        // ------------------------------------------ three shipped-content tripwires for the same class
+
+        /// <summary>
+        /// NO SHIPPED EFFECT ASKS A STACK QUESTION IT HAS NOT NAMED A SUBJECT FOR.
+        ///
+        /// `StatusStacksAtLeast` resolves its counter from the named status or from an explicit
+        /// counter index, and answers FALSE UNCONDITIONALLY when neither is authored. That is not a
+        /// condition that rarely passes: it is an effect that can never run, wearing a gate. Kiva
+        /// shipped four of them - two in her active, one in Severance Paid and one in her third
+        /// talent - and the whole of Severance Paid was inert for it.
+        ///
+        /// Counted over every gate slot of every ability, passive, talent and talent append.
+        /// </summary>
+        private static void CheckNoStackConditionIsUnanswerable(ContentDatabase live)
+        {
+            List<string> named = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                // AllAbilitiesOf folds the def's passives in as wrappers, so this one loop covers
+                // the basic, the active and every authored passive.
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                    for (int e = 0; e < abilities[a].Effects.Count; e++)
+                        NoteUnanswerableStack(def.Id + "/" + abilities[a].Name + "[" + e + "]",
+                                              abilities[a].Effects[e], named);
+                for (int t = 0; t < def.Talents.Count; t++)
+                {
+                    PassiveDef talent = def.Talents[t];
+                    for (int e = 0; e < talent.Effects.Count; e++)
+                        NoteUnanswerableStack(def.Id + "/" + talent.Name + "[" + e + "]",
+                                              talent.Effects[e], named);
+                    for (int ap = 0; ap < talent.Appends.Count; ap++)
+                        if (talent.Appends[ap].Effect != null)
+                            NoteUnanswerableStack(def.Id + "/" + talent.Name + " append[" + ap + "]",
+                                                  talent.Appends[ap].Effect, named);
+                }
+            }
+            Check(named.Count == 0,
+                  "no shipped effect gates on StatusStacksAtLeast without naming a status or a"
+                  + " counter, which answers false unconditionally"
+                  + (named.Count == 0 ? "" : " - FOUND: " + string.Join(", ", named.ToArray())));
+        }
+
+        private static void NoteUnanswerableStack(string where, EffectDef e, List<string> into)
+        {
+            if (e == null) return;
+            if (e.Condition == EffectCondition.StatusStacksAtLeast
+                && e.ConditionStatus == StatusKind.None && e.ConditionCounterIndex <= 0) into.Add(where);
+            if (e.Condition2 == EffectCondition.StatusStacksAtLeast
+                && e.ConditionStatus2 == StatusKind.None && e.ConditionCounterIndex2 <= 0) into.Add(where + " (gate 2)");
+            if (e.Condition3 == EffectCondition.StatusStacksAtLeast
+                && e.ConditionStatus3 == StatusKind.None && e.ConditionCounterIndex3 <= 0) into.Add(where + " (gate 3)");
+        }
+
+        /// <summary>
+        /// NO ABILITY STRIPS A STATUS ITS OWN LATER EFFECTS READ, which is the single defect shape
+        /// that accounted for five of the six talents the dark pass repaired and for one more here.
+        ///
+        /// An appended effect lands at the END of its host's effect list unless it names an
+        /// atIndex, and several hosts finish by consuming the very thing the appended clause is
+        /// gated on. Nysera's own Vanishing Mark had it without a talent involved at all: it removed
+        /// her mark in its first effect and then asked, twice, whether that mark was there.
+        ///
+        /// Deliberately narrow, so it accuses nothing it cannot prove: only RemoveStatus by NAME is
+        /// considered - a Dispel takes whatever it finds and cannot be reasoned about statically -
+        /// and only a later gate naming the SAME status on the SAME body counts. Talent appends are
+        /// folded in at the index they declare, because that is the list that actually resolves.
+        /// </summary>
+        private static void CheckNoAbilityStripsWhatItLaterReads(ContentDatabase live)
+        {
+            List<string> named = new List<string>();
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                List<AbilityDef> abilities = AllAbilitiesOf(def);
+                for (int a = 0; a < abilities.Count; a++)
+                    ScanStripBeforeRead(def.Id + "/" + abilities[a].Name, abilities[a].Effects, named);
+
+                List<PassiveDef> passives = new List<PassiveDef>(def.Passives);
+                for (int t = 0; t < def.Talents.Count; t++) passives.Add(def.Talents[t]);
+                for (int p = 0; p < passives.Count; p++)
+                    ScanStripBeforeRead(def.Id + "/" + passives[p].Name, passives[p].Effects, named);
+
+                // And each talent's own host lists, with that talent's appends spliced in where
+                // they declare. A talent is only ever selected alone, so one merged list per
+                // talent per host - and ALL of that talent's appends to one host go in together,
+                // in declaration order, because that is what ApplyTalentAppends does and a scan
+                // that spliced them one at a time would read positions no battle ever has.
+                for (int t = 0; t < def.Talents.Count; t++)
+                {
+                    PassiveDef talent = def.Talents[t];
+                    List<string> hosts = new List<string>();
+                    for (int ap = 0; ap < talent.Appends.Count; ap++)
+                        if (talent.Appends[ap].Effect != null && !hosts.Contains(talent.Appends[ap].Ability))
+                            hosts.Add(talent.Appends[ap].Ability);
+                    for (int hs = 0; hs < hosts.Count; hs++)
+                    {
+                        List<EffectDef> host = HostEffectsOf(def, hosts[hs]);
+                        if (host == null) continue;
+                        List<EffectDef> merged = new List<EffectDef>(host);
+                        for (int ap = 0; ap < talent.Appends.Count; ap++)
+                        {
+                            TalentAppendDef append = talent.Appends[ap];
+                            if (append.Effect == null || append.Ability != hosts[hs]) continue;
+                            if (append.AtIndex < 0 || append.AtIndex > merged.Count) merged.Add(append.Effect);
+                            else merged.Insert(append.AtIndex, append.Effect);
+                        }
+                        ScanStripBeforeRead(def.Id + "/" + talent.Name + " on " + hosts[hs], merged, named);
+                    }
+                }
+            }
+            Check(named.Count == 0,
+                  "no ability removes a named status that a later effect of the same ability then"
+                  + " asks about" + (named.Count == 0 ? "" : " - FOUND: " + string.Join(", ", named.ToArray())));
+        }
+
+        /// <summary>The same slot resolution CombatSimulation.PassiveSlotIndex applies, so this
+        /// scan reads the list the append really lands in - nested "skills.passiveN" included.</summary>
+        private static List<EffectDef> HostEffectsOf(HeroDef def, string ability)
+        {
+            if (string.IsNullOrEmpty(ability)) return null;
+            if (ability == "basic") return def.BasicAttack != null ? def.BasicAttack.Effects : null;
+            if (ability == "active") return def.Active != null ? def.Active.Effects : null;
+            for (int p = 0; p < def.Passives.Count; p++)
+                if (def.Passives[p].SlotKey == ability) return def.Passives[p].Effects;
+            if (!ability.StartsWith("passive")) return null;
+            for (int p = 0; p < def.Passives.Count; p++)
+                if (def.Passives[p].SlotKey == "skills." + ability) return def.Passives[p].Effects;
+            return null;
+        }
+
+        private static void ScanStripBeforeRead(string where, List<EffectDef> effects, List<string> into)
+        {
+            for (int i = 0; i < effects.Count; i++)
+            {
+                EffectDef strip = effects[i];
+                if (strip.Kind != EffectKind.RemoveStatus || strip.Status == StatusKind.None) continue;
+                for (int j = i + 1; j < effects.Count; j++)
+                {
+                    EffectDef later = effects[j];
+                    // An effect between the two that PUTS the status back on the same body undoes
+                    // the strip, and the reader is asking about the new one. Oris spends his own
+                    // MarkAlt in his basic's third effect and lays a fresh one in its sixth.
+                    if (Reapplied(effects, i, j, strip)) break;
+                    if (!GateReads(later, later.Condition, later.ConditionStatus, later.ConditionOn, strip)
+                        && !GateReads(later, later.Condition2, later.ConditionStatus2, later.ConditionOn2, strip)
+                        && !GateReads(later, later.Condition3, later.ConditionStatus3, later.ConditionOn3, strip)) continue;
+                    into.Add(where + "[" + i + "] strips " + strip.Status + " that [" + j + "] reads");
+                    break;
+                }
+            }
+        }
+
+        private static bool Reapplied(List<EffectDef> effects, int from, int to, EffectDef strip)
+        {
+            for (int k = from + 1; k < to; k++)
+            {
+                EffectDef mid = effects[k];
+                if (mid.Kind != EffectKind.ApplyStatus && mid.Kind != EffectKind.TransferStatus) continue;
+                if (mid.Status != strip.Status) continue;
+                if (mid.Target == strip.Target) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Whether one gate asks about the status a strip on the SAME body just took.</summary>
+        private static bool GateReads(EffectDef reader, EffectCondition cond, StatusKind status,
+                                      ConditionSubject on, EffectDef strip)
+        {
+            if (cond != EffectCondition.HasStatus && cond != EffectCondition.StatusStacksAtLeast
+                && cond != EffectCondition.HasMyMark && cond != EffectCondition.MyStatusStacksAtLeast) return false;
+            // HasMyMark with no named status means Mark; the others mean exactly what they name.
+            StatusKind asked = status;
+            if (asked == StatusKind.None && cond == EffectCondition.HasMyMark) asked = StatusKind.Mark;
+            if (asked != strip.Status) return false;
+            return SameBody(strip.Target, reader, on);
+        }
+
+        /// <summary>
+        /// Whether a TargetMode and a ConditionSubject name the same body with certainty. Anything
+        /// this cannot prove is treated as a different body, which is the direction a static scan
+        /// has to be wrong in.
+        /// </summary>
+        private static bool SameBody(TargetMode target, EffectDef reader, ConditionSubject on)
+        {
+            // ConditionSubject.Target is the READER'S OWN target, not the strip's, which is the one
+            // thing a scan like this gets wrong if it is careless: Seraphine's Volume Closed strips
+            // MarkAlt off every enemy and then asks about MarkAlt on Target inside an effect aimed
+            // at HERSELF, so the two are different bodies and the strip is not what stops it.
+            if (on == ConditionSubject.Target) return reader.Target == target;
+            if (target == TargetMode.Self) return on == ConditionSubject.Caster;
+            if (target == TargetMode.BroadcastSubject) return on == ConditionSubject.BroadcastSubject;
+            if (target == TargetMode.BroadcastSource) return on == ConditionSubject.BroadcastSource;
+            if (target == TargetMode.LastTarget) return on == ConditionSubject.LastTarget;
+            if (target == TargetMode.LastAttacker) return on == ConditionSubject.LastAttacker;
+            if (target == TargetMode.DefeatedUnit) return on == ConditionSubject.Defeated;
+            return false;
+        }
+
         // ------------------------------------------------- the twenty-nine dark talents
 
         /// <summary>
@@ -19240,13 +19866,21 @@ namespace Emberfall.DevHarness
         /// Isara's Seedling needs her Return After Loss to land on an ally who is ALREADY nearly
         /// dead: the mark it leaves lasts two rounds, and the ally has to cross 20% HP inside them.
         /// At 28 Energy a basic plus 9 for every hit taken she casts on round three, when the party
-        /// is still near full, and the mark has expired long before anybody is low. At 25 and none
-        /// she casts on round five, which is where the two curves cross. That is a property of the
-        /// ARENA's clock rather than of her kit, so it lives here rather than in a tuning file.
+        /// is still near full, and the mark has expired long before anybody is low. That is a
+        /// property of the ARENA's clock rather than of her kit, so it lives here rather than in a
+        /// tuning file.
+        ///
+        /// RE-TUNED IN THE KIT-DEFECT PASS, from 25 Energy and none on damage to 30 and none, and
+        /// the reason is the repair rather than the hero. What Survives is an
+        /// OnAllyHpBelowThreshold passive, and that trigger fired on EVERY point of damage any ally
+        /// took until this pass made it fire on the crossing its own Threshold names. Against the
+        /// old trigger the Seedling caught its bearer eventually whatever the clock did; against a
+        /// crossing it has two rounds, so the cast has to land in the window where an ally is
+        /// heading for 20% rather than merely somewhere below full. At 30 it does, twice.
         /// </summary>
         private const string DarkSlowBalance = @"{
   ""defenseConstant"": 400, ""defensePerLevel"": 24,
-  ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 0,
+  ""energyMax"": 100, ""energyPerBasicAttack"": 30, ""energyOnDamaged"": 0,
   ""maxRounds"": 30, ""damageVariance"": 0, ""speedVariance"": 0,
   ""minDamage"": 1, ""maxTeamSize"": 5 }";
 
@@ -19518,20 +20152,22 @@ namespace Emberfall.DevHarness
         /// spent the thing the appended effect's condition reads. They are named in the commit that
         /// repaired them; what the checks below pin is the repaired behaviour.
         ///
-        /// FOUR OF THE TWENTY-NINE ARE NOT HERE, and their absence is the finding rather than an
-        /// omission:
-        ///   - Elyra III and Edrin III wait on a stack their own host can never accumulate, because
-        ///     `ConditionSubject.LastTarget` reads `_lastTarget`, and `ResolveAbility` clears that
-        ///     field for the wrapper ability a passive's effects run inside. Every passive gated on
-        ///     LastTarget therefore answers false forever. Edrin's Record also carries no duration,
-        ///     so his stacks expire two rounds after they land and four can never be held at once.
-        ///   - Hale II is an OR branch on a clause that is already true: its host reads
+        /// THE FOUR THAT USED TO BE ABSENT ARE HERE NOW, and each needed a repair rather than a
+        /// better arena - which was the finding their absence recorded:
+        ///   - Elyra III and Edrin III waited on a stack their own host could never accumulate,
+        ///     because `ConditionSubject.LastTarget` reads `_lastTarget` and `ResolveAbility`
+        ///     cleared that field for the wrapper ability a passive's effects run inside. The clear
+        ///     is gated on depth 0 now. Edrin's Record also carried no duration, so his stacks
+        ///     expired two rounds after they landed and four could never be held at once; his
+        ///     description names a ceiling and no timer, and the authoring now says so.
+        ///   - Hale II was an OR branch on a clause that was already true: its host read
         ///     SubjectDamagedSinceMyTurn, `LastTurnRound` is stamped as the turn OPENS, and the
-        ///     ability's own first effect damages the target - so the AND branch has always passed
-        ///     by the time the OR is consulted and the talent cannot decide anything.
-        ///   - Kael II re-applies a Mark to enemies that already carry one, which is a duration
-        ///     refresh rather than the application its text describes, and nothing in the condition
-        ///     vocabulary can ask "did this firing remove a defensive effect from this body".
+        ///     ability's own first effect damages the target. The host asks
+        ///     SubjectDamagedByOtherSinceMyTurn now, which is the "if any ALLY attacked it" its
+        ///     own text names, so the talent has something left to decide.
+        ///   - Kael II re-applied a Mark to enemies that already carried one, which is a duration
+        ///     refresh rather than the application its text describes. It reads
+        ///     SubjectLostStatusThisFiring now - a condition that did not exist.
         /// </summary>
         private static void CheckDarkTalents(ContentDatabase live)
         {
@@ -19550,16 +20186,38 @@ namespace Emberfall.DevHarness
                       + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
                       + ") - that body is out of reach of her basic, which marks the lowest-HP one");
 
-            // ---- Kiva III: the same kill, paid out as Shield per Broken Link held.
+            // ---- Kiva III: the same kill, and what it can pay out now that Severance Paid runs.
+            //
+            // THIS CHECK USED TO ASSERT A SHIELD AND NO LONGER CAN, and the reason is a second
+            // defect that the first one was hiding. Severance Paid was inert - both of its clauses
+            // and both of her active's copies of them gated on StatusStacksAtLeast with no status
+            // named, which answers false unconditionally - so nothing in her kit ever SPENT a
+            // Broken Link, and Unclaimed Victory found two of them banked at the kill. With those
+            // four gates repaired the spend is live, and the rates do not leave a remainder:
+            // Abandoned Support banks at most one link per round, and Severance Paid consumes one
+            // on every basic against a Forsaken body - the same basic whose own Mark banked it. So
+            // she opens every turn at zero and a kill has nothing to consume.
+            //
+            // That is a KIT defect rather than an engine one and it is not repaired here: it lives
+            // in the rates two of her descriptions name, and changing either is a balance decision
+            // about Kiva rather than a repair to fold into a defect pass. What is asserted is the
+            // half that is now true and was not - the spend - plus that the talent still fires.
             if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
                 Check(false, "kiva III arena built");
             else
-                Check(b.SubjectShield > 0 && a.SubjectShield == 0
-                      && b.Fires("kiva_unclaimed_victory") > 0,
-                      "Kiva III turns a Broken Link into a Shield on that kill (" + b.SubjectShield
-                      + " against " + a.SubjectShield + ", which is 12% of her Max HP per link) - "
-                      + "both Shield effects gated on StatusStacksAtLeast without naming a status, "
-                      + "which ConditionMet answers false unconditionally");
+            {
+                Check(b.Fires("kiva_unclaimed_victory") > 0 && a.Fires("kiva_unclaimed_victory") == 0,
+                      "Kiva III fires on a Forsaken kill (" + b.Fires("kiva_unclaimed_victory")
+                      + " against " + a.Fires("kiva_unclaimed_victory") + ")");
+                Check(a.Count(StatusKind.HealSuppression) > 0,
+                      "and Severance Paid, which named no status on its own stack gate and was inert"
+                      + " for it, now lands with no talent selected at all: "
+                      + a.Count(StatusKind.HealSuppression) + " application(s) of HealSuppression");
+                Line("  [note] Kiva III pays " + b.SubjectShield + " Shield here, where it paid 2236"
+                     + " before Severance Paid was repaired. She banks at most one Broken Link a"
+                     + " round and spends one on every basic against a Forsaken body, so she is at"
+                     + " zero when a kill lands. The rates are hers to change, not this pass's.");
+            }
 
             // ---- Aeron II: the ally Momentum Breaker pays is the ally that advances.
             // Five bodies on each side so the pending order has a tail both shifts can land in.
@@ -19815,7 +20473,7 @@ namespace Emberfall.DevHarness
 
             // ---- Isara II: the second body a Seedling heals.
             if (!DarkPair("isara_the_second_chance", 2, "s_wash", "darian_the_hidden_bulwark,"
-                          + "kael_the_unyielding", 1, true, out a, out b))
+                          + "kael_the_unyielding", 2, true, out a, out b))
                 Check(false, "isara II arena built");
             else
                 Check(b.SubjectHeal > a.SubjectHeal,
@@ -19823,6 +20481,71 @@ namespace Emberfall.DevHarness
                       + b.SubjectHeal + " against " + a.SubjectHeal
                       + ", the difference being 70% of her Attack) - appended after What Survives "
                       + "cleared its own bookkeeping mark it read a mark that was already gone");
+
+            // ---- Elyra III: the stacks Slow Growth can finally hold, spent by Stillness Pays.
+            //
+            // One self-buffing body and the five-hero line. Her Patience is banked by a passive
+            // gated on ConditionSubject.LastTarget, so before the depth-0 repair she reached the
+            // end of every fight with none and the four her third talent asks for were
+            // unreachable by construction. This was one of the two the arena could not raise.
+            if (!DarkPair("elyra_the_patient_warden", 3, "s_buffer", DarkFive, 1, false, out a, out b))
+                Check(false, "elyra III arena built");
+            else
+                Check(b.SubjectShield > 0 && a.SubjectShield == 0 && b.SubjectDamage > a.SubjectDamage,
+                      "Elyra III pays out at four Patience (" + b.SubjectShield + " Shield against "
+                      + a.SubjectShield + ", and " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage + ") - her Slow Growth banks nothing at all until a passive"
+                      + " can read the body its basic struck");
+
+            // ---- Edrin III: the same repair on the other side of it, plus the Record's lifetime.
+            if (!DarkPair("edrin_the_distant_bell", 3, "s_buffer", DarkFive, 1, false, out a, out b))
+                Check(false, "edrin III arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent > a.ResolveSpent,
+                      "Edrin III spends four Record on the Ledger's remains (" + b.SubjectDamage
+                      + " damage against " + a.SubjectDamage + ", " + b.ResolveSpent
+                      + " Record spent against " + a.ResolveSpent + ") - his Guardian of What"
+                      + " Remains banked none of them, and what it banks now lasts the battle");
+
+            // ---- Hale II: the clause that decides something once its host stops answering itself.
+            //
+            // SOLO, and the loneliness is the point: with no ally on the line nobody but Hale can
+            // have attacked the Quarry, so the AND branch is false by construction and everything
+            // the talent adds is the OR branch its own text describes. Against the old host - which
+            // asked only whether the body had been damaged at all, and had damaged it itself one
+            // effect earlier - the two runs were identical.
+            if (!DarkPair("hale_the_relentless_hunter", 2, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "hale II arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage,
+                      "Hale II lands Closing Radius's missing-HP damage with no ally to have hit the"
+                      + " Quarry, once he is under half health (" + b.SubjectDamage + " against "
+                      + a.SubjectDamage + ")");
+
+            // ---- Kael II: Fault Line applied where Take Down the Wall took something away.
+            if (!DarkPair("kael_the_unyielding", 2, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "kael II arena built");
+            else
+                Check(b.Count(StatusKind.Mark) > a.Count(StatusKind.Mark),
+                      "Kael II applies Fault Line to the body his active stripped ("
+                      + b.Count(StatusKind.Mark) + " against " + a.Count(StatusKind.Mark)
+                      + ") - gated on HasMyMark it landed on bodies that still carried one, which is"
+                      + " a refresh rather than the application its text names");
+
+            // ---- Nysera III: the second concealment, which nothing authored before this pass.
+            //
+            // Two soft bodies she can actually kill. The ArmorBreakUp half of the talent is checked
+            // in the armoured arena above; this is the clause that follows it - "if that attack
+            // defeats the target, Nysera immediately becomes Untargetable again" - and it is worth
+            // exactly two extra Stealth applications here, one per kill made while the mark-up is
+            // still on her.
+            if (!DarkPair("nysera_the_missing_arrow", 3, "s_soft_soft_big", "", 1, false, out a, out b))
+                Check(false, "nysera III kill arena built");
+            else
+                Check(b.Count(StatusKind.Stealth) > a.Count(StatusKind.Stealth),
+                      "Nysera III goes unseen again on a kill made while Last Known Position is up ("
+                      + b.Count(StatusKind.Stealth) + " concealment(s) against "
+                      + a.Count(StatusKind.Stealth) + ")");
 
             Line("");
         }

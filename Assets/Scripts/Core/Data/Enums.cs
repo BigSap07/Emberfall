@@ -856,7 +856,39 @@ namespace Emberfall.Core.Data
         PassiveFiredOnSubjectAtLeast,
 
         /// <summary>The negation, so "only the first firing" can be said without a NOT.</summary>
-        PassiveFiredOnSubjectBelow
+        PassiveFiredOnSubjectBelow,
+
+        /// <summary>
+        /// SOMEBODY OTHER THAN THE CASTER has damaged the subject in a round at or after the one
+        /// the caster last acted in.
+        ///
+        /// SubjectDamagedSinceMyTurn with the caster's own blows excluded, and the exclusion is
+        /// the whole of it. "If any ALLY attacked it since Hale's last turn" cannot be asked of
+        /// that condition, because LastTurnRound is stamped as the turn OPENS and the ability's own
+        /// first effect damages the target - so by the time the clause is read the caster has
+        /// always satisfied it, and a talent authored as an OR branch on top had nothing to decide.
+        ///
+        /// Round-granular, exactly like its sibling, and carrying the same approximation: two units
+        /// acting inside one round are not ordered against each other by it. Reads
+        /// CombatUnit.LastDamagedRoundBy, which is the per-attacker form of LastDamagedRound.
+        /// </summary>
+        SubjectDamagedByOtherSinceMyTurn,
+
+        /// <summary>
+        /// THIS FIRING has already taken a status off the subject - a Dispel, a Cleanse or a
+        /// RemoveStatus earlier in the same ability, or in a passive that ability woke.
+        ///
+        /// "Applies Fault Line to enemies FROM WHOM IT REMOVED a defensive effect" is a question
+        /// about what one firing did, and nothing else in this enum could ask it: HasStatus reads
+        /// the body's state now, StoredStatusMatches reads a record, and neither can tell an enemy
+        /// this ability just stripped from one it found bare. Authored on the appended clause, it
+        /// is what makes that clause an APPLICATION rather than a duration refresh on a mark the
+        /// target already carried.
+        ///
+        /// The window is the ability a unit CHOSE - cleared at depth 0 in ResolveAbility and
+        /// inherited by the passives that ability triggers, the same boundary LastTarget uses.
+        /// </summary>
+        SubjectLostStatusThisFiring
     }
 
     /// <summary>
@@ -908,10 +940,16 @@ namespace Emberfall.Core.Data
 
         /// <summary>
         /// The last unit that an effect in the current ability resolved against. Set after each
-        /// effect's per-target loop, cleared at ability boundaries so it cannot leak across
-        /// passives or between a basic and a passive it triggers. Lets a Self-targeted effect
-        /// (EnergyGain, Heal, GainResolve) condition on the state of whatever the prior effect
-        /// in the same ability just hit.
+        /// effect's per-target loop, cleared at the boundary of an ability a unit CHOSE - a Basic
+        /// or an Active - so it cannot leak across turns. Lets a Self-targeted effect (EnergyGain,
+        /// Heal, GainResolve) condition on the state of whatever the prior effect in the same
+        /// ability just hit.
+        ///
+        /// A PASSIVE INHERITS IT RATHER THAN CLEARING IT, and that is what makes this subject
+        /// answerable inside one. A passive's effects run inside a wrapper AbilityDef, so they
+        /// re-enter ResolveAbility; the clear there is gated on depth == 0 precisely so an
+        /// AfterBasicAttack passive reads the body the basic that woke it struck. It did not use
+        /// to be, and every passive gated on this subject answered false for as long as it was not.
         /// </summary>
         LastTarget,
 
