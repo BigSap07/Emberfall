@@ -364,6 +364,16 @@ namespace UnityEngine
 
     public sealed class Coroutine : Object { }
     public class YieldInstruction { }
+
+    /// <summary>Base of every yieldable engine operation. Present for UnityWebRequest's
+    /// SendWebRequest(), which returns one and is yielded on inside a coroutine.</summary>
+    public class AsyncOperation : YieldInstruction
+    {
+        public bool isDone { get { return true; } }
+        public float progress { get { return 1f; } }
+        public int priority { get; set; }
+        public bool allowSceneActivation { get; set; }
+    }
     public sealed class WaitForSeconds : YieldInstruction { public WaitForSeconds(float seconds) { } }
     public sealed class WaitForSecondsRealtime : CustomYieldInstruction
     {
@@ -451,11 +461,24 @@ namespace UnityEngine
         public static void Save() { }
     }
 
+    /// <summary>Enough of UnityEngine.GUIUtility for the one thing this project uses it for: the
+    /// Account screen puts a friend code on the system clipboard.</summary>
+    public static class GUIUtility
+    {
+        public static string systemCopyBuffer { get; set; }
+    }
+
     public static class Resources
     {
         public static T Load<T>(string path) where T : Object { return null; }
         public static Object Load(string path) { return null; }
         public static T GetBuiltinResource<T>(string path) where T : Object { return null; }
+
+        /// <summary>Every loaded object of a type, including ones no scene references - the only
+        /// way to reach an editor window without asking for one, which is what ShotOnDemand needs
+        /// to repaint the Game view without stealing focus.</summary>
+        public static Object[] FindObjectsOfTypeAll(Type type) { return new Object[0]; }
+        public static T[] FindObjectsOfTypeAll<T>() where T : Object { return new T[0]; }
     }
 
     public static class Physics { public static bool autoSimulation { get; set; } }
@@ -720,4 +743,77 @@ namespace UnityEngine.Events
     }
     public delegate void UnityAction();
     public delegate void UnityAction<T>(T arg0);
+}
+
+// ---------------------------------------------------------------------------
+// UnityWebRequest, for the Supabase client.
+//
+// Declared here for the reason the header of this file gives: the game's engine-facing code
+// has to compile and type-check with no editor installed, and Emberfall.Game.Cloud is the
+// first code in the project that touches the network at all. The signatures match the real
+// ones - the shim is worthless the moment it diverges, because it would then be certifying a
+// call the engine would reject.
+//
+// Every member here returns the shape of a request that has already completed and failed,
+// which is the safest inert answer: nothing in the project reads these values from the shim
+// (it is compiled, never run), and a default of "succeeded" would be the wrong lie to tell.
+// ---------------------------------------------------------------------------
+namespace UnityEngine.Networking
+{
+    public class DownloadHandler : System.IDisposable
+    {
+        public virtual string text { get { return ""; } }
+        public virtual byte[] data { get { return new byte[0]; } }
+        public void Dispose() { }
+    }
+
+    public sealed class DownloadHandlerBuffer : DownloadHandler { }
+
+    public class UploadHandler : System.IDisposable
+    {
+        public string contentType { get; set; }
+        public void Dispose() { }
+    }
+
+    public sealed class UploadHandlerRaw : UploadHandler
+    {
+        public UploadHandlerRaw(byte[] data) { }
+    }
+
+    public class UnityWebRequestAsyncOperation : AsyncOperation { }
+
+    public class UnityWebRequest : System.IDisposable
+    {
+        public enum Result { InProgress, Success, ConnectionError, ProtocolError, DataProcessingError }
+
+        public const string kHttpVerbGET = "GET";
+        public const string kHttpVerbPOST = "POST";
+        public const string kHttpVerbPUT = "PUT";
+        public const string kHttpVerbDELETE = "DELETE";
+
+        public UnityWebRequest() { }
+        public UnityWebRequest(string url) { }
+        public UnityWebRequest(string url, string method) { }
+
+        public string url { get; set; }
+        public string method { get; set; }
+        public string error { get { return "shim"; } }
+        public long responseCode { get { return 0; } }
+        public int timeout { get; set; }
+        public bool isDone { get { return true; } }
+        public Result result { get { return Result.ConnectionError; } }
+        public DownloadHandler downloadHandler { get; set; }
+        public UploadHandler uploadHandler { get; set; }
+
+        public void SetRequestHeader(string name, string value) { }
+        public string GetResponseHeader(string name) { return null; }
+        public UnityWebRequestAsyncOperation SendWebRequest() { return new UnityWebRequestAsyncOperation(); }
+        public void Abort() { }
+        public void Dispose() { }
+
+        public static UnityWebRequest Get(string uri) { return new UnityWebRequest(uri); }
+        public static UnityWebRequest Delete(string uri) { return new UnityWebRequest(uri); }
+        public static UnityWebRequest Post(string uri, string postData) { return new UnityWebRequest(uri); }
+        public static UnityWebRequest Put(string uri, string bodyData) { return new UnityWebRequest(uri); }
+    }
 }

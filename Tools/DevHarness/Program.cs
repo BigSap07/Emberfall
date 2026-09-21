@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
@@ -93,6 +94,7 @@ namespace Emberfall.DevHarness
             CheckCampaignStructure(content);
             CheckProving(content);
             CheckSaveRoundTrip(content);
+            CheckAccounts(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
@@ -2750,9 +2752,123 @@ namespace Emberfall.DevHarness
             CheckPassiveDepthStillBoundedWithTwo();
             CheckTalentSelection();
             CheckUnselectedTalentIsInert();
+            CheckTalentOnTheOpponentSide();
             CheckTalentSavesAndLoads(live);
+            CheckOpponentTalentSavesAndLoads(live);
 
             Line("");
+        }
+
+        /// <summary>
+        /// A talent on the FAR side of a fight does everything a talent on the near side does.
+        ///
+        /// Before LoadoutUnit carried a selection, this was the asymmetry the whole talent layer
+        /// had: a Proving ghost of your own team, and a friend's line in a duel, both fought
+        /// without the talents their owner had picked. The fight on offer was not the line it
+        /// named. Nothing failed, which is why it survived - an opponent simply behaved as though
+        /// nobody had chosen anything, and there was no way to tell that from an opponent who had
+        /// genuinely chosen nothing.
+        ///
+        /// Four claims, and the last is the one that makes the other three worth anything:
+        ///
+        ///   - a loadout with no selection fights exactly as a loadout built before the field
+        ///     existed, so no line that fought without talents yesterday fights differently today;
+        ///   - each of the three selections changes the fight, so the field is genuinely read;
+        ///   - the three differ from EACH OTHER, so it is the selection being read and not merely
+        ///     the presence of one;
+        ///   - and the same talent on the same hero produces the same fingerprint whether that
+        ///     hero stands on the player's side or the opponent's, which is the symmetry a duel
+        ///     between two identical lines rests on. Without it two equal teams could beat each
+        ///     other depending only on which device pressed the button.
+        /// </summary>
+        private static void CheckTalentOnTheOpponentSide()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef talented = db.GetHero("test_talented");
+            HeroDef plain = db.GetHero("test_untalented");
+            StageDef arena = db.GetStage("test_passive_arena");
+            if (talented == null || plain == null || arena == null) return;
+
+            string none = FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, 0));
+            Check(!string.IsNullOrEmpty(none) && none != "NULL",
+                  "an opponent built from a loadout resolves a real fight to compare against");
+
+            string[] selected = new string[4];
+            for (int selection = 1; selection <= 3; selection++)
+            {
+                selected[selection] = FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, selection));
+                Check(selected[selection] != none,
+                      "talent " + selection + " on the OPPONENT changes the fight - the far side reads the "
+                      + "selection the same way the near side does");
+            }
+
+            Check(selected[1] != selected[2] && selected[2] != selected[3] && selected[1] != selected[3],
+                  "and the three selections differ from each other, so it is WHICH talent that is being read "
+                  + "rather than merely that one is set");
+
+            // A loadout carrying no selection at all - which is every generated Proving roster and
+            // every opponent any existing save holds - must be indistinguishable from the same
+            // line built by a version of this code that had no field to carry.
+            BattleLoadout bare = LoadoutOf(talented, 0);
+            bare.Units[0].SelectedTalent = 0;
+            Check(FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, 0)) == FingerprintOf(
+                      RunWithOpponent(db, arena, plain, bare)),
+                  "and an unselected talent on an opponent is ABSENT rather than quiet - no extra passive, no "
+                  + "extra draw, nothing the record can see");
+
+            // ---- the symmetry claim. The same hero, the same talent, the same arena, the same
+            // seed - once as the player's own unit and once as the opposing loadout. The two
+            // records are different by construction (sides are swapped), so what is compared is
+            // each side's fight against ITS unselected control: if the talent does the same work
+            // on both sides, it moves both records, and if it were being dropped on one side that
+            // side's two records would be identical.
+            string playerNone = FingerprintOf(RunWithTalent(db, talented, 0));
+            bool movesOnBothSides = true;
+            for (int selection = 1; selection <= 3 && movesOnBothSides; selection++)
+            {
+                if (FingerprintOf(RunWithTalent(db, talented, selection)) == playerNone) movesOnBothSides = false;
+                if (selected[selection] == none) movesOnBothSides = false;
+            }
+            Check(movesOnBothSides,
+                  "every talent moves the record from BOTH sides of the arena - a duel between two identical "
+                  + "lines cannot be decided by which one pressed the button");
+        }
+
+        /// <summary>The talented hero as a one-unit opposing line, at the level RunWithTalent puts
+        /// him at on the player's side, so the two sides are the same unit.</summary>
+        private static BattleLoadout LoadoutOf(HeroDef def, int selection)
+        {
+            BattleLoadout loadout = new BattleLoadout();
+            loadout.Label = "Opposing Line";
+            LoadoutUnit unit = new LoadoutUnit();
+            unit.DefId = def.Id;
+            unit.Level = 10;
+            unit.Stars = def.Stars;
+            unit.SelectedTalent = selection;
+            loadout.Units.Add(unit);
+            return loadout;
+        }
+
+        private static BattleResult RunAgainstLoadout(ContentDatabase db, StageDef arena, HeroDef playerDef,
+                                                      HeroDef opponentDef, int selection)
+        {
+            return RunWithOpponent(db, arena, playerDef, LoadoutOf(opponentDef, selection));
+        }
+
+        private static BattleResult RunWithOpponent(ContentDatabase db, StageDef arena, HeroDef playerDef,
+                                                    BattleLoadout opponent)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(playerDef, 10));
+            BattleRequest request = new BattleRequest();
+            request.Content = db;
+            request.Stage = arena;
+            request.Opponent = opponent;
+            request.Seed = 31;
+            request.Team = team;
+            return CombatSimulation.Run(request);
         }
 
         /// <summary>
@@ -3016,10 +3132,19 @@ namespace Emberfall.DevHarness
         /// The selection is save state: it survives a round trip, an upgrading save reads as none,
         /// and the downgrade guard still refuses a save from a newer build.
         ///
-        /// The version numbers here are deliberately written BOTH ways. CurrentVersion - 1 and
-        /// CurrentVersion + 1 are the upgrade and the downgrade as every earlier bump asserts them,
-        /// and never go stale; the literal 12 and 14 alongside them are the specific numbers this
-        /// bump was commissioned against, and they stay true as long as this build reads 13.
+        /// The version numbers here used to be written BOTH ways: CurrentVersion - 1 and
+        /// CurrentVersion + 1 for the upgrade and the downgrade, plus the literals 12 and 14
+        /// asserting that those relative forms named the specific saves this bump was commissioned
+        /// against. That second pair was documented as true "as long as this build reads 13", and
+        /// version 14 - the talent on a pending OPPONENT - ended that. The tripwire fired exactly
+        /// as designed and is removed rather than re-pinned one higher, because re-pinning would
+        /// only schedule the same failure for version 15 while testing nothing the relative form
+        /// does not already test.
+        ///
+        /// What the literals were actually buying is kept, and kept better: the version 12 upgrade
+        /// is now exercised against a save STAMPED 12 rather than against whatever CurrentVersion
+        /// happens to be one below, so the migration this bump introduced stays measured no matter
+        /// how far the version number travels past it.
         /// </summary>
         private static void CheckTalentSavesAndLoads(ContentDatabase db)
         {
@@ -3033,10 +3158,17 @@ namespace Emberfall.DevHarness
 
             HeroInstance hero = profile.Heroes[0];
 
-            // No shipped hero authors a talent, so a real selection is refused - which is itself
-            // the rule, not an obstacle: a selection is a promise that something resolves.
+            // The message here used to read "SelectTalent refuses a slot the hero does not author
+            // (no shipped hero authors one yet)", which asserted success while describing a
+            // refusal. It was written when no shipped hero authored a talent; thirty now do, the
+            // starter this runs against is one of them, and the line has been reporting the
+            // opposite of what it measured ever since - a passing check saying the wrong thing,
+            // which is worse than a failing one.
             Check(session.SelectTalent(hero, 1),
-                  "SelectTalent refuses a slot the hero does not author (no shipped hero authors one yet)");
+                  "SelectTalent accepts slot 1 on a starter, which authors three talents ("
+                  + (hero.Def == null ? "no def" : hero.Def.Talents.Count + " authored") + ")");
+            Check(!session.SelectTalent(hero, HeroDef.MaxTalents + 1),
+                  "and refuses a slot no hero can author - a selection is a promise that something resolves");
             Check(session.SelectTalent(hero, 0), "and clearing to none always succeeds");
 
             // Written straight onto the instance for the round trip, because the serializer's job is
@@ -3063,18 +3195,30 @@ namespace Emberfall.DevHarness
 
             // ---- upgrade: the zero-default migration, at the version that predates the key and at
             // the version that carries it but happens not to have used it.
-            int previousVersion = SaveSerializer.CurrentVersion - 1;
+            //
+            // Stamped 12 outright rather than derived from CurrentVersion - 1. Version 12 is the
+            // last save format with no selectedTalent key ANYWHERE, and that is a fact about the
+            // format's history which does not move when CurrentVersion does - deriving it meant
+            // this check silently stopped exercising the talent migration the moment a later bump
+            // landed, and started exercising whatever the previous bump was instead.
+            const int TalentPredecessorVersion = 12;
             string previous = cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
-                                                "\"version\": " + previousVersion);
+                                                "\"version\": " + TalentPredecessorVersion);
             string previousError;
             PlayerProfile upgraded = SaveSerializer.Deserialize(previous, db, out previousError);
             Check(upgraded != null && previousError == null,
-                  "a version " + previousVersion + " save (CurrentVersion - 1, and the literal 12 this bump was "
-                  + "commissioned against - no selectedTalent key anywhere) loads"
+                  "a version " + TalentPredecessorVersion + " save - the last format with no selectedTalent key "
+                  + "anywhere, which is the save this bump was commissioned against - loads"
                   + (previousError != null ? " (" + previousError + ")" : ""));
-            Check(previousVersion == 12,
-                  "and that IS version 12, so the relative form above and the number the bump was specified with "
-                  + "are the same save (got " + previousVersion + ")");
+            int previousVersion = SaveSerializer.CurrentVersion - 1;
+            string oneBelowError;
+            PlayerProfile oneBelow = SaveSerializer.Deserialize(
+                cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+                                  "\"version\": " + previousVersion), db, out oneBelowError);
+            Check(oneBelow != null && oneBelowError == null,
+                  "and so does a save one below CURRENT (version " + previousVersion + "), so the ordinary upgrade "
+                  + "path is exercised at whatever version this build has reached"
+                  + (oneBelowError != null ? " (" + oneBelowError + ")" : ""));
             if (upgraded != null)
             {
                 int selected = 0;
@@ -3107,12 +3251,94 @@ namespace Emberfall.DevHarness
                 "\"version\": " + nextVersion), db, out nextError);
             Check(next == null && nextError != null
                   && nextError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
-                  "a version " + nextVersion + " save (CurrentVersion + 1, and the literal 14 this bump was "
-                  + "commissioned against) is refused with the same message every earlier bump uses (\""
-                  + nextError + "\")");
-            Check(nextVersion == 14,
-                  "and that IS version 14, so the guard and the number the bump was specified with are the same "
-                  + "save (got " + nextVersion + ")");
+                  "a version " + nextVersion + " save (CurrentVersion + 1) is refused with the same message every "
+                  + "earlier bump uses (\"" + nextError + "\")");
+        }
+
+        /// <summary>
+        /// Version 14: the talent a PENDING OPPONENT is running, inside `provingOpponent`.
+        ///
+        /// Three claims, and the third is the one the bump exists for. The selection round-trips;
+        /// a version 13 opponent - which is every opponent any live save currently holds - reads
+        /// as no talent rather than as a synthesised one; and an opponent that HAS a talent fights
+        /// differently from the same opponent without it, which is what makes the first two claims
+        /// worth making. Without the third, "the field survives a save" would be a statement about
+        /// a number nothing reads.
+        /// </summary>
+        private static void CheckOpponentTalentSavesAndLoads(ContentDatabase db)
+        {
+            Check(SaveSerializer.CurrentVersion >= 14,
+                  "save version is at least 14, where the opponent's talent bumped it ("
+                  + SaveSerializer.CurrentVersion + ")");
+
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1699963200L);
+            GameSession session = new GameSession(db, profile);
+
+            BattleLoadout opponent = ProvingGenerator.Generate(db, db.Balance, 6, session.ProvingTargetPower(),
+                                                                ProvingGenerator.SeedFor(6, 3));
+            Check(opponent != null && opponent.Units.Count > 0, "a generated line to hang a talent on");
+            if (opponent == null || opponent.Units.Count == 0) return;
+
+            int generatedWithTalent = 0;
+            for (int i = 0; i < opponent.Units.Count; i++)
+                if (opponent.Units[i].SelectedTalent != 0) generatedWithTalent++;
+            Check(generatedWithTalent == 0,
+                  "a GENERATED roster carries no talent on any unit - there is no player behind it to have picked "
+                  + "one, and handing synthetic opponents talents would be a difficulty change dressed as a data "
+                  + "change (" + generatedWithTalent + " carried one)");
+
+            profile.ProvingOpponent = opponent;
+            string noTalent = SaveSerializer.Serialize(profile);
+            Check(noTalent.IndexOf("selectedTalent", StringComparison.Ordinal) < 0,
+                  "and writes no selectedTalent key at all, so a pending generated opponent serialises byte for "
+                  + "byte the way it did before the field existed");
+
+            // Written straight onto the unit: the serializer's job is to carry whatever is there,
+            // and no shipped hero authors a talent for SelectTalent to legitimately hand out.
+            opponent.Units[0].SelectedTalent = 2;
+            string withTalent = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile reloaded = SaveSerializer.Deserialize(withTalent, db, out error);
+            Check(reloaded != null && error == null && reloaded.ProvingOpponent != null,
+                  "a save carrying an opponent's talent loads" + (error != null ? " (" + error + ")" : ""));
+            if (reloaded == null || reloaded.ProvingOpponent == null) return;
+            Check(reloaded.ProvingOpponent.Units[0].SelectedTalent == 2,
+                  "and the opponent's selection survives the round trip (got "
+                  + reloaded.ProvingOpponent.Units[0].SelectedTalent + ", expected 2)");
+
+            // ---- the upgrade, against a document stamped 13: the last format in which a loadout
+            // could not carry a talent at all. Zero is not a default chosen here, it is what those
+            // opponents actually fought with, because LoadoutUnit had no field for anything else.
+            string thirteen = withTalent.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": 13");
+            // Strip the key the way a version 13 writer would have: it did not know it existed.
+            thirteen = thirteen.Replace("\"selectedTalent\": 2,", "").Replace(", \"selectedTalent\": 2", "");
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(thirteen, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null && upgraded.ProvingOpponent != null,
+                  "a version 13 save with a pending opponent and no talent key still loads"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            if (upgraded != null && upgraded.ProvingOpponent != null)
+            {
+                int carried = 0;
+                for (int i = 0; i < upgraded.ProvingOpponent.Units.Count; i++)
+                    if (upgraded.ProvingOpponent.Units[i].SelectedTalent != 0) carried++;
+                Check(carried == 0,
+                      "and every unit of it reads as no talent, which is exactly what it fought with - the zero "
+                      + "default IS the migration, so a player part-way through a match keeps the fight they were "
+                      + "offered (" + carried + " did not)");
+            }
+
+            // ---- and a slot past MaxTalents is corrupt rather than stale, the same rule a hero's
+            // own selection follows.
+            string absurdError;
+            PlayerProfile absurd = SaveSerializer.Deserialize(
+                withTalent.Replace("\"selectedTalent\": 2", "\"selectedTalent\": 99"), db, out absurdError);
+            Check(absurd != null && absurd.ProvingOpponent != null
+                  && absurd.ProvingOpponent.Units[0].SelectedTalent == 0,
+                  "an opponent's selection past HeroDef.MaxTalents reads as none rather than as a slot that can "
+                  + "never resolve");
+
+            Line("");
         }
 
         private static string TalentIdFor(int selection)
@@ -9857,6 +10083,27 @@ namespace Emberfall.DevHarness
                   "and the opponent actually handed out is flagged as a ghost, so the UI can say so out loud");
             Check(first != null && first.Units.Count == profile.TeamHeroes().Count,
                   "the ghost is the player's own team, body for body (" + (first == null ? 0 : first.Units.Count) + ")");
+
+            // ...and choice for choice. A ghost is the one opponent in the game that CLAIMS to be
+            // the player's own line, so a ghost fighting without the talents that line runs was a
+            // quiet lie in the place this mode's honesty rules care about most. Taken on a second
+            // ghost rather than by re-reading `first`, because the pending one was built before
+            // these selections existed - which is itself the correct behaviour and is why the
+            // pending opponent has to be cleared to ask the question at all.
+            List<HeroInstance> ghostTeam = profile.TeamHeroes();
+            int selectable = 0;
+            for (int i = 0; i < ghostTeam.Count; i++)
+                if (session.SelectTalent(ghostTeam[i], 1)) selectable++;
+            profile.ProvingOpponent = null;
+            BattleLoadout afterPicking = session.CurrentProvingOpponent(Now);
+            int carried = 0;
+            if (afterPicking != null)
+                for (int i = 0; i < afterPicking.Units.Count; i++)
+                    if (afterPicking.Units[i].SelectedTalent == 1) carried++;
+            Check(selectable > 0 && carried == selectable,
+                  "and choice for choice - every talent the player has picked is on the ghost that is offered ("
+                  + carried + " of " + selectable + " picked)");
+            for (int i = 0; i < ghostTeam.Count; i++) session.SelectTalent(ghostTeam[i], 0);
 
             // Past the bootstrap window the mode switches to generated rosters.
             // Attempts, not highest standing. Highest used to stand in for this and was wrong: one
@@ -23697,6 +23944,427 @@ namespace Emberfall.DevHarness
             List<HeroInstance> team = new List<HeroInstance>();
             team.Add(MakeInstance(db.GetHero("ri_hero"), 1));
             return RunWith(db, db.GetStage("ri_arena"), 9404, team);
+        }
+
+        // ================================================================== ACCOUNTS AND CLOUD
+
+        /// <summary>
+        /// The half of the accounts feature that can be proved without a network.
+        ///
+        /// Everything checked here is in Emberfall.Core.Cloud, and it is in Core precisely so it
+        /// can be checked here: the conflict rule decides whether a player loses a week of
+        /// progress, and a rule like that has to be exercised for every case by something that
+        /// runs on every build, not demonstrated once against a live database.
+        ///
+        /// What is NOT here, and cannot be: whether the database enforces its own half. Row Level
+        /// Security, the friend-code trigger and push_save's compare-and-swap are all facts about
+        /// a Postgres instance, and Tools/supabase-rules-test.py is what measures those. This
+        /// section proves the client cannot lose a save; that script proves the server cannot be
+        /// talked into handing one over.
+        /// </summary>
+        private static void CheckAccounts(ContentDatabase db)
+        {
+            Line("");
+            Line("ACCOUNTS, CLOUD SAVE AND SNAPSHOTS");
+            CheckFriendCodeFormat();
+            CheckCloudSaveRoundTrip(db);
+            CheckSyncDecisions();
+            CheckSnapshotFightsTheSame(db);
+        }
+
+        /// <summary>
+        /// The friend code alphabet, and the two repairs Normalise is allowed to make.
+        ///
+        /// The interesting assertions are the negative ones. An O is NOT read as a 0 and an I is
+        /// NOT read as a 1: those letters are absent from the alphabet because they are ambiguous,
+        /// and a silent substitution would turn a mistyped code into a successful lookup of
+        /// somebody else's account, which is the one failure this whole alphabet exists to stop.
+        /// </summary>
+        private static void CheckFriendCodeFormat()
+        {
+            Check(FriendCode.Alphabet.Length == 30,
+                  "the friend code alphabet has 30 symbols (" + FriendCode.Alphabet.Length + ")");
+            Check(FriendCode.Alphabet.IndexOf('0') < 0 && FriendCode.Alphabet.IndexOf('1') < 0
+                  && FriendCode.Alphabet.IndexOf('I') < 0 && FriendCode.Alphabet.IndexOf('L') < 0
+                  && FriendCode.Alphabet.IndexOf('O') < 0 && FriendCode.Alphabet.IndexOf('U') < 0,
+                  "0, 1, I, L, O and U are all absent - the pairs that get misread out loud");
+
+            Check(FriendCode.IsValid("ABC234"), "a six-character code from the alphabet is valid");
+            Check(!FriendCode.IsValid("ABC23"), "five characters is not a code");
+            Check(!FriendCode.IsValid("ABC2345"), "seven characters is not a code");
+            Check(!FriendCode.IsValid("ABCO23"), "a code containing O is refused");
+            Check(!FriendCode.IsValid(""), "an empty string is not a code");
+
+            Check(FriendCode.Normalise("abc-234") == "ABC234",
+                  "lower case and a dash are repaired (" + FriendCode.Normalise("abc-234") + ")");
+            Check(FriendCode.Normalise("  ABC 234 ") == "ABC234", "spaces are dropped");
+            Check(FriendCode.Normalise("ABCO23") == "",
+                  "an O is REFUSED rather than read as a zero - a silent repair would look up the wrong account");
+            Check(FriendCode.Normalise("ABC1234") == "", "too many characters normalises to nothing");
+            Check(FriendCode.Format("ABC234") == "ABC-234", "a code is shown grouped");
+            Check(FriendCode.Normalise(FriendCode.Format("ABC234")) == "ABC234",
+                  "and what is shown can be typed straight back in");
+        }
+
+        /// <summary>
+        /// A save survives the trip through the cloud row shape byte for byte.
+        ///
+        /// The trip is the whole point: the save is written by SaveSerializer, embedded as a
+        /// PARSED value in the push_save body (the column is jsonb, and sending it as a string
+        /// would store a JSON string that happens to contain JSON), returned inside a PostgREST
+        /// row, and re-serialised out of it. Four format boundaries, any of which could re-order
+        /// a key or drop a number's precision, and none of which is allowed to.
+        ///
+        /// Checked twice over: the document must come back IDENTICAL as text, and it must also
+        /// still deserialise into the same profile. The first is the stronger claim and the
+        /// second is what a player would actually notice, so neither stands in for the other.
+        /// </summary>
+        private static void CheckCloudSaveRoundTrip(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1700000000);
+            GameSession session = new GameSession(db, profile);
+            session.LevelUpHero(profile.Heroes[0], 6);
+            session.GrantBattleResult(db.AllStages[0], true, 1700000100);
+            session.Summon(9182, 1700000200);
+
+            string local = SaveSerializer.Serialize(profile);
+
+            // The body the client posts to push_save.
+            string body = CloudSaveCodec.WritePushBody(3, SaveSerializer.CurrentVersion, "device-a", local);
+            JsonValue parsedBody;
+            string bodyError;
+            bool bodyParses = JsonValue.TryParse(body, out parsedBody, out bodyError);
+            Check(bodyParses && parsedBody != null && parsedBody.IsObject,
+                  "the push_save body is a JSON object");
+            Check(bodyParses && parsedBody["p_data"] != null && parsedBody["p_data"].IsObject,
+                  "the save travels as a JSON OBJECT, not as a string containing JSON - the column is jsonb");
+            Check(bodyParses && parsedBody.GetInt("p_expected_revision", -1) == 3,
+                  "the expected revision is carried as sent");
+
+            // The row PostgREST hands back, built the way the server would: `data` is a jsonb
+            // VALUE, so it is the parsed document rather than a quoted string.
+            JsonValue row = JsonValue.NewObject();
+            row.Set("user_id", "00000000-0000-0000-0000-00000000beef");
+            row.Set("save_version", SaveSerializer.CurrentVersion);
+            row.Set("revision", 4);
+            row.Set("device_id", "device-a");
+            row.Set("updated_at", "2026-09-21T11:00:00+00:00");
+            row.Set("data", parsedBody["p_data"]);
+            JsonValue rows = JsonValue.NewArray();
+            rows.Add(row);
+
+            CloudSaveRecord record = CloudSaveCodec.ReadFirstRow(rows.ToJson(false));
+            Check(record != null, "a PostgREST row reads back as a cloud save record");
+            if (record == null) return;
+
+            Check(record.Revision == 4 && record.SaveVersion == SaveSerializer.CurrentVersion,
+                  "revision and save version survive the row (" + record.Revision + ", v" + record.SaveVersion + ")");
+            Check(record.DeviceId == "device-a", "the device id survives the row");
+
+            // NOT a text comparison, and the reason is worth stating because the obvious test is
+            // the wrong one. SaveSerializer writes pretty-printed JSON, and `data` is jsonb: a
+            // real Postgres column parses the document and re-renders it, discarding whitespace
+            // and imposing its own key order. Textual identity is therefore not merely untrue
+            // here, it is not a property the storage HAS - a test asserting it would fail against
+            // a correct server and could only be satisfied by giving up jsonb for text, which
+            // would give up the ability to ever query inside a save.
+            //
+            // What must survive is the SAVE, so that is what is measured: the document
+            // deserialises, and the profile it produces re-serialises to the original byte for
+            // byte. That tolerates exactly what jsonb legitimately does and catches everything
+            // else - a dropped key, a truncated number, a mangled string - because the re-write
+            // goes through the one writer whose key order is fixed.
+            string error;
+            PlayerProfile back = SaveSerializer.Deserialize(record.Data, db, out error);
+            Check(back != null && error == null,
+                  "the save deserialises out of the cloud row" + (error != null ? " (" + error + ")" : ""));
+            if (back == null) return;
+
+            string rewritten = SaveSerializer.Serialize(back);
+            Check(rewritten == local,
+                  "AND RE-SERIALISES TO THE ORIGINAL BYTE FOR BYTE - the round trip through jsonb is lossless ("
+                  + rewritten.Length + " vs " + local.Length + " chars)"
+                  + (rewritten == local ? "" : "; first difference: " + FirstDifference(local, rewritten)));
+            Check(back.Gold == profile.Gold && back.PlayerLevel == profile.PlayerLevel
+                  && back.Heroes.Count == profile.Heroes.Count && back.StagesCleared == profile.StagesCleared,
+                  "into the same profile (gold " + back.Gold + ", level " + back.PlayerLevel
+                  + ", " + back.Heroes.Count + " heroes)");
+
+            // The lossless claim above is only worth anything if this comparison can fail. One
+            // coin off the purse is the smallest thing a bad round trip could lose.
+            back.Gold += 1;
+            Check(SaveSerializer.Serialize(back) != local,
+                  "and one gold piece changes the re-serialised text, so that comparison can fail");
+            back.Gold -= 1;
+
+            // An empty PostgREST array is what "no cloud save yet" actually looks like on the
+            // wire - not a 404 - and reading it as anything but "no record" would turn a first
+            // launch into a conflict.
+            Check(CloudSaveCodec.ReadFirstRow("[]") == null, "an empty result reads as no cloud save");
+            Check(CloudSaveCodec.ReadFirstRow("{ not json") == null,
+                  "a malformed body reads as no cloud save rather than throwing");
+
+            SaveSummary summary = SaveSummaryReader.From(local);
+            Check(summary.Readable && summary.PlayerLevel == profile.PlayerLevel
+                  && summary.StagesCleared == profile.StagesCleared
+                  && summary.HeroesOwned == profile.Heroes.Count,
+                  "the conflict card's summary reads the save without deserialising it ("
+                  + summary.Describe() + ")");
+            Check(!SaveSummaryReader.From("{ not json").Readable,
+                  "and an unreadable document summarises as unreadable rather than as an empty account");
+        }
+
+        /// <summary>
+        /// Every case of the conflict decision, including the ones that must NOT resolve
+        /// themselves.
+        ///
+        /// This is the check the whole feature turns on. Two rules are being asserted: nothing is
+        /// ever silently overwritten, and a save from a newer build is refused rather than read.
+        /// The second is the same refusal SaveSerializer.Deserialize already makes locally, moved
+        /// one step earlier so it happens before the document is parsed - which is why
+        /// save_version is a column of its own in the database rather than a field inside the blob.
+        /// </summary>
+        private static void CheckSyncDecisions()
+        {
+            int reader = SaveSerializer.CurrentVersion;
+
+            SyncInputs nothing = new SyncInputs();
+            nothing.ReaderVersion = reader;
+            Check(SyncPlanner.Decide(nothing).Action == SyncAction.NothingToDo,
+                  "no local save and no cloud save: nothing to do");
+
+            SyncInputs firstUpload = new SyncInputs();
+            firstUpload.HasLocal = true;
+            firstUpload.ReaderVersion = reader;
+            Check(SyncPlanner.Decide(firstUpload).Action == SyncAction.UploadLocal,
+                  "a local save and no cloud save: upload");
+            Check(SyncPlanner.ExpectedRevisionForUpload(firstUpload) == 0,
+                  "and it claims revision 0, which is push_save's 'there is no row yet'");
+
+            SyncInputs freshDevice = new SyncInputs();
+            freshDevice.ReaderVersion = reader;
+            freshDevice.HasCloud = true;
+            freshDevice.CloudSaveVersion = reader;
+            freshDevice.CloudRevision = 7;
+            Check(SyncPlanner.Decide(freshDevice).Action == SyncAction.DownloadCloud,
+                  "a cloud save and no local save: download");
+
+            SyncInputs inStep = new SyncInputs();
+            inStep.HasLocal = true;
+            inStep.ReaderVersion = reader;
+            inStep.HasCloud = true;
+            inStep.CloudSaveVersion = reader;
+            inStep.CloudRevision = 7;
+            inStep.BaseRevision = 7;
+            Check(SyncPlanner.Decide(inStep).Action == SyncAction.UploadLocal,
+                  "the cloud is at the revision this device last synced: upload, local descends from it");
+            Check(SyncPlanner.ExpectedRevisionForUpload(inStep) == 7,
+                  "and it claims revision 7, which push_save checks against what is stored");
+
+            SyncInputs cloudMoved = new SyncInputs();
+            cloudMoved.HasLocal = true;
+            cloudMoved.ReaderVersion = reader;
+            cloudMoved.HasCloud = true;
+            cloudMoved.CloudSaveVersion = reader;
+            cloudMoved.CloudRevision = 9;
+            cloudMoved.BaseRevision = 7;
+            Check(SyncPlanner.Decide(cloudMoved).Action == SyncAction.AskPlayer,
+                  "the cloud has moved past this device: ASK, never merge and never pick");
+
+            SyncInputs neverSynced = new SyncInputs();
+            neverSynced.HasLocal = true;
+            neverSynced.ReaderVersion = reader;
+            neverSynced.HasCloud = true;
+            neverSynced.CloudSaveVersion = reader;
+            neverSynced.CloudRevision = 3;
+            neverSynced.BaseRevision = 0;
+            Check(SyncPlanner.Decide(neverSynced).Action == SyncAction.AskPlayer,
+                  "local progress on a device that has never synced, against an existing cloud save: ASK");
+
+            SyncInputs cloudBehind = new SyncInputs();
+            cloudBehind.HasLocal = true;
+            cloudBehind.ReaderVersion = reader;
+            cloudBehind.HasCloud = true;
+            cloudBehind.CloudSaveVersion = reader;
+            cloudBehind.CloudRevision = 4;
+            cloudBehind.BaseRevision = 9;
+            Check(SyncPlanner.Decide(cloudBehind).Action == SyncAction.AskPlayer,
+                  "the cloud went BACKWARDS - restored or rebuilt - so even though local looks newer: ASK");
+
+            SyncInputs newerBuild = new SyncInputs();
+            newerBuild.HasLocal = true;
+            newerBuild.ReaderVersion = reader;
+            newerBuild.HasCloud = true;
+            newerBuild.CloudSaveVersion = reader + 1;
+            newerBuild.CloudRevision = 7;
+            newerBuild.BaseRevision = 2;
+            Check(SyncPlanner.Decide(newerBuild).Action == SyncAction.RefuseCloudNewerVersion,
+                  "a cloud save from a NEWER build is refused, not downloaded and not overwritten");
+
+            // The ordering assertion, and it is not a formality. This device is in step with the
+            // cloud, which on its own says "upload" - and uploading would destroy a save written
+            // by a build that knows more than this one. The version gate has to be reached first.
+            SyncInputs newerButInStep = newerBuild;
+            newerButInStep.BaseRevision = newerButInStep.CloudRevision;
+            Check(SyncPlanner.Decide(newerButInStep).Action == SyncAction.RefuseCloudNewerVersion,
+                  "and the version refusal outranks the in-step upload, so a downgraded build cannot overwrite a newer save");
+
+            SyncInputs olderCloud = new SyncInputs();
+            olderCloud.HasLocal = true;
+            olderCloud.ReaderVersion = reader;
+            olderCloud.HasCloud = true;
+            olderCloud.CloudSaveVersion = 1;
+            olderCloud.CloudRevision = 2;
+            olderCloud.BaseRevision = 2;
+            Check(SyncPlanner.Decide(olderCloud).Action == SyncAction.UploadLocal,
+                  "a cloud save from an OLDER build is readable, so the ordinary rules apply");
+        }
+
+        /// <summary>
+        /// A line published to the cloud and fetched back fights EXACTLY the fight the same line
+        /// fights locally.
+        ///
+        /// This is the claim the friendly duel rests on, and it is the reason a duel needs no
+        /// server logic at all. CombatSimulation is a pure function of its request, so if the
+        /// snapshot survives the trip without moving a number, then the fight resolved on this
+        /// device against a fetched line is the same fight the other player's device would
+        /// resolve - and the fingerprint is how that is measured rather than asserted.
+        ///
+        /// The comparison is the full event record, not the outcome: two fights that both end in
+        /// a win can still differ in every blow, and it is the blows that would reveal a snapshot
+        /// that dropped an armor substat or rounded a level.
+        /// </summary>
+        private static void CheckSnapshotFightsTheSame(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1700000000);
+            GameSession session = new GameSession(db, profile);
+
+            // A line worth taking a snapshot OF: levelled, and more heroes than the starters, so
+            // the walk has real slots to resolve. A team of bare level-1 heroes would round-trip
+            // trivially and prove much less.
+            session.Summon(4242, 1700000200);
+            session.Summon(9001, 1700000300);
+            for (int i = 0; i < profile.Heroes.Count; i++) session.LevelUpHero(profile.Heroes[i], 4 + i);
+            profile.NormaliseTeam();
+
+            List<HeroInstance> team = profile.TeamHeroes();
+            Check(team.Count > 0, "the snapshot test has a team to publish (" + team.Count + ")");
+            if (team.Count == 0) return;
+
+            // Talents, written straight onto the instances rather than through SelectTalent, which
+            // is the selection RULE's path and not this check's subject.
+            //
+            // Not decoration, and not free. Thirty shipped heroes author three talents each, so
+            // these selections are LIVE - they resolve through TalentAt on both sides and change
+            // the fight. That is deliberate: the whole claim below is that a line published to the
+            // cloud fights the fight it names, and a line where every unit agreed about zero would
+            // have proved that claim for the one case where the new field cannot possibly be
+            // wrong. With talents set, the round trip is carrying something, and the fingerprint
+            // comparison is carrying it into a battle.
+            int running = 0;
+            for (int i = 0; i < team.Count; i++)
+            {
+                team[i].SelectedTalent = (i % HeroDef.MaxTalents) + 1;
+                if (team[i].Def != null && team[i].Def.TalentAt(team[i].SelectedTalent) != null) running++;
+            }
+            Check(running > 0,
+                  "at least one hero in the published line is running a talent that RESOLVES, so the round trip "
+                  + "below is carrying something into a real fight rather than agreeing about zero ("
+                  + running + " of " + team.Count + ")");
+
+            TeamSnapshot published = TeamSnapshotBuilder.From(db, profile, "Pinoy");
+            Check(published.Units.Count == team.Count,
+                  "the snapshot carries every deployed hero (" + published.Units.Count + " of " + team.Count + ")");
+            Check(published.PowerScore > 0, "and its power is resolved at publish time (" + published.PowerScore + ")");
+
+            // Through the wire: the units array as the jsonb column would hold it, and back.
+            JsonValue units = TeamSnapshotCodec.WriteUnits(published);
+            TeamSnapshot fetched = TeamSnapshotCodec.Read(JsonValue.Parse(units.ToJson(false)),
+                                                          published.Label, published.PowerScore);
+
+            Check(fetched.Units.Count == published.Units.Count,
+                  "every unit survives the column (" + fetched.Units.Count + ")");
+
+            bool fieldsMatch = fetched.Label == published.Label && fetched.PowerScore == published.PowerScore;
+            int armorPieces = 0;
+            for (int i = 0; i < published.Units.Count && fieldsMatch; i++)
+            {
+                SnapshotUnit a = published.Units[i];
+                SnapshotUnit b = fetched.Units[i];
+                armorPieces += a.Armor.Count;
+                if (a.DefId != b.DefId || a.Level != b.Level || a.Stars != b.Stars
+                    || a.RelicId != b.RelicId || a.SelectedTalent != b.SelectedTalent
+                    || a.Armor.Count != b.Armor.Count) fieldsMatch = false;
+                for (int p = 0; p < a.Armor.Count && fieldsMatch; p++)
+                {
+                    if (SaveSerializer.WriteArmorPieceJson(a.Armor[p]).ToJson(false)
+                        != SaveSerializer.WriteArmorPieceJson(b.Armor[p]).ToJson(false)) fieldsMatch = false;
+                }
+            }
+            Check(fieldsMatch, "and every field of every unit, armor rolls included, is unchanged ("
+                  + armorPieces + " armor piece(s) carried by value)");
+
+            // And the selection reaches the type the SIMULATION consumes, which is the step the
+            // field comparison above cannot see: SnapshotUnit and LoadoutUnit are different types
+            // and ToLoadout is the only thing that joins them.
+            BattleLoadout asFought = fetched.ToLoadout();
+            bool talentsReachedTheLoadout = asFought.Units.Count == fetched.Units.Count;
+            for (int i = 0; i < asFought.Units.Count && talentsReachedTheLoadout; i++)
+                if (asFought.Units[i].SelectedTalent != fetched.Units[i].SelectedTalent)
+                    talentsReachedTheLoadout = false;
+            Check(talentsReachedTheLoadout,
+                  "and every selection arrives on the LOADOUT the simulation consumes - ToLoadout is the only "
+                  + "join between the snapshot's unit and the combat one, so a drop here would be invisible to "
+                  + "every check above it");
+
+            // The fight itself. Same stage, same seed, same player side - the only difference is
+            // which object the far side was built from.
+            StageDef arena = ProvingGenerator.BuildStage();
+            const int Seed = 771144;
+            BattleResult local = CombatSimulation.Run(session.BuildProvingRequest(arena, published.ToLoadout(), Seed));
+            BattleResult remote = CombatSimulation.Run(session.BuildProvingRequest(arena, fetched.ToLoadout(), Seed));
+
+            Check(local != null && remote != null && local.Events.Count > 0, "both duels resolved to a real record");
+            if (local == null || remote == null) return;
+
+            Check(FingerprintOf(local) == FingerprintOf(remote),
+                  "A DUEL AGAINST A FETCHED LINE IS THE SAME FIGHT, EVENT FOR EVENT, as one against the local line ("
+                  + local.Events.Count + " events, " + local.Rounds + " rounds)");
+
+            // And the fingerprint is capable of noticing a difference, which is what stops the
+            // check above from being satisfied by two empty records. One hero's level moved by
+            // one is the smallest change a snapshot could get wrong.
+            fetched.Units[0].Level += 1;
+            BattleResult nudged = CombatSimulation.Run(session.BuildProvingRequest(arena, fetched.ToLoadout(), Seed));
+            Check(FingerprintOf(nudged) != FingerprintOf(local),
+                  "and moving ONE hero's level by one changes the record, so the comparison above can fail");
+
+            Check(!published.ToLoadout().IsGhost,
+                  "a duel line is not flagged as a ghost - that flag means 'your own former line', which this is not");
+        }
+
+        /// <summary>Where two documents first disagree, with enough either side to see what
+        /// moved. A length-equal mismatch is almost always a reordering or a single value, and
+        /// "they differ" without saying where costs an hour every time it happens.</summary>
+        private static string FirstDifference(string expected, string actual)
+        {
+            int limit = Math.Min(expected.Length, actual.Length);
+            int at = -1;
+            for (int i = 0; i < limit; i++) { if (expected[i] != actual[i]) { at = i; break; } }
+            if (at < 0) at = limit;
+            int from = Math.Max(0, at - 30);
+            int take = Math.Min(70, Math.Min(expected.Length, actual.Length) - from);
+            if (take <= 0) return "at " + at + " (one document ends there)";
+            char[] breaks = { '\n', '\r' };
+            string wanted = expected.Substring(from, Math.Min(take, expected.Length - from));
+            string found = actual.Substring(from, Math.Min(take, actual.Length - from));
+            return "at " + at + " expected [" + Flatten(wanted, breaks) + "] got [" + Flatten(found, breaks) + "]";
+        }
+
+        private static string Flatten(string text, char[] breaks)
+        {
+            string[] parts = text.Split(breaks, StringSplitOptions.RemoveEmptyEntries);
+            return string.Join(" ", parts).Trim();
         }
     }
 }

@@ -168,7 +168,36 @@ namespace Emberfall.Core.Save
         /// Downgrade is guarded the same way every bump above is: version 12 code reads no
         /// selectedTalent key, so it would silently drop every talent every hero is running - a
         /// whole layer of a team's behaviour - and the check below refuses that instead.
-        public const int CurrentVersion = 13;
+        ///
+        /// 14: the talent a PENDING OPPONENT is running (LoadoutUnit.SelectedTalent), written per
+        /// unit inside `provingOpponent` and only when non-zero, exactly as version 13 writes a
+        /// hero's own selection.
+        ///
+        /// Upgrade needs no migration and gets none: a version 13 opponent has no selectedTalent
+        /// key on any unit, which reads as 0, and 0 is precisely what that opponent fought with -
+        /// LoadoutUnit had no talent field at all when it was written, so the simulation could not
+        /// have given it one. The default IS the migration, and it is the strict kind: a player
+        /// part-way through a Proving match keeps the fight they were offered rather than having a
+        /// talent switched on underneath them by an update.
+        ///
+        /// WHY THIS IS A BUMP AND NOT A SILENT ADDITION, since a pending opponent is not progress
+        /// and the case is genuinely arguable. Version 9's note already settled what a
+        /// `provingOpponent` is - "the opponent they were part-way through", named there beside
+        /// standing and the Brand bank as a thing version 8 code would silently drop - and version
+        /// 13's note already settled what a dropped talent costs: "a whole layer of a team's
+        /// behaviour". This key is the intersection of those two sentences. Version 13 code reads
+        /// no selectedTalent inside a loadout, so it would hand the player the same five bodies
+        /// with a layer of their behaviour quietly removed, and the fight on offer would be easier
+        /// than the fight that was offered. That is small, and it is exactly the class of silent
+        /// difference every bump in this list exists to refuse.
+        ///
+        /// It also stopped being hypothetical the moment saves began travelling between devices.
+        /// SyncPlanner refuses a cloud save from a newer build rather than reading it, and that
+        /// refusal can only protect what the version number declares - `save_version` is its own
+        /// column precisely so the refusal happens before the document is parsed. A shape change
+        /// that did not move the number would walk straight through that guard onto an older
+        /// phone, which is the one place in this system where "small" and "silent" compound.
+        public const int CurrentVersion = 14;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -196,6 +225,31 @@ namespace Emberfall.Core.Save
         /// identical shape for a Proving opponent's gear: a snapshot piece and an owned piece are
         /// the same record, and writing them through one method is what keeps them that way.
         /// </summary>
+        /// <summary>
+        /// WriteArmorPiece and ReadArmorPiece, in public. Nothing else here is public and nothing
+        /// about the format changes by being reachable - these two forward, unchanged.
+        ///
+        /// They exist because a THIRD reader of this shape arrived: a team snapshot published to
+        /// the cloud for a friendly duel carries whole armor pieces, for the same reason a Proving
+        /// opponent does (see BattleLoadout - a uid resolves against a save only its owner holds).
+        /// The alternative was a second armor writer in Emberfall.Core.Cloud, which would have been
+        /// one more place for the piece format to drift out of step with itself, and the version 9
+        /// note above already records that extracting ONE writer is what stopped that happening
+        /// between an owned piece and a snapshot piece. A third copy would undo that.
+        ///
+        /// Read is total the way ReadArmorPiece is: a malformed piece comes back inert rather than
+        /// null, so a caller never has to guard.
+        /// </summary>
+        public static JsonValue WriteArmorPieceJson(ArmorPiece piece)
+        {
+            return piece == null ? new JsonValue() : WriteArmorPiece(piece);
+        }
+
+        public static ArmorPiece ReadArmorPieceJson(JsonValue aj)
+        {
+            return ReadArmorPiece(aj);
+        }
+
         private static JsonValue WriteArmorPiece(ArmorPiece piece)
         {
             JsonValue aj = JsonValue.NewObject();
@@ -262,6 +316,10 @@ namespace Emberfall.Core.Save
                 uj.Set("level", u.Level);
                 uj.Set("stars", u.Stars);
                 uj.Set("relicId", u.RelicId);
+                // Written only when non-zero, the way a hero's own selectedTalent is, so a pending
+                // opponent that nobody has picked a talent for serialises byte for byte the way it
+                // did before the field existed. Every generated roster is such an opponent.
+                if (u.SelectedTalent != 0) uj.Set("selectedTalent", u.SelectedTalent);
                 JsonValue armor = JsonValue.NewArray();
                 for (int a = 0; a < u.Armor.Count; a++)
                 {
@@ -295,6 +353,13 @@ namespace Emberfall.Core.Save
                 u.Level = Math.Max(1, uj.GetInt("level", 1));
                 u.Stars = Math.Max(1, uj.GetInt("stars", 1));
                 u.RelicId = uj.GetString("relicId", "");
+                // Absent on every opponent written before version 14, which reads as 0, which is
+                // "no talent" - and no talent is precisely what those opponents fought with, so
+                // the default IS the migration and a pending fight does not change under a player
+                // mid-way through it. Clamped the same way a hero's own selection is, so a file
+                // naming slot 9 cannot reach TalentAt with it.
+                int talent = uj.GetInt("selectedTalent", 0);
+                u.SelectedTalent = talent < 0 || talent > HeroDef.MaxTalents ? 0 : talent;
                 List<JsonValue> armor = uj.GetList("armor");
                 for (int a = 0; a < armor.Count; a++) u.Armor.Add(ReadArmorPiece(armor[a]));
                 loadout.Units.Add(u);
@@ -557,7 +622,24 @@ namespace Emberfall.Core.Save
                 if (def == null) continue; // content changed under the save - skip quietly
 
                 HeroInstance h = new HeroInstance();
-                h.Uid = hj.GetString("uid", profile.AllocateUid());
+                // The fallback is computed ONLY when there is no stored uid, which is the whole
+                // reason this is three lines rather than one.
+                //
+                // It was `GetString("uid", profile.AllocateUid())`, and C# evaluates an argument
+                // before the call that might not use it - so AllocateUid() ran for EVERY hero,
+                // present uid or not, and each run incremented NextHeroUid. A save was therefore
+                // not idempotent under load-and-save: every load inflated the counter by the
+                // number of heroes owned, and writing it back produced a document that differed
+                // from the one just read.
+                //
+                // Nothing broke visibly, which is why it survived - uids only ever skipped
+                // forward, so they stayed unique and no hero was ever confused with another. It
+                // matters now because a cloud save compares documents across devices, and a save
+                // that changes every time it is read is a save two devices can never agree about.
+                // Found by the round-trip check in the accounts harness section, which
+                // re-serialises a loaded profile and requires the text to match.
+                string storedUid = hj.GetString("uid", "");
+                h.Uid = string.IsNullOrEmpty(storedUid) ? profile.AllocateUid() : storedUid;
                 h.DefId = defId;
                 h.Def = def;
                 h.Level = Math.Max(1, hj.GetInt("level", 1));

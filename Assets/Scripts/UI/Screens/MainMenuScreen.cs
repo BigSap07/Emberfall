@@ -174,10 +174,57 @@ namespace Emberfall.UI.Screens
             BuildMapNodes();
             BuildCampaignCard();
             BuildIdlePanel();
+            BuildSocialButtons();
             BuildBadgeDock();
             BuildSquadStrip();
             BuildOptions();
             BuildDevEntry();
+        }
+
+        /// <summary>
+        /// ACCOUNT and FRIENDS, top left, under the top bar.
+        ///
+        /// NOT IN THE BADGE DOCK, and the dock's own note says why: a sixth badge widens
+        /// BadgeRowWidth from 740 to 892 per side, which at 16:9 leaves 72 logical units between
+        /// the dock and the squad strip - "survivable but tight", and that was for ONE badge.
+        /// These are two. The dock is full.
+        ///
+        /// NOT IN THE MAP NODES either, which is the other obvious home and the wrong one for a
+        /// different reason: every node on that painting is a PLACE the player walks to - the
+        /// barracks, the smithy, the obelisk, the gatehouse - and an account is not a place. It is
+        /// chrome about who you are, exactly as the idle panel is chrome about what you have
+        /// earned. So it sits where that panel sits, in the same register, on the opposite corner.
+        ///
+        /// Top LEFT specifically, and the clearance was checked rather than assumed. This pair
+        /// occupies y 148 to 232 and x 32 to 668 at the reference resolution. The idle panel is
+        /// the mirror of it at 148 to 348 on the right, so the two cannot meet. The nearest map
+        /// node is the barracks at map-y 0.300, whose label lands around y 300 to 348 at 16:9 -
+        /// and unlike the map nodes this pair is SCREEN-anchored, so that gap does not move with
+        /// the aspect the way a map-space clearance would. The Proving node's own comment records
+        /// what happens when a screen-anchored panel and a map-space label are checked only
+        /// against their own coordinate system: the label ended up invisible behind the idle
+        /// panel at every aspect.
+        /// </summary>
+        private void BuildSocialButtons()
+        {
+            const float buttonWidth = 310f;
+            const float buttonHeight = 84f;
+
+            RectTransform row = UIBuilder.Node("Social", Root);
+            UIBuilder.Box(row, UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16),
+                          buttonWidth * 2f + UITheme.Space16, buttonHeight, new Vector2(0f, 1f));
+            UIBuilder.HStack(row, UITheme.Space16, new RectOffset(0, 0, 0, 0), TextAnchor.UpperLeft);
+
+            // Secondary, not Gold. The Hub already carries exactly two Gold buttons - Continue and
+            // Claim - and the note on each says nothing else on this screen is allowed to be Gold.
+            // An account is not a call to action; it is a door.
+            UIButton account = UIBuilder.SecondaryButton("Account", row, "ACCOUNT", HubStyle.FontButton);
+            UIBuilder.Sized(account.Root, buttonWidth, buttonHeight);
+            account.OnClick(OpenAccount);
+
+            UIButton friends = UIBuilder.SecondaryButton("Friends", row, "FRIENDS", HubStyle.FontButton);
+            UIBuilder.Sized(friends.Root, buttonWidth, buttonHeight);
+            friends.OnClick(OpenFriends);
         }
 
         /// <summary>
@@ -897,6 +944,18 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Forge);
+        }
+
+        private void OpenAccount()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Account);
+        }
+
+        private void OpenFriends()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Friends);
         }
 
         private void ShowOptions()

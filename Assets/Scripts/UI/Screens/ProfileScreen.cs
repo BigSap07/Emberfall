@@ -52,12 +52,16 @@ namespace Emberfall.UI.Screens
         // ------------------------------------------------------------------ name
 
         /// <summary>
-        /// The name, and the first InputField in this project.
+        /// The name, and the project's first text box - though no longer its only one.
         ///
-        /// Built here rather than added to UIBuilder because it is the only one: putting a
-        /// half-considered TextField helper into shared code on the strength of a single call site
-        /// invites the next person to use it for something it was never shaped for. If a second
-        /// screen ever needs one, that is the moment it becomes a builder.
+        /// It used to be built inline here, with a note saying it was not a UIBuilder helper
+        /// because it was the only call site and a half-considered TextField in shared code
+        /// invites misuse. That note named the condition for changing its mind - "if a second
+        /// screen ever needs one" - and the accounts screens need four: a display name, a friend
+        /// code, an email and a password. So the box moved to UIBuilder.TextField, which is where
+        /// the placeholder, the plate, the border and the password mode now live. What stayed here
+        /// is the only part that was ever about THIS screen: what the name means and what happens
+        /// when it is committed.
         ///
         /// Committed on END EDIT rather than per keystroke - one save per rename instead of one
         /// per letter - and a name that comes back empty or whitespace reverts to the stored one
@@ -72,27 +76,8 @@ namespace Emberfall.UI.Screens
                                          UITheme.TextDim, TextAnchor.UpperLeft);
             UIBuilder.Box(label.rectTransform, 28f, -22f, 400f, 26f, new Vector2(0f, 1f));
 
-            RectTransform box = UIBuilder.Node("NameBox", card);
-            UIBuilder.Box(box, 28f, -60f, 640f, 76f, new Vector2(0f, 1f));
-            Image boxBg = box.gameObject.AddComponent<Image>();
-            boxBg.sprite = UISkin.Panel(14);
-            boxBg.type = Image.Type.Sliced;
-            boxBg.color = UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", box, UITheme.Border, 14, 2);
-
-            Text placeholder = UIBuilder.Label("Placeholder", box, "Your name", UITheme.FontSmall,
-                                               UITheme.TextDim, TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(placeholder.rectTransform, 18f);
-
-            Text shown = UIBuilder.Label("Text", box, "", UITheme.FontSmall,
-                                         UITheme.TextPrimary, TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(shown.rectTransform, 18f);
-
-            _nameField = box.gameObject.AddComponent<InputField>();
-            _nameField.textComponent = shown;
-            _nameField.placeholder = placeholder;
-            _nameField.characterLimit = NameLimit;
-            _nameField.lineType = InputField.LineType.SingleLine;
+            _nameField = UIBuilder.TextField("NameBox", card, "Your name", UITheme.FontSmall, NameLimit, false);
+            UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 28f, -60f, 640f, 76f, new Vector2(0f, 1f));
             _nameField.onEndEdit.AddListener(CommitName);
 
             Text hint = UIBuilder.Label("Hint", card,

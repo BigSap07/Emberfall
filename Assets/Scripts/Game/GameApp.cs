@@ -6,6 +6,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
+using Emberfall.Game.Cloud;
 using Emberfall.UI;
 
 namespace Emberfall.Game
@@ -26,6 +27,24 @@ namespace Emberfall.Game
         public RectTransform ScreenLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
         public Sfx Audio { get; private set; }
+
+        /// <summary>
+        /// Accounts, cloud save and friends - or null, on a build with no Supabase config.
+        ///
+        /// NULL IS A SUPPORTED STATE AND EVERY CALLER CHECKS FOR IT. A fresh clone has no
+        /// Assets/Resources/Config/supabase.json (it is gitignored, and must be), so the ordinary
+        /// state of this field on a machine nobody has pointed at a project is null - and the game
+        /// has to boot and play exactly as it did before any of this existed. Constructing the
+        /// coordinator anyway and letting it fail on every request would work too, but it would
+        /// mean the offline case was a path through the online code rather than the absence of it,
+        /// and the absence is what the offline promise actually is.
+        /// </summary>
+        public CloudCoordinator Cloud { get; private set; }
+
+        /// <summary>The two-save chooser. Built whether or not there is a cloud, because it costs
+        /// one hidden object and the alternative is a null check at the one moment in this system
+        /// where a missing screen would silently overwrite somebody's progress.</summary>
+        public ConflictChooser Conflict { get; private set; }
 
         private HudTopBar _topBar;
         private RectTransform _background;
@@ -146,6 +165,7 @@ namespace Emberfall.Game
             BootStage = "overlays";
             _toast = new Toast(OverlayLayer);
             _modal = new ModalPopup(OverlayLayer);
+            Conflict = new ConflictChooser(OverlayLayer);
 
             _topBar.Root.SetAsLastSibling();
             OverlayLayer.SetAsLastSibling();
@@ -155,6 +175,12 @@ namespace Emberfall.Game
             Router.Show(ScreenId.MainMenu, false);
 
             if (freshStart) SaveNow();
+
+            // AFTER the first screen is up, and deliberately last. Nothing about an account is on
+            // the path to a playable game: this starts a coroutine and returns, the menu is
+            // already drawn, and a device with no network never notices that it did not finish.
+            BootStage = "cloud";
+            StartCloud();
 
             // The only onboarding this game has, and only ever for a genuinely new install.
             // Keyed to freshStart rather than a saved flag so the save shape is untouched and an
@@ -173,6 +199,80 @@ namespace Emberfall.Game
                     + ". Everything downstream of this stage did not run. " + ex);
                 throw;
             }
+        }
+
+        // ------------------------------------------------------------------ the cloud
+
+        /// <summary>
+        /// Builds the account stack and starts the sign-in, or does nothing at all.
+        ///
+        /// WRAPPED, AND THE WRAP IS THE POINT. This runs inside Awake's own try, so an exception
+        /// here would be reported as a boot failure and rethrown - and a game that refused to
+        /// start because a JSON config file was malformed would be exactly the failure this whole
+        /// feature promises cannot happen. Caught here instead: the cloud is left null, one
+        /// warning says why, and the menu behind this line is already drawn and already playable.
+        /// </summary>
+        private void StartCloud()
+        {
+            try
+            {
+                SupabaseConfig config = SupabaseConfig.Current;
+                if (!config.Configured)
+                {
+                    // Not a warning. A build with no config is the normal state of a fresh clone
+                    // and of every machine that has not been pointed at a project, and logging it
+                    // as a problem would train everyone to ignore this line.
+                    Debug.Log("Emberfall: no cloud configured - " + config.Problem
+                              + ". The game runs entirely locally.");
+                    return;
+                }
+
+                CloudLocalState state = CloudLocalState.Load();
+                SupabaseClient client = new SupabaseClient(config, this);
+                AccountService account = new AccountService(client, state);
+                CloudSaveService saves = new CloudSaveService(client, account, state);
+                SocialService social = new SocialService(client, account, state);
+                Cloud = new CloudCoordinator(this, client, account, saves, social, state);
+                StartCoroutine(Cloud.Begin());
+            }
+            catch (System.Exception ex)
+            {
+                Cloud = null;
+                Debug.LogWarning("Emberfall: the cloud stack could not be built, so this session is "
+                                 + "local only. The game is unaffected. " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the running game from whatever is now on disk - the one thing the cloud
+        /// download path needs from here, and the only caller.
+        ///
+        /// Goes through SaveService.Load rather than deserialising directly, so the session a
+        /// download produces is bit-for-bit the session the NEXT LAUNCH would produce from the
+        /// same document. Anything else would be a state the player could not get back to.
+        ///
+        /// Returns false without touching anything if the document will not load, which leaves
+        /// the player on the save they already had - the correct outcome, because the alternative
+        /// is a half-swapped session holding heroes from one profile and progress from another.
+        /// </summary>
+        public bool AdoptSaveFromDisk()
+        {
+            PlayerProfile adopted = SaveService.Load(Content);
+            if (adopted == null) return false;
+
+            Session = new GameSession(Content, adopted);
+            RefreshHud();
+
+            // Home, unconditionally. Every screen that is currently built holds references INTO
+            // the profile that was just replaced - a hero list, a selected armor piece, a pending
+            // opponent - and OnShow is the only thing that re-reads them. Sending the router home
+            // runs it, and clearing the history stops Back walking into a screen that never did.
+            if (Router != null)
+            {
+                Router.ClearHistory();
+                Router.Show(ScreenId.MainMenu, false);
+            }
+            return true;
         }
 
         private static void ConfigureRuntime()
@@ -358,6 +458,33 @@ namespace Emberfall.Game
             {
                 Debug.LogError("GameApp.SaveNow: the save FAILED and PROGRESS IS NOT ON DISK. "
                     + "Autosave is idle until the next RequestSave re-arms it. " + ex);
+                return;
+            }
+
+            // THE ONE HOOK THE PUBLISHED TEAM LINE NEEDS, and it is here rather than at a dozen
+            // call sites for a reason worth stating: every action that can change a friend's view
+            // of this player's line - levelling a hero, equipping or rerolling armor, assigning a
+            // relic, picking a talent, changing the team - already ends in a save, because that is
+            // how this project has recorded "something the player owns moved" since before there
+            // was a cloud. So this catches all of them, cannot be forgotten by a new screen, and
+            // cannot fire for a change that was not saved.
+            //
+            // After the save rather than before, and skipped entirely when the save threw: the
+            // cloud must never advertise a line that is not on this device's disk.
+            //
+            // It does not upload every time. PublishSnapshotIfChanged rebuilds the snapshot and
+            // compares it, so claiming idle income - which saves, and changes nothing about the
+            // line - touches no network at all.
+            if (Cloud != null)
+            {
+                try
+                {
+                    Cloud.PublishSnapshotIfChanged();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning("Emberfall: could not publish the team line: " + ex.Message);
+                }
             }
         }
 
@@ -419,14 +546,27 @@ namespace Emberfall.Game
         }
 #endif
 
+        /// <summary>
+        /// Save, then push.
+        ///
+        /// The save is the part that must not fail; the sync is the part that is allowed to. On
+        /// Android there is no guaranteed window at pause and none at kill, so the coroutine
+        /// started here may simply be cut off - which is safe by construction rather than by luck:
+        /// the disk already holds the save, an upload that never lands leaves the cloud exactly as
+        /// it was, and the base revision only moves once the server has answered. A sync that dies
+        /// halfway costs one sync and nothing else.
+        /// </summary>
         private void OnApplicationPause(bool paused)
         {
-            if (paused) SaveNow();
+            if (!paused) return;
+            SaveNow();
+            if (Cloud != null) Cloud.SyncOnLeaving();
         }
 
         private void OnApplicationQuit()
         {
             SaveNow();
+            if (Cloud != null) Cloud.SyncOnLeaving();
         }
 
         /// <summary>Wipes progress and rebuilds a starter profile. Exposed on the main menu.</summary>

@@ -152,7 +152,10 @@ namespace UnityEditor
 
     /// <summary>Enough of the real type for the verification tools' GameView-focus helper:
     /// EditorWindow.GetWindow(gameViewType, false, null, false).Focus()/.Repaint().</summary>
-    public class EditorWindow
+    /// <summary>Derives from ScriptableObject, exactly as Unity's does. It was free-standing,
+    /// which was harmless until something walked Resources.FindObjectsOfTypeAll's Object[] and
+    /// cast an element to it - a cast the real engine allows and the shim rejected.</summary>
+    public class EditorWindow : ScriptableObject
     {
         public static EditorWindow GetWindow(Type t) { return null; }
         public static EditorWindow GetWindow(Type t, bool utility) { return null; }

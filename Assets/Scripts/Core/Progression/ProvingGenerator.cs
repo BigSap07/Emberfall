@@ -126,6 +126,12 @@ namespace Emberfall.Core.Progression
                 unit.Level = hero.Level;
                 unit.Stars = def.Stars;
                 unit.RelicId = hero.EquippedRelicId;
+                // The talent the player has actually picked for this hero. A ghost is the one
+                // opponent in the game that is claimed to BE the player's own line, and a ghost
+                // fighting without the talents that line runs was a quiet lie in exactly the place
+                // this mode's honesty rules care about most - the fight it offers is not the line
+                // it names. Generated rosters still carry no talent; see LoadoutUnit for why.
+                unit.SelectedTalent = hero.SelectedTalent;
                 for (int s = 0; s < hero.EquippedArmor.Length; s++)
                 {
                     string uid = hero.EquippedArmor[s];

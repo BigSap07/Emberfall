@@ -48,6 +48,60 @@ namespace Emberfall.Game
             }
         }
 
+        /// <summary>
+        /// The save document exactly as it sits on disk, or null when there is none.
+        ///
+        /// The cloud uploader reads THIS rather than re-serialising the live profile, and the
+        /// difference matters more than it looks. Save stamps LastSaveUnix on the way past, so two
+        /// serialisations of one profile are two different documents - and the whole conflict rule
+        /// is built on a base revision meaning "the cloud holds exactly what this device last
+        /// agreed with". A copy that differed from the file by one timestamp would make that
+        /// sentence quietly false. The caller saves first, then uploads what was written.
+        /// </summary>
+        public static string ReadDocument()
+        {
+            return ReadRaw();
+        }
+
+        /// <summary>
+        /// Replaces the local save with a document from somewhere else - the one call the cloud
+        /// download path needs, and the only writer here that does not go through a PlayerProfile.
+        ///
+        /// Written to both homes, the way Save writes to both, because a half-adopted save would
+        /// leave the file and the PlayerPrefs mirror disagreeing and the next launch picking
+        /// whichever it found first. Returns false if NEITHER landed, which is the only case the
+        /// caller can act on: it must not then swap the running session, because the session would
+        /// be the cloud's and the disk would still be this device's.
+        /// </summary>
+        public static bool WriteDocument(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return false;
+            bool anyLanded = false;
+
+            try
+            {
+                File.WriteAllText(FilePath, json);
+                anyLanded = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("Emberfall: could not write the downloaded save to disk (" + ex.Message + ").");
+            }
+
+            try
+            {
+                PlayerPrefs.SetString(PrefsKey, json);
+                PlayerPrefs.Save();
+                anyLanded = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("Emberfall: could not mirror the downloaded save to PlayerPrefs: " + ex.Message);
+            }
+
+            return anyLanded;
+        }
+
         /// <summary>Returns null when there is no usable save, so the caller can start fresh.</summary>
         public static PlayerProfile Load(ContentDatabase content)
         {

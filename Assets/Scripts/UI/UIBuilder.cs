@@ -516,6 +516,56 @@ namespace Emberfall.UI
             FillParent(label.rectTransform, 10f, 2f, 10f, 2f);
             return root;
         }
+
+        // ------------------------------------------------------------------ text entry
+
+        /// <summary>
+        /// A single-line text box: sunken plate, thin border, placeholder, and the InputField
+        /// wired to both.
+        ///
+        /// PROMOTED FROM ProfileScreen, WHICH IS WHERE IT SAID TO PROMOTE IT FROM. That screen
+        /// built the project's first InputField inline and recorded why it was not a builder: it
+        /// was the only one, and "putting a half-considered TextField helper into shared code on
+        /// the strength of a single call site invites the next person to use it for something it
+        /// was never shaped for". The accounts screens need four more - a display name, a friend
+        /// code, an email and a password - so the condition that note set for promoting it has
+        /// been met, by the note's own terms.
+        ///
+        /// What the fifth call site taught, and what is therefore HERE rather than at any of them:
+        /// a password needs asterisks, a friend code needs a character limit and a wider glyph,
+        /// and every one of them needs committing on end-edit rather than per keystroke. Those are
+        /// the parameters; everything else is the same box.
+        ///
+        /// The caller owns the RectTransform. This sizes nothing - a field inside a VStack and a
+        /// field at a fixed offset need different things, and a builder that guessed would be
+        /// wrong for one of them.
+        /// </summary>
+        public static InputField TextField(string name, Transform parent, string placeholderText,
+                                           int fontSize, int characterLimit, bool password)
+        {
+            RectTransform box = Node(name, parent);
+
+            Image background = box.gameObject.AddComponent<Image>();
+            background.sprite = UISkin.Panel(14);
+            background.type = Image.Type.Sliced;
+            background.color = UITheme.PanelSunken;
+            Frame("Edge", box, UITheme.Border, 14, 2);
+
+            Text placeholder = Label("Placeholder", box, placeholderText, fontSize,
+                                     UITheme.TextDim, TextAnchor.MiddleLeft);
+            FillParent(placeholder.rectTransform, 18f);
+
+            Text shown = Label("Text", box, "", fontSize, UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            FillParent(shown.rectTransform, 18f);
+
+            InputField field = box.gameObject.AddComponent<InputField>();
+            field.textComponent = shown;
+            field.placeholder = placeholder;
+            field.characterLimit = characterLimit;
+            field.lineType = InputField.LineType.SingleLine;
+            if (password) field.contentType = InputField.ContentType.Password;
+            return field;
+        }
     }
 
     /// <summary>Squash-and-release feedback so taps feel physical instead of instant.</summary>
