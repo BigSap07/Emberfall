@@ -1412,6 +1412,7 @@
         "scale": 1.06,
         "sigil": null,
         "sprite": "branik_the_siege_mason",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1472,6 +1473,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "demos_the_debt_collector",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1532,6 +1534,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "kest_the_bridgebreaker",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1592,6 +1595,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "orelle_the_fever_warden",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1652,6 +1656,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "tavia_the_signal_huntress",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1712,6 +1717,7 @@
         "scale": 1.05,
         "sigil": null,
         "sprite": "adric_the_blank_map",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1772,6 +1778,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "aster_the_glassblower",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1832,6 +1839,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "quin_the_sealed_dispatch",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1892,6 +1900,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "selka_the_unheard_appeal",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -1952,6 +1961,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "arno_the_unfinished_mason",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -2000,6 +2010,7 @@
         "scale": 1.04,
         "sigil": null,
         "sprite": "barr_the_splintered_door",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -2048,6 +2059,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "piri_the_match_seller",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -2096,6 +2108,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "fenn_the_parcel_runner",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -2144,6 +2157,7 @@
         "scale": 1.03,
         "sigil": null,
         "sprite": "ulric_the_fallen_sign",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -3769,6 +3783,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "mika_the_salvage_pilot",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -3829,6 +3844,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "rhys_the_fence_walker",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -3889,6 +3905,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "siofra_the_turncoat_oracle",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -3949,6 +3966,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "vanno_the_detour_king",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4009,6 +4027,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "bren_the_extra_measure",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4069,6 +4088,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "cal_the_alternate_angle",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4129,6 +4149,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "linnet_the_misdialed",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4189,6 +4210,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "oswin_the_refit_surgeon",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4249,6 +4271,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "dett_the_untied_knot",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4297,6 +4320,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "hod_the_redirected_load",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4345,6 +4369,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "yara_the_spare_compass",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4393,6 +4418,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "moss_the_side_route",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -4441,6 +4467,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "orenna_the_turning_wheel",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -5842,6 +5869,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "corin_the_patience_engineer",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -5902,6 +5930,7 @@
         "scale": 1.06,
         "sigil": null,
         "sprite": "halwen_the_reserve_keeper",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -5962,6 +5991,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "jory_the_old_gate",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6022,6 +6052,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "maera_the_harbor_eye",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6082,6 +6113,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "maren_the_long_sleeper",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6142,6 +6174,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "brio_the_patient_record",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6202,6 +6235,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "elin_the_second_stitch",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6262,6 +6296,7 @@
         "scale": 1.05,
         "sigil": null,
         "sprite": "marn_the_holding_wall",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6322,6 +6357,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "rusk_the_patchmaker",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6382,6 +6418,7 @@
         "scale": 1.04,
         "sigil": null,
         "sprite": "garron_the_stout_frame",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6430,6 +6467,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "nara_the_road_nurse",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6478,6 +6516,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "wynn_the_hand_me_down",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6526,6 +6565,7 @@
         "scale": 1.03,
         "sigil": null,
         "sprite": "hal_the_stone_cache",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -6574,6 +6614,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "iri_the_kept_token",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -7972,6 +8013,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "eira_the_rolling_barricade",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8032,6 +8074,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "finn_the_bellmaker",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8092,6 +8135,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "niko_the_uninvited_guest",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8152,6 +8196,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "sable_the_queue_cutter",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8212,6 +8257,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "tamsin_the_loose_thread",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8272,6 +8318,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "avera_the_interrupter",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8332,6 +8379,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "lydia_the_unscheduled",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8392,6 +8440,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "roan_the_side_door",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8452,6 +8501,7 @@
         "scale": 1.05,
         "sigil": null,
         "sprite": "tomas_the_door_jammer",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8512,6 +8562,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "jax_the_clockwork_rat",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8560,6 +8611,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "kora_the_interrupted_queue",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8608,6 +8660,7 @@
         "scale": 0.97,
         "sigil": null,
         "sprite": "sena_the_empty_chair",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8656,6 +8709,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "bex_the_unlatched",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -8704,6 +8758,7 @@
         "scale": 0.96,
         "sigil": null,
         "sprite": "till_the_shifting_target",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -10136,6 +10191,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "iolan_the_redacted_judge",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -10196,6 +10252,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "ruma_the_false_trail",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -10256,6 +10313,7 @@
         "scale": 1.06,
         "sigil": null,
         "sprite": "toren_the_closed_door",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -10316,6 +10374,7 @@
         "scale": 1.05,
         "sigil": null,
         "sprite": "petra_the_unsent_letter",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -11623,6 +11682,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "leon_the_numbered_arrow",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -11683,6 +11743,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "lio_the_clear_diagnosis",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -11743,6 +11804,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "nadine_the_border_clerk",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true
@@ -11803,6 +11865,7 @@
         "scale": 0.98,
         "sigil": null,
         "sprite": "clara_the_named_remedy",
+        "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
         "spriteMirror": true

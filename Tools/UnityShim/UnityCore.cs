@@ -147,6 +147,7 @@ namespace UnityEngine
         public static Quaternion LookRotation(Vector3 forward) { return identity; }
         public static Quaternion LookRotation(Vector3 forward, Vector3 up) { return identity; }
         public static Quaternion Slerp(Quaternion a, Quaternion b, float t) { return a; }
+        public static Quaternion Inverse(Quaternion q) { return q; }
         public Vector3 eulerAngles { get { return Vector3.zero; } set { } }
         public static Quaternion operator *(Quaternion a, Quaternion b) { return a; }
         public static Vector3 operator *(Quaternion q, Vector3 v) { return v; }
@@ -570,6 +571,18 @@ namespace UnityEngine
     }
 
     public sealed class MeshRenderer : Renderer { }
+
+    /// <summary>Legacy world-space text. UnitRig's placeholder nameplate is the only user.</summary>
+    public sealed class TextMesh : Component
+    {
+        public string text { get; set; }
+        public Font font { get; set; }
+        public int fontSize { get; set; }
+        public float characterSize { get; set; }
+        public TextAnchor anchor { get; set; }
+        public TextAlignment alignment { get; set; }
+        public Color color { get; set; }
+    }
     public sealed class MeshFilter : Component { public Mesh mesh { get; set; } public Mesh sharedMesh { get; set; } }
     public class Collider : Component { public bool enabled { get; set; } public bool isTrigger { get; set; } }
     public sealed class BoxCollider : Collider { }
@@ -620,6 +633,7 @@ namespace UnityEngine
     public sealed class Font : Object
     {
         public int fontSize { get; set; }
+        public Material material { get; set; }
         public static Font CreateDynamicFontFromOSFont(string fontname, int size) { return null; }
         public static string[] GetOSInstalledFontNames() { return new string[0]; }
     }

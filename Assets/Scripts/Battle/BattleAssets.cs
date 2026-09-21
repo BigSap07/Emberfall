@@ -72,15 +72,81 @@ namespace Emberfall.Battle
         // ------------------------------------------------------------------ unit sprites
 
         /// <summary>
+        /// THE ONE PLACEHOLDER FILE. Every hero whose art is not drawn yet renders this mannequin,
+        /// tinted by aspect, instead of its own sheet - so an undrawn roster reads as "not drawn
+        /// yet" rather than as ninety-four broken sprites, and an artist who wants a better
+        /// placeholder replaces this single PNG and every one of them changes at once.
+        ///
+        /// It is a real file under Resources like any other sprite, not a generated texture,
+        /// precisely so it can be replaced without a code change. Tools/make_placeholder_dummy.py
+        /// is how the current one was drawn and is the thing to re-run if the measurements below
+        /// need to change.
+        /// </summary>
+        public const string DummySpriteId = "placeholder_dummy";
+
+        /// <summary>
+        /// The dummy's own measurements, the same two numbers heroes.json carries per hero, and
+        /// they are MEASURED OFF THE FILE rather than intended for it - make_placeholder_dummy.py
+        /// crops the drawing to its rendered alpha and seats it at exactly these fractions, then
+        /// prints them back from the saved PNG. BuildSprite treats them as an instruction, so a
+        /// file that disagreed with them would stand at the wrong height on the wrong ground line
+        /// and nothing would say so.
+        ///
+        /// The values themselves are the MEDIAN of the thirty-one delivered heroes (body 0.558 of
+        /// range 0.508-0.827, foot 0.220 of range 0.096-0.238), which is what makes a line of
+        /// drawn and undrawn heroes keep its proportions instead of the dummies standing tall or
+        /// sunk. 0.219 rather than 0.220 because 0.220 x 260px is 57.2 and a pixel is a pixel.
+        ///
+        /// IF THE PNG IS REPLACED these must be re-measured. Re-running the generator prints them.
+        /// </summary>
+        public const float DummyBodyFraction = 0.558f;
+        public const float DummyFootFraction = 0.219f;
+
+        /// <summary>
+        /// The placeholder mannequin, drawn white so a tint multiplies cleanly through it.
+        ///
+        /// Unlike UnitSprite below, reaching this is NOT an error - it is the expected path for
+        /// most of the roster. The file going missing IS an error, and gets the magenta square,
+        /// because at that point there is no placeholder left to place.
+        /// </summary>
+        public static Texture2D DummyUnitSprite()
+        {
+            string key = "unitsprite_dummy";
+            Texture2D cached;
+            if (TextureCache.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = Resources.Load<Texture2D>("Sprites/Units/" + DummySpriteId);
+            if (tex == null)
+            {
+                Debug.LogError("Emberfall: the placeholder mannequin is missing from "
+                               + "Resources/Sprites/Units/" + DummySpriteId + ".png. Every hero "
+                               + "without art depends on it; run Tools/make_placeholder_dummy.py.");
+                tex = MissingSpriteTexture;
+            }
+            TextureCache[key] = tex;
+            return tex;
+        }
+
+        /// <summary>
         /// Loads Resources/Sprites/Units/{spriteId}.png for the sprite rig path. Cached like the
         /// generated textures below, so repeat battles with the same unit don't re-hit Resources.
-        /// Never returns null: a missing or misspelled id logs a warning and falls back to a flat
-        /// magenta square, which is deliberately impossible to mistake for real art, rather than
-        /// silently reverting to the procedural rig (that fallback belongs to VisualDef.Sprite
-        /// being empty, a different and correct case - a non-empty id that fails to resolve is a
-        /// content bug and should look like one).
+        ///
+        /// REACHING THE FALLBACK HERE IS A BUG, AND SAYS SO. A unit only gets this far if its data
+        /// claims it has art - VisualDef.Sprite is set and VisualDef.SpriteStatus is not "pending"
+        /// - so the file failing to load means it is missing, misnamed, or outside Resources. That
+        /// is a content bug, it gets a LogError naming the unit and the path it looked in, and it
+        /// keeps the flat magenta square, which is deliberately impossible to mistake for art.
+        ///
+        /// This used to be a LogWarning, and it used to be the ONLY thing that happened when a
+        /// hero had no art - which was every hero, because most of the roster is undrawn. Ninety-
+        /// odd warnings a battle is the same as none: the one real failure would have sat in the
+        /// middle of them unread. Undrawn heroes are now declared as such in heroes.json and never
+        /// arrive here (see VisualDef.SpriteStatus), which is what makes it worth shouting about
+        /// the ones that do.
         /// </summary>
-        public static Texture2D UnitSprite(string spriteId)
+        /// <param name="unitLabel">Who to blame. The unit's display name or def id - a bare sprite
+        /// path is not enough to find the entry that names it.</param>
+        public static Texture2D UnitSprite(string spriteId, string unitLabel)
         {
             string key = "unitsprite_" + spriteId;
             Texture2D cached;
@@ -89,7 +155,10 @@ namespace Emberfall.Battle
             Texture2D tex = Resources.Load<Texture2D>("Sprites/Units/" + spriteId);
             if (tex == null)
             {
-                Debug.LogWarning("Emberfall: no sprite at Resources/Sprites/Units/" + spriteId + ".png - showing a placeholder instead.");
+                Debug.LogError("Emberfall: BROKEN SPRITE - " + (string.IsNullOrEmpty(unitLabel) ? "a unit" : unitLabel)
+                               + " declares art but Resources/Sprites/Units/" + spriteId
+                               + ".png does not load. Either deliver the file or mark the unit"
+                               + " \"spriteStatus\": \"pending\" in its content entry.");
                 tex = MissingSpriteTexture;
             }
             TextureCache[key] = tex;
