@@ -7,6 +7,17 @@ namespace UnityEngine
 {
     public enum KeyCode { LeftBracket = 91 }
 
+    /// Standalone window mode. Real Unity puts this in UnityEngine, not UnityEditor, and
+    /// PlayerSettings.fullScreenMode is typed with it - so it lives here rather than beside the
+    /// build enums, to keep EmberfallBuild's `using` list the same offline as it is in the editor.
+    public enum FullScreenMode
+    {
+        ExclusiveFullScreen = 0,
+        FullScreenWindow = 1,
+        MaximizedWindow = 2,
+        Windowed = 3,
+    }
+
     public static class Input
     {
         public static Vector3 mousePosition { get { return Vector3.zero; } }
@@ -280,6 +291,10 @@ namespace UnityEditor
         public static BuildTarget activeBuildTarget { get { return BuildTarget.StandaloneWindows64; } }
         public static bool buildAppBundle { get; set; }
         public static bool development { get; set; }
+        // Separate from `development` in Unity as well as here, which is the whole point of the
+        // pair: Development Build without script debugging is a real and wanted combination.
+        public static bool allowDebugging { get; set; }
+        public static bool connectProfiler { get; set; }
         public static bool exportAsGoogleAndroidProject { get; set; }
         public static AndroidBuildType androidBuildType { get; set; }
         public static bool SwitchActiveBuildTarget(BuildTargetGroup group, BuildTarget target) { return true; }
@@ -304,6 +319,17 @@ namespace UnityEditor
         public static bool allowedAutorotateToLandscapeLeft { get; set; }
         public static bool allowedAutorotateToLandscapeRight { get; set; }
         public static bool useAnimatedAutorotation { get; set; }
+
+        // Standalone window settings, for EmberfallBuild's Windows desktop player. Plain
+        // properties like the rest of this class: the shim exists so editor-facing code COMPILES
+        // without Unity, not so it behaves, and nothing offline reads these back.
+        public static bool defaultIsNativeResolution { get; set; }
+        public static int defaultScreenWidth { get; set; }
+        public static int defaultScreenHeight { get; set; }
+        public static FullScreenMode fullScreenMode { get; set; }
+        public static bool resizableWindow { get; set; }
+        public static bool allowFullscreenSwitch { get; set; }
+        public static bool forceSingleInstance { get; set; }
         public static UnityEngine.Texture2D[] GetIconsForTargetGroup(BuildTargetGroup group) { return new UnityEngine.Texture2D[0]; }
         public static void SetIconsForTargetGroup(BuildTargetGroup group, UnityEngine.Texture2D[] icons) { }
         public static void SetApiCompatibilityLevel(BuildTargetGroup group, ApiCompatibilityLevel level) { }

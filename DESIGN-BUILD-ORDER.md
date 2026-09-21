@@ -15,11 +15,19 @@ carrying a one-effect basic and a one-effect active, and their designs are alrea
 Nothing in this document is blocked on 5-star authoring any more. Everything the eleven records
 under **Already done** describes is on `main` and observable in the files.
 
-**Two branches are open: `feat/guilds` and `fix/kit-defects`.** The three efforts this section
-used to head "In flight" - the placeholder mannequins, the Dev Arena, and accounts with the
-friendly duel - are all on `main` now and their branches are merged; each is retitled below and
-their branch names are gone, because an unmerged branch is the only thing a pointer can say that
-the files cannot.
+**One branch is open: `fix/build-polish`.** It carries a Windows desktop player for handing the
+game to somebody on a PC — Mono, windowed 1600x900, Development Build — the portrait rule below
+changing from `spriteStatus` to the portrait file, the repair that actually puts `DevArena.unity`
+into the development player, and the hub map labels that ran off the screen edge at 16:10.
+Nothing in it touches content or the simulation.
+
+`feat/guilds` and `fix/kit-defects` are no longer open: both are merged into `main` and
+`git log main..<branch>` is empty for each, so their sections below are history rather than
+status and their branch names have stopped being the only thing that can describe them. The
+three efforts this section used to head "In flight" - the placeholder mannequins, the Dev Arena,
+and accounts with the friendly duel - are all on `main` too; each is retitled below and their
+branch names are gone, because an unmerged branch is the only thing a pointer can say that the
+files cannot.
 
 The engine grew to meet those kits rather than the kits being trimmed to fit the engine. That was
 the standing rule of the authoring passes and it is why the roster authored cleanly: where a
@@ -73,7 +81,7 @@ to this list. The one caveat that is not a regression: these 34 are dormancy tri
 authoring the 64 lower-star kits will trip more of them as those kits adopt features. A new red
 that NAMES its adopters belongs on this list; anything else does not.
 
-### Eight kit defects, repaired, on branch `fix/kit-defects`
+### Landed: eight kit defects, repaired
 
 The dark-talent pass found defects in shipped kits it was not allowed to repair, because each of
 them moves the 150 hero-sweep lines. This branch moves them, deliberately, and states what moved
@@ -145,7 +153,7 @@ engine fault, and changing either is a balance decision about Kiva. And Seraphin
 asks about `MarkAlt` on `Target` inside an effect aimed at HERSELF, so the 15 Energy it promises
 cannot land; it is a wrong subject rather than a strip, and it is not repaired here.
 
-### In flight: guilds, phase one, on branch `feat/guilds`
+### Landed: guilds, phase one
 
 A player can found a guild, hand out its code, let people in or leave it open, promote and
 demote, hand it over, remove somebody, leave, disband, talk to everybody in it, and go and fight
@@ -258,12 +266,71 @@ art it does not have, or that is still marked pending after its art landed. A de
 hero is asserted to be detected, and the same missing file declared pending is asserted to be
 silent, so the detector is known to be capable of firing rather than merely never having fired.
 
-Portraits take the same idea in their own rendering path: a pending hero's badge shows their
+Portraits take the same idea in their own rendering path: a hero with no portrait art shows their
 initial in the aspect colour instead of the shared sigil.
+
+**That rule was originally `spriteStatus == "pending"` and is now the portrait file itself**, and
+the difference is thirty-one heroes. `spriteStatus` is a claim about BATTLE art, and the two
+deliveries are independent: the thirty-one heroes who have battle sprites are not marked pending
+and have no portrait either, so they kept resolving to the handful of shared sigils in the
+collection — the exact repeat the initial exists to prevent, in the one screen that shows the
+whole roster at once. `Widgets.Portrait` asks `HasPortraitArt` instead, which is the question the
+widget is actually answering, so a hero's collection cell no longer changes the day their battle
+sheet lands. Enemies are excluded by type rather than by the file check, because most of them are
+never going to be drawn and are not meant to be — a Grave Moth's emblem is its intended look.
+Both portrait tiers are empty in shipped content today, so in practice every hero shows an
+initial and every enemy a sigil. Presentation only; no content and no simulation touched.
 
 Presentation only. No `CombatSimulation` change and no content numbers touched: the 72 stage
 fingerprints are byte-identical to `main`'s, the 150 hero-sweep and 450 talent-sweep baselines
 match, and the failure count is unchanged at 36.
+
+### In flight: a Windows desktop player, on branch `build/windows-dev`
+
+For putting the game in front of somebody who has a PC and not an Android device. Android is
+still the target and nothing here changes a layout: the same landscape screens, the same
+`UITheme.ReferenceResolution`, the same safe-area rect. What a desktop build adds is a window
+whose shape the player owns, so the settings are all about the window.
+
+**Mono, not IL2CPP, and it is the machine rather than a preference.** This editor install has no
+Windows IL2CPP module: `PlaybackEngines/windowsstandalonesupport/Variations` holds only the six
+mono variations (win32, win64 and win_arm64 × development and nondevelopment), while
+`AndroidPlayer/Variations` has an `il2cpp` folder beside its `mono` one. Asking for IL2CPP on this
+machine fails the build rather than falling back. For a development build handed to one person it
+costs nothing that matters — Mono builds faster, and managed stripping is off either way.
+
+**Windowed at 1600x900, resizable, Alt+Enter for fullscreen.** Windowed because a player that
+seizes a stranger's whole display before they have pressed anything is hard to get out of if it
+misbehaves; 1600x900 rather than the 1920x1080 ProjectSettings carries for Android because it is
+the same 16:9 and it fits inside a 1920x1080 desktop with the title bar and taskbar still
+visible. Alt+Enter is `PlayerSettings.allowFullscreenSwitch`, Unity's own Windows handler, not
+something the game binds. Development Build is on and Script Debugging is off — they are separate
+flags and only the first is wanted, since the second opens a managed debugger port and makes the
+player wait on it.
+
+**Landscape holds at 16:9 and at 16:10, with one clipped label at 16:10.** Verified on the built
+exe at 1600x900, 1440x900 and 1680x1050. At both 16:10 sizes the `PROVING` node's label runs off
+the right edge and reads "PROVIN". The cause is not a sizing bug in the node: `_map` carries an
+`AspectRatioFitter` in `EnvelopeParent` mode set to the painting's authored aspect, so at any
+aspect narrower than the painting the map is WIDER than the screen, and a node anchored in map
+space at `ProvingX` 0.915 is therefore 91.5% across something that overhangs the window. Every
+other node clears. This is pre-existing and reaches Android at any narrow-landscape device shape;
+it is recorded here rather than fixed, because clamping map nodes to the visible rect is a change
+to the Hub's layout system and belongs on its own branch with its own capture.
+
+**The save cannot be shared between two people, and that was checked rather than assumed.**
+`Application.persistentDataPath` resolves to
+`%USERPROFILE%\AppData\LocalLow\Emberfall Studio\Emberfall\`, holding `emberfall_save.json` and
+`Player.log`; `PlayerPrefs` is `HKCU\Software\Emberfall Studio\Emberfall`, holding the save
+mirror, `emberfall.cloud.v1` and the window size. Both are per-Windows-user and per-machine, and
+the identity inside `CloudLocalState` is a random per-install `DeviceId` plus a refresh token that
+only ever exists in that machine's HKCU. Nothing in the distributed folder carries a save or a
+token, so a second PC's first launch makes its own anonymous account. The one way two people
+share a save is both attaching the same email in the Account screen, which is the feature working
+as designed.
+
+**Presentation and build configuration only.** No content file and no `CombatSimulation` change;
+the harness is 35 failures before and after, the same 35.
 
 ### Landed: the Dev Arena
 
@@ -328,10 +395,30 @@ exactly as it did.
 **It cannot reach a release build, and that is checked rather than intended.** Every file under
 `Assets/Scripts/Dev` is wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, which is a compiler
 gate: a release player does not contain the classes. The scene is absent from `EditorBuildSettings`
-in the committed state and a build hook adds it only when the build carries
-`BuildOptions.Development`. `Tools/build-check.ps1` has a `[dev-arena]` step that asserts all three
+in the committed state. `Tools/build-check.ps1` has a `[dev-arena]` step that asserts all of it
 from the files, including that the one shipped file which mentions the arena — the hub's `DEV`
 button — mentions it only inside the same guard.
+
+**`DevArenaMenu.BuildHook` does not put the scene in the player, and the Windows build is what
+found that out.** The hook amends `EditorBuildSettings.scenes` from `OnPreprocessBuild`, and that
+callback fires from inside `BuildPipeline.BuildPlayer` *after* the pipeline has already resolved
+which scenes this build contains — so the amendment lands in the settings asset and never in the
+player, and then the postprocess puts the asset back. It is too late whether or not the caller
+named its own scenes: two Windows builds proved it, one naming `BuildPlayerOptions.scenes` and one
+leaving them null so the list would be read from `EditorBuildSettings`, and both produced a player
+holding `level0` and no `level1`. The DEV button was compiled in, because `DEVELOPMENT_BUILD` was
+set, and pressing it did nothing but log that the scene was missing — which is exactly the failure
+`OpenDevArena`'s `CanStreamedLevelBeLoaded` guard was written to report rather than swallow.
+
+So `EmberfallBuild.BuildWindows` names the arena scene outright, gated on the same Development
+condition the hook tested. The hook is kept rather than deleted because its release-side half
+still does something — it strips the scene if somebody added it to the settings by hand — but it
+is no longer described as the thing that delivers the arena. **None of this was ever the
+guarantee.** The guarantee is the compiler gate on every file in `Assets/Scripts/Dev`, which no
+build script can bypass and which is why a hook that silently did nothing for this long cost
+nothing but a confused evening. The Android path in `EmberfallBuild.Run` still names only
+`Main.unity`, so a development APK has never carried the arena either; that is now a known gap
+rather than a belief that it works.
 
 **The chrome is anchored, not placed.** The first version invented its own reference resolution
 (1600x900) and positioned every control by measuring from the screen origin, which is why it did
