@@ -17,9 +17,51 @@ namespace UnityEngine
         public static bool GetKey(KeyCode key) { return false; }
     }
 
+    /// <summary>
+    /// Layout options are opaque to a type-check - only their presence in a signature matters -
+    /// so one empty marker stands in for every GUILayout.Width/Height/ExpandWidth call.
+    /// </summary>
+    public sealed class GUILayoutOption { }
+
+    /// <summary>Real Unity puts GUIStyle in UnityEngine, not UnityEditor - runtime IMGUI uses it
+    /// too. It sat in the wrong namespace here until something outside UnityEditor needed it.</summary>
+    public sealed class GUIStyle { }
+
     public static class GUILayout
     {
         public static bool Button(string text) { return false; }
+        public static bool Button(string text, params GUILayoutOption[] options) { return false; }
+        public static bool Button(string text, GUIStyle style, params GUILayoutOption[] options) { return false; }
+        public static void Label(string text, params GUILayoutOption[] options) { }
+        public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static bool Toggle(bool value, string text, GUIStyle style, params GUILayoutOption[] options) { return value; }
+        public static bool Toggle(bool value, string text, params GUILayoutOption[] options) { return value; }
+        public static void Space(float pixels) { }
+        public static void FlexibleSpace() { }
+        public static GUILayoutOption Width(float w) { return null; }
+        public static GUILayoutOption Height(float h) { return null; }
+        public static GUILayoutOption ExpandWidth(bool expand) { return null; }
+    }
+
+    public static class GUILayoutUtility
+    {
+        public static Rect GetRect(float minW, float maxW, float minH, float maxH) { return new Rect(); }
+        public static Rect GetRect(float minW, float maxW, float minH, float maxH, params GUILayoutOption[] options) { return new Rect(); }
+        public static Rect GetRect(float w, float h) { return new Rect(); }
+    }
+
+    /// <summary>The immediate-mode surface, enough to type-check a hand-drawn editor window.</summary>
+    public static class GUI
+    {
+        public static Color backgroundColor { get; set; }
+        public static Color color { get; set; }
+        public static bool enabled { get; set; }
+        public static void Label(Rect rect, string text) { }
+        public static void Label(Rect rect, string text, GUIStyle style) { }
+        public static bool Button(Rect rect, string text) { return false; }
+        public static void DrawTexture(Rect rect, Texture image) { }
+        public static void DrawTextureWithTexCoords(Rect rect, Texture image, Rect texCoords) { }
+        public static void DrawTextureWithTexCoords(Rect rect, Texture image, Rect texCoords, bool alphaBlend) { }
     }
 }
 
@@ -45,6 +87,9 @@ namespace UnityEditor
     {
         public static CallbackFunction delayCall { get; set; }
         public static CallbackFunction update { get; set; }
+        /// <summary>Seconds since the editor started, as a double in the real API. Any editor tool
+        /// that animates reads it every frame, so the width is part of the contract.</summary>
+        public static double timeSinceStartup { get { return 0.0; } }
         // Real Unity: settable, and driving it is exactly what the Play-Mode automation under
         // Assets/Editor does (EditorApplication.isPlaying = true/false). A getter-only stub compiles
         // fine for code that only reads it, but throws CS0200 on every assignment - which is most of
@@ -83,6 +128,8 @@ namespace UnityEditor
         public static bool DisplayDialog(string title, string message, string ok) { return true; }
         public static bool DisplayDialog(string title, string message, string ok, string cancel) { return true; }
         public static void RevealInFinder(string path) { }
+        public static string SaveFilePanel(string title, string directory, string defaultName, string extension) { return ""; }
+        public static string OpenFilePanel(string title, string directory, string extension) { return ""; }
         public static void DisplayProgressBar(string title, string info, float progress) { }
         public static void ClearProgressBar() { }
         public static void SetDirty(UnityEngine.Object target) { }
@@ -113,16 +160,36 @@ namespace UnityEditor
         public static EditorWindow GetWindow(Type t, bool utility, string title, bool focus) { return null; }
         public static T GetWindow<T>(string title) where T : EditorWindow { return null; }
         public void Focus() { }
+        public void Show() { }
         public void Repaint() { }
+        public Vector2 minSize { get; set; }
+        public Vector2 maxSize { get; set; }
+        /// <summary>The window's screen rect. A hand-laid-out window reads its width to size
+        /// columns, so it is part of the surface a drawing tool type-checks against.</summary>
+        public Rect position { get; set; }
     }
 
     public enum MessageType { None, Info, Warning, Error }
 
-    public sealed class GUIStyle { }
-
     public static class EditorStyles
     {
         public static GUIStyle boldLabel { get { return null; } }
+        public static GUIStyle label { get { return null; } }
+        public static GUIStyle miniLabel { get { return null; } }
+        public static GUIStyle miniBoldLabel { get { return null; } }
+        public static GUIStyle whiteLabel { get { return null; } }
+        public static GUIStyle miniButton { get { return null; } }
+        public static GUIStyle toolbar { get { return null; } }
+        public static GUIStyle toolbarButton { get { return null; } }
+        public static GUIStyle helpBox { get { return null; } }
+        public static GUIStyle textField { get { return null; } }
+    }
+
+    public static class EditorGUI
+    {
+        public static int indentLevel { get; set; }
+        public static void DrawRect(Rect rect, Color color) { }
+        public static bool Foldout(Rect rect, bool foldout, string content, bool toggleOnLabelClick) { return foldout; }
     }
 
     public static class EditorGUILayout
@@ -135,8 +202,31 @@ namespace UnityEditor
         public static Vector2 BeginScrollView(Vector2 scroll) { return scroll; }
         public static void EndScrollView() { }
         public static void BeginHorizontal() { }
+        public static void BeginHorizontal(GUIStyle style, params GUILayoutOption[] options) { }
+        public static void BeginHorizontal(params GUILayoutOption[] options) { }
         public static void EndHorizontal() { }
+        public static void BeginVertical() { }
+        public static void BeginVertical(GUIStyle style, params GUILayoutOption[] options) { }
+        public static void BeginVertical(params GUILayoutOption[] options) { }
+        public static void EndVertical() { }
         public static void Space() { }
+        public static void Space(float pixels) { }
+        public static Vector2 BeginScrollView(Vector2 scroll, params GUILayoutOption[] options) { return scroll; }
+        public static void LabelField(string label) { }
+        public static void LabelField(string label, params GUILayoutOption[] options) { }
+        public static void LabelField(string label, string value, GUIStyle style) { }
+        public static void LabelField(string label, GUIStyle style, params GUILayoutOption[] options) { }
+        public static void LabelField(string label, string value, params GUILayoutOption[] options) { }
+        public static bool Foldout(bool foldout, string content, bool toggleOnLabelClick) { return foldout; }
+        public static bool Toggle(string label, bool value) { return value; }
+        public static bool Toggle(bool value, params GUILayoutOption[] options) { return value; }
+        public static float Slider(string label, float value, float min, float max) { return value; }
+        public static int IntField(int value, params GUILayoutOption[] options) { return value; }
+        public static int IntField(string label, int value) { return value; }
+        public static string TextField(string label, string value, params GUILayoutOption[] options) { return value; }
+        public static int Popup(string label, int selected, string[] displayed) { return selected; }
+        public static int Popup(int selected, string[] displayed, params GUILayoutOption[] options) { return selected; }
+        public static int IntPopup(string label, int selected, string[] displayed, int[] values) { return selected; }
     }
 
     /// <summary>
@@ -238,6 +328,23 @@ namespace UnityEditor
 
 namespace UnityEditor.Build
 {
+    /// <summary>Ordering for a build callback. Real Unity puts it on IOrderedCallback, which both
+    /// build hooks derive from.</summary>
+    public interface IOrderedCallback
+    {
+        int callbackOrder { get; }
+    }
+
+    public interface IPreprocessBuildWithReport : IOrderedCallback
+    {
+        void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report);
+    }
+
+    public interface IPostprocessBuildWithReport : IOrderedCallback
+    {
+        void OnPostprocessBuild(UnityEditor.Build.Reporting.BuildReport report);
+    }
+
     /// <summary>Replaces BuildTargetGroup in the newer PlayerSettings overloads.</summary>
     public struct NamedBuildTarget
     {
@@ -261,6 +368,9 @@ namespace UnityEditor.Build.Reporting
         public string outputPath { get { return ""; } }
         public TimeSpan totalTime { get { return TimeSpan.Zero; } }
         public int totalErrors { get { return 0; } }
+        /// <summary>What the build was asked for. A build hook reads Development off this to
+        /// decide whether a development-only scene belongs in the scene list.</summary>
+        public BuildOptions options { get { return BuildOptions.None; } }
     }
     public sealed class BuildReport : UnityEngine.Object
     {
@@ -271,11 +381,14 @@ namespace UnityEditor.Build.Reporting
 namespace UnityEditor.SceneManagement
 {
     public enum NewSceneSetup { EmptyScene, DefaultGameObjects }
+    public enum OpenSceneMode { Single, Additive, AdditiveWithoutLoading }
     public enum NewSceneMode { Single, Additive }
 
     public static class EditorSceneManager
     {
         public static Scene NewScene(NewSceneSetup setup, NewSceneMode mode) { return new Scene(); }
+        public static Scene OpenScene(string path, OpenSceneMode mode) { return new Scene(); }
+        public static void MarkSceneDirty(Scene scene) { }
         public static bool SaveScene(Scene scene, string path) { return true; }
         public static bool SaveScene(Scene scene) { return true; }
         public static Scene OpenScene(string path) { return new Scene(); }

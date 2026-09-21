@@ -42,7 +42,7 @@ namespace Emberfall.Core.Combat
     /// No Unity types, no coroutines, no frame timing - which is exactly why it can be
     /// unit tested, replayed and fast-forwarded.
     /// </summary>
-    public static class CombatSimulation
+    public static partial class CombatSimulation
     {
         /// <summary>
         /// Fired once after every completed fight. Subscribe in editor-only code to receive the
@@ -475,7 +475,7 @@ namespace Emberfall.Core.Combat
                  + missingTerm;
         }
 
-        private sealed class Sim
+        private sealed partial class Sim
         {
             private readonly BattleRequest _request;
             private readonly BalanceConfig _cfg;
@@ -822,8 +822,44 @@ namespace Emberfall.Core.Combat
 
             // ------------------------------------------------------------------ setup
 
+            /// <summary>
+            /// Where the walk has got to. The battle used to live entirely inside one call and its
+            /// position was the program counter; now it is this, so the fight can be left standing
+            /// between two actions and picked up again.
+            /// </summary>
+            private enum Phase { NotStarted, RoundBegin, Turns, Done }
+            private Phase _phase = Phase.NotStarted;
+
+            /// <summary>Ids that took a MANUAL action this round and therefore skip their natural
+            /// turn. Empty in every battle the game plays, cleared at every round boundary.</summary>
+            private readonly HashSet<int> _manualActed = new HashSet<int>();
+
+            public bool Finished { get { return _phase == Phase.Done; } }
+            public BattleResult Result { get { return _result; } }
+            public List<CombatUnit> Units { get { return _units; } }
+            public int Round { get { return _round; } }
+            public List<CombatUnit> Order { get { return _order; } }
+            public int OrderIndex { get { return _orderIndex; } }
+
+            /// <summary>
+            /// ONE ENGINE, TWO DOORS. A finished fight is this, and a fight being driven by hand is
+            /// the same three methods called one at a time. There is deliberately no second
+            /// resolution path: anything that resembled the engine without being it would disagree
+            /// with the game the first time either changed.
+            /// </summary>
             public BattleResult Execute()
             {
+                Begin();
+                while (_phase != Phase.Done) StepNatural();
+                return _result;
+            }
+
+            /// <summary>Everything Execute() used to do before its first round: build the bodies,
+            /// snapshot them, open the record, fire the BattleStart passives.</summary>
+            public void Begin()
+            {
+                if (_phase != Phase.NotStarted) return;
+
                 BuildUnits();
                 for (int i = 0; i < _units.Count; i++) _result.Units.Add(_units[i].ToSnapshot());
 
@@ -832,47 +868,103 @@ namespace Emberfall.Core.Combat
                 List<CombatUnit> startOrder = TurnOrder();
                 for (int i = 0; i < startOrder.Count; i++) TriggerPassive(startOrder[i], PassiveTrigger.BattleStart, 0);
 
-                for (_round = 1; _round <= _cfg.MaxRounds; _round++)
+                _round = 0;
+                _phase = Phase.RoundBegin;
+            }
+
+            /// <summary>
+            /// Advances exactly one natural action - one unit's whole turn - and returns. Round
+            /// boundaries are crossed on the way and cost no step of their own, which is why this
+            /// loops: a round that opens with nobody able to act moves straight on to the next.
+            /// </summary>
+            public void StepNatural()
+            {
+                while (_phase != Phase.Done)
                 {
-                    BattleEvent roundEvent = Emit(BattleEventType.RoundStart, -1, -1);
-                    roundEvent.Value = _round;
+                    if (_phase == Phase.RoundBegin)
+                    {
+                        _round++;
+                        if (_round > _cfg.MaxRounds) { EndBattle(); return; }
+                        OpenRound();
+                        continue;
+                    }
 
-                    for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
-
-                    // The defense-ignore budget is per round and lives on the simulation rather
-                    // than on a unit, because it is keyed by the modifier as well as the attacker.
-                    // Empty in every battle that authors none.
-                    _ignoreDefenseUses.Clear();
-
-                    // The round's own boundary, before anybody acts. Raised on every living unit
-                    // rather than broadcast to a side, because "at the start of each round" is a
-                    // statement about the clock and not about either team.
-                    for (int i = 0; i < _units.Count; i++)
-                        if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundStart, 0);
-
-                    // The list is live and the cursor is a field rather than a loop local, so an
-                    // effect resolving mid-round can move the part of the order that has not
-                    // happened yet - that is what TurnShift and SwapTurnOrder do. Count is re-read
-                    // every iteration on purpose.
+                    // The list is live and the cursor is a field, so an effect resolving mid-round
+                    // can move the part of the order that has not happened yet - that is what
+                    // TurnShift and SwapTurnOrder do. Count is re-read every iteration on purpose.
                     //
                     // Termination is structural. Both of those operations REORDER the tail; neither
                     // adds an entry, so the list cannot grow while it is being walked and the walk
                     // is bounded by _units.Count. Gale's kill-driven re-entry, which did splice new
                     // entries in and needed a cap to bound it, is gone.
-                    _order = TurnOrder();
-                    for (_orderIndex = 0; _orderIndex < _order.Count; _orderIndex++)
+                    while (_orderIndex < _order.Count)
                     {
                         CombatUnit unit = _order[_orderIndex];
-                        if (!unit.Alive) continue;
+                        if (!unit.Alive || _manualActed.Contains(unit.Id)) { _orderIndex++; continue; }
                         TakeTurn(unit);
-                        if (IsBattleOver()) break;
+                        _orderIndex++;
+                        if (IsBattleOver()) { EndBattle(); return; }
+                        return;
                     }
-                    _order = null;
-                    if (IsBattleOver()) break;
+                    CloseRound();
                 }
+            }
 
+            /// <summary>The top of a round, unchanged from the body of the old for-loop.</summary>
+            private void OpenRound()
+            {
+                BattleEvent roundEvent = Emit(BattleEventType.RoundStart, -1, -1);
+                roundEvent.Value = _round;
+
+                for (int i = 0; i < _units.Count; i++) _units[i].BeginRound();
+
+                // The defense-ignore budget is per round and lives on the simulation rather
+                // than on a unit, because it is keyed by the modifier as well as the attacker.
+                // Empty in every battle that authors none.
+                _ignoreDefenseUses.Clear();
+                _manualActed.Clear();
+
+                // The round's own boundary, before anybody acts. Raised on every living unit
+                // rather than broadcast to a side, because "at the start of each round" is a
+                // statement about the clock and not about either team.
+                for (int i = 0; i < _units.Count; i++)
+                    if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundStart, 0);
+
+                _order = TurnOrder();
+                _orderIndex = 0;
+                _phase = Phase.Turns;
+            }
+
+            private void CloseRound()
+            {
+                _order = null;
+                if (IsBattleOver()) { EndBattle(); return; }
+                _phase = Phase.RoundBegin;
+            }
+
+            private void EndBattle()
+            {
+                if (_phase == Phase.Done) return;
+                _order = null;
+                _phase = Phase.Done;
                 Finish();
-                return _result;
+            }
+
+            /// <summary>
+            /// Ends the round where it stands and opens the next one. Units that had not acted do
+            /// not act: "end the round" means the clock moved on, and the engine has no separate
+            /// end-of-round work to run - durations come off in ExpireStatuses at the close of each
+            /// unit's own turn, and the per-round bookkeeping happens in BeginRound at the top of
+            /// the next one, which this calls.
+            /// </summary>
+            public void EndRound()
+            {
+                if (_phase == Phase.NotStarted || _phase == Phase.Done) return;
+                _order = null;
+                if (IsBattleOver()) { EndBattle(); return; }
+                _round++;
+                if (_round > _cfg.MaxRounds) { EndBattle(); return; }
+                OpenRound();
             }
 
             private void BuildUnits()
@@ -1251,6 +1343,19 @@ namespace Emberfall.Core.Combat
 
             private void TakeTurn(CombatUnit unit)
             {
+                TakeTurn(unit, ManualChoice.Natural, -1, false);
+            }
+
+            /// <summary>
+            /// ONE TURN, whoever asked for it. A natural turn and a hand-driven one run the same
+            /// body in the same order: the DoT tick, the turn-debt repayment, the TurnStart
+            /// passives, the ability, the after-action passives, the turn-end broadcasts and the
+            /// status expiry. `choice` only replaces the line that reads "would this unit cast?",
+            /// and `forcedTargetId` only replaces the single-enemy pick made by this unit's own
+            /// ability. Both are inert on the natural path.
+            /// </summary>
+            private void TakeTurn(CombatUnit unit, ManualChoice choice, int forcedTargetId, bool ignoreEnergy)
+            {
                 Emit(BattleEventType.TurnStart, unit.Id, unit.Id);
 
                 // History, stamped as the turn opens rather than as it closes: a passive firing
@@ -1291,7 +1396,14 @@ namespace Emberfall.Core.Combat
                 // AfterBasicAttack passive). Cleared the same way as Stun above - RoundsLeft reaching
                 // zero in ExpireStatuses, not a manual removal here.
                 bool silenced = unit.Has(StatusKind.Silence);
-                bool usedActive = !silenced && unit.Active != null && unit.Energy >= unit.Active.EnergyCost;
+                bool usedActive;
+                if (choice == ManualChoice.Natural)
+                    usedActive = !silenced && unit.Active != null && unit.Energy >= unit.Active.EnergyCost;
+                else if (choice == ManualChoice.Active)
+                    usedActive = !silenced && unit.Active != null
+                                 && (ignoreEnergy || unit.Energy >= unit.Active.EnergyCost);
+                else
+                    usedActive = false;
 
                 // Two flags and a count, not a list: no description in the roster asks about more
                 // than the last two actions, and "the same action type on each of its last two
@@ -1374,7 +1486,9 @@ namespace Emberfall.Core.Combat
 
                     {
                         CombatUnit prevLT = _lastTarget;
+                        OpenForcedPick(unit, forcedTargetId);
                         ResolveAbility(unit, unit.Active, 0);
+                        CloseForcedPick();
                         _lastTarget = prevLT;
                     }
                     ClearCast();
@@ -1413,7 +1527,9 @@ namespace Emberfall.Core.Combat
                     attack.AbilityName = basic.Name;
                     attack.Vfx = basic.Vfx;
                     CombatUnit prevLastTarget = _lastTarget;
+                    OpenForcedPick(unit, forcedTargetId);
                     ResolveAbility(unit, basic, 0);
+                    CloseForcedPick();
                     // _lastTarget now holds the basic's final target (depth-0 does not restore).
                     // AfterBasicAttack passives can reference it via ConditionSubject.LastTarget.
 
@@ -6164,6 +6280,50 @@ namespace Emberfall.Core.Combat
 
                 }
 
+                // THE HAND-DRIVEN PICK, and the only line in this method that is not about the
+                // game. `_forcedPrimary` is null in every battle the game resolves - the guard is a
+                // null test, draws nothing from the RNG and cannot move a fingerprint - and is set
+                // only while the Dev Arena is resolving an action a person chose.
+                //
+                // It replaces the SINGLE-ENEMY pick and nothing else, which is why it sits here:
+                // every ally mode, every link mode and every multi-target mode has already
+                // returned above, so an AoE resolves exactly as authored. It is subordinate to the
+                // engine, not above it - Provoked and the Taunt anchor are checked below and both
+                // win, and a pick the actor is Restricted from or that is Concealed is refused.
+                // Each of those cases is reported rather than silently swallowed.
+                if (_forcedPrimary != null && caster == _forcedCaster)
+                {
+                    CombatUnit f = _forcedPrimary;
+                    string no = null;
+                    if (f == excluded) no = "the ability excludes it";
+                    else if (!f.Alive) no = "it is dead";
+                    else if (f.IsPlayer == caster.IsPlayer) no = "it is not an enemy of " + caster.Name;
+                    else if (TargetBanned(caster, f)) no = caster.Name + " is Restricted from targeting it";
+                    else if (Concealed(f)) no = "it is concealed";
+                    if (no != null)
+                    {
+                        NoteForcedPick("refused: " + no + " - the ability picked its own target");
+                    }
+                    else
+                    {
+                        // The anchor still answers for its side, exactly as it does for a natural
+                        // pick. Checked here rather than left to the block below so the reason can
+                        // be reported with the name of the body that intercepted.
+                        CombatUnit taunt = FindTargetAnchor(!caster.IsPlayer);
+                        if (taunt != null && taunt != excluded && !TargetBanned(caster, taunt) && taunt != f)
+                        {
+                            NoteForcedPick("redirected by Taunt: " + taunt.Name
+                                           + " answered for its side instead of " + f.Name);
+                        }
+                        else
+                        {
+                            NoteForcedPick("landed on " + f.Name);
+                            result.Add(f);
+                            return result;
+                        }
+                    }
+                }
+
                 // Every remaining mode targets a single enemy, and the anchor overrides all of them
                 // including LastAttacker/LastTarget, so the unit that answers for a side cannot be
                 // targeted around. ("Provoke" in the previous version of this comment was the old
@@ -6946,6 +7106,36 @@ namespace Emberfall.Core.Combat
             }
 
             /// <summary>True while a pick is being retried with the restriction set aside.</summary>
+            // ---------------------------------------------------------------- hand-driven state
+            //
+            // All of it inert during Run(): the two fields below are null, the notes list is null,
+            // and every read of them is a null test. No RNG draw, no event and no branch that a
+            // battle the game plays can reach.
+
+            private CombatUnit _forcedPrimary;
+            private CombatUnit _forcedCaster;
+            private List<string> _forcedNotes;
+
+            private void OpenForcedPick(CombatUnit caster, int forcedTargetId)
+            {
+                if (forcedTargetId < 0) return;
+                CombatUnit f = FindUnit(forcedTargetId);
+                if (f == null) { NoteForcedPick("refused: no unit with id " + forcedTargetId); return; }
+                _forcedPrimary = f;
+                _forcedCaster = caster;
+            }
+
+            private void CloseForcedPick()
+            {
+                _forcedPrimary = null;
+                _forcedCaster = null;
+            }
+
+            private void NoteForcedPick(string note)
+            {
+                if (_forcedNotes != null) _forcedNotes.Add(note);
+            }
+
             private bool _targetBanRelaxed;
 
             /// <summary>Candidates the restriction has refused during the pick in flight.</summary>
