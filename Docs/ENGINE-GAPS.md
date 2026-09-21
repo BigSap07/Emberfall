@@ -11,8 +11,8 @@ by adding engine features: a batch that meets one of these approximates it, mark
 and adds a row here.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
-arrangement in which a repeat is visible. Four of the eleven groups below already have more than one
-occupant, and one of those has three.
+arrangement in which a repeat is visible. Seven of the nineteen groups below already have more than
+one occupant, and one of those has four.
 
 **What is deliberately not here.** Numbers. Every authored 4-star's damage and healing values differ
 from Pinoy's originals because `CheckStarBandByRole` moved them, and that is balance rather than
@@ -77,6 +77,7 @@ named body.
 |---|---|---|---|---|
 | Kest | "takes 10% less **from it**" | a per-source damage reduction, the inverse of `Vulnerable` | `DamageReductionUp` at 10%, which reduces damage from everybody | small |
 | Jory | "Taunts the front enemy for 2 rounds; **it** deals 15% less damage to Jory" | the same | `DamageReductionUp` at 15% on Jory for the Taunt's duration, which reduces damage from everybody | small |
+| Tamsin | "Targets above 50% turn progress ... **take 15% more Skill Damage**" | a universal damage-taken modifier; `Vulnerable` is the one per-source entry and reads only its applier's damage | `Vulnerable` at 15%, so only Tamsin's own blows land harder | small |
 
 ---
 
@@ -145,6 +146,7 @@ this from three directions.
 | Mika | "When an ally **gains Energy** from Loose Parts, Mika gains a Shield" | a trigger for an ally receiving Energy | folded into the one `OnLinkedUnitHit` passive that hands the Energy out, so the grant and the ward are one firing | small |
 | Branik | "The first time each round a Cracked enemy attacks, Branik gains 8% Damage Reduction" | `OnEnemyDamagedAlly` deliberately excludes the body being hit, so it cannot answer for Branik himself | a second passive on `OnDamaged` carrying the identical clause | small |
 | Halwen | "its holder recovers 4% Max HP" - the holder can be Halwen | the same exclusion, hit a second time | a second passive on `OnDamaged` carrying the identical clause | small |
+| Niko | "When a Flustered enemy **attempts a debuff**" | a trigger for a unit APPLYING a status, and no ally-side broadcast for one being received | `OnEnemyActive`, which is when the debuffs come | medium |
 
 ---
 
@@ -195,22 +197,92 @@ own health, which is the wrong unit for a sentence of that shape.
 
 ---
 
+## 14. Round-end triggers
+
+`PassiveTrigger` gained `RoundStart` and has no mirror. `OnAllyTurnEnd` and `OnEnemyTurnEnd` are
+per-unit, so "at round end" has to become "as each of them finishes".
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Finn | "**At round end**, Ringing enemies have a 35% chance to be delayed" | a `RoundEnd` trigger beside `RoundStart` | `OnEnemyTurnEnd`, once a round, so it answers a Ringing enemy's own turn ending | small |
+
+---
+
+## 15. Chance on anything but a status landing
+
+`EffectDef.Chance` is read in exactly one place, the `ApplyStatus` landing roll, and nowhere else.
+Damage, healing, energy and turn-shift effects either happen or do not.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain and the passive is limited to once a round instead | small |
+
+---
+
+## 16. Redirecting an enemy onto somebody other than the caster
+
+`Provoked` constrains one attacker's single-enemy targeting onto whoever applied it, which the enum
+calls the opposite direction to `Taunt` and a genuinely different rule. Neither can send a named
+enemy at a named third body.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Niko | "forces its next Basic Attack onto **a random ally**" | a redirect naming a destination other than the applier | `Provoked`, so the blow lands on Niko | medium |
+
+---
+
+## 17. Counting how many statuses of a class a body carries
+
+`StatusStacksAtLeast` and `MyStatusStacksAtLeast` count entries of ONE named kind.
+`HasAnyBeneficialStatus` answers whether a body has one at all and not how many, so "N per buff" has
+nothing to multiply.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Tamsin | "removes 6% turn progress **for each target buff**, up to 18%" | a count of beneficial statuses usable as a scalar | 6% flat, and 18% against a body carrying any buff at all | medium |
+
+---
+
+## 18. Naming the unit a turn shift moved
+
+`OnTurnDelayed` fires on the unit that CAUSED the delay and sets only `_broadcastSourceId`. The
+enum's own summary says an ability wanting the delayed unit to suffer something should carry that
+beside the shift, which is right for an ability and leaves a PASSIVE with nothing to point at.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Tamsin | "**The first enemy delayed** each round gains 10% Defense Down" | a broadcast subject on `OnTurnDelayed` | the whole enemy line takes it, once a round | small |
+
+---
+
+## 19. Negating a whole-class condition
+
+`LacksStatus` and `LacksMyMark` negate a NAMED status. `HasAnyBeneficialStatus` and
+`HasAnyHarmfulStatus` have no negation, and neither does `SubjectLostStatusThisFiring`, so "if
+nothing was removed" cannot gate the fallback that answers it.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Iolan | "removes one target buff; **if none is removed**, applies 10% Effect Hit Down" | the negation of `HasAnyBeneficialStatus` or of `SubjectLostStatusThisFiring` | the rider lands whether or not the Dispel found anything | small |
+
+---
+
 ## Where the counts stand
 
-Thirteen capabilities, twenty-four clauses, across twelve heroes and three authoring batches. Nine
-of the thirteen groups already have more than one occupant: 2 (per-round budgets, 2), 3 (area hits,
-2), 4 (per-source stat modification, 2), 5 (duration on a moved status, 3), 8 (the side's last
-attacker, 2), 9 (ally triggers, 4), 11 (swaps and placement, 2) and 12 (percent-of-HP amounts, 2).
+Nineteen capabilities, thirty-two clauses, across sixteen heroes and four authoring batches. The
+groups with more than one occupant are 2 (per-round budgets, 2), 3 (area hits, 2), 4 (per-source
+stat modification, 3), 5 (duration on a moved status, 3), 8 (the side's last attacker, 2), 9 (ally
+triggers, 5), 11 (swaps and placement, 2) and 12 (percent-of-HP amounts, 2).
 
-**Groups 4, 5, 9 and 12 are the ones where one small change closes more than one clause**, and 9 is
-the largest: three of its four rows are the same exclusion in `OnEnemyDamagedAlly` met three times,
-answered three times by pasting the passive onto `OnDamaged` as well. A flag on `PassiveDef` saying
-"and me" would delete three overflow passives from the shipped roster and stop the fourth batch
-writing a fourth.
+**Group 9 is the one to close first.** Five clauses across five heroes, and three of them are the
+same exclusion in `OnEnemyDamagedAlly` met three times and answered three times by pasting the
+passive onto `OnDamaged` as well. A flag on `PassiveDef` saying "and me" would delete three overflow
+passives from the shipped roster. Groups 4, 5 and 12 are the other cases where one small change
+closes more than one row.
 
-One caution, from the same pass that produced these rows. `MaxHpCap` reads like the ceiling a
+One caution, from the pass that produced these rows. `MaxHpCap` reads like the ceiling a
 percent-of-HP clause wants and is not: it ceilings against the TARGET's Max HP, so `0.02` of Max HP
 capped at `1.0` of Max HP is uncapped. `AttackCap` is the one that bounds an amount in the caster's
-own currency. The roster has three effects scaled off a target's health that carry an `attackCap`
-and five that carry a `maxHpCap`, and the five are the reason one 5-star reads seven times the
-roster median in the sweep arena. See the branch report for batch three.
+own currency. Arden carried five of the first and none of the second and read seven and a half times
+the roster median in the sweep arena until they were moved across; `no shipped effect sets maxHpCap`
+is a standing guard again because of it.

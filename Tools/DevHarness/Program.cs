@@ -7463,18 +7463,27 @@ namespace Emberfall.DevHarness
                 UnitDef def = units[u];
                 bool isKael = def.Id == "kael_the_unyielding";
                 bool isZella = def.Id == "zella_the_slow_argument";
-                // Third named exception, and the same argument Zella's rests on rather than a
-                // widening of the rule. Corin's Weight of Time Stuns a target carrying three
-                // stacks of his own Slow, which is the payoff of his whole kit and not a number
-                // that can be dropped. What the premise below actually protects is
-                // CheckDeterminism's and CheckEffectHitResistNoOp's fingerprints, and both field
-                // a fresh profile: three starters against authored enemies. Corin is neither a
-                // starter nor an enemy nor a body of PinnedLine, so he cannot appear in any of
-                // those battles - the branch stays structurally unreachable THERE, which is the
-                // claim, even though it is no longer unreachable in the roster at large. The 72
-                // stage fingerprints were re-diffed against the merge base on the commit that
-                // authored him rather than inherited.
-                bool isCorin = def.Id == "corin_the_patience_engineer";
+                // SAID AGAINST WHAT IT PROTECTS, RATHER THAN AGAINST A LIST OF NAMES.
+                //
+                // This began as "nothing shipped applies Silence or Stun", which made the branches
+                // those statuses reach in TakeTurn structurally unreachable and CheckDeterminism's
+                // and CheckEffectHitResistNoOp's fingerprints a valid no-op proof. Zella broke it
+                // first and was named; Corin broke it second and was named. Niko is the third, and
+                // three names in three batches is a rule being widened one exception at a time
+                // rather than a guard.
+                //
+                // So it is restated as the property the fingerprints actually depend on. Both of
+                // those checks field a FRESH PROFILE, which deploys the three starters, against
+                // the authored enemies. Nothing else appears in them. The claim that has to hold
+                // is therefore that no starter, no body of PinnedLine and no ENEMY applies Silence
+                // or Stun - and that is checkable, stays true as the roster fills, and goes red
+                // the day somebody authors one onto a body those battles actually field.
+                //
+                // Kael keeps his named exception on Block, because that is a STAT on UnitDef read
+                // by ApplyDamageEffect rather than a status, and he IS a starter.
+                HeroDef asHero = def as HeroDef;
+                bool fieldedByTheFingerprints =
+                    asHero == null || asHero.StartingHero || IsPinnedBody(def.Id);
                 if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f
                     || def.ControlImmunity != 0f || def.HolyDamage != 0f
                     || (def.Block != 0f && !isKael))
@@ -7483,17 +7492,29 @@ namespace Emberfall.DevHarness
                     Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage/Block/ControlImmunity/HolyDamage - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
-                if ((UnitAppliesStatus(def, StatusKind.Silence) && !isZella)
-                    || (UnitAppliesStatus(def, StatusKind.Stun) && !isCorin))
+                if (fieldedByTheFingerprints
+                    && (UnitAppliesStatus(def, StatusKind.Silence)
+                        || UnitAppliesStatus(def, StatusKind.Stun)))
                 {
                     clean = false;
-                    Line("  [FAIL] " + def.Id + " authors Silence or Stun - "
-                        + "the shipped-fingerprint no-op assumption no longer holds for this unit");
+                    Line("  [FAIL] " + def.Id + " authors Silence or Stun AND is fielded by the "
+                        + "fingerprint checks (a starter, a PinnedLine body or an enemy) - their "
+                        + "no-op proof no longer holds and has to be re-derived");
                 }
             }
-            Check(clean, "no shipped hero or enemy besides Kael (Block), Zella (Silence) and Corin (Stun) authors Armor Break, Damage Reduction, "
-                + "Skill Damage, Silence, Stun, Block, Control Immunity or Holy Damage yet - so this pass cannot move any existing "
+            Check(clean, "no shipped hero or enemy besides Kael (Block) authors Armor Break, Damage Reduction, "
+                + "Skill Damage, Block, Control Immunity or Holy Damage, and no body the fingerprint checks FIELD applies Silence or Stun - so this pass cannot move any existing "
                 + "BattleFingerprint (CheckDeterminism / CheckEffectHitResistNoOp above already prove those stay stable)");
+        }
+
+        /// <summary>Whether this id is one of the five bodies CheckPinnedFiveBodyCurve deploys.
+        /// Read off PinnedLine itself rather than a second copy of the list, so the two cannot
+        /// drift apart.</summary>
+        private static bool IsPinnedBody(string id)
+        {
+            for (int i = 0; i < PinnedLine.Length; i++)
+                if (PinnedLine[i] == id) return true;
+            return false;
         }
 
         private static bool UnitAppliesStatus(UnitDef def, StatusKind kind)
@@ -22351,7 +22372,11 @@ namespace Emberfall.DevHarness
                                   // The third 4-star batch, same reason.
                                   "corin_the_patience_engineer", "halwen_the_reserve_keeper",
                                   "jory_the_old_gate", "maera_the_harbor_eye",
-                                  "maren_the_long_sleeper", "eira_the_rolling_barricade" };
+                                  "maren_the_long_sleeper", "eira_the_rolling_barricade",
+                                  // The fourth, first half.
+                                  "finn_the_bellmaker", "niko_the_uninvited_guest",
+                                  "sable_the_queue_cutter", "tamsin_the_loose_thread",
+                                  "iolan_the_redacted_judge" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -24463,6 +24488,11 @@ namespace Emberfall.DevHarness
             // exactly as Kest's No Way Back does. Outside every campaign stage and outside
             // PinnedLine, so the turn loop's fingerprint claims are where they were made.
             "maera_the_harbor_eye",
+            // Fourth, and the first 4-star to CANCEL one rather than name an ability id.
+            // No Quiet Moment is Finn's whole concept and the only shipped CancelCast
+            // besides Dahlia's. Same standing: not a starter, not in PinnedLine, in no
+            // campaign stage.
+            "finn_the_bellmaker",
         };
 
         private static void CheckNoShippedCastUse(ContentDatabase live)
