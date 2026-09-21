@@ -20151,20 +20151,22 @@ namespace Emberfall.DevHarness
         /// spent the thing the appended effect's condition reads. They are named in the commit that
         /// repaired them; what the checks below pin is the repaired behaviour.
         ///
-        /// FOUR OF THE TWENTY-NINE ARE NOT HERE, and their absence is the finding rather than an
-        /// omission:
-        ///   - Elyra III and Edrin III wait on a stack their own host can never accumulate, because
-        ///     `ConditionSubject.LastTarget` reads `_lastTarget`, and `ResolveAbility` clears that
-        ///     field for the wrapper ability a passive's effects run inside. Every passive gated on
-        ///     LastTarget therefore answers false forever. Edrin's Record also carries no duration,
-        ///     so his stacks expire two rounds after they land and four can never be held at once.
-        ///   - Hale II is an OR branch on a clause that is already true: its host reads
+        /// THE FOUR THAT USED TO BE ABSENT ARE HERE NOW, and each needed a repair rather than a
+        /// better arena - which was the finding their absence recorded:
+        ///   - Elyra III and Edrin III waited on a stack their own host could never accumulate,
+        ///     because `ConditionSubject.LastTarget` reads `_lastTarget` and `ResolveAbility`
+        ///     cleared that field for the wrapper ability a passive's effects run inside. The clear
+        ///     is gated on depth 0 now. Edrin's Record also carried no duration, so his stacks
+        ///     expired two rounds after they landed and four could never be held at once; his
+        ///     description names a ceiling and no timer, and the authoring now says so.
+        ///   - Hale II was an OR branch on a clause that was already true: its host read
         ///     SubjectDamagedSinceMyTurn, `LastTurnRound` is stamped as the turn OPENS, and the
-        ///     ability's own first effect damages the target - so the AND branch has always passed
-        ///     by the time the OR is consulted and the talent cannot decide anything.
-        ///   - Kael II re-applies a Mark to enemies that already carry one, which is a duration
-        ///     refresh rather than the application its text describes, and nothing in the condition
-        ///     vocabulary can ask "did this firing remove a defensive effect from this body".
+        ///     ability's own first effect damages the target. The host asks
+        ///     SubjectDamagedByOtherSinceMyTurn now, which is the "if any ALLY attacked it" its
+        ///     own text names, so the talent has something left to decide.
+        ///   - Kael II re-applied a Mark to enemies that already carried one, which is a duration
+        ///     refresh rather than the application its text describes. It reads
+        ///     SubjectLostStatusThisFiring now - a condition that did not exist.
         /// </summary>
         private static void CheckDarkTalents(ContentDatabase live)
         {
@@ -20470,7 +20472,7 @@ namespace Emberfall.DevHarness
 
             // ---- Isara II: the second body a Seedling heals.
             if (!DarkPair("isara_the_second_chance", 2, "s_wash", "darian_the_hidden_bulwark,"
-                          + "kael_the_unyielding", 1, true, out a, out b))
+                          + "kael_the_unyielding", 2, true, out a, out b))
                 Check(false, "isara II arena built");
             else
                 Check(b.SubjectHeal > a.SubjectHeal,
@@ -20478,6 +20480,71 @@ namespace Emberfall.DevHarness
                       + b.SubjectHeal + " against " + a.SubjectHeal
                       + ", the difference being 70% of her Attack) - appended after What Survives "
                       + "cleared its own bookkeeping mark it read a mark that was already gone");
+
+            // ---- Elyra III: the stacks Slow Growth can finally hold, spent by Stillness Pays.
+            //
+            // One self-buffing body and the five-hero line. Her Patience is banked by a passive
+            // gated on ConditionSubject.LastTarget, so before the depth-0 repair she reached the
+            // end of every fight with none and the four her third talent asks for were
+            // unreachable by construction. This was one of the two the arena could not raise.
+            if (!DarkPair("elyra_the_patient_warden", 3, "s_buffer", DarkFive, 1, false, out a, out b))
+                Check(false, "elyra III arena built");
+            else
+                Check(b.SubjectShield > 0 && a.SubjectShield == 0 && b.SubjectDamage > a.SubjectDamage,
+                      "Elyra III pays out at four Patience (" + b.SubjectShield + " Shield against "
+                      + a.SubjectShield + ", and " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage + ") - her Slow Growth banks nothing at all until a passive"
+                      + " can read the body its basic struck");
+
+            // ---- Edrin III: the same repair on the other side of it, plus the Record's lifetime.
+            if (!DarkPair("edrin_the_distant_bell", 3, "s_buffer", DarkFive, 1, false, out a, out b))
+                Check(false, "edrin III arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent > a.ResolveSpent,
+                      "Edrin III spends four Record on the Ledger's remains (" + b.SubjectDamage
+                      + " damage against " + a.SubjectDamage + ", " + b.ResolveSpent
+                      + " Record spent against " + a.ResolveSpent + ") - his Guardian of What"
+                      + " Remains banked none of them, and what it banks now lasts the battle");
+
+            // ---- Hale II: the clause that decides something once its host stops answering itself.
+            //
+            // SOLO, and the loneliness is the point: with no ally on the line nobody but Hale can
+            // have attacked the Quarry, so the AND branch is false by construction and everything
+            // the talent adds is the OR branch its own text describes. Against the old host - which
+            // asked only whether the body had been damaged at all, and had damaged it itself one
+            // effect earlier - the two runs were identical.
+            if (!DarkPair("hale_the_relentless_hunter", 2, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "hale II arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage,
+                      "Hale II lands Closing Radius's missing-HP damage with no ally to have hit the"
+                      + " Quarry, once he is under half health (" + b.SubjectDamage + " against "
+                      + a.SubjectDamage + ")");
+
+            // ---- Kael II: Fault Line applied where Take Down the Wall took something away.
+            if (!DarkPair("kael_the_unyielding", 2, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "kael II arena built");
+            else
+                Check(b.Count(StatusKind.Mark) > a.Count(StatusKind.Mark),
+                      "Kael II applies Fault Line to the body his active stripped ("
+                      + b.Count(StatusKind.Mark) + " against " + a.Count(StatusKind.Mark)
+                      + ") - gated on HasMyMark it landed on bodies that still carried one, which is"
+                      + " a refresh rather than the application its text names");
+
+            // ---- Nysera III: the second concealment, which nothing authored before this pass.
+            //
+            // Two soft bodies she can actually kill. The ArmorBreakUp half of the talent is checked
+            // in the armoured arena above; this is the clause that follows it - "if that attack
+            // defeats the target, Nysera immediately becomes Untargetable again" - and it is worth
+            // exactly two extra Stealth applications here, one per kill made while the mark-up is
+            // still on her.
+            if (!DarkPair("nysera_the_missing_arrow", 3, "s_soft_soft_big", "", 1, false, out a, out b))
+                Check(false, "nysera III kill arena built");
+            else
+                Check(b.Count(StatusKind.Stealth) > a.Count(StatusKind.Stealth),
+                      "Nysera III goes unseen again on a kill made while Last Known Position is up ("
+                      + b.Count(StatusKind.Stealth) + " concealment(s) against "
+                      + a.Count(StatusKind.Stealth) + ")");
 
             Line("");
         }

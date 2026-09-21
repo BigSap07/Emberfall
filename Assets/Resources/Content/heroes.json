@@ -77,7 +77,7 @@
             "power": 1.0,
             "targetMissingHpRatio": 0.12,
             "missingHpCap": 0.15,
-            "condition": "SubjectDamagedSinceMyTurn",
+            "condition": "SubjectDamagedByOtherSinceMyTurn",
             "conditionOn": "Target",
             "condition3": "HpBelow",
             "conditionValue3": -1,
@@ -486,7 +486,7 @@
                 "target": "AllEnemies",
                 "status": "Mark",
                 "duration": 2,
-                "condition": "HasMyMark",
+                "condition": "SubjectLostStatusThisFiring",
                 "conditionOn": "Target"
               }
             }
@@ -2665,6 +2665,7 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 3,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "BroadcastSubject",
@@ -2682,14 +2683,15 @@
             },
             {
               "ability": "passive2",
+              "atIndex": 4,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "Self",
                 "status": "DefenseUp",
                 "magnitude": 0.08,
                 "duration": 2,
-                "condition": "LacksStatus",
-                "conditionStatus": "AttackUp",
+                "condition": "HasStatus",
+                "conditionStatus": "DefenseDown",
                 "conditionOn": "BroadcastSubject",
                 "condition2": "StatusStacksAtLeast",
                 "conditionStatus2": "Resolve",
@@ -2716,6 +2718,24 @@
               "effectIndex": 3,
               "field": "hits",
               "delta": -10
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive2",
+              "atIndex": 3,
+              "effect": {
+                "kind": "EnergyGain",
+                "target": "Self",
+                "flat": -10,
+                "condition": "HasStatus",
+                "conditionStatus": "DefenseDown",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
             }
           ]
         }
@@ -9663,23 +9683,50 @@
         "talentIII": {
           "id": "mireth_no_record_remains",
           "name": "No Record Remains",
-          "trigger": "None",
-          "effects": [],
+          "trigger": "BattleStart",
+          "oncePerBattle": true,
+          "effects": [
+            {
+              "kind": "GainResolve",
+              "target": "Self",
+              "counterIndex": 2,
+              "maxStacks": 1,
+              "duration": 99
+            }
+          ],
           "appends": [
             {
               "ability": "passive2",
               "atIndex": 4,
               "effect": {
+                "kind": "RemoveStatus",
+                "target": "BroadcastSubject",
+                "status": "Mark",
+                "hits": 1,
+                "condition": "StatusStacksAtLeast",
+                "conditionCounterIndex": 2,
+                "conditionValue": 1,
+                "conditionOn": "Caster",
+                "condition2": "HpBelow",
+                "conditionValue2": 0.3,
+                "conditionOn2": "BroadcastSubject"
+              }
+            },
+            {
+              "ability": "passive2",
+              "atIndex": 5,
+              "effect": {
                 "kind": "Damage",
                 "target": "BroadcastSubject",
-                "power": 1.5,
-                "condition": "HpBelow",
-                "conditionValue": 0.5,
+                "power": 0.8,
+                "condition": "SubjectLostStatusThisFiring",
                 "conditionOn": "BroadcastSubject",
                 "condition2": "StatusStacksAtLeast",
-                "conditionStatus2": "Resolve2",
-                "conditionValue2": 3,
-                "conditionOn2": "Caster"
+                "conditionCounterIndex2": 2,
+                "conditionValue2": 1,
+                "conditionOn2": "Caster",
+                "consumesResolve": true,
+                "counterIndex": 2
               }
             }
           ]
@@ -9923,16 +9970,33 @@
         "talentIII": {
           "id": "nysera_last_known_position",
           "name": "Last Known Position",
-          "trigger": "OnStatusGained",
-          "triggerStatus": "Stealth",
+          "trigger": "OnKill",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "Self",
+              "chance": 1,
               "duration": 1,
-              "magnitude": 0.15,
-              "status": "ArmorBreakUp"
+              "status": "Stealth",
+              "condition": "HasStatus",
+              "conditionStatus": "ArmorBreakUp",
+              "conditionOn": "Caster"
+            }
+          ],
+          "appends": [
+            {
+              "ability": "passive1",
+              "atIndex": 1,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "Self",
+                "duration": 1,
+                "magnitude": 0.15,
+                "status": "ArmorBreakUp",
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSource"
+              }
             }
           ]
         }
@@ -11635,6 +11699,7 @@
               "kind": "Damage",
               "target": "BroadcastSubject",
               "power": 0.6,
+              "scaleByLastRelease": true,
               "condition": "StatusStacksAtLeast",
               "conditionStatus": "Resolve",
               "conditionValue": 4,
@@ -11644,6 +11709,7 @@
               "kind": "Damage",
               "target": "BroadcastSubject",
               "power": 0.4,
+              "scaleByLastRelease": true,
               "condition": "StatusStacksAtLeast",
               "conditionStatus": "Resolve",
               "conditionValue": 4,
