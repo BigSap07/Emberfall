@@ -2,7 +2,7 @@
 
 ## Now / Next
 
-Current state, checked against the repo on 2026-09-20, not against the rest of this document.
+Current state, checked against the repo on 2026-09-21, not against the rest of this document.
 
 ### All thirty 5-star heroes are authored
 
@@ -12,9 +12,13 @@ answers) and three talents each, 90 talents in total. The remaining 64 are 1-4 s
 carrying a one-effect basic and a one-effect active, and their designs are already written in
 `import/Heroes.json` waiting to be authored.
 
-Nothing in this document is blocked on 5-star authoring any more, and **no branch is open.**
-Everything the eleven records under **Already done** describes is on `main` and observable in
-the files.
+Nothing in this document is blocked on 5-star authoring any more. Everything the eleven records
+under **Already done** describes is on `main` and observable in the files.
+
+**One branch is open: `feat/guilds`.** The three efforts this section used to head "In flight" -
+the placeholder mannequins, the Dev Arena, and accounts with the friendly duel - are all on
+`main` now and their branches are merged; each is retitled below and their branch names are
+gone, because an unmerged branch is the only thing a pointer can say that the files cannot.
 
 The engine grew to meet those kits rather than the kits being trimmed to fit the engine. That was
 the standing rule of the authoring passes and it is why the roster authored cleanly: where a
@@ -51,9 +55,67 @@ refuses to call "nothing happened" a pass.
 **A 37th failure would be a regression.** If the count goes above 36, diagnose it — do not add it
 to this list.
 
-### In flight: placeholder mannequins for undrawn heroes, on branch `feat/placeholder-dummy`
+### In flight: guilds, phase one, on branch `feat/guilds`
 
-The branch makes "this hero has not been drawn yet" a thing the game can say, separately from
+**The database only, so far.** The branch carries three migrations and nothing else: no client,
+no screens, no harness section. That ordering is the point rather than an accident of scheduling
+— every rule guilds have is a rule about who may do what to whose rows, and a rule like that is
+either enforced by Postgres or it is not enforced. Writing the client first would have meant
+choosing which rules to trust the client for.
+
+**Four tables.** `guilds` (name, a short description, a six-character code, and whether requests
+auto-accept), `guild_members` (the role and a presence stamp), `guild_requests` and
+`guild_messages`. RLS on all four, `anon` revoked on all four.
+
+**Three rules are constraints, not code.** *One guild per player* is `guild_members.user_id`
+being the primary key — two guilds accepting the same applicant in the same instant lock
+different rows, so nothing makes them queue and nothing needs to: the key refuses the second
+insert whatever the timing. *At most one leader per guild* is a partial unique index, which is
+why transferring leadership demotes before it promotes — a partial index is checked per statement
+and cannot be deferred to commit. *The alphabet a guild code is drawn from* is a CHECK that
+restates it rather than trusting the generator, exactly as `profiles.friend_code` does.
+
+**Two rules are locks, not counts.** The 30-member cap takes the guild's own row `for update`
+before counting the roster, because two officers accepting two different applicants both read 29
+and both insert otherwise. The one-message-every-two-seconds chat limit takes the poster's
+membership row the same way, because two posts from one account in the same instant otherwise
+read the same "last posted" value and both pass. Neither row is being modified by the lock; each
+is being used as the thing the two callers have to agree about.
+
+**No table carries an INSERT grant, and `guild_members` carries no UPDATE grant either.**
+Creating, joining, accepting, promoting, transferring, posting and stamping presence are all
+functions, so there is no statement a client can send that promotes itself, backdates its own
+last-seen or posts around the rate limit. It is the shape `saves` and `push_save` already have,
+applied to five more rules.
+
+**Guilds are deliberately NOT readable by every signed-in user, and that is where this is
+tighter than `profiles`.** 0001's own note calls "any signed-in user may read any profile" the
+widest rule in those migrations and says the tightening, when there is a population to protect,
+is to expose an exact-match lookup instead. A guild table anybody can page is a list of every
+guild code in the project, and with auto-accept on, a list of codes is a list of guilds anyone
+can walk into — so guilds start at the tightening rather than arriving there later. `guilds` is
+readable by its own members and by somebody holding a request to it; finding any other guild goes
+through `guild_by_code()`, which resolves one exact code and cannot be asked for a second row.
+
+**A guildmate's team snapshot becomes readable by ADDING a policy, not by replacing 0003's.**
+Permissive policies are OR'd, so friends keep their access without the new file restating a rule
+it does not own — and there is no window in which the old rule is gone and the new one is not yet
+there. That one policy is the whole of what "guildmates may duel without being friends" needed:
+the combat engine is a pure function of its request, so who may fight whom reduces entirely to
+whose line may be read.
+
+**What the migrations do not decide, and what phase one excludes.** There is no guild shop, no
+currency, no raid, no reward, no guild level and no leaderboard, and nothing here adds economy of
+any kind. Chat has no edit and no delete for anybody, including a leader: moderation is a real
+feature with real rules and it is not this one.
+
+**Not yet applied to the live project, and not yet tested against it.** The rule test that proves
+these hold — the guild half of `Tools/supabase-rules-test.py` — is written after the SQL is
+pasted, because it has to run against a database that has it.
+
+### Landed: placeholder mannequins for undrawn heroes
+
+This makes "this hero has not been drawn yet" a thing the game can say, separately from
 "this hero's art is broken". Those were the same thing before it, and since 63 of the 94 heroes
 have no art, the broken case had nowhere to be heard - a magenta square per undrawn hero is the
 same as no signal at all.
@@ -86,9 +148,9 @@ Presentation only. No `CombatSimulation` change and no content numbers touched: 
 fingerprints are byte-identical to `main`'s, the 150 hero-sweep and 450 talent-sweep baselines
 match, and the failure count is unchanged at 36.
 
-### In flight: the Dev Arena, on branch `tools/dev-arena`
+### Landed: the Dev Arena
 
-The branch carries two things. **A live battle session in the engine** — `CombatSimulation.Begin`
+Two things. **A live battle session in the engine** — `CombatSimulation.Begin`
 returns a `BattleSession` holding a fight that has not finished, and `Run()` is now literally
 `Begin()` followed by `StepNatural()` until the fight ends. There is no second resolution path:
 a hand-driven action runs the same `TakeTurn` body a natural turn does, and the harness asserts
@@ -188,11 +250,11 @@ restructuring of the whole project and not something a tool should cause. The de
 achieves what the asmdef was wanted for — nothing in a release build — more directly than an
 asmdef's `defineConstraints` would.
 
-### In flight: accounts, cloud save, friends and the friendly duel, on branch `feat/accounts`
+### Landed: accounts, cloud save, friends and the friendly duel
 
-The branch carries a backend, the client half of one, three screens and one new thing a player can
-do. A player who has never seen a login screen now has an account, a save that survives losing the
-phone, a friend code, and a friend's line they can fight for nothing.
+A backend, the client half of one, three screens and one new thing a player can do. A player who
+has never seen a login screen now has an account, a save that survives losing the phone, a friend
+code, and a friend's line they can fight for nothing.
 
 **The backend is Supabase, reached over plain REST.** Three numbered migrations under
 `Server/supabase/migrations` create four tables - `profiles` (display name and a six-character
