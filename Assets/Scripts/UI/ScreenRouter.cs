@@ -21,7 +21,10 @@ namespace Emberfall.UI
         Events,
         Recital,
         Proving,
-        Forge
+        Forge,
+        Account,
+        Friends,
+        FriendTeam
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -78,6 +81,9 @@ namespace Emberfall.UI
         public Screens.RecitalScreen Recital;
         public Screens.ProvingScreen Proving;
         public Screens.ForgeScreen Forge;
+        public Screens.AccountScreen Account;
+        public Screens.FriendsScreen Friends;
+        public Screens.FriendTeamScreen FriendTeam;
 
         public UIScreen Current { get; private set; }
 
@@ -101,6 +107,14 @@ namespace Emberfall.UI
             Recital = Create<Screens.RecitalScreen>();
             Proving = Create<Screens.ProvingScreen>();
             Forge = Create<Screens.ForgeScreen>();
+
+            // Built whether or not this build has a cloud. Each of the three renders an honest
+            // empty state when GameApp.Cloud is null - "this build has no account service" rather
+            // than a blank - which is cheaper and more useful than a router that sometimes has
+            // three fewer screens in it and a menu that sometimes has two fewer buttons.
+            Account = Create<Screens.AccountScreen>();
+            Friends = Create<Screens.FriendsScreen>();
+            FriendTeam = Create<Screens.FriendTeamScreen>();
         }
 
         /// <summary>

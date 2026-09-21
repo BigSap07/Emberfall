@@ -69,7 +69,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV7-proving-plus-screen-targets";
+        private const string BuildMarker = "FIXV8-account-screens";
 
         static PlayModeScreenshot()
         {
@@ -139,6 +139,25 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Battle (live combat)", false, 67)]
         public static void CaptureBattleScreen() { Begin("Screen:Battle"); }
+
+        // The three account screens, through the same generic path. What this captures is each
+        // one's OFFLINE state - the router builds them whether or not a cloud exists, and with no
+        // network they render "no account service" or "offline" rather than a blank. That state is
+        // worth photographing in its own right, because it is what every build with no
+        // supabase.json shows and it is the one this project's offline promise is about.
+        //
+        // The SIGNED-IN states are not reachable from here and deliberately are not faked: they
+        // need a live account, a second live account, and a friendship between them, which is
+        // AccountsVerification's job and which no synthetic seeding could stand in for without
+        // photographing something no server ever returned.
+        [MenuItem("Emberfall/Capture/Account", false, 68)]
+        public static void CaptureAccountScreen() { Begin("Screen:Account"); }
+
+        [MenuItem("Emberfall/Capture/Friends", false, 69)]
+        public static void CaptureFriendsScreen() { Begin("Screen:Friends"); }
+
+        [MenuItem("Emberfall/Capture/Friend's team", false, 70)]
+        public static void CaptureFriendTeamScreen() { Begin("Screen:FriendTeam"); }
 
         [MenuItem("Emberfall/Capture/ALL of the above, in sequence", false, 80)]
         public static void CaptureAllScreens() { Begin("Screen:ALL"); }
@@ -388,7 +407,8 @@ namespace Emberfall.EditorTools
                 return;
             }
 
-            string[] all = { "MainMenu", "Heroes", "Summon", "Inventory", "RelicShop", "Events", "Recital", "Battle" };
+            string[] all = { "MainMenu", "Heroes", "Summon", "Inventory", "RelicShop", "Events", "Recital",
+                             "Account", "Friends", "FriendTeam", "Battle" };
             string[] list = which == "ALL" ? all : new string[] { which };
 
             // Per screen: show at (index * Step), capture at (index * Step + Settle). Battle gets a
@@ -418,6 +438,9 @@ namespace Emberfall.EditorTools
                     case "RelicShop": id = ScreenId.RelicShop; break;
                     case "Events": id = ScreenId.Events; break;
                     case "Recital": id = ScreenId.Recital; break;
+                    case "Account": id = ScreenId.Account; break;
+                    case "Friends": id = ScreenId.Friends; break;
+                    case "FriendTeam": id = ScreenId.FriendTeam; break;
                     case "Battle": id = ScreenId.Battle; break;
                 }
                 if (name == "Battle")

@@ -181,6 +181,18 @@ namespace UnityEngine.UI
     {
         public enum LineType { SingleLine, MultiLineSubmit, MultiLineNewline }
 
+        /// <summary>Unity's own member list, in Unity's own order. Only Password and Standard are
+        /// used here, but the enum is copied whole rather than trimmed to what one call site
+        /// needs: a shim that renumbers an engine enum is a shim that compiles code the engine
+        /// would reject.</summary>
+        public enum ContentType
+        {
+            Standard, Autocorrected, IntegerNumber, DecimalNumber, Alphanumeric, Name,
+            EmailAddress, Password, Pin, Custom
+        }
+
+        public enum InputType { Standard, AutoCorrect, Password }
+
         public class SubmitEvent : UnityEvent<string> { }
         public class OnChangeEvent : UnityEvent<string> { }
 
@@ -189,6 +201,12 @@ namespace UnityEngine.UI
         public Graphic placeholder { get; set; }
         public int characterLimit { get; set; }
         public LineType lineType { get; set; }
+        public ContentType contentType { get; set; }
+        public InputType inputType { get; set; }
+        public char asteriskChar { get; set; }
+        public bool isFocused { get { return false; } }
+        public void ActivateInputField() { }
+        public void DeactivateInputField() { }
         public SubmitEvent onEndEdit { get { return null; } }
         public OnChangeEvent onValueChanged { get { return null; } }
     }

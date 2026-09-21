@@ -461,6 +461,13 @@ namespace UnityEngine
         public static void Save() { }
     }
 
+    /// <summary>Enough of UnityEngine.GUIUtility for the one thing this project uses it for: the
+    /// Account screen puts a friend code on the system clipboard.</summary>
+    public static class GUIUtility
+    {
+        public static string systemCopyBuffer { get; set; }
+    }
+
     public static class Resources
     {
         public static T Load<T>(string path) where T : Object { return null; }

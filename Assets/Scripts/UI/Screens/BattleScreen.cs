@@ -213,6 +213,36 @@ namespace Emberfall.UI.Screens
         private BattleLoadout _provingOpponent;
 
         /// <summary>
+        /// A friend's published line while this battle is a friendly duel, or null for every other
+        /// mode. The FIFTH discriminator, and the only one that costs nothing and pays nothing.
+        ///
+        /// Kept separate from _provingOpponent rather than reusing it with a flag, even though the
+        /// two carry the same type and reach the same BuildProvingRequest. What differs is not how
+        /// the fight resolves - it resolves identically, which is the point - but everything
+        /// around it: a Proving attempt spends a Brand on entry and grants Valor and standing on
+        /// the way out, and a duel does neither. One field with a "don't charge me" flag would put
+        /// that distinction inside two branches that each have to remember it; two fields put it
+        /// in the type system, where forgetting is not available.
+        /// </summary>
+        private BattleLoadout _duelOpponent;
+
+        /// <summary>The friend's name, for the header and the result panel. Held beside the
+        /// loadout rather than taken from BattleLoadout.Label, because the label is whatever that
+        /// player's account was called when they last published and the friends list may know them
+        /// by a newer one.</summary>
+        private string _duelOpponentName = "";
+
+        /// <summary>
+        /// The seed the duel was resolved at, kept so the result panel can show it.
+        ///
+        /// Shown because a duel is the one fight in this game whose outcome somebody might want to
+        /// argue about. The engine is a pure function of its request, so the seed plus the two
+        /// lines IS the fight - printing it is what makes "we can both check" a true statement
+        /// rather than a claim about an architecture nobody outside the code can see.
+        /// </summary>
+        private int _duelSeed;
+
+        /// <summary>
         /// Enters a campaign stage, resuming wherever the player left it.
         ///
         /// The resume point comes from the session rather than defaulting to (1,1), which is what
@@ -225,6 +255,7 @@ namespace Emberfall.UI.Screens
             _stage = stage;
             _recitalFloor = -1;
             _provingOpponent = null;
+            _duelOpponent = null;
             _prologueSquad = null;
 
             _campaignWave = 1;
@@ -244,6 +275,7 @@ namespace Emberfall.UI.Screens
         {
             _recitalFloor = floor;
             _provingOpponent = null;
+            _duelOpponent = null;
             _prologueSquad = null;
             _stage = App.Session.BuildRecitalStage(floor);
         }
@@ -262,8 +294,41 @@ namespace Emberfall.UI.Screens
         {
             _recitalFloor = -1;
             _provingOpponent = opponent;
+            _duelOpponent = null;
             _prologueSquad = null;
             _stage = ProvingGenerator.BuildStage();
+        }
+
+        /// <summary>
+        /// Launches this screen as a friendly duel against a friend's published line.
+        ///
+        /// NOTHING IS SPENT HERE AND NOTHING IS SPENT IN OnShow, which is the whole difference
+        /// between this and SetProvingOpponent one method up. A duel costs no Brand, pays no
+        /// Valor, moves no standing, records no attempt and writes nothing to the save - see
+        /// ShowDuelResult, which grants nothing at all. Rematch is therefore free and unlimited,
+        /// which is correct: there is no economy here to protect.
+        ///
+        /// The stage is the Proving's, deliberately and with one caveat worth writing down. A duel
+        /// wants its own name, but it does not want its own ENVIRONMENT id: BattleAssets only
+        /// carries palettes for "ember", "hollow" and "proving", and anything else falls through
+        /// to ashen's - so inventing "duel" would have bought a name and cost the warm gatehouse
+        /// dusk that the only other line-against-line mode in the game already fights in. The id
+        /// is the Proving's; the stage id is not, because it is not that mode's match.
+        /// </summary>
+        public void SetDuelOpponent(BattleLoadout opponent, string friendName)
+        {
+            _recitalFloor = -1;
+            _provingOpponent = null;
+            _prologueSquad = null;
+            _duelOpponent = opponent;
+            _duelOpponentName = string.IsNullOrEmpty(friendName)
+                ? (opponent != null ? opponent.Label : "") : friendName;
+
+            StageDef stage = ProvingGenerator.BuildStage();
+            stage.Id = "friendly_duel";
+            stage.Name = "Friendly Duel";
+            stage.Subtitle = "nothing is at stake";
+            _stage = stage;
         }
 
         /// <summary>
@@ -285,6 +350,7 @@ namespace Emberfall.UI.Screens
         {
             _recitalFloor = -1;
             _provingOpponent = null;
+            _duelOpponent = null;
             _prologueSquad = squad;
             _prologueOnResolved = onResolved;
             _stage = PrologueScript.BuildStage(step);
@@ -506,7 +572,8 @@ namespace Emberfall.UI.Screens
             // match and a prologue step are each a single fight with nothing to chain into, so the
             // control is hidden rather than shown-and-inert.
             bool chainable = _stage != null && _stage.HasWaveCurve
-                             && _recitalFloor < 0 && _provingOpponent == null && _prologueSquad == null;
+                             && _recitalFloor < 0 && _provingOpponent == null && _duelOpponent == null
+                             && _prologueSquad == null;
             _autoButton.Root.gameObject.SetActive(chainable);
             if (!chainable) _auto = false;
             else _auto = PlayerPrefs.GetInt(AutoPrefKey, 0) == 1;
@@ -521,7 +588,15 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            if (_provingOpponent != null)
+            if (_duelOpponent != null)
+            {
+                // No spend point at all, and that absence is the mode. Checked BEFORE the Proving
+                // branch because both carry a BattleLoadout and falling into that one would charge
+                // a Brand for a fight that pays nothing - the same ordering rule the prologue
+                // branch in ShowResult keeps, for the same reason.
+                _stageLabel.text = "FRIENDLY DUEL   " + _duelOpponentName.ToUpperInvariant();
+            }
+            else if (_provingOpponent != null)
             {
                 // The one and only spend point for a Proving attempt, mirroring the Recital branch
                 // below: RecitalScreen and ProvingScreen both only PEEK affordability, and a
@@ -632,6 +707,15 @@ namespace Emberfall.UI.Screens
             // fall through to BuildBattleRequest, which reads Profile.TeamHeroes().
             BattleRequest request;
             if (_prologueSquad != null) request = App.Session.BuildPrologueRequest(_stage, _prologueSquad, seed);
+            else if (_duelOpponent != null)
+            {
+                // The SAME request builder the Proving uses, and that is the claim a duel rests
+                // on: a line fetched from a friend's snapshot is a BattleLoadout, and nothing in
+                // the combat path can tell it from a generated one. There is no duel code in the
+                // engine because there is nothing for it to do.
+                _duelSeed = seed;
+                request = App.Session.BuildProvingRequest(_stage, _duelOpponent, seed);
+            }
             else if (_provingOpponent != null) request = App.Session.BuildProvingRequest(_stage, _provingOpponent, seed);
             else
             {
@@ -1635,6 +1719,7 @@ namespace Emberfall.UI.Screens
             // the wrong panel; it would corrupt the campaign progress of an account that has not
             // started the campaign. ShowPrologueResult grants nothing at all.
             if (_prologueSquad != null) ShowPrologueResult();
+            else if (_duelOpponent != null) ShowDuelResult();
             else if (_provingOpponent != null) ShowProvingResult();
             else if (_recitalFloor >= 0) ShowRecitalResult();
             else ShowCampaignResult();
@@ -1671,7 +1756,8 @@ namespace Emberfall.UI.Screens
             // account is ch1_1 - so a prologue win would offer CONTINUE straight into the real
             // campaign, skipping the entire scripted ending this feature exists to deliver.
             StageDef nextStage = (_result.Victory && _recitalFloor < 0
-                                  && _provingOpponent == null && _prologueSquad == null)
+                                  && _provingOpponent == null && _duelOpponent == null
+                                  && _prologueSquad == null)
                 ? App.Session.NextStage : null;
             bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
 
@@ -1956,6 +2042,36 @@ namespace Emberfall.UI.Screens
         /// would read as a bug. The standing line is shown on both branches because standing moving
         /// down is as much a result as it moving up.
         /// </summary>
+        /// <summary>
+        /// A duel's result: the outcome, the seed, and a sentence saying that is all there is.
+        ///
+        /// GRANTS NOTHING, and the method is short because that is the feature rather than an
+        /// omission. There is no rewards call, no standing, no attempt counter, no write to the
+        /// save - the only thing this mode leaves behind is whatever the player now thinks about
+        /// their line. ShowResult's App.RequestSave() above still runs, because it runs for every
+        /// mode, and it writes a profile that this branch has not touched.
+        ///
+        /// The seed is on the panel deliberately. A duel is the one fight here that two people
+        /// might disagree about, and the engine is a pure function of its request - so the seed
+        /// plus the two lines IS the fight, and showing it is what turns "we would both get the
+        /// same result" from an architectural claim into something either of them can check.
+        /// </summary>
+        private void ShowDuelResult()
+        {
+            // The sentence goes in the SUBTITLE, directly under VICTORY or DEFEAT, rather than
+            // among the reward rows. A player who has just won reads the big word and stops; if
+            // "nothing is at stake" is three rows down among things that look like spoils, the one
+            // message this mode has to deliver is the one they skip.
+            _resultSub.text = "FRIENDLY DUEL, NOTHING IS AT STAKE   -   " + _result.Rounds + " ROUNDS"
+                            + (_result.TimedOut ? "   -   TIME LIMIT REACHED" : "");
+
+            AddRewardRow("AGAINST", _duelOpponentName, UITheme.TextPrimary);
+            AddRewardRow("SEED", _duelSeed.ToString(), UITheme.TextMuted);
+            AddRewardRow("REWARDS", "NONE", UITheme.TextMuted);
+
+            if (_result.Victory) App.Audio.Victory(); else App.Audio.Defeat();
+        }
+
         private void ShowProvingResult()
         {
             ProvingRewards rewards = App.Session.GrantProvingResult(_result.Victory, TimeUtil.NowUnix());
@@ -2269,6 +2385,7 @@ namespace Emberfall.UI.Screens
 
         private ScreenId OriginScreen()
         {
+            if (_duelOpponent != null) return ScreenId.FriendTeam;
             if (_provingOpponent != null) return ScreenId.Proving;
             if (_recitalFloor >= 0) return ScreenId.Recital;
             return ScreenId.Campaign;
@@ -2276,6 +2393,7 @@ namespace Emberfall.UI.Screens
 
         private string ExitLabel()
         {
+            if (_duelOpponent != null) return "BACK TO THEIR LINE";
             if (_provingOpponent != null) return "BACK TO THE PROVING";
             if (_recitalFloor >= 0) return "BACK TO THE RECITAL";
             return "BACK TO CAMPAIGN";
