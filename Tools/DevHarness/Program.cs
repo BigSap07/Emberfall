@@ -72,6 +72,7 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAuthoredHeroSweep(content);
+            CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
             CheckSourceFilterFiresForItsCauser(content);
             CheckCyrraReserveLandsOnTheAlly(content);
@@ -6558,7 +6559,18 @@ namespace Emberfall.DevHarness
                 if (e.Kind == EffectKind.Damage) zero = e.Power <= 0f && e.Flat <= 0f
                     && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f && e.TargetMissingHpRatio <= 0f
                     && !e.ScaleByBandGap && !e.ScaleByBandHigh;
-                else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield) zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f;
+                // The same three target-HP terms count for a Heal and a Shield, because the engine
+                // reads them there too: both branches of ApplyEffect assemble
+                // `ScaledTerm * Power + Flat + source.MaxHp * SelfHpRatio + TargetHpTerm`, the
+                // identical sum the Damage line above already credits. This arm had only the first
+                // three of those four, so "heals for 8% of the ally's missing HP" - power 0, one
+                // targetMissingHpRatio - was reported as an effect worth nothing while the engine
+                // paid it in full. Found by Orelle's Hard Remedy and her Triage After Loss, which
+                // are the first two in the roster written that way.
+                else if (e.Kind == EffectKind.Heal || e.Kind == EffectKind.Shield)
+                    zero = e.Power <= 0f && e.Flat <= 0f && e.SelfHpRatio <= 0f
+                        && e.TargetMaxHpRatio <= 0f && e.TargetCurrentHpRatio <= 0f
+                        && e.TargetMissingHpRatio <= 0f;
                 else if (e.Kind == EffectKind.EnergyGain) zero = e.Power <= 0f && e.Flat == 0f;
                 if (zero)
                 {
@@ -20379,22 +20391,24 @@ namespace Emberfall.DevHarness
                       + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
                       + ") - that body is out of reach of her basic, which marks the lowest-HP one");
 
-            // ---- Kiva III: the same kill, and what it can pay out now that Severance Paid runs.
+            // ---- Kiva III: the same kill, and what it pays out now that the first clause is free.
             //
-            // THIS CHECK USED TO ASSERT A SHIELD AND NO LONGER CAN, and the reason is a second
-            // defect that the first one was hiding. Severance Paid was inert - both of its clauses
-            // and both of her active's copies of them gated on StatusStacksAtLeast with no status
-            // named, which answers false unconditionally - so nothing in her kit ever SPENT a
-            // Broken Link, and Unclaimed Victory found two of them banked at the kill. With those
-            // four gates repaired the spend is live, and the rates do not leave a remainder:
-            // Abandoned Support banks at most one link per round, and Severance Paid consumes one
-            // on every basic against a Forsaken body - the same basic whose own Mark banked it. So
-            // she opens every turn at zero and a kill has nothing to consume.
+            // THIS CHECK ASSERTS A SHIELD AGAIN. It stopped being able to when Severance Paid was
+            // repaired, and the reason was a rate rather than a bug: Severance Paid was inert -
+            // both of its clauses and both of her active's copies of them gated on
+            // StatusStacksAtLeast with no status named, which answers false unconditionally - so
+            // nothing in her kit ever SPENT a Broken Link and Unclaimed Victory found two of them
+            // banked at the kill. With those four gates repaired the spend is live and the rates
+            // leave no remainder: Abandoned Support banks at most one link a round and Severance
+            // Paid consumes one on every basic against a Forsaken body, the same basic whose own
+            // Mark banked it, so she opens every turn at zero and a kill found nothing to consume.
+            // A talent that pays exactly zero for structural reasons is not a talent.
             //
-            // That is a KIT defect rather than an engine one and it is not repaired here: it lives
-            // in the rates two of her descriptions name, and changing either is a balance decision
-            // about Kiva rather than a repair to fold into a defect pass. What is asserted is the
-            // half that is now true and was not - the spend - plus that the talent still fires.
+            // The repair is content and it is the smallest one that answers the rate: the FIRST of
+            // the three Shield clauses is ungated, and the two link-gated ones are untouched. The
+            // talent reads 12 / 24 / 36% of her Max HP - it pays on the kill its own text names
+            // rather than on a resource the rest of her kit spends before the kill arrives, and it
+            // is still worth more to a Kiva who held links than to one who did not.
             if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
                 Check(false, "kiva III arena built");
             else
@@ -20402,14 +20416,15 @@ namespace Emberfall.DevHarness
                 Check(b.Fires("kiva_unclaimed_victory") > 0 && a.Fires("kiva_unclaimed_victory") == 0,
                       "Kiva III fires on a Forsaken kill (" + b.Fires("kiva_unclaimed_victory")
                       + " against " + a.Fires("kiva_unclaimed_victory") + ")");
+                Check(b.SubjectShield > a.SubjectShield && a.SubjectShield == 0,
+                      "and PAYS on it (" + b.SubjectShield + " Shield against " + a.SubjectShield
+                      + " with no talent selected) - the first of its three clauses is ungated now,"
+                      + " so the payout no longer depends on a Broken Link her own basic spends"
+                      + " before the kill lands");
                 Check(a.Count(StatusKind.HealSuppression) > 0,
                       "and Severance Paid, which named no status on its own stack gate and was inert"
                       + " for it, now lands with no talent selected at all: "
                       + a.Count(StatusKind.HealSuppression) + " application(s) of HealSuppression");
-                Line("  [note] Kiva III pays " + b.SubjectShield + " Shield here, where it paid 2236"
-                     + " before Severance Paid was repaired. She banks at most one Broken Link a"
-                     + " round and spends one on every basic against a Forsaken body, so she is at"
-                     + " zero when a kill lands. The rates are hers to change, not this pass's.");
             }
 
             // ---- Aeron II: the ally Momentum Breaker pays is the ally that advances.
@@ -21190,6 +21205,172 @@ namespace Emberfall.DevHarness
         }
 
 
+        // ---- the star band: what a rarity is worth, measured -----------------------------------
+
+        /// <summary>
+        /// A 4-STAR HAS TO SIT BELOW THE 5-STARS OF ITS OWN ROLE, AND UNTIL NOW NOTHING SAID SO.
+        ///
+        /// The star contract is a shape rule - basic, active, passive1, passive2 where the design
+        /// asks for it, three talents only at five - and `validate_heroes.py` enforces exactly that
+        /// shape. Shape is not power: a 4-star authored with a 300% active and two riders satisfies
+        /// every shape check in the project and is a better hero than the 5-star beside it. That
+        /// gap is what this closes, and it is about to matter twenty-six times over, because the
+        /// 4-star tier is being authored a batch at a time against 5-stars that are already fixed.
+        ///
+        /// ONE NUMBER, AND IT IS THE HERO'S OWN OUTPUT, not the battle's. Damage the subject dealt,
+        /// plus healing it paid out, plus shielding it granted, summed over the hero sweep's five
+        /// seeds in the hero sweep's arena - the same arena, the same squad, the same seeds, so a
+        /// line here and a fingerprint there are two readings of one battle. Credited by SOURCE, so
+        /// the four neutral fillers standing next to every subject contribute nothing to anybody's
+        /// score and the number is a property of the kit rather than of the run.
+        ///
+        /// THE THREE TERMS ARE ADDED RATHER THAN RANKED SEPARATELY, and that is the compromise this
+        /// instrument makes on purpose. A Mender's number is mostly healing and a Striker's is
+        /// mostly damage, so the sum is not a cross-role currency and must not be read as one - it
+        /// is only ever compared WITHIN a role, against the median of that role's authored 5-stars.
+        /// Three columns per role would be more honest about what each hero does and could not
+        /// answer the one question the tier is authored against, which is whether this hero is
+        /// smaller than the ones above it.
+        ///
+        /// THE MEDIAN, NOT THE MINIMUM. A role's 5-stars are not equal - the sweep arena lights
+        /// some kits and starves others - so the weakest of them is a number about the arena as
+        /// much as about the hero. The median is what "the 5-stars of this role" means when there
+        /// are several of them, and with one it is that one.
+        ///
+        /// WHAT IT CANNOT SEE, said here rather than discovered later: the arena fields no talent,
+        /// so the three a 5-star carries and a 4-star does not are outside this reading and the real
+        /// gap is wider than the number. A clause needing a Taunt enemy, an aspect matchup or an
+        /// ally this squad does not have is unmeasured here exactly as it is in the sweep. And a
+        /// role whose 5-stars are all unauthored has no median at all, so its 4-stars are listed
+        /// and not graded.
+        /// </summary>
+        private static void CheckStarBandByRole(ContentDatabase live)
+        {
+            Line("STAR BAND BY ROLE (each authored hero's own output in the sweep arena, five seeds:");
+            Line("                   damage dealt + healing paid + shielding granted, credited by source)");
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "star-band arena built"); Line(""); return; }
+
+            List<HeroDef> authored = new List<HeroDef>();
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef h = live.Heroes[i];
+                if (h.BasicAttack != null && h.BasicAttack.Id.Contains("placeholder")) continue;
+                authored.Add(h);
+            }
+            if (authored.Count == 0) { Check(false, "star-band has authored heroes to measure"); Line(""); return; }
+
+            Dictionary<string, long> output = new Dictionary<string, long>();
+            Dictionary<string, long[]> split = new Dictionary<string, long[]>();
+            for (int h = 0; h < authored.Count; h++)
+            {
+                HeroDef def = arena.GetHero(authored[h].Id);
+                if (def == null) continue;
+                long[] terms = new long[3];
+                for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+                {
+                    List<HeroInstance> team = new List<HeroInstance>();
+                    team.Add(MakeInstance(def, 40));
+                    for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                    BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+                    if (r == null) continue;
+                    SubjectOutput(r, def.Id, terms);
+                }
+                output[authored[h].Id] = terms[0] + terms[1] + terms[2];
+                split[authored[h].Id] = terms;
+            }
+
+            List<string> under = new List<string>();
+            List<string> over = new List<string>();
+            int graded = 0;
+            Array roles = Enum.GetValues(typeof(HeroRole));
+            for (int ri = 0; ri < roles.Length; ri++)
+            {
+                HeroRole role = (HeroRole)roles.GetValue(ri);
+                List<HeroDef> inRole = new List<HeroDef>();
+                for (int h = 0; h < authored.Count; h++)
+                    if (authored[h].Role == role && output.ContainsKey(authored[h].Id)) inRole.Add(authored[h]);
+                if (inRole.Count == 0) continue;
+
+                List<long> fives = new List<long>();
+                for (int h = 0; h < inRole.Count; h++)
+                    if (inRole[h].Stars >= 5) fives.Add(output[inRole[h].Id]);
+                fives.Sort();
+                long median = fives.Count == 0 ? -1
+                            : fives.Count % 2 == 1 ? fives[fives.Count / 2]
+                            : (fives[fives.Count / 2 - 1] + fives[fives.Count / 2]) / 2;
+
+                Line("  " + role + (median < 0
+                        ? "  (no authored 5-star, so nothing to grade against)"
+                        : "  5-star median " + median + " over " + fives.Count + " hero(es)"));
+
+                inRole.Sort(delegate (HeroDef a, HeroDef b)
+                {
+                    if (a.Stars != b.Stars) return b.Stars - a.Stars;
+                    return string.CompareOrdinal(a.Id, b.Id);
+                });
+                for (int h = 0; h < inRole.Count; h++)
+                {
+                    HeroDef def = inRole[h];
+                    long mine = output[def.Id];
+                    string ratio = "";
+                    if (median > 0 && def.Stars < 5)
+                    {
+                        float share = mine / (float)median;
+                        ratio = "   x" + share.ToString("0.00", CultureInfo.InvariantCulture)
+                                + " of the 5-star median";
+                        graded++;
+                        if (mine < median) under.Add(def.Id + " x" + share.ToString("0.00", CultureInfo.InvariantCulture));
+                        else over.Add(def.Id + " " + mine + " against median " + median);
+                    }
+                    long[] terms = split[def.Id];
+                    Line("    " + def.Stars + "*  " + def.Id + "  " + mine
+                         + "  (dmg " + terms[0] + ", heal " + terms[1] + ", ward " + terms[2] + ")"
+                         + ratio);
+                }
+            }
+
+            if (graded == 0)
+            {
+                Line("  [note] no authored hero below five stars shares a role with an authored"
+                     + " 5-star, so the band has nothing to grade yet.");
+                Line("");
+                return;
+            }
+            Check(over.Count == 0,
+                  over.Count == 0
+                    ? "all " + graded + " authored hero(es) below five stars sit under the 5-star"
+                      + " median for their own role (" + string.Join(", ", under.ToArray()) + ")"
+                    : over.Count + " hero(es) below five stars match or beat the 5-star median for"
+                      + " their own role: " + string.Join("; ", over.ToArray()));
+            Line("");
+        }
+
+        /// <summary>
+        /// What one unit put into a battle: damage it dealt, healing it paid out and shielding it
+        /// granted, by SOURCE id. A DoT tick credits whoever applied it, because that is the id the
+        /// tick carries - which is the right answer for a kit whose output IS its burn.
+        /// </summary>
+        private static void SubjectOutput(BattleResult r, string defId, long[] terms)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].IsPlayer && r.Units[i].DefId == defId) { id = r.Units[i].Id; break; }
+            if (id < 0) return;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.SourceId != id) continue;
+                if (e.Type == BattleEventType.Damage) terms[0] += e.Value;
+                else if (e.Type == BattleEventType.Heal) terms[1] += e.Value;
+                else if (e.Type == BattleEventType.ShieldGain) terms[2] += e.Value;
+            }
+        }
+
         // ---- which of a new kit's own rules the sweep actually reached -------------------------
 
         /// <summary>
@@ -21225,7 +21406,13 @@ namespace Emberfall.DevHarness
                                   "nysera_the_missing_arrow", "rovan_the_adaptive_commander",
                                   "kiva_the_forsaken_oath", "sylven_the_unfading_blade",
                                   "merek_the_sequence_thief", "oris_the_unwritten_path",
-                                  "zella_the_slow_argument", "dahlia_the_wayward_hymn" };
+                                  "zella_the_slow_argument", "dahlia_the_wayward_hymn",
+                                  // The first 4-star batch, here for the reason the ten above
+                                  // are: each of the five hangs a described clause on a trigger
+                                  // and a zero would mean the arena never raised it.
+                                  "branik_the_siege_mason", "demos_the_debt_collector",
+                                  "kest_the_bridgebreaker", "orelle_the_fever_warden",
+                                  "tavia_the_signal_huntress" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -23314,10 +23501,31 @@ namespace Emberfall.DevHarness
                   + "three fields on the simulation, not a status and not a target");
         }
 
+        /// <summary>
+        /// The named occupants of the cast-in-flight family. It opened as a zero-use tripwire,
+        /// became "Dahlia and nobody else" when she was authored, and takes a second name here:
+        /// Kest's No Way Back answers a defeat only during that one cast, which is a
+        /// TriggerAbilityId and lands in the same count.
+        ///
+        /// NAMES RATHER THAN A CEILING, for the reason the conversion pattern exists: a count
+        /// that merely has to stay small says nothing about who is in it, and the claim being
+        /// protected is about WHICH units can reach the turn loop's new branches. Both occupants
+        /// are outside every campaign stage and outside the pinned five-body line, so the
+        /// fingerprint claims the cast-cancellation pass made still hold where they were made;
+        /// the day a third kit or a staged unit adopts the family, this goes red and that
+        /// sentence has to be re-earned rather than re-asserted.
+        /// </summary>
+        private static readonly string[] CastFamilyOccupants =
+        {
+            "dahlia_the_wayward_hymn",
+            "kest_the_bridgebreaker",
+        };
+
         private static void CheckNoShippedCastUse(ContentDatabase live)
         {
             int uses = 0;
-            int dahliaUses = 0;
+            int namedUses = 0;
+            List<string> owners = new List<string>();
             for (int h = 0; h < live.Heroes.Count; h++)
             {
                 int mine = 0;
@@ -23332,26 +23540,28 @@ namespace Emberfall.DevHarness
                         || !string.IsNullOrEmpty(live.Heroes[h].Passives[p].TriggerAbilityId))
                         mine++;
                 uses += mine;
-                if (live.Heroes[h].Id == "dahlia_the_wayward_hymn") dahliaUses += mine;
+                if (mine == 0) continue;
+                owners.Add(live.Heroes[h].Id + " x" + mine);
+                for (int n = 0; n < CastFamilyOccupants.Length; n++)
+                    if (live.Heroes[h].Id == CastFamilyOccupants[n]) { namedUses += mine; break; }
             }
             for (int n = 0; n < live.Enemies.Count; n++)
                 for (int p = 0; p < live.Enemies[n].Passives.Count; p++)
-                    if (live.Enemies[n].Passives[p].Trigger == PassiveTrigger.OnCastDeclared) uses++;
+                    if (live.Enemies[n].Passives[p].Trigger == PassiveTrigger.OnCastDeclared)
+                    { uses++; owners.Add(live.Enemies[n].Id + " x1"); }
 
-            // As with the restriction one section down: a zero-use tripwire that Dahlia is now
-            // the sole occupant of. Her two OnCastDeclared passives and the CancelCast in one of
-            // them are the entire shipped use, and she is in no campaign stage, so the turn-loop
-            // claim the cast-cancellation pass made still holds everywhere it was made.
-            bool onlyHers = uses == dahliaUses && dahliaUses > 0;
-            Check(uses == 0 || onlyHers,
+            bool onlyTheNamed = uses == namedUses && namedUses > 0;
+            Check(uses == 0 || onlyTheNamed,
                   uses == 0
                     ? "no shipped content cancels a cast, answers a declaration or names an ability "
                       + "id, which is why the turn loop can change without a fingerprint moving"
-                    : onlyHers
-                      ? "Dahlia is the only kit that cancels a cast or answers a declaration ("
-                        + uses + " use(s), all hers), so the turn loop's fingerprint claims stand"
-                      : uses + " shipped use(s) beyond Dahlia's " + dahliaUses
-                        + " - the fingerprint claims above need re-earning");
+                    : onlyTheNamed
+                      ? "only the named kits cancel a cast, answer a declaration or name an ability "
+                        + "id (" + uses + " use(s): " + string.Join(", ", owners.ToArray())
+                        + "), so the turn loop's fingerprint claims stand"
+                      : uses + " shipped use(s) against " + namedUses + " from the named kits ("
+                        + string.Join(", ", owners.ToArray())
+                        + ") - the fingerprint claims above need re-earning");
         }
 
         /// <summary>
