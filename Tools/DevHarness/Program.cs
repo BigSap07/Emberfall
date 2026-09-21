@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
@@ -92,6 +93,7 @@ namespace Emberfall.DevHarness
             CheckCampaignStructure(content);
             CheckProving(content);
             CheckSaveRoundTrip(content);
+            CheckAccounts(content);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
@@ -23514,6 +23516,393 @@ namespace Emberfall.DevHarness
             List<HeroInstance> team = new List<HeroInstance>();
             team.Add(MakeInstance(db.GetHero("ri_hero"), 1));
             return RunWith(db, db.GetStage("ri_arena"), 9404, team);
+        }
+
+        // ================================================================== ACCOUNTS AND CLOUD
+
+        /// <summary>
+        /// The half of the accounts feature that can be proved without a network.
+        ///
+        /// Everything checked here is in Emberfall.Core.Cloud, and it is in Core precisely so it
+        /// can be checked here: the conflict rule decides whether a player loses a week of
+        /// progress, and a rule like that has to be exercised for every case by something that
+        /// runs on every build, not demonstrated once against a live database.
+        ///
+        /// What is NOT here, and cannot be: whether the database enforces its own half. Row Level
+        /// Security, the friend-code trigger and push_save's compare-and-swap are all facts about
+        /// a Postgres instance, and Tools/supabase-rules-test.py is what measures those. This
+        /// section proves the client cannot lose a save; that script proves the server cannot be
+        /// talked into handing one over.
+        /// </summary>
+        private static void CheckAccounts(ContentDatabase db)
+        {
+            Line("");
+            Line("ACCOUNTS, CLOUD SAVE AND SNAPSHOTS");
+            CheckFriendCodeFormat();
+            CheckCloudSaveRoundTrip(db);
+            CheckSyncDecisions();
+            CheckSnapshotFightsTheSame(db);
+        }
+
+        /// <summary>
+        /// The friend code alphabet, and the two repairs Normalise is allowed to make.
+        ///
+        /// The interesting assertions are the negative ones. An O is NOT read as a 0 and an I is
+        /// NOT read as a 1: those letters are absent from the alphabet because they are ambiguous,
+        /// and a silent substitution would turn a mistyped code into a successful lookup of
+        /// somebody else's account, which is the one failure this whole alphabet exists to stop.
+        /// </summary>
+        private static void CheckFriendCodeFormat()
+        {
+            Check(FriendCode.Alphabet.Length == 30,
+                  "the friend code alphabet has 30 symbols (" + FriendCode.Alphabet.Length + ")");
+            Check(FriendCode.Alphabet.IndexOf('0') < 0 && FriendCode.Alphabet.IndexOf('1') < 0
+                  && FriendCode.Alphabet.IndexOf('I') < 0 && FriendCode.Alphabet.IndexOf('L') < 0
+                  && FriendCode.Alphabet.IndexOf('O') < 0 && FriendCode.Alphabet.IndexOf('U') < 0,
+                  "0, 1, I, L, O and U are all absent - the pairs that get misread out loud");
+
+            Check(FriendCode.IsValid("ABC234"), "a six-character code from the alphabet is valid");
+            Check(!FriendCode.IsValid("ABC23"), "five characters is not a code");
+            Check(!FriendCode.IsValid("ABC2345"), "seven characters is not a code");
+            Check(!FriendCode.IsValid("ABCO23"), "a code containing O is refused");
+            Check(!FriendCode.IsValid(""), "an empty string is not a code");
+
+            Check(FriendCode.Normalise("abc-234") == "ABC234",
+                  "lower case and a dash are repaired (" + FriendCode.Normalise("abc-234") + ")");
+            Check(FriendCode.Normalise("  ABC 234 ") == "ABC234", "spaces are dropped");
+            Check(FriendCode.Normalise("ABCO23") == "",
+                  "an O is REFUSED rather than read as a zero - a silent repair would look up the wrong account");
+            Check(FriendCode.Normalise("ABC1234") == "", "too many characters normalises to nothing");
+            Check(FriendCode.Format("ABC234") == "ABC-234", "a code is shown grouped");
+            Check(FriendCode.Normalise(FriendCode.Format("ABC234")) == "ABC234",
+                  "and what is shown can be typed straight back in");
+        }
+
+        /// <summary>
+        /// A save survives the trip through the cloud row shape byte for byte.
+        ///
+        /// The trip is the whole point: the save is written by SaveSerializer, embedded as a
+        /// PARSED value in the push_save body (the column is jsonb, and sending it as a string
+        /// would store a JSON string that happens to contain JSON), returned inside a PostgREST
+        /// row, and re-serialised out of it. Four format boundaries, any of which could re-order
+        /// a key or drop a number's precision, and none of which is allowed to.
+        ///
+        /// Checked twice over: the document must come back IDENTICAL as text, and it must also
+        /// still deserialise into the same profile. The first is the stronger claim and the
+        /// second is what a player would actually notice, so neither stands in for the other.
+        /// </summary>
+        private static void CheckCloudSaveRoundTrip(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1700000000);
+            GameSession session = new GameSession(db, profile);
+            session.LevelUpHero(profile.Heroes[0], 6);
+            session.GrantBattleResult(db.AllStages[0], true, 1700000100);
+            session.Summon(9182, 1700000200);
+
+            string local = SaveSerializer.Serialize(profile);
+
+            // The body the client posts to push_save.
+            string body = CloudSaveCodec.WritePushBody(3, SaveSerializer.CurrentVersion, "device-a", local);
+            JsonValue parsedBody;
+            string bodyError;
+            bool bodyParses = JsonValue.TryParse(body, out parsedBody, out bodyError);
+            Check(bodyParses && parsedBody != null && parsedBody.IsObject,
+                  "the push_save body is a JSON object");
+            Check(bodyParses && parsedBody["p_data"] != null && parsedBody["p_data"].IsObject,
+                  "the save travels as a JSON OBJECT, not as a string containing JSON - the column is jsonb");
+            Check(bodyParses && parsedBody.GetInt("p_expected_revision", -1) == 3,
+                  "the expected revision is carried as sent");
+
+            // The row PostgREST hands back, built the way the server would: `data` is a jsonb
+            // VALUE, so it is the parsed document rather than a quoted string.
+            JsonValue row = JsonValue.NewObject();
+            row.Set("user_id", "00000000-0000-0000-0000-00000000beef");
+            row.Set("save_version", SaveSerializer.CurrentVersion);
+            row.Set("revision", 4);
+            row.Set("device_id", "device-a");
+            row.Set("updated_at", "2026-09-21T11:00:00+00:00");
+            row.Set("data", parsedBody["p_data"]);
+            JsonValue rows = JsonValue.NewArray();
+            rows.Add(row);
+
+            CloudSaveRecord record = CloudSaveCodec.ReadFirstRow(rows.ToJson(false));
+            Check(record != null, "a PostgREST row reads back as a cloud save record");
+            if (record == null) return;
+
+            Check(record.Revision == 4 && record.SaveVersion == SaveSerializer.CurrentVersion,
+                  "revision and save version survive the row (" + record.Revision + ", v" + record.SaveVersion + ")");
+            Check(record.DeviceId == "device-a", "the device id survives the row");
+
+            // NOT a text comparison, and the reason is worth stating because the obvious test is
+            // the wrong one. SaveSerializer writes pretty-printed JSON, and `data` is jsonb: a
+            // real Postgres column parses the document and re-renders it, discarding whitespace
+            // and imposing its own key order. Textual identity is therefore not merely untrue
+            // here, it is not a property the storage HAS - a test asserting it would fail against
+            // a correct server and could only be satisfied by giving up jsonb for text, which
+            // would give up the ability to ever query inside a save.
+            //
+            // What must survive is the SAVE, so that is what is measured: the document
+            // deserialises, and the profile it produces re-serialises to the original byte for
+            // byte. That tolerates exactly what jsonb legitimately does and catches everything
+            // else - a dropped key, a truncated number, a mangled string - because the re-write
+            // goes through the one writer whose key order is fixed.
+            string error;
+            PlayerProfile back = SaveSerializer.Deserialize(record.Data, db, out error);
+            Check(back != null && error == null,
+                  "the save deserialises out of the cloud row" + (error != null ? " (" + error + ")" : ""));
+            if (back == null) return;
+
+            string rewritten = SaveSerializer.Serialize(back);
+            Check(rewritten == local,
+                  "AND RE-SERIALISES TO THE ORIGINAL BYTE FOR BYTE - the round trip through jsonb is lossless ("
+                  + rewritten.Length + " vs " + local.Length + " chars)"
+                  + (rewritten == local ? "" : "; first difference: " + FirstDifference(local, rewritten)));
+            Check(back.Gold == profile.Gold && back.PlayerLevel == profile.PlayerLevel
+                  && back.Heroes.Count == profile.Heroes.Count && back.StagesCleared == profile.StagesCleared,
+                  "into the same profile (gold " + back.Gold + ", level " + back.PlayerLevel
+                  + ", " + back.Heroes.Count + " heroes)");
+
+            // The lossless claim above is only worth anything if this comparison can fail. One
+            // coin off the purse is the smallest thing a bad round trip could lose.
+            back.Gold += 1;
+            Check(SaveSerializer.Serialize(back) != local,
+                  "and one gold piece changes the re-serialised text, so that comparison can fail");
+            back.Gold -= 1;
+
+            // An empty PostgREST array is what "no cloud save yet" actually looks like on the
+            // wire - not a 404 - and reading it as anything but "no record" would turn a first
+            // launch into a conflict.
+            Check(CloudSaveCodec.ReadFirstRow("[]") == null, "an empty result reads as no cloud save");
+            Check(CloudSaveCodec.ReadFirstRow("{ not json") == null,
+                  "a malformed body reads as no cloud save rather than throwing");
+
+            SaveSummary summary = SaveSummaryReader.From(local);
+            Check(summary.Readable && summary.PlayerLevel == profile.PlayerLevel
+                  && summary.StagesCleared == profile.StagesCleared
+                  && summary.HeroesOwned == profile.Heroes.Count,
+                  "the conflict card's summary reads the save without deserialising it ("
+                  + summary.Describe() + ")");
+            Check(!SaveSummaryReader.From("{ not json").Readable,
+                  "and an unreadable document summarises as unreadable rather than as an empty account");
+        }
+
+        /// <summary>
+        /// Every case of the conflict decision, including the ones that must NOT resolve
+        /// themselves.
+        ///
+        /// This is the check the whole feature turns on. Two rules are being asserted: nothing is
+        /// ever silently overwritten, and a save from a newer build is refused rather than read.
+        /// The second is the same refusal SaveSerializer.Deserialize already makes locally, moved
+        /// one step earlier so it happens before the document is parsed - which is why
+        /// save_version is a column of its own in the database rather than a field inside the blob.
+        /// </summary>
+        private static void CheckSyncDecisions()
+        {
+            int reader = SaveSerializer.CurrentVersion;
+
+            SyncInputs nothing = new SyncInputs();
+            nothing.ReaderVersion = reader;
+            Check(SyncPlanner.Decide(nothing).Action == SyncAction.NothingToDo,
+                  "no local save and no cloud save: nothing to do");
+
+            SyncInputs firstUpload = new SyncInputs();
+            firstUpload.HasLocal = true;
+            firstUpload.ReaderVersion = reader;
+            Check(SyncPlanner.Decide(firstUpload).Action == SyncAction.UploadLocal,
+                  "a local save and no cloud save: upload");
+            Check(SyncPlanner.ExpectedRevisionForUpload(firstUpload) == 0,
+                  "and it claims revision 0, which is push_save's 'there is no row yet'");
+
+            SyncInputs freshDevice = new SyncInputs();
+            freshDevice.ReaderVersion = reader;
+            freshDevice.HasCloud = true;
+            freshDevice.CloudSaveVersion = reader;
+            freshDevice.CloudRevision = 7;
+            Check(SyncPlanner.Decide(freshDevice).Action == SyncAction.DownloadCloud,
+                  "a cloud save and no local save: download");
+
+            SyncInputs inStep = new SyncInputs();
+            inStep.HasLocal = true;
+            inStep.ReaderVersion = reader;
+            inStep.HasCloud = true;
+            inStep.CloudSaveVersion = reader;
+            inStep.CloudRevision = 7;
+            inStep.BaseRevision = 7;
+            Check(SyncPlanner.Decide(inStep).Action == SyncAction.UploadLocal,
+                  "the cloud is at the revision this device last synced: upload, local descends from it");
+            Check(SyncPlanner.ExpectedRevisionForUpload(inStep) == 7,
+                  "and it claims revision 7, which push_save checks against what is stored");
+
+            SyncInputs cloudMoved = new SyncInputs();
+            cloudMoved.HasLocal = true;
+            cloudMoved.ReaderVersion = reader;
+            cloudMoved.HasCloud = true;
+            cloudMoved.CloudSaveVersion = reader;
+            cloudMoved.CloudRevision = 9;
+            cloudMoved.BaseRevision = 7;
+            Check(SyncPlanner.Decide(cloudMoved).Action == SyncAction.AskPlayer,
+                  "the cloud has moved past this device: ASK, never merge and never pick");
+
+            SyncInputs neverSynced = new SyncInputs();
+            neverSynced.HasLocal = true;
+            neverSynced.ReaderVersion = reader;
+            neverSynced.HasCloud = true;
+            neverSynced.CloudSaveVersion = reader;
+            neverSynced.CloudRevision = 3;
+            neverSynced.BaseRevision = 0;
+            Check(SyncPlanner.Decide(neverSynced).Action == SyncAction.AskPlayer,
+                  "local progress on a device that has never synced, against an existing cloud save: ASK");
+
+            SyncInputs cloudBehind = new SyncInputs();
+            cloudBehind.HasLocal = true;
+            cloudBehind.ReaderVersion = reader;
+            cloudBehind.HasCloud = true;
+            cloudBehind.CloudSaveVersion = reader;
+            cloudBehind.CloudRevision = 4;
+            cloudBehind.BaseRevision = 9;
+            Check(SyncPlanner.Decide(cloudBehind).Action == SyncAction.AskPlayer,
+                  "the cloud went BACKWARDS - restored or rebuilt - so even though local looks newer: ASK");
+
+            SyncInputs newerBuild = new SyncInputs();
+            newerBuild.HasLocal = true;
+            newerBuild.ReaderVersion = reader;
+            newerBuild.HasCloud = true;
+            newerBuild.CloudSaveVersion = reader + 1;
+            newerBuild.CloudRevision = 7;
+            newerBuild.BaseRevision = 2;
+            Check(SyncPlanner.Decide(newerBuild).Action == SyncAction.RefuseCloudNewerVersion,
+                  "a cloud save from a NEWER build is refused, not downloaded and not overwritten");
+
+            // The ordering assertion, and it is not a formality. This device is in step with the
+            // cloud, which on its own says "upload" - and uploading would destroy a save written
+            // by a build that knows more than this one. The version gate has to be reached first.
+            SyncInputs newerButInStep = newerBuild;
+            newerButInStep.BaseRevision = newerButInStep.CloudRevision;
+            Check(SyncPlanner.Decide(newerButInStep).Action == SyncAction.RefuseCloudNewerVersion,
+                  "and the version refusal outranks the in-step upload, so a downgraded build cannot overwrite a newer save");
+
+            SyncInputs olderCloud = new SyncInputs();
+            olderCloud.HasLocal = true;
+            olderCloud.ReaderVersion = reader;
+            olderCloud.HasCloud = true;
+            olderCloud.CloudSaveVersion = 1;
+            olderCloud.CloudRevision = 2;
+            olderCloud.BaseRevision = 2;
+            Check(SyncPlanner.Decide(olderCloud).Action == SyncAction.UploadLocal,
+                  "a cloud save from an OLDER build is readable, so the ordinary rules apply");
+        }
+
+        /// <summary>
+        /// A line published to the cloud and fetched back fights EXACTLY the fight the same line
+        /// fights locally.
+        ///
+        /// This is the claim the friendly duel rests on, and it is the reason a duel needs no
+        /// server logic at all. CombatSimulation is a pure function of its request, so if the
+        /// snapshot survives the trip without moving a number, then the fight resolved on this
+        /// device against a fetched line is the same fight the other player's device would
+        /// resolve - and the fingerprint is how that is measured rather than asserted.
+        ///
+        /// The comparison is the full event record, not the outcome: two fights that both end in
+        /// a win can still differ in every blow, and it is the blows that would reveal a snapshot
+        /// that dropped an armor substat or rounded a level.
+        /// </summary>
+        private static void CheckSnapshotFightsTheSame(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1700000000);
+            GameSession session = new GameSession(db, profile);
+
+            // A line worth taking a snapshot OF: levelled, and more heroes than the starters, so
+            // the walk has real slots to resolve. A team of bare level-1 heroes would round-trip
+            // trivially and prove much less.
+            session.Summon(4242, 1700000200);
+            session.Summon(9001, 1700000300);
+            for (int i = 0; i < profile.Heroes.Count; i++) session.LevelUpHero(profile.Heroes[i], 4 + i);
+            profile.NormaliseTeam();
+
+            List<HeroInstance> team = profile.TeamHeroes();
+            Check(team.Count > 0, "the snapshot test has a team to publish (" + team.Count + ")");
+            if (team.Count == 0) return;
+
+            TeamSnapshot published = TeamSnapshotBuilder.From(db, profile, "Pinoy");
+            Check(published.Units.Count == team.Count,
+                  "the snapshot carries every deployed hero (" + published.Units.Count + " of " + team.Count + ")");
+            Check(published.PowerScore > 0, "and its power is resolved at publish time (" + published.PowerScore + ")");
+
+            // Through the wire: the units array as the jsonb column would hold it, and back.
+            JsonValue units = TeamSnapshotCodec.WriteUnits(published);
+            TeamSnapshot fetched = TeamSnapshotCodec.Read(JsonValue.Parse(units.ToJson(false)),
+                                                          published.Label, published.PowerScore);
+
+            Check(fetched.Units.Count == published.Units.Count,
+                  "every unit survives the column (" + fetched.Units.Count + ")");
+
+            bool fieldsMatch = fetched.Label == published.Label && fetched.PowerScore == published.PowerScore;
+            int armorPieces = 0;
+            for (int i = 0; i < published.Units.Count && fieldsMatch; i++)
+            {
+                SnapshotUnit a = published.Units[i];
+                SnapshotUnit b = fetched.Units[i];
+                armorPieces += a.Armor.Count;
+                if (a.DefId != b.DefId || a.Level != b.Level || a.Stars != b.Stars
+                    || a.RelicId != b.RelicId || a.SelectedTalent != b.SelectedTalent
+                    || a.Armor.Count != b.Armor.Count) fieldsMatch = false;
+                for (int p = 0; p < a.Armor.Count && fieldsMatch; p++)
+                {
+                    if (SaveSerializer.WriteArmorPieceJson(a.Armor[p]).ToJson(false)
+                        != SaveSerializer.WriteArmorPieceJson(b.Armor[p]).ToJson(false)) fieldsMatch = false;
+                }
+            }
+            Check(fieldsMatch, "and every field of every unit, armor rolls included, is unchanged ("
+                  + armorPieces + " armor piece(s) carried by value)");
+
+            // The fight itself. Same stage, same seed, same player side - the only difference is
+            // which object the far side was built from.
+            StageDef arena = ProvingGenerator.BuildStage();
+            const int Seed = 771144;
+            BattleResult local = CombatSimulation.Run(session.BuildProvingRequest(arena, published.ToLoadout(), Seed));
+            BattleResult remote = CombatSimulation.Run(session.BuildProvingRequest(arena, fetched.ToLoadout(), Seed));
+
+            Check(local != null && remote != null && local.Events.Count > 0, "both duels resolved to a real record");
+            if (local == null || remote == null) return;
+
+            Check(FingerprintOf(local) == FingerprintOf(remote),
+                  "A DUEL AGAINST A FETCHED LINE IS THE SAME FIGHT, EVENT FOR EVENT, as one against the local line ("
+                  + local.Events.Count + " events, " + local.Rounds + " rounds)");
+
+            // And the fingerprint is capable of noticing a difference, which is what stops the
+            // check above from being satisfied by two empty records. One hero's level moved by
+            // one is the smallest change a snapshot could get wrong.
+            fetched.Units[0].Level += 1;
+            BattleResult nudged = CombatSimulation.Run(session.BuildProvingRequest(arena, fetched.ToLoadout(), Seed));
+            Check(FingerprintOf(nudged) != FingerprintOf(local),
+                  "and moving ONE hero's level by one changes the record, so the comparison above can fail");
+
+            Check(!published.ToLoadout().IsGhost,
+                  "a duel line is not flagged as a ghost - that flag means 'your own former line', which this is not");
+        }
+
+        /// <summary>Where two documents first disagree, with enough either side to see what
+        /// moved. A length-equal mismatch is almost always a reordering or a single value, and
+        /// "they differ" without saying where costs an hour every time it happens.</summary>
+        private static string FirstDifference(string expected, string actual)
+        {
+            int limit = Math.Min(expected.Length, actual.Length);
+            int at = -1;
+            for (int i = 0; i < limit; i++) { if (expected[i] != actual[i]) { at = i; break; } }
+            if (at < 0) at = limit;
+            int from = Math.Max(0, at - 30);
+            int take = Math.Min(70, Math.Min(expected.Length, actual.Length) - from);
+            if (take <= 0) return "at " + at + " (one document ends there)";
+            char[] breaks = { '\n', '\r' };
+            string wanted = expected.Substring(from, Math.Min(take, expected.Length - from));
+            string found = actual.Substring(from, Math.Min(take, actual.Length - from));
+            return "at " + at + " expected [" + Flatten(wanted, breaks) + "] got [" + Flatten(found, breaks) + "]";
+        }
+
+        private static string Flatten(string text, char[] breaks)
+        {
+            string[] parts = text.Split(breaks, StringSplitOptions.RemoveEmptyEntries);
+            return string.Join(" ", parts).Trim();
         }
     }
 }

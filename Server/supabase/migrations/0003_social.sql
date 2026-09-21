@@ -2,10 +2,18 @@
 --
 -- Run after 0002.
 
+-- The two user columns reference public.profiles, NOT auth.users directly, and the difference
+-- is load-bearing rather than stylistic. Integrity is identical either way - a profile row
+-- exists for every user from the instant the user does (0001's trigger) and cascades from
+-- auth.users when one is deleted - but a foreign key into profiles is also what lets the
+-- client read a friend list in ONE request: PostgREST can only embed a table it can reach
+-- through a declared relationship, so `profiles!friendships_requester_fkey(display_name,...)`
+-- resolves both parties' names and codes inline. Pointing at auth.users instead would make the
+-- friend list an N+1 of profile lookups for exactly the same rows.
 create table if not exists public.friendships (
   id         uuid primary key default gen_random_uuid(),
-  requester  uuid not null references auth.users (id) on delete cascade,
-  addressee  uuid not null references auth.users (id) on delete cascade,
+  requester  uuid not null references public.profiles (user_id) on delete cascade,
+  addressee  uuid not null references public.profiles (user_id) on delete cascade,
   status     text not null default 'pending' check (status in ('pending', 'accepted')),
   created_at timestamptz not null default now(),
   constraint friendships_not_self check (requester <> addressee)
@@ -105,7 +113,9 @@ create policy friendships_remove_either_party
 -- read whole, five units at a time, and is never queried inside - the same reasoning that
 -- keeps the save a document.
 create table if not exists public.team_snapshots (
-  user_id     uuid primary key references auth.users (id) on delete cascade,
+  -- profiles rather than auth.users, for the reason friendships gives above: a snapshot is
+  -- read alongside the owner's name, and one relationship is one request.
+  user_id     uuid primary key references public.profiles (user_id) on delete cascade,
   label       text not null default '',
   power_score integer not null default 0,
   units       jsonb not null default '[]'::jsonb,

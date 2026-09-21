@@ -196,6 +196,31 @@ namespace Emberfall.Core.Save
         /// identical shape for a Proving opponent's gear: a snapshot piece and an owned piece are
         /// the same record, and writing them through one method is what keeps them that way.
         /// </summary>
+        /// <summary>
+        /// WriteArmorPiece and ReadArmorPiece, in public. Nothing else here is public and nothing
+        /// about the format changes by being reachable - these two forward, unchanged.
+        ///
+        /// They exist because a THIRD reader of this shape arrived: a team snapshot published to
+        /// the cloud for a friendly duel carries whole armor pieces, for the same reason a Proving
+        /// opponent does (see BattleLoadout - a uid resolves against a save only its owner holds).
+        /// The alternative was a second armor writer in Emberfall.Core.Cloud, which would have been
+        /// one more place for the piece format to drift out of step with itself, and the version 9
+        /// note above already records that extracting ONE writer is what stopped that happening
+        /// between an owned piece and a snapshot piece. A third copy would undo that.
+        ///
+        /// Read is total the way ReadArmorPiece is: a malformed piece comes back inert rather than
+        /// null, so a caller never has to guard.
+        /// </summary>
+        public static JsonValue WriteArmorPieceJson(ArmorPiece piece)
+        {
+            return piece == null ? new JsonValue() : WriteArmorPiece(piece);
+        }
+
+        public static ArmorPiece ReadArmorPieceJson(JsonValue aj)
+        {
+            return ReadArmorPiece(aj);
+        }
+
         private static JsonValue WriteArmorPiece(ArmorPiece piece)
         {
             JsonValue aj = JsonValue.NewObject();
@@ -557,7 +582,24 @@ namespace Emberfall.Core.Save
                 if (def == null) continue; // content changed under the save - skip quietly
 
                 HeroInstance h = new HeroInstance();
-                h.Uid = hj.GetString("uid", profile.AllocateUid());
+                // The fallback is computed ONLY when there is no stored uid, which is the whole
+                // reason this is three lines rather than one.
+                //
+                // It was `GetString("uid", profile.AllocateUid())`, and C# evaluates an argument
+                // before the call that might not use it - so AllocateUid() ran for EVERY hero,
+                // present uid or not, and each run incremented NextHeroUid. A save was therefore
+                // not idempotent under load-and-save: every load inflated the counter by the
+                // number of heroes owned, and writing it back produced a document that differed
+                // from the one just read.
+                //
+                // Nothing broke visibly, which is why it survived - uids only ever skipped
+                // forward, so they stayed unique and no hero was ever confused with another. It
+                // matters now because a cloud save compares documents across devices, and a save
+                // that changes every time it is read is a save two devices can never agree about.
+                // Found by the round-trip check in the accounts harness section, which
+                // re-serialises a loaded profile and requires the text to match.
+                string storedUid = hj.GetString("uid", "");
+                h.Uid = string.IsNullOrEmpty(storedUid) ? profile.AllocateUid() : storedUid;
                 h.DefId = defId;
                 h.Def = def;
                 h.Level = Math.Max(1, hj.GetInt("level", 1));

@@ -60,3 +60,7 @@ Tools/DevArenaShots/
 # untracked meta for a file it is not supposed to have.
 Assets/Resources/Config/supabase.json
 Assets/Resources/Config/supabase.json.meta
+
+# Python bytecode from Tools scripts
+__pycache__/
+*.pyc
