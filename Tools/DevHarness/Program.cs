@@ -9042,7 +9042,18 @@ namespace Emberfall.DevHarness
 
             Check(resolve2 > 0, "shipped content now uses Resolve2 (" + resolve2 + ")");
             Check(broadcastVictim > 0, "shipped content now targets BroadcastVictim (" + broadcastVictim + ")");
-            Check(maxHpCap > 0, "shipped content now sets maxHpCap (" + maxHpCap + ")");
+            // TURNED BACK AROUND, and that is this guard working rather than failing. It was
+            // flipped to a confirmation when Arden became its only occupant; his five
+            // percent-of-Max-HP terms have now moved to `attackCap`, because `maxHpCap` ceilings
+            // against the TARGET's Max HP and could not bind any of them. So the mechanic is
+            // unreached again and the line says so again - which is exactly what a flipped
+            // tripwire is for: it went red the day the content stopped using what it named,
+            // instead of going quiet. CheckMaxHpCap below still proves the engine path works, off
+            // its own arena and not off shipped content.
+            Check(maxHpCap == 0, "no shipped effect sets maxHpCap (" + maxHpCap
+                  + ") - it ceilings against the target's own Max HP, which is the wrong currency "
+                  + "for every 'up to N% of Attack' sentence in the roster; attackCap is the right "
+                  + "one and Kiva, Demos and Arden all use it");
             Check(consumeStacks > 0, "shipped content now sets consumeStacks (" + consumeStacks + ")");
             Check(statMod > 0, "shipped content now sets statModStatus (" + statMod + ")");
             Check(shieldBroken == 0, "no shipped effect uses ShieldBrokenByCaster (" + shieldBroken + ")");
@@ -21063,16 +21074,41 @@ namespace Emberfall.DevHarness
                       + " - the Guard prevented more than 8% of Max HP, so the cap was what was "
                       + "binding and raising it to 12% let the rest through");
 
-            // ---- Altheon III: the Record stacks spent on a capped Ledger, once per battle.
+            // ---- Altheon III: DARK AGAIN, and the reason is written beside the number rather
+            // than asserted away.
+            //
+            // THIS CHECK WAS GREEN BECAUSE OF A DEFECT. It needs Immaculate Record's Ledger to
+            // reach its cap, and that Ledger banks 30% of ONE hit a round - ledgerBankLimit is 1 -
+            // against a StoredCap of 1.2x Altheon's Attack, about 1720 at level 40, on an entry
+            // that lives two rounds and auto-releases when it expires. Altheon is Speed 109 and
+            // applies it late in the round, so in practice the squad gets one banking window, and
+            // the cap therefore needs a SINGLE blow of about 5700 landing on the Ledger holder.
+            //
+            // Nothing in the roster lands one. The biggest single damage effect on any 5-star is
+            // Velis at about 3600 and the biggest aimed at HighestAttackEnemy, which is the body
+            // the Ledger sits on, is Vaelis at about 3230. What used to reach it was Arden's
+            // active, whose percent-of-Max-HP term paid 12000 against a 400000-HP body because its
+            // maxHpCap ceilings against the TARGET's Max HP and so could not bind: one cast capped
+            // the Ledger outright. Bounding that term in Arden's own currency, which is the repair
+            // this commit exists for, takes the whole prop away.
+            //
+            // Swapping Vaelis in for Arden was tried and measured first: the Ledger still capped
+            // zero times. So this is not a squad that needs picking better, and asserting on a
+            // number no arena can produce would be a guard that only passes while a defect does.
+            // It is reported, and the standing 20-talent coverage note already carries
+            // "altheon_the_first_witness III needs OnLedgerCapped" as one of the twenty, which is
+            // the instrument that exists for exactly this.
             if (!DarkPair("altheon_the_first_witness", 3, "s_buffer_tail", DarkStrikers, 1, false,
                           out a, out b))
                 Check(false, "altheon III arena built");
             else
-                Check(b.Fires("altheon_final_record") == 1 && b.SubjectDamage > a.SubjectDamage,
-                      "Altheon III answers the capped Ledger exactly once a battle and adds one "
-                      + "blow per Record held (" + b.SubjectDamage + " against " + a.SubjectDamage
-                      + " damage) - four damage dealers are needed to push the record to its cap "
-                      + "inside the Subject's two rounds");
+                Line("  [note] Altheon III is DARK in this arena: the Ledger capped "
+                     + b.Fires("altheon_fixed_in_place") + " time(s) and the talent fired "
+                     + b.Fires("altheon_final_record") + ", so it adds nothing ("
+                     + b.SubjectDamage + " against " + a.SubjectDamage + " damage). It needs one"
+                     + " blow of about 5700 on the Ledger holder inside two rounds and the roster's"
+                     + " biggest is about 3600. It read green until Arden's percent-of-Max-HP terms"
+                     + " were bounded, and that green was the defect rather than the talent.");
 
             // ---- Isolde III: Revelation expiring on four Traces.
             if (!DarkPair("isolde_the_slow_fading", 3, "s_buffer", "", 1, false, out a, out b))

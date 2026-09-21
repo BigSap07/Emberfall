@@ -11823,9 +11823,9 @@
             "target": "HighestHpEnemy",
             "power": 0.0,
             "targetMaxHpRatio": 0.02,
-            "maxHpCap": 1.0,
             "condition": "HasMyMark",
-            "conditionOn": "Target"
+            "conditionOn": "Target",
+            "attackCap": 2.0
           },
           {
             "kind": "Damage",
@@ -11867,19 +11867,19 @@
             "target": "HighestHpEnemy",
             "power": 0.0,
             "targetMaxHpRatio": 0.03,
-            "maxHpCap": 1.2,
             "condition": "HasMyMark",
             "conditionStatus": "MarkAlt",
-            "conditionOn": "Target"
+            "conditionOn": "Target",
+            "attackCap": 2.4
           },
           {
             "kind": "Damage",
             "target": "HighestHpEnemy",
             "power": 0.0,
             "targetMaxHpRatio": 0.02,
-            "maxHpCap": 1.0,
             "condition": "HasMyMark",
-            "conditionOn": "Target"
+            "conditionOn": "Target",
+            "attackCap": 2.0
           }
         ]
       },
@@ -11925,22 +11925,22 @@
             "target": "LastTarget",
             "power": 0.0,
             "targetMaxHpRatio": 0.01,
-            "maxHpCap": 0.5,
             "condition": "HasMyMark",
             "conditionOn": "Target",
             "condition2": "HpAbove",
             "conditionValue2": 0.7,
-            "conditionOn2": "Target"
+            "conditionOn2": "Target",
+            "attackCap": 1.0
           },
           {
             "kind": "Damage",
             "target": "LastTarget",
             "power": 0.0,
             "targetMaxHpRatio": 0.03,
-            "maxHpCap": 1.2,
             "condition": "HasMyMark",
             "conditionStatus": "MarkAlt",
-            "conditionOn": "Target"
+            "conditionOn": "Target",
+            "attackCap": 2.4
           }
         ]
       },
@@ -11984,7 +11984,7 @@
             {
               "ability": "basic",
               "effectIndex": 0,
-              "field": "maxHpCap",
+              "field": "attackCap",
               "delta": 0.1
             }
           ]
