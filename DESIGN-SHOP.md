@@ -28,8 +28,10 @@ Two of those are structurally different from the other two, and it is the differ
 this document.
 
 **Gold's sink is capped, and the cap is not Gold's to lift.** `LevelUpCost` is
-`55 + 26L + 3.2L²`, so a single hero from 1 to the hard cap of 80 costs about **622,000 Gold** —
-a large sink. But `HeroLevelCap` is `12 + 4 × (playerLevel − 1)`, capped at 80. A player levels
+`600 + 470L` — it was `55 + 26L + 3.2L²` when this document was written, and the economy-curve
+pass replaced it — so a single hero from 1 to the hard cap of 80 costs about **1,533,000 Gold**
+rather than the 622,000 this paragraph used to quote. The argument below is unchanged and the
+sink got larger, not smaller. But `HeroLevelCap` is `12 + 4 × (playerLevel − 1)`, capped at 80. A player levels
 every fielded hero to the current cap and then **cannot spend Gold on levels at all** until account
 rank rises. Gold does not stop arriving during that window: idle income alone floors at 140/hour
 against a 10-hour cap, and four other sources keep paying. The sink is periodically **blocked**,

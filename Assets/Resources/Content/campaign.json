@@ -79,10 +79,36 @@
   // 75% at that opener against 100% everywhere else, and the geared line still opens at 97%.
   //
   // WHAT THIS PASS DID NOT TOUCH, and would be dishonest to: no recommendedPower moved. Every
-  // reading here is taken at the authored recommendedPower, and the simulated economy puts a
-  // real player at 1.5 to 3.2 times that. The band is met against the line the instrument
-  // fields, not against the player the economy produces; closing that gap is an economy
-  // decision and it is not made in this file.
+  // reading here is taken at the authored recommendedPower. The band is met against the line the
+  // instrument fields, not against the player the economy produces; closing that gap is an
+  // economy decision and it is not made in this file.
+  //
+  // THE ECONOMY-CURVE PASS then closed most of that gap from the other side, and idleGoldPerHour
+  // is the only thing on these stages it moved. No recommendedPower, no floorLevel, no
+  // ceilingLevel, no authored enemy level, no purse and no first-clear reward changed, which is
+  // why all 72 stage fingerprints are byte-identical across it. The simulated player now arrives
+  // between x0.95 and x1.54 of recommendedPower instead of between x1.55 and x3.20, and 1-9 is a
+  // real wall: the player fails it 133 times and needs four extra sittings to get past it.
+  //
+  // idleGoldPerHour IS NOW DERIVED, not authored, exactly the way recommendedPower is. The rule:
+  //
+  //     chapter 1:  idleGoldPerHour = 0.80 * the stage's own gold
+  //     chapter 2:  idleGoldPerHour = 0.85 * the stage's own gold * 1.16^(index - 1)
+  //
+  // The first half of that restores DESIGN-IDLE-PROGRESSION's own rule, which the hand-authored
+  // table had quietly abandoned: its implied multiplier ran from 1.63 at 1-1 down to 0.51 at
+  // 2-12, so the cache paid relatively LESS the deeper a player got, while recommendedPower rose
+  // 6.6x across the campaign. The chapter 2 exponent is the second half and it is not decoration:
+  // recommendedPower accelerates through chapter 2 (8,084 to 26,200, and 51.7% of that in the
+  // five stages from 2-6 to 2-11) and a cache that grows with the purse alone cannot keep pace
+  // with it. Re-derive both if a stage's purse moves; do not hand-edit one rate to fix one stage.
+  //
+  // WHAT IS STILL WRONG HERE IS recommendedPower, and the harness now says so in numbers rather
+  // than in prose. CheckCampaignPowerCurve relaxes a band it can prove is unreachable and prints
+  // what the number would have to be. Two are live today: 1-12 wants at least 11,289 (it rises
+  // only 6.6% over 1-11 while the band under it drops 27%, so the chapter 1 finale cannot be a
+  // wall), and 2-1 wants at least 8,684 (it FALLS 26% from 1-12, and player power does not fall).
+  // 2-2 and 2-3 sit in the same shadow. Fixing those is a re-derivation, not a nudge.
   //
   // Spawn order is slot order: the first entry stands in front. Note for task 11: at five
   // enemies, a single-target identity like Umbra's subtracts a fifth of the line instead of a
@@ -98,7 +124,7 @@
           "id": "ch1_1", "index": 1, "name": "Shardfall Verge", "subtitle": "Something came down here last night.",
           "environment": "ashen", "gold": 120, "shards": 6, "accountXp": 26,
           "firstClearGold": 260, "firstClearShards": 35, "recommendedPower": 3950,
-          "idleGoldPerHour": 195, "idleShardsPerHour": 9,
+          "idleGoldPerHour": 96, "idleShardsPerHour": 9,
           "waveCount": 12, "battleCount": 12, "floorLevel": 2, "ceilingLevel": 6,
           "enemies": [ { "id": "hollow_husk", "level": 2 }, { "id": "hollow_husk", "level": 2 }, { "id": "grave_moth", "level": 2 } ]
         },
@@ -106,7 +132,7 @@
           "id": "ch1_2", "index": 2, "name": "Cracked Milestones", "subtitle": "The road markers have been chewed.",
           "environment": "ashen", "gold": 150, "shards": 8, "accountXp": 32,
           "firstClearGold": 300, "firstClearShards": 40, "recommendedPower": 4550,
-          "idleGoldPerHour": 250, "idleShardsPerHour": 11,
+          "idleGoldPerHour": 120, "idleShardsPerHour": 11,
           "waveCount": 12, "battleCount": 12, "floorLevel": 6, "ceilingLevel": 10,
           "enemies": [ { "id": "hollow_husk", "level": 6 }, { "id": "cinder_imp", "level": 6 }, { "id": "grave_moth", "level": 6 } ]
         },
@@ -114,7 +140,7 @@
           "id": "ch1_3", "index": 3, "name": "The Smoking Orchard", "subtitle": "Fruit trees, still burning politely.",
           "environment": "ashen", "gold": 185, "shards": 10, "accountXp": 38,
           "firstClearGold": 340, "firstClearShards": 45, "recommendedPower": 5000,
-          "idleGoldPerHour": 305, "idleShardsPerHour": 13,
+          "idleGoldPerHour": 148, "idleShardsPerHour": 13,
           "waveCount": 12, "battleCount": 12, "floorLevel": 10, "ceilingLevel": 12,
           "enemies": [ { "id": "cinder_imp", "level": 9 }, { "id": "blight_hound", "level": 9 }, { "id": "hollow_husk", "level": 10 } ]
         },
@@ -122,7 +148,7 @@
           "id": "ch1_4", "index": 4, "name": "Wardenstone Ford", "subtitle": "Something old is standing in the river.",
           "environment": "ashen", "gold": 225, "shards": 12, "accountXp": 45,
           "firstClearGold": 400, "firstClearShards": 55, "recommendedPower": 5600,
-          "idleGoldPerHour": 360, "idleShardsPerHour": 15,
+          "idleGoldPerHour": 180, "idleShardsPerHour": 15,
           "waveCount": 12, "battleCount": 12, "floorLevel": 12, "ceilingLevel": 15,
           "enemies": [ { "id": "blight_hound", "level": 12 }, { "id": "stone_warden", "level": 11 }, { "id": "cinder_imp", "level": 12 } ]
         },
@@ -130,7 +156,7 @@
           "id": "ch1_5", "index": 5, "name": "Emberwake Hollow", "subtitle": "The ash is warm enough to walk barefoot. Do not.",
           "environment": "ember", "gold": 270, "shards": 14, "accountXp": 52,
           "firstClearGold": 460, "firstClearShards": 65, "recommendedPower": 6100,
-          "idleGoldPerHour": 415, "idleShardsPerHour": 18,
+          "idleGoldPerHour": 216, "idleShardsPerHour": 18,
           "waveCount": 12, "battleCount": 12, "floorLevel": 15, "ceilingLevel": 17,
           "enemies": [ { "id": "grave_moth", "level": 14 }, { "id": "grave_moth", "level": 14 }, { "id": "cinder_imp", "level": 15 }, { "id": "hollow_husk", "level": 13 } ]
         },
@@ -138,7 +164,7 @@
           "id": "ch1_6", "index": 6, "name": "The Kiln Gate", "subtitle": "An elite guard, and it has been waiting.",
           "environment": "ember", "gold": 320, "shards": 17, "accountXp": 60,
           "firstClearGold": 540, "firstClearShards": 80, "recommendedPower": 7430,
-          "idleGoldPerHour": 470, "idleShardsPerHour": 20,
+          "idleGoldPerHour": 256, "idleShardsPerHour": 20,
           "waveCount": 12, "battleCount": 12, "floorLevel": 17, "ceilingLevel": 27,
           "enemies": [ { "id": "stone_warden", "level": 17 }, { "id": "cinder_imp", "level": 17 }, { "id": "cinder_imp", "level": 17 }, { "id": "grave_moth", "level": 17 } ]
         },
@@ -146,7 +172,7 @@
           "id": "ch1_7", "index": 7, "name": "Drowned Causeway", "subtitle": "The tide came in and never went back out.",
           "environment": "ember", "gold": 375, "shards": 19, "accountXp": 68,
           "firstClearGold": 600, "firstClearShards": 90, "recommendedPower": 7475,
-          "idleGoldPerHour": 525, "idleShardsPerHour": 22,
+          "idleGoldPerHour": 300, "idleShardsPerHour": 22,
           "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 33,
           "enemies": [ { "id": "cinder_imp", "level": 21 }, { "id": "cinder_imp", "level": 21 }, { "id": "cinder_imp", "level": 20 }, { "id": "grave_moth", "level": 21 } ]
         },
@@ -154,7 +180,7 @@
           "id": "ch1_8", "index": 8, "name": "Revenant's Landing", "subtitle": "It remembers being a person. Barely.",
           "environment": "ember", "gold": 435, "shards": 22, "accountXp": 76,
           "firstClearGold": 680, "firstClearShards": 100, "recommendedPower": 7801,
-          "idleGoldPerHour": 580, "idleShardsPerHour": 24,
+          "idleGoldPerHour": 348, "idleShardsPerHour": 24,
           "waveCount": 12, "battleCount": 12, "floorLevel": 24, "ceilingLevel": 27,
           "enemies": [ { "id": "ashen_revenant", "level": 20 }, { "id": "cinder_imp", "level": 24 }, { "id": "cinder_imp", "level": 24 }, { "id": "grave_moth", "level": 24 } ]
         },
@@ -162,7 +188,7 @@
           "id": "ch1_9", "index": 9, "name": "Mothlight Steps", "subtitle": "Fast, thin things, and far too many of them.",
           "environment": "hollow", "gold": 500, "shards": 25, "accountXp": 85,
           "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 9620,
-          "idleGoldPerHour": 635, "idleShardsPerHour": 27,
+          "idleGoldPerHour": 400, "idleShardsPerHour": 27,
           "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 34,
           "enemies": [ { "id": "ashen_revenant", "level": 23 }, { "id": "ashen_revenant", "level": 19 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 27 } ]
         },
@@ -170,7 +196,7 @@
           "id": "ch1_10", "index": 10, "name": "The Grey Bulwark", "subtitle": "Two wardens. One narrow bridge.",
           "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
           "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 9711,
-          "idleGoldPerHour": 690, "idleShardsPerHour": 29,
+          "idleGoldPerHour": 456, "idleShardsPerHour": 29,
           "waveCount": 12, "battleCount": 12, "floorLevel": 26, "ceilingLevel": 33,
           "enemies": [ { "id": "stone_warden", "level": 26 }, { "id": "ashen_revenant", "level": 21 }, { "id": "cinder_imp", "level": 26 }, { "id": "grave_moth", "level": 26 }, { "id": "hollow_husk", "level": 26 } ]
         },
@@ -178,7 +204,7 @@
           "id": "ch1_11", "index": 11, "name": "Pyre of Names", "subtitle": "Everyone who held this pass is stacked and burning.",
           "environment": "hollow", "gold": 650, "shards": 32, "accountXp": 104,
           "firstClearGold": 950, "firstClearShards": 150, "recommendedPower": 10262,
-          "idleGoldPerHour": 745, "idleShardsPerHour": 31,
+          "idleGoldPerHour": 520, "idleShardsPerHour": 31,
           "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 32,
           "enemies": [ { "id": "ashen_revenant", "level": 25 }, { "id": "ashen_revenant", "level": 23 }, { "id": "cinder_imp", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "hollow_husk", "level": 26 } ]
         },
@@ -187,7 +213,7 @@
           "boss": true,
           "environment": "hollow", "gold": 800, "shards": 40, "accountXp": 140,
           "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 10936,
-          "idleGoldPerHour": 800, "idleShardsPerHour": 33,
+          "idleGoldPerHour": 640, "idleShardsPerHour": 33,
           "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 26,
           "enemies": [ { "id": "sundered_colossus", "level": 22 }, { "id": "hollow_husk", "level": 15 }, { "id": "hollow_husk", "level": 15 }, { "id": "grave_moth", "level": 16 }, { "id": "grave_moth", "level": 16 } ]
         }
@@ -209,7 +235,7 @@
         {
           "id": "ch2_1", "index": 1, "name": "Shorebreak Flats", "subtitle": "The tide doesn't leave. It waits.",
           "environment": "coast", "gold": 960, "shards": 48, "accountXp": 160, "recommendedPower": 8084,
-          "idleGoldPerHour": 860, "idleShardsPerHour": 35,
+          "idleGoldPerHour": 816, "idleShardsPerHour": 35,
           "firstClearGold": 1600, "firstClearShards": 260,
           "waveCount": 12, "battleCount": 12, "floorLevel": 33, "ceilingLevel": 52,
           "enemies": [ { "id": "hollow_husk", "level": 32 }, { "id": "grave_moth", "level": 32 }, { "id": "hollow_husk", "level": 33 } ]
@@ -217,7 +243,7 @@
         {
           "id": "ch2_2", "index": 2, "name": "The Bleeding Shoal", "subtitle": "Red water, always moving somewhere else.",
           "environment": "coast", "gold": 1080, "shards": 54, "accountXp": 175, "recommendedPower": 9003,
-          "idleGoldPerHour": 930, "idleShardsPerHour": 38,
+          "idleGoldPerHour": 1065, "idleShardsPerHour": 38,
           "firstClearGold": 1800, "firstClearShards": 290,
           "waveCount": 12, "battleCount": 12, "floorLevel": 36, "ceilingLevel": 41,
           "enemies": [ { "id": "grave_moth", "level": 36 }, { "id": "hollow_husk", "level": 36 }, { "id": "riptide_channeler", "level": 35 } ]
@@ -225,7 +251,7 @@
         {
           "id": "ch2_3", "index": 3, "name": "Saltwind Rise", "subtitle": "Everything carries the smell of a place it left.",
           "environment": "coast", "gold": 1210, "shards": 60, "accountXp": 192, "recommendedPower": 9830,
-          "idleGoldPerHour": 1000, "idleShardsPerHour": 41,
+          "idleGoldPerHour": 1384, "idleShardsPerHour": 41,
           "firstClearGold": 2000, "firstClearShards": 320,
           "waveCount": 12, "battleCount": 12, "floorLevel": 40, "ceilingLevel": 46,
           "enemies": [ { "id": "tidecaller_wretch", "level": 36 }, { "id": "grave_moth", "level": 40 }, { "id": "riptide_channeler", "level": 35 } ]
@@ -233,7 +259,7 @@
         {
           "id": "ch2_4", "index": 4, "name": "The Drifting Causeway", "subtitle": "The road was here last month.",
           "environment": "coast", "gold": 1360, "shards": 68, "accountXp": 212, "recommendedPower": 11647,
-          "idleGoldPerHour": 1080, "idleShardsPerHour": 44,
+          "idleGoldPerHour": 1804, "idleShardsPerHour": 44,
           "firstClearGold": 2250, "firstClearShards": 360,
           "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 61,
           "enemies": [ { "id": "riptide_channeler", "level": 51 }, { "id": "hollow_husk", "level": 45 }, { "id": "grave_moth", "level": 44 } ]
@@ -241,7 +267,7 @@
         {
           "id": "ch2_5", "index": 5, "name": "Tidal Grottos", "subtitle": "The sea decides which passages stay open.",
           "environment": "tidal", "gold": 1520, "shards": 76, "accountXp": 233, "recommendedPower": 13278,
-          "idleGoldPerHour": 1160, "idleShardsPerHour": 48,
+          "idleGoldPerHour": 2339, "idleShardsPerHour": 48,
           "firstClearGold": 2500, "firstClearShards": 400,
           "waveCount": 12, "battleCount": 12, "floorLevel": 53, "ceilingLevel": 62,
           "enemies": [ { "id": "riptide_channeler", "level": 53 }, { "id": "tidecaller_wretch", "level": 43 }, { "id": "grave_moth", "level": 49 }, { "id": "grave_moth", "level": 49 } ]
@@ -249,7 +275,7 @@
         {
           "id": "ch2_6", "index": 6, "name": "Undertow Channel", "subtitle": "Strong swimmers have disappeared here.",
           "environment": "tidal", "gold": 1700, "shards": 85, "accountXp": 256, "recommendedPower": 15653,
-          "idleGoldPerHour": 1250, "idleShardsPerHour": 52,
+          "idleGoldPerHour": 3035, "idleShardsPerHour": 52,
           "firstClearGold": 2780, "firstClearShards": 445,
           "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 60,
           "enemies": [ { "id": "riptide_channeler", "level": 51 }, { "id": "riptide_channeler", "level": 48 }, { "id": "grave_moth", "level": 51 }, { "id": "grave_moth", "level": 51 } ]
@@ -257,7 +283,7 @@
         {
           "id": "ch2_7", "index": 7, "name": "Kelp Vault", "subtitle": "Something owns what was once a road.",
           "environment": "tidal", "gold": 1900, "shards": 95, "accountXp": 280, "recommendedPower": 15993,
-          "idleGoldPerHour": 1340, "idleShardsPerHour": 56,
+          "idleGoldPerHour": 3935, "idleShardsPerHour": 56,
           "firstClearGold": 3070, "firstClearShards": 490,
           "waveCount": 12, "battleCount": 12, "floorLevel": 57, "ceilingLevel": 63,
           "enemies": [ { "id": "riptide_channeler", "level": 57 }, { "id": "riptide_channeler", "level": 49 }, { "id": "grave_moth", "level": 48 }, { "id": "grave_moth", "level": 48 } ]
@@ -265,7 +291,7 @@
         {
           "id": "ch2_8", "index": 8, "name": "Hollow Anchorage", "subtitle": "The ships that turned around, and the ones that didn't.",
           "environment": "tidal", "gold": 2100, "shards": 105, "accountXp": 306, "recommendedPower": 17600,
-          "idleGoldPerHour": 1430, "idleShardsPerHour": 60,
+          "idleGoldPerHour": 5045, "idleShardsPerHour": 60,
           "firstClearGold": 3380, "firstClearShards": 540,
           "waveCount": 12, "battleCount": 12, "floorLevel": 55, "ceilingLevel": 60,
           "enemies": [ { "id": "riptide_channeler", "level": 55 }, { "id": "riptide_channeler", "level": 51 }, { "id": "riptide_channeler", "level": 47 }, { "id": "hollow_husk", "level": 54 } ]
@@ -273,7 +299,7 @@
         {
           "id": "ch2_9", "index": 9, "name": "The Shifting Berm", "subtitle": "Four hours ago this was solid ground.",
           "environment": "deep", "gold": 2340, "shards": 117, "accountXp": 335, "recommendedPower": 19889,
-          "idleGoldPerHour": 1530, "idleShardsPerHour": 65,
+          "idleGoldPerHour": 6521, "idleShardsPerHour": 65,
           "firstClearGold": 3720, "firstClearShards": 600,
           "waveCount": 12, "battleCount": 12, "floorLevel": 60, "ceilingLevel": 67,
           "enemies": [ { "id": "riptide_channeler", "level": 60 }, { "id": "riptide_channeler", "level": 54 }, { "id": "riptide_channeler", "level": 49 }, { "id": "grave_moth", "level": 53 }, { "id": "hollow_husk", "level": 51 } ]
@@ -281,7 +307,7 @@
         {
           "id": "ch2_10", "index": 10, "name": "Wrackline Reach", "subtitle": "What the Tide discards, it keeps.",
           "environment": "deep", "gold": 2600, "shards": 130, "accountXp": 365, "recommendedPower": 21900,
-          "idleGoldPerHour": 1630, "idleShardsPerHour": 69,
+          "idleGoldPerHour": 8405, "idleShardsPerHour": 69,
           "firstClearGold": 4090, "firstClearShards": 660,
           "waveCount": 12, "battleCount": 12, "floorLevel": 70, "ceilingLevel": 75,
           "enemies": [ { "id": "riptide_channeler", "level": 70 }, { "id": "riptide_channeler", "level": 65 }, { "id": "riptide_channeler", "level": 60 }, { "id": "grave_moth", "level": 62 }, { "id": "hollow_husk", "level": 59 } ]
@@ -289,7 +315,7 @@
         {
           "id": "ch2_11", "index": 11, "name": "The Deep Reckoning", "subtitle": "Far enough out that land is a theory.",
           "environment": "deep", "gold": 2880, "shards": 144, "accountXp": 398, "recommendedPower": 23749,
-          "idleGoldPerHour": 1730, "idleShardsPerHour": 74,
+          "idleGoldPerHour": 10799, "idleShardsPerHour": 74,
           "firstClearGold": 4480, "firstClearShards": 725,
           "waveCount": 12, "battleCount": 12, "floorLevel": 76, "ceilingLevel": 82,
           "enemies": [ { "id": "riptide_channeler", "level": 76 }, { "id": "riptide_channeler", "level": 70 }, { "id": "riptide_channeler", "level": 65 }, { "id": "grave_moth", "level": 63 }, { "id": "grave_moth", "level": 61 } ]
@@ -298,7 +324,7 @@
           "id": "ch2_12", "index": 12, "name": "The Tideturned Throne", "subtitle": "It did not break. It redirected.",
           "boss": true,
           "environment": "deep", "gold": 3600, "shards": 180, "accountXp": 500, "recommendedPower": 26200,
-          "idleGoldPerHour": 1850, "idleShardsPerHour": 78,
+          "idleGoldPerHour": 15659, "idleShardsPerHour": 78,
           "firstClearGold": 6100, "firstClearShards": 1040,
           "waveCount": 12, "battleCount": 12, "floorLevel": 53, "ceilingLevel": 56,
           "enemies": [ { "id": "tideturned", "level": 51 }, { "id": "riptide_channeler", "level": 39 }, { "id": "riptide_channeler", "level": 34 }, { "id": "grave_moth", "level": 53 }, { "id": "hollow_husk", "level": 53 } ]
