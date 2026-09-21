@@ -131,6 +131,11 @@ screen that never loaded again after being left mid-load, because deactivating i
 coroutine that would have cleared the in-flight latch; and a Hub badge reading "GUILD — SOON"
 directly beneath a working GUILD button.
 
+**The harness count did not move.** `balance/retune` merged while this branch was open, taking
+the failure count from 36 to 35; `feat/guilds` was merged up and re-run, and it is 35 there too,
+with all 62 guild checks green and none of the 35 failures a guild one. All 24 stages still
+fingerprint stably and the 150 hero-sweep and 450 talent-sweep baselines still match.
+
 **Phase one excludes** a guild shop, currency, raids, rewards, guild levels and leaderboards,
 and nothing here adds economy of any kind. Chat has no edit and no delete for anybody, including
 a leader: moderation is a real feature with real rules and it is not this one.
