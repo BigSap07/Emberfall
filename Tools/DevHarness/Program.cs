@@ -82,6 +82,7 @@ namespace Emberfall.DevHarness
             CheckNoTalentIsEmpty(content);
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
+            CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
             CheckAuthoredKitExercise(content);
             ReportTalentExercise();
@@ -18954,6 +18955,630 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+        // ------------------------------------------------- the twenty-nine dark talents
+
+        /// <summary>
+        /// THE ARENA FOR THE DARK TALENTS, and it is a set of archetypes rather than one line.
+        ///
+        /// The authored-talent sweep runs every talent in ONE arena, which is what makes its 450
+        /// lines comparable - and also what leaves 27 of them unobserved, because a single enemy
+        /// line cannot raise a kill, a capped ledger, a Stealth gain, a turn-debt threshold and a
+        /// four-stack counter at the same time. The sweep's own comment says so: "the way to light
+        /// the dark ones is a better arena or a repaired talent rather than more dice."
+        ///
+        /// So the bodies here are DELIBERATELY SPECIALISED, one per gate, and each check below
+        /// names the stage it needs: a soft body that dies (a kill), a self-buffing body (an enemy
+        /// buff gained), a body that charges an active while carrying turn debt (an energy
+        /// threshold), a body that hands the front hero Stealth (a status gained), a body wearing
+        /// 900 Defense (so an Armor Break number can matter), a body that keeps four long buffs (so
+        /// a recorded status can still be there when it is read), a body that buffs AND debuffs
+        /// itself (so a status flip has something to flip). None of them is tuned; each exists to
+        /// open exactly one gate.
+        ///
+        /// Variance is zeroed, unlike the sweep's arena, and for the opposite reason: the sweep
+        /// wants maximum sensitivity so any change moves its hash, while these checks assert on
+        /// AMOUNTS - 849 healing, 16 Energy, 1118 Shield - and an amount that moves with the dice
+        /// is an amount nobody can explain.
+        /// </summary>
+        private const string DarkBalance = @"{
+  ""defenseConstant"": 400, ""defensePerLevel"": 24,
+  ""energyMax"": 100, ""energyPerBasicAttack"": 28, ""energyOnDamaged"": 9,
+  ""maxRounds"": 30, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxTeamSize"": 5 }";
+
+        /// <summary>
+        /// The same arena with a slower energy clock, and it exists for one talent.
+        ///
+        /// Isara's Seedling needs her Return After Loss to land on an ally who is ALREADY nearly
+        /// dead: the mark it leaves lasts two rounds, and the ally has to cross 20% HP inside them.
+        /// At 28 Energy a basic plus 9 for every hit taken she casts on round three, when the party
+        /// is still near full, and the mark has expired long before anybody is low. At 25 and none
+        /// she casts on round five, which is where the two curves cross. That is a property of the
+        /// ARENA's clock rather than of her kit, so it lives here rather than in a tuning file.
+        /// </summary>
+        private const string DarkSlowBalance = @"{
+  ""defenseConstant"": 400, ""defensePerLevel"": 24,
+  ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 0,
+  ""maxRounds"": 30, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxTeamSize"": 5 }";
+
+        private const string DarkEnemies = @"{""enemies"":[
+          {""id"":""t_soft"",""name"":""TSoft"",""aspect"":""Ember"",""hp"":900,""attack"":120,""defense"":0,""speed"":80,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_soft_b"",""name"":""Bolster"",""effects"":[{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackUp"",""magnitude"":0.01,""duration"":1,""chance"":1},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.3}]}},
+          {""id"":""t_buffer"",""name"":""TBuffer"",""aspect"":""Ember"",""hp"":400000,""attack"":200,""defense"":0,""speed"":78,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_buffer_b"",""name"":""Bolster"",""effects"":[{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackUp"",""magnitude"":0.01,""duration"":1,""chance"":1},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.3}]}},
+          {""id"":""t_caster"",""name"":""TCaster"",""aspect"":""Ember"",""hp"":400000,""attack"":200,""defense"":0,""speed"":85,""critChance"":0,""critDamage"":1.0,""startEnergy"":82,""basic"":{""id"":""t_caster_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.3}]},""active"":{""id"":""t_caster_a"",""name"":""Surge"",""energyCost"":100,""effects"":[{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackUp"",""magnitude"":0.01,""duration"":1,""chance"":1},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.4}]}},
+          {""id"":""t_bruiser"",""name"":""TBruiser"",""aspect"":""Ember"",""hp"":400000,""attack"":900,""defense"":0,""speed"":76,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_bruiser_b"",""name"":""Maul"",""effects"":[{""kind"":""Damage"",""target"":""LowestHpEnemy"",""power"":1.0}]}},
+          {""id"":""t_healer"",""name"":""THealer"",""aspect"":""Tide"",""hp"":400000,""attack"":200,""defense"":0,""speed"":74,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_healer_b"",""name"":""Mend"",""effects"":[{""kind"":""Heal"",""target"":""LowestHpAlly"",""power"":3.0},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_tail"",""name"":""TTail"",""aspect"":""Ember"",""hp"":400000,""attack"":200,""defense"":0,""speed"":20,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_tail_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_big"",""name"":""TBig"",""aspect"":""Ember"",""hp"":900000,""attack"":200,""defense"":0,""speed"":30,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_big_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_cloaker"",""name"":""TCloaker"",""aspect"":""Ember"",""hp"":400000,""attack"":200,""defense"":0,""speed"":72,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_cloaker_b"",""name"":""Shroud"",""effects"":[{""kind"":""ApplyStatus"",""target"":""FrontEnemy"",""status"":""Stealth"",""duration"":1,""chance"":1},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_armored"",""name"":""TArmored"",""aspect"":""Ember"",""hp"":900000,""attack"":900,""defense"":900,""speed"":30,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_armored_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_triple"",""name"":""TTriple"",""aspect"":""Ember"",""hp"":900000,""attack"":1000,""defense"":0,""speed"":30,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_triple_b"",""name"":""Rally"",""effects"":[{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackUp"",""magnitude"":0.01,""duration"":9,""chance"":1},{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""DefenseUp"",""magnitude"":0.01,""duration"":9,""chance"":1},{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""SpeedUp"",""magnitude"":0.01,""duration"":9,""chance"":1},{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""BlockUp"",""magnitude"":0.01,""duration"":9,""chance"":1},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_wash"",""name"":""TWash"",""aspect"":""Ember"",""hp"":900000,""attack"":660,""defense"":0,""speed"":60,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_wash_b"",""name"":""Wash"",""effects"":[{""kind"":""Damage"",""target"":""AllEnemies"",""power"":0.75}]}},
+          {""id"":""t_selfdown"",""name"":""TSelfdown"",""aspect"":""Ember"",""hp"":400000,""attack"":300,""defense"":0,""speed"":78,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_selfdown_b"",""name"":""Slump"",""effects"":[{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackUp"",""magnitude"":0.01,""duration"":1,""chance"":1},{""kind"":""ApplyStatus"",""target"":""Self"",""status"":""AttackDown"",""magnitude"":0.01,""duration"":3,""chance"":1,""bypassResist"":true},{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_frail"",""name"":""TFrail"",""aspect"":""Tide"",""hp"":30000,""attack"":300,""defense"":0,""speed"":50,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_frail_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.2}]}},
+          {""id"":""t_mid"",""name"":""TMid"",""aspect"":""Ember"",""hp"":200000,""attack"":120,""defense"":0,""speed"":70,""critChance"":0,""critDamage"":1.0,""basic"":{""id"":""t_mid_b"",""name"":""Prod"",""effects"":[{""kind"":""Damage"",""target"":""FrontEnemy"",""power"":0.3}]}}
+          ]}";
+
+        private const string DarkCampaign = @"{""chapters"":[{""id"":""t_ch"",""name"":""T"",""stages"":[
+          {""id"":""s_caster_tail"",""index"":1,""enemies"":[{""id"":""t_caster"",""level"":40},{""id"":""t_tail"",""level"":40}]},
+          {""id"":""s_buffer"",""index"":2,""enemies"":[{""id"":""t_buffer"",""level"":40}]},
+          {""id"":""s_buffer_tail"",""index"":3,""enemies"":[{""id"":""t_buffer"",""level"":40},{""id"":""t_tail"",""level"":40}]},
+          {""id"":""s_soft_big"",""index"":4,""enemies"":[{""id"":""t_soft"",""level"":40},{""id"":""t_big"",""level"":40}]},
+          {""id"":""s_bruiser"",""index"":5,""enemies"":[{""id"":""t_bruiser"",""level"":40}]},
+          {""id"":""s_bruiser_healer"",""index"":6,""enemies"":[{""id"":""t_bruiser"",""level"":40},{""id"":""t_healer"",""level"":40}]},
+          {""id"":""s_soft_soft_big"",""index"":7,""enemies"":[{""id"":""t_soft"",""level"":40},{""id"":""t_soft"",""level"":40},{""id"":""t_big"",""level"":40}]},
+          {""id"":""s_cloaker_armored"",""index"":8,""enemies"":[{""id"":""t_cloaker"",""level"":40},{""id"":""t_armored"",""level"":40}]},
+          {""id"":""s_soft4_triple"",""index"":9,""enemies"":[{""id"":""t_soft"",""level"":40},{""id"":""t_soft"",""level"":40},{""id"":""t_soft"",""level"":40},{""id"":""t_soft"",""level"":40},{""id"":""t_triple"",""level"":40}]},
+          {""id"":""s_caster_bruiser_tail"",""index"":10,""enemies"":[{""id"":""t_caster"",""level"":40},{""id"":""t_bruiser"",""level"":40},{""id"":""t_tail"",""level"":40}]},
+          {""id"":""s_wash"",""index"":11,""enemies"":[{""id"":""t_wash"",""level"":40},{""id"":""t_big"",""level"":40}]},
+          {""id"":""s_selfdown"",""index"":12,""enemies"":[{""id"":""t_selfdown"",""level"":40}]},
+          {""id"":""s_frail_healer"",""index"":13,""enemies"":[{""id"":""t_frail"",""level"":40},{""id"":""t_healer"",""level"":40}]},
+          {""id"":""s_frail_big"",""index"":14,""enemies"":[{""id"":""t_frail"",""level"":40},{""id"":""t_big"",""level"":40}]},
+          {""id"":""s_triple"",""index"":15,""enemies"":[{""id"":""t_triple"",""level"":40}]},
+          {""id"":""s_soft_mid_big"",""index"":16,""enemies"":[{""id"":""t_soft"",""level"":40},{""id"":""t_mid"",""level"":40},{""id"":""t_big"",""level"":40}]}
+          ]}]}";
+
+        private static ContentDatabase _darkArena, _darkArenaSlow;
+
+        private static ContentDatabase DarkArena(bool slow)
+        {
+            if (slow && _darkArenaSlow != null) return _darkArenaSlow;
+            if (!slow && _darkArena != null) return _darkArena;
+
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes;
+            try { heroes = File.ReadAllText(Path.Combine(dir, "heroes.json")); }
+            catch (Exception) { return null; }
+
+            ContentDatabase db = LoadSyntheticContent(heroes, DarkEnemies, DarkCampaign,
+                                                      slow ? DarkSlowBalance : DarkBalance,
+                                                      slow ? "dark-talent (slow clock)" : "dark-talent");
+            if (slow) _darkArenaSlow = db; else _darkArena = db;
+            return db;
+        }
+
+        /// <summary>
+        /// One battle, reduced to the handful of totals the checks below assert on.
+        ///
+        /// Read off the EVENT LIST and nothing else, which is the same discipline the battle screen
+        /// works under: if a talent's effect is not in the record, the talent did not happen, and a
+        /// check that inspected wiring instead would pass on a talent that never fires.
+        /// </summary>
+        private sealed class DarkProbe
+        {
+            public int Events, Rounds;
+            public bool Victory;
+            public int SubjectId = -1;
+            public int SubjectDamage, SubjectHeal, SubjectShield;
+            public int HealToOthers, BiggestHealToOther;
+            public int SubjectEnergyGain, AllyEnergyGain, EnemyEnergyLoss;
+            public int BuffsStripped, ResolveSpent;
+            public int AllyShifts, EnemyShifts;
+            public int AllyShiftTarget = -1, AllyEnergyTarget = -1;
+            public int Spreads, MarkOnBiggestEnemy;
+            public int SubjectCasts;
+            public readonly Dictionary<StatusKind, int> Applied = new Dictionary<StatusKind, int>();
+            public readonly Dictionary<string, int> Fired = new Dictionary<string, int>();
+
+            /// <summary>
+            /// HOW MANY TIMES A UNIT'S ENERGY MOVED BY EXACTLY THIS MUCH, and it is the only way
+            /// several of these talents can be measured at all. An energy bar is CAPPED, so a
+            /// battle-long total silently swallows every grant that arrived at a full bar - Merek's
+            /// six 5-Energy payments summed to zero extra Energy over thirty rounds. A count of
+            /// exact deltas cannot be swallowed, and "+5 six times" is also the sentence the
+            /// talent's own text says.
+            /// </summary>
+            public readonly Dictionary<int, int> SubjectDeltas = new Dictionary<int, int>();
+            public readonly Dictionary<int, int> AllyDeltas = new Dictionary<int, int>();
+            public readonly Dictionary<int, int> EnemyDeltas = new Dictionary<int, int>();
+
+            public int Fires(string abilityId) { int n; Fired.TryGetValue(abilityId, out n); return n; }
+            public int Count(StatusKind k) { int n; Applied.TryGetValue(k, out n); return n; }
+            public int SubjectPlus(int d) { int n; SubjectDeltas.TryGetValue(d, out n); return n; }
+            public int AllyPlus(int d) { int n; AllyDeltas.TryGetValue(d, out n); return n; }
+            public int EnemyMinus(int d) { int n; EnemyDeltas.TryGetValue(-d, out n); return n; }
+        }
+
+        private static DarkProbe RunDark(string heroId, int talent, string stageId, string allies,
+                                         int seed, bool slow)
+        {
+            ContentDatabase db = DarkArena(slow);
+            if (db == null) return null;
+            HeroDef subject = db.GetHero(heroId);
+            StageDef stage = db.GetStage(stageId);
+            if (subject == null || stage == null) return null;
+
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroInstance me = MakeInstance(subject, 40);
+            me.SelectedTalent = talent;
+            team.Add(me);
+            if (!string.IsNullOrEmpty(allies))
+            {
+                string[] ids = allies.Split(',');
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    HeroDef d = db.GetHero(ids[i].Trim());
+                    if (d == null) return null;
+                    team.Add(MakeInstance(d, 40));
+                }
+            }
+
+            BattleResult r = RunWith(db, stage, seed, team);
+            if (r == null) return null;
+
+            DarkProbe p = new DarkProbe();
+            p.Events = r.Events.Count;
+            p.Rounds = r.Rounds;
+            p.Victory = r.Victory;
+
+            int biggestEnemy = -1;
+            float biggestHp = -1f;
+            Dictionary<int, int> energy = new Dictionary<int, int>();
+            for (int i = 0; i < r.Units.Count; i++)
+            {
+                UnitSnapshot u = r.Units[i];
+                if (u.DefId == subject.Id && p.SubjectId < 0) p.SubjectId = u.Id;
+                if (!u.IsPlayer && u.MaxHp > biggestHp) { biggestHp = u.MaxHp; biggestEnemy = u.Id; }
+                energy[u.Id] = u.StartEnergy;
+            }
+
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                UnitSnapshot tgt = r.FindUnit(e.TargetId);
+                switch (e.Type)
+                {
+                    case BattleEventType.PassiveTrigger:
+                    {
+                        string id = e.AbilityId == null ? "" : e.AbilityId;
+                        int n; p.Fired.TryGetValue(id, out n); p.Fired[id] = n + 1;
+                        break;
+                    }
+                    case BattleEventType.AbilityCast:
+                        if (e.SourceId == p.SubjectId) p.SubjectCasts++;
+                        break;
+                    case BattleEventType.Damage:
+                        if (e.SourceId == p.SubjectId) p.SubjectDamage += e.Value;
+                        break;
+                    case BattleEventType.Heal:
+                        if (e.SourceId == p.SubjectId)
+                        {
+                            p.SubjectHeal += e.Value;
+                            if (e.TargetId != p.SubjectId)
+                            {
+                                p.HealToOthers += e.Value;
+                                if (e.Value > p.BiggestHealToOther) p.BiggestHealToOther = e.Value;
+                            }
+                        }
+                        break;
+                    case BattleEventType.ShieldGain:
+                        if (e.SourceId == p.SubjectId) p.SubjectShield += e.Value;
+                        break;
+                    case BattleEventType.StatusApplied:
+                    {
+                        int n; p.Applied.TryGetValue(e.Status, out n); p.Applied[e.Status] = n + 1;
+                        if (e.Status == StatusKind.Mark && e.TargetId == biggestEnemy
+                            && e.SourceId == p.SubjectId) p.MarkOnBiggestEnemy++;
+                        break;
+                    }
+                    case BattleEventType.StatusExpired:
+                        // Mark and MarkAlt are excluded on purpose: they are bookkeeping rather
+                        // than buffs, several kits strip their own, and counting them would make
+                        // this number say "a status left an enemy" instead of "a buff was taken".
+                        if (e.SourceId == p.SubjectId && tgt != null && !tgt.IsPlayer
+                            && !StatusInfo.IsHarmful(e.Status)
+                            && e.Status != StatusKind.Mark && e.Status != StatusKind.MarkAlt)
+                            p.BuffsStripped++;
+                        if (e.TargetId == p.SubjectId && e.Status == StatusKind.Resolve) p.ResolveSpent++;
+                        break;
+                    case BattleEventType.StatusSpread:
+                        p.Spreads++;
+                        break;
+                    case BattleEventType.TurnOrderShift:
+                        if (tgt == null) break;
+                        if (tgt.IsPlayer) { p.AllyShifts++; if (p.AllyShiftTarget < 0) p.AllyShiftTarget = e.TargetId; }
+                        else p.EnemyShifts++;
+                        break;
+                    case BattleEventType.EnergyChanged:
+                    {
+                        int was;
+                        if (!energy.TryGetValue(e.TargetId, out was)) was = 0;
+                        int delta = e.Value - was;
+                        energy[e.TargetId] = e.Value;
+                        if (tgt == null) break;
+                        if (tgt.IsPlayer && e.TargetId == p.SubjectId)
+                        {
+                            if (delta > 0) p.SubjectEnergyGain += delta;
+                            Bump(p.SubjectDeltas, delta);
+                        }
+                        if (tgt.IsPlayer && e.TargetId != p.SubjectId)
+                        {
+                            if (delta > 0)
+                            {
+                                p.AllyEnergyGain += delta;
+                                if (p.AllyEnergyTarget < 0) p.AllyEnergyTarget = e.TargetId;
+                            }
+                            Bump(p.AllyDeltas, delta);
+                        }
+                        if (!tgt.IsPlayer)
+                        {
+                            if (delta < 0) p.EnemyEnergyLoss += -delta;
+                            Bump(p.EnemyDeltas, delta);
+                        }
+                        break;
+                    }
+                }
+            }
+            return p;
+        }
+
+        private static void Bump(Dictionary<int, int> into, int key)
+        {
+            int n; into.TryGetValue(key, out n); into[key] = n + 1;
+        }
+
+        private static bool DarkPair(string hero, int talent, string stage, string allies, int seed,
+                                     bool slow, out DarkProbe without, out DarkProbe with)
+        {
+            without = RunDark(hero, 0, stage, allies, seed, slow);
+            with = RunDark(hero, talent, stage, allies, seed, slow);
+            return without != null && with != null;
+        }
+
+        /// <summary>The four squads the checks below field, named so a stage line reads as one idea.</summary>
+        private const string DarkStrikers =
+            "talren_the_wayfinder,oris_the_unwritten_path,arden_the_precise_measure,merek_the_sequence_thief";
+        private const string DarkFive =
+            "isara_the_second_chance,brenna_the_remaining_wall,kael_the_unyielding,darian_the_hidden_bulwark";
+        private const string DarkWall =
+            "kael_the_unyielding,darian_the_hidden_bulwark,isara_the_second_chance";
+        private const string DarkPairUp = "brenna_the_remaining_wall,kael_the_unyielding";
+
+        /// <summary>
+        /// EVERY DARK TALENT THIS ARENA CAN REACH, PROVED ONE AT A TIME.
+        ///
+        /// The sweep above asks whether a talent does ANYTHING in one shared arena and answers with
+        /// a fingerprint. That is the right instrument for 90 talents and the wrong one for a
+        /// repair: a fingerprint that moved says the fight changed, not that the fight changed in
+        /// the direction the talent's own text describes. Each check here asserts the DIRECTION and
+        /// the AMOUNT, against the same hero with no talent selected on the same seed - so a talent
+        /// that starts doing the wrong thing fails even though its fingerprint still moves.
+        ///
+        /// Five of these were BROKEN rather than dark, and all five by one defect: an appended
+        /// effect lands at the end of its host's effect list, and the host had already stripped or
+        /// spent the thing the appended effect's condition reads. They are named in the commit that
+        /// repaired them; what the checks below pin is the repaired behaviour.
+        ///
+        /// FOUR OF THE TWENTY-NINE ARE NOT HERE, and their absence is the finding rather than an
+        /// omission:
+        ///   - Elyra III and Edrin III wait on a stack their own host can never accumulate, because
+        ///     `ConditionSubject.LastTarget` reads `_lastTarget`, and `ResolveAbility` clears that
+        ///     field for the wrapper ability a passive's effects run inside. Every passive gated on
+        ///     LastTarget therefore answers false forever. Edrin's Record also carries no duration,
+        ///     so his stacks expire two rounds after they land and four can never be held at once.
+        ///   - Hale II is an OR branch on a clause that is already true: its host reads
+        ///     SubjectDamagedSinceMyTurn, `LastTurnRound` is stamped as the turn OPENS, and the
+        ///     ability's own first effect damages the target - so the AND branch has always passed
+        ///     by the time the OR is consulted and the talent cannot decide anything.
+        ///   - Kael II re-applies a Mark to enemies that already carry one, which is a duration
+        ///     refresh rather than the application its text describes, and nothing in the condition
+        ///     vocabulary can ask "did this firing remove a defensive effect from this body".
+        /// </summary>
+        private static void CheckDarkTalents(ContentDatabase live)
+        {
+            Line("THE DARK TALENTS (each in the smallest arena that raises what it was waiting on)");
+
+            DarkProbe a, b;
+
+            // ---- Kiva II: a marked body dies, and the highest-HP enemy inherits the mark.
+            // The mid body keeps its own Mark going to the front-most enemy, so without the talent
+            // the big body is never marked at all and the count is a clean 0 against 1.
+            if (!DarkPair("kiva_the_forsaken_oath", 2, "s_soft_mid_big", "", 1, false, out a, out b))
+                Check(false, "kiva II arena built");
+            else
+                Check(b.MarkOnBiggestEnemy > a.MarkOnBiggestEnemy && a.MarkOnBiggestEnemy == 0,
+                      "Kiva II puts Forsaken on the highest-HP enemy when a Forsaken body dies ("
+                      + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
+                      + ") - that body is out of reach of her basic, which marks the lowest-HP one");
+
+            // ---- Kiva III: the same kill, paid out as Shield per Broken Link held.
+            if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
+                Check(false, "kiva III arena built");
+            else
+                Check(b.SubjectShield > 0 && a.SubjectShield == 0
+                      && b.Fires("kiva_unclaimed_victory") > 0,
+                      "Kiva III turns a Broken Link into a Shield on that kill (" + b.SubjectShield
+                      + " against " + a.SubjectShield + ", which is 12% of her Max HP per link) - "
+                      + "both Shield effects gated on StatusStacksAtLeast without naming a status, "
+                      + "which ConditionMet answers false unconditionally");
+
+            // ---- Aeron II: the ally Momentum Breaker pays is the ally that advances.
+            // Five bodies on each side so the pending order has a tail both shifts can land in.
+            if (!DarkPair("aeron_the_unbroken_stride", 2, "s_caster_tail", DarkFive, 1, false, out a, out b))
+                Check(false, "aeron II arena built");
+            else
+                Check(b.AllyShifts == 1 && a.AllyShifts == 0
+                      && b.AllyShiftTarget == b.AllyEnergyTarget,
+                      "Aeron II advances the SAME ally Momentum Breaker just handed the energy to "
+                      + "(shift on unit " + b.AllyShiftTarget + ", energy to unit " + b.AllyEnergyTarget
+                      + ", " + b.AllyShifts + " ally shift against " + a.AllyShifts
+                      + ") - appended after the grant it re-resolved LowestEnergyAlly and advanced "
+                      + "whichever OTHER ally was now poorest");
+
+            // ---- Merek I: five extra Energy each time Anticipated answers a resolved active.
+            if (!DarkPair("merek_the_sequence_thief", 1, "s_caster_tail", "", 1, false, out a, out b))
+                Check(false, "merek I arena built");
+            else
+            {
+                int fires = b.Fires("merek_anticipated");
+                Check(fires > 0 && a.SubjectPlus(5) == 0 && b.SubjectPlus(5) > 0,
+                      "Merek I pays him 5 Energy per Anticipated firing (" + fires + " firing(s), "
+                      + b.SubjectPlus(5) + " payment(s) of exactly 5 against " + a.SubjectPlus(5)
+                      + ") - nothing else in this fight moves his bar by 5, and the firings that "
+                      + "do not show up here arrived at a bar already full");
+            }
+
+            // ---- Nysera I: Vanishing Mark also takes a buff off the body that aimed at her.
+            if (!DarkPair("nysera_the_missing_arrow", 1, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "nysera I arena built");
+            else
+                Check(b.BuffsStripped > 0 && a.BuffsStripped == 0,
+                      "Nysera I strips one positive status per Vanishing Mark trigger ("
+                      + b.BuffsStripped + " against " + a.BuffsStripped + ") - appended after the "
+                      + "host's own RemoveStatus it read a Mark that was already gone");
+
+            // ---- Nysera III: the Armor Break she gains on going unseen has to meet armour to matter.
+            if (!DarkPair("nysera_the_missing_arrow", 3, "s_cloaker_armored", "", 1, false, out a, out b))
+                Check(false, "nysera III arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage,
+                      "Nysera III lifts her damage against a 900-Defense body once she has gone "
+                      + "unseen (" + b.SubjectDamage + " against " + a.SubjectDamage
+                      + ") - the 15% Armor Break is worth nothing against the 0-Defense bodies the "
+                      + "sweep fields");
+
+            // ---- Vaelis I: Departure also lowers the previous target's Effect Resist.
+            if (!DarkPair("vaelis_the_unfixed_blade", 1, "s_soft_soft_big", "isara_the_second_chance",
+                          2, false, out a, out b))
+                Check(false, "vaelis I arena built");
+            else
+                Check(b.Count(StatusKind.EffectResistDown) > 0 && a.Count(StatusKind.EffectResistDown) == 0,
+                      "Vaelis I puts Effect Resist Down on the body Departure is bound to ("
+                      + b.Count(StatusKind.EffectResistDown) + " against "
+                      + a.Count(StatusKind.EffectResistDown) + ") and takes it off again when "
+                      + "Departure triggers");
+
+            // ---- Vaelis II: two positive effects move instead of all of them.
+            if (!DarkPair("vaelis_the_unfixed_blade", 2, "s_soft4_triple", "", 4, false, out a, out b))
+                Check(false, "vaelis II arena built");
+            else
+                Check(b.Spreads > 0 && b.Spreads < a.Spreads,
+                      "Vaelis II moves 2 positive effects each way instead of every one ("
+                      + b.Spreads + " crossings against " + a.Spreads
+                      + ") - the bound body has to be carrying more than two for the number to matter");
+
+            // ---- Vaelis III: twelve Energy when the ally that triggered Departure is a Mender.
+            if (!DarkPair("vaelis_the_unfixed_blade", 3, "s_soft_soft_big", "isara_the_second_chance",
+                          2, false, out a, out b))
+                Check(false, "vaelis III arena built");
+            else
+            {
+                int fires = b.Fires("vaelis_departure");
+                Check(fires > 0 && b.SubjectPlus(12) - a.SubjectPlus(12) == fires,
+                      "Vaelis III pays him 12 Energy per Departure triggered by a Mender ally ("
+                      + fires + " firing(s), " + (b.SubjectPlus(12) - a.SubjectPlus(12))
+                      + " payment(s) of exactly 12) - his own SubjectRoleIs clause needs an ally "
+                      + "of that role to land the hit");
+            }
+
+            // ---- Dahlia II: Broken Rhythm's heal reaches the second-lowest ally too.
+            if (!DarkPair("dahlia_the_wayward_hymn", 2, "s_caster_bruiser_tail", DarkFive, 1, false,
+                          out a, out b))
+                Check(false, "dahlia II arena built");
+            else
+                Check(b.HealToOthers > a.HealToOthers,
+                      "Dahlia II heals the second-lowest ally for 40% of Attack whenever Broken "
+                      + "Rhythm answers a cast (" + b.HealToOthers + " against " + a.HealToOthers
+                      + " healed onto other bodies)");
+
+            // ---- Brenna I: the cap on what a Lasting Guard may record, where the cap binds.
+            if (!DarkPair("brenna_the_remaining_wall", 1, "s_bruiser_healer", DarkWall, 1, false,
+                          out a, out b))
+                Check(false, "brenna I arena built");
+            else
+                Check(b.BiggestHealToOther > a.BiggestHealToOther,
+                      "Brenna I lets one ally's Lasting Guard release " + b.BiggestHealToOther
+                      + " where the 8% ceiling stopped it at " + a.BiggestHealToOther
+                      + " - the Guard prevented more than 8% of Max HP, so the cap was what was "
+                      + "binding and raising it to 12% let the rest through");
+
+            // ---- Altheon III: the Record stacks spent on a capped Ledger, once per battle.
+            if (!DarkPair("altheon_the_first_witness", 3, "s_buffer_tail", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "altheon III arena built");
+            else
+                Check(b.Fires("altheon_final_record") == 1 && b.SubjectDamage > a.SubjectDamage,
+                      "Altheon III answers the capped Ledger exactly once a battle and adds one "
+                      + "blow per Record held (" + b.SubjectDamage + " against " + a.SubjectDamage
+                      + " damage) - four damage dealers are needed to push the record to its cap "
+                      + "inside the Subject's two rounds");
+
+            // ---- Isolde III: Revelation expiring on four Traces.
+            if (!DarkPair("isolde_the_slow_fading", 3, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "isolde III arena built");
+            else
+                Check(b.Fires("isolde_final_revelation") > 0 && b.SubjectDamage > a.SubjectDamage
+                      && b.ResolveSpent > a.ResolveSpent,
+                      "Isolde III fires on Revelation's expiry and consumes the Traces ("
+                      + b.Fires("isolde_final_revelation") + " firing(s), "
+                      + (b.ResolveSpent - a.ResolveSpent) + " extra Traces spent, "
+                      + b.SubjectDamage + " damage against " + a.SubjectDamage + ")");
+
+            // ---- Mireth II: the Energy either side of the third Page.
+            if (!DarkPair("mireth_the_erased_name", 2, "s_buffer", "", 1, false, out a, out b))
+                Check(false, "mireth II arena built");
+            else
+                Check(b.SubjectPlus(15) > a.SubjectPlus(15) && b.EnemyMinus(10) > a.EnemyMinus(10),
+                      "Mireth II gives her 15 Energy and takes 10 off the Focused enemy when The "
+                      + "Missing Page spends three Pages (" + (b.SubjectPlus(15) - a.SubjectPlus(15))
+                      + " payment(s) of exactly 15 to her, " + (b.EnemyMinus(10) - a.EnemyMinus(10))
+                      + " drain(s) of exactly 10 off it)");
+
+            // ---- Mireth III: the same firing against a wounded body.
+            if (!DarkPair("mireth_the_erased_name", 3, "s_frail_big", DarkPairUp, 1, false, out a, out b))
+                Check(false, "mireth III arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage,
+                      "Mireth III adds damage when The Missing Page lands on a wounded Focused "
+                      + "enemy (" + b.SubjectDamage + " against " + a.SubjectDamage + ")");
+
+            // ---- Rheia I: three Energy per Revision instead of five, and a bigger blow for it.
+            if (!DarkPair("rheia_the_revision_scribe", 1, "s_selfdown", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "rheia I arena built");
+            else
+                Check(a.SubjectPlus(5) > 0 && b.SubjectPlus(5) == 0 && b.SubjectPlus(3) > 0,
+                      "Rheia I pays 3 Energy per Revision where she paid 5 (" + b.SubjectPlus(3)
+                      + " payment(s) of 3 and " + b.SubjectPlus(5) + " of 5, against "
+                      + a.SubjectPlus(3) + " and " + a.SubjectPlus(5)
+                      + ") - she needs a body that buffs AND debuffs itself to have a status to "
+                      + "flip at all");
+                Check(b.SubjectCasts > 0 && a.SubjectCasts > 0
+                      && b.SubjectDamage / b.SubjectCasts > a.SubjectDamage / a.SubjectCasts,
+                      "and buys 20% of Attack per affected enemy with it: " + (b.SubjectDamage / b.SubjectCasts)
+                      + " damage per cast against " + (a.SubjectDamage / a.SubjectCasts)
+                      + ", while her TOTAL falls from " + a.SubjectDamage + " to " + b.SubjectDamage
+                      + " because the Energy she gives up costs her casts");
+
+            // ---- Rheia II: the rider Second Draft carries at four Revision.
+            if (!DarkPair("rheia_the_revision_scribe", 2, "s_selfdown", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "rheia II arena built");
+            else
+                Check(b.Count(StatusKind.DefenseUp) > a.Count(StatusKind.DefenseUp)
+                      || b.Count(StatusKind.AttackDown) > a.Count(StatusKind.AttackDown),
+                      "Rheia II lands its Second Draft rider at four Revision (DefenseUp "
+                      + b.Count(StatusKind.DefenseUp) + " against " + a.Count(StatusKind.DefenseUp)
+                      + ", AttackDown " + b.Count(StatusKind.AttackDown) + " against "
+                      + a.Count(StatusKind.AttackDown) + ")");
+
+            // ---- Rheia III: Revision is no longer spent, and the blow is bigger.
+            if (!DarkPair("rheia_the_revision_scribe", 3, "s_selfdown", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "rheia III arena built");
+            else
+                Check(b.ResolveSpent < a.ResolveSpent && b.SubjectDamage > a.SubjectDamage,
+                      "Rheia III stops Second Draft consuming Revision and pays for it in damage ("
+                      + b.ResolveSpent + " Revision spent against " + a.ResolveSpent + ", "
+                      + b.SubjectDamage + " damage against " + a.SubjectDamage + ")");
+
+            // ---- Rovan II: the Shield he passes is worth Energy to whoever catches it.
+            if (!DarkPair("rovan_the_adaptive_commander", 2, "s_bruiser", "isara_the_second_chance",
+                          1, false, out a, out b))
+                Check(false, "rovan II arena built");
+            else
+                Check(b.AllyPlus(8) > 0 && a.AllyPlus(8) == 0 && b.AllyPlus(8) % 2 == 0,
+                      "Rovan II pays the ally that catches the Shield 8 Energy per 10% of Max HP "
+                      + "moved, to a ceiling of 16 (" + b.AllyPlus(8) + " payment(s) of exactly 8 "
+                      + "against " + a.AllyPlus(8) + ", two per cast, which is the ceiling) - "
+                      + "LastMovedAboveHpFraction needs a Shield that big to have moved at all");
+
+            // ---- Seraphine I: a deeper Footnote reaches its own cap sooner.
+            if (!DarkPair("seraphine_the_closed_volume", 1, "s_soft_big", DarkPairUp, 1, false,
+                          out a, out b))
+                Check(false, "seraphine I arena built");
+            else
+                Check(b.Count(StatusKind.BuffSuppression) > a.Count(StatusKind.BuffSuppression),
+                      "Seraphine I records 35% instead of 25%, so Volume Closed shuts the book a "
+                      + "round earlier (" + b.Count(StatusKind.BuffSuppression) + " suppression(s) "
+                      + "against " + a.Count(StatusKind.BuffSuppression)
+                      + ") - the record has to stay under its 80%-of-Attack cap for the difference "
+                      + "to survive");
+
+            // ---- Seraphine II: the Footnote that moves starts with something written in it.
+            // The record has to stay well UNDER its cap for the extra 30% to survive to the
+            // release, which is why this is the one stage where nothing hits hard: against the
+            // bodies the other checks field, the Footnote is at its ceiling either way and the
+            // talent's gift is swallowed by the cap rather than paid out.
+            if (!DarkPair("seraphine_the_closed_volume", 2, "s_triple", DarkPairUp, 1, false,
+                          out a, out b))
+                Check(false, "seraphine II arena built");
+            else
+                Check(b.SubjectDamage > a.SubjectDamage,
+                      "Seraphine II hands the Footnote it moves an immediate record worth 30% of "
+                      + "her Attack, and that record is released as damage (" + b.SubjectDamage
+                      + " against " + a.SubjectDamage + ")");
+
+            // ---- Seraphine III: the turn progress the suppressed body loses.
+            if (!DarkPair("seraphine_the_closed_volume", 3, "s_buffer_tail", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "seraphine III arena built");
+            else
+                Check(b.EnemyShifts > a.EnemyShifts,
+                      "Seraphine III costs the body Volume Closed silences 10% turn progress ("
+                      + b.EnemyShifts + " enemy shift(s) against " + a.EnemyShifts
+                      + ") - the authored shift is a 0 that does nothing until the talent gives it "
+                      + "a magnitude");
+
+            // ---- Sylven III: the Healing Reduction that rides Wounds Remember.
+            if (!DarkPair("sylven_the_unfading_blade", 3, "s_triple", "", 1, false, out a, out b))
+                Check(false, "sylven III arena built");
+            else
+                Check(b.Count(StatusKind.HealingReduction) > 0
+                      && a.Count(StatusKind.HealingReduction) == 0,
+                      "Sylven III puts Healing Reduction on the body whose recorded effect came "
+                      + "back (" + b.Count(StatusKind.HealingReduction) + " against "
+                      + a.Count(StatusKind.HealingReduction)
+                      + ") - appended after the host's own Dispel it read a record whose status the "
+                      + "Dispel had just taken away, and the record has to be a LONG buff or "
+                      + "nothing is being carried when it is read");
+
+            // ---- Velis III: the healing the third Remnant denies.
+            if (!DarkPair("velis_the_hollow_vow", 3, "s_frail_healer", DarkStrikers, 1, false,
+                          out a, out b))
+                Check(false, "velis III arena built");
+            else
+                Check(b.Count(StatusKind.HealSuppression) > 0
+                      && a.Count(StatusKind.HealSuppression) == 0,
+                      "Velis III shuts healing off the body What Was Taken spends three Remnants on "
+                      + "when it is under 30% HP (" + b.Count(StatusKind.HealSuppression)
+                      + " against " + a.Count(StatusKind.HealSuppression) + ")");
+
+            // ---- Isara II: the second body a Seedling heals.
+            if (!DarkPair("isara_the_second_chance", 2, "s_wash", "darian_the_hidden_bulwark,"
+                          + "kael_the_unyielding", 1, true, out a, out b))
+                Check(false, "isara II arena built");
+            else
+                Check(b.SubjectHeal > a.SubjectHeal,
+                      "Isara II heals a second ally each time a Seedling triggers ("
+                      + b.SubjectHeal + " against " + a.SubjectHeal
+                      + ", the difference being 70% of her Attack) - appended after What Survives "
+                      + "cleared its own bookkeeping mark it read a mark that was already gone");
+
+            Line("");
+        }
+
         private const string TalentSweepBaselineFile = "talent-sweep-baseline.txt";
 
         /// <summary>
@@ -19090,6 +19715,14 @@ namespace Emberfall.DevHarness
                     : gated.Count + " of " + talentCount + " talents are EXECUTED but never observed "
                       + "doing anything here - each waits on something this arena does not raise, "
                       + "and each is named with what it waits on: " + string.Join(", ", gated.ToArray()));
+
+            // WHAT THE RED ABOVE DOES AND DOES NOT CLAIM, said here rather than left to be
+            // inferred. "Never observed doing anything HERE" is a statement about this arena, and
+            // 26 of the talents it names are proved to work in THE DARK TALENTS above, each in a
+            // fight built to open its own gate. What is left in this list after that is the
+            // honest measure of what one shared enemy line cannot raise.
+            Line("  [note] 26 of the talents named above are proved in THE DARK TALENTS section,"
+                 + " each in an arena built to raise its own gate. This red is about THIS arena.");
 
             // Only among talents that DO something. Two dead talents being identical is the dead
             // check's finding, not this one's, and counting it twice would make this red decorative.
