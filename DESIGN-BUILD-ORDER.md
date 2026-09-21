@@ -285,7 +285,7 @@ Presentation only. No `CombatSimulation` change and no content numbers touched: 
 fingerprints are byte-identical to `main`'s, the 150 hero-sweep and 450 talent-sweep baselines
 match, and the failure count is unchanged at 36.
 
-### In flight: a Windows desktop player, on branch `build/windows-dev`
+### In flight: a Windows desktop player and two build defects, on branch `fix/build-polish`
 
 For putting the game in front of somebody who has a PC and not an Android device. Android is
 still the target and nothing here changes a layout: the same landscape screens, the same
@@ -308,15 +308,26 @@ something the game binds. Development Build is on and Script Debugging is off â€
 flags and only the first is wanted, since the second opens a managed debugger port and makes the
 player wait on it.
 
-**Landscape holds at 16:9 and at 16:10, with one clipped label at 16:10.** Verified on the built
-exe at 1600x900, 1440x900 and 1680x1050. At both 16:10 sizes the `PROVING` node's label runs off
-the right edge and reads "PROVIN". The cause is not a sizing bug in the node: `_map` carries an
-`AspectRatioFitter` in `EnvelopeParent` mode set to the painting's authored aspect, so at any
-aspect narrower than the painting the map is WIDER than the screen, and a node anchored in map
-space at `ProvingX` 0.915 is therefore 91.5% across something that overhangs the window. Every
-other node clears. This is pre-existing and reaches Android at any narrow-landscape device shape;
-it is recorded here rather than fixed, because clamping map nodes to the visible rect is a change
-to the Hub's layout system and belongs on its own branch with its own capture.
+**Landscape holds at 16:9 and at 16:10, and the label that used to clip no longer does.**
+`_map` carries an `AspectRatioFitter` in `EnvelopeParent` mode set to the painting's authored
+aspect (1536x828, so 1.855). Envelope means COVER, so at any window narrower than 1.855 - which is
+every shape this game targets, 16:9 included - the map is WIDER than the window and overhangs it
+on both sides. Markers are anchored by fraction of the MAP, deliberately, because anchoring them
+to the SCREEN would slide every structure off its building as the aspect changed; so `PROVING` at
+`ProvingX` 0.915 is 91.5% across something that overhangs, and at 16:10 it sat past the right edge
+and read "PROVIN". 16:9 had simply kept enough slack that it still cleared.
+
+Measured in logical units, with a 150-wide plate: at 1920x1080 the canvas is 1920 wide, the map
+2003, and the plate's right edge 1866 - clear. At 1920x1200 the canvas is 1821 wide, the map 2112,
+and the right edge 1862 - over by 41. 2560x1600 is the same aspect and so the same logical canvas
+and the same overhang, which is why the two 16:10 sizes fail and pass together.
+
+`HubMarkerClamp` slides a marker back inside by the smallest amount that fits and shifts its tail
+back by the same amount, so the plate moves and the building it points at does not. A marker that
+already fits is not touched. Captured at all three sizes - `Tools/Screenshots/hub_clamp1080.png`,
+`hub_clamp1200.png`, `hub_clamp1600.png` - and checked again on the built exe at 1920x1080 and at
+1440x900, which is the same 16:10 logical canvas as 1920x1200 and 2560x1600 because the scaler's
+0.5 match makes the logical canvas a function of aspect alone.
 
 **The save cannot be shared between two people, and that was checked rather than assumed.**
 `Application.persistentDataPath` resolves to
@@ -330,7 +341,7 @@ share a save is both attaching the same email in the Account screen, which is th
 as designed.
 
 **Presentation and build configuration only.** No content file and no `CombatSimulation` change;
-the harness is 35 failures before and after, the same 35.
+the harness is 37 failures before and after, the same 37.
 
 ### Landed: the Dev Arena
 
@@ -416,9 +427,12 @@ still does something â€” it strips the scene if somebody added it to the setting
 is no longer described as the thing that delivers the arena. **None of this was ever the
 guarantee.** The guarantee is the compiler gate on every file in `Assets/Scripts/Dev`, which no
 build script can bypass and which is why a hook that silently did nothing for this long cost
-nothing but a confused evening. The Android path in `EmberfallBuild.Run` still names only
-`Main.unity`, so a development APK has never carried the arena either; that is now a known gap
-rather than a belief that it works.
+nothing but a confused evening. The Android path carried the same gap - `EmberfallBuild.Run` named
+only `Main.unity`, so a development APK never held the arena either. Both paths now take their list
+from one `EmberfallBuild.ScenesFor(bool development)`, so the rule is stated once: a development
+build gets the arena, a release build cannot get it whatever sits in `EditorBuildSettings`, and the
+gate reads the caller's own build flag so the list and the `BuildOptions.Development` bit beside it
+cannot disagree.
 
 **The chrome is anchored, not placed.** The first version invented its own reference resolution
 (1600x900) and positioned every control by measuring from the screen origin, which is why it did
