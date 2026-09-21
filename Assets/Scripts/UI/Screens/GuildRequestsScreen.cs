@@ -65,6 +65,14 @@ namespace Emberfall.UI.Screens
             Reload();
         }
 
+        /// <summary>Clears the in-flight flag, for the reason GuildScreen.OnHide gives at length:
+        /// deactivating the screen kills the coroutine that would have cleared it, and a latch
+        /// nothing can release turns the next visit into a screen that never loads.</summary>
+        public override void OnHide()
+        {
+            _loading = false;
+        }
+
         private void Reload()
         {
             if (App.Cloud == null || !App.Cloud.SignedIn)

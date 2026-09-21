@@ -556,10 +556,21 @@ namespace Emberfall.UI.Screens
         /// emblem per entry with its label beneath, sized to sit flush with the squad portraits
         /// across the bottom of the screen.
         ///
-        /// Guild and Splinters have no screen in this build and are marked SOON. Events DOES have a
-        /// real screen (ScreenId.Events) and is not in the mockup's dock - it is added here anyway,
-        /// because the layout this replaces was that screen's only entry point and dropping it
-        /// would have quietly made a working feature unreachable. Flagged rather than done silently.
+        /// Splinters has no screen in this build and is marked SOON. Events DOES have a real screen
+        /// (ScreenId.Events) and is not in the mockup's dock - it is added here anyway, because the
+        /// layout this replaces was that screen's only entry point and dropping it would have
+        /// quietly made a working feature unreachable. Flagged rather than done silently.
+        ///
+        /// GUILD WAS SOON AND IS NOT ANY MORE. It stayed dimmed and tagged for one build after the
+        /// screens existed, which put a badge reading "GUILD - SOON" directly beneath a working
+        /// GUILD button, and a Hub that contradicts itself in two places a thumb apart is worse
+        /// than one with no badge at all. It now opens the same screen the button does.
+        ///
+        /// Two doors to one screen, deliberately, rather than removing the cell. They speak
+        /// different languages - the top-left row is chrome about who you are, the dock is the
+        /// player's own menus - and a guild honestly belongs in both. Dropping the cell instead
+        /// would narrow BadgeRowWidth, and this file's own notes treat that width as load-bearing
+        /// against the squad strip; re-measuring that clearance was not what this change was for.
         /// </summary>
         private void BuildBadgeDock()
         {
@@ -567,7 +578,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(dock, UITheme.ScreenPadding, BottomSafeMargin, BadgeRowWidth, BadgeCellHeight, new Vector2(0f, 0f));
             UIBuilder.HStack(dock, BadgeGap, new RectOffset(0, 0, 0, 0), TextAnchor.LowerLeft);
 
-            AddBadge(dock, "GUILD", 2, UITheme.ChromeBrass, null);
+            AddBadge(dock, "GUILD", 2, UITheme.ChromeBrass, OpenGuild);
             AddBadge(dock, "BAG", 7, UITheme.ChromeBrass, OpenInventory);
             AddBadge(dock, "SPLINTERS", 12, UITheme.CinderGlass, null);
             AddBadge(dock, "RELICS", 6, UITheme.RelicGradeColor(RelicGrade.Legendary), OpenRelicShop);

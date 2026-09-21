@@ -16,6 +16,8 @@ friendship with them.
     python Tools/accounts-live-drive.py befriend --token-file <f> --code ABC234
     python Tools/accounts-live-drive.py publish  --token-file <f> --hero kael_the_unyielding --level 30
     python Tools/accounts-live-drive.py conflict --email <a@b> --password <p>
+    python Tools/accounts-live-drive.py guild-ask --token-file <f> --code ABC234
+    python Tools/accounts-live-drive.py guild-say --token-file <f> --body "hello from the other side"
 
 CREDENTIALS. Reads SUPABASE_URL and SUPABASE_ANON_KEY when they are set, and otherwise reads
 Assets/Resources/Config/supabase.json - the same gitignored file the game reads, so a machine
@@ -272,6 +274,56 @@ def cmd_conflict(args):
     print("returns AskPlayer and the chooser opens. Tap Sync Now.")
 
 
+def cmd_guild_ask(args):
+    """Asks to join a guild by code, as the throwaway account.
+
+    THE POINT OF THIS IS THAT IT IS NOT THE GAME. The editor session watching a request arrive
+    has to be watching a request some OTHER process made, or the whole thing is one client
+    talking to itself and the roster, the accept button and the chat all prove nothing about two
+    players. A python script that has never seen Unity is the strongest available version of
+    "somebody else".
+
+    Answers with the one word guild_request_send answers with: an open guild admits on arrival
+    and says 'joined', a closed one queues and says 'requested'.
+    """
+    session = refresh(read_token_file(args.token_file))
+
+    status, response = request("POST", "/rest/v1/rpc/guild_request_send", token=session["token"],
+                               body={"p_code": args.code})
+    if status != 200:
+        die("guild_request_send refused", str(status) + " " + str(response))
+    print("guild_request_send -> " + str(response) + "  (code " + args.code.upper() + ")")
+
+    status, rows = request("GET", "/rest/v1/guild_members?select=guild_id,role&user_id=eq."
+                           + session["id"], token=session["token"])
+    if status == 200 and rows:
+        print("  now a " + rows[0]["role"] + " of " + rows[0]["guild_id"])
+    else:
+        print("  not a member yet - a leader or an officer has to accept")
+    write_token_file(args.token_file, session)
+
+
+def cmd_guild_say(args):
+    """Posts one chat message as the throwaway account.
+
+    Goes through guild_post_message like every other client, so the two-second rate limit applies
+    to this exactly as it applies to the game - which is the point: a message the editor session
+    sees arrive was subject to the same rule the editor's own messages are.
+    """
+    session = refresh(read_token_file(args.token_file))
+
+    status, response = request("POST", "/rest/v1/rpc/guild_post_message", token=session["token"],
+                               body={"p_body": args.body})
+    if status == 429:
+        print("refused: one message every two seconds. Wait and run it again.")
+        write_token_file(args.token_file, session)
+        return
+    if status != 200:
+        die("guild_post_message refused", str(status) + " " + str(response))
+    print("said: " + str(response.get("body") if isinstance(response, dict) else response))
+    write_token_file(args.token_file, session)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -304,6 +356,16 @@ def main():
     conflict.add_argument("--stages", type=int, default=3)
     conflict.add_argument("--levels", type=int, default=2)
     conflict.set_defaults(func=cmd_conflict)
+
+    guild_ask = subparsers.add_parser("guild-ask", help="ask to join a guild by code")
+    guild_ask.add_argument("--token-file", required=True)
+    guild_ask.add_argument("--code", required=True)
+    guild_ask.set_defaults(func=cmd_guild_ask)
+
+    guild_say = subparsers.add_parser("guild-say", help="post one guild chat message")
+    guild_say.add_argument("--token-file", required=True)
+    guild_say.add_argument("--body", required=True)
+    guild_say.set_defaults(func=cmd_guild_say)
 
     args = parser.parse_args()
     load_credentials()

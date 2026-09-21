@@ -150,7 +150,7 @@ namespace Emberfall.Game.Cloud
                                 + "profiles!guild_members_user_id_fkey(display_name,friend_code)";
             yield return _client.Send("GET",
                 "rest/v1/guild_members?" + select + "&guild_id=eq." + Current.Id
-                + "&order=role.desc,joined_at.asc", null,
+                + "&order=joined_at.asc", null,
                 delegate (SupabaseResponse response)
                 {
                     if (!response.Ok) { error = response.Error; return; }
@@ -160,6 +160,18 @@ namespace Emberfall.Game.Cloud
                 });
 
             if (members == null) { if (done != null) done(null, error); yield break; }
+
+            // RANK FIRST, THEN SENIORITY - and the rank sort is HERE rather than in the query for
+            // a reason a capture caught: `order=role.desc` sorts the COLUMN, which is text, and
+            // 'officer' > 'member' > 'leader' alphabetically. The first roster drawn put a member
+            // above the leader. The GuildRole enum already encodes the rank as its ordinal, which
+            // is the only place in this project that does, so it is what sorts. The query keeps
+            // joined_at ascending so the sort below has a stable order to work from.
+            members.Sort(delegate (GuildMemberEntry a, GuildMemberEntry b)
+            {
+                if (a.Role != b.Role) return ((int)b.Role).CompareTo((int)a.Role);
+                return a.JoinedUnix.CompareTo(b.JoinedUnix);
+            });
             Current.MemberCount = members.Count;
 
             if (members.Count > 0)

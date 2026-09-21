@@ -195,6 +195,11 @@ namespace Emberfall.UI.Screens
             }
             _drawnFingerprint = fingerprint;
 
+            // Oldest first, top to bottom, because the VStack lays children out in sibling order
+            // and the log is already sorted ascending. NOTHING in AddRow may reorder a sibling:
+            // the first version added the row's background with SetAsFirstSibling, and since that
+            // Image lives on the ROW rather than on a child, every row it added jumped to the top
+            // and the whole conversation rendered backwards.
             ClearRows();
             long now = TimeUtil.NowUnix();
             for (int i = 0; i < _log.Count; i++) AddRow(_log.Messages[i], now);
@@ -240,8 +245,12 @@ namespace Emberfall.UI.Screens
         {
             RectTransform row = UIBuilder.Node("Line", _listHost);
 
-            Text body = UIBuilder.WrappedLabel("Body", row, entry.Body, UITheme.FontSmall,
-                                               UITheme.TextPrimary, TextAnchor.UpperLeft);
+            Image bg = row.gameObject.AddComponent<Image>();
+            bg.sprite = UISkin.Panel(14);
+            bg.type = Image.Type.Sliced;
+            bg.color = entry.IsMine
+                ? UITheme.WithAlpha(UITheme.PanelRaised, 0.95f) : UITheme.PanelSunken;
+
             Text who = UIBuilder.Label("Who", row,
                                        (string.IsNullOrEmpty(entry.DisplayName)
                                             ? "Wayfarer" : entry.DisplayName).ToUpperInvariant()
@@ -249,24 +258,22 @@ namespace Emberfall.UI.Screens
                                        UITheme.FontTiny - 4,
                                        entry.IsMine ? UITheme.Gold : UITheme.TextDim,
                                        TextAnchor.UpperLeft);
-
-            // Two lines of body at FontSmall is 64; the author line is 24 and the padding 20.
-            // A message longer than two lines is rare at 200 characters across 1100 units, and the
-            // label wraps rather than clipping, so the cell grows with the layout rather than
-            // cutting text off.
-            float height = 20f + 24f + Mathf.Max(30f, body.preferredHeight);
-            UIBuilder.Sized(row, CardWidth, height);
-
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(14);
-            bg.type = Image.Type.Sliced;
-            bg.color = entry.IsMine
-                ? UITheme.WithAlpha(UITheme.PanelRaised, 0.95f) : UITheme.PanelSunken;
-            bg.rectTransform.SetAsFirstSibling();
-
             UIBuilder.Box(who.rectTransform, 22f, -10f, CardWidth - 60f, 24f, new Vector2(0f, 1f));
-            UIBuilder.Box(body.rectTransform, 22f, -36f, CardWidth - 60f, height - 46f,
-                          new Vector2(0f, 1f));
+
+            Text body = UIBuilder.WrappedLabel("Body", row, entry.Body, UITheme.FontSmall,
+                                               UITheme.TextPrimary, TextAnchor.UpperLeft);
+
+            // THE BOX COMES BEFORE THE MEASUREMENT, and a capture is what taught that. A wrapping
+            // Text computes preferredHeight against the width its RectTransform currently has, and
+            // a label read before it has been placed is measured against whatever Node's default
+            // rect happened to be - which produced 230-unit cells for a one-line message. Placing
+            // it first makes the number a real answer about a 1120-wide label.
+            UIBuilder.Box(body.rectTransform, 22f, -36f, CardWidth - 60f, 30f, new Vector2(0f, 1f));
+            float text = Mathf.Max(30f, body.preferredHeight);
+            float height = 20f + 24f + text;
+
+            UIBuilder.Sized(row, CardWidth, height);
+            UIBuilder.Box(body.rectTransform, 22f, -36f, CardWidth - 60f, text, new Vector2(0f, 1f));
         }
 
         private static string WhenLabel(long unix, long now)

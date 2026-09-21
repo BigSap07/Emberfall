@@ -102,6 +102,11 @@ namespace Emberfall.UI.Screens
 
             BuildNoGuildFace(_content);
             BuildGuildFace(_content);
+
+            // Both hidden until Render picks one. A screen that has not decided yet must show
+            // neither face rather than both, which is what a half-built state used to look like.
+            _noGuildHost.gameObject.SetActive(false);
+            _guildHost.gameObject.SetActive(false);
         }
 
         // ------------------------------------------------------------------ no guild
@@ -217,9 +222,14 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_leaveButton.Root, -30f, -162f, 260f, 66f, new Vector2(1f, 1f));
             _leaveButton.OnClick(OnLeave);
 
-            BuildSettingsCard(_guildHost);
-
-            // ---- roster
+            // ---- roster, ABOVE the settings card and not below it.
+            //
+            // The first build put SETTINGS second and a capture showed what that costs: with the
+            // identity card at 268 and the settings card at 292, a LEADER's roster started below
+            // the fold and the screen opened on two cards of chrome. A member saw the roster and
+            // a leader did not, which is backwards - the roster is what everybody opens this for,
+            // and the settings are three buttons a leader touches twice in the guild's life. So
+            // the rare card goes last, where scrolling to it is the right price.
             _transferBanner = UIBuilder.Label("TransferBanner", _guildHost, "", UITheme.FontSmall,
                                               UITheme.Warning, TextAnchor.MiddleLeft);
             UIBuilder.Sized(_transferBanner.rectTransform, CardWidth, 0f);
@@ -233,6 +243,8 @@ namespace Emberfall.UI.Screens
             _rosterNote = UIBuilder.WrappedLabel("RosterNote", _guildHost, "", UITheme.FontTiny,
                                                  UITheme.TextMuted, TextAnchor.UpperCenter);
             UIBuilder.Sized(_rosterNote.rectTransform, CardWidth - 160f, 60f);
+
+            BuildSettingsCard(_guildHost);
         }
 
         private void BuildSettingsCard(RectTransform parent)
@@ -280,9 +292,21 @@ namespace Emberfall.UI.Screens
             Reload();
         }
 
+        /// <summary>
+        /// Disarms the transfer mode, and FORGETS THAT A LOAD WAS RUNNING.
+        ///
+        /// The second half is not tidiness. Deactivating a screen's GameObject kills the
+        /// coroutines running on it, so a player who opens the chat while the roster is still
+        /// arriving leaves `_loading` true with nothing left to clear it - and the next OnShow
+        /// sees it, returns early, and the screen never loads again for the rest of the session.
+        /// It presented as a guild home with an empty roster and both faces drawn at once, which
+        /// is what "Render never ran" looks like. Cleared here because here is where the
+        /// coroutine actually died.
+        /// </summary>
         public override void OnHide()
         {
             _transferMode = false;
+            _loading = false;
         }
 
         private void Reload()
@@ -535,9 +559,12 @@ namespace Emberfall.UI.Screens
             long now = TimeUtil.NowUnix();
             for (int i = 0; i < _roster.Count; i++) AddMemberRow(_roster[i], mine, now);
 
+            // Says THEIR TEAM because that is what the button says. The first draft read "tap a
+            // guildmate's line", which is not what opens anything here and is the kind of
+            // instruction a player follows once, fails at, and stops trusting.
             _rosterNote.text = _roster.Count <= 1
                 ? "Nobody else yet. Give somebody the code above and they can ask to join."
-                : "Tap a guildmate's line to see the team they field. A duel there is friendly - "
+                : "THEIR TEAM shows the five heroes a guildmate fields. A duel there is friendly - "
                   + "nothing is at stake, and they are not told.";
         }
 
@@ -767,11 +794,24 @@ namespace Emberfall.UI.Screens
             Reload();
         }
 
+        /// <summary>
+        /// Arms the hand-over mode, and scrolls back to the roster.
+        ///
+        /// The scroll is not a flourish. HAND OVER lives in the settings card at the bottom of the
+        /// screen and the banner it raises sits above the roster, so arming it without moving the
+        /// view leaves a player looking at the button they just pressed and no sign anything
+        /// happened. This is the one action here whose feedback is entirely somewhere else.
+        /// </summary>
         private void OnArmTransfer()
         {
             App.Audio.Tap();
             _transferMode = true;
             Render();
+            if (_scroll != null)
+            {
+                Canvas.ForceUpdateCanvases();
+                _scroll.verticalNormalizedPosition = 1f;
+            }
         }
 
         private void OnCancelTransfer()
