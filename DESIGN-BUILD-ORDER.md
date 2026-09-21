@@ -21,7 +21,7 @@ the standing rule of the authoring passes and it is why the roster authored clea
 description could not be said, the pass built the thing that says it and recorded the measurement.
 Nothing in the thirty was reworded to avoid an engine change.
 
-### `main`'s harness is RED on 36 checks, and 34 of them are one kind of red
+### The harness is RED on 35 checks, and 34 of them are one kind of red
 
 **34 are dormancy tripwires that content has since adopted, and they are kept red on purpose.**
 Each was written the same way and for the same reason: an engine pass that could not move a
@@ -36,20 +36,24 @@ the *only* user, so they still go red if a second kit adopts the feature without
 That conversion is the pattern to follow for the rest, one at a time, when a feature's adoption is
 deliberate and its fingerprint consequences have been stated.
 
-**A 35th is the real one: the CEIL band check.** First miss is `1-12` at CEIL 90.5% against the
-finale band [55%, 72%]. Removing the six engine-owned aspect rules moved every difficulty number
-in the game, and the retune was deliberately deferred rather than smeared across the change that
-caused it. **It closes at a single retune, and its stated precondition is now met.**
+**The 35th used to be the CEIL band check, and it is GREEN now.** It failed on `1-12` at CEIL
+90.5% against the finale band [55%, 72%], with twenty of twenty-four stages reading 97% to 100%
+behind it. Task 13's retune was re-run against live code on branch `balance/retune` and closed it:
+every ordinary stage now sits inside [78%, 92%] and both finales inside [55%, 72%], by raising
+`ceilingLevel` per stage. See task 13's own entry for the table and the five `recommendedPower`
+derivations that went with it. That is why the count below is 35 rather than 36.
 
-**The 36th is a coverage note, not a tripwire and not a fault:** *"29 of 90 talents are EXECUTED
+**The 35th is a coverage note, not a tripwire and not a fault:** *"29 of 90 talents are EXECUTED
 but never observed doing anything here — each waits on something this arena does not provide."*
 The talent sweep runs every talent and fingerprints the result; twenty-nine of them need a Taunt
 enemy, a particular aspect matchup, a second copy of their own hero or an ally the fixed arena
 does not field, so they execute without changing anything measurable. It is red because the sweep
 refuses to call "nothing happened" a pass.
 
-**A 37th failure would be a regression.** If the count goes above 36, diagnose it — do not add it
-to this list.
+**A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
+to this list. The one caveat that is not a regression: these 34 are dormancy tripwires, so
+authoring the 64 lower-star kits will trip more of them as those kits adopt features. A new red
+that NAMES its adopters belongs on this list; anything else does not.
 
 ### In flight: placeholder mannequins for undrawn heroes, on branch `feat/placeholder-dummy`
 
@@ -341,14 +345,15 @@ Kiva's basic), which is the importer's trailing-transparent-frame trim doing its
 
 ### Next
 
-1. **The retune.** Its precondition was "after the roster's abilities are authored", and the part
-   that the measurement actually fields is done: all three starters (`kael_the_unyielding`,
-   `kiva_the_forsaken_oath`, `isara_the_second_chance`) are authored 5-stars, so the stage sweep
-   is no longer measuring placeholder kits. **One judgement is owed before it starts, and it is a
-   human's:** the 5-body column of the CEIL table fields heroes beyond the starters, and 64 of
-   those are still placeholders. Retuning now tunes chapter difficulty against a real starting
-   trio and a partly-stubbed bench. That may be the right trade — the bench is not what a new
-   player fields — but it should be chosen, not discovered afterwards.
+1. **The retune: RUN, on branch `balance/retune`.** All 24 stages are inside their CEIL bands and
+   the band check is green; the table and every judgement call are in task 13's entry. The
+   judgement this item used to say was owed WAS taken rather than discovered: the pass ran against
+   a partly-stubbed bench, because two of the yardstick's five bodies (`adric_the_blank_map`,
+   3-star, and `maera_the_tidewatcher`, 4-star) are still placeholder kits. **What remains is the
+   re-pass after item 2.** Authoring the 64 lower-star kits strengthens those two bodies and will
+   shift the whole curve upward, so the bands will need re-measuring then. The pinned line's
+   composition is recorded in task 13 precisely so that re-pass can be measured against this one;
+   do not change it.
 2. **The 64 placeholder kits**: 26 four-star, 18 three-star, 12 two-star, 8 one-star. Designs are
    written and waiting in `import/Heroes.json`. Four- and three-star entries carry full skill
    descriptions; two- and one-star entries carry empty active descriptions, which is the star
@@ -3126,6 +3131,117 @@ confirmed green on CI on `main` after the merge.
     at 200 samples; the `tidecaller_wretch` in 2-5's roster collapses the floor-ceil gap and
     prevents a clean hit without replacing the unit, which would change the stage's authored
     identity.
+
+    **That table did not survive contact with live code, and the pass was re-run. 2026-09-21.**
+    Re-measured before changing anything, the GEARED CURVE read **97% to 100% CEIL on twenty of
+    twenty-four stages** and about 90% on both finales - not the curve the table above describes.
+    The table is left in place because it is the record of what that pass measured, but it must
+    not be read as the state of the content: the numbers below are.
+
+    **Why it drifted is the same defect class this entry already documents twice.** The roster
+    pass derived `recommendedPower` per stage, and the geared instrument was re-pointed at the
+    ceiling in the same period, so the derivation and the column that reads it were calibrated
+    against each other rather than against the content. The pair agreed and the stages did not
+    move. Nothing here blames the earlier pass for tuning badly - it tuned against a reading that
+    has since changed underneath it, which is what "the instrument was broken" meant the first
+    time.
+
+    **`ceilingLevel` is the lever, and the reason is arithmetic rather than taste.**
+    `CampaignWaveGenerator.LevelDelta` is `LevelForBattle(w, b) - FloorLevel`, so the authored
+    roster levels ARE the wave 1 battle 1 composition and the whole roster shifts by
+    `ceilingLevel - floorLevel` at the ceiling. Raising `ceilingLevel` therefore moves the CEIL
+    reading and CANNOT move the FLOOR reading. Two consequences were used deliberately: FLOOR
+    stayed at or above 99.5% on all 24 stages without being tuned at all, and the 72 stage
+    fingerprints - which `BattleFingerprint` takes at `Opening(stage)`, wave 1 battle 1 - cannot
+    move either. `floorLevel` was never touched, and it is not a second lever: raising it by one
+    with the ceiling fixed only shrinks the delta by one, which is lowering the ceiling under
+    another name.
+
+    **Final table, 200 samples, measured against live code 2026-09-21.** CEIL is the tuned column.
+
+    | stage | recPwr | ceiling lv | FLOOR | CEIL |
+    |-------|--------|------------|-------|------|
+    | 1-1 to 1-5 | 3950 to 6100 | untouched | 100% | 100% |
+    | 1-6   |  7430 | 24 -> 27 | 100%  | 89%   |
+    | 1-7   |  7475 | 29 -> 33 | 100%  | 82.5% |
+    | 1-8   |  7801 | 25 -> 27 | 100%  | 87%   |
+    | 1-9   |  9620 | 29 -> 34 | 100%  | 87.5% |
+    | 1-10  |  9711 | 27 -> 33 | 100%  | 80.5% |
+    | 1-11  | 10262 | 28 -> 32 | 100%  | 82%   |
+    | 1-12  | 10936 | 24 -> 26 | 99.5% | 62.5% |
+    | 2-1   |  8084 | 42 -> 52 | 100%  | 91%   |
+    | 2-2   |  9003 | 38 -> 40 | 100%  | 79.5% |
+    | 2-3   |  9830 | 42 -> 44 | 100%  | 83%   |
+    | 2-4   | 11647 | 54 -> 58 | 100%  | 86.5% |
+    | 2-5   | 13278 | 56 -> 60 | 100%  | 81.5% |
+    | 2-6   | 15653 | 54 -> 59 | 100%  | 88%   |
+    | 2-7   | 15993 | 58 -> 62 | 100%  | 86.5% |
+    | 2-8   | 17600 | 57 -> 59 | 100%  | 82%   |
+    | 2-9   | 19889 | 62 -> 67 | 100%  | 81%   |
+    | 2-10  | 21900 | 72 -> 74 | 99.5% | 80.5% |
+    | 2-11  | 23749 | 78 -> 81 | 100%  | 82%   |
+    | 2-12  | 26200 | 54 -> 55 | 100%  | 68.5% |
+
+    Every ordinary stage sits inside [78%, 92%] and both finales inside [55%, 72%], so
+    `CheckArmoredCurveDelta`'s band assertion passes. **Zero BLOCKs on either instrument** -
+    `CheckPinnedFiveBodyCurve`'s "no stage blocks at recommendedPower" is still green.
+
+    **1-1 through 1-5 are exempt by construction, and this pass measured that rather than
+    inheriting the claim.** `BuildPinnedLineAt` levels UP from level 1 and cannot level down, so a
+    stage whose `recommendedPower` is below the geared line's level-1 floor gets a line it cannot
+    shrink. Probed by setting every stage's `recommendedPower` to 100 and reading the resulting
+    team power: the geared floor is **7000 to 7400** on every stage. 1-1 to 1-5 name 3950 to 6100
+    and are therefore measured 15% to 75% OVER their own target, so the 100% they read is the
+    instrument's floor rather than the content's difficulty. The band check skips them for the
+    same reason - it tests only stages reading under 99.5%. Tuning them into band would mean
+    authoring the opening of the game against a line 75% stronger than the one it names.
+
+    **Five `recommendedPower` moves, and each is the derivation rather than a difficulty edit.**
+    `campaign.json`'s own header defines it as the power at which a geared line clears the ceiling
+    battle about 85% of the time, or 65% for a finale. Where a stage straddled the band on integer
+    levels - one level being worth 15 to 25 points at these power levels - the ceiling was set to
+    the harder side and `recommendedPower` re-derived until the reading landed. 1-9 9531 to 9620,
+    because ceiling 33 reads 93% and ceiling 34 reads 77% and neither is in band. 2-8 17832 to
+    17600 and 2-10 22140 to 21900, the same straddle in the other direction. 2-12 26490 to 26200,
+    which also nudges the late-chapter power target DOWN, the direction this entry already flags
+    as a problem. 2-3 is the one `recommendedPower` could not fix, below.
+
+    **One roster edit, and it is the only reason any fingerprint moved.** `recommendedPower` is
+    QUANTISED by hero level steps: on 2-3, targets of 9700 and 9770 both produce the identical
+    team at 9775 power, which reads 76%, while the next step up at 9905 reads 92%. Nothing between
+    them exists, so the lever has no resolution on that stage. The finest lever that does is a
+    single unit's authored level - `riptide_channeler` 34 to 35, which is 2-3's AoE carrier and
+    the thing the chapter grades on. That lands 2-3 at 83% with real margin instead of sitting
+    exactly on the band boundary. It is the only authored-roster change in the pass, and **3 of
+    the 72 stage fingerprints moved, all three of them 2-3's.** The other 69 are byte-identical.
+
+    **What did not move.** The 150 hero-sweep and 450 talent-sweep fingerprints are unchanged - no
+    hero kit, hero stat, talent, relic, economy field or line of `CombatSimulation` was touched.
+    Enemy counts are still task 10's ramp, and no enemy kit or stat in `enemies.json` was edited.
+
+    **The economy walk is unchanged, which is the result worth stating plainly.** It still clears
+    24 of 24 stages in **96 sittings over 48.89 days**, against 48.88 days before - the campaign
+    did not get longer. It finishes at rank 14 with a hero cap of Lv64 against rank 15 and Lv68,
+    and 3595 total battles against 3597, which is the simulated player meeting the same ladder
+    with slightly different loss counts. `CheckEconomyRespondsToIncome` still passes.
+
+    **The yardstick, recorded so the re-pass after the lower-star kits land can be measured
+    against this one.** The pinned five-body line is `kael_the_unyielding`,
+    `kiva_the_forsaken_oath`, `isara_the_second_chance`, `adric_the_blank_map` and
+    `maera_the_tidewatcher`, levelled per stage to that stage's `recommendedPower` and wearing
+    instrument armor rolled off the stage's depth. **Adric is a 3-star and Maera a 4-star, and
+    both are still placeholder kits** - a one-effect basic, plus for Adric a one-effect active,
+    and no passive on either. Two of the five bodies in the yardstick are therefore stubs.
+    Authoring the 64 lower-star kits will make those two bodies stronger and shift this whole
+    curve upward, so every number in the table above is due a short re-pass at that point. The
+    composition was deliberately not changed here: a yardstick that moves between passes measures
+    nothing.
+
+    **The unarmored `CheckPinnedFiveBodyCurve` column fell a long way, and that is reported rather
+    than tuned.** It reads 11% to 80% across chapter 1 now, against 89% to 100% before. It is the
+    harsher of the two lines by construction - the same power target with none of it spent on gear
+    - and the harness says in its own output that it is not the standard. It still blocks on
+    nothing, which is the only assertion it carries.
 
     **The economy column was investigated and deliberately not touched here. 2026-09-09.**
     *Superseded by the economy re-model below, which landed alongside this work. Kept because it
