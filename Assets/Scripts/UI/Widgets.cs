@@ -81,14 +81,16 @@ namespace Emberfall.UI
         /// someone has to remember, and means adding or removing a portrait is a matter of adding
         /// or removing a file.
         ///
-        /// THIS TIER IS CURRENTLY EMPTY. The five heroes who had files here were the only ones
-        /// that ever did, and they were deleted when the same five shipped as framed badges under
-        /// Sprites/Portraits - FramedPortrait is checked first, so those files could no longer be
-        /// reached. The code stays because a frameless delivery is still a valid way to hand over
-        /// a portrait; it is the tier, not the convention, that is unused.
+        /// BOTH PORTRAIT TIERS ARE CURRENTLY EMPTY, and Sprites/Portraits is an empty folder. The
+        /// five heroes who had frameless files here lost them when the same five shipped as framed
+        /// badges, and then the badges went too, along with the five heroes themselves. No unit in
+        /// shipped content has portrait art of either kind today, which is why every hero takes
+        /// the initial branch in Portrait() and every enemy takes the sigil.
         ///
-        /// Tools/make_portraits.py still writes here. Re-running it would regenerate those five
-        /// files and nothing would display them, because the framed badges shadow this path.
+        /// The code stays because both are still valid ways to hand a portrait over, and the day
+        /// one lands the hero picks it up with no edit here. Tools/make_portraits.py still writes
+        /// to this tier; anything it regenerates would display, since FramedPortrait now finds
+        /// nothing to shadow it with.
         /// </summary>
         private static Sprite PortraitArt(string unitId)
         {
@@ -202,7 +204,7 @@ namespace Emberfall.UI
                 Image face = UIBuilder.Img("Portrait", root, art, Color.white);
                 UIBuilder.FillParent(face.rectTransform, size * 0.1465f);
             }
-            else if (def.Visual.SpritePending)
+            else if (def is HeroDef && !HasPortraitArt(def.Id))
             {
                 PlaceholderFace(root, def, size);
             }
@@ -233,20 +235,34 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// THE PORTRAIT OF A HERO WHOSE ART IS NOT DRAWN YET: the hero's initial, in the same
+        /// THE PORTRAIT OF A HERO WHO HAS NO PORTRAIT ART: the hero's initial, in the same
         /// lifted aspect colour the battlefield mannequin is tinted with.
         ///
         /// Why an initial rather than the sigil every other undrawn unit gets. The sigil is one of
-        /// a handful of abstract emblems shared across the roster, so sixty-three undrawn heroes
-        /// resolve to a few repeated glyphs and a dozen collection cells look like the same hero
-        /// listed twice. An initial is not identity either, but it is DIFFERENT per hero, which is
-        /// the entire job a portrait does in a grid. It also matches what the player sees in
-        /// battle, where the same hero stands as a mannequin with its name at its feet.
+        /// a handful of abstract emblems shared across the roster, so undrawn heroes resolve to a
+        /// few repeated glyphs and a dozen collection cells look like the same hero listed twice.
+        /// An initial is not identity either, but it is DIFFERENT per hero, which is the entire
+        /// job a portrait does in a grid. It also matches what the player sees in battle, where an
+        /// undrawn hero stands as a mannequin with its name at its feet.
         ///
-        /// This branch is reached only for a hero explicitly marked pending in content. Enemies
-        /// and any hero that simply has no portrait FILE still take the sigil branch below
-        /// unchanged - portraits have their own delivery schedule and most units will never have
-        /// one, so "no portrait art" must stay the quiet ordinary case it already was.
+        /// THE RULE IS THE PORTRAIT FILE, NOT `spriteStatus`. This branch first read
+        /// Visual.SpritePending, which is a claim about BATTLE art, and the two deliveries are
+        /// independent: the thirty-one heroes who have battle sprites are not marked pending, have
+        /// no portrait either, and so kept falling through to the shared sigil - the exact repeat
+        /// this branch exists to prevent, in the screen where the whole roster is seen at once.
+        /// Asking HasPortraitArt instead asks the question the widget is actually answering, and
+        /// keeps one hero's collection cell from changing the day their battle sheet lands.
+        ///
+        /// ENEMIES ARE EXCLUDED BY TYPE, which is why the test is `def is HeroDef` rather than the
+        /// file check alone. Most enemies will never be drawn and are not meant to be: a Grave
+        /// Moth's emblem is its intended look, not a placeholder, and stamping "G" on it would
+        /// claim a delivery that was never scheduled. Heroes are the roster a player collects and
+        /// tells apart, so they are the ones an initial serves.
+        ///
+        /// A hero who HAS art is unaffected whether owned or locked: the `allowArt` rule that
+        /// sends a locked hero down the abstract branch still lands on the sigil, because this
+        /// test reads the file rather than the branch above it. So a locked hero can still only
+        /// ever look the same as, or plainer than, the owned one beside them.
         ///
         /// No frame, no second ring, nothing else added: it replaces the sigil in place, so a
         /// mixed roster is still one set of badges with one thing swapped inside them.

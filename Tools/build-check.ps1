@@ -79,7 +79,14 @@ $okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "Ember
 #   1. every file under Assets/Scripts/Dev is wrapped in #if UNITY_EDITOR || DEVELOPMENT_BUILD,
 #      so a release player does not contain the classes - the compiler removed them;
 #   2. Assets/Dev/DevArena.unity is not in EditorBuildSettings in the committed state, so no build
-#      picks it up by default;
+#      picks it up by default. How it gets into a DEVELOPMENT player is that
+#      EmberfallBuild.BuildWindows names it in BuildPlayerOptions.scenes, gated on that build being
+#      a Development one. It is NOT DevArenaMenu.BuildHook: that hook amends
+#      EditorBuildSettings.scenes from OnPreprocessBuild, which fires after the pipeline has
+#      already resolved the scene list, so its addition reaches the settings asset and never the
+#      player. Two Windows builds demonstrated it - one naming its scenes and one leaving them to
+#      EditorBuildSettings - and both produced a player holding level0 and no level1. The hook is
+#      kept for its release-side half, which strips the scene if somebody added it by hand;
 #   3. the only shipped file that mentions the arena (MainMenuScreen's DEV button) mentions it
 #      only inside the same guard.
 # ---------------------------------------------------------------------------------------------
