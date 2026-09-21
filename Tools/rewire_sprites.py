@@ -325,9 +325,16 @@ def process_hero(hero_cfg, meta_template):
             # New clip: build from scratch
             anim = {"start": 0, "end": last_real, "fps": fps, "loop": True,
                     "footFraction": foot_frac}
-            if engine_clip not in ("idle",):
-                anim["impactFraction"] = 0.5
-                anim["playbackSpeed"] = 1.30
+            # NO SEEDED CONSTANTS HERE. This used to stamp impactFraction 0.5 and playbackSpeed
+            # 1.30 onto every non-idle clip, and because a seeded number looks exactly like a
+            # measured one once it is in the file, six heroes ran 30% fast against the other 25
+            # for as long as they existed and nobody could see why.
+            #
+            # Speed now comes from ONE place - SpriteAnimClip.DefaultPlaybackSpeed - and a sidecar
+            # only names playbackSpeed when that clip genuinely wants its own. Impact is a
+            # MEASUREMENT, taken from the art by Tools/derive_clip_impact_fractions.py, which this
+            # importer deliberately does not do inline: run it after wiring a delivery, on the
+            # attack clips, the same way the 25-hero delivery got its values.
             sidecar = {
                 "frameWidth": DST_W,
                 "frameHeight": DST_H,

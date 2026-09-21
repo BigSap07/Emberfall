@@ -28,17 +28,34 @@ namespace Emberfall.Battle
         public float ImpactFraction = 0.5f;
 
         /// <summary>
-        /// Playback-speed multiplier for this clip, authored on the sidecar for the same reason
-        /// ImpactFraction is - a presentation-pace decision, not gameplay data. Defaults to 1 (the
-        /// export's own 30fps) for a clip that doesn't set it - idle, which loops at rest and
-        /// isn't expected to feel snappy. 145 frames at 30fps is ~4.8s, far slower than an
-        /// auto-battler's normal pace, so Kael's basic/skill/hit_reaction/death all set this above
-        /// 1 to compress that down. Applied as a straight multiplier on effective fps (see
-        /// SpriteAnimator.Update), so ClipDuration already reports the SCALED duration - everything
-        /// that reads ClipDuration (ImpactFraction sync, the death hold, the pending-tail return)
-        /// sees the sped-up number automatically rather than needing its own copy of this value.
+        /// THE GAME'S CLIP PACE, in one number.
+        ///
+        /// Every clip plays at its sheet's own fps times this. It is a PRESENTATION decision, not
+        /// animation data: the exports are all 30 fps and say nothing about speed, so whatever the
+        /// game plays them at is a choice the game makes. Having one place to make it means the
+        /// whole roster can be quickened or slowed by editing this line, instead of by rewriting a
+        /// number into two hundred sidecars.
+        ///
+        /// 1 means "play the sheet at the rate it was exported at", which is what 25 of the 31
+        /// animated heroes always did. The other six were wired by a later importer that stamped
+        /// 1.30 into each of their 36 clips, so those heroes ran 30% fast against the rest of the
+        /// roster for as long as they have existed - Kael's basic came out at 1.85s where Aeron's
+        /// identical 72-frame clip took 2.40s. Those stamps are gone and the six now read off this.
         /// </summary>
-        public float PlaybackSpeed = 1f;
+        public const float DefaultPlaybackSpeed = 1f;
+
+        /// <summary>
+        /// This clip's own multiplier on effective fps. Defaults to DefaultPlaybackSpeed and is
+        /// overridden only by a sidecar that names `playbackSpeed` explicitly - so a single clip
+        /// that genuinely needs its own pace can still have one, and saying nothing means "the
+        /// game's pace", not "1".
+        ///
+        /// Applied as a straight multiplier on effective fps (see SpriteAnimator.Update), so
+        /// ClipDuration already reports the SCALED duration - everything that reads ClipDuration
+        /// (ImpactFraction sync, the death hold, the pending-tail return) sees the adjusted number
+        /// automatically rather than needing its own copy of this value.
+        /// </summary>
+        public float PlaybackSpeed = DefaultPlaybackSpeed;
 
         /// <summary>
         /// Fraction of the frame height that is empty below the character's feet. -1 means

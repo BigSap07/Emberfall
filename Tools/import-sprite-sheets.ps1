@@ -79,10 +79,11 @@
 # pose keeps the weapon at or below head height - true for Kael, which is why his numbers matched.
 # The measurement is printed, never written into heroes.json; check the idle pose before using it.
 #
-# GUESSED (do not trust): impactFraction and playbackSpeed are not in the export and cannot be
-# derived from it. Kael's were hand-picked (0.5 / 2.75) and his own sidecar says plainly they are
-# starting values "meant to be eyeballed and retuned in Play mode". The seeds below carry the same
-# warning into every sidecar they write.
+# NOT WRITTEN HERE ANY MORE: impactFraction and playbackSpeed are not in the export, and seeding
+# them was the bug. impactFraction is MEASURED off the art afterwards by
+# Tools/derive_clip_impact_fractions.py (peak horizontal extent per frame); speed comes from the
+# game's single default, SpriteAnimClip.DefaultPlaybackSpeed, and a sidecar names it only when one
+# clip genuinely needs its own.
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -271,11 +272,13 @@ foreach ($clip in $wanted.Keys) {
     # idle loops at rest at its authored rate. Everything else is an action beat: these clips run
     # ~2.2s at 1x, well past this game's attack pace, so they are sped up. Seeded, not derived.
     $isIdle = ($clip -eq 'idle')
+    # NO SEEDED CONSTANTS. This used to stamp impactFraction 0.5 and playbackSpeed 1.30 onto every
+    # non-idle clip. A seeded number is indistinguishable from a measured one once it is in the
+    # file, and that is exactly what happened: six heroes ran 30% fast against the other 25 for as
+    # long as they existed. Speed now comes from one place, SpriteAnimClip.DefaultPlaybackSpeed,
+    # and impact is measured from the art afterwards by
+    # Tools/derive_clip_impact_fractions.py.
     $anim = [ordered]@{ start = 0; end = $lastReal; fps = $fps; loop = $true }
-    if (-not $isIdle) {
-        $anim['impactFraction'] = 0.5
-        $anim['playbackSpeed']  = 1.30
-    }
 
     $footFrac = [math]::Round((($FrameHeight - 1 - $bottom) / $FrameHeight), 4)
     $bodyFrac = [math]::Round((($bottom - $top) / $FrameHeight), 4)
@@ -297,7 +300,7 @@ foreach ($clip in $wanted.Keys) {
         $side['correctionNote'] = "end corrected from the exported $($frames - 1) to ${lastReal}: frames above that are fully transparent (verified by alpha), and playing through them flashes the unit invisible before the fallback to idle. Same defect Kael's basic sheet had."
     }
     if (-not $isIdle) {
-        $side['tuningNote'] = "impactFraction and playbackSpeed are NOT in the export and are not derived from anything - they are seeded starting values, exactly as Kael's were. Eyeball them in Play mode and retune."
+        $side['tuningNote'] = "No impactFraction here: it is a measurement, not a seed. Run Tools/derive_clip_impact_fractions.py --write <heroId> after importing to take it off the art. Speed is the game's single default (SpriteAnimClip.DefaultPlaybackSpeed); name playbackSpeed here only if THIS clip needs its own."
     }
 
     [IO.File]::WriteAllText((Join-Path $outDir "${HeroId}_${clip}.json"),
