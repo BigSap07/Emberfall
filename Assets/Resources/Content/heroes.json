@@ -1438,12 +1438,12 @@
       "basic": {
         "id": "branik_faultline_tap",
         "name": "Faultline Tap",
-        "description": "Deals 105% Attack damage and applies Cracked for 2 rounds. Cracked reduces Block by 12%.",
+        "description": "Deals 155% Attack damage and applies Cracked for 2 rounds. Cracked reduces Block by 18%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.05
+            "power": 1.55
           },
           {
             "kind": "ApplyStatus",
@@ -1457,7 +1457,7 @@
             "bypassResist": true,
             "chance": 1,
             "duration": 2,
-            "magnitude": 0.12,
+            "magnitude": 0.18,
             "status": "BlockDown"
           }
         ]
@@ -1466,12 +1466,12 @@
         "id": "branik_demolition_right",
         "name": "Demolition Right",
         "energyCost": 100,
-        "description": "Deals 180% Attack damage to the front enemy. If it is Cracked, removes Cracked and grants Branik a Shield equal to 16% Max HP for 2 rounds.",
+        "description": "Deals 340% Attack damage to the front enemy. If it is Cracked, removes Cracked and grants Branik a Shield equal to 34% Max HP for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.8
+            "power": 3.4
           },
           {
             "kind": "Shield",
@@ -1479,7 +1479,7 @@
             "condition": "HasMyMark",
             "conditionOn": "LastTarget",
             "duration": 2,
-            "selfHpRatio": 0.16
+            "selfHpRatio": 0.34
           },
           {
             "kind": "RemoveStatus",
@@ -1502,7 +1502,7 @@
       "passive1": {
         "id": "branik_salvaged_cover",
         "name": "Salvaged Cover",
-        "description": "The first time each round a Cracked enemy attacks, Branik gains 8% Damage Reduction until round end.",
+        "description": "The first time each round a Cracked enemy attacks, Branik gains 12% Damage Reduction until round end.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -1513,7 +1513,7 @@
             "condition": "HasMyMark",
             "conditionOn": "LastAttacker",
             "duration": 1,
-            "magnitude": 0.08,
+            "magnitude": 0.12,
             "status": "DamageReductionUp"
           }
         ]
@@ -1533,7 +1533,7 @@
               "condition": "HasMyMark",
               "conditionOn": "LastAttacker",
               "duration": 1,
-              "magnitude": 0.08,
+              "magnitude": 0.12,
               "status": "DamageReductionUp"
             }
           ]
@@ -1580,12 +1580,12 @@
       "basic": {
         "id": "demos_notice_of_loss",
         "name": "Notice of Loss",
-        "description": "Deals 105% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% current HP.",
+        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 7% current HP.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.05
+            "power": 1.8
           },
           {
             "kind": "ApplyStatus",
@@ -1599,7 +1599,7 @@
             "bypassResist": true,
             "chance": 1,
             "duration": 2,
-            "magnitude": 0.2,
+            "magnitude": 0.3,
             "status": "HealingReduction"
           }
         ]
@@ -1608,14 +1608,14 @@
         "id": "demos_compounding_sentence",
         "name": "Compounding Sentence",
         "energyCost": 100,
-        "description": "Deals 175% Attack damage to enemies with Arrears and extends Arrears by 1 round.",
+        "description": "Deals 360% Attack damage to enemies with Arrears and extends Arrears by 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
             "condition": "HasMyMark",
             "conditionOn": "Target",
-            "power": 1.75
+            "power": 3.6
           },
           {
             "kind": "ExtendStatus",
@@ -1638,7 +1638,7 @@
       "passive1": {
         "id": "demos_no_appeal",
         "name": "No Appeal",
-        "description": "Enemies with Arrears receive 20% less healing; on defeat, their Arrears moves to the highest-HP enemy.",
+        "description": "Enemies with Arrears receive 30% less healing; on defeat, their Arrears moves to the highest-HP enemy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -1664,18 +1664,18 @@
         {
           "id": "demos_arrears_tick",
           "name": "Notice of Loss",
-          "description": "The Arrears tick: a body carrying it loses 4% of its current HP as its own turn ends.",
+          "description": "The Arrears tick: a body carrying it loses 7% of its current HP as its own turn ends.",
           "trigger": "OnEnemyTurnEnd",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "BroadcastSource",
-              "attackCap": 0.6,
+              "attackCap": 1.05,
               "condition": "HasMyMark",
               "conditionOn": "BroadcastSource",
               "power": 0,
-              "targetCurrentHpRatio": 0.04
+              "targetCurrentHpRatio": 0.07
             }
           ]
         }
@@ -1839,17 +1839,17 @@
       "basic": {
         "id": "orelle_measured_tap",
         "name": "Measured Tap",
-        "description": "Deals 100% Attack damage and heals the lowest-HP ally for 55% Attack.",
+        "description": "Deals 140% Attack damage and heals the lowest-HP ally for 90% Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.4
           },
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.55
+            "power": 0.9
           }
         ]
       },
@@ -1857,12 +1857,12 @@
         "id": "orelle_hard_remedy",
         "name": "Hard Remedy",
         "energyCost": 100,
-        "description": "Deals 155% Attack damage to all enemies, removes one debuff from each ally, and cleansed allies recover 8% missing HP.",
+        "description": "Deals 240% Attack damage to all enemies, removes one debuff from each ally, and cleansed allies recover 15% missing HP.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.55
+            "power": 2.4
           },
           {
             "kind": "Cleanse",
@@ -1874,14 +1874,14 @@
             "target": "AllAllies",
             "condition": "SubjectLostStatusThisFiring",
             "conditionOn": "Target",
-            "targetMissingHpRatio": 0.08
+            "targetMissingHpRatio": 0.15
           }
         ]
       },
       "passive1": {
         "id": "orelle_triage_after_loss",
         "name": "Triage After Loss",
-        "description": "The first time an ally falls below 35% HP, grant them a 12% Max HP Shield for 2 rounds.",
+        "description": "The first time an ally falls below 35% HP, grant them a 22% Max HP Shield for 2 rounds.",
         "trigger": "OnAllyHpBelowThreshold",
         "threshold": 0.35,
         "oncePerBattle": true,
@@ -1890,7 +1890,7 @@
             "kind": "Shield",
             "target": "BroadcastVictim",
             "duration": 2,
-            "targetMaxHpRatio": 0.12
+            "targetMaxHpRatio": 0.22
           }
         ]
       }
@@ -1935,12 +1935,12 @@
       "basic": {
         "id": "tavia_rangefinder_bolt",
         "name": "Rangefinder Bolt",
-        "description": "Deals 115% Attack damage to the highest-Attack enemy and applies Exposed Frequency for 2 rounds. Allied attacks ignore 8% Defense against it.",
+        "description": "Deals 175% Attack damage to the highest-Attack enemy and applies Exposed Frequency for 2 rounds. Allied attacks ignore 14% Defense against it.",
         "effects": [
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 1.15
+            "power": 1.75
           },
           {
             "kind": "ApplyStatus",
@@ -1954,7 +1954,7 @@
             "bypassResist": true,
             "chance": 1,
             "duration": 2,
-            "magnitude": 0.08,
+            "magnitude": 0.14,
             "status": "DefenseDown"
           }
         ]
@@ -1963,12 +1963,12 @@
         "id": "tavia_cut_the_wire",
         "name": "Cut the Wire",
         "energyCost": 100,
-        "description": "Deals 230% Attack damage to an enemy with Exposed Frequency, then transfers its buffs to the lowest-HP enemy for 1 round.",
+        "description": "Deals 370% Attack damage to an enemy with Exposed Frequency, then transfers its buffs to the lowest-HP enemy for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 2.3
+            "power": 3.7
           },
           {
             "kind": "MoveBuffs",
@@ -1982,7 +1982,7 @@
       "passive1": {
         "id": "tavia_dead_channel",
         "name": "Dead Channel",
-        "description": "When an enemy with Exposed Frequency gains a buff, Tavia deals 45% Attack damage to it once per round.",
+        "description": "When an enemy with Exposed Frequency gains a buff, Tavia deals 85% Attack damage to it once per round.",
         "trigger": "OnEnemyBuffGained",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -1992,7 +1992,7 @@
             "target": "BroadcastSubject",
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject",
-            "power": 0.45
+            "power": 0.85
           }
         ]
       }

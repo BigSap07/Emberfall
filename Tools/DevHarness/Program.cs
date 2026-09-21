@@ -21207,6 +21207,15 @@ namespace Emberfall.DevHarness
 
         // ---- the star band: what a rarity is worth, measured -----------------------------------
 
+        /// <summary>The two edges of the band, as a fraction of the role's authored 5-star
+        /// median.</summary>
+        private const float StarBandFloor = 0.45f;
+        private const float StarBandCeiling = 0.85f;
+
+        /// <summary>How many authored 5-stars a role needs before its median is treated as a
+        /// middle rather than a sample, and the band's floor enforced against it.</summary>
+        private const int StarBandMinFives = 3;
+
         /// <summary>
         /// A 4-STAR HAS TO SIT BELOW THE 5-STARS OF ITS OWN ROLE, AND UNTIL NOW NOTHING SAID SO.
         ///
@@ -21237,9 +21246,28 @@ namespace Emberfall.DevHarness
         /// much as about the hero. The median is what "the 5-stars of this role" means when there
         /// are several of them, and with one it is that one.
         ///
+        /// A CEILING ALONE DOES NOT DESCRIBE A TIER. The first shape of this asserted one thing -
+        /// a 4-star reads below its role's 5-star median - and a hero at x0.12 of that median
+        /// passed it as comfortably as one at x0.84. "Smaller" was the whole claim, and a tier
+        /// authored to be smaller with nothing saying HOW MUCH smaller is a tier of heroes nobody
+        /// would field. So the band has two edges: every graded 4-star reads between
+        /// <see cref="StarBandFloor"/> and <see cref="StarBandCeiling"/> of that median.
+        ///
+        /// THE FLOOR IS ENFORCED ONLY WHERE THE MEDIAN IS ONE. A role with fewer than
+        /// <see cref="StarBandMinFives"/> authored 5-stars prints its ratio and is named as
+        /// ungraded, because the floor is a claim about where the middle of a role sits and one or
+        /// two readings have no middle. The ceiling above keeps running for those roles, because
+        /// "smaller than the 5-stars of your role" still means something against one of them.
+        ///
+        /// FOUR STARS ONLY. The tiers below are unauthored and their floors are different numbers
+        /// nobody has decided; asserting this one on the first 3-star to land would be a guess
+        /// wearing a guard's clothes.
+        ///
         /// WHAT IT CANNOT SEE, said here rather than discovered later: the arena fields no talent,
         /// so the three a 5-star carries and a 4-star does not are outside this reading and the real
-        /// gap is wider than the number. A clause needing a Taunt enemy, an aspect matchup or an
+        /// gap is wider than the number. That is why the ceiling is 0.85 rather than 1.00 - a
+        /// 4-star reading nine tenths of a 5-star WITHOUT the 5-star's three talents is not a
+        /// smaller hero. A clause needing a Taunt enemy, an aspect matchup or an
         /// ally this squad does not have is unmeasured here exactly as it is in the sweep. And a
         /// role whose 5-stars are all unauthored has no median at all, so its 4-stars are listed
         /// and not graded.
@@ -21286,6 +21314,10 @@ namespace Emberfall.DevHarness
 
             List<string> under = new List<string>();
             List<string> over = new List<string>();
+            List<string> tooSmall = new List<string>();
+            List<string> tooBig = new List<string>();
+            List<string> inBand = new List<string>();
+            List<string> ungradedRoles = new List<string>();
             int graded = 0;
             Array roles = Enum.GetValues(typeof(HeroRole));
             for (int ri = 0; ri < roles.Length; ri++)
@@ -21304,9 +21336,20 @@ namespace Emberfall.DevHarness
                             : fives.Count % 2 == 1 ? fives[fives.Count / 2]
                             : (fives[fives.Count / 2 - 1] + fives[fives.Count / 2]) / 2;
 
+                // A MEDIAN OVER ONE OR TWO HEROES IS NOT A MEDIAN. The ceiling below survives
+                // a thin role because "smaller than the 5-stars of your role" still means
+                // something against one of them; the BAND does not, because its floor is a claim
+                // about where the middle of that role sits, and two readings have no middle.
+                // Those roles print their ratio and are named as ungraded rather than silently
+                // enforced against a sample that cannot carry the claim.
+                bool bandEnforced = fives.Count >= StarBandMinFives;
+                if (median > 0 && !bandEnforced) ungradedRoles.Add(role + " (" + fives.Count + ")");
+
                 Line("  " + role + (median < 0
                         ? "  (no authored 5-star, so nothing to grade against)"
-                        : "  5-star median " + median + " over " + fives.Count + " hero(es)"));
+                        : "  5-star median " + median + " over " + fives.Count + " hero(es)"
+                          + (bandEnforced ? "" : " - BAND NOT ENFORCED, fewer than "
+                             + StarBandMinFives)));
 
                 inRole.Sort(delegate (HeroDef a, HeroDef b)
                 {
@@ -21326,6 +21369,24 @@ namespace Emberfall.DevHarness
                         graded++;
                         if (mine < median) under.Add(def.Id + " x" + share.ToString("0.00", CultureInfo.InvariantCulture));
                         else over.Add(def.Id + " " + mine + " against median " + median);
+
+                        // THE BAND, four stars only. The tier below is not authored yet and its
+                        // floor is a different number nobody has decided; asserting this one on a
+                        // 3-star the day one lands would be a guess wearing a guard's clothes.
+                        if (def.Stars == 4)
+                        {
+                            string reading = def.Id + " x"
+                                + share.ToString("0.00", CultureInfo.InvariantCulture);
+                            if (!bandEnforced) { }
+                            else if (share < StarBandFloor) tooSmall.Add(reading);
+                            else if (share > StarBandCeiling) tooBig.Add(reading);
+                            else inBand.Add(reading);
+                        }
+                        if (def.Stars == 4)
+                            ratio += bandEnforced
+                                ? (share < StarBandFloor ? "   BELOW THE BAND"
+                                   : share > StarBandCeiling ? "   ABOVE THE BAND" : "   in band")
+                                : "   (band not enforced for this role)";
                     }
                     long[] terms = split[def.Id];
                     Line("    " + def.Stars + "*  " + def.Id + "  " + mine
@@ -21347,6 +21408,35 @@ namespace Emberfall.DevHarness
                       + " median for their own role (" + string.Join(", ", under.ToArray()) + ")"
                     : over.Count + " hero(es) below five stars match or beat the 5-star median for"
                       + " their own role: " + string.Join("; ", over.ToArray()));
+
+            if (ungradedRoles.Count > 0)
+                Line("  [note] the band is NOT enforced for " + string.Join(", ", ungradedRoles.ToArray())
+                     + " - fewer than " + StarBandMinFives + " authored 5-stars, so that role's"
+                     + " median is a sample rather than a middle. Their 4-stars print a ratio and"
+                     + " are not graded on it.");
+
+            int banded = tooSmall.Count + tooBig.Count + inBand.Count;
+            if (banded == 0)
+            {
+                Line("  [note] no authored 4-star sits in a role with " + StarBandMinFives
+                     + " or more authored 5-stars, so the band has nothing to enforce yet.");
+                Line("");
+                return;
+            }
+            Check(tooSmall.Count == 0 && tooBig.Count == 0,
+                  tooSmall.Count == 0 && tooBig.Count == 0
+                    ? "all " + banded + " graded 4-star(s) read between x"
+                      + StarBandFloor.ToString("0.00", CultureInfo.InvariantCulture) + " and x"
+                      + StarBandCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                      + " of their role's 5-star median ("
+                      + string.Join(", ", inBand.ToArray()) + ")"
+                    : (tooSmall.Count + tooBig.Count) + " graded 4-star(s) fall outside the x"
+                      + StarBandFloor.ToString("0.00", CultureInfo.InvariantCulture) + " to x"
+                      + StarBandCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                      + " band: "
+                      + (tooSmall.Count > 0 ? "below - " + string.Join(", ", tooSmall.ToArray()) : "")
+                      + (tooSmall.Count > 0 && tooBig.Count > 0 ? "; " : "")
+                      + (tooBig.Count > 0 ? "above - " + string.Join(", ", tooBig.ToArray()) : ""));
             Line("");
         }
 
