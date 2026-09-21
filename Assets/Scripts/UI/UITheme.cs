@@ -387,6 +387,26 @@ namespace Emberfall.UI
         /// for every hero card, armour disc and aspect chip in the game, and it was not this
         /// change's job. Do not read the five unfixed entries as verified against anything.
         /// </summary>
+        /// <summary>
+        /// THE COLOUR OF A UNIT THAT HAS NOT BEEN DRAWN YET - on the battlefield mannequin and on
+        /// its portrait alike, so the two read as the same absent character rather than as two
+        /// different stand-ins.
+        ///
+        /// The aspect colour lightened toward white, not the aspect colour itself. The mannequin is
+        /// drawn in flat near-white values and its material multiplies, so a fully saturated hue
+        /// lands at full strength: an Umbra or Lumen placeholder (9264E8, 3568E8) would come out a
+        /// dark solid shape on a dark battlefield, and the small value steps that separate its
+        /// head, torso and limbs would stop reading. Lifting toward white keeps the aspect legible
+        /// while leaving the figure light enough to be a silhouette.
+        ///
+        /// 0.3 for no better reason than that it is where the darkest aspect stops disappearing and
+        /// the brightest has not yet gone pastel. It is a look; this is the place to change it.
+        /// </summary>
+        public static Color PlaceholderTint(Aspect aspect)
+        {
+            return Color.Lerp(AspectColor(aspect), Color.white, 0.3f);
+        }
+
         public static Color AspectColor(Aspect aspect)
         {
             switch (aspect)

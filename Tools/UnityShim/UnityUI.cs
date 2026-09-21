@@ -13,6 +13,7 @@ namespace UnityEngine
     }
 
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
+    public enum TextAlignment { Left, Center, Right }
     public enum HorizontalWrapMode { Wrap, Overflow }
     public enum VerticalWrapMode { Truncate, Overflow }
     public enum RenderMode { ScreenSpaceOverlay, ScreenSpaceCamera, WorldSpace }

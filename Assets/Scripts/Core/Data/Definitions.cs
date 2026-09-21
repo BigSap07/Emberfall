@@ -65,6 +65,46 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool SpriteMirror;
 
+        /// <summary>
+        /// WHETHER THIS UNIT'S ART HAS BEEN DELIVERED YET. Three states, and the whole point is
+        /// that the first two are told apart by DATA rather than guessed from a failed load.
+        ///
+        ///   ""          (default) the art exists. A file that fails to load is a BUG.
+        ///   "pending"   the art is not drawn yet, on purpose. Render the placeholder mannequin.
+        ///   (anything)  unknown value: treated as "" so a typo fails loud rather than silent.
+        ///
+        /// The reason this is a field and not an inference:
+        ///
+        /// Sixty-three of the ninety-four heroes name a sprite they do not have yet. If "the file
+        /// is missing" were the rule, all sixty-three would render the mannequin and be quiet -
+        /// and so would a hero whose sheet was misnamed, deleted, or never copied into Resources.
+        /// The second case would stop being reportable at exactly the moment it became common.
+        /// Declaring the intent instead keeps them apart: pending is silent and drawn, absent is
+        /// an error with the hero's name and the path it looked in.
+        ///
+        /// It is NOT expressed by clearing Sprite, which would be the obvious shortcut. An empty
+        /// Sprite already has a meaning that is in use and is correct - "build the procedural
+        /// primitive body" - which is what nine of the twelve enemies do, and what makes a Grave
+        /// Moth read as a beast and a Sundered Colossus as a golem. Overloading it would collapse
+        /// two different answers into one and regress those enemies to a single mannequin.
+        ///
+        /// Keeping Sprite populated also means a pending hero already names the file the artist
+        /// will deliver, so the day it lands the only edit is deleting this key.
+        /// </summary>
+        public string SpriteStatus = "";
+
+        /// <summary>The value of SpriteStatus that means "not drawn yet, this is fine".</summary>
+        public const string StatusPending = "pending";
+
+        /// <summary>
+        /// True when this unit should render the shared placeholder mannequin instead of its own
+        /// art. Asked rather than compared at each site so the spelling lives in one place.
+        /// </summary>
+        public bool SpritePending
+        {
+            get { return SpriteStatus == StatusPending; }
+        }
+
         public static VisualDef FromJson(JsonValue j)
         {
             VisualDef v = new VisualDef();
@@ -80,6 +120,7 @@ namespace Emberfall.Core.Data
             v.SpriteBodyFraction = j.GetFloat("spriteBodyFraction", v.SpriteBodyFraction);
             v.SpriteFootFraction = j.GetFloat("spriteFootFraction", v.SpriteFootFraction);
             v.SpriteMirror = j.GetBool("spriteMirror", v.SpriteMirror);
+            v.SpriteStatus = j.GetString("spriteStatus", v.SpriteStatus);
             return v;
         }
     }

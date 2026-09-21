@@ -983,10 +983,18 @@ namespace Emberfall.Dev
                     && h.Id.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0
                     && h.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
-                bool art = BattleAssets.UnitAnimClip(h.Visual.Sprite, "idle") != null;
+                // The roster says which of the three states a hero is in, and it takes the answer
+                // from the same place the rig does. It used to ask whether an "idle" clip existed,
+                // which is the load-failure inference the whole placeholder pass exists to avoid:
+                // a hero whose sheet was misnamed listed identically to one nobody has drawn yet.
+                bool pending = h.Visual.SpritePending;
+                bool art = !pending && BattleAssets.UnitAnimClip(h.Visual.Sprite, "idle") != null;
+                string mark = art ? "* " : (pending ? "~ " : "! ");
                 Button b = DevArenaUi.Btn("Hero_" + h.Id, _ui.RosterContent,
-                                          (art ? "* " : "   ") + h.Name + "   " + h.Id, 500f,
-                                          art ? DevArenaUi.Quiet : new Color(0.08f, 0.08f, 0.10f, 1f));
+                                          mark + h.Name + "   " + h.Id, 500f,
+                                          art ? DevArenaUi.Quiet
+                                              : (pending ? new Color(0.08f, 0.08f, 0.10f, 1f)
+                                                         : new Color(0.26f, 0.05f, 0.16f, 1f)));
                 DevArenaUi.Fixed(b.GetComponent<RectTransform>(), 0f, 38f);
                 string id = h.Id;
                 b.onClick.AddListener(delegate

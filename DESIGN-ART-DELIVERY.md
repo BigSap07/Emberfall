@@ -62,17 +62,40 @@ The file name has to match the hero's own internal id, in lowercase with undersc
 delivering art for a different hero, ask for that hero's id rather than guessing it from their
 display name, since the two don't always match exactly.
 
-Nothing else needs to change on your end. A hero either has an image on file or doesn't; there
-is no separate step to "turn the image on." If the file is present at the right name, the game
-uses it. If it's missing, that hero simply keeps the built-in procedural look. Handing over the
-file is the entire activation step.
+Nothing else needs to change on your end beyond one line of data, described below. If the file
+is present at the right name, the game uses it.
 
-One exception, useful to know but not something you need to act on: if a hero's data has
-already been told to expect an image (Orrin's has), and the file at that name can't be found or
-can't be read, the game does not fall back to the built-in look. It shows the character as a
-flat, unmissable magenta square instead. That's intentional: a hero that's supposed to have art
-but doesn't get any is meant to look broken, not quietly fine. If you ever see a solid magenta
-character in a screenshot, the file is either missing or misnamed.
+### The three states a hero can be in, and how the game tells them apart
+
+This used to be two states and it did not work, because most of the roster has no art yet. What
+follows is what the game does now.
+
+**Not drawn yet.** The hero's data carries `"spriteStatus": "pending"` and the hero renders a
+neutral grey mannequin, tinted by their aspect colour, with their name under their feet.
+Sixty-three of the ninety-four heroes are in this state and it is not an error; nothing is logged
+and nothing goes red. The mannequin is one single file, `placeholder_dummy.png`, shared by all of
+them - replace that one file and every undrawn hero changes at once.
+
+**Drawn.** The file is there and `spriteStatus` is gone from the hero's data. **Deleting that one
+line is the activation step** - the only thing anyone has to do besides handing over the file. A
+hero whose art has landed while the line is still there is caught by the build check, so it
+cannot be silently forgotten.
+
+**Broken.** The hero's data says they have art (no `spriteStatus` line) and the file at that name
+cannot be found or cannot be read. The game shows a flat, unmissable **magenta square**, logs an
+error naming the hero and the exact path it looked in, and the build check fails with the list.
+That is intentional: a hero that is supposed to have art but doesn't is meant to look broken, not
+quietly fine. If you ever see a solid magenta character in a screenshot, the file is missing or
+misnamed.
+
+Why "not drawn yet" is declared in data rather than guessed from the missing file: those two
+states share the same symptom. If a missing file meant "not drawn yet", then a sheet that was
+misnamed, deleted or never copied across would look exactly like the sixty-three heroes nobody
+has started - and the one real fault would be invisible among them. Declaring the intent keeps
+them apart.
+
+A hero with **no `sprite` name at all** is a fourth, older case: they keep the built-in procedural
+look, assembled from primitives. That is what most enemies still do, and it stays.
 
 ## 2. File format
 
@@ -250,6 +273,14 @@ One consequence for art already delivered: the three enemy defs that carry sprit
 is what this section has always said would happen. If any of them was drawn pre-compensated, it
 will now read reversed and wants a look.
 
+**State the strike frame for every attack clip.** One frame number per basic, basic2 and skill -
+the frame where the weapon connects or the effect is released - in the delivery manifest beside
+that clip's frame range. The game hangs the damage number, the flash and the hit reaction off it,
+and it is not derivable: it has been guessed from the art by measuring each frame's width, which
+is right for a side swing and wrong for an overhead one, where the raised weapon is widest at the
+top of the windup. Sixteen clips had to be set by hand off contact sheets because of it. A single
+integer per clip from the person who drew it removes the guess.
+
 ## 7. What the game does to the art at runtime
 
 The character isn't static once it's in a battle. Three effects apply directly to your image's
@@ -268,6 +299,11 @@ self-multiply, not a colored overlay: a mid-tone color gets noticeably brighter,
 that's pure black stays pure black, since brightening zero produces zero. If part of the design
 is meant to visibly glow when the hero casts, don't render that part as pure black; give it at
 least a little color for the brightening to act on.
+
+All three apply to the **placeholder mannequin** exactly as they apply to finished art - it is
+the same flat card on the same code path, so an undrawn hero still idles, lunges at its target,
+flashes white when hit, throws damage numbers and fades on death. Nothing about a placeholder is
+a special case at runtime; the only difference is which image is on the card.
 
 **Death fade.** When the character is defeated, the image stays fully visible for about a fifth
 of a second, then fades smoothly to fully transparent over roughly the following half second, a

@@ -17,6 +17,10 @@ namespace Emberfall.Battle
         public Transform WeaponPivot;
         public Transform Shadow;
 
+        /// <summary>The placeholder's name label, or null for every unit that has art.
+        /// Held so SetFade can take it down with the body on death.</summary>
+        public TextMesh Nameplate;
+
         /// <summary>
         /// World Y of the TOP OF THE RENDERED SILHOUETTE above the unit's origin (its feet on the
         /// ground), before visual.Scale is applied. Head, not weapon: a raised staff or spear
@@ -187,7 +191,25 @@ namespace Emberfall.Battle
             return spriteMirror ^ !facingForward;
         }
 
-        public static UnitRig Build(string name, Transform parent, VisualDef visual, bool facingForward)
+        /// <summary>
+        /// The tint a placeholder mannequin wears. One line, because the rule it applies belongs to
+        /// the palette and is shared with the placeholder PORTRAIT - see UITheme.PlaceholderTint.
+        /// Kept as a named method here so the rig's two call sites read as a decision rather than
+        /// as an incidental Lerp, and so a battlefield-only adjustment has somewhere to go.
+        /// </summary>
+        public static Color DummyTint(Aspect aspect)
+        {
+            return UITheme.PlaceholderTint(aspect);
+        }
+
+        /// <param name="unitLabel">Who this rig is, for error messages only - a sprite path alone
+        /// does not identify the content entry that names it. Never displayed except on the
+        /// placeholder nameplate, which is the one case where a unit has no other identity.</param>
+        /// <param name="aspect">Tints the placeholder mannequin. Ignored by every other path: real
+        /// art carries its own colour and is drawn white-tinted, and a procedural rig already
+        /// takes its palette from VisualDef.</param>
+        public static UnitRig Build(string name, Transform parent, VisualDef visual, bool facingForward,
+                                    string unitLabel, Aspect aspect)
         {
             UnitRig rig = new UnitRig();
 
@@ -218,10 +240,29 @@ namespace Emberfall.Battle
             // behaviour change. That branch used to cover every unit but Orrin Kaal; with the
             // placeholder roster deleted, all five remaining heroes carry sheets and the procedural
             // body is now only reached by enemies that have no art yet.
-            if (!string.IsNullOrEmpty(visual.Sprite))
+            //
+            // THREE CASES, NOT TWO, and the third is the common one:
+            //
+            //   Sprite empty              procedural primitive body. Nine of the twelve enemies.
+            //   Sprite set, pending       the shared mannequin, tinted by aspect. 63 of 94 heroes.
+            //   Sprite set, delivered     the hero's own art. 31 heroes and 3 enemies.
+            //
+            // Pending is declared in content (VisualDef.SpriteStatus), never inferred from a
+            // failed load - see that field for why. The consequence here is that a sprite which
+            // fails to load is unambiguously a bug and BuildSprite reports it as one.
+            if (visual.SpritePending)
+            {
+                rig.BuildSprite(BattleAssets.DummySpriteId,
+                                BattleAssets.DummyBodyFraction, BattleAssets.DummyFootFraction,
+                                SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette,
+                                unitLabel, true, DummyTint(aspect));
+                rig.BuildNameplate(unitLabel, facingForward);
+            }
+            else if (!string.IsNullOrEmpty(visual.Sprite))
             {
                 rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction,
-                                SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette);
+                                SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette,
+                                unitLabel, false, Color.white);
             }
             else
             {
@@ -370,7 +411,12 @@ namespace Emberfall.Battle
         /// </summary>
         /// <summary>`flip` is already resolved by SpriteFlipped - the side and the hero's own
         /// authored facing folded into one answer - so this method only has to apply it.</summary>
-        private void BuildSprite(string spriteId, float bodyFraction, float footFraction, bool flip, string silhouette)
+        /// <summary>`pending` swaps the unit's own art for the shared placeholder mannequin and
+        /// suppresses the clip lookup - an undrawn hero has no clips either, and asking would only
+        /// be a Resources miss per clip per unit. `tint` multiplies the texture: white for real
+        /// art, an aspect colour for the mannequin.</summary>
+        private void BuildSprite(string spriteId, float bodyFraction, float footFraction, bool flip,
+                                 string silhouette, string unitLabel, bool pending, Color tint)
         {
             // The silhouette's own top, not a number of its own, and not HumanoidTop. This is the
             // line the whole sprite pipeline hangs off: the quad below is sized so the body's top
@@ -396,7 +442,10 @@ namespace Emberfall.Battle
             // (all frames laid out in a cols x rows grid) has nothing to do with the character's
             // own proportions. A unit with no clip data (everyone but Kael today) takes the exact
             // path this always took, unchanged.
-            SpriteAnimator animator = SpriteAnimator.TryCreate(spriteId);
+            // A pending unit skips the animator outright rather than letting it miss: the dummy is
+            // one still image by design, and TryCreate would otherwise do a Resources lookup per
+            // undrawn unit per battle to be told what the content already said.
+            SpriteAnimator animator = pending ? null : SpriteAnimator.TryCreate(spriteId);
             Texture2D tex;
             float frameWidth, frameHeight;
             if (animator != null)
@@ -407,7 +456,7 @@ namespace Emberfall.Battle
             }
             else
             {
-                tex = BattleAssets.UnitSprite(spriteId);
+                tex = pending ? BattleAssets.DummyUnitSprite() : BattleAssets.UnitSprite(spriteId, unitLabel);
                 frameWidth = tex.width;
                 frameHeight = tex.height;
             }
@@ -436,7 +485,7 @@ namespace Emberfall.Battle
             float canvasHeight = Height / Mathf.Max(0.05f, bodyFraction);
             float width = canvasHeight * aspect;
 
-            Material material = BattleAssets.NewFx(tex, Color.white, false);
+            Material material = BattleAssets.NewFx(tex, tint, false);
             // Primary/Secondary/Accent all point at the one sprite material, not three separate
             // ones - SetEmission (unlike SetFlash/SetFade) writes through these named fields
             // rather than the generic Materials list, and this keeps that call safe and
@@ -555,6 +604,99 @@ namespace Emberfall.Battle
             }
         }
 
+        // ------------------------------------------------------------------ nameplate
+
+        /// <summary>How far in front of the unit (toward the camera) the nameplate stands, and how
+        /// high off the ground. Forward rather than down because the label has to clear the feet
+        /// without sinking into the floor: the board is seen from above, so moving a thing toward
+        /// the camera moves it DOWN the screen, which is where "under it" lives.</summary>
+        private const float NameplateForward = 0.45f;
+        private const float NameplateLift = 0.06f;
+
+        /// <summary>About 0.17 world units tall, a tenth of a humanoid's 1.71. Measured off the
+        /// rendered mesh rather than reasoned about: at 0.045 the same text measured 0.236 high and
+        /// 0.45 wide, which is most of a mannequin's own width and read as a caption rather than a
+        /// label.</summary>
+        private const int NameplateFontSize = 48;
+        private const float NameplateCharacterSize = 0.032f;
+
+        /// <summary>
+        /// A name at the placeholder's feet. ONLY placeholders get one.
+        ///
+        /// A dummy is the same mannequin for every undrawn hero, so without this a line of five is
+        /// five identical shapes in (at most) five colours - the aspect tint separates them by
+        /// element and nothing separates them by name. Real art does not have that problem, which
+        /// is why this is not built for every unit.
+        ///
+        /// JUDGEMENT CALL, STATED: both screens that show a battle already print the unit's name
+        /// ABOVE its head - BattleScreen's UnitBar and the Dev Arena's own head stack - so an
+        /// undrawn hero now carries its name twice. That is accepted rather than overlooked. The
+        /// bar above is a HUD element that tracks a unit and can be switched off, hidden behind a
+        /// panel, or absent in a view that has no HUD; this one belongs to the rig and is there
+        /// wherever the rig is, which is what "show the name under it in battle and in the Dev
+        /// Arena" needs from one implementation rather than two. When the art lands, both the
+        /// mannequin and the duplication go away on their own.
+        ///
+        /// Built with TextMesh rather than a world-space Canvas on purpose: a Canvas per unit is a
+        /// layout rebuild and a draw call group per unit, and this is one word that never changes.
+        ///
+        /// Parented to Root rather than Body so it does not bob, sway or tumble - a label that
+        /// rolls over with the corpse reads as part of the character, which it is not.
+        /// </summary>
+        private void BuildNameplate(string label, bool facingForward)
+        {
+            if (string.IsNullOrEmpty(label)) return;
+
+            GameObject go = new GameObject("Nameplate");
+            Transform t = go.transform;
+            t.SetParent(Root, false);
+
+            // SQUARE TO THE VIEWER, on both sides, by cancelling Root's own turn and nothing else.
+            //
+            // Root is at 180 -/+ ThreeQuarterTurn, so undoing it leaves the plate at zero in the
+            // board's frame - which is the orientation a TextMesh is read from. The obvious-looking
+            // alternative, cancelling and then re-applying the 180 that Build calls "facing the
+            // camera", renders every name MIRRORED: a sprite quad is turned 180 because its front
+            // face is +Z and it has to turn away from the camera to face it, and TextMesh's glyph
+            // quad is built the other way round. Two different conventions, one of which had to be
+            // found by looking - it is written down here because nothing about the code says it.
+            //
+            // Cancellation rather than the two literal angles, so this cannot drift if
+            // ThreeQuarterTurn is retuned.
+            Quaternion unturn = Quaternion.Inverse(Root.localRotation);
+            t.localRotation = unturn;
+            // Pushed toward the camera (world -Z) rather than downward. The board is seen from
+            // above, so moving a thing toward the viewer moves it DOWN the screen, which is where
+            // "under it" lives; moving it down in Y would bury it in the floor instead.
+            t.localPosition = unturn * new Vector3(0f, NameplateLift, -NameplateForward);
+
+            TextMesh text = go.AddComponent<TextMesh>();
+            text.text = label;
+            text.font = UITheme.Font;
+            text.fontSize = NameplateFontSize;
+            text.characterSize = NameplateCharacterSize;
+            text.anchor = TextAnchor.UpperCenter;
+            text.alignment = TextAlignment.Center;
+            text.color = NameplateColor;
+
+            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
+            if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
+            if (renderer != null)
+            {
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+
+            Nameplate = text;
+            // facingForward is unused: the plate faces the camera from either side by construction
+            // above. It stays on the signature because every other per-side decision in this class
+            // takes it, and a nameplate that one day wants to sit outboard of its line will need it.
+        }
+
+        /// <summary>Off-white rather than the aspect tint: the mannequin already carries the aspect,
+        /// and a name is information, so it reads at one weight for everyone.</summary>
+        private static readonly Color NameplateColor = new Color(0.90f, 0.91f, 0.94f, 1f);
+
         /// <summary>
         /// Footprint of the blob shadow, in local units before visual.Scale. Was 1.35 x 1.05,
         /// which is wider than any body it sits under: a sprite hero's quad is 0.98 across and a
@@ -625,6 +767,16 @@ namespace Emberfall.Battle
         public void SetFade(float amount)
         {
             for (int i = 0; i < Materials.Count; i++) Materials[i].SetFloat("_Fade", amount);
+            // The nameplate is not in Materials - it draws through the font's shared material,
+            // which has no _Fade and which every other nameplate in the scene also uses, so
+            // writing to it would fade the whole roster at once. TextMesh.color is per-instance
+            // vertex colour, so this fades only this label.
+            if (Nameplate != null)
+            {
+                Color c = NameplateColor;
+                c.a = NameplateColor.a * amount;
+                Nameplate.color = c;
+            }
         }
 
         public void SetEmission(float primaryEmission)

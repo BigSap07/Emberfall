@@ -105,6 +105,70 @@ for fn in sorted(os.listdir(ZIPS)):
             if not same:
                 rows.append((hid, clip, key, want, got))
 
+def pacing_report():
+    """What the RUNTIME actually plays, which is the question the delivery cannot answer.
+
+    The deliveries carry no playbackSpeed and no impactFraction at all, so comparing against them
+    can never show a pacing problem. This section reads the tracked sidecars on their own terms:
+    which speeds are in play across the roster, and whether every attack clip carries its own
+    measured impact rather than a seeded constant.
+    """
+    heroes = {}
+    for f in sorted(os.listdir(UNITS)):
+        m = re.match(r"^(.*)_(idle|basic2|basic|skill|hit_reaction|death|controlled)\.json$", f)
+        if not m:
+            continue
+        hid, clip = m.group(1), m.group(2)
+        a = json.load(io.open(os.path.join(UNITS, f), encoding="utf-8")).get("defaultAnimation") or {}
+        heroes.setdefault(hid, {})[clip] = a
+
+    print("")
+    print("=" * 78)
+    print("RUNTIME PACING - what the sidecars tell the loader to play")
+    print("=" * 78)
+
+    speeds = {}
+    seeded = []
+    hand = 0
+    own = 0
+    attacks = 0
+    stray = []
+    for hid in sorted(heroes):
+        for clip, a in sorted(heroes[hid].items()):
+            sp = a.get("playbackSpeed", 1.0)
+            speeds.setdefault(round(float(sp), 3), []).append(hid)
+            if clip in ("basic", "basic2", "skill"):
+                attacks += 1
+                imp = a.get("impactFraction")
+                if imp is None or abs(float(imp) - 0.5) < 1e-9:
+                    seeded.append("%s %s" % (hid, clip))
+                else:
+                    own += 1
+                if a.get("impactSetBy") == "hand":
+                    hand += 1
+            elif "impactFraction" in a:
+                stray.append("%s %s" % (hid, clip))
+
+    print("playback speeds in use:")
+    for sp in sorted(speeds):
+        who = sorted(set(speeds[sp]))
+        print("  %.2fx on %d clip(s) across %d hero(es)%s"
+              % (sp, len(speeds[sp]), len(who),
+                 "" if len(who) > 6 else ": " + ", ".join(w.split("_")[0] for w in who)))
+
+    print("")
+    print("attack clips with their own impact: %d of %d   (%d set by hand off a contact sheet)"
+          % (own, attacks, hand))
+    if seeded:
+        print("  still on the seeded 0.5 (or absent): " + ", ".join(seeded))
+    if stray:
+        print("  impactFraction on a non-attack clip (the 25 carry none): " + ", ".join(stray))
+    print("")
+    print("%d animated hero(es); %s"
+          % (len(heroes),
+             "all on one speed" if len(speeds) == 1 else "%d different speeds" % len(speeds)))
+
+
 print("=" * 78)
 print("CLIP DATA AUDIT - delivery manifest against the tracked sidecar the loader reads")
 print("=" * 78)
@@ -124,3 +188,5 @@ else:
         print("%-30s %-13s %-16s %-12s %s" % (r[0][:30], r[1], str(r[2])[:16], str(r[3])[:12], r[4]))
     print("")
     print("%d mismatch(es)" % len(rows))
+
+pacing_report()

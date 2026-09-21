@@ -36,6 +36,7 @@ namespace Emberfall.DevHarness
             if (content == null) return 1;
 
             CheckContent(content);
+            CheckSpriteDelivery(content, contentDir);
             CheckHeroRoleOrdinals(content);
             CheckEnumParity(content);
             CheckTierFiveMechanics(content);
@@ -3492,6 +3493,188 @@ namespace Emberfall.DevHarness
 
         private static string Fmt(float v) { return v.ToString("0.##", CultureInfo.InvariantCulture); }
         private static string Pct(float v) { return (v * 100f).ToString("0.#", CultureInfo.InvariantCulture) + "%"; }
+
+        // ---------------------------------------------------------------- sprite delivery
+
+        /// <summary>
+        /// WHICH UNITS HAVE ART, WHICH ARE WAITING FOR IT, AND WHICH ARE BROKEN.
+        ///
+        /// Most of the roster is undrawn, and that is not a fault - so the interesting question is
+        /// not "how many files are missing" but "is any unit missing a file it CLAIMS to have".
+        /// Those two used to be the same question, and the answer was always the same noise.
+        ///
+        /// The rule mirrors UnitRig.Build:
+        ///
+        ///   visual.sprite empty         procedural primitive body. No file is expected.
+        ///   spriteStatus "pending"      the shared mannequin. No file is expected, and a file
+        ///                               turning up means the key was left behind when art landed.
+        ///   otherwise                   the unit's own art. The file must resolve, or this fails
+        ///                               with the unit's name and the path it looked in.
+        ///
+        /// "Resolves" means either a plain {sprite}.png or an animated {sprite}_idle.png with its
+        /// {sprite}_idle.json sidecar, because those are the two things BuildSprite will accept -
+        /// SpriteAnimator.TryCreate first, BattleAssets.UnitSprite second.
+        ///
+        /// This runs outside Unity, so it reads the FOLDER rather than Resources. That is a
+        /// feature: it fails on a build machine with no editor, before anyone opens a battle.
+        /// </summary>
+        private static void CheckSpriteDelivery(ContentDatabase db, string contentDir)
+        {
+            Line("");
+            Line("SPRITE DELIVERY");
+
+            string parent = Path.GetDirectoryName(contentDir.TrimEnd(Path.DirectorySeparatorChar));
+            string units = Path.Combine(parent, Path.Combine("Sprites", "Units"));
+            if (!Directory.Exists(units))
+            {
+                Check(false, "the unit sprite folder exists at " + units);
+                return;
+            }
+
+            Check(File.Exists(Path.Combine(units, PlaceholderSpriteId + ".png")),
+                  "the one placeholder mannequin exists (Sprites/Units/" + PlaceholderSpriteId
+                  + ".png) - every undrawn hero renders it");
+
+            List<string> heroArt = new List<string>();
+            List<string> heroPending = new List<string>();
+            List<string> broken = new List<string>();
+            List<string> stale = new List<string>();
+
+            for (int i = 0; i < db.Heroes.Count; i++)
+                Classify(db.Heroes[i], units, heroArt, heroPending, broken, stale);
+
+            List<string> enemyArt = new List<string>();
+            List<string> enemyPending = new List<string>();
+            List<string> enemyProcedural = new List<string>();
+            for (int i = 0; i < db.Enemies.Count; i++)
+            {
+                EnemyDef e = db.Enemies[i];
+                if (string.IsNullOrEmpty(e.Visual.Sprite)) { enemyProcedural.Add(e.Id); continue; }
+                Classify(e, units, enemyArt, enemyPending, broken, stale);
+            }
+
+            Line("  heroes:  " + db.Heroes.Count + " total, " + heroArt.Count + " with art, "
+                 + heroPending.Count + " on the placeholder mannequin");
+            Line("  enemies: " + db.Enemies.Count + " total, " + enemyArt.Count + " with art, "
+                 + enemyPending.Count + " on the mannequin, " + enemyProcedural.Count
+                 + " procedural (no sprite named)");
+
+            Line("");
+            Line("  HEROES WITH ART (" + heroArt.Count + "):");
+            PrintIdColumns(heroArt);
+            Line("  ENEMIES WITH ART (" + enemyArt.Count + "): " + string.Join(", ", enemyArt.ToArray()));
+            Line("");
+            Line("  HEROES ON THE MANNEQUIN (" + heroPending.Count + "):");
+            PrintIdColumns(heroPending);
+            Line("");
+
+            for (int i = 0; i < broken.Count; i++) Line("  BROKEN: " + broken[i]);
+            for (int i = 0; i < stale.Count; i++) Line("  STALE:  " + stale[i]);
+
+            Check(broken.Count == 0,
+                  "every unit that declares art has it - a unit listed BROKEN above is missing a file it says it owns");
+            Check(stale.Count == 0,
+                  "no unit is still marked pending after its art landed");
+            Check(heroArt.Count + heroPending.Count == db.Heroes.Count,
+                  "every hero is exactly one of: has art, or declared pending (none falls between)");
+
+            CheckTheBrokenDetectorActuallyFires(units);
+        }
+
+        /// <summary>Must match BattleAssets.DummySpriteId. Repeated rather than referenced because
+        /// that constant lives in the Unity assembly, which this harness deliberately cannot see -
+        /// so the check above asserts the file is there under the name the engine will ask for.</summary>
+        private const string PlaceholderSpriteId = "placeholder_dummy";
+
+        private static void Classify(UnitDef def, string units, List<string> art, List<string> pending,
+                                     List<string> broken, List<string> stale)
+        {
+            string sprite = def.Visual.Sprite;
+            bool resolves = SpriteResolves(units, sprite);
+
+            if (def.Visual.SpritePending)
+            {
+                if (resolves)
+                    stale.Add(def.Name + " (" + def.Id + ") is marked pending but "
+                              + WhichFile(units, sprite) + " exists - drop the spriteStatus key");
+                else pending.Add(def.Id);
+                return;
+            }
+
+            if (resolves) { art.Add(def.Id); return; }
+
+            broken.Add(def.Name + " (" + def.Id + ") declares sprite \"" + sprite
+                       + "\" but neither Sprites/Units/" + sprite + ".png nor Sprites/Units/"
+                       + sprite + "_idle.png + .json exists");
+        }
+
+        /// <summary>The two shapes UnitRig.BuildSprite will accept, in the order it tries them.</summary>
+        private static bool SpriteResolves(string units, string sprite)
+        {
+            if (string.IsNullOrEmpty(sprite)) return false;
+            if (File.Exists(Path.Combine(units, sprite + "_idle.png"))
+                && File.Exists(Path.Combine(units, sprite + "_idle.json"))) return true;
+            return File.Exists(Path.Combine(units, sprite + ".png"));
+        }
+
+        private static string WhichFile(string units, string sprite)
+        {
+            if (File.Exists(Path.Combine(units, sprite + "_idle.png"))) return sprite + "_idle.png";
+            return sprite + ".png";
+        }
+
+        /// <summary>
+        /// A DELIBERATE BROKEN UNIT, so the check above is known to be capable of failing.
+        ///
+        /// Everything else here reports "no broken sprites", and a detector that has never fired is
+        /// indistinguishable from one that cannot. This builds a hero whose art is declared and
+        /// absent - the exact shape of the bug - and asserts it lands in the broken list and not in
+        /// pending. Then it does the mirror case, the same hero marked pending, and asserts it
+        /// lands in pending and not in broken. The pair is the point: it proves the two are told
+        /// apart by the DECLARATION rather than by the missing file they both share.
+        ///
+        /// It fabricates a HeroDef rather than editing heroes.json, so it cannot leave residue and
+        /// cannot be broken by content changing underneath it.
+        /// </summary>
+        private static void CheckTheBrokenDetectorActuallyFires(string units)
+        {
+            HeroDef ghost = new HeroDef();
+            ghost.Id = "harness_missing_art_probe";
+            ghost.Name = "Harness Probe";
+            ghost.Visual.Sprite = "a_file_that_does_not_exist_on_purpose";
+
+            List<string> art = new List<string>();
+            List<string> pending = new List<string>();
+            List<string> broken = new List<string>();
+            List<string> stale = new List<string>();
+            Classify(ghost, units, art, pending, broken, stale);
+
+            Check(broken.Count == 1 && pending.Count == 0 && art.Count == 0,
+                  "a hero pointed at a nonexistent sprite IS reported broken (the detector fires)");
+            Check(broken.Count == 1 && broken[0].Contains("a_file_that_does_not_exist_on_purpose")
+                  && broken[0].Contains("Harness Probe"),
+                  "and the report names the hero and the path it looked in");
+
+            ghost.Visual.SpriteStatus = VisualDef.StatusPending;
+            art.Clear(); pending.Clear(); broken.Clear(); stale.Clear();
+            Classify(ghost, units, art, pending, broken, stale);
+
+            Check(pending.Count == 1 && broken.Count == 0,
+                  "the SAME missing file, declared pending, is silent - the two cases are told apart"
+                  + " by the declaration, not by the failed load");
+        }
+
+        /// <summary>Ids three to a line, so a 63-entry list stays readable in a log.</summary>
+        private static void PrintIdColumns(List<string> ids)
+        {
+            ids.Sort(StringComparer.Ordinal);
+            for (int i = 0; i < ids.Count; i += 3)
+            {
+                StringBuilder sb = new StringBuilder("    ");
+                for (int k = i; k < i + 3 && k < ids.Count; k++) sb.Append(ids[k].PadRight(36));
+                Line(sb.ToString().TrimEnd());
+            }
+        }
 
         private static ContentDatabase LoadContent(string dir)
         {
