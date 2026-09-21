@@ -614,8 +614,10 @@
             "condition2": "LacksStatus",
             "conditionOn": "Caster",
             "conditionOn2": "Target",
+            "conditionStatus": "Resolve",
             "conditionStatus2": "HealSuppression",
             "conditionValue": 1,
+            "consumeStacks": 1,
             "consumesResolve": true,
             "duration": 1,
             "status": "HealSuppression"
@@ -627,8 +629,10 @@
             "condition2": "HasStatus",
             "conditionOn": "Caster",
             "conditionOn2": "Target",
+            "conditionStatus": "Resolve",
             "conditionStatus2": "HealSuppression",
             "conditionValue": 1,
+            "consumeStacks": 1,
             "consumesResolve": true,
             "flat": -15
           }
@@ -696,7 +700,9 @@
             "condition2": "StatusStacksAtLeast",
             "conditionOn": "LastTarget",
             "conditionOn2": "Caster",
+            "conditionStatus2": "Resolve",
             "conditionValue2": 1,
+            "consumeStacks": 1,
             "consumesResolve": true,
             "duration": 1,
             "status": "HealSuppression"
@@ -709,6 +715,7 @@
             "conditionOn": "LastTarget",
             "conditionOn2": "LastTarget",
             "conditionStatus2": "HealSuppression",
+            "consumeStacks": 1,
             "consumesResolve": true,
             "flat": -15
           }
@@ -4644,7 +4651,7 @@
           {
             "kind": "RemoveStatus",
             "target": "BroadcastSubject",
-            "status": "Guard",
+            "status": "Ledger",
             "hits": 1,
             "condition": "HasStatus",
             "conditionStatus": "Guard",
@@ -4653,7 +4660,7 @@
           {
             "kind": "RemoveStatus",
             "target": "BroadcastSubject",
-            "status": "Ledger",
+            "status": "Guard",
             "hits": 1,
             "condition": "HasStatus",
             "conditionStatus": "Guard",
@@ -4862,6 +4869,7 @@
             "kind": "GainResolve",
             "target": "Self",
             "maxStacks": 4,
+            "duration": 99,
             "condition": "HasMyMark",
             "conditionOn": "LastTarget"
           }
@@ -5429,6 +5437,7 @@
         "id": "isara_what_survives",
         "name": "What Survives",
         "trigger": "OnAllyHpBelowThreshold",
+        "threshold": 0.2,
         "oncePerBattle": false,
         "effects": [
           {
@@ -9822,14 +9831,6 @@
         "oncePerBattle": false,
         "effects": [
           {
-            "kind": "RemoveStatus",
-            "target": "BroadcastSource",
-            "condition": "HasMyMark",
-            "conditionOn": "BroadcastSource",
-            "hits": 1,
-            "status": "Mark"
-          },
-          {
             "kind": "ApplyStatus",
             "target": "Self",
             "chance": 1,
@@ -9845,6 +9846,14 @@
             "conditionOn": "BroadcastSource",
             "duration": 99,
             "maxStacks": 3
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSource",
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSource",
+            "hits": 1,
+            "status": "Mark"
           }
         ]
       },

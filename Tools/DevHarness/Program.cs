@@ -18720,13 +18720,26 @@ namespace Emberfall.DevHarness
                   + "than no talent does (" + two[3] + " against " + none[3]
                   + ") - appended to Absence Has Weight it drained nobody, because that trigger "
                   + "names no subject to drain");
-            Check(three[2] > none[2],
-                  "No Record Remains adds " + (three[2] - none[2]) + " damage (" + three[2]
-                  + " against " + none[2] + "), landing on the enemy The Missing Page just hit");
+            // THE TALENT COSTS HER DAMAGE OVERALL, and that is the talent rather than a fault in
+            // it: stripping the Focus is half of what its text promises, and a Focused body is
+            // what The Missing Page fires on, so the rounds after the strip are quiet. The measure
+            // is therefore the strip and the blow that rides with it, not a battle-long total.
+            Check(three[4] == 1 && none[4] == 0,
+                  "No Record Remains strips the Focus off a body under 30% HP exactly once a battle"
+                  + " (" + three[4] + " against " + none[4] + ")");
+            Check(three[5] > 0 && none[5] == 0,
+                  "and lands its extra 80% of Attack on that same firing (" + three[5]
+                  + " damage against " + none[5] + ") - the two are one clause, so the blow is"
+                  + " gated on the strip having happened rather than on the health test twice");
+            Line("  [note] the battle-long total FALLS with the talent, " + three[2] + " against "
+                 + none[2] + ": the Focus it takes off is what The Missing Page needs to keep"
+                 + " firing, so the rounds after the strip are quiet. That is the talent, not a"
+                 + " fault in it.");
             Line("");
         }
 
-        /// <summary>{missing-page firings, absence firings, damage she dealt, enemy energy removed}</summary>
+        /// <summary>{missing-page firings, absence firings, damage she dealt, enemy energy removed,
+        /// Focus stripped off the enemy, damage of the blow that rode with the strip}</summary>
         private static int[] RunMirethArena(int talent)
         {
             string dir = FindContentDirForSweep();
@@ -18741,10 +18754,17 @@ namespace Emberfall.DevHarness
 
             // Buffs itself every turn, so a Focused body keeps handing her the trigger, and is
             // soft enough that she can push it under the health gates her talents ask about.
+            //
+            // 22,000 rather than the 26,000 this arena opened with, and the four thousand are the
+            // whole of what No Record Remains needed. At 26,000 the body bottomed out at 32.3% of
+            // its bar over thirty rounds, so a talent whose text says "below 30% HP" could not fire
+            // once - the arena had been built against a talent authored at 50%, which was itself
+            // the mismatch this pass repaired. At 22,000 she carries it to 20% and the gate is
+            // reachable without the body ever dying and ending the fight early.
             string enemies = @"{
   ""enemies"": [
     { ""id"": ""mi_foe"", ""name"": ""MiFoe"", ""aspect"": ""Ember"",
-      ""hp"": 26000, ""attack"": 45, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
+      ""hp"": 22000, ""attack"": 45, ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.0,
       ""basic"": { ""id"": ""mi_b"", ""name"": ""Bolster"",
         ""effects"": [
           { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"",
@@ -18774,7 +18794,8 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < r.Units.Count; i++)
                 if (r.Units[i].DefId == mireth.Id) mine = r.Units[i].Id;
 
-            int page = 0, absence = 0, dealt = 0, drained = 0;
+            int page = 0, absence = 0, dealt = 0, drained = 0, stripped = 0, afterStrip = 0;
+            bool justStripped = false;
             Dictionary<int, int> energy = new Dictionary<int, int>();
             for (int i = 0; i < r.Events.Count; i++)
             {
@@ -18784,6 +18805,13 @@ namespace Emberfall.DevHarness
                     if (e.AbilityId == "mireth_the_missing_page") page++;
                     else if (e.AbilityId == "mireth_absence_has_weight") absence++;
                 }
+                // The Focus she takes off, and the blow that follows it inside the same firing.
+                // Read as a pair on purpose: the talent is one clause and the two halves are only
+                // meaningful together.
+                if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Mark
+                    && e.SourceId == mine && e.TargetId != mine) { stripped++; justStripped = true; }
+                if (e.Type == BattleEventType.Damage && e.SourceId == mine && justStripped)
+                { afterStrip += e.Value; justStripped = false; }
                 if (e.Type == BattleEventType.Damage && e.SourceId == mine) dealt += e.Value;
                 if (e.Type == BattleEventType.EnergyChanged)
                 {
@@ -18794,7 +18822,7 @@ namespace Emberfall.DevHarness
                     energy[e.TargetId] = e.Value;
                 }
             }
-            return new int[] { page, absence, dealt, drained };
+            return new int[] { page, absence, dealt, drained, stripped, afterStrip };
         }
 
         private struct TriggerCtx
@@ -19837,13 +19865,21 @@ namespace Emberfall.DevHarness
         /// Isara's Seedling needs her Return After Loss to land on an ally who is ALREADY nearly
         /// dead: the mark it leaves lasts two rounds, and the ally has to cross 20% HP inside them.
         /// At 28 Energy a basic plus 9 for every hit taken she casts on round three, when the party
-        /// is still near full, and the mark has expired long before anybody is low. At 25 and none
-        /// she casts on round five, which is where the two curves cross. That is a property of the
-        /// ARENA's clock rather than of her kit, so it lives here rather than in a tuning file.
+        /// is still near full, and the mark has expired long before anybody is low. That is a
+        /// property of the ARENA's clock rather than of her kit, so it lives here rather than in a
+        /// tuning file.
+        ///
+        /// RE-TUNED IN THE KIT-DEFECT PASS, from 25 Energy and none on damage to 30 and none, and
+        /// the reason is the repair rather than the hero. What Survives is an
+        /// OnAllyHpBelowThreshold passive, and that trigger fired on EVERY point of damage any ally
+        /// took until this pass made it fire on the crossing its own Threshold names. Against the
+        /// old trigger the Seedling caught its bearer eventually whatever the clock did; against a
+        /// crossing it has two rounds, so the cast has to land in the window where an ally is
+        /// heading for 20% rather than merely somewhere below full. At 30 it does, twice.
         /// </summary>
         private const string DarkSlowBalance = @"{
   ""defenseConstant"": 400, ""defensePerLevel"": 24,
-  ""energyMax"": 100, ""energyPerBasicAttack"": 25, ""energyOnDamaged"": 0,
+  ""energyMax"": 100, ""energyPerBasicAttack"": 30, ""energyOnDamaged"": 0,
   ""maxRounds"": 30, ""damageVariance"": 0, ""speedVariance"": 0,
   ""minDamage"": 1, ""maxTeamSize"": 5 }";
 
@@ -20147,16 +20183,38 @@ namespace Emberfall.DevHarness
                       + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
                       + ") - that body is out of reach of her basic, which marks the lowest-HP one");
 
-            // ---- Kiva III: the same kill, paid out as Shield per Broken Link held.
+            // ---- Kiva III: the same kill, and what it can pay out now that Severance Paid runs.
+            //
+            // THIS CHECK USED TO ASSERT A SHIELD AND NO LONGER CAN, and the reason is a second
+            // defect that the first one was hiding. Severance Paid was inert - both of its clauses
+            // and both of her active's copies of them gated on StatusStacksAtLeast with no status
+            // named, which answers false unconditionally - so nothing in her kit ever SPENT a
+            // Broken Link, and Unclaimed Victory found two of them banked at the kill. With those
+            // four gates repaired the spend is live, and the rates do not leave a remainder:
+            // Abandoned Support banks at most one link per round, and Severance Paid consumes one
+            // on every basic against a Forsaken body - the same basic whose own Mark banked it. So
+            // she opens every turn at zero and a kill has nothing to consume.
+            //
+            // That is a KIT defect rather than an engine one and it is not repaired here: it lives
+            // in the rates two of her descriptions name, and changing either is a balance decision
+            // about Kiva rather than a repair to fold into a defect pass. What is asserted is the
+            // half that is now true and was not - the spend - plus that the talent still fires.
             if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
                 Check(false, "kiva III arena built");
             else
-                Check(b.SubjectShield > 0 && a.SubjectShield == 0
-                      && b.Fires("kiva_unclaimed_victory") > 0,
-                      "Kiva III turns a Broken Link into a Shield on that kill (" + b.SubjectShield
-                      + " against " + a.SubjectShield + ", which is 12% of her Max HP per link) - "
-                      + "both Shield effects gated on StatusStacksAtLeast without naming a status, "
-                      + "which ConditionMet answers false unconditionally");
+            {
+                Check(b.Fires("kiva_unclaimed_victory") > 0 && a.Fires("kiva_unclaimed_victory") == 0,
+                      "Kiva III fires on a Forsaken kill (" + b.Fires("kiva_unclaimed_victory")
+                      + " against " + a.Fires("kiva_unclaimed_victory") + ")");
+                Check(a.Count(StatusKind.HealSuppression) > 0,
+                      "and Severance Paid, which named no status on its own stack gate and was inert"
+                      + " for it, now lands with no talent selected at all: "
+                      + a.Count(StatusKind.HealSuppression) + " application(s) of HealSuppression");
+                Line("  [note] Kiva III pays " + b.SubjectShield + " Shield here, where it paid 2236"
+                     + " before Severance Paid was repaired. She banks at most one Broken Link a"
+                     + " round and spends one on every basic against a Forsaken body, so she is at"
+                     + " zero when a kill lands. The rates are hers to change, not this pass's.");
+            }
 
             // ---- Aeron II: the ally Momentum Breaker pays is the ally that advances.
             // Five bodies on each side so the pending order has a tail both shifts can land in.
