@@ -1,0 +1,128 @@
+# Emberfall stage fingerprint baseline.
+#
+# One line per shipped campaign stage per sampled seed:
+#   <stage>|<seed>|<fnv1a-64 of the battle's whole event stream>.
+# The battle is the stage's OPENING one, fought by a fresh profile's starting
+# three, so a line moves when that stage's authored roster or levels move, or
+# when the engine or a starter's kit changes under it.
+#
+# A MOVED LINE IS A CONTENT OR BEHAVIOUR CHANGE. It needs a stated reason in the
+# commit that moves it. Regenerating to make a surprise go away is how a guard
+# stops guarding.
+#
+# The whole event stream behind a hash:  EMBERFALL_DUMP_STAGE_FP=1
+# Regenerate deliberately:               EMBERFALL_REGEN_STAGE_FP=1
+#
+# WHY 48 OF THESE 72 LINES LOOK NOTHING LIKE THE TREE BEFORE THIS FILE EXISTED.
+#
+# The campaign-curve pass re-derived recommendedPower for all 24 stages against the
+# shortened chapter 1 ladder, then re-derived floorLevel, ceilingLevel and the authored
+# enemy levels underneath it so the CEIL band still reads in range at the new number.
+# A fingerprint here is the stage's OPENING battle, which is the authored roster at
+# floorLevel, so it moves exactly when that roster moves and not when a ceiling does.
+# One line per stage, and the eight that did not move say so rather than being omitted:
+#
+#   1-1    unmoved  roster 2/2/2 untouched; only waveCount 12 -> 3 and recommendedPower moved
+#   1-2    unmoved  roster 6/6/6 untouched; waveCount 12 -> 3, recommendedPower re-derived
+#   1-3    unmoved  roster 9/9/10 untouched; waveCount 12 -> 3, recommendedPower re-derived
+#   1-4    unmoved  roster 12/11/12 untouched; waveCount 12 -> 3, recommendedPower re-derived
+#   1-5    unmoved  roster 14/14/15/13 untouched; waveCount 12 -> 6, recommendedPower re-derived
+#   1-6    unmoved  roster 17/17/17/17 untouched; ceilingLevel 27 -> 22 is a ceiling, and a
+#                   ceiling cannot reach the opening battle
+#   1-7    unmoved  roster 21/21/20/21 untouched; ceilingLevel 33 -> 27, same reason
+#   1-8    MOVED    roster 20/24/24/24 -> 15/19/19/19, floorLevel 24 -> 19, ceiling 27 -> 22
+#   1-9    MOVED    roster 23/19/27/27/27 -> 16/12/22/22/22, floorLevel 27 -> 22, ceiling 34 -> 25
+#   1-10   MOVED    roster 26/21/26/26/26 -> 17/11/17/17/17, floorLevel 26 -> 17, ceiling 33 -> 21
+#   1-11   MOVED    roster 25/23/27/27/26 -> 11/10/16/16/15, floorLevel 27 -> 16, ceiling 32 -> 21
+#   1-12   MOVED    roster 22/15/15/16/16 -> 15/11/11/12/12, floorLevel 22 -> 15, ceiling 26 -> 18
+#   2-1    MOVED    roster 32/32/33 -> 33/33/34, floorLevel 33 -> 34, ceiling 52 -> 51
+#   2-2    MOVED    roster 36/36/35 -> 35/35/34, floorLevel 36 -> 35, ceiling 41 -> 39
+#   2-3    MOVED    roster 36/40/35 -> 33/37/32, floorLevel 40 -> 37, ceiling 46 -> 43
+#   2-4    MOVED    roster 51/45/44 -> 44/38/37, floorLevel 51 -> 44, ceiling 61 -> 53
+#   2-5    MOVED    roster 53/43/49/49 -> 43/33/39/39, floorLevel 53 -> 43, ceiling 62 -> 50
+#   2-6    MOVED    roster 51/48/51/51 -> 43/40/43/43, floorLevel 51 -> 43, ceiling 60 -> 59
+#   2-7    MOVED    roster 57/49/48/48 -> 48/40/39/39, floorLevel 57 -> 48, ceiling 63 -> 53
+#   2-8    MOVED    roster 55/51/47/54 -> 47/43/39/46, floorLevel 55 -> 47, ceiling 60 -> 51
+#   2-9    MOVED    roster 60/54/49/53/51 -> 52/46/41/45/43, floorLevel 60 -> 52, ceiling 67 -> 55
+#   2-10   MOVED    roster 70/65/60/62/59 -> 59/54/49/51/48, floorLevel 70 -> 59, ceiling 75 -> 62
+#   2-11   MOVED    roster 76/70/65/63/61 -> 66/60/55/53/51, floorLevel 76 -> 66, ceiling 82 -> 71
+#   2-12   unmoved  roster 51/39/34/53/53 untouched; ceilingLevel 56 -> 60 is the only lever the
+#                   finale needed, and it lands past the opening battle
+#
+# Every roster above moved because floorLevel has to equal the top authored level, so
+# lowering a ceiling far enough to meet a smaller recommendedPower drags the floor with
+# it. The eight unmoved lines are the proof that nothing else moved: no engine change and
+# no starter kit change rode along with this pass.
+#
+1-1|3000001|6df296e0ef038b36
+1-1|3000002|42a0b673cbede093
+1-1|3000003|2614cabab262c1ad
+1-2|3000014|1c7700b5a0626ba9
+1-2|3000015|7e36d2fd23105cf8
+1-2|3000016|f16dbb80719b843d
+1-3|3000027|4cad08e24c23197b
+1-3|3000028|1d64e7c0b60a818e
+1-3|3000029|adabfbf20a79de5a
+1-4|3000040|1f3a6087e028d631
+1-4|3000041|f440f42520bd9322
+1-4|3000042|02b86dfaf3eb3c91
+1-5|3000053|ecd0798e3743fad4
+1-5|3000054|ced7d0a45504994b
+1-5|3000055|c2e1ababb5ffd9f5
+1-6|3000066|a8db452ce641894f
+1-6|3000067|f7c834f6643148fc
+1-6|3000068|d0701d985a8d662e
+1-7|3000079|e67b8298bc962c96
+1-7|3000080|27f7c7e76fcd7756
+1-7|3000081|abf814576373b08d
+1-8|3000092|938c2e41ffb15841
+1-8|3000093|c3696e8010f7e509
+1-8|3000094|afafbe3d072746ba
+1-9|3000105|1878bdd5906ebc9a
+1-9|3000106|c5459fa21be3a53d
+1-9|3000107|19cadc1e3849339d
+1-10|3000118|bd65d739a8d29204
+1-10|3000119|f9fd593a46558fca
+1-10|3000120|a5c57e3bf03d43d4
+1-11|3000131|0572b0ab248d93c8
+1-11|3000132|7d65140a07713249
+1-11|3000133|41ebea1300acf52d
+1-12|3000144|9c9909c27c0b3af1
+1-12|3000145|29199a6326977435
+1-12|3000146|d51c47ae3b5091c8
+2-1|3000157|1168c397d3dcc65a
+2-1|3000158|0471870b78bfaf17
+2-1|3000159|cfaf1a35df1f598e
+2-2|3000170|5986bd2d546458a7
+2-2|3000171|c5dc0f0708c39e1a
+2-2|3000172|eafca61e83642fae
+2-3|3000183|04f52f598d31d5b9
+2-3|3000184|af5cbc5b8548a722
+2-3|3000185|3f3f38d9a413d8f7
+2-4|3000196|2b0097643a022170
+2-4|3000197|1a7b918308915f4f
+2-4|3000198|6dc0ac8b85628472
+2-5|3000209|9381dafec8c7aee2
+2-5|3000210|6c9821146bc5381a
+2-5|3000211|13a2cf27f37719aa
+2-6|3000222|e4653c879a27b56b
+2-6|3000223|9549f353e033810f
+2-6|3000224|d5bfcb0c5876312d
+2-7|3000235|d327dbddc314c2c7
+2-7|3000236|eb900e9cae20acee
+2-7|3000237|a06168b73ef467ea
+2-8|3000248|0e746dd31580730c
+2-8|3000249|d9d486d95c82dd36
+2-8|3000250|a5a234faae674cee
+2-9|3000261|c8130dd309bc8657
+2-9|3000262|b24ae59c11bd715d
+2-9|3000263|caac437d27d7f619
+2-10|3000274|1bf18060eff0633e
+2-10|3000275|3a597d6d3b8180b8
+2-10|3000276|269eec99c2d38d9b
+2-11|3000287|06fd8d6f5b0ae486
+2-11|3000288|6337ffe1cf9634e8
+2-11|3000289|2d81ec42c5649d84
+2-12|3000300|3f06eb33068a6e74
+2-12|3000301|00c9a906f6dcee1d
+2-12|3000302|bc3d8c1c295cff76

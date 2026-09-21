@@ -95,3 +95,36 @@ restructuring underneath the retuned numbers throws the retune away.
   battle-resolution system. Without this, the 144x playtime increase this doc already
   accepted becomes active tap-time instead of idle clock-time, which was never the trade
   being made.
+## Amended 2026-09-21: waveCount is per stage, not a constant
+
+The decision above fixes `waveCount` at 12 for every stage, and the campaign-curve pass
+found that number to be a pacing fault rather than a structural one. A sitting is 40
+battles in the economy model, so a 12x12 stage costs four sittings before difficulty has
+been consulted at all: chapter 1's four tutorial stages cost four sittings each, the whole
+chapter cost about 24, and none of that time was the game being hard. It was ladder.
+
+`waveCount` is now authored per stage and chapter 1 is the short chapter it always read
+as: **3 waves for 1-1 to 1-4** (36 battles, one sitting) and **6 waves for 1-5 to 1-12**
+(72 battles, two sittings). **Chapter 2 and everything after it keep the full 12.**
+`battleCount` stays at 12 everywhere, because it is the number the battle screen counts up
+to inside a wave and a wave of a different length in one chapter is a readout
+inconsistency for no gain.
+
+Nothing about the generator changes. `CampaignWaveGenerator.Progress` already divided by
+`waveCount * battleCount - 1` rather than by a literal 143, so a stage of any length
+interpolates from its own floor to its own ceiling, and the ceiling battle is still the
+last one whatever that is. What did change is every harness check that had the 12 written
+into it; `ExpectedWaveCount` in `Tools/DevHarness/Program.cs` is now where the authored
+shape lives, and the checks read it rather than a constant.
+
+**A save written under the old shape does not strand.** `GameSession.ResumePointFor`
+already clamped a saved `(wave, battle)` into the stage it belongs to, so a save sitting at
+wave 9 of a stage that now ends at wave 6 resumes at that stage's last battle: no progress
+is taken away, and no stage is given away, because the battle still has to be won.
+`CheckCampaignShortenedLadderResume` is the proof, and it round-trips through the real
+serializer rather than setting the profile field by hand, because the value that would
+strand a player arrives from a file.
+
+The 20,736 arithmetic in the sections above is therefore a statement about the 12-chapter
+shape this document proposed, not about what ships. What ships today is 24 stages over two
+chapters and 2,448 battles: 4 x 36 plus 8 x 72 in chapter 1, and 12 x 144 in chapter 2.

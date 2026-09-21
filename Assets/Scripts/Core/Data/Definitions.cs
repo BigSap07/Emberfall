@@ -1613,8 +1613,10 @@ namespace Emberfall.Core.Data
             get { return WaveCount > 1 || BattleCount > 1; }
         }
 
-        /// <summary>Total battles in this stage. 144 for a migrated campaign stage, 1 for a
-        /// synthetic one, which is what lets callers treat both the same way.</summary>
+        /// <summary>Total battles in this stage: 36, 72 or 144 depending on the authored
+        /// waveCount, and 1 for a synthetic stage, which is what lets callers treat both the
+        /// same way. Nothing may assume 144; chapter 1's ladder is deliberately shorter than
+        /// chapter 2's. See DESIGN-CAMPAIGN-STRUCTURE.md's 2026-09-21 amendment.</summary>
         public int TotalBattles
         {
             get { return Math.Max(1, WaveCount) * Math.Max(1, BattleCount); }
