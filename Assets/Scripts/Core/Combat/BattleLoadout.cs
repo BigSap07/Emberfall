@@ -63,6 +63,33 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public int Stars = 1;
 
+        /// <summary>
+        /// The talent slot this unit is running, 1-3, or 0 for none - the same 1-based selection
+        /// HeroInstance.SelectedTalent holds, resolved through HeroDef.TalentAt at materialisation
+        /// exactly as the player's own side resolves it.
+        ///
+        /// A SELECTION, not a talent. The distinction is the one HeroInstance.SelectedTalent
+        /// already makes and it matters more here, not less: the effect list an index names is
+        /// content, so a snapshot that carried the talent itself would freeze a balance patch into
+        /// the opponent while the player's own copy of that hero moved with the patch, and the two
+        /// sides of one fight would be running different arithmetic for the same passive.
+        ///
+        /// This field is why the opponent side of a fight is now the player side's equal. Before
+        /// it, a Proving ghost of your own team fought without the talents you had picked for it,
+        /// and a friend's line fought without theirs - so the one number the mode is built to
+        /// compare, "can my line beat that line", was being answered about a line neither of us
+        /// fields. TeamSnapshot.SelectedTalent recorded the fact from the day snapshots existed
+        /// precisely so that the day this field arrived, no published snapshot would be wrong
+        /// about what it was; this is that day, and nothing published before it has to be
+        /// discarded.
+        ///
+        /// Zero for every generated Proving roster, deliberately. ProvingGenerator.Generate builds
+        /// a line from hero templates nobody owns, and a talent is a choice a player made - there
+        /// is nobody to have made it. Giving synthetic opponents talents would be a difficulty
+        /// change dressed as a data change, and standing is already the dial for that.
+        /// </summary>
+        public int SelectedTalent;
+
         /// <summary>Content id, resolves against ContentDatabase.GetRelic. Empty for no relic.</summary>
         public string RelicId = "";
 

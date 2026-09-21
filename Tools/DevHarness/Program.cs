@@ -2752,9 +2752,123 @@ namespace Emberfall.DevHarness
             CheckPassiveDepthStillBoundedWithTwo();
             CheckTalentSelection();
             CheckUnselectedTalentIsInert();
+            CheckTalentOnTheOpponentSide();
             CheckTalentSavesAndLoads(live);
+            CheckOpponentTalentSavesAndLoads(live);
 
             Line("");
+        }
+
+        /// <summary>
+        /// A talent on the FAR side of a fight does everything a talent on the near side does.
+        ///
+        /// Before LoadoutUnit carried a selection, this was the asymmetry the whole talent layer
+        /// had: a Proving ghost of your own team, and a friend's line in a duel, both fought
+        /// without the talents their owner had picked. The fight on offer was not the line it
+        /// named. Nothing failed, which is why it survived - an opponent simply behaved as though
+        /// nobody had chosen anything, and there was no way to tell that from an opponent who had
+        /// genuinely chosen nothing.
+        ///
+        /// Four claims, and the last is the one that makes the other three worth anything:
+        ///
+        ///   - a loadout with no selection fights exactly as a loadout built before the field
+        ///     existed, so no line that fought without talents yesterday fights differently today;
+        ///   - each of the three selections changes the fight, so the field is genuinely read;
+        ///   - the three differ from EACH OTHER, so it is the selection being read and not merely
+        ///     the presence of one;
+        ///   - and the same talent on the same hero produces the same fingerprint whether that
+        ///     hero stands on the player's side or the opponent's, which is the symmetry a duel
+        ///     between two identical lines rests on. Without it two equal teams could beat each
+        ///     other depending only on which device pressed the button.
+        /// </summary>
+        private static void CheckTalentOnTheOpponentSide()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef talented = db.GetHero("test_talented");
+            HeroDef plain = db.GetHero("test_untalented");
+            StageDef arena = db.GetStage("test_passive_arena");
+            if (talented == null || plain == null || arena == null) return;
+
+            string none = FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, 0));
+            Check(!string.IsNullOrEmpty(none) && none != "NULL",
+                  "an opponent built from a loadout resolves a real fight to compare against");
+
+            string[] selected = new string[4];
+            for (int selection = 1; selection <= 3; selection++)
+            {
+                selected[selection] = FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, selection));
+                Check(selected[selection] != none,
+                      "talent " + selection + " on the OPPONENT changes the fight - the far side reads the "
+                      + "selection the same way the near side does");
+            }
+
+            Check(selected[1] != selected[2] && selected[2] != selected[3] && selected[1] != selected[3],
+                  "and the three selections differ from each other, so it is WHICH talent that is being read "
+                  + "rather than merely that one is set");
+
+            // A loadout carrying no selection at all - which is every generated Proving roster and
+            // every opponent any existing save holds - must be indistinguishable from the same
+            // line built by a version of this code that had no field to carry.
+            BattleLoadout bare = LoadoutOf(talented, 0);
+            bare.Units[0].SelectedTalent = 0;
+            Check(FingerprintOf(RunAgainstLoadout(db, arena, plain, talented, 0)) == FingerprintOf(
+                      RunWithOpponent(db, arena, plain, bare)),
+                  "and an unselected talent on an opponent is ABSENT rather than quiet - no extra passive, no "
+                  + "extra draw, nothing the record can see");
+
+            // ---- the symmetry claim. The same hero, the same talent, the same arena, the same
+            // seed - once as the player's own unit and once as the opposing loadout. The two
+            // records are different by construction (sides are swapped), so what is compared is
+            // each side's fight against ITS unselected control: if the talent does the same work
+            // on both sides, it moves both records, and if it were being dropped on one side that
+            // side's two records would be identical.
+            string playerNone = FingerprintOf(RunWithTalent(db, talented, 0));
+            bool movesOnBothSides = true;
+            for (int selection = 1; selection <= 3 && movesOnBothSides; selection++)
+            {
+                if (FingerprintOf(RunWithTalent(db, talented, selection)) == playerNone) movesOnBothSides = false;
+                if (selected[selection] == none) movesOnBothSides = false;
+            }
+            Check(movesOnBothSides,
+                  "every talent moves the record from BOTH sides of the arena - a duel between two identical "
+                  + "lines cannot be decided by which one pressed the button");
+        }
+
+        /// <summary>The talented hero as a one-unit opposing line, at the level RunWithTalent puts
+        /// him at on the player's side, so the two sides are the same unit.</summary>
+        private static BattleLoadout LoadoutOf(HeroDef def, int selection)
+        {
+            BattleLoadout loadout = new BattleLoadout();
+            loadout.Label = "Opposing Line";
+            LoadoutUnit unit = new LoadoutUnit();
+            unit.DefId = def.Id;
+            unit.Level = 10;
+            unit.Stars = def.Stars;
+            unit.SelectedTalent = selection;
+            loadout.Units.Add(unit);
+            return loadout;
+        }
+
+        private static BattleResult RunAgainstLoadout(ContentDatabase db, StageDef arena, HeroDef playerDef,
+                                                      HeroDef opponentDef, int selection)
+        {
+            return RunWithOpponent(db, arena, playerDef, LoadoutOf(opponentDef, selection));
+        }
+
+        private static BattleResult RunWithOpponent(ContentDatabase db, StageDef arena, HeroDef playerDef,
+                                                    BattleLoadout opponent)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(playerDef, 10));
+            BattleRequest request = new BattleRequest();
+            request.Content = db;
+            request.Stage = arena;
+            request.Opponent = opponent;
+            request.Seed = 31;
+            request.Team = team;
+            return CombatSimulation.Run(request);
         }
 
         /// <summary>
@@ -3018,10 +3132,19 @@ namespace Emberfall.DevHarness
         /// The selection is save state: it survives a round trip, an upgrading save reads as none,
         /// and the downgrade guard still refuses a save from a newer build.
         ///
-        /// The version numbers here are deliberately written BOTH ways. CurrentVersion - 1 and
-        /// CurrentVersion + 1 are the upgrade and the downgrade as every earlier bump asserts them,
-        /// and never go stale; the literal 12 and 14 alongside them are the specific numbers this
-        /// bump was commissioned against, and they stay true as long as this build reads 13.
+        /// The version numbers here used to be written BOTH ways: CurrentVersion - 1 and
+        /// CurrentVersion + 1 for the upgrade and the downgrade, plus the literals 12 and 14
+        /// asserting that those relative forms named the specific saves this bump was commissioned
+        /// against. That second pair was documented as true "as long as this build reads 13", and
+        /// version 14 - the talent on a pending OPPONENT - ended that. The tripwire fired exactly
+        /// as designed and is removed rather than re-pinned one higher, because re-pinning would
+        /// only schedule the same failure for version 15 while testing nothing the relative form
+        /// does not already test.
+        ///
+        /// What the literals were actually buying is kept, and kept better: the version 12 upgrade
+        /// is now exercised against a save STAMPED 12 rather than against whatever CurrentVersion
+        /// happens to be one below, so the migration this bump introduced stays measured no matter
+        /// how far the version number travels past it.
         /// </summary>
         private static void CheckTalentSavesAndLoads(ContentDatabase db)
         {
@@ -3035,10 +3158,17 @@ namespace Emberfall.DevHarness
 
             HeroInstance hero = profile.Heroes[0];
 
-            // No shipped hero authors a talent, so a real selection is refused - which is itself
-            // the rule, not an obstacle: a selection is a promise that something resolves.
+            // The message here used to read "SelectTalent refuses a slot the hero does not author
+            // (no shipped hero authors one yet)", which asserted success while describing a
+            // refusal. It was written when no shipped hero authored a talent; thirty now do, the
+            // starter this runs against is one of them, and the line has been reporting the
+            // opposite of what it measured ever since - a passing check saying the wrong thing,
+            // which is worse than a failing one.
             Check(session.SelectTalent(hero, 1),
-                  "SelectTalent refuses a slot the hero does not author (no shipped hero authors one yet)");
+                  "SelectTalent accepts slot 1 on a starter, which authors three talents ("
+                  + (hero.Def == null ? "no def" : hero.Def.Talents.Count + " authored") + ")");
+            Check(!session.SelectTalent(hero, HeroDef.MaxTalents + 1),
+                  "and refuses a slot no hero can author - a selection is a promise that something resolves");
             Check(session.SelectTalent(hero, 0), "and clearing to none always succeeds");
 
             // Written straight onto the instance for the round trip, because the serializer's job is
@@ -3065,18 +3195,30 @@ namespace Emberfall.DevHarness
 
             // ---- upgrade: the zero-default migration, at the version that predates the key and at
             // the version that carries it but happens not to have used it.
-            int previousVersion = SaveSerializer.CurrentVersion - 1;
+            //
+            // Stamped 12 outright rather than derived from CurrentVersion - 1. Version 12 is the
+            // last save format with no selectedTalent key ANYWHERE, and that is a fact about the
+            // format's history which does not move when CurrentVersion does - deriving it meant
+            // this check silently stopped exercising the talent migration the moment a later bump
+            // landed, and started exercising whatever the previous bump was instead.
+            const int TalentPredecessorVersion = 12;
             string previous = cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
-                                                "\"version\": " + previousVersion);
+                                                "\"version\": " + TalentPredecessorVersion);
             string previousError;
             PlayerProfile upgraded = SaveSerializer.Deserialize(previous, db, out previousError);
             Check(upgraded != null && previousError == null,
-                  "a version " + previousVersion + " save (CurrentVersion - 1, and the literal 12 this bump was "
-                  + "commissioned against - no selectedTalent key anywhere) loads"
+                  "a version " + TalentPredecessorVersion + " save - the last format with no selectedTalent key "
+                  + "anywhere, which is the save this bump was commissioned against - loads"
                   + (previousError != null ? " (" + previousError + ")" : ""));
-            Check(previousVersion == 12,
-                  "and that IS version 12, so the relative form above and the number the bump was specified with "
-                  + "are the same save (got " + previousVersion + ")");
+            int previousVersion = SaveSerializer.CurrentVersion - 1;
+            string oneBelowError;
+            PlayerProfile oneBelow = SaveSerializer.Deserialize(
+                cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+                                  "\"version\": " + previousVersion), db, out oneBelowError);
+            Check(oneBelow != null && oneBelowError == null,
+                  "and so does a save one below CURRENT (version " + previousVersion + "), so the ordinary upgrade "
+                  + "path is exercised at whatever version this build has reached"
+                  + (oneBelowError != null ? " (" + oneBelowError + ")" : ""));
             if (upgraded != null)
             {
                 int selected = 0;
@@ -3109,12 +3251,94 @@ namespace Emberfall.DevHarness
                 "\"version\": " + nextVersion), db, out nextError);
             Check(next == null && nextError != null
                   && nextError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
-                  "a version " + nextVersion + " save (CurrentVersion + 1, and the literal 14 this bump was "
-                  + "commissioned against) is refused with the same message every earlier bump uses (\""
-                  + nextError + "\")");
-            Check(nextVersion == 14,
-                  "and that IS version 14, so the guard and the number the bump was specified with are the same "
-                  + "save (got " + nextVersion + ")");
+                  "a version " + nextVersion + " save (CurrentVersion + 1) is refused with the same message every "
+                  + "earlier bump uses (\"" + nextError + "\")");
+        }
+
+        /// <summary>
+        /// Version 14: the talent a PENDING OPPONENT is running, inside `provingOpponent`.
+        ///
+        /// Three claims, and the third is the one the bump exists for. The selection round-trips;
+        /// a version 13 opponent - which is every opponent any live save currently holds - reads
+        /// as no talent rather than as a synthesised one; and an opponent that HAS a talent fights
+        /// differently from the same opponent without it, which is what makes the first two claims
+        /// worth making. Without the third, "the field survives a save" would be a statement about
+        /// a number nothing reads.
+        /// </summary>
+        private static void CheckOpponentTalentSavesAndLoads(ContentDatabase db)
+        {
+            Check(SaveSerializer.CurrentVersion >= 14,
+                  "save version is at least 14, where the opponent's talent bumped it ("
+                  + SaveSerializer.CurrentVersion + ")");
+
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1699963200L);
+            GameSession session = new GameSession(db, profile);
+
+            BattleLoadout opponent = ProvingGenerator.Generate(db, db.Balance, 6, session.ProvingTargetPower(),
+                                                                ProvingGenerator.SeedFor(6, 3));
+            Check(opponent != null && opponent.Units.Count > 0, "a generated line to hang a talent on");
+            if (opponent == null || opponent.Units.Count == 0) return;
+
+            int generatedWithTalent = 0;
+            for (int i = 0; i < opponent.Units.Count; i++)
+                if (opponent.Units[i].SelectedTalent != 0) generatedWithTalent++;
+            Check(generatedWithTalent == 0,
+                  "a GENERATED roster carries no talent on any unit - there is no player behind it to have picked "
+                  + "one, and handing synthetic opponents talents would be a difficulty change dressed as a data "
+                  + "change (" + generatedWithTalent + " carried one)");
+
+            profile.ProvingOpponent = opponent;
+            string noTalent = SaveSerializer.Serialize(profile);
+            Check(noTalent.IndexOf("selectedTalent", StringComparison.Ordinal) < 0,
+                  "and writes no selectedTalent key at all, so a pending generated opponent serialises byte for "
+                  + "byte the way it did before the field existed");
+
+            // Written straight onto the unit: the serializer's job is to carry whatever is there,
+            // and no shipped hero authors a talent for SelectTalent to legitimately hand out.
+            opponent.Units[0].SelectedTalent = 2;
+            string withTalent = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile reloaded = SaveSerializer.Deserialize(withTalent, db, out error);
+            Check(reloaded != null && error == null && reloaded.ProvingOpponent != null,
+                  "a save carrying an opponent's talent loads" + (error != null ? " (" + error + ")" : ""));
+            if (reloaded == null || reloaded.ProvingOpponent == null) return;
+            Check(reloaded.ProvingOpponent.Units[0].SelectedTalent == 2,
+                  "and the opponent's selection survives the round trip (got "
+                  + reloaded.ProvingOpponent.Units[0].SelectedTalent + ", expected 2)");
+
+            // ---- the upgrade, against a document stamped 13: the last format in which a loadout
+            // could not carry a talent at all. Zero is not a default chosen here, it is what those
+            // opponents actually fought with, because LoadoutUnit had no field for anything else.
+            string thirteen = withTalent.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": 13");
+            // Strip the key the way a version 13 writer would have: it did not know it existed.
+            thirteen = thirteen.Replace("\"selectedTalent\": 2,", "").Replace(", \"selectedTalent\": 2", "");
+            string upgradeError;
+            PlayerProfile upgraded = SaveSerializer.Deserialize(thirteen, db, out upgradeError);
+            Check(upgraded != null && upgradeError == null && upgraded.ProvingOpponent != null,
+                  "a version 13 save with a pending opponent and no talent key still loads"
+                  + (upgradeError != null ? " (" + upgradeError + ")" : ""));
+            if (upgraded != null && upgraded.ProvingOpponent != null)
+            {
+                int carried = 0;
+                for (int i = 0; i < upgraded.ProvingOpponent.Units.Count; i++)
+                    if (upgraded.ProvingOpponent.Units[i].SelectedTalent != 0) carried++;
+                Check(carried == 0,
+                      "and every unit of it reads as no talent, which is exactly what it fought with - the zero "
+                      + "default IS the migration, so a player part-way through a match keeps the fight they were "
+                      + "offered (" + carried + " did not)");
+            }
+
+            // ---- and a slot past MaxTalents is corrupt rather than stale, the same rule a hero's
+            // own selection follows.
+            string absurdError;
+            PlayerProfile absurd = SaveSerializer.Deserialize(
+                withTalent.Replace("\"selectedTalent\": 2", "\"selectedTalent\": 99"), db, out absurdError);
+            Check(absurd != null && absurd.ProvingOpponent != null
+                  && absurd.ProvingOpponent.Units[0].SelectedTalent == 0,
+                  "an opponent's selection past HeroDef.MaxTalents reads as none rather than as a slot that can "
+                  + "never resolve");
+
+            Line("");
         }
 
         private static string TalentIdFor(int selection)
@@ -9859,6 +10083,27 @@ namespace Emberfall.DevHarness
                   "and the opponent actually handed out is flagged as a ghost, so the UI can say so out loud");
             Check(first != null && first.Units.Count == profile.TeamHeroes().Count,
                   "the ghost is the player's own team, body for body (" + (first == null ? 0 : first.Units.Count) + ")");
+
+            // ...and choice for choice. A ghost is the one opponent in the game that CLAIMS to be
+            // the player's own line, so a ghost fighting without the talents that line runs was a
+            // quiet lie in the place this mode's honesty rules care about most. Taken on a second
+            // ghost rather than by re-reading `first`, because the pending one was built before
+            // these selections existed - which is itself the correct behaviour and is why the
+            // pending opponent has to be cleared to ask the question at all.
+            List<HeroInstance> ghostTeam = profile.TeamHeroes();
+            int selectable = 0;
+            for (int i = 0; i < ghostTeam.Count; i++)
+                if (session.SelectTalent(ghostTeam[i], 1)) selectable++;
+            profile.ProvingOpponent = null;
+            BattleLoadout afterPicking = session.CurrentProvingOpponent(Now);
+            int carried = 0;
+            if (afterPicking != null)
+                for (int i = 0; i < afterPicking.Units.Count; i++)
+                    if (afterPicking.Units[i].SelectedTalent == 1) carried++;
+            Check(selectable > 0 && carried == selectable,
+                  "and choice for choice - every talent the player has picked is on the ghost that is offered ("
+                  + carried + " of " + selectable + " picked)");
+            for (int i = 0; i < ghostTeam.Count; i++) session.SelectTalent(ghostTeam[i], 0);
 
             // Past the bootstrap window the mode switches to generated rosters.
             // Attempts, not highest standing. Highest used to stand in for this and was wrong: one
@@ -24006,6 +24251,27 @@ namespace Emberfall.DevHarness
             Check(team.Count > 0, "the snapshot test has a team to publish (" + team.Count + ")");
             if (team.Count == 0) return;
 
+            // Talents, written straight onto the instances rather than through SelectTalent, which
+            // is the selection RULE's path and not this check's subject.
+            //
+            // Not decoration, and not free. Thirty shipped heroes author three talents each, so
+            // these selections are LIVE - they resolve through TalentAt on both sides and change
+            // the fight. That is deliberate: the whole claim below is that a line published to the
+            // cloud fights the fight it names, and a line where every unit agreed about zero would
+            // have proved that claim for the one case where the new field cannot possibly be
+            // wrong. With talents set, the round trip is carrying something, and the fingerprint
+            // comparison is carrying it into a battle.
+            int running = 0;
+            for (int i = 0; i < team.Count; i++)
+            {
+                team[i].SelectedTalent = (i % HeroDef.MaxTalents) + 1;
+                if (team[i].Def != null && team[i].Def.TalentAt(team[i].SelectedTalent) != null) running++;
+            }
+            Check(running > 0,
+                  "at least one hero in the published line is running a talent that RESOLVES, so the round trip "
+                  + "below is carrying something into a real fight rather than agreeing about zero ("
+                  + running + " of " + team.Count + ")");
+
             TeamSnapshot published = TeamSnapshotBuilder.From(db, profile, "Pinoy");
             Check(published.Units.Count == team.Count,
                   "the snapshot carries every deployed hero (" + published.Units.Count + " of " + team.Count + ")");
@@ -24037,6 +24303,19 @@ namespace Emberfall.DevHarness
             }
             Check(fieldsMatch, "and every field of every unit, armor rolls included, is unchanged ("
                   + armorPieces + " armor piece(s) carried by value)");
+
+            // And the selection reaches the type the SIMULATION consumes, which is the step the
+            // field comparison above cannot see: SnapshotUnit and LoadoutUnit are different types
+            // and ToLoadout is the only thing that joins them.
+            BattleLoadout asFought = fetched.ToLoadout();
+            bool talentsReachedTheLoadout = asFought.Units.Count == fetched.Units.Count;
+            for (int i = 0; i < asFought.Units.Count && talentsReachedTheLoadout; i++)
+                if (asFought.Units[i].SelectedTalent != fetched.Units[i].SelectedTalent)
+                    talentsReachedTheLoadout = false;
+            Check(talentsReachedTheLoadout,
+                  "and every selection arrives on the LOADOUT the simulation consumes - ToLoadout is the only "
+                  + "join between the snapshot's unit and the combat one, so a drop here would be invisible to "
+                  + "every check above it");
 
             // The fight itself. Same stage, same seed, same player side - the only difference is
             // which object the far side was built from.

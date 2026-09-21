@@ -22,18 +22,18 @@ namespace Emberfall.Core.Cloud
 
         /// <summary>
         /// The talent slot this hero is running, 1-3, or 0 for none - HeroInstance.SelectedTalent,
-        /// copied at publish time.
+        /// copied at publish time and carried into LoadoutUnit.SelectedTalent by ToLoadout.
         ///
-        /// STORED, AND CURRENTLY UNUSED. CombatSimulation resolves a talent from
-        /// HeroInstance.SelectedTalent on the player's side only; the opponent side builds from
-        /// LoadoutUnit, which has no talent field, so a Proving ghost already fights without its
-        /// talents and a duel opponent fights the same way. Giving LoadoutUnit a talent field
-        /// would be a change to the combat path, which this pass is not allowed to make.
+        /// STORED AND NOW READ. It was neither when it was added: LoadoutUnit had no talent field,
+        /// so the opponent side of a fight could not receive one, and the note here said so and
+        /// said why it was captured anyway - a snapshot is a RECORD, and the day the engine grew a
+        /// talent-carrying loadout, every snapshot published before it would otherwise have been
+        /// silently wrong about what it was. That day has arrived and the bet paid: LoadoutUnit
+        /// carries the field, the simulation resolves it on both sides, and every snapshot
+        /// published in the interval is correct without being republished.
         ///
-        /// It is captured anyway because a snapshot is a RECORD of a line, and the alternative is
-        /// that the day the engine grows a talent-carrying loadout, every snapshot published
-        /// before it is silently wrong about what it was. A column written and not yet read costs
-        /// nothing; a fact thrown away cannot be recovered.
+        /// The rest of the reasoning is unchanged and is on LoadoutUnit.SelectedTalent, which is
+        /// the field that now does the work.
         /// </summary>
         public int SelectedTalent;
 
@@ -45,11 +45,11 @@ namespace Emberfall.Core.Cloud
     /// <summary>
     /// A player's current line, frozen and published so a friend can fight it.
     ///
-    /// This is deliberately NOT a new opponent format. It is BattleLoadout's data plus the one
-    /// field BattleLoadout does not yet carry, and ToLoadout() hands back exactly the type the
-    /// simulation already consumes - so a fetched friend's line travels the same path a Proving
-    /// opponent travels, which is the path BattleLoadout was built to be travelled by. Nothing in
-    /// the combat code learns that friends exist.
+    /// This is deliberately NOT a new opponent format. It is BattleLoadout's data field for field,
+    /// and ToLoadout() hands back exactly the type the simulation already consumes - so a fetched
+    /// friend's line travels the same path a Proving opponent travels, which is the path
+    /// BattleLoadout was built to be travelled by. Nothing in the combat code learns that friends
+    /// exist.
     ///
     /// Not a save, and the distinction is the privacy rule in the schema: a friend who can fight
     /// your line learns your five heroes and their gear, and learns nothing about your gold, your
@@ -85,6 +85,7 @@ namespace Emberfall.Core.Cloud
                 u.Level = s.Level;
                 u.Stars = s.Stars;
                 u.RelicId = s.RelicId;
+                u.SelectedTalent = s.SelectedTalent;
                 for (int a = 0; a < s.Armor.Count; a++)
                     if (s.Armor[a] != null) u.Armor.Add(s.Armor[a]);
                 loadout.Units.Add(u);
@@ -98,10 +99,13 @@ namespace Emberfall.Core.Cloud
     ///
     /// Deliberately the same walk ProvingGenerator.GhostOf does - team heroes in slot order,
     /// armor resolved out of OwnedArmor by uid and copied by value, power computed through
-    /// ProvingGenerator.PowerOf so the number shown is the number fought. It is not shared code
-    /// with GhostOf because the two differ in what they produce - a TeamSnapshot carries the
-    /// talent and a real name, a ghost carries neither and is flagged - and one function with two
-    /// modes would hide that difference rather than state it.
+    /// ProvingGenerator.PowerOf so the number shown is the number fought - the talent included,
+    /// now that both walks carry one. It is not shared code with GhostOf because the two differ in
+    /// what they PRODUCE and in what they CLAIM: a ghost is a BattleLoadout flagged IsGhost and
+    /// labelled as the player's own line, a snapshot is a record carrying a real player's name and
+    /// published for somebody else to read. Their field lists converged when talents arrived;
+    /// their meanings did not, and one function with two modes would hide that rather than state
+    /// it.
     /// </summary>
     public static class TeamSnapshotBuilder
     {

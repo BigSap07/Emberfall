@@ -168,7 +168,36 @@ namespace Emberfall.Core.Save
         /// Downgrade is guarded the same way every bump above is: version 12 code reads no
         /// selectedTalent key, so it would silently drop every talent every hero is running - a
         /// whole layer of a team's behaviour - and the check below refuses that instead.
-        public const int CurrentVersion = 13;
+        ///
+        /// 14: the talent a PENDING OPPONENT is running (LoadoutUnit.SelectedTalent), written per
+        /// unit inside `provingOpponent` and only when non-zero, exactly as version 13 writes a
+        /// hero's own selection.
+        ///
+        /// Upgrade needs no migration and gets none: a version 13 opponent has no selectedTalent
+        /// key on any unit, which reads as 0, and 0 is precisely what that opponent fought with -
+        /// LoadoutUnit had no talent field at all when it was written, so the simulation could not
+        /// have given it one. The default IS the migration, and it is the strict kind: a player
+        /// part-way through a Proving match keeps the fight they were offered rather than having a
+        /// talent switched on underneath them by an update.
+        ///
+        /// WHY THIS IS A BUMP AND NOT A SILENT ADDITION, since a pending opponent is not progress
+        /// and the case is genuinely arguable. Version 9's note already settled what a
+        /// `provingOpponent` is - "the opponent they were part-way through", named there beside
+        /// standing and the Brand bank as a thing version 8 code would silently drop - and version
+        /// 13's note already settled what a dropped talent costs: "a whole layer of a team's
+        /// behaviour". This key is the intersection of those two sentences. Version 13 code reads
+        /// no selectedTalent inside a loadout, so it would hand the player the same five bodies
+        /// with a layer of their behaviour quietly removed, and the fight on offer would be easier
+        /// than the fight that was offered. That is small, and it is exactly the class of silent
+        /// difference every bump in this list exists to refuse.
+        ///
+        /// It also stopped being hypothetical the moment saves began travelling between devices.
+        /// SyncPlanner refuses a cloud save from a newer build rather than reading it, and that
+        /// refusal can only protect what the version number declares - `save_version` is its own
+        /// column precisely so the refusal happens before the document is parsed. A shape change
+        /// that did not move the number would walk straight through that guard onto an older
+        /// phone, which is the one place in this system where "small" and "silent" compound.
+        public const int CurrentVersion = 14;
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -287,6 +316,10 @@ namespace Emberfall.Core.Save
                 uj.Set("level", u.Level);
                 uj.Set("stars", u.Stars);
                 uj.Set("relicId", u.RelicId);
+                // Written only when non-zero, the way a hero's own selectedTalent is, so a pending
+                // opponent that nobody has picked a talent for serialises byte for byte the way it
+                // did before the field existed. Every generated roster is such an opponent.
+                if (u.SelectedTalent != 0) uj.Set("selectedTalent", u.SelectedTalent);
                 JsonValue armor = JsonValue.NewArray();
                 for (int a = 0; a < u.Armor.Count; a++)
                 {
@@ -320,6 +353,13 @@ namespace Emberfall.Core.Save
                 u.Level = Math.Max(1, uj.GetInt("level", 1));
                 u.Stars = Math.Max(1, uj.GetInt("stars", 1));
                 u.RelicId = uj.GetString("relicId", "");
+                // Absent on every opponent written before version 14, which reads as 0, which is
+                // "no talent" - and no talent is precisely what those opponents fought with, so
+                // the default IS the migration and a pending fight does not change under a player
+                // mid-way through it. Clamped the same way a hero's own selection is, so a file
+                // naming slot 9 cannot reach TalentAt with it.
+                int talent = uj.GetInt("selectedTalent", 0);
+                u.SelectedTalent = talent < 0 || talent > HeroDef.MaxTalents ? 0 : talent;
                 List<JsonValue> armor = uj.GetList("armor");
                 for (int a = 0; a < armor.Count; a++) u.Armor.Add(ReadArmorPiece(armor[a]));
                 loadout.Units.Add(u);

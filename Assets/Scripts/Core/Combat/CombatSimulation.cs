@@ -1059,6 +1059,33 @@ namespace Emberfall.Core.Combat
                         // the stats above. Kept identical so an opponent's relic behaves exactly as
                         // the player's would.
                         if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
+
+                        // The selected talent, resolved from the SNAPSHOT rather than from a
+                        // HeroInstance, and then forgotten - the same three lines the player loop
+                        // above runs, in the same order, for the same reason. Three lines rather
+                        // than a shared helper because what differs is only where the selection
+                        // came from, and a helper taking (unit, def, selection) would read as
+                        // though the two sides were doing something more alike than they are: the
+                        // player's is live save state, this is a frozen record of somebody's.
+                        //
+                        // Appended after the def's own passives here too, so a talent resolves last
+                        // on a shared trigger on BOTH sides of the fight. That ordering is what
+                        // makes a duel symmetrical: if the opponent's talent resolved before their
+                        // def passives and the player's after, two identical lines could beat each
+                        // other, which is the one outcome a friendly duel must never produce.
+                        //
+                        // Zero - every generated Proving roster, every save written before this
+                        // field existed, and every snapshot whose owner has picked nothing -
+                        // resolves to null through TalentAt and adds nothing at all, which is why
+                        // no line that fought without talents yesterday fights differently today.
+                        PassiveDef opponentTalent = def.TalentAt(entry.SelectedTalent);
+                        if (opponentTalent != null)
+                        {
+                            unit.AddPassive(opponentTalent);
+                            ApplyTalentOverrides(unit, opponentTalent);
+                            ApplyTalentAppends(unit, opponentTalent);
+                        }
+
                         _units.Add(unit);
                     }
                 }
