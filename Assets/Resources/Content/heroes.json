@@ -4109,8 +4109,8 @@
       "passive1": {
         "id": "celen_nothing_hoarded",
         "name": "Nothing Hoarded",
-        "description": "At the start of his turn, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
-        "trigger": "TurnStart",
+        "description": "At round start, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
+        "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
           {
@@ -4399,7 +4399,7 @@
         "id": "siofra_forecast_reversed",
         "name": "Forecast Reversed",
         "energyCost": 100,
-        "description": "Deals 190% Attack damage to all enemies, reverses one modifier on each, and every enemy reversed loses 10 Energy.",
+        "description": "Deals 190% Attack damage to all enemies and reverses one Attack, Defense or Speed modifier on each.",
         "effects": [
           {
             "kind": "Damage",
@@ -4410,18 +4410,13 @@
             "kind": "InvertStatus",
             "target": "AllEnemies",
             "hits": 1
-          },
-          {
-            "kind": "EnergyGain",
-            "target": "AllEnemies",
-            "flat": -10
           }
         ]
       },
       "passive1": {
         "id": "siofra_prediction_cost",
         "name": "Prediction Cost",
-        "description": "Whenever Siofra turns a buff into a debuff, that target loses 10 Energy, once per round.",
+        "description": "Whenever Siofra changes a buff into a debuff, that target loses 10 Energy, once per round.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -4432,7 +4427,23 @@
             "flat": -10
           }
         ]
-      }
+      },
+      "passives": [
+        {
+          "id": "siofra_prediction_cost_active",
+          "name": "Prediction Cost",
+          "description": "The same cost after Forecast Reversed: every enemy whose modifier was turned over loses 10 Energy.",
+          "trigger": "AfterActiveCast",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "AllEnemies",
+              "flat": -10
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "vanno_the_detour_king",
@@ -6434,25 +6445,73 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "corin_the_patience_engineer_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "corin_measurement_strike",
+        "name": "Measurement Strike",
+        "description": "Deals 210% Attack damage and applies Settling for 2 rounds. Settling reduces Speed by 8% each round, up to 24%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.1
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.08,
+            "maxStacks": 3,
+            "stackOnReapply": true,
+            "status": "Slow"
           }
         ]
       },
       "active": {
-        "id": "corin_the_patience_engineer_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "corin_weight_of_time",
+        "name": "Weight of Time",
         "energyCost": 100,
+        "description": "Deals 400% Attack damage to enemies with Settling. Targets at 24% Speed Down are Stunned for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "MyStatusStacksAtLeast",
+            "conditionOn": "Target",
+            "conditionStatus": "Slow",
+            "conditionValue": 1,
+            "power": 4.0
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "bypassResist": true,
+            "chance": 1,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionOn": "Target",
+            "conditionStatus": "Slow",
+            "conditionValue": 3,
+            "duration": 1,
+            "status": "Stun"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "corin_load_bearing",
+        "name": "Load Bearing",
+        "description": "When Settling expires, apply 15% Defense Down for 2 rounds.",
+        "trigger": "OnAppliedStatusExpired",
+        "triggerStatus": "Slow",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastSubject",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "DefenseDown"
           }
         ]
       }
@@ -6495,28 +6554,96 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "halwen_the_reserve_keeper_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "halwen_reserve_swing",
+        "name": "Reserve Swing",
+        "description": "Deals 60% Attack damage and grants Reserve for 2 rounds. Reserve reduces the next damage taken by 18%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 0.6
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "charges": 1,
+            "duration": 2,
+            "magnitude": 0.18,
+            "status": "Guard"
           }
         ]
       },
       "active": {
-        "id": "halwen_the_reserve_keeper_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "halwen_open_the_reserve",
+        "name": "Open the Reserve",
         "energyCost": 100,
+        "description": "Deals 90% Attack damage to all enemies and grants Reserve to all allies for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 0.9
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllAllies",
+            "chance": 1,
+            "charges": 1,
+            "duration": 2,
+            "magnitude": 0.18,
+            "status": "Guard"
           }
         ]
-      }
+      },
+      "passive1": {
+        "id": "halwen_rationed_strength",
+        "name": "Rationed Strength",
+        "description": "The first time each round an enemy strikes an ally, that ally recovers 4% Max HP, or gains 6 Energy if it is already whole.",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "BroadcastVictim",
+            "condition": "HpAbove",
+            "conditionOn": "Target",
+            "conditionValue": 0.99,
+            "flat": 6
+          },
+          {
+            "kind": "Heal",
+            "target": "BroadcastVictim",
+            "targetMaxHpRatio": 0.04
+          }
+        ]
+      },
+      "passives": [
+        {
+          "id": "halwen_rationed_strength_self",
+          "name": "Rationed Strength",
+          "description": "The same recovery when Halwen is the one struck - OnEnemyDamagedAlly excludes the body being hit, so the victim needs its own hook.",
+          "trigger": "OnDamaged",
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "Self",
+              "condition": "HpAbove",
+              "conditionOn": "Caster",
+              "conditionValue": 0.99,
+              "flat": 6
+            },
+            {
+              "kind": "Heal",
+              "target": "Self",
+              "targetMaxHpRatio": 0.04
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "jory_the_old_gate",
@@ -6556,25 +6683,63 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "jory_the_old_gate_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "jory_holdfast_thrust",
+        "name": "Holdfast Thrust",
+        "description": "Deals 145% Attack damage. If Jory was attacked since his last turn, he heals 4% Max HP.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.45
+          },
+          {
+            "kind": "Heal",
+            "target": "Self",
+            "condition": "SubjectDamagedSinceMyTurn",
+            "conditionOn": "Caster",
+            "targetMaxHpRatio": 0.04
           }
         ]
       },
       "active": {
-        "id": "jory_the_old_gate_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "jory_bar_the_way",
+        "name": "Bar the Way",
         "energyCost": 100,
+        "description": "Deals 230% Attack damage and Taunts the front enemy for 2 rounds, while Jory takes 15% less damage.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "FrontEnemy",
+            "power": 2.3
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "chance": 1,
+            "duration": 2,
+            "status": "Taunt"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "DamageReductionUp"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "jory_worn_hinges",
+        "name": "Worn Hinges",
+        "description": "The first time each round an enemy hits Jory, he counterattacks it for 110% Attack damage.",
+        "trigger": "OnDamaged",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastAttacker",
+            "power": 1.1
           }
         ]
       }
@@ -6617,28 +6782,72 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "maera_the_harbor_eye_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "maera_returning_shot",
+        "name": "Returning Shot",
+        "description": "Deals 280% Attack damage; if the target has already acted this round, deals 70% additional Attack damage.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.8
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "condition": "SubjectActedThisRound",
+            "conditionOn": "Target",
+            "power": 0.7
           }
         ]
       },
       "active": {
-        "id": "maera_the_harbor_eye_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "maera_keep_the_beacon",
+        "name": "Keep the Beacon",
         "energyCost": 100,
+        "description": "Deals 540% Attack damage to the enemy that has dealt the most damage. On defeat, allies recover 7% Max HP.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "HighestDamageDealtEnemy",
+            "power": 5.4
           }
         ]
-      }
+      },
+      "passive1": {
+        "id": "maera_watch_the_water",
+        "name": "Watch the Water",
+        "description": "The first time each ally falls below 45% HP, Maera’s next attack is a guaranteed Critical.",
+        "trigger": "OnAllyHpBelowThreshold",
+        "threshold": 0.45,
+        "firesPerSubject": 1,
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "duration": 2,
+            "status": "GuaranteedCrit"
+          }
+        ]
+      },
+      "passives": [
+        {
+          "id": "maera_keep_the_beacon_relief",
+          "name": "Keep the Beacon",
+          "description": "The relief on Keep the Beacon only: an enemy defeated during that cast sends every ally 7% of their Max HP.",
+          "trigger": "OnEnemyDefeated",
+          "triggerAbilityId": "maera_keep_the_beacon",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Heal",
+              "target": "AllAllies",
+              "targetMaxHpRatio": 0.07
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "maren_the_long_sleeper",
@@ -6678,25 +6887,66 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "maren_the_long_sleeper_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "maren_waking_touch",
+        "name": "Waking Touch",
+        "description": "Deals 130% Attack damage and heals the lowest-HP ally for 60% Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.3
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.6
           }
         ]
       },
       "active": {
-        "id": "maren_the_long_sleeper_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "maren_unfinished_rest",
+        "name": "Unfinished Rest",
         "energyCost": 100,
+        "description": "Deals 210% Attack damage to all enemies and gives the two lowest-HP allies Recovery for 3 rounds. Recovery heals about 3% Max HP each turn.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.1
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "TwoLowestHpAllies",
+            "chance": 1,
+            "duration": 3,
+            "magnitude": 0.35,
+            "status": "Regen"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "maren_do_not_disturb",
+        "name": "Do Not Disturb",
+        "description": "When an ally with Recovery would die, remove Recovery and leave them at 1 HP. Once per battle.",
+        "trigger": "OnAllyWouldDie",
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "RedirectLethal",
+            "target": "BroadcastSubject",
+            "condition": "HasStatus",
+            "conditionOn": "Target",
+            "conditionStatus": "Regen",
+            "power": 0.0
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "condition": "HasStatus",
+            "conditionOn": "Target",
+            "conditionStatus": "Regen",
+            "hits": 1,
+            "status": "Regen"
           }
         ]
       }
@@ -8579,25 +8829,58 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "eira_the_rolling_barricade_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "eira_shove_aside",
+        "name": "Shove Aside",
+        "description": "Deals 150% Attack damage and shoves the target out of position if another enemy is alive.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.5
+          },
+          {
+            "kind": "SwapPositions",
+            "target": "LastTarget"
           }
         ]
       },
       "active": {
-        "id": "eira_the_rolling_barricade_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "eira_redeploy_cover",
+        "name": "Redeploy Cover",
         "energyCost": 100,
+        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the next hit each ally takes by 20%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.5
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllAllies",
+            "chance": 1,
+            "charges": 1,
+            "duration": 2,
+            "magnitude": 0.2,
+            "status": "Guard"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "eira_leave_no_corner",
+        "name": "Leave No Corner",
+        "description": "The first time each round an ally with Mobile Cover is struck, its turn progress advances by 12%.",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "TurnShift",
+            "target": "BroadcastVictim",
+            "condition": "HasStatus",
+            "conditionOn": "Target",
+            "conditionStatus": "Guard",
+            "magnitude": 0.12
           }
         ]
       }

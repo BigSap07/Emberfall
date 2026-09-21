@@ -4510,7 +4510,11 @@ namespace Emberfall.DevHarness
 
             Check(evasion.Count == 0, "no shipped content applies or reads EvasionUp" + Detail(evasion));
             Check(accuracy.Count == 0, "no shipped content applies or reads AccuracyDown" + Detail(accuracy));
-            Check(gcrit.Count == 0, "no shipped content applies or reads GuaranteedCrit" + Detail(gcrit));
+            // FLIPPED by the third 4-star batch. Maera's Watch the Water is the first shipped
+            // content to apply GuaranteedCrit, so the tripwire has fired once and is now the
+            // opposite claim - the mechanic IS reached, by this named passive - and goes red the
+            // day that stops being true. See Used() for why that is not a deletion.
+            Check(gcrit.Count > 0, "shipped content applies or reads GuaranteedCrit" + Used(gcrit));
             Check(suppress.Count > 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
             Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
             Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
@@ -7459,6 +7463,18 @@ namespace Emberfall.DevHarness
                 UnitDef def = units[u];
                 bool isKael = def.Id == "kael_the_unyielding";
                 bool isZella = def.Id == "zella_the_slow_argument";
+                // Third named exception, and the same argument Zella's rests on rather than a
+                // widening of the rule. Corin's Weight of Time Stuns a target carrying three
+                // stacks of his own Slow, which is the payoff of his whole kit and not a number
+                // that can be dropped. What the premise below actually protects is
+                // CheckDeterminism's and CheckEffectHitResistNoOp's fingerprints, and both field
+                // a fresh profile: three starters against authored enemies. Corin is neither a
+                // starter nor an enemy nor a body of PinnedLine, so he cannot appear in any of
+                // those battles - the branch stays structurally unreachable THERE, which is the
+                // claim, even though it is no longer unreachable in the roster at large. The 72
+                // stage fingerprints were re-diffed against the merge base on the commit that
+                // authored him rather than inherited.
+                bool isCorin = def.Id == "corin_the_patience_engineer";
                 if (def.ArmorBreak != 0f || def.DamageReduction != 0f || def.SkillDamage != 0f
                     || def.ControlImmunity != 0f || def.HolyDamage != 0f
                     || (def.Block != 0f && !isKael))
@@ -7467,14 +7483,15 @@ namespace Emberfall.DevHarness
                     Line("  [FAIL] " + def.Id + " authors ArmorBreak/DamageReduction/SkillDamage/Block/ControlImmunity/HolyDamage - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
-                if ((UnitAppliesStatus(def, StatusKind.Silence) && !isZella) || UnitAppliesStatus(def, StatusKind.Stun))
+                if ((UnitAppliesStatus(def, StatusKind.Silence) && !isZella)
+                    || (UnitAppliesStatus(def, StatusKind.Stun) && !isCorin))
                 {
                     clean = false;
                     Line("  [FAIL] " + def.Id + " authors Silence or Stun - "
                         + "the shipped-fingerprint no-op assumption no longer holds for this unit");
                 }
             }
-            Check(clean, "no shipped hero or enemy besides Kael (Block) and Zella (Silence) authors Armor Break, Damage Reduction, "
+            Check(clean, "no shipped hero or enemy besides Kael (Block), Zella (Silence) and Corin (Stun) authors Armor Break, Damage Reduction, "
                 + "Skill Damage, Silence, Stun, Block, Control Immunity or Holy Damage yet - so this pass cannot move any existing "
                 + "BattleFingerprint (CheckDeterminism / CheckEffectHitResistNoOp above already prove those stay stable)");
         }
@@ -22294,7 +22311,11 @@ namespace Emberfall.DevHarness
                                   // The second 4-star batch, same reason.
                                   "celen_the_open_hand", "mika_the_salvage_pilot",
                                   "rhys_the_fence_walker", "siofra_the_turncoat_oracle",
-                                  "vanno_the_detour_king" };
+                                  "vanno_the_detour_king",
+                                  // The third 4-star batch, same reason.
+                                  "corin_the_patience_engineer", "halwen_the_reserve_keeper",
+                                  "jory_the_old_gate", "maera_the_harbor_eye",
+                                  "maren_the_long_sleeper", "eira_the_rolling_barricade" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -24401,6 +24422,11 @@ namespace Emberfall.DevHarness
         {
             "dahlia_the_wayward_hymn",
             "kest_the_bridgebreaker",
+            // Third occupant, and a third TriggerAbilityId rather than a cast cancel: Keep
+            // the Beacon's relief answers a defeat during that one cast and nothing else,
+            // exactly as Kest's No Way Back does. Outside every campaign stage and outside
+            // PinnedLine, so the turn loop's fingerprint claims are where they were made.
+            "maera_the_harbor_eye",
         };
 
         private static void CheckNoShippedCastUse(ContentDatabase live)
