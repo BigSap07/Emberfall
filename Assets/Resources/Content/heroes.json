@@ -4109,8 +4109,8 @@
       "passive1": {
         "id": "celen_nothing_hoarded",
         "name": "Nothing Hoarded",
-        "description": "At the start of his turn, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
-        "trigger": "TurnStart",
+        "description": "At round start, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
+        "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
           {
@@ -4399,7 +4399,7 @@
         "id": "siofra_forecast_reversed",
         "name": "Forecast Reversed",
         "energyCost": 100,
-        "description": "Deals 190% Attack damage to all enemies, reverses one modifier on each, and every enemy reversed loses 10 Energy.",
+        "description": "Deals 190% Attack damage to all enemies and reverses one Attack, Defense or Speed modifier on each.",
         "effects": [
           {
             "kind": "Damage",
@@ -4410,18 +4410,13 @@
             "kind": "InvertStatus",
             "target": "AllEnemies",
             "hits": 1
-          },
-          {
-            "kind": "EnergyGain",
-            "target": "AllEnemies",
-            "flat": -10
           }
         ]
       },
       "passive1": {
         "id": "siofra_prediction_cost",
         "name": "Prediction Cost",
-        "description": "Whenever Siofra turns a buff into a debuff, that target loses 10 Energy, once per round.",
+        "description": "Whenever Siofra changes a buff into a debuff, that target loses 10 Energy, once per round.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -4432,7 +4427,23 @@
             "flat": -10
           }
         ]
-      }
+      },
+      "passives": [
+        {
+          "id": "siofra_prediction_cost_active",
+          "name": "Prediction Cost",
+          "description": "The same cost after Forecast Reversed: every enemy whose modifier was turned over loses 10 Energy.",
+          "trigger": "AfterActiveCast",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "AllEnemies",
+              "flat": -10
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "vanno_the_detour_king",
