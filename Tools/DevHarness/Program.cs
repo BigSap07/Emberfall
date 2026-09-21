@@ -113,7 +113,9 @@ namespace Emberfall.DevHarness
                 ReportRecommendedPowerDerivation(content);
             CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
-            RunCampaignBalancePass(content);
+            EconomyRun economy = RunCampaignBalancePass(content);
+            ReportPowerSources(content, economy);
+            CheckCampaignPowerCurve(content, economy);
             CheckEconomyRespondsToIncome(content);
             // After all of them, because it asserts on what they actually resolved
             // while running - the economy responsiveness probe included.
@@ -14320,6 +14322,61 @@ namespace Emberfall.DevHarness
             public bool Cleared;
             public float WinRate = -1f;
             public float AvgRounds;
+            /// <summary>Of Battles, the ones fought on the PREVIOUS stage to farm it. A stage the
+            /// player walks straight down costs none; every one of these is a sitting that ended
+            /// against a battle they could not beat.</summary>
+            public int FarmBattles;
+
+            /// <summary>Effective team power at the moment this stage is FIRST ATTEMPTED, before
+            /// any of its own sittings have run. TeamPower above is the exit reading, taken after
+            /// the stage is cleared; the two are different questions and the curve band is
+            /// specified against this one. A player meets a wall on the way in, not on the way
+            /// out.</summary>
+            public int EntryPower;
+            /// <summary>The same instant, decomposed. Roster is the deployed five at level 1 with
+            /// nothing on them; Bare adds the levels gold has bought; Entry adds worn armor.</summary>
+            public int EntryRosterPower;
+            public int EntryBarePower;
+            /// <summary>Cumulative income ledger as it stood at that same instant.</summary>
+            public EconomyLedger EntryLedger;
+
+            public float EntryRatio
+            {
+                get
+                {
+                    return Stage != null && Stage.RecommendedPower > 0
+                        ? EntryPower / (float)Stage.RecommendedPower : 0f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Every channel a coin can arrive through, and every channel it can leave through, counted
+        /// as the walk runs. This exists because the power question "where does it come from" had
+        /// only ever been answered by reasoning about the content files, and reasoning got it wrong:
+        /// the authored per-stage purse looks like the headline number in campaign.json and is in
+        /// fact a rounding error next to the idle rate sitting two lines below it.
+        ///
+        /// Cumulative and monotonic, so a snapshot taken at a stage entry is the whole history up
+        /// to that point rather than a per-stage delta.
+        /// </summary>
+        private sealed class EconomyLedger
+        {
+            public long GoldStart, GoldIdle, GoldFirstClear, GoldFarm, GoldDuplicate;
+            public long ShardStart, ShardIdle, ShardFirstClear, ShardFarm, ShardDuplicate;
+            public long GoldSpentOnLevels, ShardsSpentOnSummons;
+            public int ArmorDrops, Summons, HeroLevelsBought;
+
+            public long GoldTotal
+            {
+                get { return GoldStart + GoldIdle + GoldFirstClear + GoldFarm + GoldDuplicate; }
+            }
+            public long ShardTotal
+            {
+                get { return ShardStart + ShardIdle + ShardFirstClear + ShardFarm + ShardDuplicate; }
+            }
+
+            public EconomyLedger Snapshot() { return (EconomyLedger)MemberwiseClone(); }
         }
 
         private sealed class EconomyRun
@@ -14334,6 +14391,7 @@ namespace Emberfall.DevHarness
             public long Now;
             public int TotalBattles;
             public int TotalSessions;
+            public EconomyLedger Ledger = new EconomyLedger();
 
             private int _seed = 1;
             public int NextSeed() { return _seed++; }
@@ -14350,6 +14408,8 @@ namespace Emberfall.DevHarness
             GameSession session = new GameSession(db, profile);
             run.Profile = profile;
             run.Session = session;
+            run.Ledger.GoldStart = profile.Gold;
+            run.Ledger.ShardStart = profile.Shards;
 
             HeroDef noHealMender = verbose ? BuildNoHealMender(db) : null;
 
@@ -14359,6 +14419,14 @@ namespace Emberfall.DevHarness
                 EconomyStageOutcome outcome = new EconomyStageOutcome();
                 outcome.Stage = stage;
                 long stageStart = run.Now;
+
+                // Read BEFORE the first sitting of this stage runs. The band the curve guard
+                // enforces is specified at the moment the player first attempts the stage, which
+                // is here and not at the bottom of the loop.
+                outcome.EntryPower = profile.EffectiveTeamPower(db);
+                outcome.EntryBarePower = profile.TeamPower();
+                outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile);
+                outcome.EntryLedger = run.Ledger.Snapshot();
 
                 int rounds = 0;
                 int sessions = 0;
@@ -14371,11 +14439,25 @@ namespace Emberfall.DevHarness
                     // ---- between sittings the player is away, and idle accrues against that gap.
                     //      One claim per sitting, capped exactly as the game caps it.
                     run.Now += EconomyAwaySeconds;
-                    session.ClaimIdle(run.Now);
+                    IdleReport idle = session.ClaimIdle(run.Now);
+                    run.Ledger.GoldIdle += idle.Gold;
+                    run.Ledger.ShardIdle += idle.Shards;
+                    long goldBeforeLevels = profile.Gold;
+                    int levelsBefore = TotalDeployedLevels(profile);
                     if (SpendGold(session)) run.CapBlockedSessions++;
                     else run.SpendableSessions++;
+                    run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
+                    run.Ledger.HeroLevelsBought += TotalDeployedLevels(profile) - levelsBefore;
                     if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
-                    while (session.CanSummon) session.Summon(run.NextSeed(), run.Now);
+                    while (session.CanSummon)
+                    {
+                        SummonOutcome so = session.Summon(run.NextSeed(), run.Now);
+                        if (!so.Success) break;
+                        run.Ledger.Summons++;
+                        run.Ledger.ShardsSpentOnSummons += so.CostPaid;
+                        run.Ledger.GoldDuplicate += so.GoldRefund;
+                        run.Ledger.ShardDuplicate += so.ShardRefund;
+                    }
                     profile.NormaliseTeam();
                     // Wear what has actually been earned - GrantBattleResult rolls the real drops
                     // at the real drop chance, and this instrument has been accumulating them all
@@ -14410,7 +14492,10 @@ namespace Emberfall.DevHarness
                             consecutiveLosses = 0;
                             if (session.RecordBattleWon(stage, wave, battle))
                             {
-                                session.GrantBattleResult(stage, true, run.Now);
+                                BattleRewards cr = session.GrantBattleResult(stage, true, run.Now);
+                                run.Ledger.GoldFirstClear += cr.Gold;
+                                run.Ledger.ShardFirstClear += cr.Shards;
+                                if (cr.ArmorDrop != null) run.Ledger.ArmorDrops++;
                                 cleared = true;
                             }
                         }
@@ -14439,8 +14524,12 @@ namespace Emberfall.DevHarness
                         for (int i = 0; i < allowed; i++)
                         {
                             BattleRewards fr = session.SweepClearedStage(farm, run.NextSeed(), run.Now);
+                            run.Ledger.GoldFarm += fr.Gold;
+                            run.Ledger.ShardFarm += fr.Shards;
+                            if (fr.ArmorDrop != null) run.Ledger.ArmorDrops++;
                             run.TotalBattles++;
                             outcome.Battles++;
+                            outcome.FarmBattles++;
                             run.Now += (long)(EconomyBattleOverheadSeconds + 8f * EconomySecondsPerRound);
                             if (!fr.Victory) break;
                         }
@@ -14540,7 +14629,7 @@ namespace Emberfall.DevHarness
                      : "n/a (not deployed)"));
         }
 
-        private static void RunCampaignBalancePass(ContentDatabase db)
+        private static EconomyRun RunCampaignBalancePass(ContentDatabase db)
         {
             Line("CAMPAIGN BALANCE (simulated player walking the real 144-battle ladder)");
             Line("  A sitting is " + EconomySessionBattleBudget + " battles, sittings are "
@@ -14586,6 +14675,404 @@ namespace Emberfall.DevHarness
             Check(run.StuckAt < 0, "a normal player can clear the whole campaign");
             Check(profile.Heroes.Count > 3, "summoning grew the roster past the 3 starters");
             Line("");
+            return run;
+        }
+
+        // =========================================================================================
+        // POWER SOURCES and the CURVE BAND. Two sections, one simulation - both read the run
+        // RunCampaignBalancePass already walked, so neither costs a battle.
+        // =========================================================================================
+
+        /// <summary>
+        /// Where a simulated player's power actually comes from, counted rather than reasoned
+        /// about, at two named instants: the moment they first attempt 2-1 and the moment they
+        /// first attempt 2-12.
+        ///
+        /// Two tables, because "power" and "income" are not the same question and conflating them
+        /// is how the campaign ended up over-geared without anybody noticing. The first splits the
+        /// power number itself into the three things that can move it - which bodies are deployed,
+        /// what level gold has bought them to, and what armor they are wearing. The second splits
+        /// the gold and the shards into the channels they arrived through. The bridge between them
+        /// is the level row: every coin that bought a level is a coin from one of those channels,
+        /// so a channel's share of gold IS its share of the level block of power.
+        ///
+        /// Report only, no Check. It is the map the tuning pass reads; the band guard below is what
+        /// holds the result.
+        /// </summary>
+        private static void ReportPowerSources(ContentDatabase db, EconomyRun run)
+        {
+            Line("");
+            Line("POWER SOURCES (every channel that moves the simulated player, counted as it ran)");
+
+            EconomyStageOutcome at21 = FindEconomyStage(run, "ch2_1");
+            EconomyStageOutcome at212 = FindEconomyStage(run, "ch2_12");
+            if (at21 == null || at212 == null)
+            {
+                Line("  the walk did not reach both 2-1 and 2-12 - nothing to split.");
+                Line("");
+                return;
+            }
+
+            Line("");
+            Line("  Rates, as authored. These are the inputs; everything below is what they produced.");
+            Line("    idle gold        " + Fmt(db.Balance.IdleGoldPerHourFloor) + "/h before any clear,"
+                 + " then the cleared stage's own idleGoldPerHour (" + FirstStageIdleRate(db)
+                 + "/h at 1-1 up to " + LastStageIdleRate(db) + "/h at 2-12), capped at "
+                 + Fmt(db.Balance.IdleCapHours) + "h per claim.");
+            Line("    idle shards      " + Fmt(db.Balance.IdleShardsPerHourFloor) + "/h floor,"
+                 + " then the stage's idleShardsPerHour, same cap.");
+            Line("    stage purse      the stage's gold/shards once per clear, plus firstClearGold"
+                 + "/firstClearShards on the first one only.");
+            Line("    repeat clears    " + db.Balance.RepeatFullClearsPerDay + " paid clears per stage"
+                 + " per UTC day; past that the purse pays " + Pct(db.Balance.RepeatRewardFloor) + ".");
+            Line("    summoning        " + db.Balance.SummonCost + " shards a pull; a duplicate"
+                 + " refunds " + db.Balance.DuplicateGold + " gold and " + db.Balance.DuplicateShards
+                 + " shards.");
+            Line("    level cost       " + Fmt(db.Balance.LevelCostA) + " + " + Fmt(db.Balance.LevelCostB)
+                 + "*L + " + Fmt(db.Balance.LevelCostC) + "*L^2 gold for the level above L,"
+                 + " ceilinged at HeroLevelCap = " + db.Balance.HeroLevelCapBase + " + "
+                 + db.Balance.HeroLevelCapPerPlayerLevel + " per account rank.");
+            Line("    armor            rolled on an uncapped clear at the armor table's drop chance.");
+            Line("    starting purse   " + db.Balance.StartingGold + " gold, "
+                 + db.Balance.StartingShards + " shards.");
+
+            ReportPowerSplit("at first attempt of 2-1 ", at21);
+            ReportPowerSplit("at first attempt of 2-12", at212);
+            Line("");
+        }
+
+        private static void ReportPowerSplit(string label, EconomyStageOutcome o)
+        {
+            EconomyLedger L = o.EntryLedger;
+            int roster = o.EntryRosterPower;
+            int levels = o.EntryBarePower - o.EntryRosterPower;
+            int gear = o.EntryPower - o.EntryBarePower;
+            float total = o.EntryPower > 0 ? o.EntryPower : 1f;
+
+            Line("");
+            Line("  " + label + "   effective team power " + o.EntryPower
+                 + " against recommendedPower " + o.Stage.RecommendedPower
+                 + " = x" + Fmt(o.EntryRatio));
+            Line("    power block          value    share");
+            Line("      roster (5 bodies at Lv1) " + roster.ToString().PadLeft(8)
+                 + Pct(roster / total).PadLeft(9) + "   what summoning and deployment bought");
+            Line("      levels bought with gold  " + levels.ToString().PadLeft(8)
+                 + Pct(levels / total).PadLeft(9) + "   " + L.HeroLevelsBought
+                 + " levels for " + L.GoldSpentOnLevels + " gold");
+            Line("      armor worn               " + gear.ToString().PadLeft(8)
+                 + Pct(gear / total).PadLeft(9) + "   " + L.ArmorDrops + " pieces dropped");
+
+            long gt = L.GoldTotal > 0 ? L.GoldTotal : 1;
+            float levelShare = levels / total;
+            Line("    gold channel           earned    share   share of ALL power");
+            ReportChannel("      idle income          ", L.GoldIdle, gt, levelShare);
+            ReportChannel("      first clears         ", L.GoldFirstClear, gt, levelShare);
+            ReportChannel("      repeat-clear farming ", L.GoldFarm, gt, levelShare);
+            ReportChannel("      duplicate summons    ", L.GoldDuplicate, gt, levelShare);
+            ReportChannel("      starting purse       ", L.GoldStart, gt, levelShare);
+            Line("      total                " + L.GoldTotal.ToString().PadLeft(9)
+                 + "     100%" + Pct(levelShare).PadLeft(21)
+                 + "   (" + L.GoldSpentOnLevels + " of it has been spent on levels)");
+
+            long st = L.ShardTotal > 0 ? L.ShardTotal : 1;
+            Line("    shard channel          earned    share");
+            Line("      idle income          " + L.ShardIdle.ToString().PadLeft(9)
+                 + Pct(L.ShardIdle / (float)st).PadLeft(9));
+            Line("      first clears         " + L.ShardFirstClear.ToString().PadLeft(9)
+                 + Pct(L.ShardFirstClear / (float)st).PadLeft(9));
+            Line("      repeat-clear farming " + L.ShardFarm.ToString().PadLeft(9)
+                 + Pct(L.ShardFarm / (float)st).PadLeft(9));
+            Line("      duplicate summons    " + L.ShardDuplicate.ToString().PadLeft(9)
+                 + Pct(L.ShardDuplicate / (float)st).PadLeft(9));
+            Line("      starting purse       " + L.ShardStart.ToString().PadLeft(9)
+                 + Pct(L.ShardStart / (float)st).PadLeft(9));
+            Line("      total                " + L.ShardTotal.ToString().PadLeft(9) + "     100%"
+                 + "   spent on " + L.Summons + " summons (" + L.ShardsSpentOnSummons + " shards)");
+            Line("      Shards reach power only through the roster block above and through the gold"
+                 + " a duplicate refunds.");
+        }
+
+        private static void ReportChannel(string label, long amount, long total, float levelShare)
+        {
+            float share = amount / (float)total;
+            Line(label + amount.ToString().PadLeft(9) + Pct(share).PadLeft(9)
+                 + Pct(share * levelShare).PadLeft(21));
+        }
+
+        private static EconomyStageOutcome FindEconomyStage(EconomyRun run, string stageId)
+        {
+            for (int i = 0; i < run.Stages.Count; i++)
+                if (run.Stages[i].Stage != null && run.Stages[i].Stage.Id == stageId)
+                    return run.Stages[i];
+            return null;
+        }
+
+        private static string FirstStageIdleRate(ContentDatabase db)
+        {
+            return db.AllStages.Count > 0 ? db.AllStages[0].IdleGoldPerHour.ToString() : "?";
+        }
+
+        private static string LastStageIdleRate(ContentDatabase db)
+        {
+            return db.AllStages.Count > 0
+                ? db.AllStages[db.AllStages.Count - 1].IdleGoldPerHour.ToString() : "?";
+        }
+
+        // ---------------------------------------------------------------- the curve band
+
+        /// <summary>
+        /// The mid-chapter difficulty spike in each chapter, named rather than derived.
+        ///
+        /// "Which stage is the spike" is a design decision, not a measurement, so it is authored
+        /// here and the reasoning is written down instead of being re-inferred every run. Both were
+        /// picked off the curve as it stood before this pass, by the two signals that agree:
+        ///
+        ///   ch1_9  Mothlight Steps   the largest recommendedPower step in chapter 1 (+23.3% over
+        ///                            1-8) and the lowest power ratio the simulated player reached
+        ///                            anywhere in the chapter.
+        ///   ch2_6  Undertow Channel  a +17.9% step and a genuine local DIP - the ratio falls from
+        ///                            2.37 at 2-5 to 2.07 here and climbs back to 2.13 at 2-7, so
+        ///                            it is a spike in the curve rather than a point on a slope.
+        ///
+        /// Chapter finales are not listed: a finale is found from StageDef.IsBoss, so a chapter added
+        /// later gets its wall without anybody remembering to add it here. A chapter with no entry
+        /// in this list simply has no mid-chapter wall, which is a shape the guard permits.
+        /// </summary>
+        private static readonly string[] MidChapterWallStageIds = { "ch1_9", "ch2_6" };
+
+        /// <summary>Stages before the game has taught the player anything. The target curve puts no
+        /// band on them on purpose: the opening stages are over-geared by construction because the
+        /// starting purse alone outweighs anything they ask for, and pretending to measure that is
+        /// what the build-order doc already calls out as measuring the floor.</summary>
+        private const int EconomyTutorialStages = 4;
+
+        private const float OrdinaryBandLow = 1.10f;
+        private const float OrdinaryBandHigh = 1.30f;
+        private const float WallBandLow = 0.90f;
+        private const float WallBandHigh = 1.00f;
+
+        /// <summary>
+        /// THE GUARD. One line per stage: the power a simulated player brings to their first
+        /// attempt, divided by that stage's recommendedPower, against the band that stage is
+        /// supposed to sit in.
+        ///
+        /// It exists because the thing it measures had drifted to between x1.55 and x3.2 and
+        /// nothing failed. The campaign balance table above printed the ratio all along and read
+        /// 100% win rate on 24 of 24 stages, which is exactly what an economy with no walls in it
+        /// looks like; it was a column to interpret rather than a check to pass, so it was
+        /// interpreted and then not acted on. This is the same number with a verdict attached, so
+        /// the next power source that lands - a relic tier, a Coda sink, guild currency, an aspect
+        /// track - fails on the commit that adds it rather than being discovered a year later.
+        ///
+        /// The bands come straight from the decision this pass was given:
+        ///   the opening stages  no band, tutorial - EconomyTutorialStages of them;
+        ///   ordinary stages     x1.10 to x1.30, comfortably ahead but not safe;
+        ///   walls               x0.90 to x1.00, a stage you do not beat on the day you reach it.
+        /// A wall is a chapter finale (StageDef.IsBoss) or one authored mid-chapter spike; see
+        /// MidChapterWallStageIds for which and why.
+        ///
+        /// Measured at ENTRY, not at exit. A wall is something a player hits on the way in; the
+        /// campaign balance table's teamPwr column is the reading after the stage is already
+        /// cleared, which by construction can never show one.
+        ///
+        /// ONE END OF THE BAND IS DERIVED RATHER THAN AUTHORED, and it has to be. A player's power
+        /// never goes down, so once an earlier stage's band has demanded a power, no later stage can
+        /// be asked for less than it, whatever that later stage's own recommendedPower says.
+        /// recommendedPower is derived content and it is not monotonic: it rises only 6.6% into the
+        /// chapter 1 finale while the band drops 27%, and it FALLS 26% across the chapter boundary
+        /// into 2-1. So the HIGH end of a band is raised to the running maximum of every earlier
+        /// LOW, and the table marks that stage with a *.
+        ///
+        /// That is a derivation, not a concession, and deliberately not an authored exemption list.
+        /// Each relaxation prints the stage that forces it and the recommendedPower that would
+        /// retire it; move that number and the relaxation vanishes by itself, with nothing for
+        /// anybody to remember to delete. Anything still OVER after relaxing is a real economy
+        /// failure and fails the check.
+        /// </summary>
+        private static void CheckCampaignPowerCurve(ContentDatabase db, EconomyRun run)
+        {
+            Line("");
+            Line("CAMPAIGN POWER CURVE (entry power / recommendedPower, against the authored band)");
+            Line("  Tutorial = the first " + EconomyTutorialStages + " stages, no band."
+                 + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + "."
+                 + "  Wall = x" + Fmt(WallBandLow) + " to x" + Fmt(WallBandHigh) + ".");
+            Line("  A wall is a chapter finale or the one authored mid-chapter spike:"
+                 + " " + string.Join(", ", MidChapterWallStageIds) + ".");
+            Line("  entryPwr is read BEFORE the stage's first sitting. The balance table's teamPwr"
+                 + " is the exit reading and cannot show a wall.");
+            Line("  entryPwr splits into roster (the deployed five at Lv1), levels (what gold bought)"
+                 + " and armor (what clears dropped).");
+            Line("");
+            Line("  stage  name                    entryPwr  roster  levels   armor    goldEarned"
+                 + "  recPwr  ratio  band                 verdict");
+
+            int outOfBand = 0;
+            List<string> offenders = new List<string>();
+            List<string> relaxations = new List<string>();
+
+            // The running floor: the highest power any EARLIER stage's own band already demanded.
+            // A player's power never goes down, so no later stage can be asked for less than this,
+            // whatever its own recommendedPower says.
+            float floorPower = 0f;
+            string floorFrom = "";
+
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                StageDef stage = o.Stage;
+                if (stage == null || stage.RecommendedPower <= 0) continue;
+
+                string kind = BandKindOf(stage, i);
+                float lo, hi;
+                bool banded = BandFor(kind, out lo, out hi);
+                float ratio = o.EntryRatio;
+                float rec = stage.RecommendedPower;
+
+                string verdict;
+                string bandText;
+                if (!banded)
+                {
+                    verdict = "-";
+                    bandText = "none";
+                }
+                else
+                {
+                    float effectiveHigh = hi;
+                    bool relaxed = false;
+                    if (floorPower > hi * rec)
+                    {
+                        effectiveHigh = floorPower / rec;
+                        relaxed = true;
+                        // What recommendedPower this stage would need for the AUTHORED high to be
+                        // reachable again. Printed, never applied: recommendedPower is derived
+                        // content and moving it is a human decision, not this instrument's.
+                        int wouldNeed = (int)Math.Ceiling(floorPower / hi);
+                        relaxations.Add(stage.DisplayCode + " " + kind.Trim()
+                            + " high x" + Fmt(hi) + " -> x" + Fmt(effectiveHigh)
+                            + ", forced by " + floorFrom + "'s floor of " + (int)floorPower
+                            + "; recommendedPower " + wouldNeed + " would retire it");
+                    }
+
+                    if (ratio < lo)
+                    {
+                        verdict = "UNDER"; outOfBand++;
+                        offenders.Add(stage.DisplayCode + " x" + Fmt(ratio) + " under x" + Fmt(lo));
+                    }
+                    else if (ratio > effectiveHigh)
+                    {
+                        verdict = "OVER"; outOfBand++;
+                        offenders.Add(stage.DisplayCode + " x" + Fmt(ratio) + " over x" + Fmt(effectiveHigh));
+                    }
+                    else verdict = relaxed ? "ok (relaxed)" : "ok";
+
+                    bandText = relaxed
+                        ? ("x" + Fmt(lo) + "-x" + Fmt(effectiveHigh) + "*")
+                        : ("x" + Fmt(lo) + "-x" + Fmt(hi));
+
+                    if (lo * rec > floorPower) { floorPower = lo * rec; floorFrom = stage.DisplayCode; }
+                }
+
+                Line("  " + stage.DisplayCode.PadRight(6)
+                     + " " + Trim(stage.Name, 23).PadRight(23)
+                     + o.EntryPower.ToString().PadLeft(8)
+                     + o.EntryRosterPower.ToString().PadLeft(8)
+                     + (o.EntryBarePower - o.EntryRosterPower).ToString().PadLeft(8)
+                     + (o.EntryPower - o.EntryBarePower).ToString().PadLeft(8)
+                     + o.EntryLedger.GoldTotal.ToString().PadLeft(12)
+                     + stage.RecommendedPower.ToString().PadLeft(8)
+                     + ("x" + Fmt(ratio)).PadLeft(7)
+                     + "  " + (kind + " " + bandText).PadRight(21)
+                     + verdict);
+            }
+
+            Line("");
+            if (relaxations.Count == 0)
+            {
+                Line("  No band needed relaxing: every stage's recommendedPower rises fast enough to"
+                     + " carry its own band.");
+            }
+            else
+            {
+                Line("  " + relaxations.Count + " BAND(S) RELAXED, because a player's power cannot go"
+                     + " down and recommendedPower does not always go up:");
+                for (int i = 0; i < relaxations.Count; i++) Line("    " + relaxations[i]);
+                Line("  A relaxed band is marked * in the table. This is not the instrument being"
+                     + " lenient: the authored band is unreachable at that stage against the"
+                     + " recommendedPower table as it stands, and every line above is a"
+                     + " recommendedPower decision waiting for a human. Move the number and the"
+                     + " relaxation disappears on its own - there is no list to remember to delete.");
+            }
+
+            Line("");
+            ReportWallResolutionTimes(run);
+
+            Line("");
+            Check(outOfBand == 0,
+                  outOfBand == 0
+                      ? "every banded stage is inside its power band"
+                      : outOfBand + " stage(s) left the power band: "
+                        + string.Join("; ", offenders.ToArray()));
+            Line("");
+        }
+
+        /// <summary>Tutorial, Wall or Ordinary for one stage at one position in the walk.</summary>
+        private static string BandKindOf(StageDef stage, int walkIndex)
+        {
+            if (walkIndex < EconomyTutorialStages) return "tutorial";
+            if (stage.IsBoss) return "wall    ";
+            for (int i = 0; i < MidChapterWallStageIds.Length; i++)
+                if (MidChapterWallStageIds[i] == stage.Id) return "wall    ";
+            return "ordinary";
+        }
+
+        private static bool BandFor(string kind, out float lo, out float hi)
+        {
+            if (kind.StartsWith("wall")) { lo = WallBandLow; hi = WallBandHigh; return true; }
+            if (kind.StartsWith("ordinary")) { lo = OrdinaryBandLow; hi = OrdinaryBandHigh; return true; }
+            lo = 0f; hi = 0f; return false;
+        }
+
+        /// <summary>
+        /// How long each wall actually held, in the simulated player's own clock. The band says a
+        /// wall must exist; this says whether it is the right SIZE. A wall that resolves in one
+        /// battle is not a wall, and a wall that takes a week this early is a quit.
+        /// </summary>
+        private static void ReportWallResolutionTimes(EconomyRun run)
+        {
+            Line("  Wall resolution - how long each wall actually held.");
+            Line("    A stage is waves x battles wins even for a player who never loses, and a"
+                 + " sitting is " + EconomySessionBattleBudget + " battles, so every stage costs a FLOOR"
+                 + " of ceil(ladder / " + EconomySessionBattleBudget + ") sittings no matter how easy it is.");
+            Line("    The wall is what the stage cost ON TOP of that floor: the retries, the farming"
+                 + " runs on the previous stage, and the sittings they took.");
+            Line("");
+            Line("    stage  name                    ladder  retries   farm  sittings  floor  EXTRA"
+                 + "   extra hours");
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (o.Stage == null) continue;
+                if (BandKindOf(o.Stage, i).StartsWith("wall") == false) continue;
+
+                int ladder = Math.Max(1, o.Stage.WaveCount) * Math.Max(1, o.Stage.BattleCount);
+                int floorSittings = (ladder + EconomySessionBattleBudget - 1) / EconomySessionBattleBudget;
+                int extra = o.Sessions - floorSittings;
+                if (extra < 0) extra = 0;
+                float extraHours = extra * (EconomyAwaySeconds / 3600f);
+
+                Line("    " + o.Stage.DisplayCode.PadRight(6)
+                     + " " + Trim(o.Stage.Name, 23).PadRight(23)
+                     + ladder.ToString().PadLeft(6)
+                     + o.Losses.ToString().PadLeft(9)
+                     + o.FarmBattles.ToString().PadLeft(7)
+                     + o.Sessions.ToString().PadLeft(10)
+                     + floorSittings.ToString().PadLeft(7)
+                     + extra.ToString().PadLeft(7)
+                     + Fmt(extraHours).PadLeft(14)
+                     + (o.Cleared ? "" : "   <-- NEVER CLEARED"));
+            }
+            Line("    extra hours counts the gap between sittings, which is where the idle income that"
+                 + " resolves a wall is actually earned.");
         }
 
         /// <summary>
@@ -14872,6 +15359,32 @@ namespace Emberfall.DevHarness
         /// "could not spend any". The pass already printed ending Gold before this; what it could
         /// not say was whether the sink was open at the time.
         /// </summary>
+        /// <summary>The deployed five as they would stand at level 1 with nothing equipped: the
+        /// part of team power that summoning and roster choice bought rather than gold. Built from
+        /// the same StatMath entry point EffectiveTeamPower uses, with the level pinned, so the
+        /// three readings in EconomyStageOutcome are the same quantity measured three ways and
+        /// subtract cleanly.</summary>
+        private static int DeployedRosterPowerAtLevelOne(PlayerProfile profile)
+        {
+            int total = 0;
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++)
+            {
+                if (team[i].Def == null) continue;
+                total += Emberfall.Core.Progression.StatMath.PowerScore(
+                    Emberfall.Core.Progression.StatMath.ForHero(team[i].Def, 1));
+            }
+            return total;
+        }
+
+        private static int TotalDeployedLevels(PlayerProfile profile)
+        {
+            int total = 0;
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++) total += team[i].Level;
+            return total;
+        }
+
         private static bool SpendGold(GameSession session)
         {
             for (int guard = 0; guard < 500; guard++)

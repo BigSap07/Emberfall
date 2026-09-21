@@ -22,9 +22,25 @@
   "mirroredWoundReflectFraction": 0.25,
 
   // hero level up cost = A + B*level + C*level^2
-  "levelCostA": 55,
-  "levelCostB": 26,
-  "levelCostC": 3.2,
+  //
+  // RETUNED by the economy-curve pass, from 55 + 26L + 3.2L^2. The quadratic term is gone on
+  // purpose and the reason is arithmetic rather than taste. A hero's power is LINEAR in level -
+  // StatMath.Build is 1 + growth * (level - 1) - so with a quadratic cost the gold needed to hold
+  // a given power ratio grows as the CUBE of the level, while no income curve in an idle game
+  // grows anything like that fast. The old curve is why the simulated player's power ratio fell
+  // from x3.2 at 2-1 to x1.55 at 2-12: they were falling further behind the content every stage
+  // and the cost curve, not the income, was doing it. A linear cost makes level track gold
+  // directly, which is what lets the idle rate be the lever it is supposed to be.
+  //
+  // The constant is large because that is the other half of the same problem. The first level now
+  // costs 1,070 gold against a 400 starting purse, and the thirty-fifth costs 17,050; a hero from
+  // 1 to the level-80 hard cap costs about 1,533,000, against about 622,000 before. A player ends
+  // the campaign around level 30 rather than level 58, and that is the point: at level 58 the
+  // pinned five-body line was between 1.55 and 3.2 times every stage's recommendedPower and
+  // cleared all 24 ceilings at 100%.
+  "levelCostA": 600,
+  "levelCostB": 470,
+  "levelCostC": 0,
   "heroLevelCapBase": 12,
   "heroLevelCapPerPlayerLevel": 4,
   "heroLevelHardCap": 80,
@@ -81,7 +97,12 @@
   "summonWeight3": 0,
   "summonWeight4": 0,
   "summonWeight5": 100,
-  "duplicateGold": 450,
+  // 450 before the economy-curve pass. A duplicate's gold refund was the second largest gold
+  // channel in the whole economy - 13% of everything earned by 2-1 and 18% by 2-12, measured by
+  // the POWER SOURCES instrument - and it is the only large one whose size nobody chose: it
+  // rides the shard rate, and the shard rate is tuned for how fast the roster fills. That made a
+  // sixth of the campaign's gold immune to the idle curve that the rest of it is shaped by.
+  "duplicateGold": 150,
   "duplicateShards": 30,
 
   "startingGold": 400,

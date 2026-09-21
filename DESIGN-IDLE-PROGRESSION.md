@@ -1,5 +1,15 @@
 # Emberfall — the idle layer
 
+> **Later correction, from the economy-curve pass.** Two claims below are now wrong against the
+> files and are marked where they appear. The rate rule this document proposes was built and then
+> abandoned: `idleGoldPerHour` became twenty-four hand-authored numbers whose implied multiple of
+> the stage purse slid from 1.63 at 1-1 down to 0.51 at 2-12, so the cache paid relatively less
+> the deeper a player got. The economy-curve pass restored the rule, with a chapter 2 exponent on
+> top of it, and the derivation now lives in `campaign.json`'s header. The level-cost paragraph is
+> also superseded: the curve is linear now, and the reasoning is in `balance.json`. Everything
+> else here — why the rate is derived from content rather than from two constants, what the cap
+> protects, the session shape — is intact and is why the pass could be done at all.
+
 **Correction first.** The idle layer is not missing. `PeekIdle`/`ClaimIdle` accrue gold and
 shards against `Profile.LastIdleClaimUnix`, the rate derives from `StagesCleared`,
 `balance.json` carries four idle constants and an 8h cap, the save round-trips
@@ -22,6 +32,13 @@ pays that stage's own `gold` and `shards` at a fixed notional clear rate:
 idleGoldPerHour   = bestStage.RewardGold   × idleClearsPerHourGold    (4.0)
 idleShardsPerHour = bestStage.RewardShards × idleClearsPerHourShards  (0.5)
 ```
+
+**Superseded.** The gold half of that is live again but with different constants and a second
+term, and it lives in `campaign.json` per stage rather than in two balance constants: 0.80 × the
+stage's own gold through chapter 1, and 0.85 × it × 1.16 per stage into chapter 2. The exponent
+exists because `recommendedPower` accelerates and a cache that grows only with the purse falls
+behind it. The shard half was never built as a formula and the per-stage shard rates are still
+hand-authored.
 
 At stage 6 that is 1,280 gold and 8.5 shards an hour. Over a 10h night: **~12,800 gold and ~85
 shards, about five hero levels and half a summon.** That is the design target; retune the two
@@ -88,8 +105,13 @@ system.
 - `idleCapHours` **8 → 10**.
 - `summonCost` 120 holds: at stage 6 an overnight is half a summon and an active session two or
   three, keeping summoning something you play toward rather than wake up to.
-- Level costs (`55 + 26L + 3.2L²`) hold. At level 20 a level is ~1,855 gold, so an overnight
-  Forge buys five or six — visible, not decisive. Protect that ratio if anything else moves.
+- ~~Level costs (`55 + 26L + 3.2L²`) hold. At level 20 a level is ~1,855 gold, so an overnight
+  Forge buys five or six — visible, not decisive. Protect that ratio if anything else moves.~~
+  **Superseded.** The curve is `600 + 470L` and the quadratic term is deliberately gone: a hero's
+  power is linear in level, so a quadratic cost makes the gold needed to hold a power ratio grow
+  as the cube of it, and no idle curve grows that fast. At level 20 a level is now 10,000 gold and
+  an overnight cache at 2-6 buys about three. The ratio this line asks to protect was the thing
+  that had to move.
 
 ## What must not be added yet
 
