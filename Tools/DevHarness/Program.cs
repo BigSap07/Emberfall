@@ -171,16 +171,20 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
             for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
 
-            int statuses = 0, conds = 0, trigs = 0, charges = 0, hpScaled = 0;
+            int statuses = 0, conds = 0, trigs = 0, hpScaled = 0;
+            List<string> charges = new List<string>();
             for (int i = 0; i < units.Count; i++)
             {
                 UnitDef def = units[i];
                 List<EffectDef> all = new List<EffectDef>();
-                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
-                if (def.Active != null) all.AddRange(def.Active.Effects);
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
                 for (int pi = 0; pi < def.Passives.Count; pi++)
                 {
-                    all.AddRange(def.Passives[pi].Effects);
+                    AddWithNames(all, where, def.Id + "/" + def.Passives[pi].Name, def.Passives[pi].Effects);
                     for (int t = 0; t < AllyTriggers.Length; t++)
                         if (def.Passives[pi].Trigger == AllyTriggers[t]) trigs++;
                 }
@@ -192,7 +196,7 @@ namespace Emberfall.DevHarness
                             || ef.TargetStatus == FourthTierStatuses[k]) statuses++;
                     for (int c = 0; c < HistoryConditions.Length; c++)
                         if (ef.Condition == HistoryConditions[c]) conds++;
-                    if (ef.Charges != 0) charges++;
+                    if (ef.Charges != 0) charges.Add(where[e]);
                     if (ef.TargetMaxHpRatio != 0f || ef.TargetCurrentHpRatio != 0f
                         || ef.TargetMissingHpRatio != 0f) hpScaled++;
                 }
@@ -202,7 +206,7 @@ namespace Emberfall.DevHarness
             Check(conds > 0, "no shipped effect uses a history condition (" + conds + ")");
             Check(trigs > 0, "no shipped passive listens on an ally trigger (" + trigs
                   + ") - so no broadcast reaches a passive and the death path is unchanged");
-            Check(charges == 0, "no shipped effect stamps charges on a status (" + charges + ")");
+            Check(charges.Count > 0, "shipped content stamps charges on a status" + Used(charges));
             Check(hpScaled > 0, "and no shipped effect scales off the target's HP (" + hpScaled
                   + ") - so TargetHpTerm sums three zeroes for every effect the game resolves");
         }
@@ -4230,16 +4234,18 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// SIX STANDING GUARDS IN ONE SWEEP: no unit in shipped content authors any of the six
-        /// mechanics this pass added.
+        /// SIX CONFIRMATIONS IN ONE SWEEP: every mechanic this pass added is reached by shipped
+        /// content, and each line names the abilities that reach it.
         ///
-        /// One walk over every ability of every hero and enemy, asking six questions rather than
-        /// six walks asking one each, because the thing being asserted is a single property of the
-        /// content - that none of it reaches the new code - and splitting it into six would let
-        /// five pass while the sixth quietly stopped being checked.
+        /// All six opened as dormancy tripwires - "no unit in shipped content authors this" - and
+        /// all six have now fired, which is what authoring the roster means. They are flipped
+        /// rather than deleted: see <see cref="Used"/> for why a retired tripwire is still the only
+        /// guard its mechanic has.
         ///
-        /// The day any of these stops being true, the "no existing battle moved" claim this pass
-        /// makes has to be re-earned by measurement rather than inherited.
+        /// Still one walk over every ability of every hero and enemy, asking six questions rather
+        /// than six walks asking one each, because the thing being asserted is a single property of
+        /// the content and splitting it into six would let five pass while the sixth quietly
+        /// stopped being checked.
         /// </summary>
         private static void CheckNoShippedContentReachesTierFive(ContentDatabase db)
         {
@@ -4302,11 +4308,11 @@ namespace Emberfall.DevHarness
 
             Check(progress.Count > 0, "no shipped content reads turn progress as a quantity or banks a Turn Debt"
                   + Detail(progress));
-            Check(uses.Count == 0, "no shipped status carries a per-round use budget" + Detail(uses));
-            Check(conceal.Count == 0, "no shipped content applies or reads Stealth, so concealment is unreachable"
-                  + Detail(conceal));
+            Check(uses.Count > 0, "shipped content carries a per-round use budget" + Used(uses));
+            Check(conceal.Count > 0, "shipped content applies or reads Stealth, so concealment is reachable"
+                  + Used(conceal));
             Check(perTarget.Count > 0, "no shipped passive sets a per-target limit" + Detail(perTarget));
-            Check(records.Count == 0, "no shipped content writes or reads a non-numeric record" + Detail(records));
+            Check(records.Count > 0, "shipped content writes or reads a non-numeric record" + Used(records));
             Check(defeat.Count > 0, "no shipped content listens for a defeat or names the defeated unit"
                   + Detail(defeat));
         }
@@ -4314,6 +4320,43 @@ namespace Emberfall.DevHarness
         private static string Detail(List<string> offenders)
         {
             return offenders.Count == 0 ? "" : " - FOUND: " + string.Join(", ", offenders.ToArray());
+        }
+
+        /// <summary>
+        /// THE CONFIRMATION COUNTERPART OF <see cref="Detail"/>, and the reason a retired dormancy
+        /// tripwire is flipped rather than deleted.
+        ///
+        /// A dormancy tripwire says "nothing shipped reaches this yet" and goes red the day
+        /// something does. That day arrives exactly once per mechanic, and deleting the line at
+        /// that point throws away the only guard the mechanic will ever have: nothing would then
+        /// notice the usage being authored away again, and the engine path behind it would go quiet
+        /// with no line anywhere saying so. Flipped, the same check asserts the opposite fact - the
+        /// mechanic IS reached, by these named abilities - and goes red if that stops being true.
+        ///
+        /// "(none)" is deliberately what a broken confirmation prints. Check() shows one label for
+        /// both verdicts, so the FAIL line has to carry its own evidence, and an empty list behind
+        /// a claim of use is the whole finding stated in one word.
+        /// </summary>
+        private static string Used(List<string> users)
+        {
+            return users.Count == 0
+                ? " - used by: (none)"
+                : " - used by: " + string.Join(", ", users.ToArray());
+        }
+
+        /// <summary>
+        /// Appends an ability's effects to a flat scan list while recording, in a parallel list,
+        /// which "unit/ability" each one came from.
+        ///
+        /// The flat list is what the standing guards walk; the labels are what a CONFIRMATION needs
+        /// and a dormancy tripwire never did. A tripwire that is passing has nothing to name, so
+        /// every one of these scans used to flatten the effects and drop the owner on the floor.
+        /// </summary>
+        private static void AddWithNames(List<EffectDef> into, List<string> labels, string where,
+                                         List<EffectDef> effects)
+        {
+            if (effects == null) return;
+            for (int i = 0; i < effects.Count; i++) { into.Add(effects[i]); labels.Add(where); }
         }
 
         /// <summary>Basic, active and every passive of a unit, as one list.</summary>
@@ -4387,8 +4430,11 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// EIGHT STANDING GUARDS: no unit in shipped content authors any of the eight mechanics
-        /// tier six adds. One walk, eight questions.
+        /// FOURTEEN STANDING LINES OVER THE MECHANICS TIER SIX ADDS. One walk, fourteen questions,
+        /// and each question is asked in whichever direction is currently true: a mechanic no
+        /// shipped unit reaches is guarded as dormant, and one the roster has since authored is
+        /// confirmed as used and names its users. Flipping rather than deleting is what keeps a
+        /// mechanic from going quietly unreached again - see <see cref="Used"/>.
         /// </summary>
         private static void CheckNoShippedContentReachesTierSix(ContentDatabase db)
         {
@@ -4464,11 +4510,11 @@ namespace Emberfall.DevHarness
             Check(suppress.Count > 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
             Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
             Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
-            Check(statCmp.Count == 0, "no shipped content compares stats across units" + Detail(statCmp));
+            Check(statCmp.Count > 0, "shipped content compares stats across units" + Used(statCmp));
             Check(actionHist.Count > 0, "no shipped content reads action-type history" + Detail(actionHist));
             Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
             Check(extend.Count > 0, "no shipped content uses ExtendStatus" + Detail(extend));
-            Check(disrupted.Count == 0, "no shipped content applies or reads Disrupted" + Detail(disrupted));
+            Check(disrupted.Count > 0, "shipped content applies or reads Disrupted" + Used(disrupted));
             Check(consumeDebt.Count > 0, "no shipped content uses ConsumeTurnDebt" + Detail(consumeDebt));
             Check(thresholdTrig.Count > 0, "no shipped passive triggers on OnEnemyEnergyThreshold" + Detail(thresholdTrig));
             Check(thresholdTarget.Count > 0, "no shipped content targets ThresholdUnit" + Detail(thresholdTarget));
@@ -8893,6 +8939,7 @@ namespace Emberfall.DevHarness
             CheckBatchThreeNoShippedUsage(live);
             CheckBeneficialHarmfulConditions();
             CheckResolve2Counter();
+            CheckEveryStatusIsNamedForAPlayer();
             CheckResolveToStatScaling();
             CheckPartialStackRemoval();
             CheckMaxHpCap();
@@ -9027,6 +9074,108 @@ namespace Emberfall.DevHarness
                   "Resolve2 DisplayName is 'Resolve II'");
             Check(StatusInfo.ShortTag(StatusKind.Resolve2) == "RSV2",
                   "Resolve2 ShortTag is 'RSV2'");
+        }
+
+        /// <summary>
+        /// EVERY STATUS A PLAYER CAN SEE HAS A NAME WRITTEN FOR A PLAYER, and a tag short enough
+        /// for the bar above a body.
+        ///
+        /// Both switches end in a fallback - the enum member's own identifier for DisplayName, "?"
+        /// for ShortTag - and a fallback is what a missed member looks like on screen: a question
+        /// mark on the status bar, and a debrief line reading "HealingReduction", in code case, to
+        /// a player who has never seen the enum. HealingReduction did exactly that from the pass
+        /// that added it until this one, because nothing asked. This asks.
+        ///
+        /// ASKED OF THE SOURCE, NOT OF THE RETURN VALUE, and that is the whole difficulty. Twelve
+        /// statuses - Focus, Stun, Guard, Linked and the rest - are deliberately named with the
+        /// same word as their identifier, so "DisplayName returned the identifier" cannot tell an
+        /// authored name from a fallthrough and would call all twelve unnamed. What distinguishes
+        /// them is whether a `case` exists, which only the file can answer.
+        ///
+        /// Degrades to a [note] when Enums.cs is not found above the binary, the same way the
+        /// validator parity read does and for the same reason: the harness can be run from a
+        /// directory with no repository over it.
+        ///
+        /// None is excluded from both: it is the absence of a status, never drawn and never named.
+        /// </summary>
+        private static void CheckEveryStatusIsNamedForAPlayer()
+        {
+            string path = FindEnumsSource();
+            if (path == null)
+            {
+                Line("  [note] Enums.cs not found above this binary, so the status-naming read did "
+                     + "not run - a `case` is a fact about the file and nothing else can see it.");
+                return;
+            }
+
+            string text = File.ReadAllText(path);
+            List<string> named = SwitchCasesBetween(text, "public static string DisplayName(StatusKind kind)",
+                                                    "public static string ShortTag(StatusKind kind)");
+            List<string> tagged = SwitchCasesBetween(text, "public static string ShortTag(StatusKind kind)", null);
+
+            string[] kinds = Enum.GetNames(typeof(StatusKind));
+            List<string> unnamed = new List<string>(), untagged = new List<string>();
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                if (kinds[i] == "None") continue;
+                if (!named.Contains(kinds[i])) unnamed.Add(kinds[i]);
+                if (!tagged.Contains(kinds[i])) untagged.Add(kinds[i]);
+            }
+
+            Check(named.Count > 0 && unnamed.Count == 0,
+                  "every one of the " + (kinds.Length - 1) + " statuses has a player-facing"
+                  + " DisplayName of its own rather than falling through to its enum identifier"
+                  + Detail(unnamed));
+            Check(tagged.Count > 0 && untagged.Count == 0,
+                  "and every one has a ShortTag for the health bar rather than falling through"
+                  + " to a question mark" + Detail(untagged));
+        }
+
+        /// <summary>Enums.cs, found the way FindToolSource finds a tool's source.</summary>
+        private static string FindEnumsSource()
+        {
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            string tail = Path.Combine("Assets", Path.Combine("Scripts",
+                          Path.Combine("Core", Path.Combine("Data", "Enums.cs"))));
+            for (int r = 0; r < roots.Length; r++)
+            {
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName, tail);
+                    if (File.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Every `case StatusKind.X:` between two markers in a source file.
+        ///
+        /// As naive as ParsePythonSet and loud about it for the same reason: it reads text, not
+        /// C#. A switch rewritten into a dictionary or an expression body parses as empty here,
+        /// and an empty set fails its check rather than passing it.
+        /// </summary>
+        private static List<string> SwitchCasesBetween(string text, string from, string to)
+        {
+            List<string> found = new List<string>();
+            int start = text.IndexOf(from, StringComparison.Ordinal);
+            if (start < 0) return found;
+            int end = to == null ? text.Length : text.IndexOf(to, start, StringComparison.Ordinal);
+            if (end < 0) end = text.Length;
+
+            const string marker = "case StatusKind.";
+            int at = text.IndexOf(marker, start, StringComparison.Ordinal);
+            while (at >= 0 && at < end)
+            {
+                int i = at + marker.Length;
+                int j = i;
+                while (j < text.Length && (char.IsLetterOrDigit(text[j]) || text[j] == '_')) j++;
+                if (j > i) found.Add(text.Substring(i, j - i));
+                at = text.IndexOf(marker, j, StringComparison.Ordinal);
+            }
+            return found;
         }
 
         private static void CheckResolveToStatScaling()
@@ -14898,7 +15047,7 @@ namespace Emberfall.DevHarness
             Check(maxHpUp.Count > 0, "no shipped effect applies MaxHpUp" + Detail(maxHpUp));
             Check(holyDmgUp.Count > 0, "no shipped effect applies HolyDamageUp" + Detail(holyDmgUp));
             Check(perTarget.Count == 0, "no shipped effect uses PerTarget" + Detail(perTarget));
-            Check(releaseAsHeal.Count == 0, "no shipped effect uses ReleaseAsHeal" + Detail(releaseAsHeal));
+            Check(releaseAsHeal.Count > 0, "shipped content uses ReleaseAsHeal" + Used(releaseAsHeal));
             Check(autoRelease.Count > 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
             Check(mitigates.Count == 0, "no shipped effect uses LedgerMitigates" + Detail(mitigates));
             Check(bankLimit.Count > 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
@@ -15014,7 +15163,8 @@ namespace Emberfall.DevHarness
 
         private static void CheckFunnelBankingNoShippedUsage(ContentDatabase db)
         {
-            int funnelNonDamage = 0, funnelConvert = 0, stackThreshold = 0;
+            List<string> funnelNonDamage = new List<string>(), funnelConvert = new List<string>();
+            List<string> stackThreshold = new List<string>();
 
             List<UnitDef> units = new List<UnitDef>();
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
@@ -15024,37 +15174,41 @@ namespace Emberfall.DevHarness
             {
                 UnitDef def = units[i];
                 List<EffectDef> all = new List<EffectDef>();
-                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
-                if (def.Active != null) all.AddRange(def.Active.Effects);
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
                 for (int pi = 0; pi < def.Passives.Count; pi++)
                 {
-                    all.AddRange(def.Passives[pi].Effects);
+                    AddWithNames(all, where, def.Id + "/" + def.Passives[pi].Name, def.Passives[pi].Effects);
                     if (def.Passives[pi].Trigger == PassiveTrigger.OnStackThreshold)
-                        stackThreshold++;
+                        stackThreshold.Add(def.Id + "/" + def.Passives[pi].Name);
                 }
                 HeroDef hero = def as HeroDef;
                 if (hero != null)
                 {
                     for (int ti = 0; ti < hero.Talents.Count; ti++)
                     {
-                        all.AddRange(hero.Talents[ti].Effects);
+                        AddWithNames(all, where, def.Id + "/" + hero.Talents[ti].Name,
+                                     hero.Talents[ti].Effects);
                         if (hero.Talents[ti].Trigger == PassiveTrigger.OnStackThreshold)
-                            stackThreshold++;
+                            stackThreshold.Add(def.Id + "/" + hero.Talents[ti].Name);
                     }
                 }
                 for (int e = 0; e < all.Count; e++)
                 {
-                    if (all[e].LedgerFunnelSource != FunnelSource.Damage) funnelNonDamage++;
-                    if (all[e].LedgerFunnelConvert) funnelConvert++;
+                    if (all[e].LedgerFunnelSource != FunnelSource.Damage) funnelNonDamage.Add(where[e]);
+                    if (all[e].LedgerFunnelConvert) funnelConvert.Add(where[e]);
                 }
             }
 
-            Check(funnelNonDamage == 0,
-                  "no shipped effect uses a non-Damage LedgerFunnelSource (" + funnelNonDamage + ")");
-            Check(funnelConvert == 0,
-                  "no shipped effect uses LedgerFunnelConvert (" + funnelConvert + ")");
-            Check(stackThreshold == 0,
-                  "no shipped passive triggers on OnStackThreshold (" + stackThreshold + ")");
+            Check(funnelNonDamage.Count > 0,
+                  "shipped content uses a non-Damage LedgerFunnelSource" + Used(funnelNonDamage));
+            Check(funnelConvert.Count > 0,
+                  "shipped content uses LedgerFunnelConvert" + Used(funnelConvert));
+            Check(stackThreshold.Count > 0,
+                  "shipped content triggers a passive on OnStackThreshold" + Used(stackThreshold));
         }
 
         private static void CheckFunnelBankingEnumParity()
@@ -15441,8 +15595,10 @@ namespace Emberfall.DevHarness
 
         private static void CheckBatchFiveNoShippedUsage(ContentDatabase db)
         {
-            int allyShieldBreak = 0, allyLedgerBanked = 0, enemyHealed = 0;
-            int funnelConvertFired = 0, appliedAllyExpired = 0, scaleByBanked = 0;
+            List<string> allyShieldBreak = new List<string>(), allyLedgerBanked = new List<string>();
+            List<string> enemyHealed = new List<string>(), appliedAllyExpired = new List<string>();
+            List<string> scaleByBanked = new List<string>();
+            int funnelConvertFired = 0;
 
             List<UnitDef> units = new List<UnitDef>();
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
@@ -15452,17 +15608,21 @@ namespace Emberfall.DevHarness
             {
                 UnitDef def = units[i];
                 List<EffectDef> all = new List<EffectDef>();
-                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
-                if (def.Active != null) all.AddRange(def.Active.Effects);
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
                 for (int pi = 0; pi < def.Passives.Count; pi++)
                 {
                     PassiveTrigger t = def.Passives[pi].Trigger;
-                    if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak++;
-                    if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked++;
-                    if (t == PassiveTrigger.OnEnemyHealed) enemyHealed++;
+                    string host = def.Id + "/" + def.Passives[pi].Name;
+                    if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak.Add(host);
+                    if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked.Add(host);
+                    if (t == PassiveTrigger.OnEnemyHealed) enemyHealed.Add(host);
                     if (t == PassiveTrigger.OnFunnelConvertFired) funnelConvertFired++;
-                    if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired++;
-                    all.AddRange(def.Passives[pi].Effects);
+                    if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired.Add(host);
+                    AddWithNames(all, where, host, def.Passives[pi].Effects);
                 }
                 HeroDef hero = def as HeroDef;
                 if (hero != null)
@@ -15470,32 +15630,34 @@ namespace Emberfall.DevHarness
                     for (int ti = 0; ti < hero.Talents.Count; ti++)
                     {
                         PassiveTrigger t = hero.Talents[ti].Trigger;
-                        if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak++;
-                        if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked++;
-                        if (t == PassiveTrigger.OnEnemyHealed) enemyHealed++;
+                        string host = def.Id + "/" + hero.Talents[ti].Name;
+                        if (t == PassiveTrigger.OnAllyShieldBreak) allyShieldBreak.Add(host);
+                        if (t == PassiveTrigger.OnAllyLedgerBanked) allyLedgerBanked.Add(host);
+                        if (t == PassiveTrigger.OnEnemyHealed) enemyHealed.Add(host);
                         if (t == PassiveTrigger.OnFunnelConvertFired) funnelConvertFired++;
-                        if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired++;
-                        all.AddRange(hero.Talents[ti].Effects);
+                        if (t == PassiveTrigger.OnAppliedAllyStatusExpired) appliedAllyExpired.Add(host);
+                        AddWithNames(all, where, host, hero.Talents[ti].Effects);
                     }
                 }
                 for (int e = 0; e < all.Count; e++)
                 {
-                    if (all[e].ScaleByLastBanked) scaleByBanked++;
+                    if (all[e].ScaleByLastBanked) scaleByBanked.Add(where[e]);
                 }
             }
 
-            Check(allyShieldBreak == 0,
-                  "no shipped passive triggers on OnAllyShieldBreak (" + allyShieldBreak + ")");
-            Check(allyLedgerBanked == 0,
-                  "no shipped passive triggers on OnAllyLedgerBanked (" + allyLedgerBanked + ")");
-            Check(enemyHealed == 0,
-                  "no shipped passive triggers on OnEnemyHealed (" + enemyHealed + ")");
+            Check(allyShieldBreak.Count > 0,
+                  "shipped content triggers a passive on OnAllyShieldBreak" + Used(allyShieldBreak));
+            Check(allyLedgerBanked.Count > 0,
+                  "shipped content triggers a passive on OnAllyLedgerBanked" + Used(allyLedgerBanked));
+            Check(enemyHealed.Count > 0,
+                  "shipped content triggers a passive on OnEnemyHealed" + Used(enemyHealed));
             Check(funnelConvertFired == 0,
                   "no shipped passive triggers on OnFunnelConvertFired (" + funnelConvertFired + ")");
-            Check(appliedAllyExpired == 0,
-                  "no shipped passive triggers on OnAppliedAllyStatusExpired (" + appliedAllyExpired + ")");
-            Check(scaleByBanked == 0,
-                  "no shipped effect uses ScaleByLastBanked (" + scaleByBanked + ")");
+            Check(appliedAllyExpired.Count > 0,
+                  "shipped content triggers a passive on OnAppliedAllyStatusExpired"
+                  + Used(appliedAllyExpired));
+            Check(scaleByBanked.Count > 0,
+                  "shipped content uses ScaleByLastBanked" + Used(scaleByBanked));
         }
 
         private static void CheckBatchFiveEnumParity()
@@ -16030,10 +16192,15 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// THE STANDING GUARD. Three of these four mechanics sit inside the damage funnel, which
-        /// every point of damage in the game passes through, so "no existing battle moved" rests on
-        /// shipped content reaching none of it. The day a hero authors one of these, this check
-        /// fails and the no-fingerprints-move claim has to be re-earned rather than assumed.
+        /// THE STANDING LINE ON THE LINK VOCABULARY. Three of these mechanics sit inside the damage
+        /// funnel, which every point of damage in the game passes through, so the pass that added
+        /// them opened every line here as a dormancy tripwire: no existing battle could have moved
+        /// while shipped content reached none of it.
+        ///
+        /// EIGHT OF THE TEN HAVE SINCE BEEN AUTHORED and are flipped to confirmations that name the
+        /// kits authoring them - see <see cref="Used"/> for why that is not a deletion. LinkedUnit
+        /// as a target mode and OnLinkedUnitTargeted as a trigger are still unreached and stay
+        /// guarded as dormant.
         ///
         /// Covered is deliberately NOT counted. Six effects in heroes.json apply it and it is meant
         /// to keep working: the redirect arithmetic moved into RedirectShare without changing, and
@@ -16041,9 +16208,11 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckLinkNoShippedUsage(ContentDatabase db)
         {
-            int linkedStatus = 0, linkUnits = 0, echoDamage = 0;
-            int previousTarget = 0, linkedUnitMode = 0, linkTransfer = 0, linkMutual = 0;
-            int targetedTrigger = 0, hitTrigger = 0, sourceIsAlly = 0;
+            List<string> linkedStatus = new List<string>(), linkUnits = new List<string>();
+            List<string> echoDamage = new List<string>(), previousTarget = new List<string>();
+            List<string> linkTransfer = new List<string>(), linkMutual = new List<string>();
+            List<string> hitTrigger = new List<string>(), sourceIsAlly = new List<string>();
+            int linkedUnitMode = 0, targetedTrigger = 0;
 
             List<UnitDef> units = new List<UnitDef>();
             for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
@@ -16053,15 +16222,19 @@ namespace Emberfall.DevHarness
             {
                 UnitDef def = units[i];
                 List<EffectDef> all = new List<EffectDef>();
-                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
-                if (def.Active != null) all.AddRange(def.Active.Effects);
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
                 for (int pi = 0; pi < def.Passives.Count; pi++)
                 {
                     PassiveDef p = def.Passives[pi];
+                    string host = def.Id + "/" + p.Name;
                     if (p.Trigger == PassiveTrigger.OnLinkedUnitTargeted) targetedTrigger++;
-                    if (p.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger++;
-                    if (p.TriggerSourceIsAlly) sourceIsAlly++;
-                    all.AddRange(p.Effects);
+                    if (p.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger.Add(host);
+                    if (p.TriggerSourceIsAlly) sourceIsAlly.Add(host);
+                    AddWithNames(all, where, host, p.Effects);
                 }
                 HeroDef hero = def as HeroDef;
                 if (hero != null)
@@ -16069,41 +16242,42 @@ namespace Emberfall.DevHarness
                     for (int ti = 0; ti < hero.Talents.Count; ti++)
                     {
                         PassiveDef t = hero.Talents[ti];
+                        string host = def.Id + "/" + t.Name;
                         if (t.Trigger == PassiveTrigger.OnLinkedUnitTargeted) targetedTrigger++;
-                        if (t.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger++;
-                        if (t.TriggerSourceIsAlly) sourceIsAlly++;
-                        all.AddRange(t.Effects);
+                        if (t.Trigger == PassiveTrigger.OnLinkedUnitHit) hitTrigger.Add(host);
+                        if (t.TriggerSourceIsAlly) sourceIsAlly.Add(host);
+                        AddWithNames(all, where, host, t.Effects);
                     }
                 }
                 for (int e = 0; e < all.Count; e++)
                 {
                     EffectDef eff = all[e];
-                    if (eff.Kind == EffectKind.LinkUnits) linkUnits++;
-                    if (eff.Kind == EffectKind.EchoDamage) echoDamage++;
+                    if (eff.Kind == EffectKind.LinkUnits) linkUnits.Add(where[e]);
+                    if (eff.Kind == EffectKind.EchoDamage) echoDamage.Add(where[e]);
                     if (eff.Status == StatusKind.Linked || eff.ConditionStatus == StatusKind.Linked
-                        || eff.TargetStatus == StatusKind.Linked) linkedStatus++;
+                        || eff.TargetStatus == StatusKind.Linked) linkedStatus.Add(where[e]);
                     if (eff.Target == TargetMode.PreviousTarget
-                        || eff.SecondaryTarget == TargetMode.PreviousTarget) previousTarget++;
+                        || eff.SecondaryTarget == TargetMode.PreviousTarget) previousTarget.Add(where[e]);
                     if (eff.Target == TargetMode.LinkedUnit
                         || eff.SecondaryTarget == TargetMode.LinkedUnit) linkedUnitMode++;
-                    if (eff.LinkTransfer != LinkTransfer.None) linkTransfer++;
-                    if (eff.LinkMutual) linkMutual++;
+                    if (eff.LinkTransfer != LinkTransfer.None) linkTransfer.Add(where[e]);
+                    if (eff.LinkMutual) linkMutual.Add(where[e]);
                 }
             }
 
-            Check(linkUnits == 0, "no shipped effect uses EffectKind.LinkUnits (" + linkUnits + ")");
-            Check(echoDamage == 0, "no shipped effect uses EffectKind.EchoDamage (" + echoDamage + ")");
-            Check(linkedStatus == 0, "no shipped effect names StatusKind.Linked (" + linkedStatus + ")");
-            Check(previousTarget == 0, "no shipped effect targets PreviousTarget (" + previousTarget + ")");
+            Check(linkUnits.Count > 0, "shipped content uses EffectKind.LinkUnits" + Used(linkUnits));
+            Check(echoDamage.Count > 0, "shipped content uses EffectKind.EchoDamage" + Used(echoDamage));
+            Check(linkedStatus.Count > 0, "shipped content names StatusKind.Linked" + Used(linkedStatus));
+            Check(previousTarget.Count > 0, "shipped content targets PreviousTarget" + Used(previousTarget));
             Check(linkedUnitMode == 0, "no shipped effect targets LinkedUnit (" + linkedUnitMode + ")");
-            Check(linkTransfer == 0, "no shipped effect sets a LinkTransfer (" + linkTransfer + ")");
-            Check(linkMutual == 0, "no shipped effect sets LinkMutual (" + linkMutual + ")");
+            Check(linkTransfer.Count > 0, "shipped content sets a LinkTransfer" + Used(linkTransfer));
+            Check(linkMutual.Count > 0, "shipped content sets LinkMutual" + Used(linkMutual));
             Check(targetedTrigger == 0,
                   "no shipped passive triggers on OnLinkedUnitTargeted (" + targetedTrigger + ")");
-            Check(hitTrigger == 0,
-                  "no shipped passive triggers on OnLinkedUnitHit (" + hitTrigger + ")");
-            Check(sourceIsAlly == 0,
-                  "no shipped passive sets TriggerSourceIsAlly (" + sourceIsAlly + ")");
+            Check(hitTrigger.Count > 0,
+                  "shipped content triggers a passive on OnLinkedUnitHit" + Used(hitTrigger));
+            Check(sourceIsAlly.Count > 0,
+                  "shipped content sets TriggerSourceIsAlly on a passive" + Used(sourceIsAlly));
         }
 
         /// <summary>
@@ -16860,11 +17034,15 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// THE STANDING GUARD, extended. Two of these nine sit on the hot path with no link gate at
-        /// all - the OnTargeted dispatch in ApplyDamageEffect and, behind _anyLinks, the Deflect
-        /// test at the top of DealRawDamage - so "no existing battle moved" rests on shipped
-        /// content reaching none of the new vocabulary. The day a hero authors one, this fails and
-        /// the claim is re-earned rather than assumed.
+        /// THE STANDING LINE, extended. Two of these sit on the hot path with no link gate at all -
+        /// the OnTargeted dispatch in ApplyDamageEffect and, behind _anyLinks, the Deflect test at
+        /// the top of DealRawDamage - so the pass that added them opened every line as a dormancy
+        /// tripwire: no existing battle could have moved while shipped content reached none of it.
+        ///
+        /// ELEVEN OF THE FIFTEEN HAVE SINCE BEEN AUTHORED and are flipped to confirmations naming
+        /// the kits that author them - see <see cref="Used"/> for why that is not a deletion.
+        /// AllLinkedUnits, linkAmountPower, linkFromCaster and ScaleByLastMoved are still unreached
+        /// and stay guarded as dormant.
         ///
         /// Covered is again NOT counted: six effects apply it, it is meant to keep working, and the
         /// 24-stage sweep plus the cover arena are what prove the shared path still splits a hit
@@ -16872,10 +17050,13 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckNineGapNoShippedUsage(ContentDatabase db)
         {
-            int otherLinked = 0, allLinked = 0, bcSourceTarget = 0, bcSourceCond = 0;
-            int notDamaged = 0, lastMovedCond = 0, deflect = 0;
-            int linkAmount = 0, linkFromCaster = 0, scaleMoved = 0, scaleDamage = 0;
-            int onTargeted = 0, onStatusGained = 0, onEchoFired = 0, onRedirectReceived = 0;
+            List<string> otherLinked = new List<string>(), bcSourceTarget = new List<string>();
+            List<string> bcSourceCond = new List<string>(), notDamaged = new List<string>();
+            List<string> lastMovedCond = new List<string>(), deflect = new List<string>();
+            List<string> scaleDamage = new List<string>(), onTargeted = new List<string>();
+            List<string> onStatusGained = new List<string>(), onEchoFired = new List<string>();
+            List<string> onRedirectReceived = new List<string>();
+            int allLinked = 0, linkAmount = 0, linkFromCaster = 0, scaleMoved = 0;
             int scaledHealShield = 0;
             List<string> named = new List<string>();
 
@@ -16893,43 +17074,53 @@ namespace Emberfall.DevHarness
                     for (int ti = 0; ti < hero.Talents.Count; ti++) passives.Add(hero.Talents[ti]);
 
                 List<EffectDef> all = new List<EffectDef>();
-                if (def.BasicAttack != null) all.AddRange(def.BasicAttack.Effects);
-                if (def.Active != null) all.AddRange(def.Active.Effects);
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
                 for (int pi = 0; pi < passives.Count; pi++)
                 {
                     PassiveDef p = passives[pi];
-                    if (p.Trigger == PassiveTrigger.OnTargeted) onTargeted++;
-                    if (p.Trigger == PassiveTrigger.OnStatusGained) onStatusGained++;
-                    if (p.Trigger == PassiveTrigger.OnEchoFired) onEchoFired++;
-                    if (p.Trigger == PassiveTrigger.OnRedirectReceived) onRedirectReceived++;
-                    all.AddRange(p.Effects);
+                    string host = def.Id + "/" + p.Name;
+                    if (p.Trigger == PassiveTrigger.OnTargeted) onTargeted.Add(host);
+                    if (p.Trigger == PassiveTrigger.OnStatusGained) onStatusGained.Add(host);
+                    if (p.Trigger == PassiveTrigger.OnEchoFired) onEchoFired.Add(host);
+                    if (p.Trigger == PassiveTrigger.OnRedirectReceived) onRedirectReceived.Add(host);
+                    AddWithNames(all, where, host, p.Effects);
                     for (int ai = 0; ai < p.Appends.Count; ai++)
-                        if (p.Appends[ai].Effect != null) all.Add(p.Appends[ai].Effect);
+                        if (p.Appends[ai].Effect != null)
+                        {
+                            all.Add(p.Appends[ai].Effect);
+                            where.Add(host + " (append)");
+                        }
                 }
 
                 for (int e = 0; e < all.Count; e++)
                 {
                     EffectDef eff = all[e];
                     if (eff.Target == TargetMode.OtherLinkedUnit
-                        || eff.SecondaryTarget == TargetMode.OtherLinkedUnit) otherLinked++;
+                        || eff.SecondaryTarget == TargetMode.OtherLinkedUnit) otherLinked.Add(where[e]);
                     if (eff.Target == TargetMode.AllLinkedUnits
                         || eff.SecondaryTarget == TargetMode.AllLinkedUnits) allLinked++;
                     if (eff.Target == TargetMode.BroadcastSource
-                        || eff.SecondaryTarget == TargetMode.BroadcastSource) bcSourceTarget++;
+                        || eff.SecondaryTarget == TargetMode.BroadcastSource) bcSourceTarget.Add(where[e]);
                     if (eff.ConditionOn == ConditionSubject.BroadcastSource
                         || eff.ConditionOn2 == ConditionSubject.BroadcastSource
-                        || eff.ConditionOn3 == ConditionSubject.BroadcastSource) bcSourceCond++;
+                        || eff.ConditionOn3 == ConditionSubject.BroadcastSource) bcSourceCond.Add(where[e]);
                     if (eff.Condition == EffectCondition.SubjectNotDamagedByMeThisRound
                         || eff.Condition2 == EffectCondition.SubjectNotDamagedByMeThisRound
-                        || eff.Condition3 == EffectCondition.SubjectNotDamagedByMeThisRound) notDamaged++;
+                        || eff.Condition3 == EffectCondition.SubjectNotDamagedByMeThisRound)
+                        notDamaged.Add(where[e]);
                     if (eff.Condition == EffectCondition.LastMovedAboveHpFraction
                         || eff.Condition2 == EffectCondition.LastMovedAboveHpFraction
-                        || eff.Condition3 == EffectCondition.LastMovedAboveHpFraction) lastMovedCond++;
-                    if (eff.LinkTransfer == LinkTransfer.Deflect) deflect++;
+                        || eff.Condition3 == EffectCondition.LastMovedAboveHpFraction)
+                        lastMovedCond.Add(where[e]);
+                    if (eff.LinkTransfer == LinkTransfer.Deflect) deflect.Add(where[e]);
                     if (eff.LinkAmountPower != 0f) linkAmount++;
                     if (eff.LinkFromCaster) linkFromCaster++;
                     if (eff.ScaleByLastMoved) scaleMoved++;
-                    if (eff.ScaleByLastDamage) scaleDamage++;
+                    if (eff.ScaleByLastDamage) scaleDamage.Add(where[e]);
 
                     if (eff.Kind != EffectKind.Heal && eff.Kind != EffectKind.Shield) continue;
                     if (!eff.ScaleByLastRelease && !eff.ScaleByLastRedirect && !eff.ScaleByLastRemoval
@@ -16939,26 +17130,28 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            Check(otherLinked == 0, "no shipped effect targets OtherLinkedUnit (" + otherLinked + ")");
+            Check(otherLinked.Count > 0, "shipped content targets OtherLinkedUnit" + Used(otherLinked));
             Check(allLinked == 0, "no shipped effect targets AllLinkedUnits (" + allLinked + ")");
-            Check(bcSourceTarget == 0, "no shipped effect targets BroadcastSource (" + bcSourceTarget + ")");
-            Check(bcSourceCond == 0, "no shipped effect conditions on BroadcastSource (" + bcSourceCond + ")");
-            Check(notDamaged == 0,
-                  "no shipped effect uses SubjectNotDamagedByMeThisRound (" + notDamaged + ")");
-            Check(lastMovedCond == 0,
-                  "no shipped effect uses LastMovedAboveHpFraction (" + lastMovedCond + ")");
-            Check(deflect == 0, "no shipped effect creates a Deflect link (" + deflect + ")");
+            Check(bcSourceTarget.Count > 0, "shipped content targets BroadcastSource" + Used(bcSourceTarget));
+            Check(bcSourceCond.Count > 0,
+                  "shipped content conditions on BroadcastSource" + Used(bcSourceCond));
+            Check(notDamaged.Count > 0,
+                  "shipped content uses SubjectNotDamagedByMeThisRound" + Used(notDamaged));
+            Check(lastMovedCond.Count > 0,
+                  "shipped content uses LastMovedAboveHpFraction" + Used(lastMovedCond));
+            Check(deflect.Count > 0, "shipped content creates a Deflect link" + Used(deflect));
             Check(linkAmount == 0, "no shipped effect sets linkAmountPower (" + linkAmount + ")");
             Check(linkFromCaster == 0, "no shipped effect sets linkFromCaster (" + linkFromCaster + ")");
             Check(scaleMoved == 0, "no shipped effect uses ScaleByLastMoved (" + scaleMoved + ")");
-            Check(scaleDamage == 0, "no shipped effect uses ScaleByLastDamage (" + scaleDamage + ")");
-            Check(onTargeted == 0, "no shipped passive triggers on OnTargeted (" + onTargeted + ")");
-            Check(onStatusGained == 0,
-                  "no shipped passive triggers on OnStatusGained (" + onStatusGained + ")");
-            Check(onEchoFired == 0,
-                  "no shipped passive triggers on OnEchoFired (" + onEchoFired + ")");
-            Check(onRedirectReceived == 0,
-                  "no shipped passive triggers on OnRedirectReceived (" + onRedirectReceived + ")");
+            Check(scaleDamage.Count > 0, "shipped content uses ScaleByLastDamage" + Used(scaleDamage));
+            Check(onTargeted.Count > 0,
+                  "shipped content triggers a passive on OnTargeted" + Used(onTargeted));
+            Check(onStatusGained.Count > 0,
+                  "shipped content triggers a passive on OnStatusGained" + Used(onStatusGained));
+            Check(onEchoFired.Count > 0,
+                  "shipped content triggers a passive on OnEchoFired" + Used(onEchoFired));
+            Check(onRedirectReceived.Count > 0,
+                  "shipped content triggers a passive on OnRedirectReceived" + Used(onRedirectReceived));
 
             // THE BEHAVIOUR CHANGE THE NINE-GAP PASS MADE, counted rather than described in prose
             // alone. Heal and Shield honour the ScaleBy family, which they silently ignored before

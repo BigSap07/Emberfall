@@ -8952,7 +8952,7 @@
           }
         ]
       },
-      "passive": {
+      "passive1": {
         "id": "cyrra_silent_weight_stats",
         "name": "Silent Weight",
         "trigger": "BattleStart",
@@ -8976,7 +8976,7 @@
           }
         ]
       },
-      "passive1": {
+      "passive2": {
         "id": "cyrra_carry_the_burden",
         "name": "Carry the Burden",
         "trigger": "OnHealApplied",
