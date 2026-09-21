@@ -10,8 +10,6 @@
     "end": 71,
     "fps": 30,
     "loop": true,
-    "footFraction": 0.219,
-    "impactFraction": 0.5,
-    "playbackSpeed": 1.3
+    "footFraction": 0.219
   }
 }
