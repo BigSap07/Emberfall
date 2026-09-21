@@ -82,7 +82,7 @@
           "environment": "ember", "gold": 320, "shards": 17, "accountXp": 60,
           "firstClearGold": 540, "firstClearShards": 80, "recommendedPower": 7430,
           "idleGoldPerHour": 470, "idleShardsPerHour": 20,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 17, "ceilingLevel": 24,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 17, "ceilingLevel": 27,
           "enemies": [ { "id": "stone_warden", "level": 17 }, { "id": "cinder_imp", "level": 17 }, { "id": "cinder_imp", "level": 17 }, { "id": "grave_moth", "level": 17 } ]
         },
         {
@@ -90,7 +90,7 @@
           "environment": "ember", "gold": 375, "shards": 19, "accountXp": 68,
           "firstClearGold": 600, "firstClearShards": 90, "recommendedPower": 7475,
           "idleGoldPerHour": 525, "idleShardsPerHour": 22,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 29,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 33,
           "enemies": [ { "id": "cinder_imp", "level": 21 }, { "id": "cinder_imp", "level": 21 }, { "id": "cinder_imp", "level": 20 }, { "id": "grave_moth", "level": 21 } ]
         },
         {
@@ -98,15 +98,15 @@
           "environment": "ember", "gold": 435, "shards": 22, "accountXp": 76,
           "firstClearGold": 680, "firstClearShards": 100, "recommendedPower": 7801,
           "idleGoldPerHour": 580, "idleShardsPerHour": 24,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 24, "ceilingLevel": 25,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 24, "ceilingLevel": 27,
           "enemies": [ { "id": "ashen_revenant", "level": 20 }, { "id": "cinder_imp", "level": 24 }, { "id": "cinder_imp", "level": 24 }, { "id": "grave_moth", "level": 24 } ]
         },
         {
           "id": "ch1_9", "index": 9, "name": "Mothlight Steps", "subtitle": "Fast, thin things, and far too many of them.",
           "environment": "hollow", "gold": 500, "shards": 25, "accountXp": 85,
-          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 9531,
+          "firstClearGold": 760, "firstClearShards": 115, "recommendedPower": 9620,
           "idleGoldPerHour": 635, "idleShardsPerHour": 27,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 29,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 34,
           "enemies": [ { "id": "ashen_revenant", "level": 23 }, { "id": "ashen_revenant", "level": 19 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "grave_moth", "level": 27 } ]
         },
         {
@@ -114,7 +114,7 @@
           "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
           "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 9711,
           "idleGoldPerHour": 690, "idleShardsPerHour": 29,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 26, "ceilingLevel": 27,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 26, "ceilingLevel": 33,
           "enemies": [ { "id": "stone_warden", "level": 26 }, { "id": "ashen_revenant", "level": 21 }, { "id": "cinder_imp", "level": 26 }, { "id": "grave_moth", "level": 26 }, { "id": "hollow_husk", "level": 26 } ]
         },
         {
@@ -122,7 +122,7 @@
           "environment": "hollow", "gold": 650, "shards": 32, "accountXp": 104,
           "firstClearGold": 950, "firstClearShards": 150, "recommendedPower": 10262,
           "idleGoldPerHour": 745, "idleShardsPerHour": 31,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 28,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 27, "ceilingLevel": 32,
           "enemies": [ { "id": "ashen_revenant", "level": 25 }, { "id": "ashen_revenant", "level": 23 }, { "id": "cinder_imp", "level": 27 }, { "id": "grave_moth", "level": 27 }, { "id": "hollow_husk", "level": 26 } ]
         },
         {
@@ -131,7 +131,7 @@
           "environment": "hollow", "gold": 800, "shards": 40, "accountXp": 140,
           "firstClearGold": 1400, "firstClearShards": 240, "recommendedPower": 10936,
           "idleGoldPerHour": 800, "idleShardsPerHour": 33,
-          "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 24,
+          "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 26,
           "enemies": [ { "id": "sundered_colossus", "level": 22 }, { "id": "hollow_husk", "level": 15 }, { "id": "hollow_husk", "level": 15 }, { "id": "grave_moth", "level": 16 }, { "id": "grave_moth", "level": 16 } ]
         }
       ]
