@@ -764,13 +764,22 @@
           "name": "Unclaimed Victory",
           "trigger": "OnKill",
           "oncePerBattle": false,
+          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed.",
           "effects": [
             {
               "kind": "Shield",
               "target": "Self",
               "condition": "HasMyMark",
-              "condition2": "StatusStacksAtLeast",
               "conditionOn": "Defeated",
+              "duration": 2,
+              "selfHpRatio": 0.12
+            },
+            {
+              "kind": "Shield",
+              "target": "Self",
+              "condition": "HasMyMark",
+              "conditionOn": "Defeated",
+              "condition2": "StatusStacksAtLeast",
               "conditionOn2": "Caster",
               "conditionStatus2": "Resolve",
               "conditionValue2": 1,
@@ -781,8 +790,8 @@
               "kind": "Shield",
               "target": "Self",
               "condition": "HasMyMark",
-              "condition2": "StatusStacksAtLeast",
               "conditionOn": "Defeated",
+              "condition2": "StatusStacksAtLeast",
               "conditionOn2": "Caster",
               "conditionStatus2": "Resolve",
               "conditionValue2": 2,

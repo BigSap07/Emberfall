@@ -20391,22 +20391,24 @@ namespace Emberfall.DevHarness
                       + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
                       + ") - that body is out of reach of her basic, which marks the lowest-HP one");
 
-            // ---- Kiva III: the same kill, and what it can pay out now that Severance Paid runs.
+            // ---- Kiva III: the same kill, and what it pays out now that the first clause is free.
             //
-            // THIS CHECK USED TO ASSERT A SHIELD AND NO LONGER CAN, and the reason is a second
-            // defect that the first one was hiding. Severance Paid was inert - both of its clauses
-            // and both of her active's copies of them gated on StatusStacksAtLeast with no status
-            // named, which answers false unconditionally - so nothing in her kit ever SPENT a
-            // Broken Link, and Unclaimed Victory found two of them banked at the kill. With those
-            // four gates repaired the spend is live, and the rates do not leave a remainder:
-            // Abandoned Support banks at most one link per round, and Severance Paid consumes one
-            // on every basic against a Forsaken body - the same basic whose own Mark banked it. So
-            // she opens every turn at zero and a kill has nothing to consume.
+            // THIS CHECK ASSERTS A SHIELD AGAIN. It stopped being able to when Severance Paid was
+            // repaired, and the reason was a rate rather than a bug: Severance Paid was inert -
+            // both of its clauses and both of her active's copies of them gated on
+            // StatusStacksAtLeast with no status named, which answers false unconditionally - so
+            // nothing in her kit ever SPENT a Broken Link and Unclaimed Victory found two of them
+            // banked at the kill. With those four gates repaired the spend is live and the rates
+            // leave no remainder: Abandoned Support banks at most one link a round and Severance
+            // Paid consumes one on every basic against a Forsaken body, the same basic whose own
+            // Mark banked it, so she opens every turn at zero and a kill found nothing to consume.
+            // A talent that pays exactly zero for structural reasons is not a talent.
             //
-            // That is a KIT defect rather than an engine one and it is not repaired here: it lives
-            // in the rates two of her descriptions name, and changing either is a balance decision
-            // about Kiva rather than a repair to fold into a defect pass. What is asserted is the
-            // half that is now true and was not - the spend - plus that the talent still fires.
+            // The repair is content and it is the smallest one that answers the rate: the FIRST of
+            // the three Shield clauses is ungated, and the two link-gated ones are untouched. The
+            // talent reads 12 / 24 / 36% of her Max HP - it pays on the kill its own text names
+            // rather than on a resource the rest of her kit spends before the kill arrives, and it
+            // is still worth more to a Kiva who held links than to one who did not.
             if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
                 Check(false, "kiva III arena built");
             else
@@ -20414,14 +20416,15 @@ namespace Emberfall.DevHarness
                 Check(b.Fires("kiva_unclaimed_victory") > 0 && a.Fires("kiva_unclaimed_victory") == 0,
                       "Kiva III fires on a Forsaken kill (" + b.Fires("kiva_unclaimed_victory")
                       + " against " + a.Fires("kiva_unclaimed_victory") + ")");
+                Check(b.SubjectShield > a.SubjectShield && a.SubjectShield == 0,
+                      "and PAYS on it (" + b.SubjectShield + " Shield against " + a.SubjectShield
+                      + " with no talent selected) - the first of its three clauses is ungated now,"
+                      + " so the payout no longer depends on a Broken Link her own basic spends"
+                      + " before the kill lands");
                 Check(a.Count(StatusKind.HealSuppression) > 0,
                       "and Severance Paid, which named no status on its own stack gate and was inert"
                       + " for it, now lands with no talent selected at all: "
                       + a.Count(StatusKind.HealSuppression) + " application(s) of HealSuppression");
-                Line("  [note] Kiva III pays " + b.SubjectShield + " Shield here, where it paid 2236"
-                     + " before Severance Paid was repaired. She banks at most one Broken Link a"
-                     + " round and spends one on every basic against a Forsaken body, so she is at"
-                     + " zero when a kill lands. The rates are hers to change, not this pass's.");
             }
 
             // ---- Aeron II: the ally Momentum Breaker pays is the ally that advances.
