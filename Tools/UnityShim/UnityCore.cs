@@ -408,6 +408,11 @@ namespace UnityEngine
 
     public static class Application
     {
+        /// <summary>Whether a scene of that name is in the build's scene list. A development-only
+        /// scene is absent from a release build, so anything that opens one has to ask first.</summary>
+        public static bool CanStreamedLevelBeLoaded(string levelName) { return false; }
+        public static bool CanStreamedLevelBeLoaded(int levelIndex) { return false; }
+
         public static int targetFrameRate { get; set; }
         public static string persistentDataPath { get { return ""; } }
         public static string dataPath { get { return ""; } }
@@ -526,8 +531,20 @@ namespace UnityEngine
         public void MarkDynamic() { }
     }
 
+    /// <summary>World-space box a renderer covers. Only its min/max/center are ever read here -
+    /// a placement tool asks "where does this actually end" and that is the only honest answer.</summary>
+    public struct Bounds
+    {
+        public Vector3 center;
+        public Vector3 extents;
+        public Vector3 size { get { return extents * 2f; } }
+        public Vector3 min { get { return center - extents; } }
+        public Vector3 max { get { return center + extents; } }
+    }
+
     public class Renderer : Component
     {
+        public Bounds bounds { get; set; }
         public bool enabled { get; set; }
         public Material material { get; set; }
         public Material sharedMaterial { get; set; }
@@ -649,6 +666,8 @@ namespace UnityEngine.SceneManagement
 
     public static class SceneManager
     {
+        public static void LoadScene(int buildIndex) { }
+
         public static Scene GetActiveScene() { return new Scene(); }
         public static void LoadScene(string name) { }
         public static int sceneCount { get { return 1; } }

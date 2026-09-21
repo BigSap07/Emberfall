@@ -91,6 +91,51 @@ talent-sweep lines, and the failure count stays at 36. No `BattleEventType` was 
 a refusal is an `ActionReport` returned to the caller rather than an event is that the record is
 the permanent thing, and "why did the engine refuse my pick" is a question about a tool.
 
+**The arena itself** is `Assets/Dev/DevArena.unity` with its scripts in `Assets/Scripts/Dev`,
+opened from **Emberfall → Dev Arena**. It is a `BattleStage` with `UnitActor`s on it — the same
+camera, rigs, sprite clips, flash and death the game uses — and it plays the session's event list
+incrementally: the player loop shows whatever has arrived and then either waits for a person
+(Manual) or asks the engine for one more action (Auto). Switching between the two mid-fight costs
+nothing, because it is one session either way.
+
+`BattleScreen` was deliberately **not** reused. It is a player for an event list welded to the
+campaign chrome around it — `App.Session`, the router, the prologue, the recital, the proving —
+and the second half would drag the whole game into a dev scene. The arena plays the list itself
+over the same presentation primitives, and `BattleScreen` is untouched, so the real battle behaves
+exactly as it did.
+
+**It cannot reach a release build, and that is checked rather than intended.** Every file under
+`Assets/Scripts/Dev` is wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, which is a compiler
+gate: a release player does not contain the classes. The scene is absent from `EditorBuildSettings`
+in the committed state and a build hook adds it only when the build carries
+`BuildOptions.Development`. `Tools/build-check.ps1` has a `[dev-arena]` step that asserts all three
+from the files, including that the one shipped file which mentions the arena — the hub's `DEV`
+button — mentions it only inside the same guard.
+
+**Assets/Scripts/Dev has no asmdef, and could not have one.** `Assets/Scripts/Battle` depends on
+`Emberfall.UI`, which lives in the default assembly, and an asmdef assembly cannot reference the
+default assembly. Giving the arena one would mean giving Battle and UI one too, which is a
+restructuring of the whole project and not something a tool should cause. The development define
+achieves what the asmdef was wanted for — nothing in a release build — more directly than an
+asmdef's `defineConstraints` would.
+
+### The clip data audit
+
+Every sprite delivery was read straight out of its zip and compared, per clip, against the tracked
+sidecar the runtime loads (`Tools/clip_audit.py` reproduces it). **204 sprite entries across all 31
+deliveries carry `fps: 30`, and not one carries an `animation`/`sections` object**, which is the
+only place the delivery format puts per-section fps. There is no per-clip fps, impact frame or foot
+fraction in any delivery, so the loader is not dropping anything and nothing was changed.
+
+What the deliveries do not carry, the project derives or chooses, and **that is where the real
+inconsistency is**: 26 heroes have per-clip `impactFraction` values ranging 0.028–0.986 and no
+`playbackSpeed` at all, while the 36 clips belonging to the five most recently wired heroes (Kael,
+Kiva, Seraphine, Hale, Marrow) carry a hardcoded `impactFraction 0.5` and `playbackSpeed 1.30`
+written by `Tools/rewire_sprites.py`. That is why Kael reads the same on every clip. It is a
+presentation decision rather than a defect, so it was reported rather than retuned. The only other
+differences found were two clips whose `end` frame is 69 against the delivery's 71 (Kael's skill,
+Kiva's basic), which is the importer's trailing-transparent-frame trim doing its job.
+
 ### Next
 
 1. **The retune.** Its precondition was "after the roster's abilities are authored", and the part

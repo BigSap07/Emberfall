@@ -327,6 +327,23 @@ namespace UnityEditor
 
 namespace UnityEditor.Build
 {
+    /// <summary>Ordering for a build callback. Real Unity puts it on IOrderedCallback, which both
+    /// build hooks derive from.</summary>
+    public interface IOrderedCallback
+    {
+        int callbackOrder { get; }
+    }
+
+    public interface IPreprocessBuildWithReport : IOrderedCallback
+    {
+        void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report);
+    }
+
+    public interface IPostprocessBuildWithReport : IOrderedCallback
+    {
+        void OnPostprocessBuild(UnityEditor.Build.Reporting.BuildReport report);
+    }
+
     /// <summary>Replaces BuildTargetGroup in the newer PlayerSettings overloads.</summary>
     public struct NamedBuildTarget
     {
@@ -350,6 +367,9 @@ namespace UnityEditor.Build.Reporting
         public string outputPath { get { return ""; } }
         public TimeSpan totalTime { get { return TimeSpan.Zero; } }
         public int totalErrors { get { return 0; } }
+        /// <summary>What the build was asked for. A build hook reads Development off this to
+        /// decide whether a development-only scene belongs in the scene list.</summary>
+        public BuildOptions options { get { return BuildOptions.None; } }
     }
     public sealed class BuildReport : UnityEngine.Object
     {
@@ -360,11 +380,14 @@ namespace UnityEditor.Build.Reporting
 namespace UnityEditor.SceneManagement
 {
     public enum NewSceneSetup { EmptyScene, DefaultGameObjects }
+    public enum OpenSceneMode { Single, Additive, AdditiveWithoutLoading }
     public enum NewSceneMode { Single, Additive }
 
     public static class EditorSceneManager
     {
         public static Scene NewScene(NewSceneSetup setup, NewSceneMode mode) { return new Scene(); }
+        public static Scene OpenScene(string path, OpenSceneMode mode) { return new Scene(); }
+        public static void MarkSceneDirty(Scene scene) { }
         public static bool SaveScene(Scene scene, string path) { return true; }
         public static bool SaveScene(Scene scene) { return true; }
         public static Scene OpenScene(string path) { return new Scene(); }
