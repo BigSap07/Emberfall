@@ -182,7 +182,7 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// ACCOUNT and FRIENDS, top left, under the top bar.
+        /// ACCOUNT, FRIENDS and GUILD, top left, under the top bar.
         ///
         /// NOT IN THE BADGE DOCK, and the dock's own note says why: a sixth badge widens
         /// BadgeRowWidth from 740 to 892 per side, which at 16:9 leaves 72 logical units between
@@ -195,24 +195,33 @@ namespace Emberfall.UI.Screens
         /// chrome about who you are, exactly as the idle panel is chrome about what you have
         /// earned. So it sits where that panel sits, in the same register, on the opposite corner.
         ///
-        /// Top LEFT specifically, and the clearance was checked rather than assumed. This pair
-        /// occupies y 148 to 232 and x 32 to 668 at the reference resolution. The idle panel is
-        /// the mirror of it at 148 to 348 on the right, so the two cannot meet. The nearest map
-        /// node is the barracks at map-y 0.300, whose label lands around y 300 to 348 at 16:9 -
-        /// and unlike the map nodes this pair is SCREEN-anchored, so that gap does not move with
+        /// Top LEFT specifically, and the clearance was checked rather than assumed. The nearest
+        /// map node is the barracks at map-y 0.300, whose label lands around y 300 to 348 at 16:9 -
+        /// and unlike the map nodes this row is SCREEN-anchored, so that gap does not move with
         /// the aspect the way a map-space clearance would. The Proving node's own comment records
         /// what happens when a screen-anchored panel and a map-space label are checked only
         /// against their own coordinate system: the label ended up invisible behind the idle
         /// panel at every aspect.
+        ///
+        /// THE THIRD BUTTON IS WHY THESE ARE 270 WIDE AND NOT 310, and the number came out of the
+        /// narrow case rather than the reference one. The idle panel is the mirror of this row:
+        /// right-anchored, 640 wide, 32 from the edge, so its left edge sits at
+        /// (logical width - 672). At 16:9 that is 1248 and nothing here can reach it. At 4:3 -
+        /// the narrowest landscape a tablet produces - the canvas scaler's 0.5 match puts the
+        /// logical width at about 1663, so the panel's left edge is at about 991. Three 310-wide
+        /// buttons with 16 between them run from 32 to 994, which is THREE UNITS PAST IT. Three
+        /// 270-wide ones stop at 874 and leave about 117. The pair before this fitted at 310 and
+        /// the maths that allowed it did not have to consider a third; this is the same check
+        /// redone for the row that now exists rather than the row that used to.
         /// </summary>
         private void BuildSocialButtons()
         {
-            const float buttonWidth = 310f;
+            const float buttonWidth = 270f;
             const float buttonHeight = 84f;
 
             RectTransform row = UIBuilder.Node("Social", Root);
             UIBuilder.Box(row, UITheme.ScreenPadding, -(UITheme.TopBarHeight + UITheme.Space16),
-                          buttonWidth * 2f + UITheme.Space16, buttonHeight, new Vector2(0f, 1f));
+                          buttonWidth * 3f + UITheme.Space16 * 2f, buttonHeight, new Vector2(0f, 1f));
             UIBuilder.HStack(row, UITheme.Space16, new RectOffset(0, 0, 0, 0), TextAnchor.UpperLeft);
 
             // Secondary, not Gold. The Hub already carries exactly two Gold buttons - Continue and
@@ -225,6 +234,14 @@ namespace Emberfall.UI.Screens
             UIButton friends = UIBuilder.SecondaryButton("Friends", row, "FRIENDS", HubStyle.FontButton);
             UIBuilder.Sized(friends.Root, buttonWidth, buttonHeight);
             friends.OnClick(OpenFriends);
+
+            // Beside FRIENDS rather than anywhere else, because it is the same kind of door: a
+            // guild is people, and the player looking for one is looking where the other people
+            // are. It is not a map node for the reason above - a guild is not a place on the
+            // painting - and it is not a badge, because the dock is full.
+            UIButton guild = UIBuilder.SecondaryButton("Guild", row, "GUILD", HubStyle.FontButton);
+            UIBuilder.Sized(guild.Root, buttonWidth, buttonHeight);
+            guild.OnClick(OpenGuild);
         }
 
         /// <summary>
@@ -956,6 +973,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Friends);
+        }
+
+        private void OpenGuild()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Guild);
         }
 
         private void ShowOptions()

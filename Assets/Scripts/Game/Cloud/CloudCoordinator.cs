@@ -32,11 +32,11 @@ namespace Emberfall.Game.Cloud
     /// <summary>
     /// WHEN the cloud is talked to, as distinct from HOW.
     ///
-    /// AccountService, CloudSaveService and SocialService each know how to perform one kind of
-    /// request and nothing about the game around them - none of them knows what a screen is, when
-    /// a player pauses, or that a save exists on disk. This class is the other half: it owns the
-    /// policy, and it is the only thing in the project that both holds a GameApp and holds a
-    /// service. Screens talk to it; it talks to them.
+    /// AccountService, CloudSaveService, SocialService and GuildService each know how to perform
+    /// one kind of request and nothing about the game around them - none of them knows what a
+    /// screen is, when a player pauses, or that a save exists on disk. This class is the other
+    /// half: it owns the policy, and it is the only thing in the project that both holds a GameApp
+    /// and holds a service. Screens talk to it; it talks to them.
     ///
     /// THE RULE THAT SHAPES EVERY METHOD HERE: the local save is the source of truth while
     /// playing, and nothing below is allowed to make that less true. Every call is fire-and-forget
@@ -55,6 +55,7 @@ namespace Emberfall.Game.Cloud
         private readonly AccountService _account;
         private readonly CloudSaveService _saves;
         private readonly SocialService _social;
+        private readonly GuildService _guild;
         private readonly CloudLocalState _state;
 
         /// <summary>Set while any coroutine here is running, so two Sync Now taps cannot start two
@@ -67,18 +68,21 @@ namespace Emberfall.Game.Cloud
         public event Action Changed;
 
         public CloudCoordinator(GameApp app, SupabaseClient client, AccountService account,
-                                CloudSaveService saves, SocialService social, CloudLocalState state)
+                                CloudSaveService saves, SocialService social, GuildService guild,
+                                CloudLocalState state)
         {
             _app = app;
             _client = client;
             _account = account;
             _saves = saves;
             _social = social;
+            _guild = guild;
             _state = state;
         }
 
         public AccountService Account { get { return _account; } }
         public SocialService Social { get { return _social; } }
+        public GuildService Guild { get { return _guild; } }
         public CloudSaveService Saves { get { return _saves; } }
         public CloudLocalState State { get { return _state; } }
         public SupabaseClient Client { get { return _client; } }
@@ -135,7 +139,27 @@ namespace Emberfall.Game.Cloud
 
             Set(CloudStatus.Ready, "");
             yield return RefreshProfile(null);
+            yield return RefreshGuild(null);
             yield return SyncRoutine(false, null);
+        }
+
+        /// <summary>
+        /// Which guild this account is in, if any, and what it may do there.
+        ///
+        /// Fetched at boot rather than when the guild screen opens, for one reason: the main menu
+        /// draws a GUILD button whose subtitle is the guild's name, and a button that says nothing
+        /// until you press it has told the player to press it to find out. It is two small reads
+        /// and it is off the path to a playable menu like everything else here.
+        /// </summary>
+        public IEnumerator RefreshGuild(Action<string> done)
+        {
+            if (_guild == null) { Report(done, "no guild service"); yield break; }
+            if (!SignedIn) { Report(done, "not signed in"); yield break; }
+
+            string error = "";
+            yield return _guild.Refresh(delegate (string message) { error = message; });
+            Raise();
+            Report(done, error);
         }
 
         /// <summary>The display name and friend code. Cheap, and every screen that shows either
@@ -509,7 +533,9 @@ namespace Emberfall.Game.Cloud
 
             Set(CloudStatus.Ready, "");
             _publishedFingerprint = "";
+            if (_guild != null) _guild.Forget();
             yield return RefreshProfile(null);
+            yield return RefreshGuild(null);
             yield return SyncRoutine(false, null);
             Report(done, "");
         }
@@ -528,6 +554,9 @@ namespace Emberfall.Game.Cloud
 
             Profile = null;
             _publishedFingerprint = "";
+            // The guild belongs to the account, not to the device. Leaving it cached would show
+            // the next signed-in player somebody else's roster until the first refresh answered.
+            if (_guild != null) _guild.Forget();
             Set(CloudStatus.Offline, note);
             Report(done, "");
         }

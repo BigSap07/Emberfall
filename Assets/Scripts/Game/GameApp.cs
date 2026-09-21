@@ -29,7 +29,7 @@ namespace Emberfall.Game
         public Sfx Audio { get; private set; }
 
         /// <summary>
-        /// Accounts, cloud save and friends - or null, on a build with no Supabase config.
+        /// Accounts, cloud save, friends and guilds - or null, on a build with no Supabase config.
         ///
         /// NULL IS A SUPPORTED STATE AND EVERY CALLER CHECKS FOR IT. A fresh clone has no
         /// Assets/Resources/Config/supabase.json (it is gitignored, and must be), so the ordinary
@@ -232,7 +232,8 @@ namespace Emberfall.Game
                 AccountService account = new AccountService(client, state);
                 CloudSaveService saves = new CloudSaveService(client, account, state);
                 SocialService social = new SocialService(client, account, state);
-                Cloud = new CloudCoordinator(this, client, account, saves, social, state);
+                GuildService guild = new GuildService(client, account, state);
+                Cloud = new CloudCoordinator(this, client, account, saves, social, guild, state);
                 StartCoroutine(Cloud.Begin());
             }
             catch (System.Exception ex)
