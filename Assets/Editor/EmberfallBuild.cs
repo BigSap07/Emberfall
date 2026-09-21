@@ -125,16 +125,15 @@ namespace Emberfall.EditorTools
             // and the DEV button - compiled in, because DEVELOPMENT_BUILD is set - did nothing but
             // log that the scene was missing.
             //
-            // So the scene list is stated outright, gated on the same Development condition the
-            // hook tests. The hook is left alone: its release-side half (strip the scene if
+            // So the scene list is stated outright, by ScenesFor below, gated on the same
+            // Development condition the hook tests and shared with the Android path so both
+            // targets answer it the same way. The hook is left alone: its release-side half
+            // (strip the scene if
             // somebody added it by hand) still does something, and the guarantee that no arena
             // code reaches a release player was never this list anyway - it is the
             // `#if UNITY_EDITOR || DEVELOPMENT_BUILD` compiler gate on every file in
             // Assets/Scripts/Dev, which no build script can bypass. See DESIGN-BUILD-ORDER.md.
-            List<string> scenes = new List<string>();
-            scenes.Add(EmberfallProjectSetup.ScenePath);
-            if (File.Exists(DevArenaMenu.ScenePath)) scenes.Add(DevArenaMenu.ScenePath);
-            options.scenes = scenes.ToArray();
+            options.scenes = ScenesFor(true);
 
             options.locationPathName = outputPath;
             options.target = BuildTarget.StandaloneWindows64;
@@ -162,6 +161,31 @@ namespace Emberfall.EditorTools
                       Math.Round(summary.totalTime.TotalSeconds) + "s, " +
                       Math.Round(megabytes, 1) + " MB -> " + outputPath);
             return outputPath;
+        }
+
+        /// <summary>
+        /// THE SCENE LIST EVERY BUILD USES, and the only place the arena's inclusion is decided.
+        ///
+        /// It is stated here rather than left to DevArenaMenu.BuildHook, because the hook cannot
+        /// actually put the scene in a player and two builds proved it - the reasoning is written
+        /// out at the call site in BuildWindows. What this method adds is that the rule is now the
+        /// SAME rule for every target: a development build gets the arena, a release build cannot
+        /// get it whatever is sitting in EditorBuildSettings, and neither answer depends on the
+        /// caller remembering to append a path.
+        ///
+        /// `development` is the caller's own build flag, not a reading of EditorUserBuildSettings,
+        /// so the list and the BuildOptions.Development bit beside it can never disagree.
+        ///
+        /// The File.Exists guard is not defensive noise: Assets/Dev is the one folder a checkout
+        /// can legitimately be missing, and naming a scene that is not on disk fails the build
+        /// outright rather than building without it.
+        /// </summary>
+        public static string[] ScenesFor(bool development)
+        {
+            List<string> scenes = new List<string>();
+            scenes.Add(EmberfallProjectSetup.ScenePath);
+            if (development && File.Exists(DevArenaMenu.ScenePath)) scenes.Add(DevArenaMenu.ScenePath);
+            return scenes.ToArray();
         }
 
         [MenuItem("Emberfall/Build Android APK", false, 60)]
@@ -210,7 +234,7 @@ namespace Emberfall.EditorTools
             string outputPath = Path.Combine(outputDirectory, ApkName);
 
             BuildPlayerOptions options = new BuildPlayerOptions();
-            options.scenes = new string[] { EmberfallProjectSetup.ScenePath };
+            options.scenes = ScenesFor(!release);
             options.locationPathName = outputPath;
             options.target = BuildTarget.Android;
             options.targetGroup = BuildTargetGroup.Android;
