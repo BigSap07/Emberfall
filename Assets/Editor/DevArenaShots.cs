@@ -7,6 +7,12 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Core.Combat;
+using Emberfall.Core.Data;
+using Emberfall.Core.Model;
+using Emberfall.Game;
+using Emberfall.UI;
+using Emberfall.Core.Session;
 
 namespace Emberfall.EditorTools
 {
@@ -406,6 +412,72 @@ namespace Emberfall.EditorTools
             for (int i = 0; i < 4; i++) Queue(null, "pacing-aeron-" + i + ".png", 4);
             Queue(delegate { Press("Details"); Report("Aeron clip data"); }, "pacing-aeron-details.png", 6);
             Start();
+        }
+
+
+        /// <summary>
+        /// THE REAL BATTLE, with drawn heroes on both sides.
+        ///
+        /// This is BattleScreen, not the arena: the hub boots, a Proving match is launched against
+        /// a line this method names, and the capture happens inside the game's own battle view. It
+        /// exists so "which way do enemies face" can be answered about the GAME rather than about
+        /// the tool, which is the question that decides where a facing bug lives.
+        /// </summary>
+        [MenuItem("Emberfall/Dev Arena Shots/Capture the REAL battle (heroes both sides)", false, 46)]
+        public static void CaptureRealBattle()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogError("[dev-arena-shots] leave Play Mode first"); return; }
+            SessionState.SetBool(RealBattleKey, true);
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
+            EditorApplication.isPlaying = true;
+        }
+
+        private const string RealBattleKey = "Emberfall.DevArenaShots.RealBattle";
+
+        /// <summary>Called once Play Mode is up. Entering Play Mode reloads the domain, so the
+        /// two halves cannot be one call.</summary>
+        [MenuItem("Emberfall/Dev Arena Shots/Launch the REAL battle now (already playing)", false, 47)]
+        public static void QueueRealBattle()
+        {
+            _queue.Clear();
+            Queue(delegate { SetSize(1600, 900); }, null, 30);
+            Queue(delegate { LaunchProvingAgainstDrawnHeroes(); }, null, 120);
+            Queue(null, "real-battle-1.png", 90);
+            Queue(null, "real-battle-2.png", 90);
+            Queue(null, "real-battle-3.png", 10);
+            Start();
+        }
+
+        private static void LaunchProvingAgainstDrawnHeroes()
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) { Debug.LogError("[dev-arena-shots] no GameApp"); return; }
+
+            long now = TimeUtil.NowUnix();
+            int max = app.Session.Balance.ProvingBrandsMax;
+            app.Session.Profile.ProvingBrandsBanked = max;
+            app.Session.Profile.ProvingBrandsClockUnix = now;
+
+            // Named on purpose: two heroes that actually ship sprite sheets, one of them from the
+            // seven whose art is authored facing the other way (SpriteMirror false), so the shot
+            // shows both cases at once.
+            BattleLoadout line = new BattleLoadout();
+            line.Label = "Facing check";
+            string[] ids = { "kael_the_unyielding", "nysera_the_missing_arrow", "kiva_the_forsaken_oath" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(ids[i]);
+                if (d == null) { Debug.LogWarning("[dev-arena-shots] missing hero " + ids[i]); continue; }
+                LoadoutUnit u = new LoadoutUnit();
+                u.DefId = d.Id;
+                u.Level = 40;
+                u.Stars = d.Stars;
+                u.RelicId = "";
+                line.Units.Add(u);
+            }
+            app.Router.Battle.SetProvingOpponent(line);
+            app.Router.Show(ScreenId.Battle);
+            Debug.Log("[dev-arena-shots] launched a real Proving match against " + line.Units.Count + " drawn heroes");
         }
 
         /// <summary>Focuses and repaints the Game view so the capture has a rendered frame to take.
