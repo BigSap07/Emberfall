@@ -51,6 +51,9 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
 
 ## Update posts (Discord)
 
+**ON HOLD until the roster is authored: agents never post, to either webhook, even when
+a batch finishes.** The rest of this section is the procedure for when posting resumes.
+
 When a group of tasks finishes, post a summary to the staff webhook in
 `EMBERFALL_WEBHOOK`. If the batch includes feature work — anything a player could see or
 play — also post a separate community-facing version to `EMBERFALL_COMMUNITY_WEBHOOK`.
