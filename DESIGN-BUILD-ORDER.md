@@ -21,7 +21,7 @@ the standing rule of the authoring passes and it is why the roster authored clea
 description could not be said, the pass built the thing that says it and recorded the measurement.
 Nothing in the thirty was reworded to avoid an engine change.
 
-### `main`'s harness is RED on 35 checks, and 34 of them are one kind of red
+### `main`'s harness is RED on 36 checks, and 34 of them are one kind of red
 
 **34 are dormancy tripwires that content has since adopted, and they are kept red on purpose.**
 Each was written the same way and for the same reason: an engine pass that could not move a
@@ -41,8 +41,50 @@ finale band [55%, 72%]. Removing the six engine-owned aspect rules moved every d
 in the game, and the retune was deliberately deferred rather than smeared across the change that
 caused it. **It closes at a single retune, and its stated precondition is now met.**
 
-**A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
+**The 36th is a coverage note, not a tripwire and not a fault:** *"29 of 90 talents are EXECUTED
+but never observed doing anything here — each waits on something this arena does not provide."*
+The talent sweep runs every talent and fingerprints the result; twenty-nine of them need a Taunt
+enemy, a particular aspect matchup, a second copy of their own hero or an ally the fixed arena
+does not field, so they execute without changing anything measurable. It is red because the sweep
+refuses to call "nothing happened" a pass.
+
+**A 37th failure would be a regression.** If the count goes above 36, diagnose it — do not add it
 to this list.
+
+### In flight: placeholder mannequins for undrawn heroes, on branch `feat/placeholder-dummy`
+
+The branch makes "this hero has not been drawn yet" a thing the game can say, separately from
+"this hero's art is broken". Those were the same thing before it, and since 63 of the 94 heroes
+have no art, the broken case had nowhere to be heard - a magenta square per undrawn hero is the
+same as no signal at all.
+
+**A new content field, `visual.spriteStatus`.** `"pending"` means the art is deliberately absent;
+anything else (normally absent) means the hero owns their art and a failed load is a bug. It is
+declared rather than inferred from the missing file, because the two cases share that symptom -
+see the reasoning on `VisualDef.SpriteStatus`. It is NOT expressed by clearing `visual.sprite`:
+an empty `sprite` already means "build the procedural primitive body", which is what nine of the
+twelve enemies do and what gives a Grave Moth a beast silhouette rather than a mannequin.
+
+**One placeholder file**, `Assets/Resources/Sprites/Units/placeholder_dummy.png`, drawn by
+`Tools/make_placeholder_dummy.py` and sized to the median of the thirty-one delivered heroes
+(body 0.558 of the canvas, feet 0.219 above its bottom edge), so a line of drawn and undrawn
+heroes keeps its proportions. `UnitRig` tints it by the hero's aspect and hangs the hero's name
+under its feet; everything else about the unit - idle sway, lunge, hit flash, floating numbers,
+death fade, and the per-side mirror through `SpriteFlipped` - is the path a static sprite already
+took, unchanged.
+
+**The magenta square is now loud.** `BattleAssets.UnitSprite` takes the unit's name, logs an
+ERROR naming the hero and the path it looked in, and the harness fails on any unit that declares
+art it does not have, or that is still marked pending after its art landed. A deliberate broken
+hero is asserted to be detected, and the same missing file declared pending is asserted to be
+silent, so the detector is known to be capable of firing rather than merely never having fired.
+
+Portraits take the same idea in their own rendering path: a pending hero's badge shows their
+initial in the aspect colour instead of the shared sigil.
+
+Presentation only. No `CombatSimulation` change and no content numbers touched: the 72 stage
+fingerprints are byte-identical to `main`'s, the 150 hero-sweep and 450 talent-sweep baselines
+match, and the failure count is unchanged at 36.
 
 ### In flight: the Dev Arena, on branch `tools/dev-arena`
 

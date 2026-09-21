@@ -47,7 +47,12 @@ namespace Emberfall.Battle
             Alive = true;
 
             transform.localPosition = position;
-            Rig = UnitRig.Build("Rig", transform, snapshot.Visual, facingForward);
+            // Name and aspect travel with the rig: the name is what a placeholder mannequin
+            // wears instead of a face, and what a broken sprite is reported under; the aspect
+            // is what tints the mannequin. Both come off the snapshot the simulation already
+            // produced, so no screen has to look a unit up a second time to draw it.
+            Rig = UnitRig.Build("Rig", transform, snapshot.Visual, facingForward,
+                                snapshot.Name, snapshot.Aspect);
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
             _bobSpeed = snapshot.IsBoss ? 1.1f : 1.5f + (snapshot.Id % 3) * 0.16f;

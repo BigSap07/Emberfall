@@ -480,6 +480,190 @@ namespace Emberfall.EditorTools
             Debug.Log("[dev-arena-shots] launched a real Proving match against " + line.Units.Count + " drawn heroes");
         }
 
+        // ============================================================== placeholder mannequins
+
+        /// <summary>
+        /// The ids this pass stands a line on. Two heroes whose art is delivered and three whose
+        /// art is pending, on BOTH sides, so one frame shows a drawn hero and a mannequin standing
+        /// next to each other at the same scale on the same ground - which is the only way to see
+        /// whether the placeholder's height and foot line actually match the real chibis.
+        ///
+        /// The three pending picks are deliberately three DIFFERENT aspects (Ember, Tide, Umbra on
+        /// the player's side; Verdant, Gale, Lumen opposite), because the aspect tint is the only
+        /// thing that distinguishes one mannequin from another and a line of three Embers would
+        /// prove nothing about it.
+        /// </summary>
+        private static readonly string[] PlaceholderAllies =
+        {
+            "kael_the_unyielding",          // drawn, animated
+            "branik_the_siege_mason",       // pending, Ember
+            "aeron_the_unbroken_stride",    // drawn, animated
+            "mika_the_salvage_pilot",       // pending, Tide
+            "iolan_the_redacted_judge"      // pending, Umbra
+        };
+
+        private static readonly string[] PlaceholderEnemies =
+        {
+            "nysera_the_missing_arrow",     // drawn
+            "corin_the_patience_engineer",  // pending, Verdant
+            "eira_the_rolling_barricade",   // pending, Gale
+            "leon_the_numbered_arrow",      // pending, Lumen
+            "kiva_the_forsaken_oath"        // drawn
+        };
+
+        /// <summary>Run this with Play Mode already up, the same way QueueRealBattle is used -
+        /// entering Play Mode reloads the domain, so a capture cannot both start the game and
+        /// drive it from one call.</summary>
+        [MenuItem("Emberfall/Dev Arena Shots/Queue the mixed placeholder battle (already playing)", false, 48)]
+        public static void QueuePlaceholderBattle()
+        {
+            _queue.Clear();
+            Queue(delegate { SetSize(1600, 900); }, null, 30);
+            Queue(delegate { LaunchMixedPlaceholderLine(); }, null, 150);
+            Queue(null, "placeholder-battle-1.png", 90);
+            Queue(null, "placeholder-battle-2.png", 90);
+            Queue(null, "placeholder-battle-3.png", 10);
+            Start();
+        }
+
+        private static void LaunchMixedPlaceholderLine()
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) { Debug.LogError("[dev-arena-shots] no GameApp"); return; }
+
+            long now = TimeUtil.NowUnix();
+            app.Session.Profile.ProvingBrandsBanked = app.Session.Balance.ProvingBrandsMax;
+            app.Session.Profile.ProvingBrandsClockUnix = now;
+
+            for (int i = 0; i < PlaceholderAllies.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(PlaceholderAllies[i]);
+                if (d == null) { Debug.LogWarning("[dev-arena-shots] missing hero " + PlaceholderAllies[i]); continue; }
+                HeroInstance inst = app.Session.GrantHeroDirect(d, now);
+                if (inst != null) app.Session.Profile.AssignToTeam(i, inst.Uid);
+            }
+
+            BattleLoadout line = new BattleLoadout();
+            line.Label = "Placeholder check";
+            for (int i = 0; i < PlaceholderEnemies.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(PlaceholderEnemies[i]);
+                if (d == null) { Debug.LogWarning("[dev-arena-shots] missing hero " + PlaceholderEnemies[i]); continue; }
+                LoadoutUnit u = new LoadoutUnit();
+                u.DefId = d.Id;
+                u.Level = 40;
+                u.Stars = d.Stars;
+                u.RelicId = "";
+                line.Units.Add(u);
+            }
+            app.Router.Battle.SetProvingOpponent(line);
+            app.Router.Show(ScreenId.Battle);
+            Debug.Log("[dev-arena-shots] mixed placeholder line: 5 allies, " + line.Units.Count + " opponents");
+        }
+
+        // ============================================================== enemy facing
+
+        /// <summary>
+        /// The one campaign stage that fields all three enemies carrying sprite art - Hollow Husk,
+        /// Grave Moth and Sundered Colossus - so a single frame answers which way each of them
+        /// faces after the mirror fix. Chosen from campaign.json rather than assembled here: the
+        /// question is what a PLAYER sees, and a hand-built line would not be that.
+        /// </summary>
+        private const string FacingStageId = "ch1_12";
+
+        [MenuItem("Emberfall/Dev Arena Shots/Queue the enemy facing shot (already playing)", false, 49)]
+        public static void QueueEnemyFacing()
+        {
+            _queue.Clear();
+            Queue(delegate { SetSize(1600, 900); }, null, 30);
+            Queue(delegate { LaunchFacingStage(); }, null, 150);
+            Queue(null, "enemy-facing-1.png", 80);
+            Queue(null, "enemy-facing-2.png", 80);
+            Queue(null, "enemy-facing-3.png", 10);
+            Start();
+        }
+
+        private static void LaunchFacingStage()
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) { Debug.LogError("[dev-arena-shots] no GameApp"); return; }
+            StageDef stage = app.Session.Content.GetStage(FacingStageId);
+            if (stage == null) { Debug.LogError("[dev-arena-shots] no stage " + FacingStageId); return; }
+
+            long now = TimeUtil.NowUnix();
+            for (int i = 0; i < PlaceholderAllies.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(PlaceholderAllies[i]);
+                if (d == null) continue;
+                HeroInstance inst = app.Session.GrantHeroDirect(d, now);
+                if (inst != null) app.Session.Profile.AssignToTeam(i, inst.Uid);
+            }
+
+            app.Router.Battle.SetStage(stage);
+            app.Router.Show(ScreenId.Battle);
+            Debug.Log("[dev-arena-shots] launched " + stage.Id + " (" + stage.Name + ")");
+        }
+
+        // ============================================================== menu screens
+
+        /// <summary>
+        /// The collection and one hero's detail page, for a hero whose portrait is a placeholder.
+        /// Menu portraits are a different rendering path from the battle rig entirely (Widgets
+        /// .Portrait, not UnitRig), so a battle shot says nothing about them and they need their
+        /// own frame.
+        /// </summary>
+        [MenuItem("Emberfall/Dev Arena Shots/Queue the collection and a placeholder hero (already playing)", false, 50)]
+        public static void QueueCollectionShots()
+        {
+            _queue.Clear();
+            Queue(delegate { SetSize(1600, 900); }, null, 30);
+            Queue(delegate { GrantThePlaceholderCast(); }, null, 60);
+            Queue(delegate { ShowScreen(ScreenId.Heroes); }, null, 60);
+            Queue(null, "placeholder-collection.png", 20);
+            Queue(delegate { OpenFirstPendingHero(); }, null, 90);
+            Queue(null, "placeholder-hero-detail.png", 10);
+            Start();
+        }
+
+        private static void ShowScreen(ScreenId id)
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) { Debug.LogError("[dev-arena-shots] no GameApp"); return; }
+            app.Router.Show(id);
+        }
+
+        /// <summary>Owns enough heroes that the collection grid shows drawn and undrawn side by
+        /// side - a grid of only one kind cannot show that they read differently.</summary>
+        private static void GrantThePlaceholderCast()
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) return;
+            long now = TimeUtil.NowUnix();
+            for (int i = 0; i < PlaceholderAllies.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(PlaceholderAllies[i]);
+                if (d != null) app.Session.GrantHeroDirect(d, now);
+            }
+            for (int i = 0; i < PlaceholderEnemies.Length; i++)
+            {
+                HeroDef d = app.Session.Content.GetHero(PlaceholderEnemies[i]);
+                if (d != null) app.Session.GrantHeroDirect(d, now);
+            }
+        }
+
+        private static void OpenFirstPendingHero()
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null) return;
+            HeroDef d = app.Session.Content.GetHero("branik_the_siege_mason");
+            if (d == null) { Debug.LogError("[dev-arena-shots] no branik_the_siege_mason"); return; }
+            HeroInstance inst = app.Session.Profile.FindHeroByDefId(d.Id);
+            if (inst == null) { Debug.LogError("[dev-arena-shots] Branik is not owned"); return; }
+            app.Router.HeroDetail.SetHero(inst);
+            app.Router.Show(ScreenId.HeroDetail);
+            Debug.Log("[dev-arena-shots] opened hero detail for " + d.Name);
+        }
+
         /// <summary>Focuses and repaints the Game view so the capture has a rendered frame to take.
         /// ScreenCapture hands back whatever the view last drew, and an unfocused view has nothing.
         /// Same reasoning as PlayModeScreenshot's copy of this.</summary>

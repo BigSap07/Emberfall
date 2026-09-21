@@ -202,6 +202,10 @@ namespace Emberfall.UI
                 Image face = UIBuilder.Img("Portrait", root, art, Color.white);
                 UIBuilder.FillParent(face.rectTransform, size * 0.1465f);
             }
+            else if (def.Visual.SpritePending)
+            {
+                PlaceholderFace(root, def, size);
+            }
             else
             {
                 Image sigil = UIBuilder.Img("Sigil", root, TextureLab.Sigil(def.Visual.Sigil, 96), accent);
@@ -226,6 +230,48 @@ namespace Emberfall.UI
             }
 
             return root;
+        }
+
+        /// <summary>
+        /// THE PORTRAIT OF A HERO WHOSE ART IS NOT DRAWN YET: the hero's initial, in the same
+        /// lifted aspect colour the battlefield mannequin is tinted with.
+        ///
+        /// Why an initial rather than the sigil every other undrawn unit gets. The sigil is one of
+        /// a handful of abstract emblems shared across the roster, so sixty-three undrawn heroes
+        /// resolve to a few repeated glyphs and a dozen collection cells look like the same hero
+        /// listed twice. An initial is not identity either, but it is DIFFERENT per hero, which is
+        /// the entire job a portrait does in a grid. It also matches what the player sees in
+        /// battle, where the same hero stands as a mannequin with its name at its feet.
+        ///
+        /// This branch is reached only for a hero explicitly marked pending in content. Enemies
+        /// and any hero that simply has no portrait FILE still take the sigil branch below
+        /// unchanged - portraits have their own delivery schedule and most units will never have
+        /// one, so "no portrait art" must stay the quiet ordinary case it already was.
+        ///
+        /// No frame, no second ring, nothing else added: it replaces the sigil in place, so a
+        /// mixed roster is still one set of badges with one thing swapped inside them.
+        /// </summary>
+        private static void PlaceholderFace(RectTransform root, UnitDef def, float size)
+        {
+            // 0.46 of the badge: large enough to read at the 76px roster size, small enough to sit
+            // inside the disc's inner glow rather than on the aspect ring.
+            int fontSize = Mathf.Max(10, Mathf.RoundToInt(size * 0.46f));
+            Text initial = UIBuilder.Label("Initial", root, InitialOf(def), fontSize,
+                                           UITheme.PlaceholderTint(def.Aspect), TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(initial.rectTransform, 0f);
+            initial.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// First letter of the display name, upper-cased. Falls back to the def id, and then to a
+        /// question mark, so this returns something printable for any unit - a blank badge would
+        /// look like a rendering failure, which is the one thing a placeholder must not do.
+        /// </summary>
+        private static string InitialOf(UnitDef def)
+        {
+            string source = !string.IsNullOrEmpty(def.Name) ? def.Name : def.Id;
+            if (string.IsNullOrEmpty(source)) return "?";
+            return source.Substring(0, 1).ToUpperInvariant();
         }
 
         /// <summary>
