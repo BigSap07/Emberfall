@@ -22373,10 +22373,13 @@ namespace Emberfall.DevHarness
                                   "corin_the_patience_engineer", "halwen_the_reserve_keeper",
                                   "jory_the_old_gate", "maera_the_harbor_eye",
                                   "maren_the_long_sleeper", "eira_the_rolling_barricade",
-                                  // The fourth, first half.
+                                  // The fourth, both halves. With these the 4-star tier is
+                                  // complete at twenty-six.
                                   "finn_the_bellmaker", "niko_the_uninvited_guest",
                                   "sable_the_queue_cutter", "tamsin_the_loose_thread",
-                                  "iolan_the_redacted_judge" };
+                                  "iolan_the_redacted_judge", "ruma_the_false_trail",
+                                  "toren_the_closed_door", "leon_the_numbered_arrow",
+                                  "lio_the_clear_diagnosis", "nadine_the_border_clerk" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

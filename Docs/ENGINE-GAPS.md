@@ -11,8 +11,8 @@ by adding engine features: a batch that meets one of these approximates it, mark
 and adds a row here.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
-arrangement in which a repeat is visible. Seven of the nineteen groups below already have more than
-one occupant, and one of those has four.
+arrangement in which a repeat is visible. Eleven of the twenty-two groups below have more than one
+occupant, and the largest has five.
 
 **What is deliberately not here.** Numbers. Every authored 4-star's damage and healing values differ
 from Pinoy's originals because `CheckStarBandByRole` moved them, and that is balance rather than
@@ -28,15 +28,17 @@ damage funnel or the turn loop, which is where every fingerprint in the project 
 
 ---
 
-## 1. Reading the size of a blow that is landing
+## 1. Answering the blow that is landing
 
-No `EffectCondition` asks about the magnitude of the hit being resolved. The enum's 50 members ask
+No `EffectCondition` asks about the magnitude of the hit being resolved: the enum's 50 members ask
 about HP, statuses, stats, energy, action history and firing counts, and the damage funnel does not
-publish the number it is carrying to the condition evaluator at all.
+publish the number it is carrying. Nor can anything reach back into a hit that has already resolved,
+because every ally-facing hook fires after it.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Rhys | "When an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead" | a condition on the incoming damage as a fraction of the victim's Max HP | the guard goes up on the FIRST strike of each round whatever its size, and covers that ally for the rest of the round | medium |
+| Toren | "redirects 25% of **that hit**" | a way to move a share of a blow that has already landed; `OnEnemyDamagedAlly` fires afterwards | the ward goes up for the rest of the round and answers the next one | medium |
 
 ---
 
@@ -78,6 +80,7 @@ named body.
 | Kest | "takes 10% less **from it**" | a per-source damage reduction, the inverse of `Vulnerable` | `DamageReductionUp` at 10%, which reduces damage from everybody | small |
 | Jory | "Taunts the front enemy for 2 rounds; **it** deals 15% less damage to Jory" | the same | `DamageReductionUp` at 15% on Jory for the Taunt's duration, which reduces damage from everybody | small |
 | Tamsin | "Targets above 50% turn progress ... **take 15% more Skill Damage**" | a universal damage-taken modifier; `Vulnerable` is the one per-source entry and reads only its applier's damage | `Vulnerable` at 15%, so only Tamsin's own blows land harder | small |
+| Lio | "Diagnosed allies **receive 18% more healing**" | a healing-received modifier in the upward direction; `HealSuppression` and `HealingReduction` both only cut | Diagnosed is a Mark and Lio's own healing reads it, so the extra comes from him rather than from every source | small |
 
 ---
 
@@ -163,16 +166,14 @@ always reads zero.
 
 ---
 
-## 11. Swapping or placing a value, rather than moving it one way
+## 11. Swapping a value, rather than moving it one way
 
-Every transfer primitive in the engine is one-directional and every positional primitive is random.
-`HpTransfer` and `ShieldTransfer` move a pool from one body to another; `SwapPositions` swaps the
-target's slot with a RANDOM living unit on its own side.
+Every transfer primitive in the engine is one-directional. `HpTransfer` and `ShieldTransfer` move a
+pool from one body to another and there is no exchange.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Rhys | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | a two-way HP exchange; `HpTransfer` only moves HP one way | Rhys pays 45% of what the ally is missing out of his own bar, clamped by the engine to leave him at 1 HP | medium |
-| Eira | "moves the target **to the back** if another enemy is alive" | placement at a named slot; `SwapPositions` picks the partner at random | `SwapPositions` on the target, which displaces it but not reliably to the back | small |
 
 ---
 
@@ -240,18 +241,20 @@ nothing to multiply.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Tamsin | "removes 6% turn progress **for each target buff**, up to 18%" | a count of beneficial statuses usable as a scalar | 6% flat, and 18% against a body carrying any buff at all | medium |
+| Leon | "Damage increases **10% per displayed buff**, up to 40%" | the same count | the whole 40% lands against a body carrying any buff at all | medium |
 
 ---
 
-## 18. Naming the unit a turn shift moved
+## 18. Naming the unit an event happened TO, when the trigger names the causer
 
-`OnTurnDelayed` fires on the unit that CAUSED the delay and sets only `_broadcastSourceId`. The
-enum's own summary says an ability wanting the delayed unit to suffer something should carry that
-beside the shift, which is right for an ability and leaves a PASSIVE with nothing to point at.
+Two triggers fire on the unit that caused something and publish no subject, so a passive on either
+can pay the causer and cannot reach the body it happened to. `OnTurnDelayed` sets only
+`_broadcastSourceId`; `OnStatusRemoved` sets the remover and nothing else.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Tamsin | "**The first enemy delayed** each round gains 10% Defense Down" | a broadcast subject on `OnTurnDelayed` | the whole enemy line takes it, once a round | small |
+| Lio | "When Lio removes a debuff, **that ally** recovers 5% missing HP; control debuffs also grant 10 Energy" | a broadcast subject on `OnStatusRemoved` | the heal moves into the ability, where `SubjectLostStatusThisFiring` can see it; the Energy pays the lowest-HP ally, which is the body Tested Touch cleansed by construction | small |
 
 ---
 
@@ -267,20 +270,73 @@ nothing was removed" cannot gate the fallback that answers it.
 
 ---
 
+## 20. An information layer
+
+The battle screen is a player for a complete event record and already knows everything about every
+unit, so "reveal it to allies" has nothing to change. The clause is cosmetic in this engine.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Leon | "assigns Case Number ..., **revealing current HP, Energy, and buffs to allies**" | per-unit visibility, which the game does not model | carried in the text only; the Mark does the mechanical half | none |
+
+---
+
+## 21. Banning the gain of ONE named status
+
+`BuffSuppression` refuses every beneficial status at once and `StatusGainSuppression` refuses
+Resolve. Nothing refuses a single named kind, so "cannot become Concealed" has to be either far
+wider than written or answered after the fact.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Nadine | "Registered targets **cannot become Concealed or Untargetable**" | a per-status gain ban | Proper Place strips the concealment the moment it lands instead of preventing it | small |
+
+---
+
+## 22. Position, and anything that would hold a unit in one
+
+`SwapPositions` is the whole of movement in this engine and it swaps a unit with a random body on
+its own side. There is no placement, no ordering and nothing that forbids either.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Nadine | "marks the target position for 2 rounds. **It cannot move**" | a movement lock, and a movement system for it to lock | the clause is dropped; Hold the Line keeps its damage rider | small |
+| Eira | "moves the target **to the back** if another enemy is alive" | placement at a named slot; `SwapPositions` picks the partner at random | `SwapPositions` on the target, which displaces it but not reliably to the back | small |
+
+---
+
 ## Where the counts stand
 
-Nineteen capabilities, thirty-two clauses, across sixteen heroes and four authoring batches. The
-groups with more than one occupant are 2 (per-round budgets, 2), 3 (area hits, 2), 4 (per-source
-stat modification, 3), 5 (duration on a moved status, 3), 8 (the side's last attacker, 2), 9 (ally
-triggers, 5), 11 (swaps and placement, 2) and 12 (percent-of-HP amounts, 2).
+Twenty-two capabilities, thirty-nine clauses, across twenty heroes and four authoring batches, which
+is the whole of the 4-star tier plus the four 5-stars whose text met the same walls. Eleven groups
+have more than one occupant:
 
-**Group 9 is the one to close first.** Five clauses across five heroes, and three of them are the
-same exclusion in `OnEnemyDamagedAlly` met three times and answered three times by pasting the
-passive onto `OnDamaged` as well. A flag on `PassiveDef` saying "and me" would delete three overflow
-passives from the shipped roster. Groups 4, 5 and 12 are the other cases where one small change
-closes more than one row.
+| group | capability | clauses |
+|---|---|---|
+| 9 | triggers for what an ALLY did or received | 5 |
+| 4 | per-source stat modification | 4 |
+| 5 | duration on a moved, inverted or extended status | 3 |
+| 1 | answering the blow that is landing | 2 |
+| 2 | per-round budgets on a standing status | 2 |
+| 3 | telling an area hit from a single-target one | 2 |
+| 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
+| 12 | amounts written as a percentage of the HOLDER's health | 2 |
+| 17 | counting how many statuses of a class a body carries | 2 |
+| 18 | naming the unit an event happened TO | 2 |
+| 22 | position, and anything that would hold a unit in one | 2 |
 
-One caution, from the pass that produced these rows. `MaxHpCap` reads like the ceiling a
+**Group 9 is the one to close first, and most of it is one line of code.** Three of its five rows
+are the same exclusion in `OnEnemyDamagedAlly`, met three times by Branik, Halwen and Toren and
+answered three times by pasting the passive onto `OnDamaged` as well. A flag on `PassiveDef` saying
+"and me" would delete three overflow passives from the shipped roster and stop the next batch
+writing a fourth. Group 4 is the next best value: four clauses across four heroes all asking for a
+per-source stat modifier, which is one status kind beside `Vulnerable` pointing the other way.
+
+**Groups 20 and 22 are different in kind and should not be read as debt.** An information layer and
+a movement system are games this one is not; the clauses that ask for them are two sentences out of
+thirty-nine, and both heroes work without them.
+
+One caution, from the pass that produced several of these rows. `MaxHpCap` reads like the ceiling a
 percent-of-HP clause wants and is not: it ceilings against the TARGET's Max HP, so `0.02` of Max HP
 capped at `1.0` of Max HP is uncapped. `AttackCap` is the one that bounds an amount in the caster's
 own currency. Arden carried five of the first and none of the second and read seven and a half times

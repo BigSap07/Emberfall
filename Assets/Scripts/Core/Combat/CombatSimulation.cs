@@ -2771,9 +2771,11 @@ namespace Emberfall.Core.Combat
                         // Contradiction Filed moves onto a suppressed body, which is what Cross
                         // Reference had to have to increment.
                         //
-                        // NOTHING ELSE SHIPPED CAN FEEL IT: Volume Closed is the only effect in
-                        // the content that applies BuffSuppression at all, which the harness
-                        // asserts by name.
+                        // THREE EFFECTS IN THE CONTENT APPLY BuffSuppression: Seraphine's Volume
+                        // Closed, which was the only one when this gate was written, and Toren's
+                        // Lockstep and No Entry, whose "Sealed targets cannot receive new buffs"
+                        // is the same sentence. The harness confirms the mechanic is reached and
+                        // names its users rather than asserting a single one.
                         if (!StatusInfo.IsHarmful(effect.Status) && !StatusInfo.IsInert(effect.Status)
                             && target.Has(StatusKind.BuffSuppression))
                             break;
