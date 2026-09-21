@@ -2529,6 +2529,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.StatusGainSuppression: return "Gain Suppression";
                 case StatusKind.Resolve2: return "Resolve II";
                 case StatusKind.Linked: return "Linked";
+                case StatusKind.HealingReduction: return "Healing Reduction";
                 case StatusKind.Restricted: return "Displaced";
             }
             return kind.ToString();
@@ -2590,6 +2591,7 @@ namespace Emberfall.Core.Data
                 // per-instance display name, so a bar cannot say WHO the holder is bound to. That
                 // is the same UI problem Mark carries and it is not made worse here.
                 case StatusKind.Linked: return "LNK";
+                case StatusKind.HealingReduction: return "H-RED";
                 case StatusKind.Restricted: return "DSP";
             }
             return "?";
