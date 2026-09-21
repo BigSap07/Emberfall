@@ -5,7 +5,9 @@ using UnityEngine.SceneManagement;
 
 namespace UnityEngine
 {
-    public enum KeyCode { LeftBracket = 91 }
+    /// Escape is the Android hardware back button as well as the desktop key - legacy
+    /// Input reports both as this - which is why GameApp's one handler covers both.
+    public enum KeyCode { Escape = 27, LeftBracket = 91 }
 
     /// Standalone window mode. Real Unity puts this in UnityEngine, not UnityEditor, and
     /// PlayerSettings.fullScreenMode is typed with it - so it lives here rather than beside the
@@ -73,6 +75,17 @@ namespace UnityEngine
         public static void DrawTexture(Rect rect, Texture image) { }
         public static void DrawTextureWithTexCoords(Rect rect, Texture image, Rect texCoords) { }
         public static void DrawTextureWithTexCoords(Rect rect, Texture image, Rect texCoords, bool alphaBlend) { }
+    }
+}
+
+namespace UnityEditor.Compilation
+{
+    /// Only the one call the capture tooling makes: RefreshOnDemand asks the editor to rebuild
+    /// the script assemblies from outside, because Unity's automatic refresh runs on window focus
+    /// and an automated capture cannot rely on getting it.
+    public static class CompilationPipeline
+    {
+        public static void RequestScriptCompilation() { }
     }
 }
 

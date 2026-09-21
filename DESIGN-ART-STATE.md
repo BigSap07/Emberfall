@@ -28,7 +28,7 @@ surfaces.**
 
 | # | Screen | Bespoke real art | Everything else |
 |---|--------|------------------|-----------------|
-| 1 | **MainMenu** | `Backgrounds/hub.png` painted map | badge dock: 5 framed portraits, 6 procedural sigils; action discs and top bar procedural |
+| 1 | **MainMenu** | `Backgrounds/hub.png` painted map | HUD frame is procedural: player plate, currency pills, right rail, five nav cells, idle chest. Every sprite in it resolves through `HudSkin`, so a PNG dropped at `Resources/Sprites/Hud/<slot>.png` replaces one without a code change. The badge dock and squad strip it used to list are gone. |
 | 2 | **Battle** | backdrops (**3 of 6** environments), 11/11 hero sprites, **3 of 12** enemy sprites | HP bars, VFX, damage numbers procedural |
 | 3 | Profile | none | avatar through the portrait widget; panels only |
 | 4 | Formation | none | banner slots and roster through the portrait widget |

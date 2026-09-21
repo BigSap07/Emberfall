@@ -28,8 +28,19 @@ public class UnityFocus {
 '@
 if (-not ([System.Management.Automation.PSTypeName]'UnityFocus').Type) { Add-Type -TypeDefinition $sig }
 
-$p = Get-Process Unity -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $p) { Write-Error "no Unity editor window found - is the editor open on this project?"; exit 1 }
+# THE EDITOR FOR THIS PROJECT, not whichever editor Windows lists first. Two checkouts of this
+# repository can be open at once - a worktree is exactly that - and focusing the wrong one
+# refreshes the wrong assets while the capture quietly runs against stale ones. Unity titles its
+# main window "<project folder> - <scene> - <platform> - Unity <version>", so the folder name this
+# script lives under is enough to tell them apart.
+$projectName = Split-Path -Leaf (Split-Path -Parent $PSScriptRoot)
+$windows = @(Get-Process Unity -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
+$p = $windows | Where-Object { $_.MainWindowTitle -like "$projectName - *" } | Select-Object -First 1
+if (-not $p -and $windows.Count -eq 1) { $p = $windows[0] }
+if (-not $p) {
+    Write-Error "no Unity editor window found for '$projectName' - is the editor open on THIS project? Found: $($windows.MainWindowTitle -join '; ')"
+    exit 1
+}
 $h = $p.MainWindowHandle
 
 # If Unity already HOLDS the foreground, no amount of SetForegroundWindow will produce a

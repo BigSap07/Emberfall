@@ -306,6 +306,8 @@ namespace UnityEngine
         public void Translate(Vector3 translation, Space space) { }
         public void Rotate(Vector3 euler) { }
         public void DetachChildren() { }
+        public Vector3 InverseTransformPoint(Vector3 worldPoint) { return Vector3.zero; }
+        public Vector3 TransformPoint(Vector3 localPoint) { return Vector3.zero; }
         public IEnumerator GetEnumerator() { yield break; }
     }
 
@@ -323,6 +325,7 @@ namespace UnityEngine
         public enum Edge { Left, Right, Top, Bottom }
         public enum Axis { Horizontal, Vertical }
         public void SetSizeWithCurrentAnchors(Axis axis, float size) { }
+        public void GetWorldCorners(Vector3[] fourCorners) { }
     }
 
     public sealed class GameObject : Object

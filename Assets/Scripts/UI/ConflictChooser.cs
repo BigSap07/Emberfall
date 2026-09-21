@@ -47,6 +47,16 @@ namespace Emberfall.UI
 
         private Action<ConflictChoice> _answer;
 
+        /// <summary>This card's entry in the one back stack, registered as BLOCKING.
+        ///
+        /// It is the single thing in the game the back gesture may not dismiss. The card is open
+        /// because two saves disagree and only the player can say which one survives; there is no
+        /// third answer, and a back press that closed it would leave the sync unresolved with
+        /// nothing on screen to say so. Registered rather than ignored so the press is SWALLOWED
+        /// here instead of falling through to the screen underneath, which would navigate away
+        /// from a decision the game is waiting on.</summary>
+        private UiLayerStack.Layer _layer;
+
         /// <summary>The rows, in the order the card lists them. One array so the two columns
         /// cannot drift out of step with each other or with the labels between them.</summary>
         private static readonly string[] RowLabels = { "WAYFARER", "RANK", "STAGES CLEARED", "HEROES OWNED" };
@@ -191,6 +201,10 @@ namespace Emberfall.UI
 
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();
+
+            Game.GameApp app = Game.GameApp.Instance;
+            if (app != null && app.Layers != null && _layer == null)
+                _layer = app.Layers.PushBlocking("popup:conflict", null);
         }
 
         private void Fill(Text[] values, Text when, Text device, SaveSummary summary,
@@ -247,6 +261,12 @@ namespace Emberfall.UI
         {
             Action<ConflictChoice> answer = _answer;
             _answer = null;
+
+            UiLayerStack.Layer layer = _layer;
+            _layer = null;
+            if (layer != null && Game.GameApp.Instance != null && Game.GameApp.Instance.Layers != null)
+                Game.GameApp.Instance.Layers.Dismiss(layer);
+
             _root.gameObject.SetActive(false);
             if (Game.GameApp.Instance != null && Game.GameApp.Instance.Audio != null)
                 Game.GameApp.Instance.Audio.Tap();

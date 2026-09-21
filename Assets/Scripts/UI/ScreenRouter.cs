@@ -27,7 +27,8 @@ namespace Emberfall.UI
         FriendTeam,
         Guild,
         GuildRequests,
-        GuildChat
+        GuildChat,
+        Settings
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -40,6 +41,27 @@ namespace Emberfall.UI
 
         /// <summary>True when the screen draws its own header instead of the shared top bar.</summary>
         public virtual bool HidesTopBar { get { return false; } }
+
+        /// <summary>
+        /// True while this screen is being drawn INSIDE a panel rather than as a full page.
+        ///
+        /// A hosted screen is the same object either way - same fields, same services, same
+        /// coroutines - and this flag is the whole of the difference: the panel is already
+        /// drawing a title and a close button, so the screen's own header would be a second one,
+        /// and its content can sit against the sheet's edges instead of under a top bar that is
+        /// not there. Screens that are never hosted ignore it entirely.
+        /// </summary>
+        public bool Embedded { get; private set; }
+
+        /// <summary>
+        /// Called by PanelHost as a screen is hosted and again as it is handed back. Overriders
+        /// call base first, then hide their header and re-inset their content; the base class
+        /// only records the state, because there is nothing about it that every screen shares.
+        /// </summary>
+        public virtual void SetEmbedded(bool embedded)
+        {
+            Embedded = embedded;
+        }
 
         public abstract ScreenId Id { get; }
 
@@ -90,6 +112,7 @@ namespace Emberfall.UI
         public Screens.GuildScreen Guild;
         public Screens.GuildRequestsScreen GuildRequests;
         public Screens.GuildChatScreen GuildChat;
+        public Screens.SettingsScreen Settings;
 
         public UIScreen Current { get; private set; }
 
@@ -124,6 +147,11 @@ namespace Emberfall.UI
             Guild = Create<Screens.GuildScreen>();
             GuildRequests = Create<Screens.GuildRequestsScreen>();
             GuildChat = Create<Screens.GuildChatScreen>();
+
+            // Reached through the player panel's Settings tab rather than by routing to it, but
+            // built here with everything else: PanelHost hosts UIScreens, and a screen the router
+            // does not own would be the one thing in the panel with a different lifetime.
+            Settings = Create<Screens.SettingsScreen>();
         }
 
         /// <summary>
@@ -158,6 +186,12 @@ namespace Emberfall.UI
         {
             UIScreen next = Find(id);
             if (next == null) return;
+
+            // A panel or popup is a layer OVER a screen, so a screen change with one still open
+            // would draw it over a page it knows nothing about - and, worse, over a page that may
+            // be the very screen the panel was hosting. Closing them here rather than at each
+            // call site means every door out of the Hub is covered by one rule.
+            if (App != null && App.Layers != null) App.Layers.CloseAll();
             if (Current == next)
             {
                 next.OnShow();

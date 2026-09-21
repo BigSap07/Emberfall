@@ -40,6 +40,7 @@ namespace Emberfall.UI.Screens
         private const float RowHeight = 116f;
 
         private Text _headerSubtitle;
+        private RectTransform _header;
         private ScrollRect _scroll;
         private RectTransform _content;
 
@@ -88,17 +89,39 @@ namespace Emberfall.UI.Screens
         /// trap the next visit springs.</summary>
         private bool _transferMode;
 
+
+        // ------------------------------------------------------------------ embedding
+
+        /// <summary>
+        /// Drops this page's own header when a panel is already drawing one, and lets the content
+        /// sit against the sheet's edges instead of under a top bar that is not there. Nothing
+        /// else about the screen changes - same fields, same services, same coroutines.
+        /// </summary>
+        public override void SetEmbedded(bool embedded)
+        {
+            base.SetEmbedded(embedded);
+            if (_header != null) _header.gameObject.SetActive(!embedded);
+            ApplyContentInset();
+        }
+
+        private void ApplyContentInset()
+        {
+            if (_scroll == null) return;
+            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
+                                 UITheme.ScreenPadding,
+                                 Embedded ? UITheme.Space16 : UITheme.TopBarHeight + 118f,
+                                 UITheme.ScreenPadding, 20f);
+        }
+
         // ================================================================== build
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "GUILD", Router, out _headerSubtitle);
+            _header = ScreenChrome.Header(Root, "GUILD", Router, out _headerSubtitle);
 
             _content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                             new RectOffset(0, 0, 8, 48));
-            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 118f,
-                                 UITheme.ScreenPadding, 20f);
+            ApplyContentInset();
 
             BuildNoGuildFace(_content);
             BuildGuildFace(_content);

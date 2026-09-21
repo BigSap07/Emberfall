@@ -34,6 +34,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private ScrollRect _scroll;
+        private RectTransform _header;
         private RectTransform _content;
 
         private InputField _codeField;
@@ -48,13 +49,11 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "FRIENDS", Router, out _headerSubtitle);
+            _header = ScreenChrome.Header(Root, "FRIENDS", Router, out _headerSubtitle);
 
             _content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                             new RectOffset(0, 0, 8, 48));
-            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 118f,
-                                 UITheme.ScreenPadding, 20f);
+            ApplyContentInset();
 
             BuildAddCard(_content);
 
@@ -69,6 +68,29 @@ namespace Emberfall.UI.Screens
             UIBuilder.Sized(_emptyNote.rectTransform, CardWidth - 160f, 90f);
         }
 
+
+        // ------------------------------------------------------------------ embedding
+
+        /// <summary>
+        /// Drops this page's own header when a panel is already drawing one, and lets the content
+        /// sit against the sheet's edges instead of under a top bar that is not there. Nothing
+        /// else about the screen changes - same fields, same services, same coroutines.
+        /// </summary>
+        public override void SetEmbedded(bool embedded)
+        {
+            base.SetEmbedded(embedded);
+            if (_header != null) _header.gameObject.SetActive(!embedded);
+            ApplyContentInset();
+        }
+
+        private void ApplyContentInset()
+        {
+            if (_scroll == null) return;
+            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
+                                 UITheme.ScreenPadding,
+                                 Embedded ? UITheme.Space16 : UITheme.TopBarHeight + 118f,
+                                 UITheme.ScreenPadding, 20f);
+        }
         private void BuildAddCard(RectTransform parent)
         {
             RectTransform card = UIBuilder.Node("AddCard", parent);

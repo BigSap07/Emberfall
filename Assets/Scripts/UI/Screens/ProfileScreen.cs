@@ -27,6 +27,8 @@ namespace Emberfall.UI.Screens
         private const int NameLimit = 16;
 
         private Text _headerSubtitle;
+        private RectTransform _header;
+        private ScrollRect _scroll;
         private InputField _nameField;
         private RectTransform _avatarHost;
         private RectTransform _avatarChoices;
@@ -35,18 +37,39 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "YOUR PROFILE", Router, out _headerSubtitle);
+            _header = ScreenChrome.Header(Root, "YOUR PROFILE", Router, out _headerSubtitle);
 
-            ScrollRect scroll;
-            RectTransform content = UIBuilder.ScrollList("Content", Root, out scroll, 16f,
+            RectTransform content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                                          new RectOffset(0, 0, 8, 40));
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 UITheme.ScreenPadding, UITheme.TopBarHeight + 118f,
-                                 UITheme.ScreenPadding, 20f);
+            ApplyContentInset();
 
             BuildIdentityCard(content);
             BuildAvatarCard(content);
             BuildStatsCard(content);
+        }
+
+
+        // ------------------------------------------------------------------ embedding
+
+        /// <summary>
+        /// Drops this page's own header when a panel is already drawing one, and lets the content
+        /// sit against the sheet's edges instead of under a top bar that is not there. Nothing
+        /// else about the screen changes - same fields, same services, same coroutines.
+        /// </summary>
+        public override void SetEmbedded(bool embedded)
+        {
+            base.SetEmbedded(embedded);
+            if (_header != null) _header.gameObject.SetActive(!embedded);
+            ApplyContentInset();
+        }
+
+        private void ApplyContentInset()
+        {
+            if (_scroll == null) return;
+            UIBuilder.FillParent(_scroll.GetComponent<RectTransform>(),
+                                 UITheme.ScreenPadding,
+                                 Embedded ? UITheme.Space16 : UITheme.TopBarHeight + 118f,
+                                 UITheme.ScreenPadding, 20f);
         }
 
         // ------------------------------------------------------------------ name

@@ -102,6 +102,42 @@ corner.
 None of this applies to the bleed strips described in section 2. Nothing UI-related is ever
 drawn out there; it's pure background, full stop.
 
+### 3a. What the built hub actually covers
+
+The hub exists now, so the estimates above can be replaced with measurements. These are taken
+from the layered hub (`MainMenuScreen`, with its metrics in `HubStyle`) at the four shapes it is
+captured at: 1920x1080, 1920x1200, 2400x1080 and 2532x1170 with a notch. They are in **logical
+canvas units**, and the logical canvas is not the pixel size: the scaler blends the two ratios,
+so a 2400x1080 phone draws a canvas about 2147x966 and a 1920x1200 tablet about 1821x1138.
+
+- **Top band.** Two clusters, not a bar. The player plate is 430 wide at the top left, the three
+  currency pills 624 wide at the top right, both 62 tall inside a reserved band of 132. The solid
+  full-width plate behind them is switched OFF on the hub, so the painting runs between and behind
+  them. Roughly the top 12% is still the right thing to keep quiet, but only the two corners are
+  actually hidden.
+- **Bottom band.** One centred row of five nav cells, 888 wide and 128 tall, sitting 20 off the
+  bottom. That is the bottom 14% of a 1080 canvas and the bottom 15% of a 966 one, and it is
+  centred rather than full width: the outer thirds of the bottom edge are visible.
+- **Right rail.** Four icon buttons, 108 wide, 32 in from the edge. That is a column **140 wide**,
+  about 7% of the width, not the 15% estimated above, and it runs from 106 to 580 down from the
+  top rather than the full height.
+- **Left rail. There is none.** Everything that used to be stacked down the left is a tab of the
+  player panel now.
+- **Bottom right corner.** The campaign card is 600x168 and the idle chest 108 wide beside it,
+  together occupying about 750x180 above the nav row. This is the one corner where the estimate
+  above understated the cover.
+
+**The painting does not respect the right rail this document asked for, and the built hub cannot
+fix it from the layout side.** The delivered `hub.png` puts the Proving's gatehouse hard against
+the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's discs land on its right
+tower at every supported aspect. No marker or label is covered - `HubMarkerClamp` reserves the
+rail's column and slides the Proving's plate left while its tail stays on the gate's door - but
+chrome sits on painted architecture, which is exactly what section 3 exists to prevent. Three
+ways out, none of them taken here because the choice is not the layout's to make: move the rail
+to the left edge, where the painting has a rock face and nothing built until the barracks at
+about x 0.08 (`HubStyle.RailOnRightEdge` is the switch); repaint the right 7% as landscape rather
+than structure; or accept it. The switch exists so the answer costs one line either way.
+
 ## 4. The file
 
 - **PNG, 8-bit colour.** Same file type the character art already uses.
@@ -229,14 +265,14 @@ Collected in one place, so nothing above is mistaken for more settled than it is
 
 - **Whether the hub sits in a specific region or reads as neutral ground.** Section 7. A reasoned
   recommendation, not a decision.
-- **The exact safe-zone proportions in section 3.** Estimated from the size of the resource bar,
-  the button rows and the padding the rest of the game's interface already uses, scaled to a
-  landscape frame that doesn't exist yet. Once the hub is actually built, these numbers should be
-  checked against the real thing and corrected here if they're off.
+- **The exact safe-zone proportions in section 3.** SETTLED, and the estimate was wrong in both
+  directions: section 3a carries the measured bands from the built hub. The right rail is half
+  the width this document guessed, there is no left rail at all, and the bottom right corner
+  covers more than was allowed for.
 - **Whether the resource bar, side rails and bottom row end up exactly where this document
-  assumes.** They're described here because you asked what to expect and named all three
-  yourself; the actual layout is still task 9 and the hub screen's own build, neither of which
-  exist yet.
+  assumes.** SETTLED by the layered hub, and measured in section 3a. What is still open is the
+  one conflict that measurement exposed: the right rail sits on the gatehouse, and whether that
+  is solved by moving the rail or by repainting that strip has not been decided.
 - **Any file size cap or compression setting for background art**, the way character art already
   has a settled cap. Nobody has needed one before this, so nothing has been decided.
   Deliver at the frame size in section 2 and expect this to be revisited once an engineer wires
@@ -247,6 +283,8 @@ Collected in one place, so nothing above is mistaken for more settled than it is
 - **Whether parallax actually gets picked up**, and if so, how many layers and which elements
   split into which one. Section 5 only asks you to keep your options open, not to build for a
   request that hasn't been made.
-- **How this reads once landscape (task 9) actually ships and someone can look at it on a real
-  or simulated phone.** Every number in this document is reasoned from what exists today, not
-  seen in place, because there is nothing to look at yet.
+- **How this reads once landscape actually ships and someone can look at it on a real or
+  simulated phone.** PARTLY SETTLED. The hub is captured in play mode at 16:9, 16:10, 20:9 and
+  19.5:9 with a simulated notch, and section 3a is measured from those. What no capture can
+  answer is how the art reads on a physical panel at arm's length, in daylight, on a phone whose
+  colour profile is not this monitor's.
