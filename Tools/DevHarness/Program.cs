@@ -20427,7 +20427,21 @@ namespace Emberfall.DevHarness
             // release, which is why this is the one stage where nothing hits hard: against the
             // bodies the other checks field, the Footnote is at its ceiling either way and the
             // talent's gift is swallowed by the cap rather than paid out.
-            if (!DarkPair("seraphine_the_closed_volume", 2, "s_triple", DarkPairUp, 1, false,
+            //
+            // MOVED OFF s_triple/DarkPairUp, AND THE REASON IS THE POINT. That arena met the
+            // "stay under the cap" precondition only while Volume Closed could not run: with the
+            // passive live, a Footnote that reaches its ceiling is now CLOSED - Mark and Ledger
+            // both removed - before the next Contradiction Filed can release it, so both arms of
+            // the pair released nothing and the talent measured an exact zero. It is the same
+            // precondition this comment already named, tightened by a passive that now fires: the
+            // record has to stay under the cap, and under a live Volume Closed that also means the
+            // book must not close. A slow clock against a frail line does it - no book closes in
+            // thirty rounds - and the talent pays the same 1870 it paid before the repair, which
+            // is what says this is the same measurement in a different room rather than a weaker
+            // one. THAT CROSS REFERENCE NOW DESTROYS ITS OWN PAYOUT IN A FAST FIGHT IS A FINDING
+            // about Seraphine, not a fault in this check: it loads the record toward the ceiling
+            // that Volume Closed converts into a buff-lock and 15 Energy instead of into damage.
+            if (!DarkPair("seraphine_the_closed_volume", 2, "s_frail_healer", DarkWall, 1, true,
                           out a, out b))
                 Check(false, "seraphine II arena built");
             else

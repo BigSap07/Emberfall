@@ -359,9 +359,7 @@ namespace Emberfall.Core.Combat
                         // joins the list for the same reason Mark and Ledger are on it: a binding
                         // is a claim about two units, not something good happening to one, and a
                         // kit asking "does it have a buff on it" is not asking about a link.
-                        if (k == StatusKind.None || k == StatusKind.Resolve || k == StatusKind.Resolve2
-                            || k == StatusKind.Ledger || k == StatusKind.Mark || k == StatusKind.MarkAlt
-                            || k == StatusKind.Linked)
+                        if (StatusInfo.IsInert(k))
                             continue;
                         if (!StatusInfo.IsHarmful(k)) return true;
                     }
@@ -2755,7 +2753,29 @@ namespace Emberfall.Core.Combat
                         // incoming status is beneficial, the application is silently prevented.
                         // Checked AFTER the landing roll succeeds so the RNG draw that tested
                         // landing still fires - no stream shift when BuffSuppression is absent.
-                        if (!StatusInfo.IsHarmful(effect.Status) && target.Has(StatusKind.BuffSuppression))
+                        //
+                        // BENEFICIAL, NOT "NOT HARMFUL", and that is the repair here. IsHarmful
+                        // answers false for the bookkeeping kinds as well as for the buffs, so this
+                        // gate used to eat a Mark, a Ledger, a Linked and a Resolve on its way past
+                        // - none of which is a buff, and none of which this clause was ever
+                        // described as stopping. StatusInfo.IsInert names that set, which the
+                        // HasAnyBeneficialStatus arm of ConditionMet had already had to exclude
+                        // inline for the same reason.
+                        //
+                        // It is the whole of why Seraphine's Volume Closed could not run: its first
+                        // effect lays BuffSuppression on a capped body and its second lays the
+                        // MarkAlt that its own second half waits on, so the passive suppressed its
+                        // own flag and the "when that restriction ends" branch - the Mark and
+                        // Ledger it removes, and the 15 Energy it pays - was unreachable for as
+                        // long as the clause existed. The same gate was also dropping the Ledger
+                        // Contradiction Filed moves onto a suppressed body, which is what Cross
+                        // Reference had to have to increment.
+                        //
+                        // NOTHING ELSE SHIPPED CAN FEEL IT: Volume Closed is the only effect in
+                        // the content that applies BuffSuppression at all, which the harness
+                        // asserts by name.
+                        if (!StatusInfo.IsHarmful(effect.Status) && !StatusInfo.IsInert(effect.Status)
+                            && target.Has(StatusKind.BuffSuppression))
                             break;
 
                         float magnitude = effect.Magnitude;

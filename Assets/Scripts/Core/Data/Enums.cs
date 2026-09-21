@@ -2446,6 +2446,28 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The kinds that are NEITHER a buff nor a debuff: bookkeeping the engine writes on a body
+        /// so some other rule can read it back. A Mark is a claim about who is watching, a Ledger
+        /// is a running total, Linked is a binding between two units, and the Resolve counters are
+        /// a caster's own spend - none of them is something good or bad happening to the holder.
+        ///
+        /// The list already existed, inline, inside HasAnyBeneficialStatus's arm of ConditionMet;
+        /// it is named here because a second rule needs the same answer and two copies of a list
+        /// like this drift. `IsHarmful` answers false for every one of them, so any rule that
+        /// treats "not harmful" as "beneficial" gets these wrong unless it asks this first.
+        /// </summary>
+        public static bool IsInert(StatusKind kind)
+        {
+            return kind == StatusKind.None
+                || kind == StatusKind.Resolve
+                || kind == StatusKind.Resolve2
+                || kind == StatusKind.Ledger
+                || kind == StatusKind.Mark
+                || kind == StatusKind.MarkAlt
+                || kind == StatusKind.Linked;
+        }
+
+        /// <summary>
         /// The harmful counterpart of a beneficial status, or None where there is not one.
         ///
         /// The table is what EffectKind.InvertStatus means by "its matching debuff", and it is
