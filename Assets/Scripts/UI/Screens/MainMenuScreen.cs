@@ -373,7 +373,7 @@ namespace Emberfall.UI.Screens
             // the plate has to be a CHILD created after the tail for it to bury the tail's top half
             // and leave a triangle pointing down at the building. On the root it would draw first
             // and the tail would sit on top of it as a doubled-alpha diamond.
-            HubStyle.Tail(handle.Root, fillAlpha);
+            Image tail = HubStyle.Tail(handle.Root, fillAlpha);
             handle.Background = HubStyle.SurfaceChild("Plate", handle.Root, HubStyle.RadiusLabel,
                                                       fillAlpha, edgeAlpha, HubStyle.BorderWeight);
 
@@ -395,6 +395,15 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(handle.Label.rectTransform, 6f);
             // The shadow, not a heavier plate, is what holds the word off the painting behind it.
             UIBuilder.Shadowed(handle.Label, UITheme.InkArt, 1.6f);
+
+            // The map is WIDER than the window at every aspect this game targets, because its
+            // AspectRatioFitter envelopes rather than fits, so a marker anchored near the right of
+            // the map lands past the right of the screen. This slides such a marker back inside
+            // and puts its tail back over its building; a marker that already fits is not touched.
+            // See HubMarkerClamp for the measurements, and PROVING at 16:10 for the one that made
+            // it necessary.
+            handle.Root.gameObject.AddComponent<HubMarkerClamp>()
+                  .Bind(handle.Root, Root, tail.rectTransform);
             return handle;
         }
 
