@@ -44,6 +44,125 @@ caused it. **It closes at a single retune, and its stated precondition is now me
 **A 36th failure would be a regression.** If the count goes above 35, diagnose it — do not add it
 to this list.
 
+### In flight: the Dev Arena, on branch `tools/dev-arena`
+
+The branch carries two things. **A live battle session in the engine** — `CombatSimulation.Begin`
+returns a `BattleSession` holding a fight that has not finished, and `Run()` is now literally
+`Begin()` followed by `StepNatural()` until the fight ends. There is no second resolution path:
+a hand-driven action runs the same `TakeTurn` body a natural turn does, and the harness asserts
+that a fight stepped one action at a time is the same record, event for event, that `Run()`
+produces. **And a Dev Arena** — a runtime scene under `Assets/Scripts/Dev` that presents that
+session with the real battle presentation, so a fight can be driven by hand or watched playing
+itself, and switched between the two at any moment.
+
+**The semantics of a hand-driven action**, decided once and stated here because a tool that
+resolves actions differently from the game is worse than no tool:
+
+- It is a **turn**, not a free swing. It ticks that unit's damage-over-time, repays its turn debt,
+  fires its `TurnStart` passives, resolves the ability, fires the after-action passives, raises the
+  turn-end broadcasts and expires that unit's statuses — the whole pipeline, in order.
+- It **spends that unit's natural turn for the round**. A unit driven by hand does not then act
+  again when the walk reaches it. A unit that has *already* acted naturally can still be driven,
+  and that is an extra turn on purpose.
+- **Stun and Silence refuse out loud.** The natural path silently substitutes a basic for a
+  silenced active; a tool that did the same would hide the status from the person asking why the
+  active did not happen.
+- An active still **empties the bar**. The ignore-energy toggle lets a cast happen below cost; it
+  does not make the cast free.
+- A **forced target replaces the single-enemy pick made by that unit's own ability, and nothing
+  else.** Ally modes, link modes and every multi-target mode resolve as authored. `Provoked` and
+  the Taunt anchor still win, and a `Restricted` or `Concealed` body is refused. Each of those
+  outcomes is reported to the caller rather than swallowed.
+- **`EndRound` ends the round where it stands and opens the next.** Units that had not acted do
+  not act. This engine has no separate end-of-round work — durations come off in `ExpireStatuses`
+  at the close of each unit's own turn, and the per-round bookkeeping happens in `BeginRound` at
+  the top of the next round — so opening the next round *is* the round-end processing.
+- A **direct state edit** (set HP, set energy, kill, revive) is a cheat, not an event in the
+  fiction. It moves the number and emits the plain event so a view keeps up; it fires no passive
+  and opens no death dispatch. Nothing the game can do produces one.
+
+Applying a status by hand was considered and **not built**: statuses are constructed inside
+`Sim.ApplyEffect` with landing rolls, source stamping and per-stack rules, and `CombatUnit` has no
+add-a-status entry point. Exposing one would be a new engine surface rather than a tool feature.
+
+The change moved **nothing**: the whole harness output is byte-identical with the work stashed and
+restored, which includes all 72 stage fingerprints, the 150 hero-sweep lines and the 450
+talent-sweep lines, and the failure count stays at 36. No `BattleEventType` was added — the reason
+a refusal is an `ActionReport` returned to the caller rather than an event is that the record is
+the permanent thing, and "why did the engine refuse my pick" is a question about a tool.
+
+**The arena itself** is `Assets/Dev/DevArena.unity` with its scripts in `Assets/Scripts/Dev`,
+opened from **Emberfall → Dev Arena**. It is a `BattleStage` with `UnitActor`s on it — the same
+camera, rigs, sprite clips, flash and death the game uses — and it plays the session's event list
+incrementally: the player loop shows whatever has arrived and then either waits for a person
+(Manual) or asks the engine for one more action (Auto). Switching between the two mid-fight costs
+nothing, because it is one session either way.
+
+`BattleScreen` was deliberately **not** reused. It is a player for an event list welded to the
+campaign chrome around it — `App.Session`, the router, the prologue, the recital, the proving —
+and the second half would drag the whole game into a dev scene. The arena plays the list itself
+over the same presentation primitives, and `BattleScreen` is untouched, so the real battle behaves
+exactly as it did.
+
+**It cannot reach a release build, and that is checked rather than intended.** Every file under
+`Assets/Scripts/Dev` is wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, which is a compiler
+gate: a release player does not contain the classes. The scene is absent from `EditorBuildSettings`
+in the committed state and a build hook adds it only when the build carries
+`BuildOptions.Development`. `Tools/build-check.ps1` has a `[dev-arena]` step that asserts all three
+from the files, including that the one shipped file which mentions the arena — the hub's `DEV`
+button — mentions it only inside the same guard.
+
+**The chrome is anchored, not placed.** The first version invented its own reference resolution
+(1600x900) and positioned every control by measuring from the screen origin, which is why it did
+not fit a 16:9 screen: a button hidden in Manual mode left its baked-in gap behind, the drawers
+were positioned off the edge they were anchored to, and the log had no mask and painted itself up
+over the fight. It now uses the game's own scaler - `ScaleWithScreenSize` at
+`UITheme.ReferenceResolution` with match 0.5, read from `UITheme` rather than restated - and every
+piece is anchored to an edge: the bar stretches across the top, the log across the bottom, the
+drawers to their own side at full height, and the four corner buttons to their corners. Rows of
+controls are `HorizontalLayoutGroup`s, so a hidden control takes its gap with it. Everything but
+the battlefield hangs off one rect sized to `Screen.safeArea`. Health bars are placed by the same
+arithmetic `BattleScreen` uses - `HeadPosition`, a 0.12-world-unit rise, and a ceiling clamp - so
+they sit where they sit in a real battle.
+
+Three traps are worth naming because each cost a capture cycle. A layout group only sizes its
+children when `childControlWidth/Height` is on; `childForceExpand` alone merely reserves the space
+and leaves the child at Unity's 100x100 default. A horizontal group with `childForceExpandHeight`
+reports a flexible height of its own, so every row in a drawer claimed a share of the leftover
+space and a row of 48-unit buttons came out 200 tall. And a rect stretched horizontally keeps
+`sizeDelta.x = 100` until something clears it, which hung the log column 50 units off each side
+and chopped the first seven characters off every line.
+
+**Verified at four sizes with pixels**: 1600x900, 1920x1080, 1280x720 and 2400x1080 (20:9),
+drawers closed and open, captured through `Assets/Editor/DevArenaShots.cs` which drives the Game
+view at a fixed resolution and writes PNGs to `Tools/DevArenaShots` (gitignored). The arena
+rebuilds its world when the screen's aspect changes, because `BattleStage` sizes the backdrop off
+the live camera once and a tool is looked at on several shapes.
+
+**Assets/Scripts/Dev has no asmdef, and could not have one.** `Assets/Scripts/Battle` depends on
+`Emberfall.UI`, which lives in the default assembly, and an asmdef assembly cannot reference the
+default assembly. Giving the arena one would mean giving Battle and UI one too, which is a
+restructuring of the whole project and not something a tool should cause. The development define
+achieves what the asmdef was wanted for — nothing in a release build — more directly than an
+asmdef's `defineConstraints` would.
+
+### The clip data audit
+
+Every sprite delivery was read straight out of its zip and compared, per clip, against the tracked
+sidecar the runtime loads (`Tools/clip_audit.py` reproduces it). **204 sprite entries across all 31
+deliveries carry `fps: 30`, and not one carries an `animation`/`sections` object**, which is the
+only place the delivery format puts per-section fps. There is no per-clip fps, impact frame or foot
+fraction in any delivery, so the loader is not dropping anything and nothing was changed.
+
+What the deliveries do not carry, the project derives or chooses, and **that is where the real
+inconsistency is**: 26 heroes have per-clip `impactFraction` values ranging 0.028–0.986 and no
+`playbackSpeed` at all, while the 36 clips belonging to the five most recently wired heroes (Kael,
+Kiva, Seraphine, Hale, Marrow) carry a hardcoded `impactFraction 0.5` and `playbackSpeed 1.30`
+written by `Tools/rewire_sprites.py`. That is why Kael reads the same on every clip. It is a
+presentation decision rather than a defect, so it was reported rather than retuned. The only other
+differences found were two clips whose `end` frame is 69 against the delivery's 71 (Kael's skill,
+Kiva's basic), which is the importer's trailing-transparent-frame trim doing its job.
+
 ### Next
 
 1. **The retune.** Its precondition was "after the roster's abilities are authored", and the part

@@ -158,6 +158,35 @@ namespace Emberfall.Battle
         /// </summary>
         public const float ThreeQuarterTurn = 30f;
 
+        /// <summary>
+        /// WHICH WAY A SPRITE FACES. The one place that decides it, for the game and for any tool
+        /// that builds a rig - which is everything, because UnitActor.Setup is the only caller of
+        /// Build and every battle view goes through it.
+        ///
+        /// DESIGN-ART-DELIVERY section 6 is the contract: art is drawn turned toward the viewer's
+        /// right, the player's line stands on the left turned right, the enemy line stands on the
+        /// right turned left, and "the enemy side displays the identical file mirrored - there is
+        /// no separate enemy artwork, and no way to opt one side out of the flip."
+        ///
+        /// The engine did not do that. Build already turns the two sides opposite ways, but a
+        /// sprite is a FLAT QUAD: a 30 degree yaw leans it, it does not mirror it, so both lines
+        /// showed the same drawing facing the same way. Procedural rigs were fine, which is why
+        /// this survived - a turned 3D body really does face the other way. It only became visible
+        /// when heroes started standing on the enemy side, which The Proving and the Dev Arena
+        /// both do and the campaign never did: the three enemy defs that carry sprites are the
+        /// only enemy art in the game, and nobody had looked at which way a Hollow Husk faces.
+        ///
+        /// spriteMirror keeps its documented meaning - "this file is authored facing the other
+        /// way" - and is applied on BOTH sides, so a hero carrying it still turns to face the
+        /// opposing line wherever it stands. The ally side is bit-for-bit what it was before this
+        /// change (flip == spriteMirror when facingForward), so nothing anyone has already
+        /// approved on the player's line moves.
+        /// </summary>
+        public static bool SpriteFlipped(bool spriteMirror, bool facingForward)
+        {
+            return spriteMirror ^ !facingForward;
+        }
+
         public static UnitRig Build(string name, Transform parent, VisualDef visual, bool facingForward)
         {
             UnitRig rig = new UnitRig();
@@ -191,7 +220,8 @@ namespace Emberfall.Battle
             // body is now only reached by enemies that have no art yet.
             if (!string.IsNullOrEmpty(visual.Sprite))
             {
-                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction, visual.SpriteMirror, visual.Silhouette);
+                rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction,
+                                SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette);
             }
             else
             {
@@ -338,7 +368,9 @@ namespace Emberfall.Battle
         /// top of the body even when the quad extends above it for a raised weapon. See
         /// bodyFraction below for what does extend it, and why.
         /// </summary>
-        private void BuildSprite(string spriteId, float bodyFraction, float footFraction, bool mirror, string silhouette)
+        /// <summary>`flip` is already resolved by SpriteFlipped - the side and the hero's own
+        /// authored facing folded into one answer - so this method only has to apply it.</summary>
+        private void BuildSprite(string spriteId, float bodyFraction, float footFraction, bool flip, string silhouette)
         {
             // The silhouette's own top, not a number of its own, and not HumanoidTop. This is the
             // line the whole sprite pipeline hangs off: the quad below is sized so the body's top
@@ -425,11 +457,15 @@ namespace Emberfall.Battle
             t.localPosition = new Vector3(0f, canvasHeight * 0.5f - footShift, 0f);
             // Cull is off in EmberfallFx (see the shader), so a negative X scale flips the quad's
             // rendered image without going invisible from reversed winding - the only visible
-            // effect is the mirror. Mirror is authored per-hero (VisualDef.SpriteMirror), not
-            // per-side: heroes are never spawned as enemies, so there is only ever one facing to
-            // get right for a given sprite, unlike the ally/enemy turn direction above which
-            // already differs by side on its own.
-            t.localScale = new Vector3(mirror ? -width : width, canvasHeight, 1f);
+            // effect is the mirror.
+            //
+            // THE SIGN IS THE FACING, and nothing else may write it. SpriteAnimator repositions
+            // this quad on every clip change, but only ever through localPosition.y
+            // (ApplyFootPosition), never through localScale - so the flip survives a basic, a hit
+            // reaction and a death without being reapplied. The frame itself is chosen in UV space
+            // (ApplyFrame writes mainTextureOffset/Scale), which a negative X scale mirrors along
+            // with everything else, and the foot anchor is a y value that an X flip cannot move.
+            t.localScale = new Vector3(flip ? -width : width, canvasHeight, 1f);
 
             // No local rotation any more: the quad inherits Root's turn (180 -/+ ThreeQuarterTurn,
             // see Build) and so leans with the procedural rigs instead of staying square to the

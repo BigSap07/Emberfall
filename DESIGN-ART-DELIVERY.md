@@ -232,11 +232,23 @@ Two consequences worth designing around:
 Orrin Kaal's shipped placeholder is drawn square-on and predates this rule, so until it is
 redrawn it will show this exact mismatch. That is expected and is not a bug in the loader.
 
-Not yet verified: like everything else in this document, the 30 degree turn has been derived
-from the code rather than seen rendering. In particular, which of the two sides ends up showing
-the un-mirrored art is worth confirming in the editor the first time real three-quarter art
-lands. If it turns out reversed, it is a one-line engine fix rather than a redraw, so do not
-pre-compensate for it in the art.
+**Verified, and it needed the one-line fix this paragraph predicted.** The engine turned both
+sides but mirrored neither: `UnitRig.Build` yaws the two lines opposite ways, which really does
+turn a procedural 3D body around, but a sprite is a flat quad and a 30 degree yaw only leans it.
+Both lines showed the same drawing facing the same way. It went unseen because the campaign never
+puts a hero on the enemy side and only three enemy defs carry art at all; The Proving and the Dev
+Arena, which both field heroes as opponents, are where it shows.
+
+The rule now lives in one named place, `UnitRig.SpriteFlipped(spriteMirror, facingForward)`, and
+reads `spriteMirror ^ !facingForward`. **The player's line is unchanged** - it shows what it always
+showed - and the enemy line is that same file mirrored. `spriteMirror` keeps the meaning this
+document gives it, "this file is authored facing the other way", and applies on both sides, so a
+hero carrying it still turns to face the opposing line wherever it stands.
+
+One consequence for art already delivered: the three enemy defs that carry sprites
+(`hollow_husk`, `grave_moth`, `sundered_colossus`) now render mirrored in campaign battles, which
+is what this section has always said would happen. If any of them was drawn pre-compensated, it
+will now read reversed and wants a look.
 
 ## 7. What the game does to the art at runtime
 

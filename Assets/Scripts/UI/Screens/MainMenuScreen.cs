@@ -177,6 +177,7 @@ namespace Emberfall.UI.Screens
             BuildBadgeDock();
             BuildSquadStrip();
             BuildOptions();
+            BuildDevEntry();
         }
 
         /// <summary>
@@ -609,6 +610,42 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(rim.rectTransform, 0f);
             options.OnClick(ShowOptions);
         }
+
+        /// <summary>
+        /// The Dev Arena door, and the ONLY place shipped UI knows the arena exists.
+        ///
+        /// Compiled away entirely outside the editor and a Development Build - not hidden at
+        /// runtime, not behind a flag, absent - which is the same compiler gate every file under
+        /// Assets/Scripts/Dev carries. A release player has no button because it has no method.
+        /// </summary>
+        private void BuildDevEntry()
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            UIButton dev = UIBuilder.IconButton("Dev", Root, "DEV", 62f,
+                                                UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha),
+                                                HubStyle.LabelText);
+            UIBuilder.Box(dev.Root, -UITheme.ScreenPadding,
+                          -(UITheme.TopBarHeight + UITheme.Space16 + 284f),
+                          62f, 62f, new Vector2(1f, 1f));
+            dev.OnClick(OpenDevArena);
+#endif
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private void OpenDevArena()
+        {
+            // Loaded by name so this does not need a reference to the scene asset. The scene is in
+            // the build only when the build was a Development Build; if it is not there, say so
+            // rather than failing silently.
+            if (!Application.CanStreamedLevelBeLoaded("DevArena"))
+            {
+                Debug.LogWarning("Emberfall: the Dev Arena scene is not in this build. It is added "
+                                 + "only to Development Builds.");
+                return;
+            }
+            UnityEngine.SceneManagement.SceneManager.LoadScene("DevArena");
+        }
+#endif
 
         // ------------------------------------------------------------------ behaviour
 

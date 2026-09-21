@@ -72,6 +72,13 @@ namespace UnityEngine
 
     public struct Vector2
     {
+        public static bool operator ==(Vector2 a, Vector2 b)
+        { return a.x == b.x && a.y == b.y; }
+        public static bool operator !=(Vector2 a, Vector2 b)
+        { return !(a == b); }
+        public override bool Equals(object other) { return other is Vector2 && this == (Vector2)other; }
+        public override int GetHashCode() { return x.GetHashCode() ^ (y.GetHashCode() << 2); }
+
         public float x, y;
         public Vector2(float x, float y) { this.x = x; this.y = y; }
         public static Vector2 zero { get { return new Vector2(0, 0); } }
@@ -151,6 +158,11 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
         public Vector2 min { get { return new Vector2(x, y); } }
         public Vector2 size { get { return new Vector2(width, height); } }
+        public float xMin { get { return x; } }
+        public float yMin { get { return y; } }
+        public float xMax { get { return x + width; } }
+        public float yMax { get { return y + height; } }
+        public Vector2 center { get { return new Vector2(x + width * 0.5f, y + height * 0.5f); } }
     }
 
     public struct Color
@@ -392,6 +404,11 @@ namespace UnityEngine
 
     public static class Screen
     {
+        /// <summary>The part of the screen a notch or a gesture bar does not cover. Full-screen on
+        /// a device without either, which is why anything reading it must still handle the whole
+        /// rect being the answer.</summary>
+        public static Rect safeArea { get { return new Rect(0f, 0f, width, height); } }
+
         public static int width { get { return 1080; } }
         public static int height { get { return 1920; } }
         public static ScreenOrientation orientation { get; set; }
@@ -403,6 +420,14 @@ namespace UnityEngine
 
     public static class Application
     {
+        /// <summary>Whether a scene of that name is in the build's scene list. A development-only
+        /// scene is absent from a release build, so anything that opens one has to ask first.</summary>
+        /// <summary>Whether the player keeps ticking without focus. In the editor it is also what
+        /// keeps the player loop running while the Game view is not the focused window.</summary>
+        public static bool runInBackground { get; set; }
+        public static bool CanStreamedLevelBeLoaded(string levelName) { return false; }
+        public static bool CanStreamedLevelBeLoaded(int levelIndex) { return false; }
+
         public static int targetFrameRate { get; set; }
         public static string persistentDataPath { get { return ""; } }
         public static string dataPath { get { return ""; } }
@@ -521,8 +546,20 @@ namespace UnityEngine
         public void MarkDynamic() { }
     }
 
+    /// <summary>World-space box a renderer covers. Only its min/max/center are ever read here -
+    /// a placement tool asks "where does this actually end" and that is the only honest answer.</summary>
+    public struct Bounds
+    {
+        public Vector3 center;
+        public Vector3 extents;
+        public Vector3 size { get { return extents * 2f; } }
+        public Vector3 min { get { return center - extents; } }
+        public Vector3 max { get { return center + extents; } }
+    }
+
     public class Renderer : Component
     {
+        public Bounds bounds { get; set; }
         public bool enabled { get; set; }
         public Material material { get; set; }
         public Material sharedMaterial { get; set; }
@@ -644,6 +681,8 @@ namespace UnityEngine.SceneManagement
 
     public static class SceneManager
     {
+        public static void LoadScene(int buildIndex) { }
+
         public static Scene GetActiveScene() { return new Scene(); }
         public static void LoadScene(string name) { }
         public static int sceneCount { get { return 1; } }

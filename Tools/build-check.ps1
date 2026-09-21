@@ -71,7 +71,61 @@ $engineSources = @($core + $shim + $runtime + $editor)
 # UNITY_EDITOR defined by the editor itself, caught it.
 $okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll") "UNITY_EDITOR"
 
+
+# ---------------------------------------------------------------------------------------------
+# [dev-arena] A RELEASE BUILD CONTAINS NONE OF IT, measured rather than intended.
+#
+# Three things have to hold, and each is checkable from the committed files:
+#   1. every file under Assets/Scripts/Dev is wrapped in #if UNITY_EDITOR || DEVELOPMENT_BUILD,
+#      so a release player does not contain the classes - the compiler removed them;
+#   2. Assets/Dev/DevArena.unity is not in EditorBuildSettings in the committed state, so no build
+#      picks it up by default;
+#   3. the only shipped file that mentions the arena (MainMenuScreen's DEV button) mentions it
+#      only inside the same guard.
+# ---------------------------------------------------------------------------------------------
+$devOk = $true
+$devDir = Join-Path $root "Assets\Scripts\Dev"
+$guard = '#if UNITY_EDITOR || DEVELOPMENT_BUILD'
+Write-Host ""
+if (Test-Path $devDir) {
+    $devFiles = @(Get-ChildItem $devDir -Filter *.cs -Recurse)
+    Write-Host ("[dev-arena] " + $devFiles.Count + " dev file(s)")
+    foreach ($f in $devFiles) {
+        $lines = Get-Content $f.FullName
+        if ($lines.Count -lt 2 -or $lines[0].Trim() -ne $guard) {
+            Write-Host ("  " + $f.Name + " does not open with " + $guard) -ForegroundColor Red
+            $devOk = $false
+        }
+        if ($lines[$lines.Count - 1].Trim() -ne '#endif') {
+            Write-Host ("  " + $f.Name + " does not close with #endif") -ForegroundColor Red
+            $devOk = $false
+        }
+    }
+
+    $sceneList = Get-Content (Join-Path $root "ProjectSettings\EditorBuildSettings.asset") -Raw
+    if ($sceneList -match 'Assets/Dev/DevArena\.unity') {
+        Write-Host "  Assets/Dev/DevArena.unity is in EditorBuildSettings - it must be added only by the build hook, for Development Builds" -ForegroundColor Red
+        $devOk = $false
+    }
+
+    $shipped = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
+                 Where-Object { $_.FullName -notmatch "\\Scripts\\Dev\\" } |
+                 Where-Object { (Get-Content $_.FullName -Raw) -match 'Emberfall\.Dev|DevArena' })
+    foreach ($f in $shipped) {
+        $text = Get-Content $f.FullName -Raw
+        $guarded = ([regex]::Matches($text, [regex]::Escape($guard))).Count
+        if ($guarded -lt 1) {
+            Write-Host ("  " + $f.Name + " names the Dev Arena outside the development guard") -ForegroundColor Red
+            $devOk = $false
+        }
+    }
+
+    if ($devOk) { Write-Host "[dev-arena] ok - nothing reaches a release build" -ForegroundColor Green }
+    else { Write-Host "[dev-arena] FAILED" -ForegroundColor Red }
+}
+
 if (-not ($okHarness -and $okEngine)) { exit 1 }
+if (-not $devOk) { exit 1 }
 
 if (-not $NoRun) {
     Write-Host ""
