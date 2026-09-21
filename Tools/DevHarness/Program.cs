@@ -71,6 +71,7 @@ namespace Emberfall.DevHarness
             CheckBatchFiveEngineGaps(content);
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
+            CheckAllyDonorModes(content);
             CheckAuthoredHeroSweep(content);
             CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
@@ -5820,7 +5821,8 @@ namespace Emberfall.DevHarness
                                "PreviousTarget", "LinkedUnit",
                                "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
                                "HighestPendingDoTEnemy", "LowestEnergyEnemy",
-                               "SwapAdvancedUnit", "SwapDelayedUnit" },
+                               "SwapAdvancedUnit", "SwapDelayedUnit",
+                               "HighestEnergyAlly", "LargestShieldAlly" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -15576,7 +15578,11 @@ namespace Emberfall.DevHarness
             Check(autoRelease.Count > 0, "no shipped effect uses LedgerAutoRelease" + Detail(autoRelease));
             Check(mitigates.Count == 0, "no shipped effect uses LedgerMitigates" + Detail(mitigates));
             Check(bankLimit.Count > 0, "no shipped effect uses LedgerBankLimit" + Detail(bankLimit));
-            Check(hpTransfer.Count == 0, "no shipped effect uses HpTransfer" + Detail(hpTransfer));
+            // FLIPPED by the second 4-star batch. Rhys's Crossing Cut is the first shipped
+            // effect to move HP between two bodies, so the tripwire has fired once and is now
+            // the opposite claim - the mechanic IS reached, by this named ability, and this goes
+            // red the day that stops being true. See Used() for why that is not a deletion.
+            Check(hpTransfer.Count > 0, "shipped content uses HpTransfer" + Used(hpTransfer));
             Check(shieldTransfer.Count > 0, "no shipped effect uses ShieldTransfer" + Detail(shieldTransfer));
             Check(ledgerIncrement.Count > 0, "no shipped effect uses LedgerIncrement" + Detail(ledgerIncrement));
             Check(redirectLethal.Count > 0, "no shipped effect uses RedirectLethal" + Detail(redirectLethal));
@@ -21718,7 +21724,285 @@ namespace Emberfall.DevHarness
         }
 
 
+        // ---- the two donor picks: who GIVES, rather than who receives -------------------------
+
+        /// <summary>
+        /// A REDISTRIBUTION NEEDS TWO NAMES AND THE ENUM ONLY HAD ONE OF THEM.
+        ///
+        /// `LowestEnergyAlly` has been here since the stat-status pass and says who RECEIVES.
+        /// Nothing said who gives, so "transfer Energy from the fullest bar to the emptiest" could
+        /// not be authored at all - not tuned down, not approximated, not expressible. The same
+        /// hole on the other resource: `ShieldTransfer` moves a pool between the caster and its
+        /// target, and "whichever ally happens to hold the most" had no name, so a kit that moves
+        /// wards about rather than granting them had no donor to point at.
+        ///
+        /// `HighestEnergyAlly` and `LargestShieldAlly` close both, and they are the ONLY engine
+        /// addition in this batch. Two checks each, and deliberately both kinds:
+        ///
+        ///   - the arena, which proves the mode reads what it claims to read. A mode that silently
+        ///     resolved to the front body would satisfy every content scan ever written.
+        ///   - the content confirmation, which names Celen. This is a confirmation rather than a
+        ///     dormancy tripwire from the first day, because the modes and the kit that needs them
+        ///     land together: the tripwire shape would be red on arrival. It goes red the day
+        ///     nothing authors them, which is the standing line every other mechanic here carries.
+        /// </summary>
+        private static void CheckAllyDonorModes(ContentDatabase live)
+        {
+            Line("ALLY DONOR PICKS (the fullest Energy bar and the largest Shield pool)");
+
+            Check((int)TargetMode.SwapDelayedUnit == 37,
+                  "TargetMode.SwapDelayedUnit still at 37 (got " + (int)TargetMode.SwapDelayedUnit
+                  + ") - the two new modes were APPENDED, so no TargetAnchored value moved");
+            Check((int)TargetMode.HighestEnergyAlly == 38 && (int)TargetMode.LargestShieldAlly == 39,
+                  "and the two new modes sit immediately after it at "
+                  + (int)TargetMode.HighestEnergyAlly + " and " + (int)TargetMode.LargestShieldAlly);
+
+            CheckHighestEnergyAllyPicks();
+            CheckLargestShieldAllyPicks();
+            CheckAllyDonorModesAreAuthored(live);
+
+            Line("");
+        }
+
+        /// <summary>
+        /// Three allies, the caster handed 80 Energy mid-ability, and one Shield aimed with each
+        /// Energy mode. They must land on DIFFERENT bodies, or the new member is reading nothing.
+        ///
+        /// The grant happens inside the same ability as the two picks, for the reason
+        /// RunEnergyPickArena records: StartEnergy in the JSON never reaches a CombatUnit, so an
+        /// arena that expects content to set up its own difference measures nothing. And the
+        /// ability's last effect kills the only enemy, so the whole fight is one turn - otherwise
+        /// these wards accumulate over a dozen rounds while the bars fill on their own and the
+        /// totals stop being a reading of anything.
+        /// </summary>
+        private static void CheckHighestEnergyAllyPicks()
+        {
+            BattleResult r = RunAllyEnergyPickArena();
+            if (r == null) { Check(false, "highest-energy ally arena built"); return; }
+            int caster = ShieldTo(r, "AeCaster");
+            int front = ShieldTo(r, "AeFront");
+            int back = ShieldTo(r, "AeBack");
+            Check(caster == 4000,
+                  "HighestEnergyAlly answers the fullest bar - the body handed 80 Energy takes the "
+                  + "4000 ward (" + caster + "), and an ally mode resolving to the caster is "
+                  + "correct rather than a miss, exactly as LowestHpAlly does");
+            Check(front == 1500 && back == 0,
+                  "and LowestEnergyAlly answers a DIFFERENT body in the same ability - the emptiest "
+                  + "bar, with the front slot breaking the tie between two allies both at zero ("
+                  + front + " forward, " + back + " behind)");
+        }
+
+        /// <summary>
+        /// Two warded allies, 1000 on the front one and 5000 on the one behind it, and a
+        /// ShieldTransfer aimed at LargestShieldAlly. The caster must end holding exactly 5000: a
+        /// mode picking by slot, by iteration order or by "first body carrying a Shield" would
+        /// hand it 1000, and one picking by HP would too.
+        /// </summary>
+        private static void CheckLargestShieldAllyPicks()
+        {
+            BattleResult r = RunLargestShieldArena();
+            if (r == null) { Check(false, "largest-shield ally arena built"); return; }
+            int moved = ShieldTo(r, "AsCaster");
+            Check(moved == 5000,
+                  "LargestShieldAlly answers the biggest POOL, not the first body carrying one - "
+                  + "the 5000 ward moves and the 1000 one in front of it does not (" + moved + ")");
+        }
+
+        /// <summary>The standing line: both modes are reached by shipped content, and it says by
+        /// whom. See <see cref="Used"/> for why this is a confirmation rather than a tripwire.</summary>
+        private static void CheckAllyDonorModesAreAuthored(ContentDatabase db)
+        {
+            List<string> energy = new List<string>(), shield = new List<string>();
+            List<UnitDef> units = new List<UnitDef>();
+            for (int i = 0; i < db.Heroes.Count; i++) units.Add(db.Heroes[i]);
+            for (int i = 0; i < db.Enemies.Count; i++) units.Add(db.Enemies[i]);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                UnitDef def = units[i];
+                List<EffectDef> all = new List<EffectDef>();
+                List<string> where = new List<string>();
+                if (def.BasicAttack != null)
+                    AddWithNames(all, where, def.Id + "/" + def.BasicAttack.Name, def.BasicAttack.Effects);
+                if (def.Active != null)
+                    AddWithNames(all, where, def.Id + "/" + def.Active.Name, def.Active.Effects);
+                for (int p = 0; p < def.Passives.Count; p++)
+                    AddWithNames(all, where, def.Id + "/" + def.Passives[p].Name, def.Passives[p].Effects);
+                HeroDef hero = def as HeroDef;
+                if (hero != null)
+                    for (int t = 0; t < hero.Talents.Count; t++)
+                        AddWithNames(all, where, def.Id + "/" + hero.Talents[t].Name, hero.Talents[t].Effects);
+
+                for (int e = 0; e < all.Count; e++)
+                {
+                    EffectDef eff = all[e];
+                    if (eff.Target == TargetMode.HighestEnergyAlly
+                        || eff.SecondaryTarget == TargetMode.HighestEnergyAlly) energy.Add(where[e]);
+                    if (eff.Target == TargetMode.LargestShieldAlly
+                        || eff.SecondaryTarget == TargetMode.LargestShieldAlly) shield.Add(where[e]);
+                }
+            }
+
+            Check(energy.Count > 0, "shipped content targets HighestEnergyAlly" + Used(energy));
+            Check(shield.Count > 0, "shipped content targets LargestShieldAlly" + Used(shield));
+        }
+
+        /// <summary>Total ShieldGain landed ON one unit, by name. HealTo's sibling: credited by
+        /// TARGET rather than by source, because these two checks ask where a ward went.</summary>
+        private static int ShieldTo(BattleResult r, string unitName)
+        {
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].Name == unitName) { id = r.Units[i].Id; break; }
+            if (id < 0) return -1;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.ShieldGain && e.TargetId == id) total += e.Value;
+            }
+            return total;
+        }
+
+        private static BattleResult RunAllyEnergyPickArena()
+        {
+            // ONE TURN, AND THE ABILITY ENDS IT. The last effect kills the only enemy, so the
+            // battle stops after this ability resolves - the picks are read once, on bars this
+            // ability set itself, rather than summed over a dozen rounds of bars filling on their
+            // own. Every hero here is at full HP, so no HP-based mode could have been used to
+            // distinguish them: HpRatio is 1.0 for all three and every such pick would tie.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""ae_caster"", ""name"": ""AeCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ae_basic"", ""name"": ""Read The Bars"",
+        ""effects"": [
+          { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 80 },
+          { ""kind"": ""Shield"", ""target"": ""HighestEnergyAlly"", ""flat"": 4000, ""duration"": 5 },
+          { ""kind"": ""Shield"", ""target"": ""LowestEnergyAlly"", ""flat"": 1500, ""duration"": 5 },
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }
+        ] },
+      ""active"": { ""id"": ""ae_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""ae_front"", ""name"": ""AeFront"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 10, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""aec_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""aec_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""ae_back"", ""name"": ""AeBack"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 500000, ""attack"": 10, ""defense"": 0, ""speed"": 15, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""aei_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""aei_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""ae_foe"", ""name"": ""AeFoe"", ""aspect"": ""Ember"",
+      ""hp"": 10, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""aef"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""ae_ch"", ""name"": ""AllyEnergy"", ""stages"": [
+    { ""id"": ""ae_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""ae_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "ally energy pick");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ae_caster"), 1));
+            team.Add(MakeInstance(db.GetHero("ae_front"), 1));
+            team.Add(MakeInstance(db.GetHero("ae_back"), 1));
+            return RunWith(db, db.GetStage("ae_arena"), 9601, team);
+        }
+
+        private static BattleResult RunLargestShieldArena()
+        {
+            // THE TWO WARDS ARE AIMED BY ENERGY, not by HP, because every body here is at full HP
+            // and every HP-based mode would tie. The caster tops its own bar up first, which makes
+            // LowestEnergyAlly an ALLY rather than itself; the front ally takes the 1000 and is
+            // then topped up in turn, so the second LowestEnergyAlly resolves to the body behind it
+            // and the 5000 lands there. A LargestShieldAlly picking by slot, by iteration order or
+            // by "first body carrying a Shield" would therefore move 1000, and this reads 5000.
+            //
+            // The last effect kills the only enemy, so the fight is one turn and the total is one
+            // reading rather than a sum over a dozen of them.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""as_caster"", ""name"": ""AsCaster"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""startingHero"": true,
+      ""hp"": 900000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""as_basic"", ""name"": ""Even It Out"",
+        ""effects"": [
+          { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 90 },
+          { ""kind"": ""Shield"", ""target"": ""LowestEnergyAlly"", ""flat"": 1000, ""duration"": 5 },
+          { ""kind"": ""EnergyGain"", ""target"": ""LowestEnergyAlly"", ""flat"": 40 },
+          { ""kind"": ""Shield"", ""target"": ""LowestEnergyAlly"", ""flat"": 5000, ""duration"": 5 },
+          { ""kind"": ""ShieldTransfer"", ""target"": ""LargestShieldAlly"", ""magnitude"": 1.0,
+            ""transferFromTarget"": true },
+          { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }
+        ] },
+      ""active"": { ""id"": ""as_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""as_small"", ""name"": ""AsSmall"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 100000, ""attack"": 10, ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ass_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""ass_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""as_big"", ""name"": ""AsBig"", ""aspect"": ""Ember"", ""role"": ""Striker"",
+      ""startingHero"": true,
+      ""hp"": 500000, ""attack"": 10, ""defense"": 0, ""speed"": 15, ""critChance"": 0, ""critDamage"": 1.0,
+      ""startEnergy"": 0,
+      ""basic"": { ""id"": ""asb_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] },
+      ""active"": { ""id"": ""asb_active"", ""name"": ""Noop"", ""energyCost"": 9999,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""as_foe"", ""name"": ""AsFoe"", ""aspect"": ""Ember"",
+      ""hp"": 10, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""asf"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""flat"": 1 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""as_ch"", ""name"": ""AllyShield"", ""stages"": [
+    { ""id"": ""as_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""as_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(3), "largest shield pick");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("as_caster"), 1));
+            team.Add(MakeInstance(db.GetHero("as_small"), 1));
+            team.Add(MakeInstance(db.GetHero("as_big"), 1));
+            return RunWith(db, db.GetStage("as_arena"), 9602, team);
+        }
+
         // ---- the star band: what a rarity is worth, measured -----------------------------------
+
+        /// <summary>The two edges of the band, as a fraction of the role's authored 5-star
+        /// median.</summary>
+        private const float StarBandFloor = 0.45f;
+        private const float StarBandCeiling = 0.85f;
+
+        /// <summary>How many authored 5-stars a role needs before its median is treated as a
+        /// middle rather than a sample, and the band's floor enforced against it.</summary>
+        private const int StarBandMinFives = 3;
 
         /// <summary>
         /// A 4-STAR HAS TO SIT BELOW THE 5-STARS OF ITS OWN ROLE, AND UNTIL NOW NOTHING SAID SO.
@@ -21750,9 +22034,28 @@ namespace Emberfall.DevHarness
         /// much as about the hero. The median is what "the 5-stars of this role" means when there
         /// are several of them, and with one it is that one.
         ///
+        /// A CEILING ALONE DOES NOT DESCRIBE A TIER. The first shape of this asserted one thing -
+        /// a 4-star reads below its role's 5-star median - and a hero at x0.12 of that median
+        /// passed it as comfortably as one at x0.84. "Smaller" was the whole claim, and a tier
+        /// authored to be smaller with nothing saying HOW MUCH smaller is a tier of heroes nobody
+        /// would field. So the band has two edges: every graded 4-star reads between
+        /// <see cref="StarBandFloor"/> and <see cref="StarBandCeiling"/> of that median.
+        ///
+        /// THE FLOOR IS ENFORCED ONLY WHERE THE MEDIAN IS ONE. A role with fewer than
+        /// <see cref="StarBandMinFives"/> authored 5-stars prints its ratio and is named as
+        /// ungraded, because the floor is a claim about where the middle of a role sits and one or
+        /// two readings have no middle. The ceiling above keeps running for those roles, because
+        /// "smaller than the 5-stars of your role" still means something against one of them.
+        ///
+        /// FOUR STARS ONLY. The tiers below are unauthored and their floors are different numbers
+        /// nobody has decided; asserting this one on the first 3-star to land would be a guess
+        /// wearing a guard's clothes.
+        ///
         /// WHAT IT CANNOT SEE, said here rather than discovered later: the arena fields no talent,
         /// so the three a 5-star carries and a 4-star does not are outside this reading and the real
-        /// gap is wider than the number. A clause needing a Taunt enemy, an aspect matchup or an
+        /// gap is wider than the number. That is why the ceiling is 0.85 rather than 1.00 - a
+        /// 4-star reading nine tenths of a 5-star WITHOUT the 5-star's three talents is not a
+        /// smaller hero. A clause needing a Taunt enemy, an aspect matchup or an
         /// ally this squad does not have is unmeasured here exactly as it is in the sweep. And a
         /// role whose 5-stars are all unauthored has no median at all, so its 4-stars are listed
         /// and not graded.
@@ -21799,6 +22102,10 @@ namespace Emberfall.DevHarness
 
             List<string> under = new List<string>();
             List<string> over = new List<string>();
+            List<string> tooSmall = new List<string>();
+            List<string> tooBig = new List<string>();
+            List<string> inBand = new List<string>();
+            List<string> ungradedRoles = new List<string>();
             int graded = 0;
             Array roles = Enum.GetValues(typeof(HeroRole));
             for (int ri = 0; ri < roles.Length; ri++)
@@ -21817,9 +22124,20 @@ namespace Emberfall.DevHarness
                             : fives.Count % 2 == 1 ? fives[fives.Count / 2]
                             : (fives[fives.Count / 2 - 1] + fives[fives.Count / 2]) / 2;
 
+                // A MEDIAN OVER ONE OR TWO HEROES IS NOT A MEDIAN. The ceiling below survives
+                // a thin role because "smaller than the 5-stars of your role" still means
+                // something against one of them; the BAND does not, because its floor is a claim
+                // about where the middle of that role sits, and two readings have no middle.
+                // Those roles print their ratio and are named as ungraded rather than silently
+                // enforced against a sample that cannot carry the claim.
+                bool bandEnforced = fives.Count >= StarBandMinFives;
+                if (median > 0 && !bandEnforced) ungradedRoles.Add(role + " (" + fives.Count + ")");
+
                 Line("  " + role + (median < 0
                         ? "  (no authored 5-star, so nothing to grade against)"
-                        : "  5-star median " + median + " over " + fives.Count + " hero(es)"));
+                        : "  5-star median " + median + " over " + fives.Count + " hero(es)"
+                          + (bandEnforced ? "" : " - BAND NOT ENFORCED, fewer than "
+                             + StarBandMinFives)));
 
                 inRole.Sort(delegate (HeroDef a, HeroDef b)
                 {
@@ -21839,6 +22157,24 @@ namespace Emberfall.DevHarness
                         graded++;
                         if (mine < median) under.Add(def.Id + " x" + share.ToString("0.00", CultureInfo.InvariantCulture));
                         else over.Add(def.Id + " " + mine + " against median " + median);
+
+                        // THE BAND, four stars only. The tier below is not authored yet and its
+                        // floor is a different number nobody has decided; asserting this one on a
+                        // 3-star the day one lands would be a guess wearing a guard's clothes.
+                        if (def.Stars == 4)
+                        {
+                            string reading = def.Id + " x"
+                                + share.ToString("0.00", CultureInfo.InvariantCulture);
+                            if (!bandEnforced) { }
+                            else if (share < StarBandFloor) tooSmall.Add(reading);
+                            else if (share > StarBandCeiling) tooBig.Add(reading);
+                            else inBand.Add(reading);
+                        }
+                        if (def.Stars == 4)
+                            ratio += bandEnforced
+                                ? (share < StarBandFloor ? "   BELOW THE BAND"
+                                   : share > StarBandCeiling ? "   ABOVE THE BAND" : "   in band")
+                                : "   (band not enforced for this role)";
                     }
                     long[] terms = split[def.Id];
                     Line("    " + def.Stars + "*  " + def.Id + "  " + mine
@@ -21860,6 +22196,35 @@ namespace Emberfall.DevHarness
                       + " median for their own role (" + string.Join(", ", under.ToArray()) + ")"
                     : over.Count + " hero(es) below five stars match or beat the 5-star median for"
                       + " their own role: " + string.Join("; ", over.ToArray()));
+
+            if (ungradedRoles.Count > 0)
+                Line("  [note] the band is NOT enforced for " + string.Join(", ", ungradedRoles.ToArray())
+                     + " - fewer than " + StarBandMinFives + " authored 5-stars, so that role's"
+                     + " median is a sample rather than a middle. Their 4-stars print a ratio and"
+                     + " are not graded on it.");
+
+            int banded = tooSmall.Count + tooBig.Count + inBand.Count;
+            if (banded == 0)
+            {
+                Line("  [note] no authored 4-star sits in a role with " + StarBandMinFives
+                     + " or more authored 5-stars, so the band has nothing to enforce yet.");
+                Line("");
+                return;
+            }
+            Check(tooSmall.Count == 0 && tooBig.Count == 0,
+                  tooSmall.Count == 0 && tooBig.Count == 0
+                    ? "all " + banded + " graded 4-star(s) read between x"
+                      + StarBandFloor.ToString("0.00", CultureInfo.InvariantCulture) + " and x"
+                      + StarBandCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                      + " of their role's 5-star median ("
+                      + string.Join(", ", inBand.ToArray()) + ")"
+                    : (tooSmall.Count + tooBig.Count) + " graded 4-star(s) fall outside the x"
+                      + StarBandFloor.ToString("0.00", CultureInfo.InvariantCulture) + " to x"
+                      + StarBandCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                      + " band: "
+                      + (tooSmall.Count > 0 ? "below - " + string.Join(", ", tooSmall.ToArray()) : "")
+                      + (tooSmall.Count > 0 && tooBig.Count > 0 ? "; " : "")
+                      + (tooBig.Count > 0 ? "above - " + string.Join(", ", tooBig.ToArray()) : ""));
             Line("");
         }
 
@@ -21925,7 +22290,11 @@ namespace Emberfall.DevHarness
                                   // and a zero would mean the arena never raised it.
                                   "branik_the_siege_mason", "demos_the_debt_collector",
                                   "kest_the_bridgebreaker", "orelle_the_fever_warden",
-                                  "tavia_the_signal_huntress" };
+                                  "tavia_the_signal_huntress",
+                                  // The second 4-star batch, same reason.
+                                  "celen_the_open_hand", "mika_the_salvage_pilot",
+                                  "rhys_the_fence_walker", "siofra_the_turncoat_oracle",
+                                  "vanno_the_detour_king" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

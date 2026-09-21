@@ -83,6 +83,10 @@ TARGET_MODES = {
     "HighestPendingDoTEnemy", "LowestEnergyEnemy",
     # batch eight: the two bodies a SwapTurnOrder moved.
     "SwapAdvancedUnit", "SwapDelayedUnit",
+    # four-star batch two: the donor half of two redistributions. LowestEnergyAlly could
+    # already name who receives Energy and nothing could name who gives it; ShieldTransfer
+    # could move a pool and nothing could name the ally holding the biggest one.
+    "HighestEnergyAlly", "LargestShieldAlly",
 }
 
 # ---------------------------------------------------------------------------

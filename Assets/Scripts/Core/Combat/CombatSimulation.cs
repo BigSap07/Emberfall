@@ -6422,7 +6422,7 @@ namespace Emberfall.Core.Combat
                         return result;
                     }
 
-                    // The four ally modes below return from HERE, above the anchor lookup, exactly
+                    // The ally modes below return from HERE, above the anchor lookup, exactly
                     // as LowestHpAlly and RandomAlly already do. The anchor answers single-enemy
                     // questions aimed at one side; it has nothing to say about which of the
                     // caster's own allies an effect lands on.
@@ -6436,6 +6436,47 @@ namespace Emberfall.Core.Combat
                             if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             if (best == null || u.Energy < best.Energy
                                 || (u.Energy == best.Energy && u.Slot < best.Slot)) best = u;
+                        }
+                        if (best != null) result.Add(best);
+                        return result;
+                    }
+
+                    case TargetMode.HighestEnergyAlly:
+                    {
+                        // LowestEnergyAlly's mirror, and deliberately its exact mirror: the same
+                        // raw Energy read, the same front-slot tie-break, the same return from
+                        // above the anchor lookup. A donor and a recipient picked by two rules
+                        // that disagreed in any detail would move Energy for reasons nobody wrote.
+                        CombatUnit best = null;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
+                            if (best == null || u.Energy > best.Energy
+                                || (u.Energy == best.Energy && u.Slot < best.Slot)) best = u;
+                        }
+                        if (best != null) result.Add(best);
+                        return result;
+                    }
+
+                    case TargetMode.LargestShieldAlly:
+                    {
+                        // The POOL, not the status entry. CombatUnit.Shield is how much is left to
+                        // absorb; StatusKind.Shield is only the marker that says a pool exists and
+                        // carries a duration instead of an amount.
+                        //
+                        // Nobody is the answer when no ally holds a pool. Returning the front body
+                        // there would hand every "move the largest Shield" clause a silent no-op
+                        // target that reads as a hit, and this engine already answers that kind of
+                        // question with an empty list - see HighestPendingDoTEnemy.
+                        CombatUnit best = null;
+                        for (int i = 0; i < _units.Count; i++)
+                        {
+                            CombatUnit u = _units[i];
+                            if (!u.Alive || u.IsPlayer != caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
+                            if (u.Shield <= 0f) continue;
+                            if (best == null || u.Shield > best.Shield
+                                || (u.Shield == best.Shield && u.Slot < best.Slot)) best = u;
                         }
                         if (best != null) result.Add(best);
                         return result;

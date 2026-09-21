@@ -87,7 +87,7 @@ namespace Emberfall.Core.Data
         // answering unconditionally, with no status and no ability behind it - has been removed;
         // what is left is the protector mechanic, which says so on the target's own status bar.
         //
-        // The four ALLY modes are unaffected, because the anchor only ever answers for the enemy
+        // The ALLY modes are unaffected, because the anchor only ever answers for the enemy
         // side: they return from the first switch in ResolveTargets, above the anchor lookup,
         // exactly as LowestHpAlly and RandomAlly already do.
 
@@ -352,7 +352,42 @@ namespace Emberfall.Core.Data
         SwapAdvancedUnit,
 
         /// <summary>The unit the last SwapTurnOrder moved BACK. Sibling of SwapAdvancedUnit.</summary>
-        SwapDelayedUnit
+        SwapDelayedUnit,
+
+        /// <summary>
+        /// The living ally with the most Energy, ties going to the front slot.
+        ///
+        /// THE OTHER END OF LowestEnergyAlly, and the enum has had that one since the stat-status
+        /// pass without ever having this one. A kit that hands Energy DOWNHILL needs both names in
+        /// the same breath - a donor and a recipient - and until now only the recipient could be
+        /// said, so the whole idea sat unauthorable. Celen's Nothing Hoarded is that kit.
+        ///
+        /// Energy is read raw, exactly as LowestEnergyAlly and HighestEnergyEnemy read it: nothing
+        /// modifies it, and it is already the number the player watches fill. Ties break to the
+        /// lower Slot for the same reason LowestEnergyAlly does - a stable pick beats an arbitrary
+        /// one, and iteration order is not a rule anybody authored.
+        ///
+        /// Resolves to the caster when the caster IS the fullest bar, the same way LowestHpAlly
+        /// resolves to the caster when the caster is the most hurt. An ally mode in this engine has
+        /// never excluded self and one that did would be a different word.
+        /// </summary>
+        HighestEnergyAlly,
+
+        /// <summary>
+        /// The living ally carrying the largest Shield pool, ties going to the front slot.
+        ///
+        /// Reads CombatUnit.Shield - the pool in points, not the StatusKind.Shield entry that
+        /// marks its presence - because "the largest ally Shield" is a question about how much is
+        /// left to absorb, and the status entry carries a duration rather than an amount. A unit
+        /// with no pool is never picked over one that has any, and nobody at all is the answer when
+        /// no ally carries a Shield, which is honest rather than falling through to the front body.
+        ///
+        /// This is what ShieldTransfer had no way to name. That effect moves a pool between the
+        /// caster and its target; the target could be any ally, but "whichever ally happens to hold
+        /// the most" could not be said, so a kit that redistributes wards rather than granting them
+        /// had no donor to point at. Celen's Distribution is that kit.
+        /// </summary>
+        LargestShieldAlly
     }
 
     public enum EffectKind
