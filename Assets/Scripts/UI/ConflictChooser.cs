@@ -56,6 +56,22 @@ namespace Emberfall.UI
         private const float ColumnWidth = 480f;
         private const float RowHeight = 54f;
 
+        /// <summary>
+        /// Distance from the card's centre to each column's centre.
+        ///
+        /// It was ColumnWidth/2 + 60, which put the two columns 120 apart and left the row labels
+        /// between them overlapping both. "STAGES CLEARED" is wider than 120 at any size worth
+        /// reading, so the widest label decided this rather than a round number: 335 leaves a 190
+        /// gap, which the labels fit inside, and still leaves 15 units of card margin either side
+        /// (335 + 240 = 575, against a half-width of 590).
+        /// </summary>
+        private const float ColumnOffset = 335f;
+
+        /// <summary>The label strip down the middle, sized to the gap the columns leave rather
+        /// than to the longest word - so a longer label in future overflows visibly into a gap
+        /// instead of invisibly onto a column.</summary>
+        private const float LabelWidth = 190f;
+
         public ConflictChooser(RectTransform layer)
         {
             _root = UIBuilder.Node("ConflictChooser", layer);
@@ -86,9 +102,9 @@ namespace Emberfall.UI
             _localValues = new Text[RowLabels.Length];
             _cloudValues = new Text[RowLabels.Length];
 
-            RectTransform local = BuildColumn(card, "Local", "THIS DEVICE", -(ColumnWidth / 2f + 60f),
+            RectTransform local = BuildColumn(card, "Local", "THIS DEVICE", -ColumnOffset,
                                               columnTop, _localValues, out _localWhen, out _localDevice);
-            RectTransform cloud = BuildColumn(card, "Cloud", "THE CLOUD", ColumnWidth / 2f + 60f,
+            RectTransform cloud = BuildColumn(card, "Cloud", "THE CLOUD", ColumnOffset,
                                               columnTop, _cloudValues, out _cloudWhen, out _cloudDevice);
 
             // The row labels run down the middle, between the two columns, so each number is read
@@ -98,7 +114,7 @@ namespace Emberfall.UI
                 Text label = UIBuilder.Label("Row" + i, card, RowLabels[i], UITheme.FontTiny - 2,
                                              UITheme.TextDim, TextAnchor.MiddleCenter);
                 UIBuilder.Box(label.rectTransform, 0f, -(columnTop + 58f + i * RowHeight),
-                              160f, RowHeight, new Vector2(0.5f, 1f));
+                              LabelWidth, RowHeight, new Vector2(0.5f, 1f));
             }
 
             Text warning = UIBuilder.WrappedLabel("Warning", card,
@@ -109,11 +125,11 @@ namespace Emberfall.UI
             // Both Gold, both the same size. Neither is the recommended one because there is no
             // recommendation to make - see the class note.
             _keepLocal = UIBuilder.GoldButton("KeepLocal", card, "KEEP THIS DEVICE", UITheme.FontBody);
-            UIBuilder.Box(_keepLocal.Root, -(ColumnWidth / 2f + 60f), 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_keepLocal.Root, -ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
             _keepLocal.OnClick(delegate { Answer(ConflictChoice.KeepLocal); });
 
             _keepCloud = UIBuilder.GoldButton("KeepCloud", card, "KEEP THE CLOUD", UITheme.FontBody);
-            UIBuilder.Box(_keepCloud.Root, ColumnWidth / 2f + 60f, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_keepCloud.Root, ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
             _keepCloud.OnClick(delegate { Answer(ConflictChoice.KeepCloud); });
 
             _root.gameObject.SetActive(false);

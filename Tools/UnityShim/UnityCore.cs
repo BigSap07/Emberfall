@@ -473,6 +473,12 @@ namespace UnityEngine
         public static T Load<T>(string path) where T : Object { return null; }
         public static Object Load(string path) { return null; }
         public static T GetBuiltinResource<T>(string path) where T : Object { return null; }
+
+        /// <summary>Every loaded object of a type, including ones no scene references - the only
+        /// way to reach an editor window without asking for one, which is what ShotOnDemand needs
+        /// to repaint the Game view without stealing focus.</summary>
+        public static Object[] FindObjectsOfTypeAll(Type type) { return new Object[0]; }
+        public static T[] FindObjectsOfTypeAll<T>() where T : Object { return new T[0]; }
     }
 
     public static class Physics { public static bool autoSimulation { get; set; } }

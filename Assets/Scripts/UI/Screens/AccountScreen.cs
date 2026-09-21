@@ -102,7 +102,11 @@ namespace Emberfall.UI.Screens
 
         private void BuildIdentityCard(RectTransform parent)
         {
-            RectTransform card = Card(parent, 250f);
+            // 296, measured rather than guessed, and it was 250: heading 22-48, name field 56-132,
+            // hint 140-166, code label 176-202, the code itself 206-256 and the COPY button
+            // 204-266 - so the last two rows hung 16 units past the bottom edge and sat on the
+            // card below them. Verified in a capture, which is the only thing that can see it.
+            RectTransform card = Card(parent, 296f);
             Heading(card, "WHO YOU ARE");
 
             _nameField = UIBuilder.TextField("Name", card, "Your name", UITheme.FontSmall, NameLimit, false);
@@ -126,10 +130,10 @@ namespace Emberfall.UI.Screens
             // formatter puts in.
             _friendCode = UIBuilder.Label("Code", card, "------", UITheme.FontTitle, UITheme.Gold,
                                           TextAnchor.UpperLeft);
-            UIBuilder.Box(_friendCode.rectTransform, 30f, -204f, 500f, 50f, new Vector2(0f, 1f));
+            UIBuilder.Box(_friendCode.rectTransform, 30f, -206f, 500f, 54f, new Vector2(0f, 1f));
 
             _copyButton = UIBuilder.SecondaryButton("Copy", card, "COPY", UITheme.FontSmall);
-            UIBuilder.Box(_copyButton.Root, 540f, -200f, 220f, 62f, new Vector2(0f, 1f));
+            UIBuilder.Box(_copyButton.Root, 540f, -202f, 220f, 62f, new Vector2(0f, 1f));
             _copyButton.OnClick(OnCopyCode);
         }
 
@@ -145,21 +149,26 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildLinkCard(RectTransform parent)
         {
-            _linkCard = Card(parent, 320f);
+            _linkCard = Card(parent, 372f);
             _linkHeading = Heading(_linkCard, "PROTECT THIS ACCOUNT");
 
+            // 108, not 68, and the four lines below it move down to match. At FontSmall over 1060
+            // units the anonymous warning is three lines, and a 68-tall box clipped the last one -
+            // which in this case was "Link an email and it becomes recoverable from anywhere", the
+            // sentence the whole card exists to deliver. A capture caught it; the maths would not
+            // have, because how many lines a wrapped string takes is a font metric.
             _linkWarning = UIBuilder.WrappedLabel("Warning", _linkCard, "", UITheme.FontSmall,
                                                   UITheme.Warning, TextAnchor.UpperLeft);
-            UIBuilder.Box(_linkWarning.rectTransform, 30f, -56f, CardWidth - 120f, 68f, new Vector2(0f, 1f));
+            UIBuilder.Box(_linkWarning.rectTransform, 30f, -56f, CardWidth - 120f, 108f, new Vector2(0f, 1f));
 
             _emailField = UIBuilder.TextField("Email", _linkCard, "your@email", UITheme.FontSmall, 96, false);
-            UIBuilder.Box(_emailField.GetComponent<RectTransform>(), 30f, -134f, 520f, 76f, new Vector2(0f, 1f));
+            UIBuilder.Box(_emailField.GetComponent<RectTransform>(), 30f, -174f, 520f, 76f, new Vector2(0f, 1f));
 
             _passwordField = UIBuilder.TextField("Password", _linkCard, "a password", UITheme.FontSmall, 72, true);
-            UIBuilder.Box(_passwordField.GetComponent<RectTransform>(), 570f, -134f, 380f, 76f, new Vector2(0f, 1f));
+            UIBuilder.Box(_passwordField.GetComponent<RectTransform>(), 570f, -174f, 380f, 76f, new Vector2(0f, 1f));
 
             _linkButton = UIBuilder.GoldButton("Link", _linkCard, "LINK EMAIL", UITheme.FontBody);
-            UIBuilder.Box(_linkButton.Root, 30f, -226f, 460f, 84f, new Vector2(0f, 1f));
+            UIBuilder.Box(_linkButton.Root, 30f, -266f, 460f, 84f, new Vector2(0f, 1f));
             _linkButton.OnClick(OnLinkEmail);
         }
 
