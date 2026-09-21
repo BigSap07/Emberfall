@@ -2450,6 +2450,29 @@ namespace Emberfall.Core.Combat
                 // ability's chain is not clobbered. At depth 0 (basic / active), leave _lastTarget
                 // set: AfterBasicAttack passives need to see the basic's last target via
                 // ConditionSubject.LastTarget, and the caller restores it once it is done.
+                //
+                // THAT SECOND HALF DOES NOT WORK TODAY, and it is written down here because this
+                // is where the next reader will look for it. TakeTurn does leave _lastTarget set
+                // across the AfterBasicAttack broadcast - but a passive's effects run inside a
+                // wrapper AbilityDef, so they enter ResolveAbility, and the line at the top of
+                // this method clears _lastTarget before any of them is evaluated. Every effect
+                // anywhere in a PASSIVE whose condition names ConditionSubject.LastTarget
+                // therefore resolves its subject to null and answers false, forever.
+                //
+                // MEASURED, in the dark-talent arena in Tools/DevHarness/Program.cs: Elyra's Slow
+                // Growth fires 24 times in a fight and grants zero Patience, and Edrin's Guardian
+                // of What Remains fires 22 times and grants zero Record. Both are gated exactly
+                // this way, and both of their third talents wait on four of the stacks their host
+                // can never hand them. Kiva's Severance Paid is gated this way too, and has a
+                // second independent reason to be inert.
+                //
+                // The repair is `if (depth == 0) _lastTarget = null;` on that line, which was
+                // built and run: Elyra then banks 24 Patience and her no-talent damage in that
+                // arena moves from 80,004 to 90,162, Edrin banks 22 Record and moves from 82,248
+                // to 84,384. It is not applied here because it moves what a hero does with NO
+                // talent selected, which is what hero-sweep-baseline.txt's 150 lines are a record
+                // of - ten of them would move - and that is a decision for whoever owns that
+                // baseline rather than a repair to fold into a talent pass.
                 if (depth > 0)
                 {
                     _lastTarget = prevLastTarget;
