@@ -4060,25 +4060,68 @@
         "spriteMirror": true
       },
       "basic": {
-        "id": "celen_the_open_hand_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "celen_offered_strike",
+        "name": "Offered Strike",
+        "description": "Deals 150% Attack damage and gives the lowest-Energy ally 22 Energy.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.5
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LowestEnergyAlly",
+            "flat": 22
           }
         ]
       },
       "active": {
-        "id": "celen_the_open_hand_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "celen_distribution",
+        "name": "Distribution",
         "energyCost": 100,
+        "description": "Deals 245% Attack damage to all enemies, then transfers the largest ally Shield to the lowest-HP ally and extends it 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.45
+          },
+          {
+            "kind": "ShieldTransfer",
+            "target": "LargestShieldAlly",
+            "magnitude": 1.0,
+            "transferFromTarget": true
+          },
+          {
+            "kind": "ShieldTransfer",
+            "target": "LowestHpAlly",
+            "magnitude": 1.0
+          },
+          {
+            "kind": "ExtendStatus",
+            "target": "LowestHpAlly",
+            "duration": 1,
+            "status": "Shield"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "celen_nothing_hoarded",
+        "name": "Nothing Hoarded",
+        "description": "At the start of his turn, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
+        "trigger": "TurnStart",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "HighestEnergyAlly",
+            "flat": -18
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LowestEnergyAlly",
+            "flat": 18
           }
         ]
       }
