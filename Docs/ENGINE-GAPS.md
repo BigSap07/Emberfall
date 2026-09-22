@@ -68,19 +68,6 @@ mitigation can ask.
 
 ---
 
-## 5. Duration control when a status is moved, inverted or extended
-
-Three separate effect kinds each decide a duration by a rule of their own, and none takes the
-authored `duration` as an override.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Celen | "transfers the largest ally Shield to the lowest-HP ally and **extends it 1 round**" | a duration on `ShieldTransfer`, which re-seats the recipient's Shield entry at a hardcoded 99 rounds | the `ExtendStatus` is authored and lands, but against a 99-round entry it is nominal | small |
-| Siofra | "changes one target buff into its matching debuff **for 2 rounds**" | a duration override on `InvertStatus`, which copies the flipped entry's own `RoundsLeft` | the reversal lasts as long as the buff had left, and the text says so | small |
-| Demos | "extends Arrears by 1 round, **up to 3 rounds**" | a ceiling on `ExtendStatus`, which does `RoundsLeft += added` with no clamp | the cap is dropped; the clause extends without limit | small |
-
----
-
 ## 6. Comparing a resource across two named units
 
 `ConditionSubject` has seven members - Target, Caster, Defeated, BroadcastSubject, LastAttacker,
@@ -282,7 +269,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 5 | duration on a moved, inverted or extended status | 3 |
 | 1 | answering the blow that is landing | 2 |
 | 2 | per-round budgets on a standing status | 2 |
 | 3 | telling an area hit from a single-target one | 2 |

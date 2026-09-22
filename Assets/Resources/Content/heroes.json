@@ -1588,7 +1588,7 @@
         "id": "demos_compounding_sentence",
         "name": "Compounding Sentence",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to enemies with Arrears and extends Arrears by 1 round.",
+        "description": "Deals 360% Attack damage to enemies with Arrears and extends Arrears by 1 round, up to 3 rounds.",
         "effects": [
           {
             "kind": "Damage",
@@ -1603,7 +1603,8 @@
             "condition": "HasMyMark",
             "conditionOn": "Target",
             "duration": 1,
-            "status": "Mark"
+            "status": "Mark",
+            "extendCap": 3
           },
           {
             "kind": "ExtendStatus",
@@ -1611,7 +1612,8 @@
             "condition": "HasMyMark",
             "conditionOn": "Target",
             "duration": 1,
-            "status": "HealingReduction"
+            "status": "HealingReduction",
+            "extendCap": 3
           }
         ]
       },
@@ -4078,7 +4080,8 @@
           {
             "kind": "ShieldTransfer",
             "target": "LowestHpAlly",
-            "magnitude": 1.0
+            "magnitude": 1.0,
+            "shieldTransferDuration": 2
           },
           {
             "kind": "ExtendStatus",
@@ -4375,7 +4378,7 @@
       "basic": {
         "id": "siofra_bad_omen",
         "name": "Bad Omen",
-        "description": "Deals 105% Attack damage and changes one buff on the target into its matching debuff, for whatever the buff had left.",
+        "description": "Deals 105% Attack damage and changes one buff on the target into its matching debuff for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
@@ -4385,7 +4388,8 @@
           {
             "kind": "InvertStatus",
             "target": "LastTarget",
-            "hits": 1
+            "hits": 1,
+            "invertDuration": 2
           }
         ]
       },

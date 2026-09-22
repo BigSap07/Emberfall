@@ -246,7 +246,7 @@ siofra_the_turncoat_oracle|1|9565d521b8f5e941
 siofra_the_turncoat_oracle|2|59da520bb63753bb
 siofra_the_turncoat_oracle|3|c9dbe4ba10d19880
 siofra_the_turncoat_oracle|4|6b0e0a4d4a646d74
-siofra_the_turncoat_oracle|5|068eacfa60447491
+siofra_the_turncoat_oracle|5|5f04d9a5fb22058c
 sylven_the_unfading_blade|1|579d0fcaafd9503c
 sylven_the_unfading_blade|2|a6613247faf80386
 sylven_the_unfading_blade|3|2e3fe62cd6090420
