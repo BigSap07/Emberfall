@@ -6919,6 +6919,7 @@ namespace Emberfall.DevHarness
             Check(db.AllStages.Count > 0, db.AllStages.Count + " stage(s) to fingerprint across all chapters");
 
             bool fingerprintsStable = true;
+            List<string> stageLines = new List<string>();
             GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
             for (int s = 0; s < db.AllStages.Count; s++)
             {
@@ -6928,12 +6929,11 @@ namespace Emberfall.DevHarness
                     int actualSeed = 3000000 + s * 13 + seed;
                     string a = BattleFingerprint(session, stage, actualSeed);
                     string b = BattleFingerprint(session, stage, actualSeed);
-                    // THE 72 FINGERPRINTS, DUMPED ON REQUEST. Every engine pass in this project
-                    // reports "72 of 72 unmoved", and producing that number has meant editing this
-                    // loop by hand on both sides of the change - a procedure nobody else can repeat
-                    // and nobody can audit. EMBERFALL_DUMP_STAGE_FP=1 prints them, so the claim
-                    // becomes a diff of two runs rather than a recollection.
+                    // THE 72 FINGERPRINTS, DUMPED ON REQUEST. EMBERFALL_DUMP_STAGE_FP=1 prints the
+                    // whole event stream for each, which is what you want when a line HAS moved and
+                    // the question is what moved in it. The short hash below is what gets pinned.
                     if (_dumpStageFingerprints) Line("  [fp] " + stage.DisplayCode + "|" + actualSeed + "|" + a);
+                    stageLines.Add(stage.DisplayCode + "|" + actualSeed + "|" + StageFingerprintHash(a));
                     if (a != b)
                     {
                         fingerprintsStable = false;
@@ -6942,7 +6942,123 @@ namespace Emberfall.DevHarness
                 }
             }
             Check(fingerprintsStable, "every one of the " + db.AllStages.Count + " stage(s) still produces a stable, reproducible fingerprint across sampled seeds");
+            CheckStageFingerprintBaseline(stageLines);
             Line("");
+        }
+
+        private const string StageFingerprintBaselineFile = "stage-fingerprint-baseline.txt";
+
+        /// <summary>FNV-1a over the whole event stream the fingerprint already spells out, so a
+        /// pinned line is 16 characters rather than 40 kilobytes. The stream itself is still what
+        /// EMBERFALL_DUMP_STAGE_FP prints - this only shortens what gets committed.</summary>
+        private static string StageFingerprintHash(string fingerprint)
+        {
+            ulong hash = 14695981039346656037UL;
+            for (int i = 0; i < fingerprint.Length; i++)
+            {
+                hash ^= fingerprint[i];
+                hash *= 1099511628211UL;
+            }
+            return hash.ToString("x16");
+        }
+
+        /// <summary>
+        /// THE 72 STAGE FINGERPRINTS, PINNED TO A FILE rather than to a recollection.
+        ///
+        /// Every engine pass in this project reports "72 of 72 unmoved", and until now producing
+        /// that number meant dumping the stream on both sides of a change by hand - a procedure
+        /// nobody else could repeat and nobody could audit. The file makes it a diff, and makes the
+        /// opposite claim auditable too: the campaign-curve pass MOVED all 72, because it re-derived
+        /// every stage's authored enemy levels, and the file says so stage by stage.
+        ///
+        /// A moved line is a content change in that stage's opening battle. It needs a stated
+        /// reason in the commit that moves it, NOT a regenerate. Regenerate deliberately with
+        /// EMBERFALL_REGEN_STAGE_FP=1.
+        /// </summary>
+        private static void CheckStageFingerprintBaseline(List<string> lines)
+        {
+            string dir = FindToolDir("DevHarness");
+            string path = dir == null ? null : Path.Combine(dir, StageFingerprintBaselineFile);
+            bool regen = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMBERFALL_REGEN_STAGE_FP"));
+            if (path == null)
+            {
+                Line("  [note] Tools/DevHarness not found next to this binary, so the stage fingerprints"
+                     + " could not be compared against their baseline.");
+                return;
+            }
+            if (regen || !File.Exists(path))
+            {
+                WriteStageFingerprintBaseline(path, lines);
+                Line("  [note] " + (regen ? "EMBERFALL_REGEN_STAGE_FP is set" : "no baseline existed")
+                     + " - wrote " + lines.Count + " stage fingerprints to " + StageFingerprintBaselineFile
+                     + ". A regenerate is a CLAIM that every moved line was intended.");
+                return;
+            }
+
+            Dictionary<string, string> baseline = new Dictionary<string, string>();
+            string[] raw = File.ReadAllLines(path);
+            for (int i = 0; i < raw.Length; i++)
+            {
+                string t = raw[i].Trim();
+                if (t.Length == 0 || t[0] == '#') continue;
+                int cut = t.LastIndexOf('|');
+                if (cut <= 0) continue;
+                baseline[t.Substring(0, cut)] = t.Substring(cut + 1);
+            }
+
+            List<string> moved = new List<string>();
+            List<string> added = new List<string>();
+            Dictionary<string, bool> seen = new Dictionary<string, bool>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int cut = lines[i].LastIndexOf('|');
+                string key = lines[i].Substring(0, cut);
+                string hash = lines[i].Substring(cut + 1);
+                seen[key] = true;
+                string was;
+                if (!baseline.TryGetValue(key, out was)) { added.Add(key); continue; }
+                if (was != hash) moved.Add(key);
+            }
+            List<string> gone = new List<string>();
+            foreach (KeyValuePair<string, string> kv in baseline)
+                if (!seen.ContainsKey(kv.Key)) gone.Add(kv.Key);
+
+            Check(moved.Count == 0,
+                  moved.Count == 0
+                    ? "all " + lines.Count + " stage fingerprints match " + StageFingerprintBaselineFile
+                    : moved.Count + " of " + lines.Count + " stage fingerprints MOVED: "
+                      + string.Join(", ", moved.ToArray()));
+            Check(added.Count == 0,
+                  added.Count == 0
+                    ? "no stage fingerprint is missing from the baseline"
+                    : added.Count + " stage fingerprint(s) are not in the baseline: "
+                      + string.Join(", ", added.ToArray()));
+            Check(gone.Count == 0,
+                  gone.Count == 0
+                    ? "no baseline entry has lost its stage"
+                    : gone.Count + " baseline entr(ies) no longer resolve to a shipped stage: "
+                      + string.Join(", ", gone.ToArray()));
+        }
+
+        private static void WriteStageFingerprintBaseline(string path, List<string> lines)
+        {
+            List<string> outp = new List<string>();
+            outp.Add("# Emberfall stage fingerprint baseline.");
+            outp.Add("#");
+            outp.Add("# One line per shipped campaign stage per sampled seed:");
+            outp.Add("#   <stage>|<seed>|<fnv1a-64 of the battle's whole event stream>.");
+            outp.Add("# The battle is the stage's OPENING one, fought by a fresh profile's starting");
+            outp.Add("# three, so a line moves when that stage's authored roster or levels move, or");
+            outp.Add("# when the engine or a starter's kit changes under it.");
+            outp.Add("#");
+            outp.Add("# A MOVED LINE IS A CONTENT OR BEHAVIOUR CHANGE. It needs a stated reason in the");
+            outp.Add("# commit that moves it. Regenerating to make a surprise go away is how a guard");
+            outp.Add("# stops guarding.");
+            outp.Add("#");
+            outp.Add("# The whole event stream behind a hash:  EMBERFALL_DUMP_STAGE_FP=1");
+            outp.Add("# Regenerate deliberately:               EMBERFALL_REGEN_STAGE_FP=1");
+            for (int i = 0; i < lines.Count; i++) outp.Add(lines[i]);
+            File.WriteAllLines(path, outp.ToArray());
         }
 
         /// <summary>
@@ -10505,6 +10621,31 @@ namespace Emberfall.DevHarness
             CheckCampaignProgressSaveRoundTrip(db);
         }
 
+        /// <summary>
+        /// THE AUTHORED LADDER LENGTH, stated once and asserted from it.
+        ///
+        /// It was a flat twelve waves everywhere, and that was the structural fault the campaign
+        /// curve pass found: a chapter 1 stage costs four sittings whatever its difficulty is,
+        /// because 144 battles at a 40-battle sitting is four sittings before a single enemy has
+        /// been looked at. The tutorial therefore took about eight days and the chapter about
+        /// twenty-four, and none of that time was difficulty - it was ladder.
+        ///
+        /// Chapter 1 is now the short chapter it reads as: 3 waves (36 battles, one sitting) for
+        /// the four tutorial stages, 6 waves (72 battles, two sittings) for the rest of it.
+        /// Chapter 2 and everything after it keep the full twelve, because by then a sitting is
+        /// what the player has come back for rather than what stands between them and the game.
+        ///
+        /// battleCount is NOT a second lever and stays at 12 everywhere: it is the number the
+        /// battle screen counts up to inside one wave, and a wave of a different length in one
+        /// chapter is a readout inconsistency for no gain.
+        /// </summary>
+        private static int ExpectedWaveCount(StageDef stage)
+        {
+            if (stage == null) return 12;
+            if (stage.ChapterNumber != 1) return 12;
+            return stage.Index <= EconomyTutorialStages ? 3 : 6;
+        }
+
         /// <summary>Every shipped stage carries a real curve, and the four numbers agree with the
         /// roster they were derived from.</summary>
         private static void CheckCampaignCurveSchema(ContentDatabase db)
@@ -10512,12 +10653,18 @@ namespace Emberfall.DevHarness
             int stages = db.AllStages.Count;
             Check(stages == 24, "24 authored stages across chapters 1 and 2 (" + stages + ")");
 
-            int withCurve = 0, waves12 = 0, battles12 = 0, floorMatchesRoster = 0;
+            int withCurve = 0, wavesAsAuthored = 0, battles12 = 0, floorMatchesRoster = 0;
+            string firstWaveMiss = "";
+            int expectedTotal = 0;
             for (int i = 0; i < db.AllStages.Count; i++)
             {
                 StageDef st = db.AllStages[i];
                 if (st.HasWaveCurve) withCurve++;
-                if (st.WaveCount == 12) waves12++;
+                int want = ExpectedWaveCount(st);
+                expectedTotal += want * 12;
+                if (st.WaveCount == want) wavesAsAuthored++;
+                else if (firstWaveMiss.Length == 0)
+                    firstWaveMiss = st.DisplayCode + " is " + st.WaveCount + " waves, not " + want;
                 if (st.BattleCount == 12) battles12++;
 
                 int top = 0;
@@ -10525,7 +10672,11 @@ namespace Emberfall.DevHarness
                 if (st.FloorLevel == top) floorMatchesRoster++;
             }
             Check(withCurve == stages, "every stage carries a wave curve (" + withCurve + "/" + stages + ")");
-            Check(waves12 == stages, "every stage is 12 waves (" + waves12 + "/" + stages + ")");
+            Check(wavesAsAuthored == stages,
+                  "every stage carries the wave count its position authors - 3 for the chapter 1 tutorial,"
+                  + " 6 for the rest of chapter 1, 12 from chapter 2 on"
+                  + (firstWaveMiss.Length > 0 ? " - first miss: " + firstWaveMiss : "")
+                  + " (" + wavesAsAuthored + "/" + stages + ")");
             Check(battles12 == stages, "every stage is 12 battles per wave (" + battles12 + "/" + stages + ")");
             Check(floorMatchesRoster == stages,
                   "every stage's floorLevel equals the top level in its own roster, so the floor is the"
@@ -10533,7 +10684,9 @@ namespace Emberfall.DevHarness
 
             int total = 0;
             for (int i = 0; i < db.AllStages.Count; i++) total += db.AllStages[i].TotalBattles;
-            Check(total == 24 * 144, "24 stages x 144 battles = " + (24 * 144) + " battles across the shipped campaign (" + total + ")");
+            Check(total == expectedTotal,
+                  "the shipped campaign is " + expectedTotal + " battles, which is what the authored wave"
+                  + " counts add up to (" + total + ")");
 
             Check(SaveSerializer.CurrentVersion >= 11,
                   "save version is at least 11, where campaign wave progress bumped it (" + SaveSerializer.CurrentVersion + ")");
@@ -10545,27 +10698,50 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckCampaignInterpolation(ContentDatabase db)
         {
-            StageDef st = db.AllStages[0];
+            // Measured on a stage that still carries the full twelve waves AND on one of the short
+            // chapter 1 stages, because the span the interpolation divides by is now per stage
+            // rather than a constant 143. A check written against one length stops being a check
+            // the moment content authors another.
+            StageDef st = db.GetStage("ch2_1");
+            StageDef shortStage = db.AllStages[0];
+            int waves = Math.Max(1, st.WaveCount);
+            int battles = Math.Max(1, st.BattleCount);
+            int span = waves * battles - 1;
 
             Check(Math.Abs(CampaignWaveGenerator.Progress(st, 1, 1) - 0f) < 0.0001f,
                   "t is 0 at wave 1 battle 1");
-            Check(Math.Abs(CampaignWaveGenerator.Progress(st, 12, 12) - 1f) < 0.0001f,
-                  "t is 1 at wave 12 battle 12");
+            Check(Math.Abs(CampaignWaveGenerator.Progress(st, waves, battles) - 1f) < 0.0001f,
+                  "t is 1 at the last battle of the stage (wave " + waves + " battle " + battles + ")");
 
-            // t = ((wave-1)*12 + (battle-1)) / 143, stated in the design and checked literally.
+            // t = ((wave-1)*battles + (battle-1)) / span, stated in the design and checked literally
+            // on both ladder lengths the campaign ships.
             bool tExact = true;
-            for (int w = 1; w <= 12 && tExact; w++)
-                for (int b = 1; b <= 12; b++)
-                {
-                    float expect = ((w - 1) * 12 + (b - 1)) / 143f;
-                    if (Math.Abs(CampaignWaveGenerator.Progress(st, w, b) - expect) > 0.0001f) { tExact = false; break; }
-                }
-            Check(tExact, "t matches ((wave-1)*12 + battle-1) / 143 at all 144 positions");
+            StageDef[] shapes = { st, shortStage };
+            for (int k = 0; k < shapes.Length && tExact; k++)
+            {
+                StageDef shape = shapes[k];
+                int sw = Math.Max(1, shape.WaveCount), sb = Math.Max(1, shape.BattleCount);
+                for (int w = 1; w <= sw && tExact; w++)
+                    for (int b = 1; b <= sb; b++)
+                    {
+                        float expect = ((w - 1) * sb + (b - 1)) / (float)(sw * sb - 1);
+                        if (Math.Abs(CampaignWaveGenerator.Progress(shape, w, b) - expect) > 0.0001f) { tExact = false; break; }
+                    }
+            }
+            Check(tExact, "t matches ((wave-1)*battleCount + battle-1) / (waveCount*battleCount - 1) at every"
+                  + " position of both a " + waves + "-wave stage and a " + shortStage.WaveCount + "-wave one");
 
             Check(CampaignWaveGenerator.LevelForBattle(st, 1, 1) == st.FloorLevel,
                   "the first battle sits exactly on floorLevel (" + st.FloorLevel + ")");
-            Check(CampaignWaveGenerator.LevelForBattle(st, 12, 12) == st.CeilingLevel,
+            Check(CampaignWaveGenerator.LevelForBattle(st, waves, battles) == st.CeilingLevel,
                   "the last battle sits exactly on ceilingLevel (" + st.CeilingLevel + ")");
+            Check(CampaignWaveGenerator.LevelForBattle(shortStage, 1, 1) == shortStage.FloorLevel
+                  && CampaignWaveGenerator.LevelForBattle(
+                         shortStage, Math.Max(1, shortStage.WaveCount),
+                         Math.Max(1, shortStage.BattleCount)) == shortStage.CeilingLevel,
+                  "a short chapter 1 stage still spans its whole floor-to-ceiling range across its own"
+                  + " shorter ladder (" + shortStage.FloorLevel + " -> " + shortStage.CeilingLevel + " over "
+                  + (shortStage.WaveCount * shortStage.BattleCount) + " battles)");
 
             // Plain linear, NOT stepped per wave: battle 12 of wave 1 to battle 1 of wave 2 is one
             // ordinary step. A stepped curve would show a flat run inside each wave and a jump at
@@ -10605,6 +10781,19 @@ namespace Emberfall.DevHarness
             Check(visited == 144, "Next() walks exactly 144 battles then reports the stage finished (" + visited + ")");
             Check(w2 == 12 && b2 == 12, "and stops on wave 12 battle 12 (" + w2 + "," + b2 + ")");
 
+            // The same walk on a short stage, because Next() is what decides where a ladder ENDS
+            // and a stage whose waveCount shrank has to end sooner rather than run off the top.
+            int shortVisited = 1, sw2 = 1, sb2 = 1, shortGuard = 0;
+            while (CampaignWaveGenerator.Next(shortStage, sw2, sb2, out nw, out nb) && shortGuard++ < 1000)
+            {
+                sw2 = nw; sb2 = nb; shortVisited++;
+            }
+            Check(shortVisited == shortStage.WaveCount * shortStage.BattleCount
+                  && sw2 == shortStage.WaveCount && sb2 == shortStage.BattleCount,
+                  "Next() walks a short stage's own " + (shortStage.WaveCount * shortStage.BattleCount)
+                  + " battles and stops on wave " + shortStage.WaveCount + " battle " + shortStage.BattleCount
+                  + " (" + shortVisited + " battles, stopped at " + sw2 + "," + sb2 + ")");
+
             // A stage with no curve must be inert, or every synthetic stage breaks.
             StageDef flat = new StageDef();
             flat.FloorLevel = 5;
@@ -10635,7 +10824,8 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < db.AllStages.Count; i++)
             {
                 StageDef st = db.AllStages[i];
-                StageDef top = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+                StageDef top = CampaignWaveGenerator.BuildBattle(
+                    st, Math.Max(1, st.WaveCount), Math.Max(1, st.BattleCount));
                 if (top.Enemies.Count == st.Enemies.Count) countHeld++;
 
                 bool sameOrder = top.Enemies.Count == st.Enemies.Count;
@@ -10661,7 +10851,8 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < db.AllStages.Count; i++)
             {
                 StageDef st = db.AllStages[i];
-                StageDef top = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+                StageDef top = CampaignWaveGenerator.BuildBattle(
+                    st, Math.Max(1, st.WaveCount), Math.Max(1, st.BattleCount));
                 int topLevel = 0;
                 for (int e = 0; e < top.Enemies.Count; e++) if (top.Enemies[e].Level > topLevel) topLevel = top.Enemies[e].Level;
                 if (topLevel == st.CeilingLevel) ceilingAboveRoster++;
@@ -10710,10 +10901,23 @@ namespace Emberfall.DevHarness
                   && opener.Enemies[2].EnemyId == "grave_moth" && opener.Enemies[2].Level == 2,
                   "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth");
 
-            Check(ch1_1 != null && ch1_1.RewardGold == 120 && ch1_1.RewardShards == 6
-                  && ch1_1.RecommendedPower == 3950,
-                  "ch1_1's rewards and recommendedPower survived the migration untouched (task 13 is not"
-                  + " re-tuned by this restructure)");
+            // The reward half of this is the original claim and still holds: no pass since the wave
+            // migration has touched what ch1_1 pays, and a restructure that moved it would be a
+            // retune wearing a restructure's clothes.
+            //
+            // recommendedPower is the other half and it MOVED, deliberately. It read 3,950 from
+            // task 13 until the campaign-curve pass re-derived all 24 stages against the shortened
+            // chapter 1 ladder, and 2,977 is what the simulated player's entry power at ch1_1
+            // divided by the ordinary band's midpoint comes to. The pin stays because a derived
+            // number nobody watches drifts; it is not a claim that the number is permanent, it is
+            // a claim that moving it is a decision somebody made on purpose and wrote down.
+            Check(ch1_1 != null && ch1_1.RewardGold == 120 && ch1_1.RewardShards == 6,
+                  "ch1_1's authored rewards survived the migration untouched - a restructure does not"
+                  + " retune a purse");
+            Check(ch1_1 != null && ch1_1.RecommendedPower == 2977,
+                  "ch1_1's recommendedPower is the campaign-curve pass's derived 2977 (got "
+                  + (ch1_1 == null ? "no stage" : ch1_1.RecommendedPower.ToString())
+                  + ") - it is derived content, so a move here needs a stated reason, not a re-pin");
         }
 
         /// <summary>
@@ -10722,9 +10926,13 @@ namespace Emberfall.DevHarness
         private static void CheckCampaignRetrySingleBattle(ContentDatabase db)
         {
             GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 1000L));
-            StageDef st = db.GetStage("ch1_3");
+            StageDef st = db.GetStage("ch2_3");
+            int lastWave = Math.Max(1, st.WaveCount);
+            int lastBattle = Math.Max(1, st.BattleCount);
 
-            // Walk to a deliberately awkward spot: wave 4, battle 7.
+            // Walk to a deliberately awkward spot: wave 4, battle 7. It is read off a stage that
+            // still carries twelve waves, because chapter 1's stages no longer have a wave 4 to
+            // stand in and this check is about the cursor, not about the ladder length.
             session.Profile.CampaignCurrentStageId = st.Id;
             session.Profile.CampaignCurrentWave = 4;
             session.Profile.CampaignCurrentBattle = 7;
@@ -10743,17 +10951,17 @@ namespace Emberfall.DevHarness
             session.ResumePointFor(st, out w, out b);
             Check(!done && w == 4 && b == 8, "winning it advances one battle, to wave 4 battle 8");
 
-            done = session.RecordBattleWon(st, 4, 12);
+            done = session.RecordBattleWon(st, 4, lastBattle);
             session.ResumePointFor(st, out w, out b);
             Check(!done && w == 5 && b == 1, "winning the last battle of a wave rolls into the next wave at battle 1");
 
-            done = session.RecordBattleWon(st, 12, 12);
-            Check(done, "winning wave 12 battle 12 reports the stage finished");
+            done = session.RecordBattleWon(st, lastWave, lastBattle);
+            Check(done, "winning the stage's last battle reports the stage finished");
             Check(session.Profile.CampaignCurrentStageId.Length == 0,
                   "and clears the in-stage cursor, so it never points into a finished stage");
 
             // A different stage must not inherit this one's position.
-            session.Profile.CampaignCurrentStageId = "ch1_3";
+            session.Profile.CampaignCurrentStageId = st.Id;
             session.Profile.CampaignCurrentWave = 9;
             session.Profile.CampaignCurrentBattle = 4;
             session.ResumePointFor(db.GetStage("ch1_5"), out w, out b);
@@ -10761,16 +10969,94 @@ namespace Emberfall.DevHarness
                   "entering a DIFFERENT stage starts at wave 1 battle 1 rather than inheriting the saved"
                   + " stage's position (wave " + w + " battle " + b + ")");
 
-            Check(session.HasResumePoint(db.GetStage("ch1_3")) && !session.HasResumePoint(db.GetStage("ch1_5")),
+            Check(session.HasResumePoint(st) && !session.HasResumePoint(db.GetStage("ch1_5")),
                   "HasResumePoint is true only for the stage the position belongs to");
 
             // Out-of-range saved values are clamped rather than trusted.
             session.Profile.CampaignCurrentWave = 99;
             session.Profile.CampaignCurrentBattle = 99;
-            session.ResumePointFor(db.GetStage("ch1_3"), out w, out b);
-            Check(w == 12 && b == 12,
+            session.ResumePointFor(st, out w, out b);
+            Check(w == lastWave && b == lastBattle,
                   "a corrupt or out-of-range saved position clamps into the stage rather than running off it ("
                   + w + "," + b + ")");
+
+            CheckCampaignShortenedLadderResume(db);
+        }
+
+        /// <summary>
+        /// SHORTENING A LADDER MUST NOT STRAND A SAVE.
+        ///
+        /// Chapter 1's stages went from twelve waves to three and six, and there are saves written
+        /// while those stages were still twelve. A save sitting at wave 9 of a stage that now ends
+        /// at wave 6 names a position the stage no longer has, and the question this answers is
+        /// what the game does with it: resume at a real battle, or walk off the end of the ladder.
+        ///
+        /// It resumes at the stage's LAST battle. That is the generous reading and the right one -
+        /// the player had already fought past wave 6 under the old shape, so handing them the final
+        /// battle of the new one takes no progress away and gives no stage away, because that
+        /// battle still has to be won. What it must never do is hand back a (wave, battle) outside
+        /// the stage, or one whose win does not finish the stage.
+        ///
+        /// The clamp itself is GameSession.ResumePointFor's and it predates this change; what did
+        /// not exist is anything proving it covers this case. The round trip through the real
+        /// serializer is part of the proof rather than a hand-set profile field, because the value
+        /// that would strand a player arrives from a file.
+        /// </summary>
+        private static void CheckCampaignShortenedLadderResume(ContentDatabase db)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 1000L);
+            int shortened = 0, resumedInside = 0, finishes = 0;
+            string firstMiss = "";
+
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef stage = db.AllStages[i];
+                int waves = Math.Max(1, stage.WaveCount);
+                int battles = Math.Max(1, stage.BattleCount);
+                if (waves >= 12) continue;
+                shortened++;
+
+                // A save written under the old twelve-wave shape, through the real serializer.
+                profile.CampaignCurrentStageId = stage.Id;
+                profile.CampaignCurrentWave = 12;
+                profile.CampaignCurrentBattle = 12;
+                string error;
+                PlayerProfile back = SaveSerializer.Deserialize(
+                    SaveSerializer.Serialize(profile), db, out error);
+                if (back == null)
+                {
+                    if (firstMiss.Length == 0) firstMiss = stage.DisplayCode + " did not deserialize";
+                    continue;
+                }
+
+                GameSession session = new GameSession(db, back);
+                int w, b;
+                session.ResumePointFor(stage, out w, out b);
+
+                bool inside = w >= 1 && w <= waves && b >= 1 && b <= battles;
+                if (inside) resumedInside++;
+                else if (firstMiss.Length == 0)
+                    firstMiss = stage.DisplayCode + " resumed at " + w + "," + b + " outside " + waves + "x" + battles;
+
+                // The battle it resumes at is a real one, and winning it completes the stage
+                // rather than advancing into a wave that no longer exists.
+                StageDef built = CampaignWaveGenerator.BuildBattle(stage, w, b);
+                int nw, nb;
+                bool more = CampaignWaveGenerator.Next(stage, w, b, out nw, out nb);
+                if (built != null && built.Enemies.Count == stage.Enemies.Count && !more) finishes++;
+            }
+
+            Check(shortened > 0,
+                  "there are stages whose ladder is shorter than the twelve waves older saves were"
+                  + " written against (" + shortened + ")");
+            Check(resumedInside == shortened,
+                  "a saved position past the new end of a shortened stage clamps to a battle that stage"
+                  + " actually has" + (firstMiss.Length > 0 ? " - first miss: " + firstMiss : "")
+                  + " (" + resumedInside + "/" + shortened + ")");
+            Check(finishes == shortened,
+                  "and it clamps to the stage's LAST battle, so the win that follows finishes the stage"
+                  + " instead of advancing into a wave that no longer exists ("
+                  + finishes + "/" + shortened + ")");
         }
 
         /// <summary>
@@ -10798,7 +11084,8 @@ namespace Emberfall.DevHarness
                   + " granularity is unchanged by the restructure (" + before + " -> " + after + ")");
 
             // The sweep decides on the stage's HARDEST battle, so it is not a free win.
-            StageDef hardest = CampaignWaveGenerator.BuildBattle(st, 12, 12);
+                StageDef hardest = CampaignWaveGenerator.BuildBattle(
+                st, Math.Max(1, st.WaveCount), Math.Max(1, st.BattleCount));
             int hardestTop = 0, floorTop = 0;
             for (int e = 0; e < hardest.Enemies.Count; e++) if (hardest.Enemies[e].Level > hardestTop) hardestTop = hardest.Enemies[e].Level;
             for (int e = 0; e < st.Enemies.Count; e++) if (st.Enemies[e].Level > floorTop) floorTop = st.Enemies[e].Level;
@@ -14879,8 +15166,30 @@ namespace Emberfall.DevHarness
 
         private const float OrdinaryBandLow = 1.10f;
         private const float OrdinaryBandHigh = 1.30f;
-        private const float WallBandLow = 0.90f;
-        private const float WallBandHigh = 1.00f;
+
+        /// <summary>
+        /// THE WALL BAND IS PER CHAPTER, and it is not a taste decision - it is read off how long
+        /// a wall at each ratio actually takes to resolve.
+        ///
+        /// x0.90 to x1.00 was one band for the whole campaign, and it was measured to be too harsh
+        /// where it bites hardest. At x0.95, 1-9 cost the simulated player four extra sittings on
+        /// top of the ladder floor - two days of a twice-a-day player's time on one stage, nine
+        /// stages into the game. At x1.01 the same stage cost one. A wall is meant to be a stage
+        /// you do not beat on the day you reach it, not one you are still on two days later, so
+        /// chapter 1 sits at x1.00 to x1.05: an entry power that just fails, and clears on the next
+        /// claim rather than on the fourth.
+        ///
+        /// Chapter 2 keeps a harder band, x0.95 to x1.02, because by then a player has a roster,
+        /// a gear track and a reason to farm a stage on purpose. The two are different games and a
+        /// single number could only be wrong for one of them.
+        ///
+        /// ORDINARY IS NOT SPLIT. x1.10 to x1.30 is the same demand in both chapters, and nothing
+        /// measured says otherwise.
+        /// </summary>
+        private const float WallBandLowChapter1 = 1.00f;
+        private const float WallBandHighChapter1 = 1.05f;
+        private const float WallBandLowLater = 0.95f;
+        private const float WallBandHighLater = 1.02f;
 
         /// <summary>
         /// THE GUARD. One line per stage: the power a simulated player brings to their first
@@ -14895,10 +15204,11 @@ namespace Emberfall.DevHarness
         /// the next power source that lands - a relic tier, a Coda sink, guild currency, an aspect
         /// track - fails on the commit that adds it rather than being discovered a year later.
         ///
-        /// The bands come straight from the decision this pass was given:
+        /// The bands:
         ///   the opening stages  no band, tutorial - EconomyTutorialStages of them;
         ///   ordinary stages     x1.10 to x1.30, comfortably ahead but not safe;
-        ///   walls               x0.90 to x1.00, a stage you do not beat on the day you reach it.
+        ///   walls               x1.00 to x1.05 in chapter 1, x0.95 to x1.02 from chapter 2 on.
+        /// See WallBandLowChapter1 for why the wall band is per chapter and the ordinary one is not.
         /// A wall is a chapter finale (StageDef.IsBoss) or one authored mid-chapter spike; see
         /// MidChapterWallStageIds for which and why.
         ///
@@ -14925,8 +15235,11 @@ namespace Emberfall.DevHarness
             Line("");
             Line("CAMPAIGN POWER CURVE (entry power / recommendedPower, against the authored band)");
             Line("  Tutorial = the first " + EconomyTutorialStages + " stages, no band."
-                 + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + "."
-                 + "  Wall = x" + Fmt(WallBandLow) + " to x" + Fmt(WallBandHigh) + ".");
+                 + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + ".");
+            Line("  Wall = x" + Fmt(WallBandLowChapter1) + " to x" + Fmt(WallBandHighChapter1)
+                 + " in chapter 1, x" + Fmt(WallBandLowLater) + " to x" + Fmt(WallBandHighLater)
+                 + " from chapter 2 on - measured off how many extra sittings a wall at each ratio"
+                 + " actually costs.");
             Line("  A wall is a chapter finale or the one authored mid-chapter spike:"
                  + " " + string.Join(", ", MidChapterWallStageIds) + ".");
             Line("  entryPwr is read BEFORE the stage's first sitting. The balance table's teamPwr"
@@ -14955,7 +15268,7 @@ namespace Emberfall.DevHarness
 
                 string kind = BandKindOf(stage, i);
                 float lo, hi;
-                bool banded = BandFor(kind, out lo, out hi);
+                bool banded = BandFor(stage, kind, out lo, out hi);
                 float ratio = o.EntryRatio;
                 float rec = stage.RecommendedPower;
 
@@ -15056,9 +15369,15 @@ namespace Emberfall.DevHarness
             return "ordinary";
         }
 
-        private static bool BandFor(string kind, out float lo, out float hi)
+        private static bool BandFor(StageDef stage, string kind, out float lo, out float hi)
         {
-            if (kind.StartsWith("wall")) { lo = WallBandLow; hi = WallBandHigh; return true; }
+            if (kind.StartsWith("wall"))
+            {
+                bool chapterOne = stage != null && stage.ChapterNumber == 1;
+                lo = chapterOne ? WallBandLowChapter1 : WallBandLowLater;
+                hi = chapterOne ? WallBandHighChapter1 : WallBandHighLater;
+                return true;
+            }
             if (kind.StartsWith("ordinary")) { lo = OrdinaryBandLow; hi = OrdinaryBandHigh; return true; }
             lo = 0f; hi = 0f; return false;
         }
