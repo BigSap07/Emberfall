@@ -7,9 +7,9 @@ measured, what it refused to build and why. This file is the state: what exists,
 what is moving, and what is owed.
 
 Checked against the repository on 2026-09-22, after the 2-star and 1-star kits landed, the roster
-reached 94 of 94 and the five-star review closed three of the open decisions, against a live
-`Tools/build-check.ps1` run, a live `validate_heroes.py` run and the files themselves, not against
-this document's own prior claims.
+reached 94 of 94, the five-star review closed four of the open decisions and the Dispel repair
+closed the fifth, against a live `Tools/build-check.ps1` run, a live `validate_heroes.py` run and
+the files themselves, not against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
 
@@ -29,15 +29,15 @@ Two runs decide whether the tree is healthy, and they measure different things.
 - **`Tools/build-check.ps1`: 1 failure.** It lints the docs, compiles the core and the
   Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
   is the talent coverage note under **Known bugs**, and it is a standing instrument reporting a
-  real reading rather than a break. The campaign power-band guard was the second and is green: the
-  curve was re-solved under the eighteen 3-star kits, and neither the low-star batch nor the
-  five-star review moved anything it reads - the balance line is Kael, Kiva, Isara, Adric and
-  Orelle, and the review changed none of their behaviour, so all 72 stage fingerprints held and the
-  solver was not re-run.
+  real reading rather than a break. The campaign power-band guard was the second and is green, and
+  so is the geared curve's CEIL band. The balance line is Kael, Kiva, Isara, Adric and Orelle, and
+  the Dispel repair changed Kael, so `Tools/solve-recommended-power.ps1` was re-run: 13 of 24
+  stages moved, chapter 2 came down everywhere but `2-1`, and the stage fingerprint baseline was
+  regenerated under the levels it wrote.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 37 tracked markdown files and reports 122
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 41 tracked markdown files and reports 122
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
@@ -61,15 +61,18 @@ of them needs a stated reason in the commit that moves it.
 - **`stage-fingerprint-baseline.txt`: 72 lines.** One per shipped stage per sampled seed, over the
   stage's opening battle fought by a fresh profile's starting three. This used to be a recollection
   carried in prose; the campaign-curve pass pinned it to a file, with one line per stage
-  attributing that pass's move.
+  attributing that pass's move. The Dispel repair moved 22 of them on its own, and the re-solve it
+  forced moved 57 in total.
 - **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
-  the whole roster. Nothing is excluded from it any more. The five-star review moved 11 of them:
-  all five of Altheon's, all five of Hale's, and one of Seraphine's, which is the single seed in
-  which her Footnote reaches its ceiling at all.
+  the whole roster. Nothing is excluded from it any more. The Dispel repair and the Altheon retune
+  moved 15 of them: all five of Altheon's, all five of Kael's and all five of Seraphine's. Kael and
+  Seraphine both author a Dispel that had been taking their own bookkeeping; Altheon's basic was
+  retuned.
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. Talents are a 5-star's alone, so the
-  lower tiers add none and this file stays at 450. The five-star review moved 33 of them, all three
-  talents of the same three heroes, for the same reasons their hero-sweep lines moved.
+  lower tiers add none and this file stays at 450. The Dispel repair and the Altheon retune moved
+  50 of them: all three talents of Altheon, Kael and Seraphine, plus all five seeds of Nysera I,
+  which appends a Dispel of its own.
 
 ## Systems
 
@@ -445,14 +448,15 @@ differs between them.
 
 ## In progress
 
-**`balance/five-star-review`** carries the four open decisions the five-star review closed - Hale's
-band position, Altheon's unreachable Ledger ceiling, Seraphine's Cross Reference conflict and the
-low-tier Energy question - plus two text repairs on Demos and Kiva III, a harness check that sees
-Roan spend his Energy bar, and `Docs/DESIGN-DAMAGE-DISPLAY.md`. Everything else that was in flight
-has landed on `main` and is observable in the files: the 4-star and 3-star tiers, the rarity stat pass, the star band's floor,
-the economy retune, the campaign curve re-derivation, the Hub's four layers, the Emberforge design
-system, Arden's caps, `Docs/ENGINE-GAPS.md`, and the twelve 2-star and eight 1-star kits with the
-star band's last two rungs and the sweep filler fix.
+**`balance/dispel-inert`** carries the Dispel repair that closed the last of the five-star
+review's open decisions, the campaign curve re-solved and re-pinned under it, three dark-talent
+arenas moved to rooms that can still see their talents, Altheon brought from x1.51 of his role's
+5-star median to x1.23, and Altheon III's stale note turned into a live check. Everything else that
+was in flight has landed on `main` and is observable in the files: the five-star review itself, the
+4-star and 3-star tiers, the rarity stat pass, the star band's floor, the economy retune, the
+campaign curve re-derivation, the Hub's four layers, the Emberforge design system, Arden's caps,
+`Docs/ENGINE-GAPS.md`, and the twelve 2-star and eight 1-star kits with the star band's last two
+rungs and the sweep filler fix.
 
 ## Next
 
@@ -500,9 +504,10 @@ In order.
 
 ## Open decisions
 
-Four. None of them is a number to nudge, and neither the economy question nor the power-band one
-that used to head this list is still here. The five-star review closed four more: the three
-5-star kit questions and the low-tier Energy one, all recorded below.
+Three. None of them is a number to nudge, and neither the economy question nor the power-band one
+that used to head this list is still here. The five-star review closed four more - the three
+5-star kit questions and the low-tier Energy one - and this pass closed the Dispel one, all
+recorded below.
 
 **The economy decision is resolved.** It read "a simulated player arrives at every stage between
 1.55 and 3.2 times its `recommendedPower`, and either progression is too fast or the targets are
@@ -561,6 +566,22 @@ carries the four rows as a record of what the kits do rather than as a question.
   15 Energy. Cross Reference makes the payout arrive sooner and start 30% of her Attack higher, and
   Volume Closed keeps everything it did. The Dispel half of the finding is open decision 3 below.
 
+**And the Dispel decision is closed: the repair was spent.** It read "a Mark counts as a buff to
+`Dispel`, and repairing that is an engine pass rather than a balance edit", and the open half was
+never the reading - it was whether to pay for it. `Dispel` now asks `StatusInfo.IsInert` before it
+takes anything, which is the same question `ApplyStatus`'s BuffSuppression gate and `CombatUnit`'s
+beneficial count already ask, and it was the last rule in the engine reading "not harmful" as
+"buff". The bill was what the decision said it would be and all of it was paid: 22 of 72 stage
+fingerprints moved on the repair alone, `Tools/solve-recommended-power.ps1` was re-run because Kael
+is one of the five bodies the balance line fields, 13 of 24 stages moved with it and 57 of 72
+fingerprints in total, and the geared CEIL band that went red on `2-4` at 94.5% reads 91% under the
+re-solved levels. Three dark-talent arenas moved rather than three being rewritten: Kael II to a
+body that holds four long buffs, Seraphine I to a squad that leaves the record under its cap, and
+Seraphine II to a room where the book does not close before the record is read. **Kael II is the
+one talent that went dark in the sweep and stayed dark**, because the sweep's enemy line carries a
+single one-round AttackUp that has expired by the time he casts; it is proved in the dark arena
+instead and is named in the coverage note under **Known bugs**.
+
 1. **All four walls resolve in zero extra sittings, in simulation.** A stage is
    `waveCount` times 12 wins even for a player who never loses, so every stage costs a floor of
    `ceil(ladder / 40)` sittings whatever its difficulty, and the wall is what it costs on top of
@@ -573,27 +594,16 @@ carries the four rows as a record of what the kits do rather than as a question.
    that cannot see what a wall is; another harness pass cannot tell those apart.
 2. **The CEIL band is blind on `1-1` to `1-8`.** The geared curve is what content is tuned against
    and its band assertion covers non-pinned stages only. The instrument's own geared level-1 line
-   is worth about 7,000 to 7,400 power and chapter 1 now asks for 2,977 to 8,748, so eight of its
+   is worth about 7,000 to 7,400 power and chapter 1 asks for 2,977 to 8,753, so ten of its
    twelve stages report FLOOR-PINNED: the pin cannot level down to the target, so those rows measure
-   the five-body floor rather than `recommendedPower`. All eight read 100% at their ceiling, which
-   is outside the ordinary band of 78% to 92% and is excluded from it rather than failing. Chapter 1
-   is therefore tuned against nothing for two thirds of its length. Closing it would need chapter 1
+   the five-body floor rather than `recommendedPower`. Seven of the ten read 100% at their ceiling
+   and the other three read 99.5%, 94.5% and 77.5%, all of them measurements of the instrument
+   rather than of the stage, and all of them excluded from the ordinary band of 78% to 92% rather
+   than failing it. Only `1-9` and `1-12` are measured against what they ask for. Chapter 1 is
+   therefore tuned against nothing for five sixths of its length. Closing it would need chapter 1
    income to roughly quadruple, which is a different game, so the alternative is a second cheaper
    yardstick for the opening stages.
-3. **A Mark counts as a buff to `Dispel`, and repairing that is an engine pass rather than a
-   balance edit.** `Dispel` skips harmful statuses and takes everything else, walking newest first.
-   `StatusInfo.IsInert` already names the bookkeeping set - Mark, MarkAlt, Ledger, both Resolve
-   counters and Linked - and its own comment says any rule treating "not harmful" as "beneficial"
-   gets them wrong unless it asks first. `ApplyStatus`'s BuffSuppression gate asks and so does the
-   beneficial count on `CombatUnit`; `Dispel` is the last rule in the engine that does not. Eight
-   authored Dispels say "removes one buff" and none of them wants a Mark, and Seraphine's Contrary
-   Evidence was eating the bookmark her own Volume Closed writes. **The one-line repair was written
-   and measured and backed out**, because of what it costs: 22 of 72 stage fingerprints move, the
-   geared CEIL band goes red on `2-4` at 94.5% against a 92% ceiling, Kael II goes dark in the
-   sweep because his active stops stripping the Mark his talent answers, and the dark-talent check
-   for Seraphine I loses its separation. That is a re-solve of `recommendedPower` and a rewrite of
-   two dark-talent arenas. The decision is whether to spend that pass; the reading is not in doubt.
-4. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
+3. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
    gatehouse hard against the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's
    discs land on its right tower at every supported aspect. No marker and no label is covered -
    `HubMarkerClamp` reserves the rail's column and slides the Proving's plate left while its tail
@@ -609,22 +619,26 @@ carries the four rows as a record of what the kits do rather than as a question.
 
 The one harness red first, then the rest.
 
-1. **20 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
+1. **19 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
-   particular matchup, an `OnLedgerCapped`. Every one is named in the report with what it waits on,
-   and most of them are proved separately in the dark-talent arenas, each built to raise its own
-   gate. The check is red because the sweep refuses to call "nothing happened" a pass. It read 29
-   when the roster was authored, 27 after the dark-talent pass, and 20 after the kit-defect pass.
-   **It is still 20 after the five-star review, and the membership changed underneath the number.**
-   Altheon III has left it: it waits on `OnLedgerCapped`, which no arena had ever raised for him,
-   and his repaired Ledger now closes in four of the five seeds. Seraphine III has joined it, and
-   that is a consequence of a repair rather than a defect in the talent - it deepens a turn shift on
-   the body whose record just capped, and Volume Closed used to re-fire on that body every single
-   turn once capped, because its bookmark was being dispelled and its own gate read the bookmark's
-   absence. Closing the book once per record is the correct behaviour and it costs the talent its
-   repeats; in the sweep the only body that caps is the straggler, which dies of its own bleed
-   before the delay it was handed can land. **Roan could never have moved this number**: the roster
-   authors talents on 5-stars alone and he is a 3-star.
+   particular matchup, a buff worth dispelling. Every one is named in the report with what it waits
+   on. **All 19 are proved separately in the dark-talent arenas**, each built to raise its own gate,
+   and the note that says so counts its own overlap now rather than carrying a number: it had read
+   "23 of the 27" for two passes after the list stopped being 27 long. The check is red because the
+   sweep refuses to call "nothing happened" a pass. It read 29 when the roster was authored, 27
+   after the dark-talent pass, 20 after the kit-defect pass, and 20 again after the five-star
+   review with different membership.
+   **The Dispel repair took it to 19, and two talents left as one joined.** Seraphine I and
+   Seraphine III both left: her Contrary Evidence had been dispelling the bookmark her own Volume
+   Closed writes, so the book could not close on the bodies those two talents are about, and with
+   the bookmark surviving both are observable in the sweep again. **Kael II joined**, and it is the
+   repair working rather than a defect: his Take Down the Wall was stripping the Fault Line his own
+   basic had just laid, which is the loss his talent answers, and the sweep's enemy line carries one
+   AttackUp that lasts a single round and has expired by the time he casts - so his Dispel now finds
+   nothing to take there. It is proved in `s_triple`, against a body holding four nine-round buffs,
+   at 26 Fault Lines against 20, one per strip. **Altheon III stays off the list** and is a live
+   check now rather than a note; what that check reports is that the talent fires and loses on its
+   own trade, which is a balance question for Pinoy and not a wire.
 
 Beyond the harness:
 
@@ -646,11 +660,14 @@ the Celen and Nereia deliveries, every kit clause the engine could not say as wr
 frames, and the note about the right edge of a future hub painting. It is one file so it can be
 sent as one message.
 
-**Section 2d is new and is the first set of departures on 5-star heroes.** Every number moved below
-five stars so far was the star band's and is recorded as a class rather than row by row; these four
-are a sentence the engine says perfectly well that a measurement caught doing nothing, or doing
-something nobody could have meant. Altheon's Subject and its ceiling, both halves of Seraphine's
-Volume Closed, and Hale's two percentages.
+**Section 2d carries the departures on 5-star heroes.** Every number moved below five stars so far
+was the star band's and is recorded as a class rather than row by row; these five are a sentence the
+engine says perfectly well that a measurement caught doing nothing, or doing something nobody could
+have meant. Altheon's Subject and its ceiling, both halves of Seraphine's Volume Closed, Hale's two
+percentages, and Altheon's Witness Script rider - 35% where 42% shipped, and resolving before the
+blow it rides instead of after it, so that its condition can be false. A sixth reading sits under
+that section and changes nothing: Altheon's Final Record pays for Records that Preserved Moment is
+already spending, and loses on the trade.
 
 ## Later
 

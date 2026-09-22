@@ -236,10 +236,10 @@ for a described clause that answers a trigger of its own.
 | **Cal** | "The **next ally attack** on the target also deals 25% damage to an adjacent enemy" | Cal's own shot carries 25% into the bodies beside the target | a link plus a second passive on `OnLinkedUnitHit`, which is what Mika's Loose Parts carries |
 | **Petra** | "When a Withheld enemy **targets** an ally, Petra gains 8% Damage Reduction" | it answers the blow landing, so a strike that misses or is blocked does not reach it | nothing in the engine; `OnTargeted` fires on the body being aimed at, not on a watcher |
 
-### 2d. Four numbers on three 5-stars that the measurements moved
+### 2d. Five numbers on three 5-stars that the measurements moved
 
 Sections 2b and 2c are about clauses the engine could not say or the star contract had no room
-for. **These four are different: every one of them is a sentence the engine says perfectly well,
+for. **These five are different: every one of them is a sentence the engine says perfectly well,
 and every one of them was measured doing nothing, or doing something nobody could have meant.**
 They are the first departures on 5-star heroes; every number moved below five stars so far has been
 the star band's and is recorded in 2b's preamble rather than row by row.
@@ -247,8 +247,9 @@ the star band's and is recorded in 2b's preamble rather than row by row.
 | hero | clause as written | what ships instead | what the measurement said |
 |---|---|---|---|
 | **Altheon** | Immaculate Record marks the Subject "**for 2 rounds**" and records "up to **120% of Altheon's Attack**" | the Subject lives 3 rounds and the ceiling is 50% of his Attack; the record also takes only Altheon's own blows, which is the sentence's "from Altheon" honoured for the first time | the ceiling needed a single blow of four times his Attack, and his largest effect is 185% and resolves before the record it creates exists. The Subject is also faster than he is, so its clock ticks before his turn and a 2-round Subject contained ONE of his turns. The record closed in none of the five sweep seeds; it closes in four now |
-| **Seraphine** | Volume Closed: "the target becomes Unable to Gain Buffs for 1 round. **When that restriction ends**, Footnote is removed and Seraphine gains 15 Energy" | all of it lands in the same firing, on the turn the record reaches its cap | the second beat needed a mark to survive one of her turns, and Contrary Evidence - her own Dispel - strips it, on the same trigger that fills the record. It ran zero times in every arena |
+| **Seraphine** | Volume Closed: "the target becomes Unable to Gain Buffs for 1 round. **When that restriction ends**, Footnote is removed and Seraphine gains 15 Energy" | all of it lands in the same firing, on the turn the record reaches its cap | the second beat needed a mark to survive one of her turns, and Contrary Evidence - her own Dispel - was stripping it, on the same trigger that fills the record. It ran zero times in every arena. The Dispel has since been repaired to skip the bookkeeping statuses, so the mark now survives; the departure stands on its own merits rather than on that defect, and the question of whether the two beats should separate again is open |
 | **Seraphine** | nothing: Volume Closed says nothing about damage | closing the book also releases the record as damage to the target | a record that reached its cap was thrown away unread, which is what made Cross Reference work against this clause rather than with it |
+| **Altheon** | Witness Script deals 120% "and damage increases by **35%** if Altheon has already damaged that enemy this round" | the rider is 35% again, and it resolves BEFORE the 120% blow instead of after it | it shipped as 42%, and the order was what mattered: the condition reads the round's damage list, the 120% blow above it is an entry in that list, so the rider asked a question its own firing had already answered and paid on every basic he ever threw. That flat second blow made his basic x1.55 of the role's per-basic median while his active sat exactly on it, and it is most of why he read x1.51 of the Breaker 5-star median. He reads x1.23 now. Ordered this way the rider fires when the Subject's delayed damage or Fixed in Place reached that body earlier in the round, which is the sentence as written - but a hero with one action a turn reaches it rarely, and it fires zero times in the sweep arena |
 | **Hale** | Field Sign deals "**120% of Attack**" and Closing Radius "**220% of Attack**" | 250% and 570% | he read x0.36 of his role's 5-star median, below every 4-star and both 3-star Marksmen. Both of his numbers are single blows at single targets where his three 5-star peers carry a second damage clause on each ability or hit the whole line; every 4-star and 3-star Marksman had a bigger single-target active than his 220%. He reads x0.79 now |
 
 **The answer that is useful here is different from 2b's.** These are not "the approximation is fine"
@@ -256,7 +257,15 @@ questions. Each is *the shipped number is the one I want*, or *the original numb
 want and the kit should change around it*, and for Hale in particular the second answer means
 giving him a second damage clause rather than restoring 120% and 220%.
 
-One more thing sits underneath the Altheon row and is not a question for Pinoy, only a note:
+**A sixth reading is not in the table because nothing was changed for it, and it is the one worth
+answering first.** Altheon's Final Record pays 20% of Attack per Record and then consumes every
+Record, exactly as written - but Preserved Moment is spending those same Records as a standing
++5% on every blow he lands on the Subject, so the talent sells a 15% output modifier to buy three
+blows and, over a long fight, loses on the trade. Measured at 103,377 against 107,349 in the arena
+built to raise it. The clause is authored, so nothing was touched; the question is whether the two
+halves of Record were meant to compete for it.
+
+One more thing sits underneath the Altheon rows and is not a question for Pinoy, only a note:
 Immaculate Record's own ceiling arithmetic assumed a blow lands for as much as it is priced at.
 Defence takes a share of every blow before the record sees it, so a clause that records a fraction
 of damage and ceilings against raw Attack is reading two different currencies. Nothing else in the
