@@ -120,6 +120,7 @@ namespace UnityEditor
         // what these tools do with it.
         public static bool isPlaying { get; set; }
         public static bool isPlayingOrWillChangePlaymode { get { return false; } }
+        public static void Exit(int returnValue) { }
         public static bool isCompiling { get { return false; } }
         public static bool isUpdating { get { return false; } }
     }

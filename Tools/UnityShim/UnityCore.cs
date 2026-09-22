@@ -415,6 +415,7 @@ namespace UnityEngine
         public static float unscaledDeltaTime { get { return 0.016f; } }
         public static float time { get { return 0f; } }
         public static float unscaledTime { get { return 0f; } }
+        public static float realtimeSinceStartup { get { return 0f; } }
         public static float timeScale { get; set; }
         public static int frameCount { get { return 0; } }
     }
@@ -515,6 +516,7 @@ namespace UnityEngine
         public void SetPixels(Color[] colors) { }
         public void SetPixels32(Color32[] colors) { }
         public Color GetPixel(int x, int y) { return Color.white; }
+        public void ReadPixels(Rect source, int destX, int destY) { }
         public void Apply() { }
         public void Apply(bool updateMipmaps) { }
         public void Apply(bool updateMipmaps, bool makeNoLongerReadable) { }
@@ -535,6 +537,12 @@ namespace UnityEngine
         public static byte[] EncodeToJPG(this Texture2D tex) { return new byte[0]; }
         public static byte[] EncodeToJPG(this Texture2D tex, int quality) { return new byte[0]; }
         public static bool LoadImage(this Texture2D tex, byte[] data) { return true; }
+    }
+
+    public sealed class RenderTexture : Texture
+    {
+        public RenderTexture(int width, int height, int depth) { }
+        public static RenderTexture active { get; set; }
     }
 
     public sealed class Sprite : Object
@@ -652,6 +660,8 @@ namespace UnityEngine
         public Vector3 ScreenToWorldPoint(Vector3 position) { return Vector3.zero; }
         public bool allowHDR { get; set; }
         public bool allowMSAA { get; set; }
+        public RenderTexture targetTexture { get; set; }
+        public void Render() { }
     }
 
     public sealed class Light : Behaviour
