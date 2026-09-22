@@ -642,6 +642,16 @@ namespace Emberfall.Core.Data
         public TargetBan TargetBanKind = TargetBan.None;
         public StatusKind TargetBanStatus = StatusKind.None;
 
+        /// <summary>
+        /// Stamps a StatusKind.DamageTakenUp entry so it answers SKILL damage only - an Active or
+        /// a passive-sourced hit, which is the same division step 4 of the damage pipeline already
+        /// makes and the only definition of "Skill Damage" this engine has.
+        ///
+        /// False (the default) answers every hit, which is what the plain reading of "takes N%
+        /// more damage" means. Read only by that one status; every other application ignores it.
+        /// </summary>
+        public bool DamageTakenSkillOnly;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -736,6 +746,7 @@ namespace Emberfall.Core.Data
             e.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
             e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
+            e.DamageTakenSkillOnly = j.GetBool("damageTakenSkillOnly", false);
             return e;
         }
 
@@ -850,6 +861,7 @@ namespace Emberfall.Core.Data
             c.TargetBanKind = TargetBanKind;
             c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
+            c.DamageTakenSkillOnly = DamageTakenSkillOnly;
             return c;
         }
     }

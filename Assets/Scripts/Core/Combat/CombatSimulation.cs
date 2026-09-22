@@ -2907,6 +2907,17 @@ namespace Emberfall.Core.Combat
                                 }
                             }
 
+                        // The skill scope of a DamageTakenUp entry, stamped the way Charges and
+                        // the per-round budget above are. False on every entry in shipped content,
+                        // so no existing modifier gains a scope nobody authored.
+                        if (effect.Status == StatusKind.DamageTakenUp && effect.DamageTakenSkillOnly)
+                            for (int sk = 0; sk < target.Statuses.Count; sk++)
+                            {
+                                StatusInstance ds = target.Statuses[sk];
+                                if (ds.Kind == StatusKind.DamageTakenUp && ds.SourceId == source.Id)
+                                    ds.SkillOnly = true;
+                            }
+
                         // PreventExtend on an APPLICATION as well as on a transfer, so the flag
                         // means one thing wherever it is authored. Zella and Sylven both want it
                         // on the transferred copy; an entry that is born unextendable is the same
@@ -4079,6 +4090,28 @@ namespace Emberfall.Core.Combat
                 // and x + 0 is exact, so it cannot move a battle nobody authored it into.
                 float vulnerable = target.VulnerableTo(source.Id);
                 if (vulnerable != 0f) raw *= 1f + vulnerable;
+
+                // 7.6. Resistant - THE MIRROR OF THE LINE ABOVE, and the only other per-source
+                // entry in the game. "Takes 10% less from it" and "it deals 15% less damage to
+                // Jory" are sentences about ONE attacker; DamageReductionUp, which both currently
+                // use, softens the holder against the whole enemy line. Zero from anybody who has
+                // applied none, and `raw * (1f - 0f)` is exact.
+                //
+                // Clamped at 0.9 rather than 1.0 so no depth of stacking makes an attacker
+                // harmless - the same discipline the damageReduction step keeps one block up.
+                float resistant = target.ResistantTo(source.Id);
+                if (resistant != 0f)
+                {
+                    if (resistant > 0.9f) resistant = 0.9f;
+                    raw *= 1f - resistant;
+                }
+
+                // 7.7. DamageTakenUp - the UNIVERSAL half Vulnerable never had, and the one thing
+                // "takes 15% more Skill Damage" actually says. Skill-scoped per entry, read
+                // against the same ability.Kind division step 4 makes, so the two cannot disagree
+                // about what a skill is. Exactly zero when nothing carries the kind.
+                float damageTakenUp = target.DamageTakenUpAgainst(ability.Kind != AbilityKind.BasicAttack);
+                if (damageTakenUp != 0f) raw *= 1f + damageTakenUp;
 
                 // 8. Variance, round, clamp
                 raw *= 1f + _rng.Spread(_cfg.DamageVariance);
@@ -5349,6 +5382,27 @@ namespace Emberfall.Core.Combat
                 {
                     if (healCut > 1f) healCut = 1f;
                     amount = (int)Math.Round(amount * (1f - healCut), MidpointRounding.AwayFromZero);
+                    if (amount <= 0) return;
+                }
+
+                // And the direction this pipeline never had. HealSuppression refuses a heal and
+                // HealingReduction cuts one; nothing could raise one, so "Diagnosed allies receive
+                // 18% more healing" had to become "Lio heals them 18% more" - a smaller clause
+                // that also stops being true the moment a second Mender stands beside him.
+                //
+                // Deepest entry wins rather than the entries stacking, which is the reading the
+                // block directly above takes and the one every other magnitude-bearing status in
+                // this engine takes. Exactly zero when nothing carries the kind.
+                float healBoost = 0f;
+                for (int hu = 0; hu < target.Statuses.Count; hu++)
+                {
+                    StatusInstance hb = target.Statuses[hu];
+                    if (hb.Kind != StatusKind.HealingReceivedUp) continue;
+                    if (hb.Magnitude > healBoost) healBoost = hb.Magnitude;
+                }
+                if (healBoost > 0f)
+                {
+                    amount = (int)Math.Round(amount * (1f + healBoost), MidpointRounding.AwayFromZero);
                     if (amount <= 0) return;
                 }
 
@@ -7479,6 +7533,7 @@ namespace Emberfall.Core.Combat
                     landed.StoredHighHp = status.StoredHighHp;
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
+                    landed.SkillOnly = status.SkillOnly;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
                     landed.BanKind = status.BanKind;

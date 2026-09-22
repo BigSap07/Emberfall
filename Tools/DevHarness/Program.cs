@@ -5858,7 +5858,8 @@ namespace Emberfall.DevHarness
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
-                               "Resolve2", "Linked", "HealingReduction", "Restricted" },
+                               "Resolve2", "Linked", "HealingReduction", "Restricted",
+                               "Resistant", "DamageTakenUp", "HealingReceivedUp" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
@@ -17872,6 +17873,7 @@ namespace Emberfall.DevHarness
         {
             Line("ENGINE GAPS - closing the repeated ones (Docs/ENGINE-GAPS.md)");
             CheckGapGroupNine();
+            CheckGapGroupFour();
             Line("");
         }
 
@@ -18039,6 +18041,184 @@ namespace Emberfall.DevHarness
                 if (def != null) team.Add(MakeInstance(def, 1));
             }
             return RunWith(db, db.GetStage("g9_arena"), 9009, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 4
+
+        /// <summary>
+        /// GROUP 4 - per-source and upward stat modification, four clauses across four heroes.
+        ///
+        /// Vulnerable was the ONE per-source entry in the game and it pointed upward only, and the
+        /// healing pipeline had a total refusal and a partial cut and no increase at all. So every
+        /// clause naming one attacker had to be authored as an aura, and every clause raising
+        /// healing had to be authored as the healer paying more.
+        ///
+        /// Measured as arithmetic on real hits rather than as "a status appeared": the whole point
+        /// of a per-source term is WHO it answers for, and only two attackers in one arena can
+        /// show that.
+        /// </summary>
+        private static void CheckGapGroupFour()
+        {
+            Line("  group 4 - per-source and upward modifiers");
+
+            // --- Resistant: one attacker softened, the other untouched ------------------
+            BattleResult plain = RunGapFourArena("none");
+            BattleResult warded = RunGapFourArena("resistant");
+            int namedPlain = DamageDealtBy(plain, "g4_named");
+            int otherPlain = DamageDealtBy(plain, "g4_other");
+            int namedWard = DamageDealtBy(warded, "g4_named");
+            int otherWard = DamageDealtBy(warded, "g4_other");
+            Check(namedPlain > 0 && otherPlain > 0,
+                  "control: both foes connect with nothing applied (named " + namedPlain
+                  + ", other " + otherPlain + ")");
+            Check(namedWard < namedPlain,
+                  "Resistant softens the attacker it names (" + namedPlain + " -> " + namedWard + ")");
+            Check(otherWard == otherPlain,
+                  "and leaves every other attacker at full strength (" + otherPlain + " -> " + otherWard
+                  + ") - which is the whole difference between it and DamageReductionUp, the aura "
+                  + "Kest and Jory currently ship");
+
+            // --- DamageTakenUp: every source, and the skill scope ----------------------
+            BattleResult taken = RunGapFourArena("takenup");
+            int namedTaken = DamageDealtBy(taken, "g4_named");
+            int otherTaken = DamageDealtBy(taken, "g4_other");
+            Check(namedTaken > namedPlain && otherTaken > otherPlain,
+                  "DamageTakenUp raises damage from BOTH attackers (named " + namedPlain + " -> "
+                  + namedTaken + ", other " + otherPlain + " -> " + otherTaken
+                  + ") - the universal half Vulnerable never had");
+
+            // Each foe throws two equal blows a turn - a Basic Attack and a passive-sourced one,
+            // which is the other side of step 4's division. A skill-scoped entry must raise the
+            // second and leave the first alone, so the arm lands on EXACTLY HALF the increase the
+            // unscoped one produced. "Half" is the measurement: a scope that did nothing would
+            // read the control and one that leaked would read the unscoped arm.
+            BattleResult skill = RunGapFourArena("takenup-skill");
+            int namedSkill = DamageDealtBy(skill, "g4_named");
+            int otherSkill = DamageDealtBy(skill, "g4_other");
+            Check(namedSkill > namedPlain && namedSkill < namedTaken,
+                  "a skill-scoped entry raises the passive-sourced blow and not the Basic Attack ("
+                  + namedPlain + " control, " + namedSkill + " skill-scoped, " + namedTaken
+                  + " unscoped)");
+            Check(namedSkill - namedPlain == (namedTaken - namedPlain) / 2
+                  && otherSkill - otherPlain == (otherTaken - otherPlain) / 2,
+                  "and the increase is EXACTLY HALF the unscoped one on both attackers, which is "
+                  + "the half of each turn that is a skill (" + (namedSkill - namedPlain) + " of "
+                  + (namedTaken - namedPlain) + ", " + (otherSkill - otherPlain) + " of "
+                  + (otherTaken - otherPlain) + ")");
+
+            // --- HealingReceivedUp -----------------------------------------------------
+            int healPlain = HealingInto(RunGapFourArena("none"), "g4_hurt");
+            int healUp = HealingInto(RunGapFourArena("healup"), "g4_hurt");
+            Check(healPlain > 0, "control: the mender heals the hurt ally (" + healPlain + ")");
+            Check(healUp > healPlain,
+                  "HealingReceivedUp raises what the SAME heal delivers (" + healPlain + " -> "
+                  + healUp + ") - a property of the body being healed rather than of the healer, "
+                  + "which is what Lio's text says and what his Mark cannot say");
+
+            Check(FingerprintOf(RunGapFourArena("resistant")) == FingerprintOf(RunGapFourArena("resistant")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Total healing one unit RECEIVED across the battle, by def id.</summary>
+        private static int HealingInto(BattleResult r, string defId)
+        {
+            if (r == null) return 0;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return 0;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Heal && r.Events[i].TargetId == id)
+                    total += r.Events[i].Value;
+            return total;
+        }
+
+        /// <summary>
+        /// A hurt body, a mender that heals it, and TWO enemies that hit it - one of which the
+        /// applied status names and one of which it does not. Two attackers is the whole design:
+        /// a per-source term and an aura are indistinguishable against a single foe.
+        ///
+        /// The status is applied at battle start by the hurt body onto itself, so every arm of the
+        /// arena fights the identical battle and differs only by which entry is standing.
+        ///
+        /// Each foe also throws a passive-sourced blow of the same size as its Basic Attack, which
+        /// is what makes the skill scope measurable: AbilityDef.Kind defaults to Active, so a
+        /// passive's damage is on the SKILL side of the division step 4 makes and a Basic Attack
+        /// is not.
+        /// </summary>
+        private static BattleResult RunGapFourArena(string mode)
+        {
+            // Applied by the hurt body to itself. The named attacker is enemy slot 0, which the
+            // FrontEnemy mode resolves to from the player side.
+            string apply = "";
+            if (mode == "takenup")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"DamageTakenUp\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+            else if (mode == "takenup-skill")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"DamageTakenUp\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5,"
+                      + " \"damageTakenSkillOnly\": true }";
+            else if (mode == "healup")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"HealingReceivedUp\","
+                      + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+
+            // Resistant is source-keyed, so it has to be applied BY the attacker it softens. The
+            // named foe applies it to the hurt body as part of its own swing, which is the only
+            // way a synthetic arena can produce an entry whose SourceId is that attacker.
+            string foeApply = mode == "resistant"
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Resistant\","
+                  + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }"
+                : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g4_hurt"", ""name"": ""Hurt"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4h_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g4_hurt_passive"", ""name"": ""Mark Self"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } },
+    { ""id"": ""g4_mender"", ""name"": ""Mender"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4m_basic"", ""name"": ""Mend"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g4_named"", ""name"": ""Named"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4nb"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }" + foeApply + @" ] },
+      ""passive"": { ""id"": ""g4n_skill"", ""name"": ""Follow Through"", ""trigger"": ""AfterBasicAttack"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""g4_other"", ""name"": ""Other"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 700, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4ob"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""passive"": { ""id"": ""g4o_skill"", ""name"": ""Follow Through"", ""trigger"": ""AfterBasicAttack"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g4_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g4_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g4_named"", ""level"": 1 },
+                                                        { ""id"": ""g4_other"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap4");
+            if (db == null) return null;
+            string[] ids = { "g4_hurt", "g4_mender" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g4_arena"), 4004, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)

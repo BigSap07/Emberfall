@@ -1360,7 +1360,72 @@ namespace Emberfall.Core.Data
         ///
         /// Harmful: it is done TO a unit, so a Cleanse takes it and a Dispel does not.
         /// </summary>
-        Restricted
+        Restricted,
+
+        // ---------- the gaps pass, group 4: the three modifiers that pointed only one way ----------
+        //
+        // Every stat status in this enum applies to its holder against EVERYBODY, with exactly one
+        // exception - Vulnerable, which sums only the entries its applier placed. So the damage
+        // pipeline had one per-source term and it pointed upward, and the healing pipeline had a
+        // reduction and no increase. Four clauses across four heroes ask for the missing
+        // directions, and all four ship today as approximations that answer the whole field where
+        // the text names one body, or read only their own healer where the text names every source.
+
+        /// <summary>
+        /// LESS DAMAGE FROM ONE NAMED ATTACKER. The mirror of Vulnerable, and the only other
+        /// per-source entry in the game.
+        ///
+        /// "Takes 10% less from it" and "it deals 15% less damage to Jory" are both sentences about
+        /// one attacker, and DamageReductionUp - what both currently use - softens the holder
+        /// against the entire enemy line. The difference is not cosmetic in a five-a-side fight:
+        /// one of those is a duel clause and the other is a team aura.
+        ///
+        /// Read through CombatUnit.ResistantTo, which sums only the entries THAT attacker applied,
+        /// exactly as VulnerableTo does from the other direction. Zero from anybody else, and
+        /// `raw * (1f - 0f)` is exact, so it cannot move a battle nobody authored it into. Clamped
+        /// at 0.9 so a deep enough stack cannot make an attacker harmless.
+        ///
+        /// Beneficial: it is a protection, so it is Dispel's business and not Cleanse's - the same
+        /// side of that line as Covered and Guard.
+        /// </summary>
+        Resistant,
+
+        /// <summary>
+        /// MORE DAMAGE FROM EVERY SOURCE. What Vulnerable is usually mistaken for.
+        ///
+        /// "Targets above 50% turn progress take 15% more Skill Damage" names no attacker, and
+        /// Vulnerable - the only thing that could be authored for it - made the clause pay out
+        /// only for its own applier's blows. That is a materially smaller ability, and nothing in
+        /// this enum could say the larger one.
+        ///
+        /// SKILL-SCOPED WHEN THE ENTRY SAYS SO, through EffectDef.DamageTakenSkillOnly stamped on
+        /// the instance. "Skill Damage" is not a synonym for damage in this engine: step 4 of the
+        /// damage pipeline already divides Active and passive-sourced hits from Basic Attacks, and
+        /// a modifier that ignored that division would be answering a different sentence. An entry
+        /// that does not set it answers every hit.
+        ///
+        /// Unpaired in Opposite(), exactly like Vulnerable, because its inverse is a per-source
+        /// entry and a universal one cannot flip into a source-keyed one.
+        ///
+        /// Harmful: done TO a unit, so a Cleanse takes it and a Dispel does not.
+        /// </summary>
+        DamageTakenUp,
+
+        /// <summary>
+        /// MORE HEALING RECEIVED, from every source.
+        ///
+        /// The upward direction of a pipeline that had only the two downward ones: HealSuppression
+        /// refuses a heal outright and HealingReduction cuts it, and nothing could raise one.
+        /// "Diagnosed allies receive 18% more healing" therefore had to become "Lio heals them 18%
+        /// more", which is a smaller clause that also stops being true the moment a second Mender
+        /// stands beside him.
+        ///
+        /// Deepest entry wins rather than the entries stacking, the same reading HealingReduction
+        /// takes two lines above it in ApplyHealValue, so two 18% grants are 18%.
+        ///
+        /// Beneficial: a Dispel takes it, a Cleanse does not.
+        /// </summary>
+        HealingReceivedUp
     }
 
     /// <summary>
@@ -2537,6 +2602,10 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.HealingReduction
                 // A restriction is done TO a unit, so it sits with Provoked and Vulnerable.
                 || kind == StatusKind.Restricted
+                // The universal half of Vulnerable, and on the same side of the line as it.
+                // Resistant and HealingReceivedUp are deliberately absent: both are protections,
+                // which makes them Dispel's business the way Covered and Guard are.
+                || kind == StatusKind.DamageTakenUp
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
                 || kind == StatusKind.Disrupted
                 // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
@@ -2652,6 +2721,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "Linked";
                 case StatusKind.HealingReduction: return "Healing Reduction";
                 case StatusKind.Restricted: return "Displaced";
+                case StatusKind.Resistant: return "Resistant";
+                case StatusKind.DamageTakenUp: return "Exposed II";
+                case StatusKind.HealingReceivedUp: return "Receptive";
             }
             return kind.ToString();
         }
@@ -2714,6 +2786,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "LNK";
                 case StatusKind.HealingReduction: return "H-RED";
                 case StatusKind.Restricted: return "DSP";
+                case StatusKind.Resistant: return "RES";
+                case StatusKind.DamageTakenUp: return "DMG+";
+                case StatusKind.HealingReceivedUp: return "H-UP";
             }
             return "?";
         }

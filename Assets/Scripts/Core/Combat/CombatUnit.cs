@@ -89,6 +89,17 @@ namespace Emberfall.Core.Combat
         public int UsesThisRound;
         public int UsesPerRound;
 
+        /// <summary>
+        /// On a StatusKind.DamageTakenUp entry: answer SKILL damage only, the division step 4 of
+        /// the damage pipeline already makes. False on every other kind and on every entry in
+        /// shipped content.
+        ///
+        /// On the ENTRY rather than on the unit, for the reason Disrupted's parameters are: two
+        /// marks from two casters are two rules, and a field on the unit would be one value they
+        /// fought over.
+        /// </summary>
+        public bool SkillOnly;
+
         // ---------------------------------------------------------------- tier eight: ledger extensions
         //
         // Carried on the Ledger entry alongside Stored and StoredCap, because they are properties
@@ -569,6 +580,43 @@ namespace Emberfall.Core.Combat
             for (int i = 0; i < Statuses.Count; i++)
                 if (Statuses[i].Kind == StatusKind.Vulnerable && Statuses[i].SourceId == sourceId)
                     total += Statuses[i].Magnitude;
+            return total;
+        }
+
+        /// <summary>
+        /// LESS damage this unit takes from that attacker specifically - the mirror of
+        /// VulnerableTo, summed the same way over the Resistant entries that attacker applied.
+        /// Zero from anybody else, which is what makes "takes 10% less FROM IT" a duel clause
+        /// rather than a team aura.
+        /// </summary>
+        public float ResistantTo(int sourceId)
+        {
+            if (sourceId < 0) return 0f;
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == StatusKind.Resistant && Statuses[i].SourceId == sourceId)
+                    total += Statuses[i].Magnitude;
+            return total;
+        }
+
+        /// <summary>
+        /// Extra damage this unit takes from EVERY source - the universal half Vulnerable never
+        /// had. `isSkill` is the caller's answer to step 4's question, and an entry stamped
+        /// SkillOnly contributes nothing to a Basic Attack.
+        ///
+        /// Summed rather than deepest-wins, matching VulnerableTo, so two marks from two heroes
+        /// are two modifiers. Exactly zero when nothing carries the kind.
+        /// </summary>
+        public float DamageTakenUpAgainst(bool isSkill)
+        {
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+            {
+                StatusInstance d = Statuses[i];
+                if (d.Kind != StatusKind.DamageTakenUp) continue;
+                if (d.SkillOnly && !isSkill) continue;
+                total += d.Magnitude;
+            }
             return total;
         }
 
