@@ -23,9 +23,9 @@ namespace Emberfall.Core.Progression
     }
 
     /// <summary>
-    /// THE AUDITED LIST, as the game can read it: the five talents Docs/PINOY-LIST.md section 2e
-    /// and the harness's KnownCostlyTalents record as costing their own hero output across every
-    /// arena that reaches them.
+    /// THE AUDITED LIST, as the game can read it: the talents Docs/PINOY-LIST.md section 2e and the
+    /// harness's KnownCostlyTalents record as costing their own hero output across every arena that
+    /// reaches them.
     ///
     /// WHY THE SCREEN NEEDS IT AS WELL AS ITS OWN MEASUREMENT. TalentTrial measures one line, and
     /// in some lines a trap reads inside the noise - the harness found both traps below across
@@ -33,9 +33,8 @@ namespace Emberfall.Core.Progression
     /// quiet line stand in for the audit would hide a trap exactly where it was quietest.
     ///
     /// A COPY, and it can drift. The harness's KnownCostlyTalents is the list the build proves; this
-    /// is what the game is allowed to see, because the harness is not compiled into it. The two
-    /// are meant to be checked equal by the harness, which is a check this branch could not add
-    /// (Tools/DevHarness/Program.cs was owned elsewhere while it was written).
+    /// is what the game is allowed to see, because the harness is not compiled into it. The harness
+    /// checks the two equal, traps and trades alike, in CheckTalentAuditMatchesHarness.
     /// </summary>
     public static class TalentAudit
     {
@@ -44,15 +43,17 @@ namespace Emberfall.Core.Progression
             new AuditedTalent("kael_the_unyielding", 3, true,
                 "Audited as a trap: it costs Kael damage in every test fight, and What Breaks Forward"
                 + " spends Rubble before it could ever expire or stack."),
-            new AuditedTalent("velis_the_hollow_vow", 3, true,
-                "Audited as a trap: blocking healing on that enemy also blocks the healing Velis turns"
-                + " into damage and Energy."),
-            new AuditedTalent("kiva_the_forsaken_oath", 3, false,
-                "Audited as a trade: Kiva deals less, and lives through fights she otherwise loses."),
+            new AuditedTalent("mireth_the_erased_name", 1, true,
+                "Audited as a trap: The Missing Page already answers once every round, and two answers"
+                + " per enemy for the whole battle is fewer."),
+            new AuditedTalent("marrow_the_irrevocable_vow", 1, false,
+                "Audited as a trade: a smaller Promise heal, for Marrow sharing the damage of a third ally."),
             new AuditedTalent("nysera_the_missing_arrow", 1, false,
                 "Audited as a trade: Nysera deals less, and strips a buff off whoever targets her."),
             new AuditedTalent("rheia_the_revision_scribe", 1, false,
-                "Audited as a trade: fewer casts that each land harder.")
+                "Audited as a trade: fewer casts that each land harder."),
+            new AuditedTalent("rheia_the_revision_scribe", 3, false,
+                "Audited as a trade: a harder full-Revision strike that keeps its Revision, for Energy each time.")
         };
 
         public static AuditedTalent For(string heroId, int selection)

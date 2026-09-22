@@ -945,6 +945,10 @@ namespace Emberfall.Core.Data
         ///
         /// The window is the ability a unit CHOSE - cleared at depth 0 in ResolveAbility and
         /// inherited by the passives that ability triggers, the same boundary LastTarget uses.
+        ///
+        /// With ConditionStatus set, only a removal OF THAT KIND counts (pass 3): a firing that
+        /// strips one status and later strikes "on the firing that took the Mark" has to be able
+        /// to tell the two apart. Unset, it answers for any removal, as it always has.
         /// </summary>
         SubjectLostStatusThisFiring,
 
@@ -1037,7 +1041,41 @@ namespace Emberfall.Core.Data
         /// False when the ability has struck nobody yet, and false for any body other than the
         /// first one struck: the snapshot is of one body, and this does not guess about others.
         /// </summary>
-        SubjectHadStatusWhenStruck
+        SubjectHadStatusWhenStruck,
+
+        /// <summary>
+        /// The caster's most recent Ledger release paid at least ConditionValue. Sim state, read
+        /// from the same per-caster record ScaleByLastRelease reads.
+        ///
+        /// ENGINE-GAPS pass 3, Nereia I. "When Reserve is consumed for healing, restore 10 Energy"
+        /// answered every Reserve that expired, including the ones that held nothing. An empty
+        /// auto-release now records its zero rather than leaving the previous release's figure
+        /// behind, so this asks the question the sentence asks: did the store just pay out.
+        /// </summary>
+        LastReleaseAtLeast,
+
+        /// <summary>
+        /// The subject repaid at least ConditionValue of a turn in Turn Debt at the start of its
+        /// current turn. Pure: reads CombatUnit.DebtRepaidThisTurn, which RepayTurnDebt writes and
+        /// the start of every turn clears.
+        ///
+        /// ENGINE-GAPS pass 3, Aeron III. "The first enemy each round to repay at least 20% Turn
+        /// Debt" had nothing that could ask the size of a repayment: the entries were gone and the
+        /// Energy moved before OnTurnDebtRepaid was raised.
+        /// </summary>
+        SubjectRepaidDebtAtLeast,
+
+        /// <summary>
+        /// The subject carries at least ConditionValue harmful status entries, counted the way
+        /// StatusInfo.IsHarmful counts them. Pure.
+        ///
+        /// ENGINE-GAPS pass 3, Isolde's Unfinished Sentence: "if the enemy has three or more active
+        /// damage-over-time effects". Burn is the only damage-over-time kind and every application
+        /// folds into one entry whoever applied it, so that count could never pass three in any
+        /// team. Counting debuffs keeps the sentence's number and its point - reward a team that
+        /// piles effects onto one body - and widens only the class being counted.
+        /// </summary>
+        HarmfulStatusesAtLeast
     }
 
     /// <summary>
@@ -2231,7 +2269,19 @@ namespace Emberfall.Core.Data
         /// Quarry body already holding a Ward gained some OTHER status, its own Mark included.
         /// No campaign enemy shields, so no PvE fight reaches this; a Proving opponent's heroes do.
         /// </summary>
-        OnEnemyShielded
+        OnEnemyShielded,
+
+        /// <summary>
+        /// An ally of the owner is starting its turn. Broadcast to the turn-taker's own side,
+        /// excluding the turn-taker, with _broadcastSubject and _broadcastSourceId both set to it.
+        /// Raised straight after the turn-taker's own TurnStart passives, before the Stun check,
+        /// so a stunned ally's turn still opens.
+        ///
+        /// ENGINE-GAPS pass 3, the ally half of Marrow's Promise: "at the start of their next turn,
+        /// Promise heals them". OnAllyTurnEnd was the only ally-turn hook, so every Promise heal on
+        /// an ally landed a whole turn early, at the end of the turn before.
+        /// </summary>
+        OnAllyTurnStart
     }
 
     /// <summary>

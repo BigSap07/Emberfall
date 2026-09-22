@@ -135,6 +135,12 @@ namespace Emberfall.Core.Combat
         public int BankLimit;
         public int BankUsesThisRound;
 
+        /// <summary>Conversions a FunnelConvert entry has made since it was applied, against
+        /// BankLimit. Per application rather than per round, and never reset by BeginRound: a
+        /// conversion is a spend ("it can trigger once before it expires"), where a deposit is
+        /// not. Zeroed by a fresh application of the same entry, carried by a transfer.</summary>
+        public int ConvertUses;
+
         // ---------------------------------------------------------------- tier nine: ledger parameterisation
 
         /// <summary>When true, this Ledger banks overheal instead of incoming damage.</summary>
@@ -367,6 +373,11 @@ namespace Emberfall.Core.Combat
         /// Together they answer "took damage since my last turn" at round granularity.</summary>
         public int LastTurnRound;
         public int LastDamagedRound;
+
+        /// <summary>The fraction of a turn this unit repaid in Turn Debt as its current turn
+        /// opened, 0 when it repaid none. Written by RepayTurnDebt, cleared as each turn opens,
+        /// read by EffectCondition.SubjectRepaidDebtAtLeast.</summary>
+        public float DebtRepaidThisTurn;
 
         /// <summary>The round this unit was last healed in, and the round it last gained a Shield.
         /// Siblings of LastDamagedRound, written at the same kind of moment and read by the two

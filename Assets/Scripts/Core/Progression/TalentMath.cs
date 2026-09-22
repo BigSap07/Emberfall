@@ -91,6 +91,9 @@ namespace Emberfall.Core.Progression
                 case "conditionvalue": e.ConditionValue += delta; return true;
                 case "conditionvalue3": e.ConditionValue3 += delta; return true;
                 case "ignoredefense": e.IgnoreDefense += delta; return true;
+                // Arden's Deeper Measure raises the limit on Find the Measure's Max HP blow, and
+                // its sentence says so; before this line the delta was dropped and the text lied.
+                case "attackcap":  e.AttackCap += delta; return true;
             }
             return false;
         }
@@ -117,6 +120,7 @@ namespace Emberfall.Core.Progression
                 case "conditionvalue": return e.ConditionValue;
                 case "conditionvalue3": return e.ConditionValue3;
                 case "ignoredefense": return e.IgnoreDefense;
+                case "attackcap":  return e.AttackCap;
             }
             return 0f;
         }
