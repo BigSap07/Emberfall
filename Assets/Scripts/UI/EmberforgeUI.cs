@@ -1103,13 +1103,32 @@ namespace Emberfall.UI
 
         public void OnPointerUp(PointerEventData eventData)
         {
+            if (_held) return;
             _down = false;
             Apply();
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (_held) return;
             _down = false;
+            Apply();
+        }
+
+        private bool _held;
+
+        /// <summary>
+        /// Keeps the button in its pressed art after the finger has lifted, until released.
+        ///
+        /// For a press that STARTS something rather than finishing it: the summon's first beat is
+        /// the pull button staying sunk while the room goes dark, and a button that sprang back
+        /// up on release would read as the tap having been handled and over. Interactable is left
+        /// alone while held, because the disabled art would replace the pressed art.
+        /// </summary>
+        public void HoldPressed(bool held)
+        {
+            _held = held;
+            _down = held && _interactable;
             Apply();
         }
 

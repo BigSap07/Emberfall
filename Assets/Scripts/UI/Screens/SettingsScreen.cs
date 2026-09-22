@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Game.Cloud;
+using Emberfall.UI.Summon;
 
 namespace Emberfall.UI.Screens
 {
@@ -31,6 +32,8 @@ namespace Emberfall.UI.Screens
 
         private UIButton _soundButton;
         private Text _soundNote;
+        private UIButton _fastSummonButton;
+        private Text _fastSummonNote;
         private Text _saveNote;
 
         protected override void Build()
@@ -43,6 +46,7 @@ namespace Emberfall.UI.Screens
             ApplyContentInset();
 
             BuildSoundCard(content);
+            BuildSummonCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
         }
@@ -88,6 +92,29 @@ namespace Emberfall.UI.Screens
             _soundNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                            TextAnchor.UpperLeft);
             UIBuilder.Box(_soundNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
+        }
+
+        /// <summary>
+        /// Fast summon. A player sees the summon buildup hundreds of times, and past the first few
+        /// dozen the drama is a wait. This cuts the buildup to a fraction of a second and keeps the
+        /// reveal whole, because the reveal is the part that still says something new. The light
+        /// still commits to the rolled tier's colour, just sooner.
+        ///
+        /// Stored per device in PlayerPrefs (SummonSettings), not on the save.
+        /// </summary>
+        private void BuildSummonCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, 200f);
+            Heading(card, "SUMMONING");
+
+            _fastSummonButton = EmberforgeUI.Button("FastSummon", card, "", HubStyle.FontButton,
+                                                    ForgeButtonKind.Secondary);
+            UIBuilder.Box(_fastSummonButton.Root, 30f, -56f, 320f, HubStyle.TouchMin, new Vector2(0f, 1f));
+            _fastSummonButton.OnClick(ToggleFastSummon);
+
+            _fastSummonNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
+                                                TextAnchor.UpperLeft);
+            UIBuilder.Box(_fastSummonNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
         }
 
         private void BuildSaveCard(RectTransform parent)
@@ -159,6 +186,22 @@ namespace Emberfall.UI.Screens
                 : "Taps, battle hits and rewards play at their usual volume.";
         }
 
+        private void ToggleFastSummon()
+        {
+            SummonSettings.FastSummon = !SummonSettings.FastSummon;
+            App.Audio.Tap();
+            RefreshFastSummon();
+        }
+
+        private void RefreshFastSummon()
+        {
+            bool fast = SummonSettings.FastSummon;
+            _fastSummonButton.SetText(fast ? "FAST SUMMON: ON" : "FAST SUMMON: OFF");
+            _fastSummonNote.text = fast
+                ? "The build-up before each summon is cut short. The colour still tells you the rarity first."
+                : "Each summon builds up in full before the hero is shown. Tap to skip it, or hold to skip them all.";
+        }
+
         private void RefreshSave()
         {
             CloudCoordinator cloud = App.Cloud;
@@ -182,6 +225,7 @@ namespace Emberfall.UI.Screens
             App.RefreshHud();
             _headerSubtitle.text = "";
             RefreshSound();
+            RefreshFastSummon();
             RefreshSave();
         }
 

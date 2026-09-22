@@ -114,6 +114,23 @@ namespace Emberfall.EditorTools
 
             EditorGUILayout.Space();
 
+            // ---- summon preview ----
+            // Presentation only: plays the summon sequence for heroes of a chosen tier WITHOUT
+            // rolling, spending or granting anything. See SummonScreen.DebugPreview. The live
+            // weights make every real pull a 5-star, so this is the only way to see the others.
+            EditorGUILayout.LabelField("Summon Preview (nothing is rolled or granted)", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("3-star")) PreviewSummon(new[] { 3 });
+            if (GUILayout.Button("4-star")) PreviewSummon(new[] { 4 });
+            if (GUILayout.Button("5-star")) PreviewSummon(new[] { 5 });
+            if (GUILayout.Button("x10 mixed")) PreviewSummon(PreviewBatch);
+            EditorGUILayout.EndHorizontal();
+            bool fast = EditorGUILayout.Toggle("Fast summon", Emberfall.UI.Summon.SummonSettings.FastSummon);
+            if (fast != Emberfall.UI.Summon.SummonSettings.FastSummon)
+                Emberfall.UI.Summon.SummonSettings.FastSummon = fast;
+
+            EditorGUILayout.Space();
+
             // ---- status readout ----
             EditorGUILayout.LabelField("Profile Status", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Account Lv", Profile.PlayerLevel.ToString());
@@ -128,6 +145,18 @@ namespace Emberfall.EditorTools
             EditorGUILayout.LabelField("Stages Cleared", Profile.StagesCleared.ToString());
 
             EditorGUILayout.EndScrollView();
+        }
+
+        // ------------------------------------------------------------------ summon preview
+
+        /// <summary>A ten-pull with every tier the sequence colours, one gold among them, in an
+        /// order that puts the gold mid-batch so the mini tell's gold path is exercised too.</summary>
+        public static readonly int[] PreviewBatch = { 3, 3, 4, 3, 3, 5, 3, 4, 3, 3 };
+
+        private static void PreviewSummon(int[] tiers)
+        {
+            App.Router.Show(Emberfall.UI.ScreenId.Summon);
+            App.Router.Summon.DebugPreview(tiers);
         }
 
         // ------------------------------------------------------------------ grants
