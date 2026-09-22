@@ -53,14 +53,32 @@ namespace Emberfall.UI.Screens
         public override bool HidesTopBar { get { return true; } }
 
         private const float StageWidth = 1500f;
-        // 500, not 452. At 452 the rift's outer ring reached to within a couple of pixels of the
-        // hero's name plate, so the name was printed across the bottom arc of the ring - which the
-        // rect check missed, because the ring is drawn by the portal and not by the portrait whose
-        // bounds were being measured. The extra 48px buys the name real clearance instead. The
-        // action block below simply moves down with it; there was 70px of unused screen under the
-        // odds line to spend.
-        private const float StageHeight = 500f;
         private const float PullWidth = 640f;
+
+        /// <summary>
+        /// THE STAGE STRETCHES between the currency strip and the action block, and that is a fix
+        /// rather than a preference.
+        ///
+        /// It was a fixed 500 tall, which put the pity bar at y 972 and the odds line below that -
+        /// on a 20:9 phone, whose logical canvas is about 966 tall, the whole action block was off
+        /// the bottom of the screen. It fitted at 16:9 because that canvas is 1080. Same fault as
+        /// the hero page's, found the same way, and fixed the same way: the fixed element is the
+        /// FURNITURE and the stage takes whatever is left.
+        ///
+        ///   966 short canvas - 336 header and strip - 226 action block = 404 of stage.
+        /// </summary>
+        private const float ShortestCanvasHeight = 966f;
+
+        /// <summary>Everything under the stage, measured from the stage's own bottom edge: the
+        /// gap, the pull buttons, the guarantee bar and the two lines of small print.</summary>
+        private const float PullHeight = 88f;
+        private const float PityRowHeight = 36f;
+        private const float ActionBlockHeight = UITheme.Space16 + PullHeight + UITheme.Space12
+                                              + PityRowHeight + 6f + 24f + 4f + 24f + UITheme.Space16;
+
+        /// <summary>The band at the bottom of the stage the name and the title occupy, which is
+        /// the space the featured portrait is centred ABOVE rather than in.</summary>
+        private const float NameBand = 130f;
 
         private Text _headerSubtitle;
         private readonly CurrencyStrip _currencies = new CurrencyStrip();
@@ -102,13 +120,25 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "THE RIFT", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+
+            ScreenChrome.ForgedHeader(Root, "THE RIFT", Router, out _headerSubtitle);
             _headerSubtitle.text = "BIND A NEW ALLY TO YOUR BANNER";
             _currencies.Build(Root);
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
             BuildStage(top);
-            BuildActions(top + StageHeight + UITheme.Space16);
+
+            // Says out loud when the stage has been squeezed to nothing on the shortest canvas
+            // this game targets, for the reason DesignGallery.CheckFits exists: the failure is
+            // silent at 16:9 and only shows on the 20:9 capture.
+            float shortest = ShortestCanvasHeight - top - ActionBlockHeight;
+            if (shortest < NameBand + 200f)
+                Debug.LogError("SummonScreen: the banner stage is only " + shortest + " units tall"
+                    + " on the shortest canvas this game targets, which is not enough for the"
+                    + " featured hero and their name. Shorten the action block.");
+
+            BuildActions(UITheme.Space16);
             BuildReveal();
             BuildResults();
         }
@@ -117,24 +147,36 @@ namespace Emberfall.UI.Screens
         private void BuildStage(float top)
         {
             RectTransform stage = UIBuilder.Node("Stage", Root);
-            UIBuilder.Box(stage, 0f, -top, StageWidth, StageHeight, new Vector2(0.5f, 1f));
+            // Anchored top AND bottom, so the stage is exactly the room left between the strip
+            // above it and the action block below it, at any canvas height.
+            stage.anchorMin = new Vector2(0.5f, 0f);
+            stage.anchorMax = new Vector2(0.5f, 1f);
+            stage.pivot = new Vector2(0.5f, 0.5f);
+            stage.sizeDelta = new Vector2(StageWidth, -(top + ActionBlockHeight));
+            stage.anchoredPosition = new Vector2(0f, (ActionBlockHeight - top) * 0.5f);
 
-            Image bg = stage.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(20);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.96f);
-            UIBuilder.NotchedFrame("Edge", stage, UITheme.WithAlpha(UITheme.ChromeBrass, 0.9f), 20, 3);
+            EmberforgeUI.PanelOn(stage, true);
+
+            // The featured hero is centred in the space ABOVE the name band rather than in the
+            // stage, so a shorter stage moves the portrait up into the room it still has instead
+            // of printing the name across the bottom of the art.
+            RectTransform focus = UIBuilder.Node("Focus", stage);
+            focus.anchorMin = new Vector2(0.5f, 0f);
+            focus.anchorMax = new Vector2(0.5f, 1f);
+            focus.pivot = new Vector2(0.5f, 0.5f);
+            focus.sizeDelta = new Vector2(StageWidth, -NameBand);
+            focus.anchoredPosition = new Vector2(0f, NameBand * 0.5f);
 
             // The rift itself, kept but demoted: it is the light the hero stands in now rather than
             // the subject of the screen. Same rings, same Update-driven spin, smaller and behind.
             // Lifted off centre and tightened to 340, so it reads as an aura around the hero
             // rather than as a hoop the layout has to work around.
-            RectTransform portal = UIBuilder.Node("Portal", stage);
-            UIBuilder.Box(portal, 0f, 76f, 340f, 340f, new Vector2(0.5f, 0.5f));
+            RectTransform portal = UIBuilder.Node("Portal", focus);
+            UIBuilder.Box(portal, 0f, 0f, PortalSize, PortalSize, new Vector2(0.5f, 0.5f));
 
             Image halo = UIBuilder.Img("Halo", portal, TextureLab.Glow(256, 1.6f),
                                        UITheme.WithAlpha(UITheme.StarColor(5), 0.22f));
-            UIBuilder.FillParent(halo.rectTransform, -90f);
+            UIBuilder.FillParent(halo.rectTransform, -40f);
 
             _portalRingOuter = UIBuilder.Img("RingOuter", portal, TextureLab.Ring(256, 8),
                                              UITheme.WithAlpha(UITheme.Shard, 0.55f));
@@ -149,21 +191,18 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_portalCore.rectTransform, 110f);
 
             // The featured hero, filled in on OnShow once the session is readable.
-            //
-            // 300 at +46, not 340 at +26: at the larger size the portrait's lower edge reached
-            // y=-144 and the name plate's upper edge reached -141, so the name was printed across
-            // the bottom of the art. Measured, not guessed - see the report.
-            _portraitHost = UIBuilder.Node("Featured", stage);
-            UIBuilder.Box(_portraitHost, 0f, 76f, 300f, 300f, new Vector2(0.5f, 0.5f));
+            _portraitHost = UIBuilder.Node("Featured", focus);
+            UIBuilder.Box(_portraitHost, 0f, 0f, FeaturedSize, FeaturedSize, new Vector2(0.5f, 0.5f));
 
-            _featuredName = UIBuilder.Label("FeaturedName", stage, "", UITheme.FontTitle,
-                                            UITheme.TextPrimary, TextAnchor.LowerCenter);
+            _featuredName = EmberforgeUI.Title("FeaturedName", stage, "", UITheme.FontTitle,
+                                               Emberforge.TextGold, TextAnchor.LowerCenter);
             UIBuilder.Box(_featuredName.rectTransform, 0f, 62f, StageWidth - 120f, 54f, new Vector2(0.5f, 0f));
-            UIBuilder.Shadowed(_featuredName, UITheme.InkDisplay, 4f);
+            UIBuilder.Outlined(_featuredName, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _featuredTitle = UIBuilder.Label("FeaturedTitle", stage, "", UITheme.FontSmall,
-                                             UITheme.TextMuted, TextAnchor.LowerCenter);
+            _featuredTitle = EmberforgeUI.Label("FeaturedTitle", stage, "", UITheme.FontSmall,
+                                                Emberforge.TextQuiet, TextAnchor.LowerCenter);
             UIBuilder.Box(_featuredTitle.rectTransform, 0f, 24f, StageWidth - 120f, 34f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_featuredTitle, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>
@@ -174,7 +213,17 @@ namespace Emberfall.UI.Screens
         /// subject that deserves the room, so they are one line - the same sentence BuildRates
         /// composed, with the same single-tier special case, just not framed like a feature.
         /// </summary>
-        private void BuildActions(float top)
+        /// <summary>The featured badge, and the rift ring behind it. The ring is 1.13 times the
+        /// badge so a ribbon of it shows past the rim rather than being buried by it.</summary>
+        private const float FeaturedSize = 250f;
+        private const float PortalSize = 283f;
+
+        /// <summary>
+        /// The action block, anchored to the BOTTOM of the screen rather than measured down from
+        /// the top. Every y below is a distance up from the bottom edge, which is what keeps the
+        /// block on screen at a canvas height nobody laid it out against.
+        /// </summary>
+        private void BuildActions(float bottom)
         {
             // ---- the dominant pull.
             //
@@ -182,8 +231,11 @@ namespace Emberfall.UI.Screens
             // apart by hand is what the first pass did, and at "NEED 1122 MORE" the cost ran back
             // under the word PULL. Anchoring them to opposite edges means the cost can grow to
             // whatever the shortfall needs without ever reaching the label.
-            _pullOne = UIBuilder.Notch(UIBuilder.GoldButton("PullOne", Root, "PULL", UITheme.FontHeading), 16);
-            UIBuilder.Box(_pullOne.Root, -150f, -top, PullWidth, 104f, new Vector2(0.5f, 1f));
+            float pullY = bottom + 24f + 4f + 24f + 6f + PityRowHeight + UITheme.Space12;
+
+            _pullOne = EmberforgeUI.Button("PullOne", Root, "PULL", UITheme.FontHeading,
+                                           ForgeButtonKind.Primary);
+            UIBuilder.Box(_pullOne.Root, -150f, pullY, PullWidth, PullHeight, new Vector2(0.5f, 0f));
 
             Image shard = UIBuilder.Img("Shard", _pullOne.Root, TextureLab.CrystalIcon(64), UITheme.Shard);
             UIBuilder.Box(shard.rectTransform, 34f, 0f, 32f, 32f, new Vector2(0f, 0.5f));
@@ -191,26 +243,29 @@ namespace Emberfall.UI.Screens
             _pullOne.Label.alignment = TextAnchor.MiddleLeft;
             UIBuilder.Box(_pullOne.Label.rectTransform, 82f, 0f, 220f, 48f, new Vector2(0f, 0.5f));
 
-            _pullOne.SubLabel = UIBuilder.Label("Cost", _pullOne.Root, "", UITheme.FontSmall,
-                                                UITheme.TextOnAccent, TextAnchor.MiddleRight);
+            _pullOne.SubLabel = EmberforgeUI.Label("Cost", _pullOne.Root, "", UITheme.FontSmall,
+                                                   Emberforge.TextOnColor, TextAnchor.MiddleRight);
             UIBuilder.Box(_pullOne.SubLabel.rectTransform, -28f, 0f, 300f, 36f, new Vector2(1f, 0.5f));
+            UIBuilder.Outlined(_pullOne.SubLabel, Emberforge.Outline, Emberforge.StrokeThin);
             _pullOne.SubLabel.raycastTarget = false;
             _pullOne.OnClick(delegate { DoSummon(1); });
 
             // Secondary, and shaped to read that way: narrower, shorter, and the panel fill rather
             // than gold. Same action it always had. Seated clear of PullOne's right edge - the two
             // overlapped by 20px in the first pass, measured at x[190,210].
-            _pullTen = UIBuilder.Notch(UIBuilder.SecondaryButton("PullTen", Root, "PULL X10", UITheme.FontSmall), 14);
-            UIBuilder.Box(_pullTen.Root, PullWidth * 0.5f + 20f, -(top + 8f), 300f, 88f, new Vector2(0.5f, 1f));
+            _pullTen = EmberforgeUI.Button("PullTen", Root, "PULL X10", UITheme.FontSmall,
+                                           ForgeButtonKind.Secondary);
+            UIBuilder.Box(_pullTen.Root, PullWidth * 0.5f + 20f, pullY, 300f, PullHeight, new Vector2(0.5f, 0f));
             UIBuilder.Box(_pullTen.Label.rectTransform, 0f, 14f, 260f, 34f, new Vector2(0.5f, 0.5f));
 
-            _pullTen.SubLabel = UIBuilder.Label("Cost", _pullTen.Root, "", UITheme.FontTiny,
-                                                UITheme.TextMuted, TextAnchor.MiddleCenter);
+            _pullTen.SubLabel = EmberforgeUI.Label("Cost", _pullTen.Root, "", UITheme.FontTiny,
+                                                   Emberforge.TextOnColor, TextAnchor.MiddleCenter);
             UIBuilder.Box(_pullTen.SubLabel.rectTransform, 0f, -18f, 260f, 30f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_pullTen.SubLabel, Emberforge.Outline, Emberforge.StrokeThin);
             _pullTen.SubLabel.raycastTarget = false;
             _pullTen.OnClick(delegate { DoSummon(10); });
 
-            BuildPityBar(top + 104f + UITheme.Space16);
+            BuildPityBar(bottom);
         }
 
         /// <summary>
@@ -220,45 +275,40 @@ namespace Emberfall.UI.Screens
         /// guarantee the segments ARE the pulls, so a player can count what they have left without
         /// reading the label.
         /// </summary>
-        private void BuildPityBar(float top)
+        private void BuildPityBar(float bottom)
         {
-            RectTransform row = UIBuilder.Node("Pity", Root);
-            UIBuilder.Box(row, -34f, -top, PullWidth + 300f, 22f, new Vector2(0.5f, 1f));
+            float rowY = bottom + 24f + 4f + 24f + 6f;
 
-            RectTransform track = UIBuilder.Node("Track", row);
+            RectTransform row = UIBuilder.Node("Pity", Root);
+            UIBuilder.Box(row, -34f, rowY, PullWidth + 300f, PityRowHeight, new Vector2(0.5f, 0f));
+
+            // THE KIT'S BAR, and the row grew from 22 to 36 to hold it. The trough and the fill
+            // are nine-sliced with most of their height in the top and bottom borders, so an
+            // 18-unit track has no middle left to stretch and both render as a squashed pair of
+            // corners - a lens rather than a bar. Both captures of this screen showed exactly
+            // that, first with a chamfered plate and then with the kit's own sprite scaled by a
+            // FILLED image, which is the other way to lose the nine-slice: Image.Type.Filled
+            // ignores the borders entirely and stretches the whole sprite.
+            //
+            // Anchor-driven instead, which is what EmberforgeUI.ProgressBar is for. The ticks
+            // are added to the same root AFTER the fill, so they draw over it and stay put while
+            // the fill's right edge moves under them.
+            _pityFill = EmberforgeUI.ProgressBar("Track", row);
+            _pityFill.raycastTarget = false;
+
+            RectTransform track = _pityFill.rectTransform.parent as RectTransform;
             track.anchorMin = new Vector2(0f, 0.5f);
             track.anchorMax = new Vector2(1f, 0.5f);
             track.pivot = new Vector2(0.5f, 0.5f);
-            track.offsetMin = new Vector2(0f, -9f);
-            track.offsetMax = new Vector2(-44f, 9f);
-
-            Image trackBg = track.gameObject.AddComponent<Image>();
-            trackBg.sprite = TextureLab.NotchedRect(8);
-            trackBg.type = Image.Type.Sliced;
-            trackBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
-            trackBg.raycastTarget = false;
-
-            RectTransform fill = UIBuilder.Node("Fill", track);
-            fill.anchorMin = new Vector2(0f, 0f);
-            fill.anchorMax = new Vector2(1f, 1f);
-            fill.offsetMin = new Vector2(2f, 2f);
-            fill.offsetMax = new Vector2(-2f, -2f);
-            fill.pivot = new Vector2(0f, 0.5f);
-
-            _pityFill = fill.gameObject.AddComponent<Image>();
-            _pityFill.sprite = TextureLab.NotchedRect(6);
-            _pityFill.type = Image.Type.Filled;
-            _pityFill.fillMethod = Image.FillMethod.Horizontal;
-            _pityFill.fillOrigin = (int)Image.OriginHorizontal.Left;
-            _pityFill.color = UITheme.Gold;
-            _pityFill.raycastTarget = false;
+            track.offsetMin = new Vector2(0f, -PityRowHeight * 0.5f);
+            track.offsetMax = new Vector2(-44f, PityRowHeight * 0.5f);
 
             // A tick at each pull boundary inside the guarantee.
             for (int i = 1; i < GameSession.PityGuaranteedSummons; i++)
             {
                 float t = i / (float)GameSession.PityGuaranteedSummons;
                 Image tick = UIBuilder.Img("Tick" + i, track, TextureLab.Diamond(32),
-                                           UITheme.WithAlpha(UITheme.BackdropDeep, 0.85f));
+                                           Emberforge.Outline);
                 RectTransform tickRect = tick.rectTransform;
                 tickRect.anchorMin = new Vector2(t, 0.5f);
                 tickRect.anchorMax = new Vector2(t, 0.5f);
@@ -267,16 +317,18 @@ namespace Emberfall.UI.Screens
                 tickRect.anchoredPosition = Vector2.zero;
             }
 
-            _pityChest = UIBuilder.Img("Chest", row, TextureLab.Chest(64), UITheme.Gold);
+            _pityChest = UIBuilder.Img("Chest", row, TextureLab.Chest(64), Emberforge.TextGold);
             UIBuilder.Box(_pityChest.rectTransform, 0f, 0f, 34f, 34f, new Vector2(1f, 0.5f));
 
-            _pityLabel = UIBuilder.Label("PityLabel", Root, "", UITheme.FontTiny - 2,
-                                         UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(_pityLabel.rectTransform, -34f, -(top + 26f), 1000f, 28f, new Vector2(0.5f, 1f));
+            _pityLabel = EmberforgeUI.Label("PityLabel", Root, "", UITheme.FontTiny - 2,
+                                            Emberforge.TextQuiet, TextAnchor.LowerCenter);
+            UIBuilder.Box(_pityLabel.rectTransform, -34f, bottom + 28f, 1000f, 24f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_pityLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _oddsLabel = UIBuilder.Label("Odds", Root, "", UITheme.FontTiny - 2,
-                                         UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(_oddsLabel.rectTransform, 0f, -(top + 56f), 1200f, 28f, new Vector2(0.5f, 1f));
+            _oddsLabel = EmberforgeUI.Label("Odds", Root, "", UITheme.FontTiny - 2,
+                                            Emberforge.TextQuiet, TextAnchor.LowerCenter);
+            UIBuilder.Box(_oddsLabel.rectTransform, 0f, bottom, 1200f, 24f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_oddsLabel, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         private void BuildReveal()
@@ -298,20 +350,24 @@ namespace Emberfall.UI.Screens
             _revealStarHost = UIBuilder.Node("StarHost", _reveal);
             UIBuilder.Box(_revealStarHost, 0f, 75f, 130f, 24f, new Vector2(0.5f, 0.5f));
 
-            _revealTag = UIBuilder.Label("Tag", _reveal, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.MiddleCenter);
+            _revealTag = EmberforgeUI.Label("Tag", _reveal, "", UITheme.FontSmall, Emberforge.TextGold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealTag.rectTransform, 0f, 30f, 700f, 40f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_revealTag, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _revealName = UIBuilder.Label("Name", _reveal, "", UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.MiddleCenter);
+            _revealName = EmberforgeUI.Title("Name", _reveal, "", UITheme.FontTitle, Emberforge.TextGold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealName.rectTransform, 0f, -30f, 900f, 60f, new Vector2(0.5f, 0.5f));
-            UIBuilder.Shadowed(_revealName, UITheme.InkDisplay, 4f);
+            UIBuilder.Outlined(_revealName, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _revealTitle = UIBuilder.Label("Title", _reveal, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
+            _revealTitle = EmberforgeUI.Label("Title", _reveal, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(_revealTitle.rectTransform, 0f, -84f, 900f, 36f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_revealTitle, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _revealNote = UIBuilder.WrappedLabel("Note", _reveal, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
+            _revealNote = EmberforgeUI.Body("Note", _reveal, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(_revealNote.rectTransform, 0f, -150f, 820f, 100f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_revealNote, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _revealClose = UIBuilder.Notch(UIBuilder.GoldButton("Close", _reveal, "CONTINUE", UITheme.FontHeading), 16);
+            _revealClose = EmberforgeUI.Button("Close", _reveal, "CONTINUE", UITheme.FontHeading,
+                                               ForgeButtonKind.Primary);
             UIBuilder.Box(_revealClose.Root, 0f, 150f, 620f, 130f, new Vector2(0.5f, 0f));
             _revealClose.OnClick(CloseReveal);
 
@@ -341,25 +397,24 @@ namespace Emberfall.UI.Screens
             RectTransform panel = UIBuilder.Node("Panel", _results);
             UIBuilder.Box(panel, 0f, 0f, 1020f, 880f, new Vector2(0.5f, 0.5f));
 
-            Image panelBg = panel.gameObject.AddComponent<Image>();
-            panelBg.sprite = TextureLab.NotchedRect(22);
-            panelBg.type = Image.Type.Sliced;
-            panelBg.color = UITheme.Panel;
-            UIBuilder.NotchedFrame("Edge", panel, UITheme.WithAlpha(UITheme.ChromeBrass, 0.75f), 22, 3);
+            EmberforgeUI.PanelOn(panel, true);
 
-            _resultsTitle = UIBuilder.Label("Title", panel, "", UITheme.FontHeading,
-                                            UITheme.TextPrimary, TextAnchor.UpperCenter);
+            _resultsTitle = EmberforgeUI.Title("Title", panel, "", UITheme.FontHeading,
+                                               Emberforge.TextGold, TextAnchor.UpperCenter);
             UIBuilder.Box(_resultsTitle.rectTransform, 0f, -26f, 940f, 46f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_resultsTitle, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _resultsSummary = UIBuilder.Label("Summary", panel, "", UITheme.FontSmall,
-                                              UITheme.TextMuted, TextAnchor.UpperCenter);
+            _resultsSummary = EmberforgeUI.Label("Summary", panel, "", UITheme.FontSmall,
+                                                 Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_resultsSummary.rectTransform, 0f, -78f, 940f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_resultsSummary, Emberforge.Outline, Emberforge.StrokeThin);
 
             ScrollRect scroll;
             _resultsList = UIBuilder.ScrollList("List", panel, out scroll, 8f, new RectOffset(16, 16, 8, 8));
             UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 20f, 124f, 20f, 132f);
 
-            UIButton close = UIBuilder.Notch(UIBuilder.GoldButton("ResultsClose", panel, "CONTINUE", UITheme.FontHeading), 16);
+            UIButton close = EmberforgeUI.Button("ResultsClose", panel, "CONTINUE",
+                                                 UITheme.FontHeading, ForgeButtonKind.Primary);
             UIBuilder.Box(close.Root, 0f, 24f, 420f, 96f, new Vector2(0.5f, 0f));
             close.OnClick(CloseResults);
 
@@ -380,30 +435,31 @@ namespace Emberfall.UI.Screens
             RectTransform row = UIBuilder.Node("Result_" + def.Id, _resultsList);
             UIBuilder.Sized(row, 0f, 66f);
 
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(12);
-            bg.type = Image.Type.Sliced;
-            bg.color = outcome.IsNew
-                ? UITheme.WithAlpha(UITheme.Success, 0.16f)
-                : UITheme.PanelRaised;
+            // A new ally is a PLAIN PANEL, a duplicate is a RECESS. Depth rather than a tint
+            // does the sorting: ten rows in two shades of one colour is a list a player reads,
+            // ten rows where three stand proud of the sheet is a list they count.
+            if (outcome.IsNew) EmberforgeUI.PlainPanelOn(row);
+            else EmberforgeUI.SunkenOn(row);
 
-            Text name = UIBuilder.Label("Name", row, def.Name, UITheme.FontSmall,
-                                        UITheme.StarColor(def.Stars), TextAnchor.MiddleLeft);
+            Text name = EmberforgeUI.Label("Name", row, def.Name, UITheme.FontSmall,
+                                           UITheme.StarColor(def.Stars), TextAnchor.MiddleLeft);
             name.rectTransform.anchorMin = new Vector2(0f, 0f);
             name.rectTransform.anchorMax = new Vector2(1f, 1f);
             name.rectTransform.offsetMin = new Vector2(24f, 0f);
             name.rectTransform.offsetMax = new Vector2(-460f, 0f);
+            UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
             string status = outcome.IsNew
                 ? "NEW ALLY"
                 : "DUPLICATE  -  +" + outcome.GoldRefund + " gold, +" + outcome.ShardRefund + " shards";
-            Text statusLabel = UIBuilder.Label("Status", row, status, UITheme.FontSmall,
-                                               outcome.IsNew ? UITheme.Success : UITheme.Gold,
-                                               TextAnchor.MiddleRight);
+            Text statusLabel = EmberforgeUI.Label("Status", row, status, UITheme.FontSmall,
+                                                  outcome.IsNew ? UITheme.Success : Emberforge.TextGold,
+                                                  TextAnchor.MiddleRight);
             statusLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
             statusLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
             statusLabel.rectTransform.offsetMin = new Vector2(440f, 0f);
             statusLabel.rectTransform.offsetMax = new Vector2(-24f, 0f);
+            UIBuilder.Outlined(statusLabel, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         private void ShowResults(List<SummonOutcome> outcomes)
@@ -496,7 +552,8 @@ namespace Emberfall.UI.Screens
             for (int i = _portraitHost.childCount - 1; i >= 0; i--)
                 Destroy(_portraitHost.GetChild(i).gameObject);
 
-            RectTransform portrait = Widgets.Portrait("Featured", _portraitHost, featured, featured.Stars, 300f, true);
+            RectTransform portrait = EmberforgeUI.PortraitFrame("Featured", _portraitHost, featured,
+                                                                featured.Stars, FeaturedSize);
             UIBuilder.FillParent(portrait, 0f);
 
             _featuredName.text = featured.Name;
@@ -563,11 +620,11 @@ namespace Emberfall.UI.Screens
             int used = Mathf.Min(App.Session.Profile.TotalSummons, cap);
             int left = Mathf.Max(0, cap - App.Session.Profile.TotalSummons);
 
-            UIBuilder.SetBar(_pityFill, cap > 0 ? used / (float)cap : 1f);
+            EmberforgeUI.SetProgress(_pityFill, cap > 0 ? used / (float)cap : 1f);
 
             if (left > 0)
             {
-                _pityFill.color = UITheme.Gold;
+                _pityFill.color = Color.white;
                 _pityChest.color = UITheme.Gold;
                 _pityLabel.color = UITheme.TextMuted;
                 _pityLabel.text = "OPENING GUARANTEE  -  " + left
@@ -575,7 +632,7 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                _pityFill.color = UITheme.WithAlpha(UITheme.Gold, 0.35f);
+                _pityFill.color = UITheme.WithAlpha(Color.white, 0.35f);
                 _pityChest.color = UITheme.TextDim;
                 _pityLabel.color = UITheme.TextDim;
                 _pityLabel.text = "OPENING GUARANTEE SPENT  -  PULLS NOW DRAW FROM THE FULL POOL";
@@ -712,7 +769,8 @@ namespace Emberfall.UI.Screens
 
             for (int i = _revealPortraitHost.childCount - 1; i >= 0; i--)
                 Destroy(_revealPortraitHost.GetChild(i).gameObject);
-            RectTransform portrait = Widgets.Portrait("Portrait", _revealPortraitHost, def, def.Stars, 340f, true);
+            RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", _revealPortraitHost, def,
+                                                                def.Stars, 340f);
             UIBuilder.FillParent(portrait, 0f);
 
             for (int i = _revealStarHost.childCount - 1; i >= 0; i--)
@@ -727,7 +785,7 @@ namespace Emberfall.UI.Screens
             _revealNote.text = outcome.IsNew
                 ? "NEW ALLY  -  " + outcome.Message
                 : outcome.Message + "  Converted to " + outcome.GoldRefund + " gold and " + outcome.ShardRefund + " shards.";
-            _revealNote.color = outcome.IsNew ? UITheme.Success : UITheme.TextMuted;
+            _revealNote.color = outcome.IsNew ? UITheme.Success : Emberforge.TextBody;
 
             _reveal.gameObject.SetActive(true);
             _reveal.SetAsLastSibling();

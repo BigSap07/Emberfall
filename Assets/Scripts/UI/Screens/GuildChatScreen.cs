@@ -55,7 +55,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "GUILD CHAT", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "GUILD CHAT", Router, out _headerSubtitle);
 
             _listHost = UIBuilder.ScrollList("Content", Root, out _scroll, 10f,
                                              new RectOffset(0, 0, 8, 16));
@@ -63,8 +64,8 @@ namespace Emberfall.UI.Screens
                                  UITheme.ScreenPadding, UITheme.TopBarHeight + 118f,
                                  UITheme.ScreenPadding, 168f);
 
-            _emptyNote = UIBuilder.WrappedLabel("Empty", _listHost, "", UITheme.FontTiny,
-                                                UITheme.TextMuted, TextAnchor.UpperCenter);
+            _emptyNote = EmberforgeUI.Body("Empty", _listHost, "", UITheme.FontTiny,
+                                                Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Sized(_emptyNote.rectTransform, CardWidth - 160f, 70f);
 
             BuildComposer();
@@ -75,22 +76,18 @@ namespace Emberfall.UI.Screens
             RectTransform bar = UIBuilder.Node("Composer", Root);
             UIBuilder.Box(bar, 0f, 24f, CardWidth, 128f, new Vector2(0.5f, 0f));
 
-            Image bg = bar.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", bar, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(bar, false);
 
-            _entry = UIBuilder.TextField("Entry", bar, "Say something", UITheme.FontSmall,
+            _entry = EmberforgeUI.TextField("Entry", bar, "Say something", UITheme.FontSmall,
                                          GuildRules.MessageMax, false);
             UIBuilder.Box(_entry.GetComponent<RectTransform>(), 24f, 0f, 820f, 80f, new Vector2(0f, 0.5f));
 
-            _sendButton = UIBuilder.GoldButton("Send", bar, "SEND", UITheme.FontBody);
+            _sendButton = EmberforgeUI.Button("Send", bar, "SEND", UITheme.FontBody, ForgeButtonKind.Primary);
             UIBuilder.Box(_sendButton.Root, -24f, 0f, 280f, 80f, new Vector2(1f, 0.5f));
             _sendButton.OnClick(OnSend);
 
-            _sendNote = UIBuilder.Label("SendNote", bar, "", UITheme.FontTiny - 4,
-                                        UITheme.TextDim, TextAnchor.LowerLeft);
+            _sendNote = EmberforgeUI.Label("SendNote", bar, "", UITheme.FontTiny - 4,
+                                        Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.Box(_sendNote.rectTransform, 24f, 6f, 820f, 22f, new Vector2(0f, 0f));
         }
 
@@ -245,23 +242,24 @@ namespace Emberfall.UI.Screens
         {
             RectTransform row = UIBuilder.Node("Line", _listHost);
 
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(14);
-            bg.type = Image.Type.Sliced;
-            bg.color = entry.IsMine
-                ? UITheme.WithAlpha(UITheme.PanelRaised, 0.95f) : UITheme.PanelSunken;
+            // YOUR OWN LINE stands proud of the sheet and everyone else's is set into it -
+            // depth carrying authorship, which is the same thing the friends list and the guild
+            // roster do with their own rows. It is still not right-aligned, for the reason the
+            // note above gives: at 1180 wide a right-aligned bubble leaves a metre of empty panel.
+            if (entry.IsMine) EmberforgeUI.PlainPanelOn(row);
+            else EmberforgeUI.SunkenOn(row);
 
-            Text who = UIBuilder.Label("Who", row,
+            Text who = EmberforgeUI.Label("Who", row,
                                        (string.IsNullOrEmpty(entry.DisplayName)
                                             ? "Wayfarer" : entry.DisplayName).ToUpperInvariant()
                                        + "   " + WhenLabel(entry.CreatedUnix, now),
                                        UITheme.FontTiny - 4,
-                                       entry.IsMine ? UITheme.Gold : UITheme.TextDim,
+                                       entry.IsMine ? Emberforge.TextGold : Emberforge.TextQuiet,
                                        TextAnchor.UpperLeft);
             UIBuilder.Box(who.rectTransform, 22f, -10f, CardWidth - 60f, 24f, new Vector2(0f, 1f));
 
-            Text body = UIBuilder.WrappedLabel("Body", row, entry.Body, UITheme.FontSmall,
-                                               UITheme.TextPrimary, TextAnchor.UpperLeft);
+            Text body = EmberforgeUI.Body("Body", row, entry.Body, UITheme.FontSmall,
+                                               Emberforge.TextBody, TextAnchor.UpperLeft);
 
             // THE BOX COMES BEFORE THE MEASUREMENT, and a capture is what taught that. A wrapping
             // Text computes preferredHeight against the width its RectTransform currently has, and

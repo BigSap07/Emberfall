@@ -69,7 +69,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "RELIC SHOP", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "RELIC SHOP", Router, out _headerSubtitle);
             _currencies.Build(Root);
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
@@ -85,20 +86,33 @@ namespace Emberfall.UI.Screens
 
             float below = top + CardHeight + UITheme.Space24;
 
-            _pageLabel = UIBuilder.Label("Page", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
+            _pageLabel = EmberforgeUI.Label("Page", Root, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_pageLabel.rectTransform, 0f, -below, 600f, 32f, new Vector2(0.5f, 1f));
 
-            _priceHint = UIBuilder.Label("Prices", Root, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+            _priceHint = EmberforgeUI.Label("Prices", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_priceHint.rectTransform, 0f, -(below + 34f), 900f, 28f, new Vector2(0.5f, 1f));
         }
 
+        /// <summary>
+        /// One shelf arrow: the kit's rail disc with a Cinzel glyph on it. Text rather than a
+        /// sprite for the reason ScreenChrome's back chevron is - there is no arrow in the
+        /// generator and adding one for a handful of callers would put a shape in the shared kit
+        /// that nothing else asks for.
+        /// </summary>
         private UIButton PageArrow(string name, string glyph, float x, float top)
         {
-            UIButton button = UIBuilder.IconButton(name, Root, glyph, ArrowWidth,
-                                                   UITheme.WithAlpha(UITheme.PanelRaised, 0.9f), UITheme.TextPrimary);
-            UIBuilder.Box(button.Root, x, -(top + CardHeight * 0.5f - ArrowWidth * 0.5f),
-                          ArrowWidth, ArrowWidth, new Vector2(0.5f, 1f));
-            return button;
+            ForgeDisc disc = EmberforgeUI.IconButton(name, Root, "", TextureLab.Sigil(0, 64),
+                                                     Emberforge.TextGold, ArrowWidth, null);
+            UIBuilder.Box(disc.Root, x, -(top + CardHeight * 0.5f - HubStyle.TouchMin * 0.5f),
+                          HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(0.5f, 1f));
+            disc.Glyph.enabled = false;
+
+            Text mark = EmberforgeUI.Title("Glyph", disc.Face, glyph, UITheme.FontHeading,
+                                           Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(mark.rectTransform, 0f);
+            UIBuilder.Outlined(mark, Emberforge.Outline, Emberforge.StrokeThin);
+            mark.raycastTarget = false;
+            return disc.Button;
         }
 
         // ------------------------------------------------------------------ refresh
@@ -147,8 +161,8 @@ namespace Emberfall.UI.Screens
 
             if (relics.Count == 0)
             {
-                Text empty = UIBuilder.Label("Empty", _row, "No relics in the content database.",
-                                             UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text empty = EmberforgeUI.Label("Empty", _row, "No relics in the content database.",
+                                             UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Sized(empty.rectTransform, ShelfWidth, CardHeight);
                 return;
             }
@@ -185,16 +199,17 @@ namespace Emberfall.UI.Screens
                 UIBuilder.FillParent(glow.rectTransform, -26f);
             }
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(CardCut);
-            bg.type = Image.Type.Sliced;
-            bg.color = owned ? UITheme.WithAlpha(UITheme.PanelRaised, 0.72f) : UITheme.Panel;
-
-            // Frame weight and brightness are the grade read: a mythic frame is a full-strength
-            // three-pixel edge, a legendary a softer two.
-            UIBuilder.NotchedFrame("Edge", card,
-                                   UITheme.WithAlpha(grade, mythic ? 0.95f : 0.62f),
-                                   CardCut, mythic ? 3 : 2);
+            // A FRAMED PANEL for a relic still on the shelf and a PLAIN one for one already
+            // owned. Depth carries "you have this" rather than an alpha on the fill: a translucent
+            // card reads as whatever is behind it, and what is behind it here is the page.
+            //
+            // The grade's own colour left the card's border with it. Every frame in this kit is
+            // gold, and a shelf of cards framed in two different colours was using the one
+            // channel the kit spends on structure to say something else. The grade is still on
+            // every card twice - the chip under the name and the tint on the mark - which is
+            // where a player reads it.
+            if (owned) EmberforgeUI.PlainPanelOn(card);
+            else EmberforgeUI.PanelOn(card, mythic);
 
             float top = UITheme.Space16;
 
@@ -203,12 +218,8 @@ namespace Emberfall.UI.Screens
             RectTransform iconTile = UIBuilder.Node("Tile", card);
             UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
 
-            Image tileBg = iconTile.gameObject.AddComponent<Image>();
-            tileBg.sprite = TextureLab.NotchedRect(TileCut);
-            tileBg.type = Image.Type.Sliced;
-            tileBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
+            Image tileBg = EmberforgeUI.SunkenOn(iconTile);
             tileBg.raycastTarget = false;
-            UIBuilder.NotchedFrame("TileEdge", iconTile, UITheme.WithAlpha(grade, mythic ? 0.85f : 0.5f), TileCut, 2);
 
             // The relic's own mark. Sigil is the project's existing emblem set, indexed off the
             // relic id's hash so a given relic always draws the same mark - stable between sessions
@@ -220,21 +231,21 @@ namespace Emberfall.UI.Screens
             top += tile + UITheme.Space12;
 
             // ---- name
-            Text nameLabel = UIBuilder.WrappedLabel("Name", card, relic.Name, UITheme.FontSmall,
-                                                    UITheme.TextPrimary, TextAnchor.UpperCenter);
+            Text nameLabel = EmberforgeUI.Body("Name", card, relic.Name, UITheme.FontSmall,
+                                               Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(nameLabel.rectTransform, 0f, -top, CardWidth - UITheme.Space24, 58f, new Vector2(0.5f, 1f));
             top += 58f + UITheme.Space4;
 
             // ---- grade badge
-            RectTransform badge = UIBuilder.Chip("Grade", card, UITheme.RelicGradeLabel(relic.Grade),
+            RectTransform badge = EmberforgeUI.Chip("Grade", card, UITheme.RelicGradeLabel(relic.Grade),
                                                  grade, UITheme.FontTiny - 2);
             UIBuilder.Box(badge, 0f, -top, 148f, 28f, new Vector2(0.5f, 1f));
             top += 28f + UITheme.Space8;
 
             // ---- the relic's own text, from CardText() so the shop and the inventory cannot drift
             // into describing the same relic two ways.
-            Text rule = UIBuilder.WrappedLabel("Rule", card, relic.CardText(), UITheme.FontTiny - 4,
-                                               UITheme.TextMuted, TextAnchor.UpperCenter);
+            Text rule = EmberforgeUI.Body("Rule", card, relic.CardText(), UITheme.FontTiny - 4,
+                                               Emberforge.TextQuiet, TextAnchor.UpperCenter);
             rule.rectTransform.anchorMin = new Vector2(0f, 0f);
             rule.rectTransform.anchorMax = new Vector2(1f, 1f);
             rule.rectTransform.offsetMin = new Vector2(UITheme.Space12, 104f);
@@ -244,29 +255,27 @@ namespace Emberfall.UI.Screens
             RectTransform cost = UIBuilder.Node("Cost", card);
             UIBuilder.Box(cost, 0f, 62f, CardWidth - UITheme.Space24, 32f, new Vector2(0.5f, 0f));
 
-            Image costPlate = cost.gameObject.AddComponent<Image>();
-            costPlate.sprite = UISkin.Panel(8);
-            costPlate.type = Image.Type.Sliced;
-            costPlate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            Image costPlate = EmberforgeUI.SunkenOn(cost);
             costPlate.raycastTarget = false;
 
             Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.SpiralIcon(64), UITheme.Dust);
             UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 24f, 24f, new Vector2(0f, 0.5f));
 
-            Text costText = UIBuilder.Label("Value", cost, price.ToString(), UITheme.FontTiny,
-                                            (affordable || owned) ? UITheme.TextPrimary : UITheme.Danger,
-                                            TextAnchor.MiddleLeft);
+            Text costText = EmberforgeUI.Label("Value", cost, price.ToString(), UITheme.FontTiny,
+                                               (affordable || owned) ? Emberforge.TextGold : UITheme.Danger,
+                                               TextAnchor.MiddleLeft);
             UIBuilder.FillParent(costText.rectTransform, UITheme.Space8 + 24f + UITheme.Space8, 0f, UITheme.Space8, 0f);
+            UIBuilder.Outlined(costText, Emberforge.Outline, Emberforge.StrokeThin);
 
             // ---- action
             if (owned)
             {
-                RectTransform ownedBadge = UIBuilder.Chip("Owned", card, "OWNED", UITheme.TextMuted, UITheme.FontTiny);
+                RectTransform ownedBadge = EmberforgeUI.Chip("Owned", card, "OWNED", Emberforge.TextQuiet, UITheme.FontTiny);
                 UIBuilder.Box(ownedBadge, 0f, UITheme.Space16, CardWidth - UITheme.Space24, 40f, new Vector2(0.5f, 0f));
             }
             else
             {
-                UIButton buy = UIBuilder.Notch(UIBuilder.GoldButton("Buy", card, "BUY", UITheme.FontSmall), 12);
+                UIButton buy = EmberforgeUI.Button("Buy", card, "BUY", UITheme.FontSmall, ForgeButtonKind.Primary);
                 UIBuilder.Box(buy.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space24, 46f, new Vector2(0.5f, 0f));
                 buy.Interactable = affordable;
 

@@ -46,8 +46,22 @@ namespace Emberfall.UI.Screens
         public override bool HidesTopBar { get { return true; } }
 
         private const float BannerWidth = 560f;
-        private const float BannerHeight = 560f;
-        private const float HexSize = 280f;
+
+        /// <summary>
+        /// THE BANNER TAKES WHAT THE CYCLE STRIP LEAVES, measured against the shortest canvas
+        /// this game targets rather than against the editor's.
+        ///
+        /// It was a fixed 560, which put the cycle strip's cells below y 1010 - off the bottom of
+        /// a 20:9 phone, whose logical canvas is about 966 tall. It fitted at 16:9 because that
+        /// canvas is 1080, and the failure was invisible until the page was photographed at the
+        /// other aspect. Same fault as the hero page's and the Rift's, and fixed the same way:
+        /// the strip is the fixed thing and the banner takes the rest.
+        ///
+        ///   966 short canvas - 336 header and strip - 24 gap - 120 cycle block = 486 of banner.
+        /// </summary>
+        private const float ShortestCanvasHeight = 966f;
+        private const float CycleBlock = 120f;
+        private const float HexSize = 210f;
         private const float CycleWidth = 900f;
 
         private Text _headerSubtitle;
@@ -71,25 +85,23 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "THE DEEP RECITAL", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "THE DEEP RECITAL", Router, out _headerSubtitle);
             _currencies.Build(Root);
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
-            BuildBanner(top);
-            BuildCycleRow(top + BannerHeight + UITheme.Space24);
+            float bannerHeight = ShortestCanvasHeight - top - UITheme.Space24 - CycleBlock;
+            BuildBanner(top, bannerHeight);
+            BuildCycleRow();
         }
 
         /// <summary>The standing banner: floor plate, record, echo meter, one action.</summary>
-        private void BuildBanner(float top)
+        private void BuildBanner(float top, float height)
         {
             RectTransform banner = UIBuilder.Node("Banner", Root);
-            UIBuilder.Box(banner, 0f, -top, BannerWidth, BannerHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(banner, 0f, -top, BannerWidth, height, new Vector2(0.5f, 1f));
 
-            Image bg = banner.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(20);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.96f);
-            UIBuilder.NotchedFrame("Edge", banner, UITheme.WithAlpha(UITheme.ChromeBrass, 0.9f), 20, 3);
+            EmberforgeUI.PanelOn(banner, true);
 
             Image glow = UIBuilder.Img("Glow", banner, TextureLab.Glow(128, 2f),
                                        UITheme.WithAlpha(UITheme.Echo, 0.10f));
@@ -107,19 +119,19 @@ namespace Emberfall.UI.Screens
             _hexEdge = UIBuilder.Img("HexEdge", hex, TextureLab.HexagonOutline(256, 0.035f), UITheme.ChromeBrass);
             UIBuilder.FillParent(_hexEdge.rectTransform, 0f);
 
-            _floorNumber = UIBuilder.Label("Floor", hex, "", UITheme.FontDisplay + 26,
-                                           UITheme.TextPrimary, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_floorNumber.rectTransform, 0f, 26f, HexSize, 108f, new Vector2(0.5f, 0.5f));
-            UIBuilder.Shadowed(_floorNumber, UITheme.InkDisplay, 4f);
+            _floorNumber = EmberforgeUI.Title("Floor", hex, "", UITheme.FontDisplay + 8,
+                                              Emberforge.TextOnColor, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_floorNumber.rectTransform, 0f, 22f, HexSize, 96f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_floorNumber, Emberforge.Outline, Emberforge.StrokeThick);
 
             // The rolled aspect: a small accent-coloured mark under the number, inside the plate,
             // so "floor 28" and "which aspect floor 28 is" are read as one fact rather than two.
-            _aspectIcon = UIBuilder.Img("Aspect", hex, TextureLab.Sigil(0, 128), UITheme.TextMuted);
-            UIBuilder.Box(_aspectIcon.rectTransform, 0f, -44f, 52f, 52f, new Vector2(0.5f, 0.5f));
+            _aspectIcon = UIBuilder.Img("Aspect", hex, TextureLab.Sigil(0, 128), Emberforge.TextQuiet);
+            UIBuilder.Box(_aspectIcon.rectTransform, 0f, -34f, 44f, 44f, new Vector2(0.5f, 0.5f));
 
-            _aspectName = UIBuilder.Label("AspectName", hex, "", UITheme.FontTiny - 2,
-                                          UITheme.TextMuted, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_aspectName.rectTransform, 0f, -84f, HexSize, 24f, new Vector2(0.5f, 0.5f));
+            _aspectName = EmberforgeUI.Label("AspectName", hex, "", UITheme.FontTiny - 2,
+                                          Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_aspectName.rectTransform, 0f, -66f, HexSize, 24f, new Vector2(0.5f, 0.5f));
 
             inner += HexSize + UITheme.Space8;
 
@@ -127,17 +139,14 @@ namespace Emberfall.UI.Screens
             RectTransform record = UIBuilder.Node("Record", banner);
             UIBuilder.Box(record, 0f, -inner, 260f, 40f, new Vector2(0.5f, 1f));
 
-            Image recordPlate = record.gameObject.AddComponent<Image>();
-            recordPlate.sprite = UISkin.Panel(10);
-            recordPlate.type = Image.Type.Sliced;
-            recordPlate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            Image recordPlate = EmberforgeUI.SunkenOn(record);
             recordPlate.raycastTarget = false;
 
             Image crown = UIBuilder.Img("Crown", record, TextureLab.Crown(64), UITheme.Gold);
             UIBuilder.Box(crown.rectTransform, UITheme.Space12, 0f, 28f, 28f, new Vector2(0f, 0.5f));
 
-            _highestValue = UIBuilder.Label("Highest", record, "", UITheme.FontSmall,
-                                            UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            _highestValue = EmberforgeUI.Label("Highest", record, "", UITheme.FontSmall,
+                                            Emberforge.TextBody, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(_highestValue.rectTransform,
                                  UITheme.Space12 + 28f + UITheme.Space8, 0f, UITheme.Space12, 0f);
 
@@ -150,12 +159,12 @@ namespace Emberfall.UI.Screens
             Image codaIcon = UIBuilder.Img("CodaIcon", codaRow, TextureLab.GemIcon(64), UITheme.Coda);
             UIBuilder.Box(codaIcon.rectTransform, UITheme.Space12, 0f, 24f, 24f, new Vector2(0f, 0.5f));
 
-            _codaValue = UIBuilder.Label("CodaValue", codaRow, "0", UITheme.FontSmall,
-                                          UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            _codaValue = EmberforgeUI.Label("CodaValue", codaRow, "0", UITheme.FontSmall,
+                                          Emberforge.TextBody, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(_codaValue.rectTransform,
                                  UITheme.Space12 + 24f + UITheme.Space8, 0f, UITheme.Space12, 0f);
 
-            inner += 32f + UITheme.Space16;
+            inner += 32f + UITheme.Space8;
 
             // ---- the echo meter
             RectTransform echoRow = UIBuilder.Node("Echoes", banner);
@@ -172,38 +181,60 @@ namespace Emberfall.UI.Screens
             _echoMeter.offsetMax = new Vector2(-132f, 16f);
             UIBuilder.HStack(_echoMeter, 5f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleLeft);
 
-            _echoCountdown = UIBuilder.Label("Countdown", echoRow, "", UITheme.FontTiny - 2,
-                                             UITheme.TextDim, TextAnchor.MiddleRight);
+            _echoCountdown = EmberforgeUI.Label("Countdown", echoRow, "", UITheme.FontTiny - 2,
+                                             Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(_echoCountdown.rectTransform, 0f, 0f, 124f, 30f, new Vector2(1f, 0.5f));
 
-            inner += 40f + UITheme.Space16;
+            inner += 40f + UITheme.Space8;
 
             // ---- the one action
-            _fightButton = UIBuilder.Notch(UIBuilder.PrimaryButton("Fight", banner, "", UITheme.FontHeading), 16);
-            UIBuilder.Box(_fightButton.Root, 0f, -inner, BannerWidth - UITheme.Space48, 88f, new Vector2(0.5f, 1f));
+
+            // Says out loud when the blocks above have outgrown the room the cycle strip leaves,
+            // for the reason DesignGallery.CheckFits exists: the failure is silent at 16:9 and
+            // only shows on the 20:9 capture.
+            float needed = inner + 84f + UITheme.Space24;
+            if (needed > height)
+                Debug.LogError("RecitalScreen: the banner's contents need " + needed + " units and"
+                    + " the shortest canvas this game targets leaves only " + height
+                    + ". It fits at 16:9 and runs under the cycle strip at 20:9.");
+            // Anchored to the banner's BOTTOM with the panel's padding under it, rather than
+            // carried down by the running `inner` offset. The button used to land exactly on the
+            // panel's lower edge and print itself over the two bottom corner ornaments; hanging it
+            // off the bottom means it keeps that clearance whatever the blocks above it do.
+            _fightButton = EmberforgeUI.Button("Fight", banner, "", UITheme.FontHeading, ForgeButtonKind.Primary);
+            UIBuilder.Box(_fightButton.Root, 0f, UITheme.Space24,
+                          BannerWidth - Emberforge.OrnamentClearance * 2f, 84f,
+                          new Vector2(0.5f, 0f));
             _fightButton.OnClick(OnFight);
 
-            Image blades = UIBuilder.Img("Swords", _fightButton.Root, TextureLab.Swords(64), UITheme.TextPrimary);
+            Image blades = UIBuilder.Img("Swords", _fightButton.Root, TextureLab.Swords(64), Emberforge.TextBody);
             UIBuilder.Box(blades.rectTransform, 34f, 0f, 38f, 38f, new Vector2(0f, 0.5f));
 
             UIBuilder.Box(_fightButton.Label.rectTransform, 16f, 0f, 300f, 46f, new Vector2(0.5f, 0.5f));
 
-            _fightCost = UIBuilder.Label("Cost", _fightButton.Root, "", UITheme.FontTiny,
-                                         UITheme.WithAlpha(UITheme.TextPrimary, 0.85f), TextAnchor.MiddleRight);
+            _fightCost = EmberforgeUI.Label("Cost", _fightButton.Root, "", UITheme.FontTiny,
+                                         UITheme.WithAlpha(Emberforge.TextBody, 0.85f), TextAnchor.MiddleRight);
             UIBuilder.Box(_fightCost.rectTransform, -28f, 0f, 160f, 30f, new Vector2(1f, 0.5f));
             _fightCost.raycastTarget = false;
         }
 
-        private void BuildCycleRow(float top)
+        /// <summary>
+        /// The six-aspect cycle strip, anchored to the BOTTOM of the screen rather than measured
+        /// down from the banner. Every y here is a distance up from the bottom edge, which is
+        /// what keeps the strip on screen at a canvas height nobody laid it out against.
+        /// </summary>
+        private void BuildCycleRow()
         {
-            Text heading = UIBuilder.Label("CycleHeading", Root, "THIS CYCLE",
-                                           UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(heading.rectTransform, 0f, -top, CycleWidth, 26f, new Vector2(0.5f, 1f));
-            top += 26f + UITheme.Space8;
-
             _cycleRow = UIBuilder.Node("CycleRow", Root);
-            UIBuilder.Box(_cycleRow, 0f, -top, CycleWidth, 56f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_cycleRow, 0f, UITheme.Space24, CycleWidth, 56f, new Vector2(0.5f, 0f));
             UIBuilder.HStack(_cycleRow, UITheme.Space12, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+
+            Text heading = EmberforgeUI.Title("CycleHeading", Root, "THIS CYCLE",
+                                              UITheme.FontTiny, Emberforge.TextGold,
+                                              TextAnchor.LowerCenter);
+            UIBuilder.Box(heading.rectTransform, 0f, UITheme.Space24 + 56f + UITheme.Space8,
+                          CycleWidth, 26f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(heading, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         // ------------------------------------------------------------------ refresh
@@ -284,8 +315,10 @@ namespace Emberfall.UI.Screens
                 {
                     RectTransform cell = UIBuilder.Node("Echo" + i, _echoMeter);
                     UIBuilder.Flexible(cell, 1f, 0f);
+                    // The kit's bar fill for a spent-or-banked cell, so a meter of five reads as
+                    // five segments of the same gold section the progress bars are made of.
                     Image fill = cell.gameObject.AddComponent<Image>();
-                    fill.sprite = UISkin.Panel(6);
+                    fill.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.BarFill);
                     fill.type = Image.Type.Sliced;
                     fill.raycastTarget = false;
                 }
@@ -295,9 +328,7 @@ namespace Emberfall.UI.Screens
             {
                 Image fill = _echoMeter.GetChild(i).GetComponent<Image>();
                 if (fill == null) continue;
-                fill.color = i < echoes.Banked
-                    ? UITheme.Echo
-                    : UITheme.WithAlpha(UITheme.PanelSunken, 0.9f);
+                fill.color = i < echoes.Banked ? UITheme.Echo : Emberforge.SunkenMid;
             }
         }
 
@@ -322,16 +353,16 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Flexible(cell, 1f, 0f);
                 UIBuilder.Sized(cell, 0f, 56f);
 
-                Image bg = cell.gameObject.AddComponent<Image>();
-                bg.sprite = TextureLab.NotchedRect(12);
-                bg.type = Image.Type.Sliced;
-                bg.color = isCurrent ? UITheme.WithAlpha(tint, 0.32f) : UITheme.WithAlpha(tint, isPast ? 0.10f : 0.16f);
-                UIBuilder.NotchedFrame("Edge", cell, UITheme.WithAlpha(tint, isCurrent ? 0.9f : 0.4f),
-                                       12, isCurrent ? 3 : 2);
+                // The floor you are ON is framed and every other is set into the strip. Depth
+                // says "here" rather than three strengths of one tint, which is what the strip
+                // used to do and is why a past floor and a future one read as the same thing at a
+                // glance. The aspect's own colour stays on the WORD, which is what it is about.
+                if (isCurrent) EmberforgeUI.PanelOn(cell, false);
+                else EmberforgeUI.SunkenOn(cell);
 
-                Text label = UIBuilder.Label("Label", cell,
+                Text label = EmberforgeUI.Label("Label", cell,
                                              cycleAspect.ToString().Substring(0, 3).ToUpperInvariant(),
-                                             UITheme.FontTiny, isPast ? UITheme.TextDim : tint,
+                                             UITheme.FontTiny, isPast ? Emberforge.TextQuiet : tint,
                                              TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(label.rectTransform, 4f);
             }

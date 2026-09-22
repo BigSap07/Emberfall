@@ -207,10 +207,15 @@ namespace Emberfall.UI
             _sheet = HudWidgets.Sheet("Sheet", safe);
             UIBuilder.FillParent(_sheet, HubStyle.HudEdge);
 
-            _title = UIBuilder.Label("Title", _sheet, "", UITheme.FontHeading, HubStyle.ValueGold,
-                                     TextAnchor.MiddleLeft);
+            // Cinzel in gold, because a sheet's title is a TITLE - the one word that says which
+            // door the player came through. Same rect and same anchor as before: the tab row and
+            // the body below it are measured against SheetHeaderHeight, and a conversion that
+            // moved this would have moved every screen the sheet hosts.
+            _title = EmberforgeUI.Title("Title", _sheet, "", UITheme.FontHeading,
+                                        Emberforge.TextGold, TextAnchor.MiddleLeft);
             UIBuilder.Box(_title.rectTransform, HubStyle.PanelPadX, -HubStyle.PanelPadY,
                           720f, HubStyle.SheetHeaderHeight - HubStyle.PanelPadY * 2f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_title, Emberforge.Outline, Emberforge.StrokeThin);
 
             HudWidgets.CloseButton(_sheet, Close);
 

@@ -96,6 +96,19 @@ namespace Emberfall.UI
         public static readonly Color OrnamentInset = UITheme.Hex("E84532");
         public const float OrnamentSize = 26f;
 
+        /// <summary>
+        /// How far in from a framed panel's corner a control has to stay to clear the corner
+        /// diamond, on BOTH axes.
+        ///
+        /// It exists because four screens got this wrong the same way: a full-width button hung
+        /// off the bottom of a panel at the panel's own padding lands exactly on the two lower
+        /// ornaments and prints itself over them. The diamond is centred OrnamentSize * 0.34 in
+        /// from the corner and is OrnamentSize across, so it reaches OrnamentSize * 0.84 - this
+        /// is that, rounded up with a little air, so a caller that uses it is clear rather than
+        /// touching.
+        /// </summary>
+        public const float OrnamentClearance = OrnamentSize + Space4;
+
         // ------------------------------------------------------------------ buttons
         //
         // A button is a FACE sitting on a LIP sitting inside an EDGE. The lip is the part that
@@ -115,11 +128,23 @@ namespace Emberfall.UI
         public static readonly Color SecondaryLip = UITheme.Hex("0B4550");
         public static readonly Color SecondaryEdge = UITheme.Hex("062A31");
 
-        public static readonly Color DisabledTop = UITheme.Hex("9EA0A8");
-        public static readonly Color DisabledMid = UITheme.Hex("6C6E77");
-        public static readonly Color DisabledLow = UITheme.Hex("4E505A");
-        public static readonly Color DisabledLip = UITheme.Hex("2C2D34");
-        public static readonly Color DisabledEdge = UITheme.Hex("17181D");
+        /// <summary>
+        /// A DISABLED BUTTON HAS TO RECEDE, and the first ramp here did the opposite.
+        ///
+        /// It was a cool light grey - 9EA0A8 down to 4E505A - which is BRIGHTER than the warm
+        /// brown panel it sits on. On the forge, whose three anvil actions are all unavailable
+        /// until the player has Slag, that made the one row a player cannot use the loudest thing
+        /// on the page. The capture is what caught it; nothing about the token read wrong on its
+        /// own, only against the surface it lands on.
+        ///
+        /// Warm, and darker than PanelTop at every stop, so an unavailable control reads as the
+        /// same object with the light off rather than as a different, paler one.
+        /// </summary>
+        public static readonly Color DisabledTop = UITheme.Hex("4A433E");
+        public static readonly Color DisabledMid = UITheme.Hex("332D2A");
+        public static readonly Color DisabledLow = UITheme.Hex("241F1D");
+        public static readonly Color DisabledLip = UITheme.Hex("171312");
+        public static readonly Color DisabledEdge = UITheme.Hex("0C0A09");
 
         public const int ButtonLip = 6;
         public const int ButtonLipPressed = 2;
@@ -180,6 +205,36 @@ namespace Emberfall.UI
         public static readonly Color PlusMid = UITheme.Hex("5FB93E");
         public static readonly Color PlusLow = UITheme.Hex("2F7A24");
         public const float PlusSize = 42f;
+
+        // ------------------------------------------------------------------ the chip
+        //
+        // A CHIP IS THE KIT'S ONE TINTABLE SURFACE, and it is two sprites for the reason the
+        // currency jewel is two: Image.color multiplies the WHOLE sprite, so a one-piece chip in
+        // an aspect colour would have its dark outline tinted along with its fill and every
+        // aspect would end up with a differently coloured outline. A dark body carrying the
+        // shared outline, with a hairline over it that is the only thing tinted, gives one
+        // authored shape that can say aspect, role, rarity grade or temper without the outline
+        // ever moving off Emberforge.Outline.
+
+        public static readonly Color ChipFill = UITheme.Hex("17100C");
+
+        /// <summary>How strongly a chip's tinted hairline reads, and how strongly the same tint
+        /// washes the fill behind it. The wash is deliberately faint: a chip is a label with a
+        /// colour attached, not a coloured button, and a grid of six of them at full strength is
+        /// six things shouting at a portrait.</summary>
+        public const float ChipLineAlpha = 0.9f;
+        public const float ChipWashAlpha = 0.20f;
+        public const int ChipRadius = 12;
+        public const int ChipLineWeight = 2;
+
+        // ------------------------------------------------------------------ the rule
+        //
+        // The hairline that separates two sections of one panel. It is gold rather than a grey
+        // border because everything structural in this kit is gold, and it carries the outline
+        // above and below it so it reads as a struck line inlaid into the panel rather than as a
+        // scratch across it.
+
+        public const int RuleHeight = 6;
 
         // ------------------------------------------------------------------ text
         //

@@ -35,6 +35,7 @@ namespace Emberfall.UI.Screens
         private Text _headerSubtitle;
         private ScrollRect _scroll;
         private RectTransform _header;
+        private Image _ground;
         private RectTransform _content;
 
         private InputField _codeField;
@@ -49,7 +50,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            _header = ScreenChrome.Header(Root, "FRIENDS", Router, out _headerSubtitle);
+            _ground = EmberforgeUI.Ground(Root);
+            _header = ScreenChrome.ForgedHeader(Root, "FRIENDS", Router, out _headerSubtitle);
 
             _content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                             new RectOffset(0, 0, 8, 48));
@@ -63,8 +65,8 @@ namespace Emberfall.UI.Screens
             ContentSizeFitter fitter = _listHost.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            _emptyNote = UIBuilder.WrappedLabel("Empty", _content, "", UITheme.FontSmall,
-                                                UITheme.TextMuted, TextAnchor.UpperCenter);
+            _emptyNote = EmberforgeUI.Body("Empty", _content, "", UITheme.FontSmall,
+                                                Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Sized(_emptyNote.rectTransform, CardWidth - 160f, 90f);
         }
 
@@ -80,6 +82,9 @@ namespace Emberfall.UI.Screens
         {
             base.SetEmbedded(embedded);
             if (_header != null) _header.gameObject.SetActive(!embedded);
+            // The ground goes with the header: inside a panel sheet this page already sits on the
+            // sheet's framed surface - see EmberforgeUI.Ground.
+            if (_ground != null) _ground.enabled = !embedded;
             ApplyContentInset();
         }
 
@@ -95,30 +100,26 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = UIBuilder.Node("AddCard", parent);
             UIBuilder.Sized(card, CardWidth, 220f);
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(card, false);
 
-            Text heading = UIBuilder.Label("Heading", card, "ADD BY FRIEND CODE", UITheme.FontTiny,
-                                           UITheme.TextDim, TextAnchor.UpperLeft);
+            Text heading = EmberforgeUI.Title("Heading", card, "ADD BY FRIEND CODE", UITheme.FontSmall,
+                                           Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(heading.rectTransform, 30f, -22f, 700f, 26f, new Vector2(0f, 1f));
 
             // Seven, not six: the code is shown grouped as ABC-234 and a player who typed what
             // they read would otherwise lose the last character to the limit. Normalise drops the
             // dash on the way in, so what is sent is still six.
-            _codeField = UIBuilder.TextField("Code", card, "ABC-234", UITheme.FontHeading, 7, false);
+            _codeField = EmberforgeUI.TextField("Code", card, "ABC-234", UITheme.FontHeading, 7, false);
             UIBuilder.Box(_codeField.GetComponent<RectTransform>(), 30f, -56f, 440f, 84f, new Vector2(0f, 1f));
 
-            _addButton = UIBuilder.GoldButton("Add", card, "SEND REQUEST", UITheme.FontBody);
+            _addButton = EmberforgeUI.Button("Add", card, "SEND REQUEST", UITheme.FontBody, ForgeButtonKind.Primary);
             UIBuilder.Box(_addButton.Root, 490f, -56f, 360f, 84f, new Vector2(0f, 1f));
             _addButton.OnClick(OnAdd);
 
-            _addNote = UIBuilder.WrappedLabel("Note", card,
+            _addNote = EmberforgeUI.Body("Note", card,
                 "Six characters, from the code on their Account screen. O, I, L, U, 0 and 1 are not "
                 + "in the alphabet, so a code never contains one.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(_addNote.rectTransform, 30f, -152f, CardWidth - 120f, 56f, new Vector2(0f, 1f));
         }
 
@@ -232,8 +233,8 @@ namespace Emberfall.UI.Screens
 
         private void AddSectionLabel(string text)
         {
-            Text label = UIBuilder.Label("Section", _listHost, text, UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.LowerLeft);
+            Text label = EmberforgeUI.Label("Section", _listHost, text, UITheme.FontTiny,
+                                         Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.Sized(label.rectTransform, CardWidth, 40f);
         }
 
@@ -245,31 +246,29 @@ namespace Emberfall.UI.Screens
         {
             RectTransform row = UIBuilder.Node("Row", _listHost);
             UIBuilder.Sized(row, CardWidth, RowHeight);
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(16);
-            bg.type = Image.Type.Sliced;
-            bg.color = entry.AwaitingMyAnswer
-                ? UITheme.WithAlpha(UITheme.PanelRaised, 0.98f) : UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", row,
-                            entry.AwaitingMyAnswer ? UITheme.WithAlpha(UITheme.Gold, 0.55f) : UITheme.BorderSoft,
-                            16, 2);
+            // A request WAITING ON YOU stands proud of the sheet; everything else is set into
+            // it. Depth rather than a gold border does the sorting, so a list of twelve friends
+            // with one pending request reads at a glance without a second frame colour entering
+            // the kit.
+            if (entry.AwaitingMyAnswer) EmberforgeUI.PanelOn(row, false);
+            else EmberforgeUI.SunkenOn(row);
 
             string shown = string.IsNullOrEmpty(entry.DisplayName) ? "Wayfarer" : entry.DisplayName;
-            Text name = UIBuilder.Label("Name", row, shown, UITheme.FontBody, UITheme.TextPrimary,
+            Text name = EmberforgeUI.Label("Name", row, shown, UITheme.FontBody, Emberforge.TextBody,
                                         TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 28f, -22f, 460f, 38f, new Vector2(0f, 1f));
 
-            Text code = UIBuilder.Label("Code", row,
+            Text code = EmberforgeUI.Label("Code", row,
                                         string.IsNullOrEmpty(entry.FriendCode) ? "" : FriendCode.Format(entry.FriendCode),
-                                        UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+                                        UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(code.rectTransform, 28f, -62f, 460f, 28f, new Vector2(0f, 1f));
 
             string state = entry.AwaitingMyAnswer ? "WANTS TO BE FRIENDS"
                          : entry.Status == "accepted" ? "FRIENDS" : "REQUEST SENT";
-            Text status = UIBuilder.Label("State", row, state, UITheme.FontTiny,
-                                          entry.AwaitingMyAnswer ? UITheme.Gold
-                                          : entry.Status == "accepted" ? UITheme.Success : UITheme.TextMuted,
-                                          TextAnchor.MiddleLeft);
+            Text status = EmberforgeUI.Label("State", row, state, UITheme.FontTiny,
+                                             entry.AwaitingMyAnswer ? Emberforge.TextGold
+                                             : entry.Status == "accepted" ? UITheme.Success : Emberforge.TextQuiet,
+                                             TextAnchor.MiddleLeft);
             UIBuilder.Box(status.rectTransform, 520f, 0f, 300f, 34f, new Vector2(0f, 0.5f));
 
             string capturedId = entry.FriendshipId;
@@ -278,7 +277,7 @@ namespace Emberfall.UI.Screens
 
             if (entry.AwaitingMyAnswer)
             {
-                UIButton accept = UIBuilder.GoldButton("Accept", row, "ACCEPT", UITheme.FontSmall);
+                UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall, ForgeButtonKind.Primary);
                 UIBuilder.Box(accept.Root, -230f, 0f, 200f, 72f, new Vector2(1f, 0.5f));
                 accept.OnClick(delegate { OnAccept(capturedId, capturedName); });
 
@@ -286,7 +285,7 @@ namespace Emberfall.UI.Screens
                 // which is why SocialService has no decline beside its Remove - three player
                 // actions, one database effect, and naming them separately here would imply three
                 // different outcomes.
-                UIButton decline = UIBuilder.SecondaryButton("Decline", row, "DECLINE", UITheme.FontSmall);
+                UIButton decline = EmberforgeUI.Button("Decline", row, "DECLINE", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(decline.Root, -24f, 0f, 190f, 72f, new Vector2(1f, 0.5f));
                 decline.OnClick(delegate { OnRemove(capturedId, capturedName, "declined"); });
                 return;
@@ -294,14 +293,14 @@ namespace Emberfall.UI.Screens
 
             if (entry.Status == "accepted")
             {
-                UIButton open = UIBuilder.GoldButton("Open", row, "THEIR TEAM", UITheme.FontSmall);
+                UIButton open = EmberforgeUI.Button("Open", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Primary);
                 UIBuilder.Box(open.Root, -230f, 0f, 220f, 72f, new Vector2(1f, 0.5f));
                 open.OnClick(delegate { OnOpenTeam(capturedUser, capturedName); });
             }
 
-            UIButton remove = UIBuilder.SecondaryButton("Remove", row,
+            UIButton remove = EmberforgeUI.Button("Remove", row,
                                                         entry.Status == "accepted" ? "REMOVE" : "CANCEL",
-                                                        UITheme.FontSmall);
+                                                        UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(remove.Root, -24f, 0f, 190f, 72f, new Vector2(1f, 0.5f));
             remove.OnClick(delegate
             {

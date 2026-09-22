@@ -65,7 +65,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _panel;
         private RectTransform _actions;
 
-        private readonly List<UIButton> _railButtons = new List<UIButton>();
+        private readonly List<ForgeTab> _railButtons = new List<ForgeTab>();
 
         /// <summary>Presentation state only. -1 is "every slot"; nothing here reaches the profile.</summary>
         private int _slotFilter = -1;
@@ -73,7 +73,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "FORGE", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "FORGE", Router, out _headerSubtitle);
 
             float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
             BuildSlagPlate(top);
@@ -91,20 +92,20 @@ namespace Emberfall.UI.Screens
             RectTransform plate = UIBuilder.Node("SlagPlate", Root);
             UIBuilder.Box(plate, AnvilX, -top, 460f, 56f, new Vector2(0.5f, 1f));
 
-            Image bg = plate.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(12);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.94f);
+            // A recess, like every other readout of a number in the kit: the currency strip's
+            // cells and the top bar's band are the same surface, so a purse reads as a purse
+            // wherever the game shows one.
+            Image bg = EmberforgeUI.SunkenOn(plate);
             bg.raycastTarget = false;
-            UIBuilder.NotchedFrame("Edge", plate, UITheme.WithAlpha(UITheme.Slag, 0.7f), 12, 2);
 
             Image icon = UIBuilder.Img("Icon", plate, TextureLab.IngotIcon(64), UITheme.Slag);
             UIBuilder.Box(icon.rectTransform, UITheme.Space16, 0f, 30f, 30f, new Vector2(0f, 0.5f));
 
-            _slagValue = UIBuilder.Label("Slag", plate, "", UITheme.FontSmall,
-                                         UITheme.TextPrimary, TextAnchor.MiddleLeft);
+            _slagValue = EmberforgeUI.Label("Slag", plate, "", UITheme.FontSmall,
+                                            Emberforge.TextGold, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(_slagValue.rectTransform, UITheme.Space16 + 30f + UITheme.Space12, 0f,
                                  UITheme.Space16, 0f);
+            UIBuilder.Outlined(_slagValue, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>The slot filter, down the left, as the mockup draws it.</summary>
@@ -113,12 +114,8 @@ namespace Emberfall.UI.Screens
             _rail = UIBuilder.Node("Rail", Root);
             UIBuilder.Box(_rail, RailX, -top, RailWidth, 7f * 82f, new Vector2(0.5f, 1f));
 
-            Image bg = _rail.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(14);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.9f);
+            Image bg = EmberforgeUI.SunkenOn(_rail);
             bg.raycastTarget = false;
-            UIBuilder.NotchedFrame("Edge", _rail, UITheme.WithAlpha(UITheme.ChromeBrass, 0.6f), 14, 2);
 
             AddRailButton(0, -1, TextureLab.Chest(64), "ALL");
             for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
@@ -126,24 +123,29 @@ namespace Emberfall.UI.Screens
                               ItemCard.ShortSlotName(ArmorInfo.AllSlots[i]));
         }
 
+        /// <summary>
+        /// One slot on the filter rail, as a TAB. The inventory's rail is the same control for the
+        /// same reason: seven buttons in a column is seven things to press and no statement about
+        /// which one you are in, and the selected state is a different plate rather than a tint on
+        /// a baked bevel.
+        /// </summary>
         private void AddRailButton(int index, int slotFilter, Sprite icon, string tip)
         {
-            UIButton button = UIBuilder.Notch(
-                UIBuilder.MakeButton("Rail" + index, _rail, "", UITheme.FontTiny,
-                                     UITheme.WithAlpha(UITheme.Panel, 0.9f), UITheme.BorderSoft,
-                                     UITheme.TextPrimary), 10);
-            UIBuilder.Box(button.Root, 0f, -(8f + index * 82f), 92f, 74f, new Vector2(0.5f, 1f));
+            int captured = slotFilter;
+            ForgeTab tab = EmberforgeUI.Tab("Rail" + index, _rail, 92f, 74f,
+                                            delegate { SetFilter(captured); });
+            UIBuilder.Box(tab.Root, 0f, -(8f + index * 82f), 92f, 74f, new Vector2(0.5f, 1f));
+            tab.Caption.gameObject.SetActive(false);
 
-            Image glyph = UIBuilder.Img("Glyph", button.Root, icon, UITheme.TextMuted);
+            Image glyph = UIBuilder.Img("Glyph", tab.Root, icon, Emberforge.TextQuiet);
             UIBuilder.Box(glyph.rectTransform, 0f, 6f, 34f, 34f, new Vector2(0.5f, 0.5f));
 
-            Text label = UIBuilder.Label("Tip", button.Root, tip,
-                                         UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.LowerCenter);
+            Text label = EmberforgeUI.Label("Tip", tab.Root, tip, UITheme.FontTiny - 8,
+                                            Emberforge.TextQuiet, TextAnchor.LowerCenter);
             UIBuilder.Box(label.rectTransform, 0f, 4f, 88f, 18f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
 
-            int captured = slotFilter;
-            button.OnClick(delegate { SetFilter(captured); });
-            _railButtons.Add(button);
+            _railButtons.Add(tab);
         }
 
         /// <summary>The anvil: the focused piece, and the two a Combine would consume beside it.</summary>
@@ -155,8 +157,8 @@ namespace Emberfall.UI.Screens
 
         private void BuildTray(float top)
         {
-            Text heading = UIBuilder.Label("TrayHeading", Root, "", UITheme.FontTiny,
-                                           UITheme.TextDim, TextAnchor.UpperLeft);
+            Text heading = EmberforgeUI.Label("TrayHeading", Root, "", UITheme.FontTiny,
+                                           Emberforge.TextQuiet, TextAnchor.UpperLeft);
             // Centred on the tray with left-aligned TEXT. See InventoryScreen's own note: Box's
             // anchor doubles as its pivot, so a (0,1) anchor measures x from the canvas edge.
             UIBuilder.Box(heading.rectTransform, AnvilX, -top, 700f, 26f, new Vector2(0.5f, 1f));
@@ -182,12 +184,8 @@ namespace Emberfall.UI.Screens
             _panel = UIBuilder.Node("Compare", Root);
             UIBuilder.Box(_panel, PanelX, -top, PanelWidth, 628f, new Vector2(0.5f, 1f));
 
-            Image bg = _panel.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
+            Image bg = EmberforgeUI.PanelOn(_panel, true);
             bg.raycastTarget = false;
-            UIBuilder.NotchedFrame("Edge", _panel, UITheme.WithAlpha(UITheme.ChromeBrass, 0.8f), 18, 2);
         }
 
         // ------------------------------------------------------------------ refresh
@@ -255,13 +253,13 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < _railButtons.Count; i++)
             {
                 bool active = (i - 1) == _slotFilter;
-                _railButtons[i].Background.color = active
-                    ? UITheme.WithAlpha(UITheme.Gold, 0.20f)
-                    : UITheme.WithAlpha(UITheme.Panel, 0.9f);
-                _railButtons[i].Frame.color = active ? UITheme.Gold : UITheme.BorderSoft;
+                EmberforgeUI.SetTabSelected(_railButtons[i], active);
                 Transform glyph = _railButtons[i].Root.Find("Glyph");
                 if (glyph != null)
-                    glyph.GetComponent<Image>().color = active ? UITheme.Gold : UITheme.TextMuted;
+                    glyph.GetComponent<Image>().color = active ? Emberforge.TextGold : Emberforge.TextQuiet;
+                Transform tip = _railButtons[i].Root.Find("Tip");
+                if (tip != null)
+                    tip.GetComponent<Text>().color = active ? Emberforge.TextGold : Emberforge.TextQuiet;
             }
 
             List<ArmorPiece> pool = Filtered();
@@ -331,8 +329,8 @@ namespace Emberfall.UI.Screens
 
             if (focus == null)
             {
-                Text none = UIBuilder.Label("None", _anvil, "NOTHING ON THE ANVIL",
-                                            UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text none = EmberforgeUI.Label("None", _anvil, "NOTHING ON THE ANVIL",
+                                            UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
@@ -354,8 +352,8 @@ namespace Emberfall.UI.Screens
                 {
                     RectTransform card = ItemCard.Vacant("Card", host, PartnerSize, focus.Slot);
                     UIBuilder.FillParent(card, 0f);
-                    Text q = UIBuilder.Label("Need", host, "NEEDED", UITheme.FontTiny - 6,
-                                             UITheme.TextDim, TextAnchor.UpperCenter);
+                    Text q = EmberforgeUI.Label("Need", host, "NEEDED", UITheme.FontTiny - 6,
+                                             Emberforge.TextQuiet, TextAnchor.UpperCenter);
                     UIBuilder.Box(q.rectTransform, 0f, -PartnerSize * 0.5f - 14f, 160f, 20f, new Vector2(0.5f, 0.5f));
                 }
 
@@ -371,8 +369,8 @@ namespace Emberfall.UI.Screens
             RectTransform focusCard = ItemCard.ForArmor("Card", focusHost, FocusSize, focus);
             UIBuilder.FillParent(focusCard, 0f);
 
-            Text name = UIBuilder.Label("Name", _anvil, focus.Name, UITheme.FontSmall,
-                                        UITheme.TextPrimary, TextAnchor.UpperCenter);
+            Text name = EmberforgeUI.Label("Name", _anvil, focus.Name, UITheme.FontSmall,
+                                        Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(name.rectTransform, 0f, -FocusSize * 0.5f - 6f, 560f, 30f, new Vector2(0.5f, 0.5f));
         }
 
@@ -423,23 +421,38 @@ namespace Emberfall.UI.Screens
                    CombineReason(equipped, nextTemper.HasValue, partners.Count, combineCost));
         }
 
+        /// <summary>
+        /// One anvil action. TEAL, all three, and the tint the caller passes reaches only the
+        /// GLYPH now.
+        ///
+        /// It used to colour each button's own border - green for salvage, amber for reroll, gold
+        /// for combine - which is three button voices on one row, and the kit has two. The row's
+        /// job is to offer three equal choices rather than to say which is the thing to press, so
+        /// none of them is the ember one; what tells them apart is the mark and the word on each.
+        /// </summary>
         private UIButton Action(string name, float x, string title, string cost, Color edge, Sprite icon)
         {
-            UIButton button = UIBuilder.Notch(
-                UIBuilder.MakeButton(name, _actions, "", UITheme.FontSmall,
-                                     UITheme.PanelRaised, edge, UITheme.TextPrimary), 14);
+            UIButton button = EmberforgeUI.Button(name, _actions, "", UITheme.FontSmall,
+                                                  ForgeButtonKind.Secondary);
             UIBuilder.Box(button.Root, x, 0f, 220f, 96f, new Vector2(0.5f, 1f));
 
             Image glyph = UIBuilder.Img("Glyph", button.Root, icon, edge);
             UIBuilder.Box(glyph.rectTransform, UITheme.Space16, 0f, 34f, 34f, new Vector2(0f, 0.5f));
 
+            // The title sits ABOVE the centre line and the cost below it, with real space
+            // between. Both used to be within seven units of each other and the cost's box ran
+            // through the title's baseline, which printed a line across the word - the first
+            // capture of this screen shows SALVAGE with a rule through it.
             button.Label.alignment = TextAnchor.LowerLeft;
-            UIBuilder.Box(button.Label.rectTransform, 62f, 4f, 148f, 32f, new Vector2(0f, 0.5f));
+            UIBuilder.Box(button.Label.rectTransform, 62f, 12f, 148f, 30f, new Vector2(0f, 0.5f));
             button.Label.text = title;
 
-            button.SubLabel = UIBuilder.Label("Cost", button.Root, cost, UITheme.FontTiny - 2,
-                                              UITheme.TextMuted, TextAnchor.UpperLeft);
-            UIBuilder.Box(button.SubLabel.rectTransform, 62f, -18f, 148f, 26f, new Vector2(0f, 0.5f));
+            UIBuilder.Outlined(button.Label, Emberforge.Outline, Emberforge.StrokeThin);
+
+            button.SubLabel = EmberforgeUI.Label("Cost", button.Root, cost, UITheme.FontTiny - 2,
+                                                 Emberforge.TextOnColor, TextAnchor.UpperLeft);
+            UIBuilder.Box(button.SubLabel.rectTransform, 62f, -22f, 148f, 26f, new Vector2(0f, 0.5f));
+            UIBuilder.Outlined(button.SubLabel, Emberforge.Outline, Emberforge.StrokeThin);
             button.SubLabel.raycastTarget = false;
             return button;
         }
@@ -455,7 +468,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private static void Reason(RectTransform parent, string name, float x, string text)
         {
-            Text label = UIBuilder.Label(name, parent, text, UITheme.FontTiny - 4, UITheme.TextMuted,
+            Text label = EmberforgeUI.Label(name, parent, text, UITheme.FontTiny - 4, Emberforge.TextQuiet,
                                          TextAnchor.UpperCenter);
             UIBuilder.Box(label.rectTransform, x, -102f, 232f, 28f, new Vector2(0.5f, 1f));
         }
@@ -479,8 +492,8 @@ namespace Emberfall.UI.Screens
 
             if (focus == null)
             {
-                Text none = UIBuilder.Label("None", _panel, "SELECT A PIECE",
-                                            UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text none = EmberforgeUI.Label("None", _panel, "SELECT A PIECE",
+                                            UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
@@ -491,23 +504,23 @@ namespace Emberfall.UI.Screens
             ArmorTemper? next = ArmorInfo.NextTemper(focus.Temper);
 
             Image arrow = UIBuilder.Img("Arrow", _panel, TextureLab.Diamond(48),
-                                        UITheme.WithAlpha(next.HasValue ? UITheme.Gold : UITheme.TextDim, 0.9f));
+                                        UITheme.WithAlpha(next.HasValue ? UITheme.Gold : Emberforge.TextQuiet, 0.9f));
             UIBuilder.Box(arrow.rectTransform, 0f, -top, 26f, 26f, new Vector2(0.5f, 1f));
             top += 26f + UITheme.Space16;
 
             if (!next.HasValue)
             {
-                Text max = UIBuilder.Label("Max", _panel, "ALREADY THE TOP RUNG",
-                                           UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+                Text max = EmberforgeUI.Label("Max", _panel, "ALREADY THE TOP RUNG",
+                                           UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
                 UIBuilder.Box(max.rectTransform, 0f, -top, PanelWidth - 40f, 30f, new Vector2(0.5f, 1f));
                 return;
             }
 
             top = BuildCompareBlock("After", focus, next.Value, top, true);
 
-            Text note = UIBuilder.WrappedLabel("Note", _panel,
+            Text note = EmberforgeUI.Body("Note", _panel,
                 "Rung and substat count are fixed. The rolls themselves are rolled at the anvil.",
-                UITheme.FontTiny - 6, UITheme.TextDim, TextAnchor.UpperCenter);
+                UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(note.rectTransform, 0f, -top, PanelWidth - 56f, 42f, new Vector2(0.5f, 1f));
         }
 
@@ -527,14 +540,14 @@ namespace Emberfall.UI.Screens
                                                 UITheme.WithAlpha(UITheme.AspectAccent(piece.Aspect), 0.16f));
             UIBuilder.FillParent(card, 0f);
 
-            Text rung = UIBuilder.Label("Rung", block, ArmorInfo.TemperLabel(temper).ToUpperInvariant(),
+            Text rung = EmberforgeUI.Label("Rung", block, ArmorInfo.TemperLabel(temper).ToUpperInvariant(),
                                         UITheme.FontSmall, tint, TextAnchor.UpperLeft);
             UIBuilder.Box(rung.rectTransform, 116f + UITheme.Space32, -UITheme.Space8, 300f, 30f, new Vector2(0f, 1f));
 
             int subs = ArmorInfo.SubStatCount(temper);
-            Text detail = UIBuilder.Label("Detail", block,
+            Text detail = EmberforgeUI.Label("Detail", block,
                                           subs + (subs == 1 ? " SUBSTAT" : " SUBSTATS"),
-                                          UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.UpperLeft);
+                                          UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(detail.rectTransform, 116f + UITheme.Space32, -42f, 300f, 26f, new Vector2(0f, 1f));
 
             // The piece's actual lines. On the preview block these are the CURRENT rolls, dimmed and
@@ -554,17 +567,17 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(row, UITheme.Space16, -rowTop,
                               PanelWidth - 40f - UITheme.Space32 - 190f, 24f, new Vector2(0f, 1f));
 
-                Text value = UIBuilder.Label("Value", block, ArmorInfo.StatLabel(roll.Stat) + "  " + RollText(roll),
+                Text value = EmberforgeUI.Label("Value", block, ArmorInfo.StatLabel(roll.Stat) + "  " + RollText(roll),
                                              UITheme.FontTiny - 6,
-                                             preview ? UITheme.TextDim : UITheme.TextMuted, TextAnchor.MiddleRight);
+                                             preview ? Emberforge.TextQuiet : Emberforge.TextQuiet, TextAnchor.MiddleRight);
                 UIBuilder.Box(value.rectTransform, -UITheme.Space16, -rowTop, 182f, 24f, new Vector2(1f, 1f));
                 rowTop += 30f;
             }
 
             if (preview)
             {
-                Text pending = UIBuilder.Label("Pending", block, "CURRENT ROLLS SHOWN - THESE REROLL",
-                                               UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.UpperLeft);
+                Text pending = EmberforgeUI.Label("Pending", block, "CURRENT ROLLS SHOWN - THESE REROLL",
+                                               UITheme.FontTiny - 8, Emberforge.TextQuiet, TextAnchor.UpperLeft);
                 UIBuilder.Box(pending.rectTransform, UITheme.Space16, -rowTop, 420f, 22f, new Vector2(0f, 1f));
             }
 

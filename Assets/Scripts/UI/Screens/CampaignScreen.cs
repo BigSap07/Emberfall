@@ -27,11 +27,6 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Campaign; } }
 
-        // campaign.png's authored size. Used for the aspect fit, NOT read back off the imported
-        // sprite: the importer has already scaled the texture per-axis, so feeding its rect back in
-        // would render that distortion instead of correcting it. Same reasoning as the Hub's map.
-        private const float SourceFileWidth = 960f;
-        private const float SourceFileHeight = 420f;
 
         private const float TrayHeight = 168f;
         private const float PortraitSize = 132f;
@@ -60,7 +55,7 @@ namespace Emberfall.UI.Screens
         protected override void Build()
         {
             BuildBackdrop();
-            ScreenChrome.Header(Root, "CAMPAIGN", Router, out _headerSubtitle);
+            ScreenChrome.ForgedHeader(Root, "CAMPAIGN", Router, out _headerSubtitle);
             BuildChipRow();
             BuildStageLabel();
             BuildSquadPower();
@@ -98,12 +93,18 @@ namespace Emberfall.UI.Screens
 
             AspectRatioFitter fitter = frame.gameObject.AddComponent<AspectRatioFitter>();
             fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-            fitter.aspectRatio = SourceFileWidth / SourceFileHeight;
+            // From the sprite's own rect. This was two hand-declared constants, because the
+            // importer used to rescale a non-power-of-two texture per axis and hand back a
+            // different shape than the file. Every painting in Assets/Resources/Backgrounds now
+            // carries nPOTScale 0, so the imported texture is the authored size - same change,
+            // same reason, as the Hub's map.
+            fitter.aspectRatio = sprite.rect.width / sprite.rect.height;
 
             // A readability wash, not a style choice. The painting is a lit diorama and the text
             // that sits on it - stage name, aspect, squad power - is small and light. Without this
             // the top-left label competes with whatever the art happens to put behind it.
-            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White, new Color(0f, 0f, 0f, 0.28f));
+            Image scrim = UIBuilder.Img("Scrim", Root, TextureLab.White,
+                                        UITheme.WithAlpha(Emberforge.Outline, 0.36f));
             scrim.raycastTarget = false;
             UIBuilder.FillParent(scrim.rectTransform, 0f);
         }
@@ -125,22 +126,29 @@ namespace Emberfall.UI.Screens
             RectTransform block = UIBuilder.Node("StageLabel", Root);
             UIBuilder.Box(block, UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 210f), 620f, 120f, new Vector2(0f, 1f));
 
-            _stageCode = UIBuilder.Label("Code", block, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
+            _stageCode = EmberforgeUI.Label("Code", block, "", UITheme.FontSmall, Emberforge.TextGold,
+                                            TextAnchor.UpperLeft);
             UIBuilder.Box(_stageCode.rectTransform, 0f, 0f, 620f, 30f, new Vector2(0f, 1f));
-            UIBuilder.Shadowed(_stageCode, UITheme.InkPanel, 3f);
+            UIBuilder.Outlined(_stageCode, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _stageName = UIBuilder.Label("Name", block, "", UITheme.FontHeading, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            // OUTLINED rather than shadowed, and that is the rule for every label on this screen:
+            // these three sit directly on a painting rather than on a plate, and a drop shadow
+            // only separates text from whatever happens to be BELOW it. A stroke all the way
+            // round is what keeps a light word readable over a lit horizon.
+            _stageName = EmberforgeUI.Title("Name", block, "", UITheme.FontHeading, Emberforge.TextOnColor,
+                                            TextAnchor.UpperLeft);
             UIBuilder.Box(_stageName.rectTransform, 0f, -32f, 620f, 46f, new Vector2(0f, 1f));
-            UIBuilder.Shadowed(_stageName, UITheme.InkPanel, 3f);
+            UIBuilder.Outlined(_stageName, Emberforge.Outline, Emberforge.StrokeThick);
 
             // Dot plus name, both driven by UITheme.AspectColor - the palette every other screen
             // reads. No colour is defined in this file.
             _aspectDot = UIBuilder.Img("Dot", block, TextureLab.Circle(64), UITheme.TextDim);
             UIBuilder.Box(_aspectDot.rectTransform, 2f, -88f, 18f, 18f, new Vector2(0f, 1f));
 
-            _aspectName = UIBuilder.Label("Aspect", block, "", UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+            _aspectName = EmberforgeUI.Label("Aspect", block, "", UITheme.FontTiny, Emberforge.TextBody,
+                                             TextAnchor.UpperLeft);
             UIBuilder.Box(_aspectName.rectTransform, 30f, -86f, 560f, 26f, new Vector2(0f, 1f));
-            UIBuilder.Shadowed(_aspectName, UITheme.InkPanel, 2f);
+            UIBuilder.Outlined(_aspectName, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         private void BuildSquadPower()
@@ -148,13 +156,15 @@ namespace Emberfall.UI.Screens
             RectTransform block = UIBuilder.Node("SquadPower", Root);
             UIBuilder.Box(block, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 210f), 420f, 90f, new Vector2(1f, 1f));
 
-            Text caption = UIBuilder.Label("Caption", block, "YOUR SQUAD", UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperRight);
+            Text caption = EmberforgeUI.Label("Caption", block, "YOUR SQUAD", UITheme.FontTiny,
+                                              Emberforge.TextBody, TextAnchor.UpperRight);
             UIBuilder.Box(caption.rectTransform, 0f, 0f, 420f, 26f, new Vector2(1f, 1f));
-            UIBuilder.Shadowed(caption, UITheme.InkPanel, 2f);
+            UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _squadPower = UIBuilder.Label("Power", block, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperRight);
+            _squadPower = EmberforgeUI.Title("Power", block, "", UITheme.FontHeading,
+                                             Emberforge.TextGold, TextAnchor.UpperRight);
             UIBuilder.Box(_squadPower.rectTransform, 0f, -28f, 420f, 46f, new Vector2(1f, 1f));
-            UIBuilder.Shadowed(_squadPower, UITheme.InkPanel, 3f);
+            UIBuilder.Outlined(_squadPower, Emberforge.Outline, Emberforge.StrokeThick);
         }
 
         private void BuildDiorama()
@@ -170,13 +180,10 @@ namespace Emberfall.UI.Screens
             RectTransform tray = UIBuilder.Node("Tray", Root);
             UIBuilder.Box(tray, 0f, UITheme.ScreenPadding, 1780f, TrayHeight, new Vector2(0.5f, 0f));
 
-            Image bg = tray.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(24);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
-            UIBuilder.Frame("Edge", tray, UITheme.BorderSoft, 24, 2);
+            EmberforgeUI.PanelOn(tray, true);
 
-            UIButton setup = UIBuilder.SecondaryButton("SetupTeam", tray, "SETUP TEAM", UITheme.FontBody);
+            UIButton setup = EmberforgeUI.Button("SetupTeam", tray, "SETUP TEAM", UITheme.FontBody,
+                                                 ForgeButtonKind.Secondary);
             UIBuilder.Box(setup.Root, 28f, 0f, 320f, 104f, new Vector2(0f, 0.5f));
             setup.OnClick(delegate
             {
@@ -184,7 +191,8 @@ namespace Emberfall.UI.Screens
                 Router.Show(ScreenId.Formation);
             });
 
-            _enter = UIBuilder.GoldButton("EnterBattle", tray, "ENTER BATTLE", UITheme.FontBody);
+            _enter = EmberforgeUI.Button("EnterBattle", tray, "ENTER BATTLE", UITheme.FontBody,
+                                         ForgeButtonKind.Primary);
             UIBuilder.Box(_enter.Root, -28f, 0f, 340f, 104f, new Vector2(1f, 0.5f));
             _enter.OnClick(delegate { EnterBattle(); });
 
@@ -260,43 +268,38 @@ namespace Emberfall.UI.Screens
                 ChapterDef chapter = chapters[c];
                 bool active = c == _chapterIndex;
 
-                RectTransform chip = UIBuilder.Node("Chip" + chapter.Number, _chipRow);
-                UIBuilder.Sized(chip, 300f, 84f);
+                // A TAB, not a chip. One chapter of several, exactly one of them open, is what a
+                // tab bar is for, and the selected state is a different plate rather than an
+                // alpha on one - which matters on a screen whose background is a PAINTING, where
+                // a translucent plate reads as whatever happens to be behind it.
+                int captured = c;
+                ForgeTab tab = EmberforgeUI.Tab(chapter.Name, _chipRow, 300f, 84f,
+                                                delegate { SelectChapter(captured); });
+                UIBuilder.Sized(tab.Root, 300f, 84f);
+                tab.Caption.gameObject.SetActive(false);
+                EmberforgeUI.SetTabSelected(tab, active);
 
-                // The flat panel style the rest of the project already uses, dimmed when inactive.
-                // No new chrome: same UISkin surface, same frame, only the alpha and the tint move.
-                Image bg = chip.gameObject.AddComponent<Image>();
-                bg.sprite = UISkin.Panel(16);
-                bg.type = Image.Type.Sliced;
-                bg.color = active ? UITheme.WithAlpha(UITheme.PanelRaised, 0.96f)
-                                  : UITheme.WithAlpha(UITheme.PanelSunken, 0.72f);
-                UIBuilder.Frame("Edge", chip, active ? UITheme.Border : UITheme.WithAlpha(UITheme.BorderSoft, 0.6f), 16, 2);
-
-                Text name = UIBuilder.Label("Name", chip, chapter.Name.ToUpperInvariant(), UITheme.FontSmall,
-                                            active ? UITheme.TextPrimary : UITheme.TextDim, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -14f, 280f, 30f, new Vector2(0.5f, 1f));
+                Text name = EmberforgeUI.Title("Name", tab.Root, chapter.Name.ToUpperInvariant(),
+                                               UITheme.FontSmall,
+                                               active ? Emberforge.TextGold : Emberforge.TextQuiet,
+                                               TextAnchor.UpperCenter);
+                // -20, not -14. The tab plate spends its top five pixels on an outline and a
+                // gold frame, and Cinzel's capitals reach the top of their box, so at -14 the
+                // heads of the letters were printed into the frame.
+                UIBuilder.Box(name.rectTransform, 0f, -20f, 280f, 32f, new Vector2(0.5f, 1f));
+                UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
                 int cleared = 0;
                 for (int s = 0; s < chapter.Stages.Count; s++)
                     if (App.Session.Profile.HasClearedStage(chapter.Stages[s].Id)) cleared++;
 
-                Text count = UIBuilder.Label("Count", chip, cleared + " / " + chapter.Stages.Count + " CLEARED",
-                                             UITheme.FontTiny, active ? UITheme.TextMuted : UITheme.TextDim,
-                                             TextAnchor.UpperCenter);
-                UIBuilder.Box(count.rectTransform, 0f, -46f, 280f, 24f, new Vector2(0.5f, 1f));
-
-                if (active)
-                {
-                    Image underline = UIBuilder.Img("Underline", chip, TextureLab.RoundedRect(4), UITheme.Gold);
-                    underline.type = Image.Type.Sliced;
-                    UIBuilder.Box(underline.rectTransform, 0f, 8f, 220f, 5f, new Vector2(0.5f, 0f));
-                }
-
-                Button button = chip.gameObject.AddComponent<Button>();
-                button.targetGraphic = bg;
-                chip.gameObject.AddComponent<ButtonPress>();
-                int captured = c;
-                button.onClick.AddListener(delegate { SelectChapter(captured); });
+                Text count = EmberforgeUI.Label("Count", tab.Root,
+                                                cleared + " / " + chapter.Stages.Count + " CLEARED",
+                                                UITheme.FontTiny,
+                                                active ? Emberforge.TextBody : Emberforge.TextQuiet,
+                                                TextAnchor.UpperCenter);
+                UIBuilder.Box(count.rectTransform, 0f, -52f, 280f, 24f, new Vector2(0.5f, 1f));
+                UIBuilder.Outlined(count, Emberforge.Outline, Emberforge.StrokeThin);
             }
         }
 
@@ -336,23 +339,46 @@ namespace Emberfall.UI.Screens
                     shadow.raycastTarget = false;
                     UIBuilder.Box(shadow.rectTransform, 0f, -10f, PortraitSize + 18f, PortraitSize + 18f, new Vector2(0.5f, 0.5f));
 
+                    // NO GOLD RING. A drawn badge arrives with its own gold frame and four spikes
+                    // reaching the edge of the image, so a ring around one is a second frame with
+                    // the spikes clipped against it. PortraitFrame puts the tier on a plate BEHIND
+                    // the badge instead, which is a reading the ring did not carry at all.
                     HeroInstance hero = team[slot];
-                    RectTransform portrait = Widgets.Portrait("P" + slot, cell, hero.Def, hero.Def.Stars, PortraitSize, false);
+                    RectTransform portrait = EmberforgeUI.PortraitFrame("P" + slot, cell, hero.Def,
+                                                                        hero.Def.Stars, PortraitSize);
                     UIBuilder.Box(portrait, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
-
-                    Image ring = UIBuilder.Img("GoldRing", cell, TextureLab.Ring(160, 6), UITheme.Gold);
-                    ring.raycastTarget = false;
-                    UIBuilder.Box(ring.rectTransform, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
                 }
                 else
                 {
-                    Image dashed = UIBuilder.Img("Empty", cell, DashedRing(160, 6, 14), UITheme.WithAlpha(UITheme.BorderSoft, 0.85f));
+                    Image dashed = UIBuilder.Img("Empty", cell, DashedRing(160, 6, 14),
+                                                 UITheme.WithAlpha(Emberforge.GoldDeep, 0.85f));
                     dashed.raycastTarget = false;
                     UIBuilder.Box(dashed.rectTransform, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
                 }
             }
 
             _squadPower.text = App.Session.Profile.TeamPower().ToString();
+        }
+
+        /// <summary>
+        /// One stepper chevron: the kit's rail disc with a Cinzel glyph on it, inside a full-size
+        /// hit rect. The glyph is text rather than a sprite for the reason ScreenChrome's back
+        /// chevron is - there is no arrow in the generator, and adding one for two call sites
+        /// would put a shape in the shared kit that nothing else asks for.
+        /// </summary>
+        private UIButton Chevron(string name, string glyph, Vector2 anchor)
+        {
+            ForgeDisc disc = EmberforgeUI.IconButton(name, _stepper, "", TextureLab.Sigil(0, 64),
+                                                     Emberforge.TextGold, 64f, null);
+            UIBuilder.Box(disc.Root, 0f, 0f, HubStyle.TouchMin, HubStyle.TouchMin, anchor);
+            disc.Glyph.enabled = false;
+
+            Text mark = EmberforgeUI.Title("Glyph", disc.Face, glyph, UITheme.FontBody,
+                                           Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(mark.rectTransform, 0f);
+            UIBuilder.Outlined(mark, Emberforge.Outline, Emberforge.StrokeThin);
+            mark.raycastTarget = false;
+            return disc.Button;
         }
 
         private void RefreshStageLabel()
@@ -429,15 +455,11 @@ namespace Emberfall.UI.Screens
             if (chapter == null) return;
             int count = chapter.Stages.Count;
 
-            UIButton prev = UIBuilder.IconButton("Prev", _stepper, "<", 64f,
-                                                 UITheme.WithAlpha(UITheme.PanelRaised, 0.95f), UITheme.TextPrimary);
-            UIBuilder.Box(prev.Root, 0f, 0f, 64f, 64f, new Vector2(0f, 0.5f));
+            UIButton prev = Chevron("Prev", "<", new Vector2(0f, 0.5f));
             prev.Interactable = _stageIndex > 0;
             prev.OnClick(delegate { StepStage(-1); });
 
-            UIButton next = UIBuilder.IconButton("Next", _stepper, ">", 64f,
-                                                 UITheme.WithAlpha(UITheme.PanelRaised, 0.95f), UITheme.TextPrimary);
-            UIBuilder.Box(next.Root, 0f, 0f, 64f, 64f, new Vector2(1f, 0.5f));
+            UIButton next = Chevron("Next", ">", new Vector2(1f, 0.5f));
             next.Interactable = _stageIndex < count - 1;
             next.OnClick(delegate { StepStage(1); });
 
@@ -463,31 +485,33 @@ namespace Emberfall.UI.Screens
                 RectTransform art = UIBuilder.Node("Art", pip);
                 UIBuilder.Box(art, 0f, 0f, size, size, new Vector2(0.5f, 0.5f));
 
-                Image disc = UIBuilder.Img("Disc", art, TextureLab.Circle(96),
-                                           current ? UITheme.Gold
-                                                   : (cleared ? UITheme.WithAlpha(UITheme.Success, 0.28f)
-                                                              : UITheme.WithAlpha(UITheme.PanelSunken, 0.9f)));
+                // THE KIT'S DISC, in its two depths. The stage you are on stands proud - the
+                // gold-framed disc with its lit top - and every other stage is the same disc
+                // pressed, which is a recess. Depth says "here" where a tint used to, and a tint
+                // on a baked bevel darkens its highlight and its shadow by the same factor, so a
+                // strip of twelve of them was twelve exposures of one object.
+                Image disc = UIBuilder.Img("Disc", art,
+                                           EmberforgeSkin.Get(current ? EmberforgeArt.Slot.Disc
+                                                                      : EmberforgeArt.Slot.DiscDown),
+                                           Color.white);
                 UIBuilder.FillParent(disc.rectTransform, 0f);
-
-                Image edge = UIBuilder.Img("Edge", art, TextureLab.Ring(96, 4),
-                                           current ? UITheme.GoldDeep : UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
-                edge.raycastTarget = false;
-                UIBuilder.FillParent(edge.rectTransform, 0f);
 
                 if (unlocked)
                 {
-                    Text number = UIBuilder.Label("N", art, (s + 1).ToString(),
-                                                  current ? UITheme.FontBody : UITheme.FontSmall,
-                                                  current ? UITheme.TextOnAccent : UITheme.TextPrimary,
-                                                  TextAnchor.MiddleCenter);
+                    Text number = EmberforgeUI.Title("N", art, (s + 1).ToString(),
+                                                     current ? UITheme.FontBody : UITheme.FontSmall,
+                                                     current ? Emberforge.TextGold
+                                                             : (cleared ? UITheme.Success : Emberforge.TextBody),
+                                                     TextAnchor.MiddleCenter);
                     UIBuilder.FillParent(number.rectTransform, 0f);
+                    UIBuilder.Outlined(number, Emberforge.Outline, Emberforge.StrokeThin);
                 }
                 else
                 {
                     // 0.62 of the pip, not 0.5: at 52px a half-size padlock is 26px, which holds its
                     // silhouette but reads as a smudge next to a full-size numeral. Locked has to be
                     // a shape you recognise, not just a cell with something small in it.
-                    Image padlock = UIBuilder.Img("Lock", art, Padlock(64), UITheme.TextMuted);
+                    Image padlock = UIBuilder.Img("Lock", art, Padlock(64), Emberforge.TextQuiet);
                     padlock.raycastTarget = false;
                     UIBuilder.Box(padlock.rectTransform, 0f, 0f, size * 0.62f, size * 0.62f, new Vector2(0.5f, 0.5f));
                 }

@@ -29,23 +29,51 @@ namespace Emberfall.UI.Screens
     /// equip action in the game. A second equip path would mean two screens that could disagree
     /// about what is worn.
     ///
-    /// THE ASPECT ACCENT APPEARS EXACTLY TWICE: the portrait's frame and the hero's own badge, both
-    /// tied to this hero's own aspect. Nowhere else - the stat bars are keyed to their stat, not to
-    /// the hero, so a Tide hero's Attack bar is the same colour as an Ember hero's.
+    /// THE ASPECT ACCENT APPEARS EXACTLY TWICE: the glow behind the portrait and the hero's own
+    /// badge, both tied to this hero's own aspect. Nowhere else - the stat bars are keyed to their
+    /// stat, not to the hero, so a Tide hero's Attack bar is the same colour as an Ember hero's.
+    ///
+    /// NO RING ROUND THE PORTRAIT. It used to have one, tinted to the aspect, drawn outside a
+    /// Widgets.Portrait - which put a second frame around a badge that arrives from the artist
+    /// already framed, with its four cardinal spikes clipped against the ring's inner edge.
+    /// EmberforgeUI.PortraitFrame is what draws the hero now: the tier is a plate BEHIND the
+    /// badge and the aspect is the glow outside it, which is two readings where the ring had one.
     /// </summary>
     public sealed class HeroDetailScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.HeroDetail; } }
 
-        // The right panel's contents have to FIT it. Measured, after the first pass ran them 36px
-        // past the bottom edge and the ability cards were drawn underneath the action bar:
-        //   20 pad + 84 badge band + 10 divider + 6*48 stats + 8 + 74 aspects + 8 + 112 abilities
-        //   = 608, inside 636 with 28 to spare.
-        // The action bar came down from 190 to 168 to buy the panel the room; two 100px buttons and
-        // a caption never needed 190.
+        // THE PANELS STRETCH BETWEEN THE HEADER AND THE ACTION BAR, and that is a fix rather
+        // than a preference.
+        //
+        // They used to be a fixed 636 tall hung off the top, which meant the page needed
+        // 252 + 636 + 168 = 1056 units of height. The 16:9 editor canvas is 1080 and it fitted;
+        // a 20:9 phone gets a logical canvas about 966 tall, and on that one the action bar was
+        // drawn 90 units UP THROUGH both panels - the hero's title, their attunement line and
+        // every ability card were behind it. It is the same fault DESIGN-EMBERFORGE records the
+        // component gallery hitting, and it was caught the same way: by photographing the page at
+        // the other aspect.
+        //
+        // Anchored top AND bottom, the panel is exactly the space left between the two whatever
+        // the canvas is. The contents then only have to fit the SHORTEST case, which is what the
+        // budget below is measured against.
+        //
+        //   966 short canvas - 252 header - 140 action bar - 8 gap = 566 of panel.
+        //   24 pad + 72 badge band + 10 divider + 6*44 stats + 8 + 66 aspects + 8 + 96 abilities
+        //   = 548, inside 566 with 18 to spare.
         private const float PanelTop = 252f;
-        private const float PanelHeight = 636f;
+        private const float ActionBarHeight = 140f;
+        private const float PanelBottomGap = 8f;
         private const float PanelWidth = 920f;
+
+        /// <summary>The shortest logical canvas this game targets - a 20:9 phone, not the 16:9
+        /// editor window. Every height on this page is checked against it.</summary>
+        private const float ShortestCanvasHeight = 966f;
+
+        /// <summary>What the panel is at its shortest, which is what its contents are laid out
+        /// against. At 16:9 the panel is taller than this and the contents simply have air under
+        /// them; at 20:9 this is exactly what there is.</summary>
+        private const float PanelHeight = ShortestCanvasHeight - PanelTop - ActionBarHeight - PanelBottomGap;
         private const float LeftX = -480f;
         private const float RightX = 480f;
         private const float SlotSize = 112f;
@@ -64,8 +92,9 @@ namespace Emberfall.UI.Screens
         private const float BannerButtonWidth = 260f;
         private const float PortraitSize = 300f;
 
-        /// <summary>Stat row pitch: a 16px name, a 28px bar, and breathing room.</summary>
-        private const float RowPitch = 48f;
+        /// <summary>Stat row pitch: a 14px name, a 26px bar, and breathing room.</summary>
+        private const float RowPitch = 44f;
+        private const float StatBarHeight = 26f;
 
         private HeroInstance _hero;
         private HeroDef _lockedDef;
@@ -75,7 +104,6 @@ namespace Emberfall.UI.Screens
         private RectTransform _left;
         private RectTransform _right;
         private RectTransform _portraitHost;
-        private Image _portraitFrame;
         private RectTransform _slotHost;
 
         private Text _nameLabel;
@@ -145,7 +173,12 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "HERO", Router, out _headerSubtitle);
+            // The page's own ground. The shared backdrop is the near-black violet an unconverted
+            // screen sits on, and two warm brown panels on it read as two different pieces of
+            // software - the same one Image, on one screen, that HeroesScreen lays down.
+            EmberforgeUI.Ground(Root);
+
+            ScreenChrome.ForgedHeader(Root, "HERO", Router, out _headerSubtitle);
             BuildLeftPanel();
             BuildRightPanel();
             BuildActionBar();
@@ -155,51 +188,61 @@ namespace Emberfall.UI.Screens
         {
             _left = Panel("Hero", LeftX);
 
-            // The hero, framed. The frame is the one place on this side the aspect accent appears.
+            // THE HERO, AND NO RING ROUND THEM.
+            //
+            // This used to draw Widgets.Portrait inside a separate brass ring tinted to the
+            // hero's aspect. Every portrait Pinoy delivers is a finished badge with its own gold
+            // frame and four spikes reaching the edge of the image, so that ring was a second
+            // frame on one object with the spikes clipped against its inner edge - the exact
+            // fault EmberforgeUI.PortraitFrame was written to answer. The tier is a plate BEHIND
+            // the badge and the aspect is the glow outside it, which is two channels where the
+            // ring had one.
             _portraitHost = UIBuilder.Node("PortraitHost", _left);
             UIBuilder.Box(_portraitHost, 0f, 34f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
 
-            _portraitFrame = UIBuilder.Img("Frame", _left, TextureLab.Ring(256, 6), UITheme.ChromeBrass);
-            UIBuilder.Box(_portraitFrame.rectTransform, 0f, 34f, PortraitSize + 22f, PortraitSize + 22f,
-                          new Vector2(0.5f, 0.5f));
-            _portraitFrame.rectTransform.SetAsFirstSibling();
-
-            _nameLabel = UIBuilder.Label("Name", _left, "", UITheme.FontTitle,
-                                         UITheme.TextPrimary, TextAnchor.UpperCenter);
+            _nameLabel = EmberforgeUI.Title("Name", _left, "", UITheme.FontTitle,
+                                            Emberforge.TextGold, TextAnchor.UpperCenter);
             UIBuilder.Box(_nameLabel.rectTransform, 0f, 96f, 620f, 52f, new Vector2(0.5f, 0f));
-            UIBuilder.Shadowed(_nameLabel, UITheme.InkDisplay, 3f);
+            UIBuilder.Outlined(_nameLabel, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _titleLabel = UIBuilder.Label("Title", _left, "", UITheme.FontTiny,
-                                          UITheme.TextMuted, TextAnchor.UpperCenter);
+            _titleLabel = EmberforgeUI.Label("Title", _left, "", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_titleLabel.rectTransform, 0f, 70f, 620f, 28f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_titleLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _levelLabel = UIBuilder.Label("Level", _left, "", UITheme.FontSmall,
-                                          UITheme.TextPrimary, TextAnchor.UpperLeft);
+            _levelLabel = EmberforgeUI.Label("Level", _left, "", UITheme.FontSmall,
+                                             Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(_levelLabel.rectTransform, UITheme.Space24, -UITheme.Space16, 400f, 32f,
                           new Vector2(0f, 1f));
+            UIBuilder.Outlined(_levelLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _powerLabel = UIBuilder.Label("Power", _left, "", UITheme.FontSmall,
-                                          UITheme.Gold, TextAnchor.UpperRight);
+            _powerLabel = EmberforgeUI.Label("Power", _left, "", UITheme.FontSmall,
+                                             Emberforge.TextGold, TextAnchor.UpperRight);
             // Right-aligned, so it grows leftward from its own right edge - which is parked one
             // button-width plus a gutter clear of the panel edge, leaving the corner to the button.
             UIBuilder.Box(_powerLabel.rectTransform,
                           -(UITheme.Space24 + BannerButtonWidth + UITheme.Space16), -UITheme.Space16,
                           400f, 32f, new Vector2(1f, 1f));
+            UIBuilder.Outlined(_powerLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
             // The six slots: three down each side of the hero, in ArmorInfo's own order.
             _slotHost = UIBuilder.Node("Slots", _left);
             UIBuilder.FillParent(_slotHost, 0f);
 
-            _attunementLabel = UIBuilder.WrappedLabel("Attunement", _left, "", UITheme.FontTiny - 4,
-                                                      UITheme.TextDim, TextAnchor.UpperCenter);
+            _attunementLabel = EmberforgeUI.Body("Attunement", _left, "", UITheme.FontTiny - 4,
+                                                 Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_attunementLabel.rectTransform, 0f, 34f, PanelWidth - 60f, 34f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_attunementLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _slotStatus = UIBuilder.Label("SlotStatus", _left, "", UITheme.FontTiny,
-                                          UITheme.TextMuted, TextAnchor.UpperCenter);
+            _slotStatus = EmberforgeUI.Label("SlotStatus", _left, "", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_slotStatus.rectTransform, 0f, 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_slotStatus, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _openFormation = UIBuilder.Notch(
-                UIBuilder.SecondaryButton("Formation", _left, "CHANGE BANNER", UITheme.FontTiny), 12);
+            // Teal, because it is the way OUT of this page and into the formation. The one thing
+            // this screen wants pressed is LEVEL UP, which is the ember one on the action bar.
+            _openFormation = EmberforgeUI.Button("Formation", _left, "CHANGE BANNER",
+                                                 UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(_openFormation.Root, -UITheme.Space24, -UITheme.Space16,
                           BannerButtonWidth, 48f, new Vector2(1f, 1f));
             _openFormation.OnClick(OpenFormation);
@@ -213,18 +256,28 @@ namespace Emberfall.UI.Screens
 
             // The hero's own badge: their aspect, on a diamond, exactly as the mockup draws it.
             RectTransform badgeHost = UIBuilder.Node("Badge", _right);
-            UIBuilder.Box(badgeHost, UITheme.Space24, -top, 80f, 80f, new Vector2(0f, 1f));
+            UIBuilder.Box(badgeHost, UITheme.Space24, -top, 68f, 68f, new Vector2(0f, 1f));
 
-            _aspectBadge = UIBuilder.Img("Plate", badgeHost, TextureLab.Diamond(96), UITheme.Panel);
+            // THE KIT'S JEWEL, in two pieces, for the reason a currency pill's is in two: the
+            // body is white and takes the aspect tint, the edge is an untinted gold rim over it.
+            // A one-piece tinted diamond would tint its own dark outline and every aspect would
+            // carry a differently coloured one.
+            _aspectBadge = UIBuilder.Img("Plate", badgeHost,
+                                         EmberforgeSkin.Get(EmberforgeArt.Slot.JewelBody), Color.white);
             UIBuilder.FillParent(_aspectBadge.rectTransform, 0f);
 
-            _aspectBadgeGlyph = UIBuilder.Img("Glyph", badgeHost, TextureLab.Sigil(13, 128), UITheme.TextPrimary);
+            Image badgeEdge = UIBuilder.Img("Edge", badgeHost,
+                                            EmberforgeSkin.Get(EmberforgeArt.Slot.JewelEdge), Color.white);
+            UIBuilder.FillParent(badgeEdge.rectTransform, 0f);
+
+            _aspectBadgeGlyph = UIBuilder.Img("Glyph", badgeHost, TextureLab.Sigil(13, 128),
+                                              Emberforge.TextOnGold);
             UIBuilder.Box(_aspectBadgeGlyph.rectTransform, 0f, 0f, 38f, 38f, new Vector2(0.5f, 0.5f));
 
             _starHost = UIBuilder.Node("Stars", _right);
-            UIBuilder.Box(_starHost, UITheme.Space24 + 100f, -(top + 26f), 300f, 30f, new Vector2(0f, 1f));
+            UIBuilder.Box(_starHost, UITheme.Space24 + 88f, -(top + 20f), 300f, 30f, new Vector2(0f, 1f));
 
-            top += 84f;
+            top += 72f;
             Divider(top);
             top += 10f;
 
@@ -234,63 +287,79 @@ namespace Emberfall.UI.Screens
             top += 6f * RowPitch + UITheme.Space8;
 
             _aspectRow = UIBuilder.Node("Aspects", _right);
-            UIBuilder.Box(_aspectRow, 0f, -top, PanelWidth - UITheme.Space48, 74f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_aspectRow, 0f, -top, PanelWidth - UITheme.Space48, 66f, new Vector2(0.5f, 1f));
 
-            Image aspectBg = _aspectRow.gameObject.AddComponent<Image>();
-            aspectBg.sprite = TextureLab.NotchedRect(10);
-            aspectBg.type = Image.Type.Sliced;
-            aspectBg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.85f);
+            Image aspectBg = EmberforgeUI.SunkenOn(_aspectRow);
             aspectBg.raycastTarget = false;
 
-            top += 74f + UITheme.Space8;
+            top += 66f + UITheme.Space8;
 
             _abilityHost = UIBuilder.Node("Abilities", _right);
-            UIBuilder.Box(_abilityHost, 0f, -top, PanelWidth - UITheme.Space48, 112f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_abilityHost, 0f, -top, PanelWidth - UITheme.Space48, 96f, new Vector2(0.5f, 1f));
+
+            // Says out loud when this page has outgrown the shortest canvas, for the reason
+            // DesignGallery.CheckFits exists: the failure is SILENT on the machine it is authored
+            // on. At 16:9 everything fits and the section that runs under the action bar only
+            // appears on the 20:9 capture.
+            float used = top + 96f;
+            if (used > PanelHeight)
+                Debug.LogError("HeroDetailScreen: the right panel needs " + used + " units and the"
+                    + " shortest canvas this game targets leaves only " + PanelHeight
+                    + ". It fits at 16:9 and runs under the action bar at 20:9.");
         }
 
         private RectTransform Panel(string name, float x)
         {
             RectTransform panel = UIBuilder.Node(name, Root);
-            UIBuilder.Box(panel, x, -PanelTop, PanelWidth, PanelHeight, new Vector2(0.5f, 1f));
+            // Stretched top to bottom rather than Boxed at a fixed height - see the note on
+            // PanelTop. x is still the panel's own centre on a 0.5 horizontal anchor.
+            panel.anchorMin = new Vector2(0.5f, 0f);
+            panel.anchorMax = new Vector2(0.5f, 1f);
+            panel.pivot = new Vector2(0.5f, 0.5f);
+            panel.sizeDelta = new Vector2(PanelWidth, -(PanelTop + ActionBarHeight + PanelBottomGap));
+            panel.anchoredPosition = new Vector2(x, (ActionBarHeight + PanelBottomGap - PanelTop) * 0.5f);
 
-            Image bg = panel.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(20);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.Panel, 0.94f);
+            Image bg = EmberforgeUI.PanelOn(panel, true);
             bg.raycastTarget = false;
-            UIBuilder.NotchedFrame("Edge", panel, UITheme.WithAlpha(UITheme.ChromeBrass, 0.85f), 20, 2);
             return panel;
         }
 
         private void Divider(float top)
         {
-            Image rule = UIBuilder.Img("Rule" + top, _right, TextureLab.White,
-                                       UITheme.WithAlpha(UITheme.ChromeBrass, 0.5f));
-            UIBuilder.Box(rule.rectTransform, 0f, -top, PanelWidth - UITheme.Space48, 1f, new Vector2(0.5f, 1f));
+            Image rule = EmberforgeUI.Rule("Rule" + top, _right);
+            UIBuilder.Box(rule.rectTransform, 0f, -top, PanelWidth - UITheme.Space48,
+                          Emberforge.RuleHeight, new Vector2(0.5f, 1f));
         }
 
         private void BuildActionBar()
         {
             RectTransform bar = UIBuilder.Node("Actions", Root);
-            UIBuilder.BottomStrip(bar, 168f, 0f, 0f);
+            UIBuilder.BottomStrip(bar, ActionBarHeight, 0f, 0f);
 
-            Image backing = bar.gameObject.AddComponent<Image>();
-            backing.sprite = TextureLab.White;
-            backing.color = UITheme.WithAlpha(UITheme.BackdropDeep, 0.94f);
+            // A RECESS across the foot of the page, which is the same thing the top bar's
+            // backing is and for the same reason: the two buttons sit ON this, and a framed panel
+            // behind a framed button is two frames deep for one row of controls.
+            Image backing = EmberforgeUI.SunkenOn(bar);
+            backing.raycastTarget = false;
 
-            _capNote = UIBuilder.Label("CapNote", bar, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(_capNote.rectTransform, 0f, -8f, 1200f, 26f, new Vector2(0.5f, 1f));
+            _capNote = EmberforgeUI.Label("CapNote", bar, "", UITheme.FontTiny, Emberforge.TextQuiet,
+                                          TextAnchor.UpperCenter);
+            UIBuilder.Box(_capNote.rectTransform, 0f, -6f, 1200f, 24f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_capNote, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _levelUpButton = UIBuilder.Notch(UIBuilder.GoldButton("LevelUp", bar, "LEVEL UP", UITheme.FontHeading), 16);
-            UIBuilder.Box(_levelUpButton.Root, -190f, 20f, 640f, 100f, new Vector2(0.5f, 0f));
+            _levelUpButton = EmberforgeUI.Button("LevelUp", bar, "LEVEL UP", UITheme.FontHeading,
+                                                 ForgeButtonKind.Primary);
+            UIBuilder.Box(_levelUpButton.Root, -190f, 14f, 640f, 88f, new Vector2(0.5f, 0f));
             _levelUpButton.OnClick(delegate { LevelUp(1); });
 
-            _levelUpTenButton = UIBuilder.Notch(UIBuilder.SecondaryButton("LevelUpTen", bar, "x10", UITheme.FontHeading), 16);
-            UIBuilder.Box(_levelUpTenButton.Root, 320f, 20f, 340f, 100f, new Vector2(0.5f, 0f));
+            _levelUpTenButton = EmberforgeUI.Button("LevelUpTen", bar, "x10", UITheme.FontHeading,
+                                                    ForgeButtonKind.Secondary);
+            UIBuilder.Box(_levelUpTenButton.Root, 320f, 14f, 340f, 88f, new Vector2(0.5f, 0f));
             _levelUpTenButton.OnClick(delegate { LevelUp(10); });
 
-            _obtainButton = UIBuilder.Notch(UIBuilder.GoldButton("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading), 16);
-            UIBuilder.Box(_obtainButton.Root, 0f, 20f, 980f, 100f, new Vector2(0.5f, 0f));
+            _obtainButton = EmberforgeUI.Button("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading,
+                                                ForgeButtonKind.Primary);
+            UIBuilder.Box(_obtainButton.Root, 0f, 14f, 980f, 88f, new Vector2(0.5f, 0f));
             _obtainButton.OnClick(GoToSummon);
         }
 
@@ -315,18 +384,19 @@ namespace Emberfall.UI.Screens
             Color accent = UITheme.AspectAccent(def.Aspect);
 
             for (int i = _portraitHost.childCount - 1; i >= 0; i--) Destroy(_portraitHost.GetChild(i).gameObject);
-            RectTransform portrait = Widgets.Portrait("Portrait", _portraitHost, def, def.Stars, PortraitSize, !locked);
+            RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", _portraitHost, def,
+                                                                def.Stars, PortraitSize);
             UIBuilder.FillParent(portrait, 0f);
             if (locked)
             {
                 // dimmed silhouette - same identity below, but the portrait itself stays a shape,
-                // not a reveal
+                // not a reveal. Over the badge rather than under the plate, so the tier behind it
+                // still reads: not owning a hero does not make them a different rarity.
                 Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), UITheme.ScrimModal);
-                UIBuilder.FillParent(scrim.rectTransform, 0f);
+                UIBuilder.FillParent(scrim.rectTransform, PortraitSize * 0.07f);
             }
-            _portraitFrame.color = locked ? UITheme.WithAlpha(UITheme.BorderSoft, 0.9f) : accent;
 
-            _aspectBadge.color = UITheme.WithAlpha(UITheme.Mix(UITheme.Panel, accent, 0.25f), 0.95f);
+            _aspectBadge.color = accent;
             _aspectBadgeGlyph.sprite = TextureLab.Sigil(AspectSigil(def.Aspect), 128);
             _aspectBadgeGlyph.color = accent;
 
@@ -376,7 +446,7 @@ namespace Emberfall.UI.Screens
             // 136 apart, not 126: the slot's name label sits BELOW its card, and at the old pitch
             // the 112px card plus a 20px label left 14px of gap - so every label straddled the top
             // edge of the card beneath it.
-            float[] rowY = { 152f, 16f, -120f };
+            float[] rowY = { 136f, 8f, -120f };
 
             for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
             {
@@ -394,9 +464,11 @@ namespace Emberfall.UI.Screens
                     : ItemCard.Vacant("Card", host, SlotSize, slot);
                 UIBuilder.FillParent(card, 0f);
 
-                Text label = UIBuilder.Label("Label", host, ItemCard.SlotName(slot),
-                                             UITheme.FontTiny - 8, UITheme.TextDim, TextAnchor.UpperCenter);
+                Text label = EmberforgeUI.Label("Label", host, ItemCard.SlotName(slot),
+                                                UITheme.FontTiny - 8, Emberforge.TextQuiet,
+                                                TextAnchor.UpperCenter);
                 UIBuilder.Box(label.rectTransform, 0f, -SlotSize * 0.5f - 13f, 170f, 20f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
 
                 // Tapping a slot routes to the Inventory, which owns every equip action in the
                 // game. Nothing is chosen here - choosing is what the screen being opened is for.
@@ -432,7 +504,7 @@ namespace Emberfall.UI.Screens
                 float x = -width * 0.5f + step * (i + 0.5f);
 
                 Image icon = UIBuilder.Img("A" + i, _aspectRow, TextureLab.Sigil(AspectSigil(other), 128), accent);
-                UIBuilder.Box(icon.rectTransform, x, 14f, 32f, 32f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(icon.rectTransform, x, 12f, 30f, 30f, new Vector2(0.5f, 0.5f));
 
                 float multiplier = AspectChart.Multiplier(def.Aspect, other);
                 int pips = multiplier > 1.001f ? 3 : (multiplier < 0.999f ? 1 : 2);
@@ -440,15 +512,15 @@ namespace Emberfall.UI.Screens
                 for (int p = 0; p < 3; p++)
                 {
                     Image dot = UIBuilder.Img("D" + i + "_" + p, _aspectRow, TextureLab.Circle(32),
-                                              p < pips ? accent : UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
-                    UIBuilder.Box(dot.rectTransform, x - 18f + p * 18f, -20f, 12f, 12f, new Vector2(0.5f, 0.5f));
+                                              p < pips ? accent : Emberforge.TextQuiet);
+                    UIBuilder.Box(dot.rectTransform, x - 18f + p * 18f, -17f, 12f, 12f, new Vector2(0.5f, 0.5f));
                 }
 
                 if (i < 5)
                 {
                     Image sep = UIBuilder.Img("Sep" + i, _aspectRow, TextureLab.White,
-                                              UITheme.WithAlpha(UITheme.BorderSoft, 0.5f));
-                    UIBuilder.Box(sep.rectTransform, x + step * 0.5f, 0f, 1f, 48f, new Vector2(0.5f, 0.5f));
+                                              Emberforge.GoldDeep);
+                    UIBuilder.Box(sep.rectTransform, x + step * 0.5f, 0f, 2f, 42f, new Vector2(0.5f, 0.5f));
                 }
             }
         }
@@ -482,30 +554,31 @@ namespace Emberfall.UI.Screens
             {
                 float x = -width * 0.5f + step * (i + 0.5f);
                 RectTransform cell = UIBuilder.Node("Ability" + i, _abilityHost);
-                UIBuilder.Box(cell, x, 0f, cardWidth, 112f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(cell, x, 0f, cardWidth, 96f, new Vector2(0.5f, 0.5f));
 
-                Image bg = cell.gameObject.AddComponent<Image>();
-                bg.sprite = TextureLab.NotchedRect(12);
-                bg.type = Image.Type.Sliced;
-                bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
+                Image bg = EmberforgeUI.SunkenOn(cell);
                 bg.raycastTarget = false;
-                UIBuilder.NotchedFrame("Edge", cell, UITheme.WithAlpha(tints[i], 0.9f), 12, 2);
 
                 // Glyph, kind, name - stacked with real gaps between them. The first pass anchored
                 // the kind at the card's centre and the name off its bottom edge, and the two
                 // overlapped by 11px: "BASIC" was printed across "Ashen Cleave".
                 Image glyph = UIBuilder.Img("Glyph", cell, TextureLab.Sigil(def.Visual.Sigil, 128), tints[i]);
-                UIBuilder.Box(glyph.rectTransform, 0f, 32f, 42f, 42f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(glyph.rectTransform, 0f, 27f, 34f, 34f, new Vector2(0.5f, 0.5f));
 
-                Text kind = UIBuilder.Label("Kind", cell, kinds[i], UITheme.FontTiny - 8, tints[i],
-                                            TextAnchor.MiddleCenter);
-                UIBuilder.Box(kind.rectTransform, 0f, 4f, cardWidth - 12f, 18f, new Vector2(0.5f, 0.5f));
+                // The KIND is a chip now rather than a bare word, which is what the ability's
+                // tint is left carrying on this card - the fill and the border it used to tint as
+                // well are the kit's recess and the kit's outline, the same on all five cells.
+                RectTransform kindChip = EmberforgeUI.Chip("Kind", cell, kinds[i], tints[i],
+                                                           UITheme.FontTiny - 8);
+                UIBuilder.Box(kindChip, 0f, 2f, Mathf.Min(cardWidth - 12f, 150f), 22f,
+                              new Vector2(0.5f, 0.5f));
 
-                Text nameLabel = UIBuilder.WrappedLabel("Name", cell, names[i],
-                                                        UITheme.FontTiny - 6, UITheme.TextPrimary,
-                                                        TextAnchor.UpperCenter);
-                UIBuilder.Box(nameLabel.rectTransform, 0f, 6f, cardWidth - 16f, 34f,
+                Text nameLabel = EmberforgeUI.Body("Name", cell, names[i],
+                                                   UITheme.FontTiny - 6, Emberforge.TextBody,
+                                                   TextAnchor.UpperCenter);
+                UIBuilder.Box(nameLabel.rectTransform, 0f, 4f, cardWidth - 16f, 32f,
                               new Vector2(0.5f, 0f));
+                UIBuilder.Outlined(nameLabel, Emberforge.Outline, Emberforge.StrokeThin);
             }
         }
 
@@ -571,7 +644,7 @@ namespace Emberfall.UI.Screens
                 ? "Standing in slot " + (deployedSlot + 1)
                   + (deployedSlot == 0 ? "  -  the front of the line" : "")
                 : "On the bench";
-            _slotStatus.color = deployedSlot >= 0 ? UITheme.Success : UITheme.TextMuted;
+            _slotStatus.color = deployedSlot >= 0 ? UITheme.Success : Emberforge.TextQuiet;
         }
 
         /// <summary>
@@ -617,29 +690,33 @@ namespace Emberfall.UI.Screens
             // across the health bar on every row.
             float rowTop = index * RowPitch;
 
-            Text name = UIBuilder.Label("Name" + index, _statHost, label, UITheme.FontTiny - 8,
-                                        UITheme.TextDim, TextAnchor.LowerLeft);
-            UIBuilder.Box(name.rectTransform, 44f, -rowTop, 300f, 16f, new Vector2(0f, 1f));
+            Text name = EmberforgeUI.Label("Name" + index, _statHost, label, UITheme.FontTiny - 8,
+                                           Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(name.rectTransform, 44f, -rowTop, 300f, 14f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
-            RectTransform row = ItemCard.StatBar("Stat" + index, _statHost, icon, tint, ratio, 8, 28f);
+            RectTransform row = ItemCard.StatBar("Stat" + index, _statHost, icon, tint, ratio, 8, StatBarHeight);
             row.anchorMin = new Vector2(0f, 1f);
             row.anchorMax = new Vector2(0f, 1f);
             row.pivot = new Vector2(0f, 1f);
-            row.anchoredPosition = new Vector2(0f, -(rowTop + 18f));
-            row.sizeDelta = new Vector2(PanelWidth - UITheme.Space48 - 250f, 28f);
+            row.anchoredPosition = new Vector2(0f, -(rowTop + 16f));
+            row.sizeDelta = new Vector2(PanelWidth - UITheme.Space48 - 250f, StatBarHeight);
 
             string shown = percent ? Pct(value) : Whole(value);
-            Text valueLabel = UIBuilder.Label("Value" + index, _statHost, shown, UITheme.FontSmall,
-                                              UITheme.TextPrimary, TextAnchor.MiddleRight);
-            UIBuilder.Box(valueLabel.rectTransform, 0f, -(rowTop + 8f), 150f, 34f, new Vector2(1f, 1f));
+            Text valueLabel = EmberforgeUI.Label("Value" + index, _statHost, shown, UITheme.FontSmall,
+                                                 Emberforge.TextBody, TextAnchor.MiddleRight);
+            UIBuilder.Box(valueLabel.rectTransform, 0f, -(rowTop + 6f), 150f, 34f, new Vector2(1f, 1f));
+            UIBuilder.Outlined(valueLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
             float delta = nextValue - value;
             if (!hideDeltas && delta > (percent ? 0.0005f : 0.5f))
             {
-                Text deltaLabel = UIBuilder.Label("Delta" + index, _statHost,
-                                                  percent ? "+" + Pct(delta) : "+" + Mathf.RoundToInt(delta),
-                                                  UITheme.FontTiny - 6, UITheme.Success, TextAnchor.MiddleRight);
-                UIBuilder.Box(deltaLabel.rectTransform, -152f, -(rowTop + 8f), 92f, 34f, new Vector2(1f, 1f));
+                Text deltaLabel = EmberforgeUI.Label("Delta" + index, _statHost,
+                                                     percent ? "+" + Pct(delta) : "+" + Mathf.RoundToInt(delta),
+                                                     UITheme.FontTiny - 6, UITheme.Success,
+                                                     TextAnchor.MiddleRight);
+                UIBuilder.Box(deltaLabel.rectTransform, -152f, -(rowTop + 6f), 92f, 34f, new Vector2(1f, 1f));
+                UIBuilder.Outlined(deltaLabel, Emberforge.Outline, Emberforge.StrokeThin);
             }
         }
 
@@ -665,7 +742,7 @@ namespace Emberfall.UI.Screens
             {
                 _attunementLabel.text = "Attunement  " + matching + "/6 " + aspectName
                                       + "  -  2 matching pieces unlocks the first bonus.";
-                _attunementLabel.color = UITheme.TextDim;
+                _attunementLabel.color = Emberforge.TextQuiet;
             }
             else
             {

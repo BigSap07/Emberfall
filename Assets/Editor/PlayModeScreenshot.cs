@@ -12,6 +12,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.EditorTools
 {
@@ -52,6 +53,9 @@ namespace Emberfall.EditorTools
         private const string StageKey = "PlayModeScreenshot.Stage";
         private const string LastShotKey = "PlayModeScreenshot.LastShot";
         private const string BattleArmKey = "PlayModeScreenshot.BattleArm";
+        private const string WidthKey = "PlayModeScreenshot.Width";
+        private const string HeightKey = "PlayModeScreenshot.Height";
+        private const string SuffixKey = "PlayModeScreenshot.Suffix";
 
         /// <summary>
         /// Poll target for an external, file-based trigger: an already-open Editor session cannot
@@ -74,7 +78,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV12-battle-skips-the-fixed-shot";
+        private const string BuildMarker = "FIXV13-the-trigger-carries-its-own-aspect";
 
         static PlayModeScreenshot()
         {
@@ -145,6 +149,9 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Battle (live combat)", false, 67)]
         public static void CaptureBattleScreen() { Begin("Screen:Battle"); }
 
+        [MenuItem("Emberfall/Capture/Battle result", false, 73)]
+        public static void CaptureBattleResult() { Begin("Screen:Result"); }
+
         // Formation and Hero detail are the two portrait-dense screens that had no target here,
         // which is how a portrait delivery could have been called verified without either being
         // photographed. Both need a little more than Show(): the formation screen is the roster
@@ -181,27 +188,84 @@ namespace Emberfall.EditorTools
         public static void CaptureAllScreens() { Begin("Screen:ALL"); }
 
         /// <summary>
-        /// What every capture from this tool is framed at. Pinned rather than inherited, because
-        /// the logical canvas is a function of ASPECT (see GameViewSize) - an unpinned capture only
-        /// proves the layout works at whatever size the Game view was last dragged to, which is the
-        /// caveat Tools/capture-hub.sh already states for the Hub and which applied silently to
-        /// every screen this tool photographed. 1920x1080 is ProjectSettings' own Android
-        /// resolution and the reference UITheme lays out against.
+        /// What a capture from this tool is framed at by default. Pinned rather than inherited,
+        /// because the logical canvas is a function of ASPECT (see GameViewSize) - an unpinned
+        /// capture only proves the layout works at whatever size the Game view was last dragged
+        /// to, which is the caveat Tools/capture-hub.sh already states for the Hub and which
+        /// applied silently to every screen this tool photographed. 1920x1080 is ProjectSettings'
+        /// own Android resolution and the reference UITheme lays out against.
         /// </summary>
         private const int CaptureWidth = 1920;
         private const int CaptureHeight = 1080;
 
+        /// <summary>
+        /// The OTHER aspect every screen has to be photographed at, and the reason this tool
+        /// takes a size at all now.
+        ///
+        /// 16:9 is the editor's shape and 20:9 is the phone's, and the canvas scaler blends the
+        /// two - so a 20:9 device gets a logical canvas about 2147x966, which is 114 units
+        /// SHORTER than the 1920x1080 an editor capture proves. DESIGN-EMBERFORGE records three
+        /// sections of the component gallery that overflowed their panels at 20:9 and nowhere
+        /// else. A screen photographed at one aspect is a screen that has been half checked.
+        /// </summary>
+        private const int WideWidth = 2400;
+        private const int WideHeight = 1080;
+
+        [MenuItem("Emberfall/Capture/ALL of the above, at 20:9", false, 81)]
+        public static void CaptureAllScreensWide() { Begin("Screen:ALL@" + WideWidth + "x" + WideHeight); }
+
+        /// <summary>
+        /// Starts a run. The target may carry its own frame size and its own file suffix:
+        ///
+        ///     Screen:Summon                  1920x1080, writes screen_Summon.png
+        ///     Screen:Summon@2400x1080        2400x1080, writes screen_Summon@2400x1080.png
+        ///
+        /// The size rides on the target rather than sitting in a second trigger file because the
+        /// trigger is one file with one line in it, and an aspect that had to be set separately
+        /// is an aspect that can be forgotten between the two writes - which photographs one
+        /// shape and files it as the other.
+        /// </summary>
         private static void Begin(string target)
         {
-            if (!GameViewSize.Apply(CaptureWidth, CaptureHeight))
+            int width = CaptureWidth;
+            int height = CaptureHeight;
+            string suffix = "";
+
+            int at = target.LastIndexOf('@');
+            if (at > 0)
+            {
+                string size = target.Substring(at + 1);
+                target = target.Substring(0, at);
+                string[] parts = size.Split('x');
+                int w, h;
+                if (parts.Length == 2 && int.TryParse(parts[0], out w) && int.TryParse(parts[1], out h)
+                    && w > 0 && h > 0)
+                {
+                    width = w;
+                    height = h;
+                    suffix = "@" + w + "x" + h;
+                }
+                else
+                {
+                    Debug.LogWarning("PlayModeScreenshot: '" + size + "' is not a WxH size, so this"
+                                     + " run uses the default " + CaptureWidth + "x" + CaptureHeight
+                                     + ". A capture at an unintended aspect proves nothing about"
+                                     + " the one that was asked for.");
+                }
+            }
+
+            if (!GameViewSize.Apply(width, height))
             {
                 Debug.LogWarning("PlayModeScreenshot: could not pin the Game view to "
-                                 + CaptureWidth + "x" + CaptureHeight + "; the capture will use"
+                                 + width + "x" + height + "; the capture will use"
                                  + " whatever size it is currently at and its layout is unproven.");
             }
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
             SessionState.SetString(TargetKey, target);
+            SessionState.SetInt(WidthKey, width);
+            SessionState.SetInt(HeightKey, height);
+            SessionState.SetString(SuffixKey, suffix);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
             // Both of these survive a domain reload, so a second run in the same editor session
@@ -446,9 +510,16 @@ namespace Emberfall.EditorTools
                 return;
             }
 
-            string[] all = { "MainMenu", "Heroes", "HeroDetail", "Formation", "Summon", "Inventory",
-                             "RelicShop", "Events", "Recital", "Account", "Friends", "FriendTeam",
-                             "Battle" };
+            // Every page the router owns, so "ALL" means all of them rather than the thirteen
+            // that happened to have a target when this list was last written. The eight added
+            // here - Campaign, Forge, Settings, Profile, Guild and its two sub-pages, Proving -
+            // are pages a player reaches by tapping, and a page with no capture target is a page
+            // whose layout nothing in this repository has ever looked at.
+            string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Formation", "Summon",
+                             "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
+                             "Profile", "Account", "Friends", "FriendTeam", "Settings",
+                             "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
+                             "Claim", "Sheet", "Menu", "Gallery", "Dialog" };
             string[] list = which == "ALL" ? all : new string[] { which };
 
             // Per screen: show at (index * Step), capture at (index * Step + its settle).
@@ -500,18 +571,41 @@ namespace Emberfall.EditorTools
                 ScreenId id = ScreenId.MainMenu;
                 switch (name)
                 {
+                    case "Campaign": id = ScreenId.Campaign; break;
                     case "Heroes": id = ScreenId.Heroes; break;
                     case "HeroDetail": id = ScreenId.HeroDetail; break;
                     case "Formation": id = ScreenId.Formation; break;
                     case "Summon": id = ScreenId.Summon; break;
+                    case "Forge": id = ScreenId.Forge; break;
                     case "Inventory": id = ScreenId.Inventory; break;
                     case "RelicShop": id = ScreenId.RelicShop; break;
                     case "Events": id = ScreenId.Events; break;
                     case "Recital": id = ScreenId.Recital; break;
+                    case "Proving": id = ScreenId.Proving; break;
+                    case "Profile": id = ScreenId.Profile; break;
                     case "Account": id = ScreenId.Account; break;
                     case "Friends": id = ScreenId.Friends; break;
                     case "FriendTeam": id = ScreenId.FriendTeam; break;
+                    case "Settings": id = ScreenId.Settings; break;
+                    case "Guild": id = ScreenId.Guild; break;
+                    case "GuildRequests": id = ScreenId.GuildRequests; break;
+                    case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
+                    case "Result": id = ScreenId.Battle; break;
+                }
+
+                // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of
+                // them is a screen the router owns: a popup, a panel sheet and a menu are opened
+                // BY the Hub, over it, and a capture schedule that only ever calls Router.Show
+                // can photograph none of the three. MainMenuScreen.OpenLayerForCapture is the
+                // door they already have, and it opens each one the way a tap does.
+                if (name == "Claim" || name == "Sheet" || name == "Menu"
+                    || name == "Gallery" || name == "Dialog")
+                {
+                    app.Router.Show(ScreenId.MainMenu);
+                    OpenHubLayer(app, name);
+                    Debug.Log("PlayModeScreenshot: opened the Hub layer for " + name);
+                    return;
                 }
                 // HeroDetail is the one generic target that is about a SUBJECT rather than a
                 // screen, so it is handed one the way HeroesScreen hands it one - the first hero
@@ -530,7 +624,18 @@ namespace Emberfall.EditorTools
                     app.Router.HeroDetail.SetHero(owned[0]);
                 }
 
-                if (name == "Battle")
+                // THE ITEM SCREENS NEED ITEMS. A fresh profile owns no armour and no relics, so
+                // the inventory and the forge photograph as two empty boxes - which proves the
+                // empty state and nothing at all about the grid, the detail panel or the item
+                // cards, and those are the whole of both pages.
+                //
+                // Granted through the same ArmorRoller.Roll and GameSession.GrantRelic the drop
+                // and the shop call, exactly as PopulateEvents drives real Summon and BuyRelic
+                // calls rather than poking the profile: a screenshot of state no code path
+                // produces is evidence of nothing.
+                if (name == "Inventory" || name == "Forge") PopulateItems(app);
+
+                if (name == "Battle" || name == "Result")
                 {
                     StageDef next = app.Session.NextStage;
                     if (next == null)
@@ -581,17 +686,160 @@ namespace Emberfall.EditorTools
                 return;
             }
 
+            // THE RESULT PANEL is the same fight photographed at its other end, and it is a
+            // target of its own because it is the screen a player sees after EVERY battle in the
+            // game and no capture in this repository has ever looked at it.
+            //
+            // It presses SKIP rather than sitting through the playback: how long a fight lasts is
+            // a property of which five heroes are deployed and how many waves the stage has, and
+            // 144 battles at playback speed is not a schedule. Skip is a real control on the real
+            // screen, so what this photographs is what a player who taps it sees.
+            if (name == "Result")
+            {
+                if (frame <= shotAt) return;
+
+                BattleScreen screen = app.Router.Battle;
+                if (screen == null)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: no battle screen, skipping Result.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+
+                int armed = SessionState.GetInt(BattleArmKey, 0);
+                if (armed == 0)
+                {
+                    if (screen.Finished) { SessionState.SetInt(BattleArmKey, frame); return; }
+                    if (screen.RoundUnderway) screen.SkipToEndForCapture();
+                    else if (frame > showAt + BattleWaitCeiling)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: no round started within "
+                                         + BattleWaitCeiling + " frames, so the result never"
+                                         + " arrived. Shooting anyway - the capture shows"
+                                         + " whatever the screen is stuck on.");
+                    }
+                    return;
+                }
+
+                if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
+                if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
+            }
+
+            // The Hub's layers open one frame after the Show that put the Hub up, because
+            // ScreenRouter.Show closes every open layer before it changes screens - opening one
+            // in the same call opens it and closes it again.
+            string pendingLayer = SessionState.GetString(HubLayerKey, "");
+            if (pendingLayer.Length > 0 && frame == showAt + 6)
+            {
+                SessionState.SetString(HubLayerKey, "");
+                MainMenuScreen hub = app.Router.MainMenu;
+                if (hub == null) Debug.LogWarning("PlayModeScreenshot: no Hub screen to open a layer on.");
+                else hub.OpenLayerForCapture(HubLayerName(pendingLayer));
+            }
+
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
         }
 
-        /// <summary>Requests one screen's PNG and advances the schedule to the next screen.</summary>
+        /// <summary>
+        /// Gives the profile a handful of real armour pieces and every relic, so the item screens
+        /// have something to draw.
+        ///
+        /// One piece per slot per owned hero at one temper would be a wall of identical cards, so
+        /// the tempers cycle: what a capture of these pages has to show is four different rarity
+        /// borders and four different pip counts side by side, which is the whole of the item
+        /// card's rarity read.
+        /// </summary>
+        private static void PopulateItems(GameApp app)
+        {
+            GameSession session = app.Session;
+            ArmorConfig config = session.Content != null ? session.Content.Armor : null;
+            if (config == null || !config.IsUsable)
+            {
+                Debug.LogWarning("PlayModeScreenshot: the armor config is not usable, so the item"
+                                 + " screens will photograph empty.");
+                return;
+            }
+
+            PlayerProfile profile = session.Profile;
+            if (profile.OwnedArmor.Count == 0)
+            {
+                int seed = 770000;
+                for (int h = 0; h < profile.Heroes.Count && h < 4; h++)
+                {
+                    HeroInstance hero = profile.Heroes[h];
+                    if (hero.Def == null) continue;
+                    for (int sIdx = 0; sIdx < ArmorInfo.AllSlots.Length; sIdx++)
+                    {
+                        ArmorTemper temper = (ArmorTemper)((h + sIdx) % 4);
+                        ArmorPiece piece = ArmorRoller.Roll(config, ArmorInfo.AllSlots[sIdx], temper,
+                                                            hero.Def.Aspect, seed++);
+                        if (piece == null) continue;
+                        piece.Uid = profile.AllocateArmorUid();
+                        profile.OwnedArmor.Add(piece);
+                        if (h == 0) session.EquipArmor(hero, piece.Uid);
+                    }
+                }
+            }
+
+            // HALF the relics, not all of them. Granting every relic makes the shop photograph as
+            // ten OWNED cards, which shows one of that screen's two states and hides the other -
+            // and the one it hides is the card with a price and a BUY on it, which is what the
+            // shop is for.
+            for (int i = 0; i < session.Content.Relics.Count; i += 2)
+                session.GrantRelic(session.Content.Relics[i].Id);
+
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: the profile now holds " + profile.OwnedArmor.Count
+                      + " armor pieces and " + profile.OwnedRelics.Count + " relics.");
+        }
+
+        /// <summary>
+        /// Opens one of the Hub's layers, one frame after the Hub itself is shown.
+        ///
+        /// A frame apart on purpose: ScreenRouter.Show closes every open layer before it changes
+        /// screens, so opening a popup in the same call that shows the Hub opens it and closes it
+        /// again. The schedule below runs this on the frame AFTER the Show.
+        /// </summary>
+        private static void OpenHubLayer(GameApp app, string name)
+        {
+            SessionState.SetString(HubLayerKey, name);
+        }
+
+        private const string HubLayerKey = "PlayModeScreenshot.HubLayer";
+
+        /// <summary>Requests one screen's PNG and advances the schedule to the next screen.
+        ///
+        /// The frame size is in the FILE NAME, not only in the log. Two captures of one screen at
+        /// two aspects are two pieces of evidence about two different layouts, and writing both
+        /// to one path means the second silently replaces the first and the run reports two
+        /// successes for one surviving file.</summary>
         private static void Shoot(string name, int frame, int slot)
         {
-            ScreenCapture.CaptureScreenshot(OutputPath("screen_" + name + ".png"), 1);
-            Debug.Log("PlayModeScreenshot: requested screen_" + name + ".png");
+            string file = "screen_" + name + SessionState.GetString(SuffixKey, "") + ".png";
+            ScreenCapture.CaptureScreenshot(OutputPath(file), 1);
+            Debug.Log("PlayModeScreenshot: requested " + file);
             SessionState.SetInt(LastShotKey, frame);
             SessionState.SetInt(StageKey, slot + 1);
+            // Cleared here rather than at the next screen's start: Battle and Result both arm on
+            // this key, so an ALL run that left it set would shoot the second of them on the
+            // first one's arming frame and photograph a screen that had not been shown yet.
+            SessionState.SetInt(BattleArmKey, 0);
+        }
+
+        /// <summary>The target name a capture asks for, as the door the Hub already has.</summary>
+        private static string HubLayerName(string target)
+        {
+            switch (target)
+            {
+                case "Claim": return "claim";
+                case "Sheet": return "profile";
+                case "Menu": return "menu";
+                case "Gallery": return "gallery";
+            }
+            return "dialog";
         }
 
         private static void PumpRecital(int frame)

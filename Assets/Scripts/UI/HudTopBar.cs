@@ -46,16 +46,24 @@ namespace Emberfall.UI
             Root = UIBuilder.Node("TopBar", parent);
             UIBuilder.TopStrip(Root, UITheme.TopBarHeight, 0f, 0f);
 
-            _backing = Root.gameObject.AddComponent<Image>();
-            _backing.sprite = TextureLab.White;
-            _backing.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.BarBackingAlpha);
+            // THE SEAM IS CLOSED. This plate is only ever visible on a screen that is NOT the
+            // Hub, so while eighteen pages were still in the old language it was the one strip
+            // where the two met - DESIGN-EMBERFORGE names it as exactly that and leaves it
+            // unconverted for the reason it left the panel sheet unconverted. Every page now
+            // draws Emberforge, so the bar does.
+            //
+            // A RECESS rather than a panel: the plate and the three pills sit ON this, and a
+            // framed panel behind a framed plate is two frames deep for one row of chrome. A
+            // trough with a gold rule closing it off is the kit's way of saying "a band the
+            // furniture is set into".
+            _backing = EmberforgeUI.SunkenOn(Root);
 
-            Image underline = UIBuilder.Img("Underline", Root, TextureLab.White,
-                                            UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlpha));
-            UIBuilder.Box(underline.rectTransform, 0f, 0f, 0f, 2f, new Vector2(0.5f, 0f));
+            Image underline = EmberforgeUI.Rule("Underline", Root);
             underline.rectTransform.anchorMin = new Vector2(0f, 0f);
             underline.rectTransform.anchorMax = new Vector2(1f, 0f);
-            underline.rectTransform.sizeDelta = new Vector2(0f, 2f);
+            underline.rectTransform.pivot = new Vector2(0.5f, 0f);
+            underline.rectTransform.anchoredPosition = Vector2.zero;
+            underline.rectTransform.sizeDelta = new Vector2(0f, Emberforge.RuleHeight);
             _underline = underline;
 
             BuildRankBlock();

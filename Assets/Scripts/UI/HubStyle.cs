@@ -251,98 +251,21 @@ namespace Emberfall.UI
         public const float PanelScrimAlpha = 0.72f;
         public const float PopupScrimAlpha = 0.62f;
 
-        // ------------------------------------------------------------------ shared components
-
-        /// <summary>
-        /// A dark translucent surface with a warm edge - the one shape all Hub chrome is made of.
-        /// Pills, building labels, SOON badges and panels are all this with different numbers, so
-        /// they cannot drift apart into four separate looks.
-        /// </summary>
-        public static Image Surface(RectTransform rt, int radius, float fillAlpha, float edgeAlpha, int edgeWeight)
-        {
-            Image plate = rt.gameObject.AddComponent<Image>();
-            plate.sprite = TextureLab.RoundedRect(radius);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(Plate, fillAlpha);
-            UIBuilder.Frame("Edge", rt, UITheme.WithAlpha(BorderWarm, edgeAlpha), radius, edgeWeight);
-            return plate;
-        }
-
-        /// <summary>
-        /// A top-bar pill: filled circular icon at the left, value text to its right, on the shared
-        /// surface. tint colours the icon only - the value stays ValueGold on every pill, so three
-        /// currencies read as three of the same thing rather than three different things.
-        /// </summary>
-        public static Text Pill(string name, Transform parent, float x, float width, Color tint, string glyph)
-        {
-            RectTransform pill = UIBuilder.Node(name, parent);
-            UIBuilder.Box(pill, x, -(UITheme.TopBarHeight - PillHeight) * 0.5f, width, PillHeight, new Vector2(1f, 1f));
-            Surface(pill, RadiusPill, PlateAlpha, BorderAlpha, BorderWeight);
-
-            RectTransform icon = UIBuilder.Node("Icon", pill);
-            UIBuilder.Box(icon, PillPadX, 0f, PillIcon, PillIcon, new Vector2(0f, 0.5f));
-            Image fill = icon.gameObject.AddComponent<Image>();
-            fill.sprite = TextureLab.Circle(96);
-            fill.color = tint;
-            fill.raycastTarget = false;
-            Text mark = UIBuilder.Label("Glyph", icon, glyph, FontCaption, UITheme.TextOnAccent, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(mark.rectTransform, 0f);
-
-            Text value = UIBuilder.Label("Value", pill, "0", FontValue, ValueGold, TextAnchor.MiddleRight);
-            float valueLeft = PillPadX + PillIcon + PillGapIconToValue;
-            UIBuilder.Box(value.rectTransform, -PillPadX, 0f, width - valueLeft - PillPadX, PillIcon, new Vector2(1f, 0.5f));
-            return value;
-        }
-
-        /// <summary>
-        /// A surface built as a CHILD that fills its parent, rather than on the parent itself.
-        ///
-        /// Not a stylistic preference - it is the only way the tail below can work. Unity UI draws
-        /// a parent's own Graphic BEFORE all of its children, so a tail added as a child of a
-        /// plate-bearing node draws on top of that plate instead of behind it, and the half that
-        /// was supposed to be buried shows as a diamond-shaped patch of doubled alpha. Moving the
-        /// plate into a child that is created AFTER the tail puts the two in the right order.
-        /// </summary>
-        public static Image SurfaceChild(string name, RectTransform parent, int radius,
-                                         float fillAlpha, float edgeAlpha, int edgeWeight)
-        {
-            RectTransform rt = UIBuilder.Node(name, parent);
-            UIBuilder.FillParent(rt, 0f);
-            return Surface(rt, radius, fillAlpha, edgeAlpha, edgeWeight);
-        }
-
-        /// <summary>
-        /// The downward pointer that ties a floating label back to the structure it names. A White
-        /// square turned 45 degrees, centred exactly on the plate's bottom edge so the plate buries
-        /// its top half and what is left is a triangle aiming at the building. That is a triangle
-        /// without adding a sprite to TextureLab for one decoration.
-        ///
-        /// Must be created BEFORE the plate that buries it - see SurfaceChild.
-        /// </summary>
-        public static Image Tail(RectTransform parent, float fillAlpha)
-        {
-            Image tail = UIBuilder.Img("Tail", parent, TextureLab.White, UITheme.WithAlpha(Plate, fillAlpha));
-            UIBuilder.Box(tail.rectTransform, 0f, 0f, TailSize, TailSize, new Vector2(0.5f, 0f));
-            tail.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            tail.raycastTarget = false;
-            return tail;
-        }
-
-        /// <summary>
-        /// The "not built yet" badge. Smaller face, muted tone and a lower alpha than any label it
-        /// hangs off, so it is subordinate by construction rather than by being remembered to be.
-        /// </summary>
-        public static RectTransform SoonBadge(RectTransform parent, float x, float y, Vector2 anchor)
-        {
-            RectTransform tag = UIBuilder.Node("Soon", parent);
-            UIBuilder.Box(tag, x, y, SoonWidth, SoonHeight, anchor);
-            Surface(tag, RadiusSoon, PlateAlphaSolid * SoonAlpha, BorderAlphaMuted, BorderWeight);
-
-            Text label = UIBuilder.Label("Text", tag, "SOON", FontSoon,
-                                         UITheme.WithAlpha(SoonText, SoonAlpha), TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(label.rectTransform, 0f);
-            return tag;
-        }
+        // ------------------------------------------------------------------ what is left here
+        //
+        // THE DRAWING IS GONE. Surface, Pill, SurfaceChild, Tail and SoonBadge drew the Hub's own
+        // dialect - a dark translucent plate with a warm hairline - and every one of them had no
+        // callers left once the building nametags, the currency pills and the player plate moved
+        // to Emberforge. Dead code that draws in a retired language is worse than no code: the
+        // next person to need a plate finds two ways to make one and only one of them is the
+        // kit's.
+        //
+        // What stays is the METRICS, and they are the reason this file stays at all. The Hub's
+        // frame is measured in them - TouchMin, the rail's disc and gap, the nav cell, the chest,
+        // the sheet's header and its tab row - and so are the screens that borrow those numbers
+        // so their own controls match the Hub's. Those are measurements of THIS GAME'S layout,
+        // which is a different kind of fact from what a surface looks like, and Emberforge
+        // deliberately owns only the second.
 
         /// <summary>Width of a building label: the shared padding plus the word.</summary>
         public static float LabelWidthFor(string label)

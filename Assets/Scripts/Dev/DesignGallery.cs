@@ -239,10 +239,25 @@ namespace Emberfall.Dev
             return body;
         }
 
+        /// <summary>
+        /// The three plates, and beside them the two surfaces that arrived with the screen pass:
+        /// the tinted CHIP and the gold RULE.
+        ///
+        /// They share this section rather than getting one of their own because the page has to
+        /// fit the shortest canvas this game targets and it already does, to within a couple of
+        /// units - see CheckFits. The samples narrow from 200 to 150 to pay for the column beside
+        /// them, which costs nothing a reader of this page needs: a nine-sliced plate says
+        /// everything it has to say at 150 as well as at 200.
+        ///
+        /// The chip is drawn twice, in two different tints, because its whole reason for being
+        /// two sprites is that the tint must move without the outline moving with it. One chip
+        /// proves nothing about that; two in different colours with the same dark line round both
+        /// is the demonstration.
+        /// </summary>
         private float Surfaces(RectTransform column, float y)
         {
-            RectTransform body = Section(column, "SURFACES", LeftWidth, 150f, ref y);
-            float w = 200f;
+            RectTransform body = Section(column, "SURFACES AND TAGS", LeftWidth, 150f, ref y);
+            float w = 150f;
             float h = 96f;
             float gap = 22f;
             float top = RibbonReserve + Emberforge.Space8;
@@ -250,6 +265,21 @@ namespace Emberfall.Dev
             Sample(body, "PANEL", Emberforge.Space32, top, w, h, 0);
             Sample(body, "PLAIN", Emberforge.Space32 + (w + gap), top, w, h, 1);
             Sample(body, "SUNKEN", Emberforge.Space32 + (w + gap) * 2f, top, w, h, 2);
+
+            float tagX = Emberforge.Space32 + (w + gap) * 3f;
+            float tagWidth = LeftWidth - tagX - Emberforge.Space32;
+
+            RectTransform chipA = EmberforgeUI.Chip("ChipRole", body, "WARDEN",
+                                                    UITheme.RoleColor(HeroRole.Warden), UITheme.FontTiny);
+            UIBuilder.Box(chipA, tagX, -top, tagWidth, 34f, new Vector2(0f, 1f));
+
+            RectTransform chipB = EmberforgeUI.Chip("ChipAspect", body, "EMBER",
+                                                    Emberforge.Accent(Aspect.Ember), UITheme.FontTiny);
+            UIBuilder.Box(chipB, tagX, -(top + 40f), tagWidth, 34f, new Vector2(0f, 1f));
+
+            Image rule = EmberforgeUI.Rule("Rule", body);
+            UIBuilder.Box(rule.rectTransform, tagX, -(top + 86f), tagWidth,
+                          Emberforge.RuleHeight, new Vector2(0f, 1f));
             return y;
         }
 
@@ -341,11 +371,19 @@ namespace Emberfall.Dev
             button.Button.interactable = false;   // so a click cannot release it mid-capture
         }
 
+        /// <summary>
+        /// The four bars, and beside them the STAT ROW every page in the game that shows a stat
+        /// block is built from.
+        ///
+        /// Two rows rather than one, because a stat row's job is to be stacked: what has to read
+        /// correctly is the gold rule between two of them, not the row on its own.
+        /// </summary>
         private float Bars(RectTransform column, float y)
         {
-            RectTransform body = Section(column, "PROGRESS", LeftWidth, 150f, ref y);
+            RectTransform body = Section(column, "PROGRESS AND ROWS", LeftWidth, 150f, ref y);
             float top = RibbonReserve + Emberforge.Space4;
-            float barWidth = LeftWidth - Emberforge.Space32 * 2f - 110f;
+            float rowWidth = 300f;
+            float barWidth = LeftWidth - Emberforge.Space32 * 2f - rowWidth - Emberforge.Space24 - 70f;
 
             float[] ratios = new float[] { 0f, 0.18f, 0.55f, 1f };
             for (int i = 0; i < ratios.Length; i++)
@@ -360,9 +398,20 @@ namespace Emberfall.Dev
                 Text value = EmberforgeUI.Label("V" + i, body,
                                                 Mathf.RoundToInt(ratios[i] * 100f) + "%",
                                                 UITheme.FontTiny, Emberforge.TextGold,
-                                                TextAnchor.MiddleRight);
-                UIBuilder.Box(value.rectTransform, -Emberforge.Space32, -rowTop, 100f, 22f,
-                              new Vector2(1f, 1f));
+                                                TextAnchor.MiddleLeft);
+                UIBuilder.Box(value.rectTransform, Emberforge.Space32 + barWidth + Emberforge.Space8,
+                              -rowTop, 70f, 22f, new Vector2(0f, 1f));
+            }
+
+            float statX = LeftWidth - Emberforge.Space32 - rowWidth;
+            string[] names = new string[] { "ATTACK", "DEFENCE" };
+            string[] figures = new string[] { "1,284", "612" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                Text row = EmberforgeUI.StatRow("Stat" + i, body, names[i], figures[i],
+                                                Emberforge.TextGold, 40f);
+                RectTransform rt = row.rectTransform.parent as RectTransform;
+                UIBuilder.Box(rt, statX, -(top + i * 44f), rowWidth, 40f, new Vector2(0f, 1f));
             }
             return y;
         }

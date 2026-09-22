@@ -28,6 +28,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private RectTransform _header;
+        private Image _ground;
         private ScrollRect _scroll;
         private InputField _nameField;
         private RectTransform _avatarHost;
@@ -37,7 +38,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            _header = ScreenChrome.Header(Root, "YOUR PROFILE", Router, out _headerSubtitle);
+            _ground = EmberforgeUI.Ground(Root);
+            _header = ScreenChrome.ForgedHeader(Root, "YOUR PROFILE", Router, out _headerSubtitle);
 
             RectTransform content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                                          new RectOffset(0, 0, 8, 40));
@@ -60,6 +62,9 @@ namespace Emberfall.UI.Screens
         {
             base.SetEmbedded(embedded);
             if (_header != null) _header.gameObject.SetActive(!embedded);
+            // The ground goes with the header: inside a panel sheet this page already sits on the
+            // sheet's framed surface - see EmberforgeUI.Ground.
+            if (_ground != null) _ground.enabled = !embedded;
             ApplyContentInset();
         }
 
@@ -95,17 +100,16 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = Card(parent, 210f);
 
-            Text label = UIBuilder.Label("Label", card, "DISPLAY NAME", UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 28f, -22f, 400f, 26f, new Vector2(0f, 1f));
+            EmberforgeUI.Heading("Label", card, "DISPLAY NAME", 28f, -22f);
 
-            _nameField = UIBuilder.TextField("NameBox", card, "Your name", UITheme.FontSmall, NameLimit, false);
+            _nameField = EmberforgeUI.TextField("NameBox", card, "Your name", UITheme.FontSmall,
+                                                NameLimit, false);
             UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 28f, -60f, 640f, 76f, new Vector2(0f, 1f));
             _nameField.onEndEdit.AddListener(CommitName);
 
-            Text hint = UIBuilder.Label("Hint", card,
-                                        "Shown on the top bar. Up to " + NameLimit + " characters.",
-                                        UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+            Text hint = EmberforgeUI.Label("Hint", card,
+                                           "Shown on the top bar. Up to " + NameLimit + " characters.",
+                                           UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(hint.rectTransform, 28f, -148f, 640f, 26f, new Vector2(0f, 1f));
         }
 
@@ -133,28 +137,32 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = Card(parent, 300f);
 
-            Text label = UIBuilder.Label("Label", card, "AVATAR", UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 28f, -22f, 400f, 26f, new Vector2(0f, 1f));
+            EmberforgeUI.Heading("Label", card, "AVATAR", 28f, -22f);
 
             _avatarHost = UIBuilder.Node("Current", card);
             UIBuilder.Box(_avatarHost, 40f, -58f, 150f, 150f, new Vector2(0f, 1f));
 
-            _avatarNote = UIBuilder.Label("Note", card, "", UITheme.FontTiny,
-                                          UITheme.TextMuted, TextAnchor.UpperLeft);
+            _avatarNote = EmberforgeUI.Label("Note", card, "", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(_avatarNote.rectTransform, 40f, 26f, 620f, 26f, new Vector2(0f, 0f));
 
-            // Stretched across the card's remaining width, to the right of the big portrait.
-            // Anchors and offsets are set directly rather than through Box, which pins both
-            // anchors to one corner - the first draft did both and the contradiction collapsed
-            // this row to a few pixels with every face piled on top of the next.
-            _avatarChoices = UIBuilder.Node("Choices", card);
-            _avatarChoices.anchorMin = new Vector2(0f, 1f);
-            _avatarChoices.anchorMax = new Vector2(1f, 1f);
-            _avatarChoices.pivot = new Vector2(0f, 1f);
-            _avatarChoices.offsetMin = new Vector2(220f, -208f);
-            _avatarChoices.offsetMax = new Vector2(-28f, -58f);
-            UIBuilder.HStack(_avatarChoices, 12f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperLeft);
+            // A SCROLLING STRIP, not a fixed row.
+            //
+            // It was a HorizontalLayoutGroup in a fixed rect, which does not overflow: the group
+            // runs with childControlWidth and divides the width it HAS between however many
+            // children it gets. Seven owned heroes looked correct; thirty-two were fifty pixels
+            // each, their badges overlapping and their names printed through one another. How
+            // many faces this row holds is a property of the player's collection, so the row
+            // needs somewhere to go rather than a width to be squeezed into.
+            ScrollRect choiceScroll;
+            _avatarChoices = UIBuilder.ScrollStrip("Choices", card, out choiceScroll, 12f,
+                                                   new RectOffset(0, 0, 0, 0));
+            RectTransform strip = choiceScroll.GetComponent<RectTransform>();
+            strip.anchorMin = new Vector2(0f, 1f);
+            strip.anchorMax = new Vector2(1f, 1f);
+            strip.pivot = new Vector2(0f, 1f);
+            strip.offsetMin = new Vector2(220f, -212f);
+            strip.offsetMax = new Vector2(-28f, -54f);
         }
 
         /// <summary>
@@ -176,13 +184,14 @@ namespace Emberfall.UI.Screens
 
             if (chosen != null)
             {
-                RectTransform big = Widgets.Portrait("Chosen", _avatarHost, chosen, chosen.Stars, 150f, true);
+                RectTransform big = EmberforgeUI.PortraitFrame("Chosen", _avatarHost, chosen,
+                                                               chosen.Stars, 150f);
                 UIBuilder.FillParent(big, 0f);
             }
             else
             {
                 Image ring = UIBuilder.Img("Empty", _avatarHost, TextureLab.Ring(160, 3),
-                                           UITheme.WithAlpha(UITheme.BorderSoft, 0.8f));
+                                           UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f));
                 UIBuilder.FillParent(ring.rectTransform, 0f);
             }
 
@@ -212,31 +221,33 @@ namespace Emberfall.UI.Screens
 
         private void AddAvatarChoice(HeroDef def, bool active)
         {
-            UIButton pick = UIBuilder.MakeButton("Avatar_" + def.Id, _avatarChoices, "", UITheme.FontTiny,
-                                                 active ? UITheme.Ember : UITheme.PanelRaised,
-                                                 active ? UITheme.EmberDeep : UITheme.Border,
-                                                 UITheme.TextPrimary);
+            // A TAB, not a button, and the difference matters at this length. A row of thirty-two
+            // teal buttons is thirty-two things shouting "press me" on a page whose actual
+            // question is which ONE of them is already true - and teal in this kit means "the way
+            // back out", which is not what a face in a picker is. A tab bar says both halves of
+            // it: exactly one plate is lit, and the rest are the same object unlit.
+            ForgeTab pick = EmberforgeUI.Tab("Avatar_" + def.Id, _avatarChoices, 118f, 150f,
+                                             delegate { ChooseAvatar(def.Id); });
             // Sized, not Size: HStack runs with childControlWidth, so it takes each child's width
             // from a LayoutElement's preferredWidth and ignores sizeDelta entirely. Setting the
             // rect and adding a second, empty LayoutElement - which is what the first draft did -
             // left every choice at its minimum and squeezed seven faces into a thumbnail.
             UIBuilder.Sized(pick.Root, 118f, 150f);
-            pick.Label.gameObject.SetActive(false);
+            pick.Caption.gameObject.SetActive(false);
+            EmberforgeUI.SetTabSelected(pick, active);
 
             RectTransform body = UIBuilder.Node("Body", pick.Root);
             UIBuilder.FillParent(body, 0f);
             body.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
 
-            RectTransform face = Widgets.Portrait("Face", body, def, def.Stars, 84f, true);
+            RectTransform face = EmberforgeUI.PortraitFrame("Face", body, def, def.Stars, 84f);
             UIBuilder.Box(face, 0f, -12f, 84f, 84f, new Vector2(0.5f, 1f));
 
-            Text name = UIBuilder.Label("Name", body, def.Name, UITheme.FontTiny - 4,
-                                        active ? UITheme.TextOnAccent : UITheme.TextMuted,
-                                        TextAnchor.LowerCenter);
+            Text name = EmberforgeUI.Label("Name", body, def.Name, UITheme.FontTiny - 4,
+                                           active ? Emberforge.TextGold : Emberforge.TextBody,
+                                           TextAnchor.LowerCenter);
             UIBuilder.Box(name.rectTransform, 0f, 10f, 112f, 34f, new Vector2(0.5f, 0f));
-
-            string capturedId = def.Id;
-            pick.OnClick(delegate { ChooseAvatar(capturedId); });
+            UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         private void ChooseAvatar(string heroId)
@@ -266,9 +277,7 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = Card(parent, 320f);
 
-            Text label = UIBuilder.Label("Label", card, "LIFETIME", UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 28f, -22f, 400f, 26f, new Vector2(0f, 1f));
+            EmberforgeUI.Heading("Label", card, "LIFETIME", 28f, -22f);
 
             _statList = UIBuilder.Node("Stats", card);
             _statList.anchorMin = new Vector2(0f, 0f);
@@ -330,12 +339,7 @@ namespace Emberfall.UI.Screens
         {
             RectTransform card = UIBuilder.Node("Card", parent);
             UIBuilder.Sized(card, 0f, height);
-
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(card, false);
             return card;
         }
 

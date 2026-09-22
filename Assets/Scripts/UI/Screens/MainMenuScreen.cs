@@ -86,21 +86,6 @@ namespace Emberfall.UI.Screens
         // HubPanelRaised and HubPanelSunken - live in HubStyle with the rest of the Hub's chrome
         // vocabulary, along with every metric the layers above are built from.
 
-        /// <summary>
-        /// The authored dimensions of hub.png, declared rather than read back off the texture.
-        ///
-        /// The importer does not hand back the file: a non-power-of-two texture is rescaled per
-        /// axis, so 1536x828 arrives as a 2048x1024 Texture2D and its 1.855:1 becomes 2.0:1.
-        /// Feeding the sprite's own rect to the fitter would render that distortion instead of
-        /// correcting it. Driving the fitter from these two numbers renders the squashed texture
-        /// back at the shape it was painted at.
-        ///
-        /// npotScale: 0 does not avoid this - it was tried on the previous art and reverted,
-        /// because the width is not a multiple of four and the compressed format cannot hold it.
-        /// </summary>
-        private const float SourceFileWidth = 1536f;
-        private const float SourceFileHeight = 828f;
-
         // ---------- map node anchors ----------
         // Fractions of the PAINTING, x then y from its top-left - not of the screen. Every node is
         // parented to the map image and anchored by these, so a node stays on its structure at any
@@ -230,11 +215,16 @@ namespace Emberfall.UI.Screens
 
                 AspectRatioFitter fitter = _map.gameObject.AddComponent<AspectRatioFitter>();
                 fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-                // From the AUTHORED dimensions, not from _mapSprite.rect. The sprite's rect is in
-                // imported-texture space, which the importer has already stretched by a different
-                // factor per axis; feeding that back in would render the distortion instead of
-                // correcting it.
-                fitter.aspectRatio = SourceFileWidth / SourceFileHeight;
+                // From the sprite's own rect, which is the file's own shape again.
+                //
+                // This was two hand-declared constants, because the importer used to rescale a
+                // non-power-of-two texture per axis and hand back 1536x828 as 2048x1024 - feeding
+                // that rect to the fitter rendered the distortion instead of correcting it. The
+                // texture-size pass set nPOTScale to 0 on every painting in
+                // Assets/Resources/Backgrounds, so the imported texture is the authored size and
+                // the rect is the right number to read. Two constants that have to be kept in
+                // step with a PNG by hand are two constants that will eventually disagree with it.
+                fitter.aspectRatio = _mapSprite.rect.width / _mapSprite.rect.height;
             }
             else
             {
@@ -424,7 +414,11 @@ namespace Emberfall.UI.Screens
             // action of that layer - so at any moment there is exactly one orange thing to press.
             _continueButton = EmberforgeUI.Button("Continue", card, "CONTINUE CAMPAIGN",
                                                   HubStyle.FontButton, ForgeButtonKind.Primary);
-            UIBuilder.Box(_continueButton.Root, 0f, CardInner, CardWidth - CardInner * 2f,
+            // Inset by the ornament's clearance rather than by the card's own padding: at
+            // CardInner the button's lower corners land exactly on the two bottom corner diamonds
+            // and print over them - see Emberforge.OrnamentClearance.
+            UIBuilder.Box(_continueButton.Root, 0f, CardInner,
+                          CardWidth - Emberforge.OrnamentClearance * 2f,
                           HubStyle.TouchMin, new Vector2(0.5f, 0f));
             _continueButton.OnClick(OpenCampaign);
         }
@@ -810,6 +804,19 @@ namespace Emberfall.UI.Screens
                 case "claim": _claimPopup.Show(); break;
                 case "menu": _overflowMenu.Show(_overflowButtonTop); break;
                 case "gallery": _overflowMenu.OpenDesignGallery(); break;
+
+                // The confirm dialog, on the one question in the game that actually asks it. It
+                // is opened through App.Modal rather than built here, so what a capture sees is
+                // the dialog every screen shares - and it is opened on the RESET copy because
+                // that is the only two-answer dialog with real words in it.
+                case "dialog":
+                    App.Modal.ShowConfirm(
+                        "RESET PROGRESS",
+                        "This wipes your heroes, currency and campaign progress and starts a fresh "
+                        + "account. Useful for testing the first-run experience.",
+                        "RESET", "KEEP PLAYING", null, null);
+                    break;
+
                 case "heroes": Router.Show(ScreenId.Heroes); break;
 
                 // Opens two layers, then presses back twice and once more for luck. What the

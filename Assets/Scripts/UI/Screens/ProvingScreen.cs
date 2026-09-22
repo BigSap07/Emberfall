@@ -44,64 +44,75 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "THE PROVING", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "THE PROVING", Router, out _headerSubtitle);
             BuildOpponentCard();
             BuildHonestyNote();
         }
 
         private void BuildOpponentCard()
         {
-            const float cardHeight = 520f;
+            // Measured from the blocks inside it rather than guessed: 414 of content, then the
+            // FIGHT button's own 92 and the panel's padding under it. It was a flat 520, and two
+            // captures paid for that: once the button moved to the card's bottom edge - to clear
+            // the corner ornaments - a fixed 520 drew it straight over the third stat row, and at
+            // 564 the card's own lower edge ran into the Valor purse under it on a 20:9 canvas.
+            //
+            //   966 short canvas - 268 header - 168 of footer = 530 for the card.
+            const float cardHeight = 414f + 92f + UITheme.Space24;
             float top = ScreenChrome.HeaderTop + 108f + 16f;
             RectTransform card = UIBuilder.Node("Opponent", Root);
             UIBuilder.Box(card, 0f, -top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
 
-            Image background = card.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(24);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.5f), 24, 2);
+            EmberforgeUI.PanelOn(card, true);
 
             float inner = UITheme.Space24;
 
-            _opponentName = UIBuilder.Label("Name", card, "", UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            _opponentName = EmberforgeUI.Title("Name", card, "", UITheme.FontTitle,
+                                               Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(_opponentName.rectTransform, 30f, -inner, 560f, 56f, new Vector2(0f, 1f));
 
-            _ghostChip = UIBuilder.Chip("GhostChip", card, "", UITheme.CinderGlass, UITheme.FontTiny);
+            _ghostChip = EmberforgeUI.Chip("GhostChip", card, "", UITheme.CinderGlass, UITheme.FontTiny);
             UIBuilder.Box(_ghostChip, -30f, -inner, 260f, 42f, new Vector2(1f, 1f));
             _ghostChipText = _ghostChip.GetComponentInChildren<Text>();
 
             inner += 56f + UITheme.Space8;
 
-            _opponentPower = UIBuilder.Label("Power", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
+            _opponentPower = EmberforgeUI.Label("Power", card, "", UITheme.FontSmall,
+                                                Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(_opponentPower.rectTransform, 30f, -inner, 560f, 32f, new Vector2(0f, 1f));
 
-            inner += 32f + UITheme.Space16;
+            inner += 32f + UITheme.Space12;
 
-            Image divider = UIBuilder.Divider("Divider", card, UITheme.BorderSoft);
-            UIBuilder.Box(divider.rectTransform, 0f, -inner, CardWidth - 60f, 2f, new Vector2(0.5f, 1f));
+            Image divider = EmberforgeUI.Rule("Divider", card);
+            UIBuilder.Box(divider.rectTransform, 0f, -inner, CardWidth - 60f, Emberforge.RuleHeight,
+                          new Vector2(0.5f, 1f));
             inner += UITheme.Space16;
 
             // The opposing line, as portraits. Widgets.Portrait is the same badge the Hub and the
             // campaign strip use, so an opponent's heroes read as heroes rather than as a list.
             _lineRow = UIBuilder.Node("Line", card);
-            UIBuilder.Box(_lineRow, 0f, -inner, CardWidth - 60f, 132f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_lineRow, 0f, -inner, CardWidth - 60f, 120f, new Vector2(0.5f, 1f));
             UIBuilder.HStack(_lineRow, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            inner += 132f + UITheme.Space16;
+            inner += 120f + UITheme.Space12;
 
             RectTransform statList = UIBuilder.Node("Stats", card);
-            UIBuilder.Box(statList, 0f, -inner, CardWidth - 60f, 132f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(statList, 0f, -inner, CardWidth - 60f, 114f, new Vector2(0.5f, 1f));
             UIBuilder.VStack(statList, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
-            _standingValue = Widgets.StatRow("Standing", statList, "YOUR STANDING", "", UITheme.Gold, 40f);
-            _brandsValue = Widgets.StatRow("Brands", statList, "BRANDS AVAILABLE", "", UITheme.Ember, 40f);
-            _nextBrandValue = Widgets.StatRow("NextBrand", statList, "NEXT BRAND IN", "", UITheme.TextMuted, 40f);
+            _standingValue = Widgets.StatRow("Standing", statList, "YOUR STANDING", "", Emberforge.TextGold, 34f);
+            _brandsValue = Widgets.StatRow("Brands", statList, "BRANDS AVAILABLE", "", UITheme.Ember, 34f);
+            _nextBrandValue = Widgets.StatRow("NextBrand", statList, "NEXT BRAND IN", "", Emberforge.TextQuiet, 34f);
 
-            inner += 132f + UITheme.Space16;
+            inner += 114f + UITheme.Space16;
 
-            _fightButton = UIBuilder.GoldButton("Fight", card, "FIGHT", UITheme.FontHeading);
-            UIBuilder.Box(_fightButton.Root, 0f, -inner, CardWidth - 60f, 92f, new Vector2(0.5f, 1f));
+            // Anchored to the card's BOTTOM with the panel's own padding under it, rather than
+            // carried down by the running `inner` offset. Hung off the top it landed exactly on
+            // the card's lower edge and printed itself over the two bottom corner ornaments.
+            _fightButton = EmberforgeUI.Button("Fight", card, "FIGHT", UITheme.FontHeading, ForgeButtonKind.Primary);
+            UIBuilder.Box(_fightButton.Root, 0f, UITheme.Space24, CardWidth - 60f, 92f,
+                          new Vector2(0.5f, 0f));
             _fightButton.OnClick(OnFight);
         }
 
@@ -115,25 +126,28 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildHonestyNote()
         {
-            float top = ScreenChrome.HeaderTop + 108f + 16f + 520f + UITheme.Space24;
+            // BOTH ANCHORED TO THE BOTTOM of the screen rather than measured down from a
+            // hard-coded copy of the card's height. Two numbers that have to agree by hand are
+            // two numbers that stop agreeing: this method carried a literal 520 that the card no
+            // longer is. Hung off the bottom, the purse and the note sit where they belong at any
+            // canvas height and cannot drift from the card above them.
+            float noteHeight = 60f;
+            float bottom = UITheme.Space24 + noteHeight + UITheme.Space12;
 
             RectTransform purse = UIBuilder.Node("Purse", Root);
-            UIBuilder.Box(purse, 0f, -top, CardWidth, 56f, new Vector2(0.5f, 1f));
-            Image bg = purse.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(16);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.9f);
-            UIBuilder.Frame("Edge", purse, UITheme.WithAlpha(UITheme.Gold, 0.35f), 16, 2);
-            _valorValue = UIBuilder.Label("Valor", purse, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.MiddleCenter);
+            UIBuilder.Box(purse, 0f, bottom, CardWidth, 56f, new Vector2(0.5f, 0f));
+            EmberforgeUI.SunkenOn(purse);
+            _valorValue = EmberforgeUI.Label("Valor", purse, "", UITheme.FontSmall,
+                                             Emberforge.TextGold, TextAnchor.MiddleCenter);
             UIBuilder.FillParent(_valorValue.rectTransform, 8f);
+            UIBuilder.Outlined(_valorValue, Emberforge.Outline, Emberforge.StrokeThin);
 
-            top += 56f + UITheme.Space12;
-
-            _honestyNote = UIBuilder.WrappedLabel("Note", Root,
+            _honestyNote = EmberforgeUI.Body("Note", Root,
                 "Opponents are reconstructed lines, not other players. Standing is your own record"
                 + " and sets how hard the next line is - it is not a rank against anyone.",
-                UITheme.FontTiny - 2, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(_honestyNote.rectTransform, 0f, -top, CardWidth, 56f, new Vector2(0.5f, 1f));
+                UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperCenter);
+            UIBuilder.Box(_honestyNote.rectTransform, 0f, UITheme.Space24, CardWidth, noteHeight,
+                          new Vector2(0.5f, 0f));
         }
 
         // ------------------------------------------------------------------ refresh
@@ -196,11 +210,12 @@ namespace Emberfall.UI.Screens
                 RectTransform cell = UIBuilder.Node("Unit" + i, _lineRow);
                 UIBuilder.Sized(cell, 132f, 132f);
 
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, def, entry.Stars, 96f, true);
+                RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", cell, def,
+                                                                    entry.Stars, 96f);
                 UIBuilder.Box(portrait, 0f, 0f, 96f, 96f, new Vector2(0.5f, 1f));
 
-                Text level = UIBuilder.Label("Level", cell, "LV " + entry.Level, UITheme.FontTiny - 4,
-                                             UITheme.TextMuted, TextAnchor.UpperCenter);
+                Text level = EmberforgeUI.Label("Level", cell, "LV " + entry.Level, UITheme.FontTiny - 4,
+                                             Emberforge.TextQuiet, TextAnchor.UpperCenter);
                 UIBuilder.Box(level.rectTransform, 0f, -100f, 132f, 24f, new Vector2(0.5f, 1f));
             }
         }
