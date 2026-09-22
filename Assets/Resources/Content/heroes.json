@@ -4274,7 +4274,7 @@
       "basic": {
         "id": "rhys_crossing_cut",
         "name": "Crossing Cut",
-        "description": "Deals 145% Attack damage and gives the lowest-HP ally 45% of the HP they are missing, out of Rhys’s own, if they are below 50% HP.",
+        "description": "Deals 145% Attack damage and gives the lowest-HP ally 20% of the HP they are missing, out of Rhys's own, if they are below 50% HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -4287,7 +4287,7 @@
             "condition": "HpBelow",
             "conditionOn": "Target",
             "conditionValue": 0.5,
-            "targetMissingHpRatio": 0.45
+            "targetMissingHpRatio": 0.2
           }
         ]
       },
@@ -4321,19 +4321,19 @@
       "passive1": {
         "id": "rhys_shared_peril",
         "name": "Shared Peril",
-        "description": "The first time each round an enemy strikes an ally, Rhys stands in front of that ally for the rest of the round and takes 30% of every hit aimed at them.",
+        "description": "When an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead, once per round.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
         "effects": [
           {
-            "kind": "ApplyStatus",
+            "kind": "HpTransfer",
             "target": "BroadcastVictim",
-            "bypassResist": true,
-            "chance": 1,
-            "duration": 1,
-            "magnitude": 0.3,
-            "status": "Covered"
+            "condition": "SubjectTookHitAboveMaxHpFraction",
+            "conditionOn": "BroadcastSubject",
+            "conditionValue": 0.25,
+            "scaleByLastDamage": true,
+            "power": 0.3
           }
         ]
       }
@@ -11540,7 +11540,7 @@
       "passive1": {
         "id": "toren_unasked_question",
         "name": "Unasked Question",
-        "description": "The first time each round a Sealed enemy strikes somebody other than Toren, he takes a 15% Max HP Shield and stands in front of that ally for the rest of the round, taking 25% of every hit aimed at them.",
+        "description": "The first time each round a Sealed enemy strikes another ally, Toren gains a 15% Max HP Shield and redirects 25% of that hit.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -11554,15 +11554,12 @@
             "targetMaxHpRatio": 0.15
           },
           {
-            "kind": "ApplyStatus",
+            "kind": "HpTransfer",
             "target": "BroadcastVictim",
-            "bypassResist": true,
-            "chance": 1,
             "condition": "HasMyMark",
             "conditionOn": "LastAttacker",
-            "duration": 1,
-            "magnitude": 0.25,
-            "status": "Covered"
+            "scaleByLastDamage": true,
+            "power": 0.25
           }
         ]
       }

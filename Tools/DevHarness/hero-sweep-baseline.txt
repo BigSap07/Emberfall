@@ -217,11 +217,11 @@ rheia_the_revision_scribe|2|fb95815953873e31
 rheia_the_revision_scribe|3|21e912b43fc91636
 rheia_the_revision_scribe|4|083655e30695c56e
 rheia_the_revision_scribe|5|fbaf547224c1dab5
-rhys_the_fence_walker|1|a009c234356ffa30
-rhys_the_fence_walker|2|bfe58702c3a7a207
-rhys_the_fence_walker|3|66c852657f46f08c
-rhys_the_fence_walker|4|2790d5ea24ff518d
-rhys_the_fence_walker|5|4b2f5b52d3803e21
+rhys_the_fence_walker|1|ceef00d39d873d65
+rhys_the_fence_walker|2|481e6715a7c559da
+rhys_the_fence_walker|3|aa61d1caca61e399
+rhys_the_fence_walker|4|1e4cd303eb0ca080
+rhys_the_fence_walker|5|79bdbac521d21cf9
 rovan_the_adaptive_commander|1|a28f54b84815db58
 rovan_the_adaptive_commander|2|ba0039c06fd7b4f7
 rovan_the_adaptive_commander|3|1da7e699aff770fe
@@ -267,8 +267,8 @@ tavia_the_signal_huntress|2|909fa219757710b0
 tavia_the_signal_huntress|3|c2158d56435c68f0
 tavia_the_signal_huntress|4|1e4fbb11c72b91fa
 tavia_the_signal_huntress|5|1ce732cae76e94ad
-toren_the_closed_door|1|0422a9890159a800
-toren_the_closed_door|2|b862fd2821efd18f
+toren_the_closed_door|1|7344939a0841f360
+toren_the_closed_door|2|5113f320f4deca83
 toren_the_closed_door|3|054656aea56dd9d8
 toren_the_closed_door|4|cf38ac47f28e36c5
 toren_the_closed_door|5|4d58fbc176a274d4

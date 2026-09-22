@@ -28,20 +28,6 @@ damage funnel or the turn loop, which is where every fingerprint in the project 
 
 ---
 
-## 1. Answering the blow that is landing
-
-No `EffectCondition` asks about the magnitude of the hit being resolved: the enum's 50 members ask
-about HP, statuses, stats, energy, action history and firing counts, and the damage funnel does not
-publish the number it is carrying. Nor can anything reach back into a hit that has already resolved,
-because every ally-facing hook fires after it.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Rhys | "When an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead" | a condition on the incoming damage as a fraction of the victim's Max HP | the guard goes up on the FIRST strike of each round whatever its size, and covers that ally for the rest of the round | medium |
-| Toren | "redirects 25% of **that hit**" | a way to move a share of a blow that has already landed; `OnEnemyDamagedAlly` fires afterwards | the ward goes up for the rest of the round and answers the next one | medium |
-
----
-
 ## 2. Per-round budgets on a standing status
 
 `StatusInstance` carries `UsesPerRound` and `UsesThisRound`, and exactly two places read them:
@@ -261,7 +247,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 1 | answering the blow that is landing | 2 |
 | 2 | per-round budgets on a standing status | 2 |
 | 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
