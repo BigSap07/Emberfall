@@ -4672,7 +4672,11 @@ namespace Emberfall.DevHarness
             }
 
             Check(evasion.Count == 0, "no shipped content applies or reads EvasionUp" + Detail(evasion));
-            Check(accuracy.Count == 0, "no shipped content applies or reads AccuracyDown" + Detail(accuracy));
+            // FLIPPED by the first 3-star batch. Adric's Mapcase Bash is the first shipped content
+            // to apply AccuracyDown, so the miss check has a real occupant and the tripwire has
+            // fired once. It is now the opposite claim, and goes red the day Lost Route stops
+            // being an accuracy clause. See Used() for why that is not a deletion.
+            Check(accuracy.Count > 0, "shipped content applies or reads AccuracyDown" + Used(accuracy));
             // FLIPPED by the third 4-star batch. Maera's Watch the Water is the first shipped
             // content to apply GuaranteedCrit, so the tripwire has fired once and is now the
             // opposite claim - the mechanic IS reached, by this named passive - and goes red the
@@ -4680,10 +4684,17 @@ namespace Emberfall.DevHarness
             Check(gcrit.Count > 0, "shipped content applies or reads GuaranteedCrit" + Used(gcrit));
             Check(suppress.Count > 0, "no shipped content applies or reads BuffSuppression" + Detail(suppress));
             Check(interrupt.Count == 0, "no shipped content uses Interrupt" + Detail(interrupt));
-            Check(splash.Count == 0, "no shipped effect is marked Splash" + Detail(splash));
+            // FLIPPED by the first 3-star batch, and by two kits rather than one: Aster's
+            // Shatterproof spreads Fracture into the bodies beside its target and Cal's Ricochet
+            // Mark and Corner Shot carry damage into them.
+            Check(splash.Count > 0, "shipped content marks an effect Splash" + Used(splash));
             Check(statCmp.Count > 0, "shipped content compares stats across units" + Used(statCmp));
             Check(actionHist.Count > 0, "no shipped content reads action-type history" + Detail(actionHist));
-            Check(dodge.Count == 0, "no shipped passive triggers on OnDodge" + Detail(dodge));
+            // FLIPPED by the first 3-star batch. Adric's No Return Mark is the first shipped
+            // passive to listen on a miss, and it is the other half of the AccuracyDown line
+            // above: the status that creates misses and the passive that answers one landed in
+            // the same kit, which is why both turn over together.
+            Check(dodge.Count > 0, "a shipped passive triggers on OnDodge" + Used(dodge));
             Check(extend.Count > 0, "no shipped content uses ExtendStatus" + Detail(extend));
             Check(disrupted.Count > 0, "shipped content applies or reads Disrupted" + Used(disrupted));
             Check(consumeDebt.Count > 0, "no shipped content uses ConsumeTurnDebt" + Detail(consumeDebt));
@@ -24905,6 +24916,18 @@ namespace Emberfall.DevHarness
         private const float StarBandFloor = 0.45f;
         private const float StarBandCeiling = 0.85f;
 
+        /// <summary>
+        /// THE SAME TWO EDGES ONE TIER DOWN, and they are lower rather than narrower.
+        ///
+        /// A 3-star is authored with a basic, an active and one passive, which is the 4-star's
+        /// shape minus whatever the 4-star spent its overflow slot on, so the tier below reads
+        /// smaller for the same reason the tier above reads smaller than five: fewer rules, and
+        /// a stat line that is a smaller fraction of its role's mean. The band was set where the
+        /// tier actually lands once every 3-star has a real kit, not guessed in advance.
+        /// </summary>
+        private const float StarBandThreeFloor = 0.30f;
+        private const float StarBandThreeCeiling = 0.60f;
+
         /// <summary>How many authored 5-stars a role needs before its median is treated as a
         /// middle rather than a sample, and the band's floor enforced against it.</summary>
         private const int StarBandMinFives = 3;
@@ -24952,9 +24975,19 @@ namespace Emberfall.DevHarness
         /// two readings have no middle. The ceiling above keeps running for those roles, because
         /// "smaller than the 5-stars of your role" still means something against one of them.
         ///
-        /// FOUR STARS ONLY. The tiers below are unauthored and their floors are different numbers
-        /// nobody has decided; asserting this one on the first 3-star to land would be a guess
-        /// wearing a guard's clothes.
+        /// FOUR AND THREE STARS. Each tier has its own pair of edges against the same 5-star
+        /// median, because "smaller" is a claim about a tier rather than about the roster: a
+        /// 3-star graded against the 4-star band would pass at the bottom of it and say nothing.
+        /// The two-star and one-star tiers are still unauthored and their floors are numbers
+        /// nobody has decided, so nothing is asserted about them.
+        ///
+        /// AND A 3-STAR ALSO HAS TO SIT UNDER ITS OWN ROLE'S 4-STARS, which the band against the
+        /// 5-star median cannot say on its own. The two bands overlap between x0.45 and x0.60, so
+        /// a 3-star at x0.58 and a 4-star at x0.47 in the same role both satisfy their own edges
+        /// while standing in the wrong order. The 4-star median is the second reading, and it is a
+        /// median for the same reason the 5-star one is: a role's 4-stars are not equal, and the
+        /// weakest of them is a number about the arena as much as about the hero. Roles with no
+        /// authored 4-star have nothing to compare against and are skipped rather than guessed.
         ///
         /// WHAT IT CANNOT SEE, said here rather than discovered later: the arena fields no talent,
         /// so the three a 5-star carries and a 4-star does not are outside this reading and the real
@@ -25010,6 +25043,11 @@ namespace Emberfall.DevHarness
             List<string> tooSmall = new List<string>();
             List<string> tooBig = new List<string>();
             List<string> inBand = new List<string>();
+            List<string> tooSmall3 = new List<string>();
+            List<string> tooBig3 = new List<string>();
+            List<string> inBand3 = new List<string>();
+            List<string> overFour = new List<string>();
+            List<string> underFour = new List<string>();
             List<string> ungradedRoles = new List<string>();
             int graded = 0;
             Array roles = Enum.GetValues(typeof(HeroRole));
@@ -25037,6 +25075,18 @@ namespace Emberfall.DevHarness
                 // enforced against a sample that cannot carry the claim.
                 bool bandEnforced = fives.Count >= StarBandMinFives;
                 if (median > 0 && !bandEnforced) ungradedRoles.Add(role + " (" + fives.Count + ")");
+
+                // THE SECOND READING, and it needs no minimum. The 5-star median is a claim about
+                // where the middle of a role sits and wants three samples to mean anything; this
+                // one is a claim about ORDER between two adjacent tiers, and one 4-star is still a
+                // 4-star a 3-star has to be smaller than. A role with none is skipped.
+                List<long> fours = new List<long>();
+                for (int h = 0; h < inRole.Count; h++)
+                    if (inRole[h].Stars == 4) fours.Add(output[inRole[h].Id]);
+                fours.Sort();
+                long fourMedian = fours.Count == 0 ? -1
+                                : fours.Count % 2 == 1 ? fours[fours.Count / 2]
+                                : (fours[fours.Count / 2 - 1] + fours[fours.Count / 2]) / 2;
 
                 Line("  " + role + (median < 0
                         ? "  (no authored 5-star, so nothing to grade against)"
@@ -25080,6 +25130,38 @@ namespace Emberfall.DevHarness
                                 ? (share < StarBandFloor ? "   BELOW THE BAND"
                                    : share > StarBandCeiling ? "   ABOVE THE BAND" : "   in band")
                                 : "   (band not enforced for this role)";
+
+                        // The tier below, against its own pair of edges.
+                        if (def.Stars == 3)
+                        {
+                            string reading = def.Id + " x"
+                                + share.ToString("0.00", CultureInfo.InvariantCulture);
+                            if (!bandEnforced) { }
+                            else if (share < StarBandThreeFloor) tooSmall3.Add(reading);
+                            else if (share > StarBandThreeCeiling) tooBig3.Add(reading);
+                            else inBand3.Add(reading);
+
+                            ratio += bandEnforced
+                                ? (share < StarBandThreeFloor ? "   BELOW THE 3-STAR BAND"
+                                   : share > StarBandThreeCeiling ? "   ABOVE THE 3-STAR BAND"
+                                   : "   in the 3-star band")
+                                : "   (band not enforced for this role)";
+                        }
+                    }
+
+                    // The order check, asked of every 3-star in a role that has an authored
+                    // 4-star, graded or not. It is a different question from the band and it is
+                    // answerable in roles where the band is not.
+                    if (def.Stars == 3 && fourMedian > 0)
+                    {
+                        float fourShare = mine / (float)fourMedian;
+                        ratio += "   x" + fourShare.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + " of the 4-star median";
+                        if (mine >= fourMedian)
+                            overFour.Add(def.Id + " " + mine + " against 4-star median " + fourMedian);
+                        else
+                            underFour.Add(def.Id + " x"
+                                + fourShare.ToString("0.00", CultureInfo.InvariantCulture));
                     }
                     long[] terms = split[def.Id];
                     Line("    " + def.Stars + "*  " + def.Id + "  " + mine
@@ -25130,6 +25212,38 @@ namespace Emberfall.DevHarness
                       + (tooSmall.Count > 0 ? "below - " + string.Join(", ", tooSmall.ToArray()) : "")
                       + (tooSmall.Count > 0 && tooBig.Count > 0 ? "; " : "")
                       + (tooBig.Count > 0 ? "above - " + string.Join(", ", tooBig.ToArray()) : ""));
+
+            int banded3 = tooSmall3.Count + tooBig3.Count + inBand3.Count;
+            if (banded3 > 0)
+                Check(tooSmall3.Count == 0 && tooBig3.Count == 0,
+                      tooSmall3.Count == 0 && tooBig3.Count == 0
+                        ? "all " + banded3 + " graded 3-star(s) read between x"
+                          + StarBandThreeFloor.ToString("0.00", CultureInfo.InvariantCulture)
+                          + " and x"
+                          + StarBandThreeCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                          + " of their role's 5-star median ("
+                          + string.Join(", ", inBand3.ToArray()) + ")"
+                        : (tooSmall3.Count + tooBig3.Count) + " graded 3-star(s) fall outside the x"
+                          + StarBandThreeFloor.ToString("0.00", CultureInfo.InvariantCulture)
+                          + " to x"
+                          + StarBandThreeCeiling.ToString("0.00", CultureInfo.InvariantCulture)
+                          + " band: "
+                          + (tooSmall3.Count > 0 ? "below - " + string.Join(", ", tooSmall3.ToArray()) : "")
+                          + (tooSmall3.Count > 0 && tooBig3.Count > 0 ? "; " : "")
+                          + (tooBig3.Count > 0 ? "above - " + string.Join(", ", tooBig3.ToArray()) : ""));
+            else
+                Line("  [note] no authored 3-star sits in a role with " + StarBandMinFives
+                     + " or more authored 5-stars, so the 3-star band has nothing to enforce yet.");
+
+            int ordered = overFour.Count + underFour.Count;
+            if (ordered > 0)
+                Check(overFour.Count == 0,
+                      overFour.Count == 0
+                        ? "all " + ordered + " 3-star(s) in a role with an authored 4-star sit under"
+                          + " that role's 4-star median (" + string.Join(", ", underFour.ToArray()) + ")"
+                        : overFour.Count + " 3-star(s) match or beat the 4-star median for their own"
+                          + " role, so the two tiers stand in the wrong order: "
+                          + string.Join("; ", overFour.ToArray()));
             Line("");
         }
 
@@ -25210,7 +25324,13 @@ namespace Emberfall.DevHarness
                                   "sable_the_queue_cutter", "tamsin_the_loose_thread",
                                   "iolan_the_redacted_judge", "ruma_the_false_trail",
                                   "toren_the_closed_door", "leon_the_numbered_arrow",
-                                  "lio_the_clear_diagnosis", "nadine_the_border_clerk" };
+                                  "lio_the_clear_diagnosis", "nadine_the_border_clerk",
+                                  // The first 3-star batch. Same reason again, and one of them is
+                                  // the first kit in the roster to listen on a miss, which is a
+                                  // window this arena had never opened.
+                                  "adric_the_blank_map", "aster_the_glassblower",
+                                  "quin_the_sealed_dispatch", "selka_the_unheard_appeal",
+                                  "bren_the_extra_measure", "cal_the_alternate_angle" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

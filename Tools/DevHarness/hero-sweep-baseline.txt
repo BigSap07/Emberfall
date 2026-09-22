@@ -12,6 +12,11 @@
 # Regenerating to make a surprise go away is how a guard stops guarding.
 #
 # Regenerate deliberately:  EMBERFALL_REGEN_HERO_SWEEP=1  pwsh Tools/build-check.ps1
+adric_the_blank_map|1|52a183be515e2caa
+adric_the_blank_map|2|d5fa23a1069bf2ac
+adric_the_blank_map|3|7c705772cc5c0c95
+adric_the_blank_map|4|c2df174037e8f471
+adric_the_blank_map|5|bb6f31514685fec2
 aeron_the_unbroken_stride|1|da5eab6e36295f21
 aeron_the_unbroken_stride|2|4959be6d80a7bf27
 aeron_the_unbroken_stride|3|65cc8bafdef4669e
@@ -32,16 +37,31 @@ arden_the_precise_measure|2|c44441574957d5cd
 arden_the_precise_measure|3|2cb2443c960a07df
 arden_the_precise_measure|4|1561fc3bbb16d321
 arden_the_precise_measure|5|ea32bf078f060c12
+aster_the_glassblower|1|4da1c1bad1b12063
+aster_the_glassblower|2|110d8c7e83cc7462
+aster_the_glassblower|3|1c5a43c0c2d83057
+aster_the_glassblower|4|05c5cda3de65c9ee
+aster_the_glassblower|5|a8bf6dc3ca47a8f5
 branik_the_siege_mason|1|ec99ab19eef43b6b
 branik_the_siege_mason|2|9822c04fec71bb93
 branik_the_siege_mason|3|80d7d61ab0221249
 branik_the_siege_mason|4|0f2b3c4af36e1838
 branik_the_siege_mason|5|4fa9692fe09b2ca9
+bren_the_extra_measure|1|fa0c333f59d53c1f
+bren_the_extra_measure|2|b79be740bf361b5e
+bren_the_extra_measure|3|1cdccabd57fc02f8
+bren_the_extra_measure|4|b63dfd18edcbac7d
+bren_the_extra_measure|5|afdf7b034f72dce0
 brenna_the_remaining_wall|1|d50054a0c79e8770
 brenna_the_remaining_wall|2|926d72e752267b88
 brenna_the_remaining_wall|3|d642903578793752
 brenna_the_remaining_wall|4|d8a54e70fe6e8a29
 brenna_the_remaining_wall|5|c0dee596317f04e7
+cal_the_alternate_angle|1|11a38ecb8d5bd8cc
+cal_the_alternate_angle|2|e986a6202db93aef
+cal_the_alternate_angle|3|79549d829c52a4ac
+cal_the_alternate_angle|4|4b680ea67ad1fe84
+cal_the_alternate_angle|5|5524ec3c9bdb21a1
 caldus_the_appointed_guard|1|abf900f0a536666f
 caldus_the_appointed_guard|2|cbdb7d09a7a0579d
 caldus_the_appointed_guard|3|6dffe1f321f1253c
@@ -212,6 +232,11 @@ oris_the_unwritten_path|2|557c6efac691ec1f
 oris_the_unwritten_path|3|d59a04b0c0f25278
 oris_the_unwritten_path|4|5a19e521e6543436
 oris_the_unwritten_path|5|4a46562322d8eb5b
+quin_the_sealed_dispatch|1|1d6faad9f10acf22
+quin_the_sealed_dispatch|2|b31b6a8a71abcfd0
+quin_the_sealed_dispatch|3|12b98652d1a9bdb0
+quin_the_sealed_dispatch|4|3ecb620965d9baef
+quin_the_sealed_dispatch|5|2e5588a6d9b0fd73
 rheia_the_revision_scribe|1|b71ab6117ae12dce
 rheia_the_revision_scribe|2|fb95815953873e31
 rheia_the_revision_scribe|3|21e912b43fc91636
@@ -237,6 +262,11 @@ sable_the_queue_cutter|2|7ef4a8bd3cd872d9
 sable_the_queue_cutter|3|99b612ecfb07d618
 sable_the_queue_cutter|4|32c780358e407d41
 sable_the_queue_cutter|5|c0680779e2080224
+selka_the_unheard_appeal|1|86a0612effe83052
+selka_the_unheard_appeal|2|d0122146bfca68dd
+selka_the_unheard_appeal|3|9f4d8737a5c679ba
+selka_the_unheard_appeal|4|babf508ce778dd86
+selka_the_unheard_appeal|5|2298909df8ebb2fe
 seraphine_the_closed_volume|1|f5d8de4a6d0f6536
 seraphine_the_closed_volume|2|22fef8be39acf444
 seraphine_the_closed_volume|3|85bbd39654e865e4

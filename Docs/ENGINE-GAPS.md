@@ -78,9 +78,13 @@ always reads zero.
 Every transfer primitive in the engine is one-directional. `HpTransfer` and `ShieldTransfer` move a
 pool from one body to another and there is no exchange.
 
+`HpTransfer` also only ever moves HP BETWEEN THE CASTER AND ITS TARGET, so a clause naming two
+bodies that are both somebody else cannot be said one way either.
+
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Rhys | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | a two-way HP exchange; `HpTransfer` only moves HP one way | Rhys pays 45% of what the ally is missing out of his own bar, clamped by the engine to leave him at 1 HP | medium |
+| Rhys | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | a two-way HP exchange; `HpTransfer` only moves HP one way | Rhys pays 20% of what the ally is missing out of his own bar, clamped by the engine to leave him at 1 HP | medium |
+| Bren | "swaps the target's present HP percentage with the **highest-HP enemy**" | a two-way exchange, and a one-way one between two bodies neither of which is the caster | Take Another Route is aimed at the highest-HP enemy instead, so the blow goes where the swap would have sent the health | medium |
 
 ---
 
@@ -204,17 +208,103 @@ its own side. There is no placement, no ordering and nothing that forbids either
 
 ---
 
+## 23. A damage modifier scoped to one kind of hit, or spent by one hit
+
+`Vulnerable`, `Blunted` and `DamageTakenUp` are the three entries that change what a blow is worth,
+and all three answer every blow for as long as they last. `DamageTakenUp` can narrow itself to
+skill damage, which is the only scope any of them has. Nothing narrows one to a CRITICAL hit, and
+nothing spends one on a single blow: `charges` is stamped on a status as it lands and is read by
+`Guard` and by the `Covered` redirect, not by the damage modifiers.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Aster | "Fracture causes the **next critical hit** to deal 15% more damage" | a crit-scoped damage modifier, and a per-hit charge on one | Fracture is a `DamageTakenUp` of 15% that answers every blow for its 2 rounds | small |
+| Quin | "Delivered targets take 8% more damage from the **next** active skill" | a per-hit charge on a damage modifier; the skill scope itself is authorable | Delivered carries the skill-scoped 8% for its 2 rounds rather than for one cast | small |
+
+---
+
+## 24. A miss that somebody other than the dodger can hear
+
+`OnDodge` fires on the body that was missed and publishes the attacker as its source, which is the
+right shape for "when she evades, she counters". Nothing raises it on the applier of the accuracy
+debuff that caused the miss, and no trigger reaches a third party at all.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Adric | "When an enemy with Lost Route **misses**, Adric gains 8 Energy" | a miss window the applier can hear, rather than only the body that dodged | the 8 Energy pays only when the missed blow was aimed at Adric himself | small |
+
+---
+
+## 25. An amount that counts the bodies an effect reached
+
+`perStack` scales an effect by how many entries of a named status, or of a whole class, sit on one
+named subject. Nothing scales an amount by HOW MANY TARGETS the effect resolved onto, so "per
+target" has no arithmetic behind it. `_hitIsArea` records that a blow reached more than one body
+and is a boolean, not a count.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Quin | "removes Delivered to give Quin **12 Energy per target**" | an amount multiplied by the number of bodies an effect resolved onto | a flat 12 Energy for the cast, whatever it reached | small |
+
+---
+
+## 26. Changing what an ability costs
+
+`energyCost` is a field on `AbilityDef` and the one thing that moves it is a `TalentOverrideDef`,
+which is applied at unit-build time from the SELECTED TALENT. A passive carries an `overrides`
+list in its JSON and nothing reads it outside the talent path, so a hero below five stars has no
+way to author a cost change at all.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Quin | "Quin's **first active skill each battle costs 15 less Energy**" | an ability cost modifier reachable from a passive rather than from a talent override | a `BattleStart` passive that banks 15 Energy, which is the same first cast one turn earlier and a different thing on every cast after it | small |
+
+---
+
+## 27. Refusing a cleanse
+
+`Cleanse` walks the target's harmful entries newest first and takes the first `hits` of them.
+Nothing on a `StatusInstance` and no condition anywhere says "not this one". `NoExtend` refuses an
+`ExtendStatus` and is the only refusal an entry can carry.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Selka | "Overdue **cannot be cleansed** during the round it was applied" | a per-entry cleanse immunity | No Extension writes Overdue back onto its carrier at every round start, so it cannot be shaken off at all rather than for one round | small |
+
+---
+
+## 28. Which effect of a cast landed the blow
+
+A defeat publishes the killer and the defeated body. It does not publish which EFFECT of the
+killer's ability did it, so a clause that answers only one line of a multi-effect cast cannot tell
+itself apart from the rest of the cast. `TriggerAbilityId` narrows a defeat trigger to one ABILITY,
+which is as fine as the record gets.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Cal | "When **Offset splash** defeats an enemy, Cal gains a guaranteed Critical Hit" | the effect within a cast that landed a killing blow | any defeat Cal lands on an Offset enemy pays the guaranteed critical | small |
+
+---
+
 ## Where the counts stand
 
-Thirteen capabilities, fourteen clauses, across thirteen heroes. It began at twenty-two and
+Nineteen capabilities, twenty-two clauses, across nineteen heroes. It began at twenty-two and
 thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
-eighteen kits that carried them.
+eighteen kits that carried them, leaving thirteen and fourteen. The first 3-star batch then added
+six groups and eight clauses, which is the count going the other way for the first time since the
+pass.
 
-Exactly one group still has more than one occupant:
+Three groups have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
+| 11 | swapping a value, rather than moving it one way | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
+| 23 | a damage modifier scoped to one kind of hit, or spent by one hit | 2 |
+
+**Group 23 is the one with a repeat that arrived in a single batch**, which is what this file's
+grouping exists to make visible: Aster's Fracture and Quin's Delivered are the same sentence
+written twice, and one per-hit charge on the damage modifiers would close both.
 
 **What the pass built**, in the order the groups were taken:
 

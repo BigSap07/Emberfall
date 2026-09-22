@@ -2030,25 +2030,66 @@
         "portrait": "adric_the_blank_map"
       },
       "basic": {
-        "id": "adric_the_blank_map_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "adric_mapcase_bash",
+        "name": "Mapcase Bash",
+        "description": "Deals 255% Attack damage and applies Lost Route for 2 rounds. Lost Route reduces Accuracy by 12%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.55
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.12,
+            "status": "AccuracyDown"
           }
         ]
       },
       "active": {
-        "id": "adric_the_blank_map_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "adric_erase_the_road",
+        "name": "Erase the Road",
         "energyCost": 100,
+        "description": "Deals 400% Attack damage to all enemies with Lost Route and grants Adric a Shield equal to 12% Max HP for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "power": 4.0
+          },
+          {
+            "kind": "Shield",
+            "target": "Self",
+            "duration": 2,
+            "selfHpRatio": 0.12
+          }
+        ]
+      },
+      "passive1": {
+        "id": "adric_no_return_mark",
+        "name": "No Return Mark",
+        "description": "When an attack from an enemy carrying Lost Route misses Adric, he gains 8 Energy. Pinoy writes it as any miss by a Lost Route enemy; the engine raises its miss window on the body that dodged, so only Adric dodging reaches him. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 24.",
+        "trigger": "OnDodge",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSource",
+            "flat": 8
           }
         ]
       }
@@ -2092,25 +2133,75 @@
         "portrait": "aster_the_glassblower"
       },
       "basic": {
-        "id": "aster_the_glassblower_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "aster_scoring_point",
+        "name": "Scoring Point",
+        "description": "Deals 350% Attack damage to the highest-Attack enemy and applies Fracture for 2 rounds. A Fractured body takes 15% more damage. Pinoy writes the bonus onto the next critical hit only; the engine has no crit-scoped damage modifier and no per-hit charge on one, so it answers every blow for the duration. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 23.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 3.5
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "DamageTakenUp"
           }
         ]
       },
       "active": {
-        "id": "aster_the_glassblower_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "aster_shatterproof",
+        "name": "Shatterproof",
         "energyCost": 100,
+        "description": "Deals 540% Attack damage to an enemy with Fracture and spreads Fracture to the enemies beside it for 1 round.",
         "effects": [
           {
             "kind": "Damage",
+            "target": "EnemyWithMyMark",
+            "power": 5.4
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "splash": true,
+            "duration": 1,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "splash": true,
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 1,
+            "magnitude": 0.15,
+            "status": "DamageTakenUp"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "aster_stress_line",
+        "name": "Stress Line",
+        "description": "When an enemy with Fracture is defeated, all remaining enemies lose 6 Energy.",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasMyMark",
+            "conditionOn": "Defeated",
+            "flat": -6
           }
         ]
       }
@@ -2154,25 +2245,80 @@
         "portrait": "quin_the_sealed_dispatch"
       },
       "basic": {
-        "id": "quin_the_sealed_dispatch_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "quin_stamped_parcel",
+        "name": "Stamped Parcel",
+        "description": "Deals 258% Attack damage and applies Delivered for 2 rounds. Delivered targets take 8% more damage from active skills. Pinoy writes it as the next active skill only; the engine has no per-hit charge on a damage modifier, so it holds for the duration. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 23.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.58
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.08,
+            "status": "DamageTakenUp",
+            "damageTakenSkillOnly": true
           }
         ]
       },
       "active": {
-        "id": "quin_the_sealed_dispatch_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "quin_return_to_sender",
+        "name": "Return to Sender",
         "energyCost": 100,
+        "description": "Deals 454% Attack damage to all Delivered enemies and takes Delivered back off them, giving Quin 12 Energy. Pinoy pays the 12 per target; nothing in the engine scales an amount by how many bodies an effect reached, so it pays once. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 25.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "power": 4.54
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 12
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "AllEnemies",
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "hits": 1,
+            "status": "DamageTakenUp"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "AllEnemies",
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "hits": 1,
+            "status": "Mark"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "quin_urgent_matter",
+        "name": "Urgent Matter",
+        "description": "Quin opens the battle with 15 Energy already banked. Pinoy writes it as his first active skill costing 15 less; an ability cost can only be moved by a talent override, which a 3-star does not carry. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 26.",
+        "trigger": "BattleStart",
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 15
           }
         ]
       }
@@ -2216,25 +2362,74 @@
         "portrait": "selka_the_unheard_appeal"
       },
       "basic": {
-        "id": "selka_the_unheard_appeal_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "selka_filed_objection",
+        "name": "Filed Objection",
+        "description": "Deals 190% Attack damage and applies Overdue for 2 rounds. Overdue reduces received healing by 15%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.9
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "HealingReduction"
           }
         ]
       },
       "active": {
-        "id": "selka_the_unheard_appeal_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "selka_deadline",
+        "name": "Deadline",
         "energyCost": 100,
+        "description": "Deals 360% Attack damage to an Overdue enemy. If it is below 35% HP, deals 103% additional Attack damage.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 3.6
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "condition": "HpBelow",
+            "conditionOn": "Target",
+            "conditionValue": 0.35,
+            "power": 1.03
+          }
+        ]
+      },
+      "passive1": {
+        "id": "selka_no_extension",
+        "name": "No Extension",
+        "description": "At round start Overdue is written back onto the enemy carrying it, so it cannot be shaken off. Pinoy writes it as Overdue being uncleansable during the round it was applied; the engine has no cleanse immunity, and a renewal is the nearest thing it can say. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 27.",
+        "trigger": "RoundStart",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "EnemyWithMyMark",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "EnemyWithMyMark",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "HealingReduction"
           }
         ]
       }
@@ -4626,25 +4821,50 @@
         "portrait": "bren_the_extra_measure"
       },
       "basic": {
-        "id": "bren_the_extra_measure_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "bren_shared_passage",
+        "name": "Shared Passage",
+        "description": "Deals 232% Attack damage and gives the lowest-HP ally 8% Damage Reduction for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.32
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "chance": 1,
+            "duration": 1,
+            "magnitude": 0.08,
+            "status": "DamageReductionUp"
           }
         ]
       },
       "active": {
-        "id": "bren_the_extra_measure_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "bren_take_another_route",
+        "name": "Take Another Route",
         "energyCost": 100,
+        "description": "Deals 380% Attack damage to the highest-HP enemy. Pinoy swaps the target’s present HP percentage with that body’s; the engine has no two-way exchange and no one-way transfer between two units that are not the caster, so the blow is routed to the big body instead. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 11.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "HighestHpEnemy",
+            "power": 3.8
+          }
+        ]
+      },
+      "passive1": {
+        "id": "bren_reserved_passage",
+        "name": "Reserved Passage",
+        "description": "The first time an ally falls below 30% HP, Bren advances their turn by 15% turn progress.",
+        "trigger": "OnAllyHpBelowThreshold",
+        "threshold": 0.3,
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "TurnShift",
+            "target": "BroadcastVictim",
+            "magnitude": 0.15
           }
         ]
       }
@@ -4688,25 +4908,59 @@
         "portrait": "cal_the_alternate_angle"
       },
       "basic": {
-        "id": "cal_the_alternate_angle_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "cal_ricochet_mark",
+        "name": "Ricochet Mark",
+        "description": "Deals 251% Attack damage to the highest-Attack enemy and applies Offset for 2 rounds, then a 57% Attack ricochet strikes that enemy again and the enemies beside it. Pinoy hangs the ricochet on the next ALLY attack against an Offset body; that shape needs a link and a second passive, which a 3-star does not carry, so Cal’s own shot carries it. Draft, Pinoy to confirm.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "HighestAttackEnemy",
+            "power": 2.51
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "splash": true,
+            "power": 0.57
           }
         ]
       },
       "active": {
-        "id": "cal_the_alternate_angle_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "cal_corner_shot",
+        "name": "Corner Shot",
         "energyCost": 100,
+        "description": "Deals 457% Attack damage to an Offset enemy, and the same blow strikes both enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "splash": true,
+            "power": 4.57
+          }
+        ]
+      },
+      "passive1": {
+        "id": "cal_new_sightline",
+        "name": "New Sightline",
+        "description": "When Cal defeats an Offset enemy, his next attack is a guaranteed Critical Hit. Pinoy names the splash as the killer; the engine does not record which effect of a cast landed the blow. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 28.",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "triggerSourceIsSelf": true,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "Defeated",
+            "duration": 1,
+            "status": "GuaranteedCrit"
           }
         ]
       }
