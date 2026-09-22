@@ -118,6 +118,7 @@ whose bars do not outrun a 4-star's Attack, and choosing between those is Pinoy'
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Maera | "and **she cannot be controlled**" | a status that raises the `ControlImmunity` stat; `StatusKind` has no `ControlImmunityUp`, and the stat is authored on `UnitDef` only | the clause is dropped; the guaranteed critical half of the passive is authored and the immunity half is not | small |
+| Sena | "Sena gains **10% Critical Chance** against slowed enemies" | a status that raises Critical Chance; `StatusKind` carries `CritDamageUp` and `CritDamageDown` and has no Critical Chance entry in either direction, and `GuaranteedCrit` is the only crit-facing entry there is | Unfixed Aim pays the advantage as damage instead: a rider worth 85% of Attack against an enemy carrying Slow | small |
 
 ---
 
@@ -330,30 +331,103 @@ time in the same batch that found it unanswerable.
 
 ---
 
+## 32. A shield break only its own side can hear
+
+A Shield reaching zero raises `OnShieldBreak` on the body that lost it and broadcasts
+`OnAllyShieldBreak` to that body's own side. Both windows are on the defending side, and nothing is
+raised on the unit whose blow took the Shield down, so "when an enemy Shield is removed" has no
+hook on the breaker. `ShieldBrokenByCaster` exists as a CONDITION and reads `_shieldBreakerId`,
+which is only set inside those two windows, so it can only be read by a passive the breaker does
+not own. This is the same shape as group 24, where a miss is only audible to the body that dodged.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Arno | "**When an enemy Shield is removed**, Arno gains 8% Attack for 2 rounds" | a break the breaker hears, or a `ShieldBrokenByCaster` window a watcher can open | Rubble Resolve answers a strike landing on an enemy whose Shield is still standing, which is the case before the break rather than after it | small |
+
+---
+
+## 33. A hero cannot hear its own change of target
+
+`OnEnemyChangedTarget` is raised the moment `LastTargetId` moves, and it is broadcast to the
+opposing side only, so the switcher's own passives never see it. The two conditions that look like
+they answer it do not: `SubjectIsMyPreviousTarget` and its negation both read `PreviousTargetId`,
+which is the last DIFFERENT body and is not written at all when a unit strikes the same one twice,
+so a hero repeating a target reads "no history" rather than "no change".
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Yara | "When Yara **attacks a different target than last turn**, she gains 10 Energy" | a condition, or an owner-centric trigger, saying that this cast went somewhere new | Second Bearing makes the switch a standing rule instead of a gate: a `TargetBan` of `LastTarget` forbids her the body she just hit, and the reward is paid on every basic. It is paid in Attack rather than Energy for a second reason, which is not an engine gap and is in `Docs/PINOY-LIST.md` section 2c | medium |
+
+---
+
+## 34. A once-per-battle limit is spent by the trigger, not by the clause
+
+`TriggerPassive` marks `OncePerBattle` as soon as the passive's gates pass, and only then evaluates
+each effect's own condition. So "the first time X happens" is authorable exactly when X is the
+trigger; when X is the trigger PLUS a condition, the limit is spent on the first firing whatever
+the condition said, and the clause can be gone before it has ever landed. `PassiveLimit.OncePerRound`
+is charged at the same point and has the same problem.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Nara | "**The first time** an ally is healed below 35% HP, they gain 6% Damage Reduction for 1 round" | a limit charged when an effect lands rather than when its passive fires | Carry On has no limit at all, so every heal that leaves an ally under 35% pays it. `DamageReductionUp` refreshes rather than stacking, so the ungated form cannot compound | small |
+
+---
+
+## 35. A damage modifier gated on a condition rather than on a status
+
+The engine has two ways to raise damage and both are counted off an entry a body carries:
+`PassiveDef.OutputModStatus` scales the owner's output per stack of a named status, and
+`DamageTakenUp` raises what a target receives. Neither takes a condition, so "more damage against
+an enemy that has not acted this round" cannot be written as a modifier; it can only be written as
+a second blow whose own condition gates it. The difference is real rather than cosmetic: an added
+blow rolls its own critical and its own variance, where a modifier would ride the first one.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Kora | "Kora deals **10% more damage** to enemies that have not acted this round" | a damage modifier a condition can gate | First Opening is an added blow worth 38% of Attack, gated on `SubjectHasNotActedThisRound`. A 2-star has no active skill, so her basic is all the damage she has and the added blow covers the same ground the modifier would have | small |
+
+---
+
 ## Where the counts stand
 
-Twenty-two capabilities, twenty-nine clauses, across twenty-five heroes. It began at twenty-two
-and thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored
-the eighteen kits that carried them, leaving thirteen and fourteen. The three 3-star batches added
-nine groups and fifteen clauses, which is the count going the other way for the first time since
-the pass.
+Twenty-six capabilities, thirty-four clauses, across thirty heroes, and **the roster is now
+authored end to end, so this is the whole of it**: every one of the 94 heroes has a shipped kit and
+no further batch can add a row. It began at twenty-two and thirty-nine; the engine pass closed
+groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the eighteen kits that carried them,
+leaving thirteen and fourteen. The three 3-star batches added nine groups and fifteen clauses, and
+the low-star batch added four groups and five clauses.
 
-Seven groups have more than one occupant, where before the 3-star tier there was one:
+Eight groups have more than one occupant, where before the 3-star tier there was one:
 
 | group | capability | clauses |
 |---|---|---|
 | 6 | comparing a resource across two named units | 2 |
 | 11 | swapping a value, rather than moving it one way | 2 |
+| 13 | statuses the enum does not have | 2 |
 | 15 | chance on anything but a status landing | 2 |
 | 18 | telling which kind of status a removal took | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 | 23 | a damage modifier scoped to one kind of hit, or spent by one hit | 2 |
 | 30 | a moved status is not recorded as a removal | 2 |
 
-**The shape of the repeats is the finding.** Three of the seven pair a 3-star with a 4-star or a
+**The shape of the repeats is the finding.** Three of the eight pair a 3-star with a 4-star or a
 5-star that asked for the same thing first - Lydia beside Celen, Avera beside Finn, Clara beside
-Lio - and each of those three would close two kits at once. The other four are all inside the
-3-star tier. Nothing here is scheduled; the file is still a record.
+Lio - and each of those three would close two kits at once. Group 13 is the fourth of that shape
+and the low-star batch made it one: Sena's Critical Chance joins Maera's control immunity, and
+both are one missing `StatusKind` member away. Nothing here is scheduled; the file is still a
+record.
+
+**Three of the four new groups are the same absence seen from a new side**, which is worth reading
+next to group 24. An event in this engine is raised where it happens and broadcast to the side it
+happened to, and a clause written from the other side of it has nowhere to listen: a miss is
+audible only to the body that dodged (24), a Shield break only to the side that lost it (32), and a
+change of target only to the side being turned onto (33). One shape, three groups, three heroes.
+
+**Group 35 is the one to weigh against group 23**, because they ask for opposite halves of the same
+thing. Group 23 wants an existing damage modifier narrowed to one hit; group 35 wants one widened
+to take a condition. Three clauses across three heroes sit between them, and a single conditioned,
+chargeable damage modifier would answer all three.
 
 **Group 23 is the one with a repeat that arrived in a single batch**, which is what this file's
 grouping exists to make visible: Aster's Fracture and Quin's Delivered are the same sentence
@@ -382,7 +456,7 @@ retitled around it.
 
 **Groups 20 and 22 are different in kind and should not be read as debt.** An information layer and
 a movement system are games this one is not; the clauses that ask for them are three sentences out
-of the fourteen left, and all three heroes work without them.
+of the thirty-four, and all three heroes work without them.
 
 One caution, from the pass that produced several of these rows. `MaxHpCap` reads like the ceiling a
 percent-of-HP clause wants and is not: it ceilings against the TARGET's Max HP, so `0.02` of Max HP

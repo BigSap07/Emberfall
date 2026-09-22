@@ -2473,13 +2473,41 @@
         "portrait": "arno_the_unfinished_mason"
       },
       "basic": {
-        "id": "arno_the_unfinished_mason_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "arno_chisel_strike",
+        "name": "Chisel Strike",
+        "description": "Deals 402% Attack damage to the front enemy, and 70% more if that enemy's Shield is still standing.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 4.02
+          },
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "power": 0.7,
+            "condition": "HasShield",
+            "conditionOn": "Target"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "arno_rubble_resolve",
+        "name": "Rubble Resolve",
+        "description": "When Arno strikes an enemy carrying a Shield, he gains 8% Attack for 2 rounds. Pinoy writes it as the moment an enemy Shield is removed; a break is raised on the body that lost the Shield and on that body's own side, so the unit that broke it never hears about it. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 32.",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 2,
+            "magnitude": 0.08,
+            "condition": "HasShield",
+            "conditionOn": "LastTarget"
           }
         ]
       }
@@ -2523,13 +2551,39 @@
         "portrait": "barr_the_splintered_door"
       },
       "basic": {
-        "id": "barr_the_splintered_door_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "barr_splintering_blow",
+        "name": "Splintering Blow",
+        "description": "Deals 323% Attack damage to the front enemy and gives Barr 8% Damage Reduction for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.23
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "DamageReductionUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.08
+          }
+        ]
+      },
+      "passive1": {
+        "id": "barr_give_way",
+        "name": "Give Way",
+        "description": "The first time Barr falls below 40% HP, he gains a Shield equal to 10% of his Max HP for 2 rounds.",
+        "trigger": "OnHpBelowThreshold",
+        "threshold": 0.4,
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "Shield",
+            "target": "Self",
+            "duration": 2,
+            "selfHpRatio": 0.1
           }
         ]
       }
@@ -2573,13 +2627,33 @@
         "portrait": "piri_the_match_seller"
       },
       "basic": {
-        "id": "piri_the_match_seller_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "piri_price_breaker",
+        "name": "Price Breaker",
+        "description": "Deals 335% Attack damage to the front enemy and takes 5 Energy off it.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.35
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "flat": -5
+          }
+        ]
+      },
+      "passive1": {
+        "id": "piri_cheap_kindling",
+        "name": "Cheap Kindling",
+        "description": "When Piri defeats an enemy, the ally with the emptiest bar gains 15 Energy. Pinoy pays the 15 to Piri; a 2-star has no active skill to spend Energy on, so the spark is passed to somebody who does. See Docs/PINOY-LIST.md section 2c.",
+        "trigger": "OnKill",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "LowestEnergyAlly",
+            "flat": 15
           }
         ]
       }
@@ -2623,13 +2697,14 @@
         "portrait": "fenn_the_parcel_runner"
       },
       "basic": {
-        "id": "fenn_the_parcel_runner_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "fenn_cargo_spark",
+        "name": "Cargo Spark",
+        "description": "Deals 286% Attack damage to the enemy with the lowest HP.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "LowestHpEnemy",
+            "power": 2.86
           }
         ]
       }
@@ -2673,13 +2748,14 @@
         "portrait": "ulric_the_fallen_sign"
       },
       "basic": {
-        "id": "ulric_the_fallen_sign_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "ulric_signpost_strike",
+        "name": "Signpost Strike",
+        "description": "Deals 377% Attack damage to the front enemy.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.77
           }
         ]
       }
@@ -5197,13 +5273,39 @@
         "portrait": "dett_the_untied_knot"
       },
       "basic": {
-        "id": "dett_the_untied_knot_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "dett_unmoored_swing",
+        "name": "Unmoored Swing",
+        "description": "Deals 370% Attack damage to the front enemy and advances Dett's next turn by 8%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.7
+          },
+          {
+            "kind": "TurnShift",
+            "target": "Self",
+            "magnitude": 0.08
+          }
+        ]
+      },
+      "passive1": {
+        "id": "dett_turn_with_it",
+        "name": "Turn With It",
+        "description": "When an active skill is aimed at Dett, he gains 8% Damage Reduction for 1 round.",
+        "trigger": "OnTargeted",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "DamageReductionUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.08,
+            "condition": "SubjectLastActionWasActive",
+            "conditionOn": "BroadcastSource"
           }
         ]
       }
@@ -5247,13 +5349,43 @@
         "portrait": "hod_the_redirected_load"
       },
       "basic": {
-        "id": "hod_the_redirected_load_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "hod_cargo_bolt",
+        "name": "Cargo Bolt",
+        "description": "Deals 329% Attack damage to the front enemy, takes 5 Energy off it and gives 5 Energy to the ally with the emptiest bar.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.29
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LastTarget",
+            "flat": -5
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LowestEnergyAlly",
+            "flat": 5
+          }
+        ]
+      },
+      "passive1": {
+        "id": "hod_counterweight",
+        "name": "Counterweight",
+        "description": "An ally Hod hands Energy to gains 5% Defense for 1 round.",
+        "trigger": "OnAllyEnergyGained",
+        "triggerSourceIsSelf": true,
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastSubject",
+            "status": "DefenseUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.05
           }
         ]
       }
@@ -5297,13 +5429,42 @@
         "portrait": "yara_the_spare_compass"
       },
       "basic": {
-        "id": "yara_the_spare_compass_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "yara_deflection_shot",
+        "name": "Deflection Shot",
+        "description": "Deals 385% Attack damage to the front enemy and gives the lowest-HP ally 5% Speed for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.85
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "status": "SpeedUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.05
+          }
+        ]
+      },
+      "passive1": {
+        "id": "yara_second_bearing",
+        "name": "Second Bearing",
+        "description": "Yara never aims twice running at the same enemy, and gains 10% Attack for 1 round each time she takes a new bearing. Pinoy writes it as a reward for changing target and pays it in Energy; nothing lets a hero hear its own target change, and a 2-star has no active skill to spend Energy on, so the switch is made a standing rule and the reward is paid in Attack. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 33.",
+        "trigger": "AfterBasicAttack",
+        "targetBan": "LastTarget",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "AttackUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.1
           }
         ]
       }
@@ -5347,13 +5508,14 @@
         "portrait": "moss_the_side_route"
       },
       "basic": {
-        "id": "moss_the_side_route_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "moss_side_shot",
+        "name": "Side Shot",
+        "description": "Deals 298% Attack damage to a random enemy.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "FrontEnemy",
-            "power": 1.0
+            "target": "RandomEnemy",
+            "power": 2.98
           }
         ]
       }
@@ -5397,13 +5559,19 @@
         "portrait": "orenna_the_turning_wheel"
       },
       "basic": {
-        "id": "orenna_the_turning_wheel_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "orenna_wheelhouse_swing",
+        "name": "Wheelhouse Swing",
+        "description": "Deals 348% Attack damage to the front enemy and gives 5 Energy to the ally with the emptiest bar. Pinoy pays the 5 to Orenna; a 1-star has no active skill to spend Energy on, so the wheel passes it on. See Docs/PINOY-LIST.md section 2c.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.48
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "LowestEnergyAlly",
+            "flat": 5
           }
         ]
       }
@@ -7728,13 +7896,37 @@
         "portrait": "garron_the_stout_frame"
       },
       "basic": {
-        "id": "garron_the_stout_frame_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "garron_frame_strike",
+        "name": "Frame Strike",
+        "description": "Deals 356% Attack damage to the front enemy and gives Garron 6% Block for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.56
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "BlockUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 2,
+            "magnitude": 0.06
+          }
+        ]
+      },
+      "passive1": {
+        "id": "garron_set_iron",
+        "name": "Set Iron",
+        "description": "When Garron blocks an attack, he heals 3% of his Max HP.",
+        "trigger": "OnBlock",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Heal",
+            "target": "Self",
+            "targetMaxHpRatio": 0.03
           }
         ]
       }
@@ -7778,13 +7970,40 @@
         "portrait": "nara_the_road_nurse"
       },
       "basic": {
-        "id": "nara_the_road_nurse_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "nara_roadside_care",
+        "name": "Roadside Care",
+        "description": "Deals 422% Attack damage to the front enemy and heals the lowest-HP ally for 190% of Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 4.22
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 1.9
+          }
+        ]
+      },
+      "passive1": {
+        "id": "nara_carry_on",
+        "name": "Carry On",
+        "description": "An ally who is still below 35% HP after being healed gains 6% Damage Reduction for 1 round. Pinoy writes it as the first time only; a once-per-battle limit is spent when the trigger arrives rather than when the clause lands, so it would be gone on the battle's first heal whatever that ally's health. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 34.",
+        "trigger": "OnAllyHealed",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastSubject",
+            "status": "DamageReductionUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.06,
+            "condition": "HpBelow",
+            "conditionOn": "BroadcastSubject",
+            "conditionValue": 0.35
           }
         ]
       }
@@ -7828,13 +8047,41 @@
         "portrait": "wynn_the_hand_me_down"
       },
       "basic": {
-        "id": "wynn_the_hand_me_down_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "wynn_mended_shot",
+        "name": "Mended Shot",
+        "description": "Deals 331% Attack damage to the front enemy and gives a random ally 5% Defense for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.31
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "RandomAlly",
+            "status": "DefenseUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 2,
+            "magnitude": 0.05
+          }
+        ]
+      },
+      "passive1": {
+        "id": "wynn_useful_again",
+        "name": "Useful Again",
+        "description": "When an ally carrying Wynn's Defense buff is hit, that ally gains 5 Energy. Pinoy pays the 5 to Wynn; a 2-star has no active skill to spend Energy on, so the hand-me-down keeps paying its holder. See Docs/PINOY-LIST.md section 2c.",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "BroadcastSubject",
+            "flat": 5,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "DefenseUp",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
           }
         ]
       }
@@ -7878,13 +8125,19 @@
         "portrait": "hal_the_stone_cache"
       },
       "basic": {
-        "id": "hal_the_stone_cache_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "hal_cache_shovel",
+        "name": "Cache Shovel",
+        "description": "Deals 376% Attack damage to the front enemy and recovers 2% of Hal's Max HP.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.76
+          },
+          {
+            "kind": "Heal",
+            "target": "Self",
+            "targetMaxHpRatio": 0.02
           }
         ]
       }
@@ -7928,13 +8181,19 @@
         "portrait": "iri_the_kept_token"
       },
       "basic": {
-        "id": "iri_the_kept_token_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "iri_tokenkeepers_tap",
+        "name": "Tokenkeeper's Tap",
+        "description": "Deals 437% Attack damage to the front enemy and heals the lowest-HP ally for 131% of Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 4.37
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 1.31
           }
         ]
       }
@@ -10294,13 +10553,37 @@
         "portrait": "jax_the_clockwork_rat"
       },
       "basic": {
-        "id": "jax_the_clockwork_rat_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "jax_rattle_shot",
+        "name": "Rattle Shot",
+        "description": "Deals 322% Attack damage to the front enemy and puts its turn back by 8%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.22
+          },
+          {
+            "kind": "TurnShift",
+            "target": "LastTarget",
+            "magnitude": -0.08
+          }
+        ]
+      },
+      "passive1": {
+        "id": "jax_loose_spring",
+        "name": "Loose Spring",
+        "description": "When Jax puts an enemy's turn back, he gains 5% Speed for 1 round.",
+        "trigger": "OnTurnDelayed",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SpeedUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.05
           }
         ]
       }
@@ -10344,13 +10627,35 @@
         "portrait": "kora_the_interrupted_queue"
       },
       "basic": {
-        "id": "kora_the_interrupted_queue_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "kora_skip_ahead",
+        "name": "Skip Ahead",
+        "description": "Deals 384% Attack damage to the front enemy and advances Kora's next turn by 10%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.84
+          },
+          {
+            "kind": "TurnShift",
+            "target": "Self",
+            "magnitude": 0.1
+          }
+        ]
+      },
+      "passive1": {
+        "id": "kora_first_opening",
+        "name": "First Opening",
+        "description": "Kora's strike deals 38% of Attack in additional damage to an enemy that has not acted this round. Pinoy writes it as 10% more damage; the engine's damage modifiers are counted off a status the target carries, and there is none that reads a condition, so the tenth is authored as a second blow. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 35.",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "power": 0.38,
+            "condition": "SubjectHasNotActedThisRound",
+            "conditionOn": "LastTarget"
           }
         ]
       }
@@ -10394,13 +10699,40 @@
         "portrait": "sena_the_empty_chair"
       },
       "basic": {
-        "id": "sena_the_empty_chair_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "sena_displaced_arrow",
+        "name": "Displaced Arrow",
+        "description": "Deals 374% Attack damage to the front enemy and applies 8% Speed Down for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.74
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "status": "Slow",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.08
+          }
+        ]
+      },
+      "passive1": {
+        "id": "sena_unfixed_aim",
+        "name": "Unfixed Aim",
+        "description": "Sena's shot bites 85% of Attack deeper into a slowed enemy. Pinoy writes it as 10% Critical Chance against the slowed; StatusKind has no Critical Chance entry, so the advantage is paid as damage instead. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 13.",
+        "trigger": "AfterBasicAttack",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Damage",
+            "target": "LastTarget",
+            "power": 0.85,
+            "condition": "HasStatus",
+            "conditionStatus": "Slow",
+            "conditionOn": "LastTarget"
           }
         ]
       }
@@ -10444,13 +10776,23 @@
         "portrait": "bex_the_unlatched"
       },
       "basic": {
-        "id": "bex_the_unlatched_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "bex_latchbreaker",
+        "name": "Latchbreaker",
+        "description": "Deals 345% Attack damage to the front enemy and gives Bex 5% Speed for 1 round.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.45
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "SpeedUp",
+            "chance": 1,
+            "bypassResist": true,
+            "duration": 1,
+            "magnitude": 0.05
           }
         ]
       }
@@ -10494,13 +10836,19 @@
         "portrait": "till_the_shifting_target"
       },
       "basic": {
-        "id": "till_the_shifting_target_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "till_rolling_shot",
+        "name": "Rolling Shot",
+        "description": "Deals 415% Attack damage to the front enemy and puts its turn back by 5%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 4.15
+          },
+          {
+            "kind": "TurnShift",
+            "target": "LastTarget",
+            "magnitude": -0.05
           }
         ]
       }

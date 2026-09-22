@@ -16,9 +16,12 @@ It is one file so it can be sent as one message, and it is maintained here rathe
    judgement.
 4. **A note for the next painting** - one constraint on future hub art.
 
-Checked against the tree on 2026-09-22, after the 3-star tier was authored. Section 2b was
-rebuilt against the shipped kits in that pass rather than carried forward: the engine gaps
-pass had retired nine of its rows and this file had not been told.
+Checked against the tree on 2026-09-22, after the 2-star and 1-star tiers were authored and the
+roster reached 94 of 94. Section 2b was rebuilt against the shipped kits when the 3-star tier
+landed rather than carried forward - the engine gaps pass had retired nine of its rows and this
+file had not been told - and the low-star batch appends to it rather than rebuilding it again.
+**Sections 2b and 2c are now closed lists**: every hero has a shipped kit, so no further batch can
+add a row to either.
 
 ---
 
@@ -103,9 +106,9 @@ same thing. **If the answer is no, both come back together.**
 
 ### 2b. Clauses the engine could not say as written
 
-`Docs/ENGINE-GAPS.md` is the full record: **22 capabilities, 29 clauses, 25 heroes**, grouped by
+`Docs/ENGINE-GAPS.md` is the full record: **26 capabilities, 34 clauses, 30 heroes**, grouped by
 what is missing rather than by hero so a repeat is visible. Every row carries the sentence as
-written, what the engine lacks, and what the shipped kit does instead. What follows is the same 29
+written, what the engine lacks, and what the shipped kit does instead. What follows is the same 34
 regrouped **by hero**, because that is the order they are easiest to answer in, plus a short second
 table of departures that are not engine gaps at all.
 
@@ -120,9 +123,12 @@ energy fold, Niko's debuff window, both of Rhys's hit-size rows, Siofra's revers
 skill scope, her per-buff scaling and her named delay subject, and Toren's redirect are all
 authored as written now and need no answer.
 
-Nothing here was reworded quietly, and nothing here is a number. Every 4-star and 3-star damage
-value differs from the original because the star band moved it, which is balance rather than
-expressibility.
+Nothing here was reworded quietly, and nothing here is a number. Every damage value below five
+stars differs from the original because the star band moved it, which is balance rather than
+expressibility. That is most visible at the bottom of the roster: the shipped 2-star and 1-star
+basics run to about 350% of Attack where the sentence says 105% to 110%, because a hero with no
+active skill spends every turn on one ability and carries about half its role's 5-star stat
+total. The percentages are the band's, the clauses are yours.
 
 **Three kinds of answer are useful:** *the approximation is fine, keep it*; *the approximation is
 wrong, here is a sentence the engine can say*; or *this clause is worth an engine change*.
@@ -158,6 +164,11 @@ wrong, here is a sentence the engine can say*; or *this clause is worth an engin
 | **Quin** | "Quin's **first active skill each battle costs 15 less Energy**" | a battle-start passive that banks 15 Energy instead |
 | **Rhys** | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | Rhys pays 20% of what the ally is missing out of his own bar, clamped to leave him at 1 HP. There is no swap in the engine |
 | **Selka** | "Overdue **cannot be cleansed** during the round it was applied" | Overdue is written back onto its carrier at every round start, so it cannot be shaken off at all rather than for one round |
+| **Sena** | "Sena gains **10% Critical Chance** against slowed enemies" | the advantage is paid as damage - a rider worth 85% of Attack against a slowed enemy. `StatusKind` has no Critical Chance entry in either direction |
+| **Arno** | "**When an enemy Shield is removed**, Arno gains 8% Attack for 2 rounds" | it answers a strike landing on an enemy whose Shield is still standing, which is the moment before the break. A break is only audible to the side that lost it |
+| **Kora** | "Kora deals **10% more damage** to enemies that have not acted this round" | an added blow worth 38% of Attack against an enemy that has not acted, rather than a modifier on the one she is already landing |
+| **Nara** | "**The first time** an ally is healed below 35% HP, they gain 6% Damage Reduction" | every heal that leaves an ally under 35% pays it. A once-per-battle limit is spent when the trigger arrives, so it would be gone on the battle's first heal whatever that ally's health |
+| **Yara** | "When Yara **attacks a different target than last turn**, she gains 10 Energy" | she is forbidden the body she just hit, so every shot is a new bearing, and the reward is paid on all of them. Nothing lets a hero hear its own change of target |
 
 **The three dropped clauses are the ones to read first**: Maera's control immunity, Nadine's hold
 and Brio's "cannot miss". All three are in the shipped kit's text as nothing at all rather than as
@@ -169,13 +180,34 @@ second hook were both marked draft in their batches on the strength of a scan th
 `PassiveTrigger`'s 52 members and dropped the two that answered them. Both sentences are authored
 unchanged now.
 
-### 2c. Three departures the engine could say and a 3-star has no room for
+### 2c. Seven departures the engine could say and the star contract has no room for
 
-These are not in `Docs/ENGINE-GAPS.md`, because the engine can say all three. They are in the
-shipped kit differently because **a 3-star is authored as a basic, an active and one passive and
-nothing else**, where a 4-star may carry an extra passive in the overflow list for a described
-clause that answers a trigger of its own. That rule is the batch's, not the engine's, so the answer
-to any of these could be "give that hero the second passive" rather than "change the engine".
+These are not in `Docs/ENGINE-GAPS.md`, because the engine can say all of them. They are in the
+shipped kit differently because of what the star contract gives each tier, not because of what the
+engine can express, so the answer to any of these could be "change the contract for that hero"
+rather than "change the engine".
+
+**Four of the seven are one question, and it is the one worth answering first.** A 1-star is a
+basic and nothing else and a 2-star is a basic and one passive, so **neither tier has an active
+skill** - and Energy is spent on nothing else. Four of the low-star designs pay the hero Energy:
+Piri 15 on a kill, Yara 10 for a new bearing, Wynn 5 when a buffed ally is hit, and Orenna 5 on
+every swing. Written as they stand, all four are clauses a player reads on the card and that can
+never do anything. Each shipped kit keeps the amount and moves where it lands - to the ally with
+the emptiest bar, or to the ally who was hit - except Yara's, which is paid in Attack because two
+heroes handing Energy to an ally was already one more than the tier needed. **The choice is
+Pinoy's: either the low tiers get an active skill, or these four clauses mean what the shipped kits
+make them mean.**
+
+| hero | clause as written | what ships instead | what the faithful shape would cost |
+|---|---|---|---|
+| **Piri** | "When Piri defeats an enemy, **she gains 15 Energy**" | the ally with the emptiest bar gains the 15 | an active skill at two stars, for the whole tier |
+| **Wynn** | "When an ally with Wynn's Defense buff is hit, **Wynn gains 5 Energy**" | the ally who was hit gains the 5 | the same |
+| **Orenna** | "Deals 110% Attack damage and **gains 5 Energy**" | the ally with the emptiest bar gains the 5 | an active skill at one star, for the whole tier |
+| **Yara** | "she gains **10 Energy**" | 10% Attack for 1 round instead | the same, plus group 33 for the gate it hangs on |
+
+**The other three are the older question, one tier up.** A 3-star is authored as a basic, an active
+and one passive and nothing else, where a 4-star may carry an extra passive in the overflow list
+for a described clause that answers a trigger of its own.
 
 | hero | clause as written | what ships instead | what the faithful shape would cost |
 |---|---|---|---|
@@ -250,11 +282,15 @@ The full measurement is in `DESIGN-HUB-DELIVERY`, section 3a.
 
 Not a question, listed so it is in one place with everything else.
 
-- **63 of 94 heroes have no drawn art.** The 31 that do are the thirty 5-stars plus Celen. The other
-  63 carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
-  their name under its feet, so the game can say "not drawn yet" separately from "this hero's art is
+- **63 of 94 heroes have no drawn BATTLE art**, and that is now the only thing missing from the
+  roster: every one of the 94 has a shipped kit and all 94 profile badges are wired. The 31 heroes
+  that have battle sheets are the thirty 5-stars plus Celen. The other 63 carry
+  `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with their
+  name under its feet, so the game can say "not drawn yet" separately from "this hero's art is
   broken". By tier that is all 8 one-stars, all 12 two-stars, all 18 three-stars and 25 of the 26
-  four-stars.
+  four-stars. The clip set `SpriteAnimator` plays is `idle`, `basic`, `basic2`, `skill`,
+  `hit_reaction`, `death` and `controlled`; a clip a hero never shipped falls back to idle rather
+  than breaking, and the 31 drawn heroes do not all carry all seven today.
 - **Chapters 3 to 6 are blocked on backdrops.** `DESIGN-WORLD`'s contested-region proposal for
   chapter 3 is moot until they exist.
 - **Optional: rarity-coloured frame variants for the badges** - gold, purple, blue, green and grey,

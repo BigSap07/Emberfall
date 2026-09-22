@@ -87,6 +87,7 @@ namespace Emberfall.DevHarness
             CheckAllyDonorModes(content);
             CheckEngineGapsPass(content);
             CheckAuthoredHeroSweep(content);
+            CheckSweepFillerIsFlimsiest(content);
             CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
             CheckSourceFilterFiresForItsCauser(content);
@@ -21678,6 +21679,10 @@ namespace Emberfall.DevHarness
         private const string HeroSweepBaselineFile = "hero-sweep-baseline.txt";
         private const int HeroSweepSeeds = 5;
 
+        /// <summary>The level every body in the sweep arena is built at, subject and fillers
+        /// alike. Named so a check about the arena's own shape can read it.</summary>
+        private const int HeroSweepLevel = 40;
+
           /// <summary>
         /// A TALENT THAT IS AUTHORED AS NOTHING. No trigger with effects, no overrides, no
         /// appends: the slot has an id and a name and does not contain a rule.
@@ -24928,6 +24933,43 @@ namespace Emberfall.DevHarness
         private const float StarBandThreeFloor = 0.30f;
         private const float StarBandThreeCeiling = 0.60f;
 
+        /// <summary>
+        /// THE LAST TWO RUNGS, AND THE RULE THAT PICKED THEM.
+        ///
+        /// One rule builds the whole ladder, and it was read off the three tiers that were
+        /// already authored rather than invented for these two: A TIER'S CEILING IS THE MEASURED
+        /// MEDIAN OF THE TIER ABOVE IT, AND ITS FLOOR IS HALF ITS CEILING. Check it against what
+        /// was already here - the sixteen graded 4-stars read a median of x0.61 and the 3-star
+        /// ceiling is x0.60; the 4-star floor is 0.53 of its ceiling and the 3-star floor is
+        /// exactly 0.50 of its. So:
+        ///
+        ///   two stars : the thirteen graded 3-stars read a median of x0.365, so the ceiling is
+        ///               x0.36 - under it, which is what "sits below the tier above's middle"
+        ///               means - and the floor is x0.18.
+        ///   one star  : the twelve 2-stars read a median of x0.205, so the ceiling is x0.20 and
+        ///               the floor is x0.10.
+        ///
+        /// The ladder of ceilings is 0.85, 0.60, 0.36, 0.20, which is a step of x0.71, x0.60 and
+        /// x0.56 - the step widens as the tier falls, and that is the shape of the roster rather
+        /// than a choice: three stars to two is the rung where the ACTIVE SKILL disappears, and
+        /// two stars to one is where the passive does. A tier that loses a whole ability loses
+        /// more than a tier that loses a clause.
+        ///
+        /// WHY THESE TWO TIERS READ SO MUCH SMALLER THAN THEIR ABILITY NUMBERS SUGGEST. A 2-star
+        /// is a basic and a passive, and the sweep arena's straggler-and-four-walls line lasts
+        /// long enough that a hero with no active spends every turn on one ability. It is also
+        /// carrying 0.64 of its role's 5-star stat total at two stars and 0.52 at one, so it
+        /// takes fewer turns before it dies. Both push the same way, and the authored damage
+        /// numbers climb to answer them: the shipped basics run to about 350% of Attack at two
+        /// stars against 251% on a 3-star and 110% on a 5-star. That is the tier ladder the
+        /// roster already had - Pinoy wrote 105% to 110% at every tier and the band moved every
+        /// one of them below five stars - and it is not new here.
+        /// </summary>
+        private const float StarBandTwoFloor = 0.18f;
+        private const float StarBandTwoCeiling = 0.36f;
+        private const float StarBandOneFloor = 0.10f;
+        private const float StarBandOneCeiling = 0.20f;
+
         /// <summary>How many authored 5-stars a role needs before its median is treated as a
         /// middle rather than a sample, and the band's floor enforced against it.</summary>
         private const int StarBandMinFives = 3;
@@ -24975,19 +25017,22 @@ namespace Emberfall.DevHarness
         /// two readings have no middle. The ceiling above keeps running for those roles, because
         /// "smaller than the 5-stars of your role" still means something against one of them.
         ///
-        /// FOUR AND THREE STARS. Each tier has its own pair of edges against the same 5-star
-        /// median, because "smaller" is a claim about a tier rather than about the roster: a
-        /// 3-star graded against the 4-star band would pass at the bottom of it and say nothing.
-        /// The two-star and one-star tiers are still unauthored and their floors are numbers
-        /// nobody has decided, so nothing is asserted about them.
+        /// EVERY TIER BELOW FIVE. Each has its own pair of edges against the same 5-star median,
+        /// because "smaller" is a claim about a tier rather than about the roster: a 3-star graded
+        /// against the 4-star band would pass at the bottom of it and say nothing. Four rungs are
+        /// graded now that the roster is authored to 94 of 94, and the rule that set the last two
+        /// is written out beside <see cref="StarBandTwoFloor"/>.
         ///
-        /// AND A 3-STAR ALSO HAS TO SIT UNDER ITS OWN ROLE'S 4-STARS, which the band against the
-        /// 5-star median cannot say on its own. The two bands overlap between x0.45 and x0.60, so
-        /// a 3-star at x0.58 and a 4-star at x0.47 in the same role both satisfy their own edges
-        /// while standing in the wrong order. The 4-star median is the second reading, and it is a
-        /// median for the same reason the 5-star one is: a role's 4-stars are not equal, and the
-        /// weakest of them is a number about the arena as much as about the hero. Roles with no
-        /// authored 4-star have nothing to compare against and are skipped rather than guessed.
+        /// AND EACH TIER ALSO HAS TO SIT UNDER ITS OWN ROLE'S TIER ABOVE, which the band against
+        /// the 5-star median cannot say on its own. Adjacent bands overlap - x0.45 to x0.60 for
+        /// four against three, x0.30 to x0.36 for three against two, x0.18 to x0.20 for two
+        /// against one - so a 3-star at x0.58 and a 4-star at x0.47 in the same role both satisfy
+        /// their own edges while standing in the wrong order. The tier-above median is the second
+        /// reading, and it is a median for the same reason the 5-star one is: a role's 4-stars are
+        /// not equal, and the weakest of them is a number about the arena as much as about the
+        /// hero. Roles with no authored hero in the tier above have nothing to compare against and
+        /// are skipped rather than guessed, and this reading needs no minimum sample, so it runs
+        /// in the roles whose band is not enforced too.
         ///
         /// WHAT IT CANNOT SEE, said here rather than discovered later: the arena fields no talent,
         /// so the three a 5-star carries and a 4-star does not are outside this reading and the real
@@ -25046,8 +25091,18 @@ namespace Emberfall.DevHarness
             List<string> tooSmall3 = new List<string>();
             List<string> tooBig3 = new List<string>();
             List<string> inBand3 = new List<string>();
+            List<string> tooSmall2 = new List<string>();
+            List<string> tooBig2 = new List<string>();
+            List<string> inBand2 = new List<string>();
+            List<string> tooSmall1 = new List<string>();
+            List<string> tooBig1 = new List<string>();
+            List<string> inBand1 = new List<string>();
             List<string> overFour = new List<string>();
             List<string> underFour = new List<string>();
+            List<string> overThree = new List<string>();
+            List<string> underThree = new List<string>();
+            List<string> overTwo = new List<string>();
+            List<string> underTwo = new List<string>();
             List<string> ungradedRoles = new List<string>();
             int graded = 0;
             Array roles = Enum.GetValues(typeof(HeroRole));
@@ -25079,14 +25134,11 @@ namespace Emberfall.DevHarness
                 // THE SECOND READING, and it needs no minimum. The 5-star median is a claim about
                 // where the middle of a role sits and wants three samples to mean anything; this
                 // one is a claim about ORDER between two adjacent tiers, and one 4-star is still a
-                // 4-star a 3-star has to be smaller than. A role with none is skipped.
-                List<long> fours = new List<long>();
-                for (int h = 0; h < inRole.Count; h++)
-                    if (inRole[h].Stars == 4) fours.Add(output[inRole[h].Id]);
-                fours.Sort();
-                long fourMedian = fours.Count == 0 ? -1
-                                : fours.Count % 2 == 1 ? fours[fours.Count / 2]
-                                : (fours[fours.Count / 2 - 1] + fours[fours.Count / 2]) / 2;
+                // 4-star a 3-star has to be smaller than. A role with none is skipped. One per
+                // rung, so every tier below four is asked the same question about the tier above.
+                long fourMedian = TierMedian(inRole, output, 4);
+                long threeMedian = TierMedian(inRole, output, 3);
+                long twoMedian = TierMedian(inRole, output, 2);
 
                 Line("  " + role + (median < 0
                         ? "  (no authored 5-star, so nothing to grade against)"
@@ -25113,9 +25165,10 @@ namespace Emberfall.DevHarness
                         if (mine < median) under.Add(def.Id + " x" + share.ToString("0.00", CultureInfo.InvariantCulture));
                         else over.Add(def.Id + " " + mine + " against median " + median);
 
-                        // THE BAND, four stars only. The tier below is not authored yet and its
-                        // floor is a different number nobody has decided; asserting this one on a
-                        // 3-star the day one lands would be a guess wearing a guard's clothes.
+                        // THE BAND, one pair of edges per tier. Four rungs are graded now that the
+                        // roster is authored to 94 of 94, and each reads against the same 5-star
+                        // median; a tier graded against its neighbour's edges would pass at the
+                        // bottom of them and say nothing.
                         if (def.Stars == 4)
                         {
                             string reading = def.Id + " x"
@@ -25124,12 +25177,12 @@ namespace Emberfall.DevHarness
                             else if (share < StarBandFloor) tooSmall.Add(reading);
                             else if (share > StarBandCeiling) tooBig.Add(reading);
                             else inBand.Add(reading);
-                        }
-                        if (def.Stars == 4)
+
                             ratio += bandEnforced
                                 ? (share < StarBandFloor ? "   BELOW THE BAND"
                                    : share > StarBandCeiling ? "   ABOVE THE BAND" : "   in band")
                                 : "   (band not enforced for this role)";
+                        }
 
                         // The tier below, against its own pair of edges.
                         if (def.Stars == 3)
@@ -25147,10 +25200,42 @@ namespace Emberfall.DevHarness
                                    : "   in the 3-star band")
                                 : "   (band not enforced for this role)";
                         }
+
+                        if (def.Stars == 2)
+                        {
+                            string reading = def.Id + " x"
+                                + share.ToString("0.00", CultureInfo.InvariantCulture);
+                            if (!bandEnforced) { }
+                            else if (share < StarBandTwoFloor) tooSmall2.Add(reading);
+                            else if (share > StarBandTwoCeiling) tooBig2.Add(reading);
+                            else inBand2.Add(reading);
+
+                            ratio += bandEnforced
+                                ? (share < StarBandTwoFloor ? "   BELOW THE 2-STAR BAND"
+                                   : share > StarBandTwoCeiling ? "   ABOVE THE 2-STAR BAND"
+                                   : "   in the 2-star band")
+                                : "   (band not enforced for this role)";
+                        }
+
+                        if (def.Stars == 1)
+                        {
+                            string reading = def.Id + " x"
+                                + share.ToString("0.00", CultureInfo.InvariantCulture);
+                            if (!bandEnforced) { }
+                            else if (share < StarBandOneFloor) tooSmall1.Add(reading);
+                            else if (share > StarBandOneCeiling) tooBig1.Add(reading);
+                            else inBand1.Add(reading);
+
+                            ratio += bandEnforced
+                                ? (share < StarBandOneFloor ? "   BELOW THE 1-STAR BAND"
+                                   : share > StarBandOneCeiling ? "   ABOVE THE 1-STAR BAND"
+                                   : "   in the 1-star band")
+                                : "   (band not enforced for this role)";
+                        }
                     }
 
-                    // The order check, asked of every 3-star in a role that has an authored
-                    // 4-star, graded or not. It is a different question from the band and it is
+                    // The order check, asked of every hero in a role that has an authored hero one
+                    // tier up, graded or not. It is a different question from the band and it is
                     // answerable in roles where the band is not.
                     if (def.Stars == 3 && fourMedian > 0)
                     {
@@ -25162,6 +25247,28 @@ namespace Emberfall.DevHarness
                         else
                             underFour.Add(def.Id + " x"
                                 + fourShare.ToString("0.00", CultureInfo.InvariantCulture));
+                    }
+                    if (def.Stars == 2 && threeMedian > 0)
+                    {
+                        float threeShare = mine / (float)threeMedian;
+                        ratio += "   x" + threeShare.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + " of the 3-star median";
+                        if (mine >= threeMedian)
+                            overThree.Add(def.Id + " " + mine + " against 3-star median " + threeMedian);
+                        else
+                            underThree.Add(def.Id + " x"
+                                + threeShare.ToString("0.00", CultureInfo.InvariantCulture));
+                    }
+                    if (def.Stars == 1 && twoMedian > 0)
+                    {
+                        float twoShare = mine / (float)twoMedian;
+                        ratio += "   x" + twoShare.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + " of the 2-star median";
+                        if (mine >= twoMedian)
+                            overTwo.Add(def.Id + " " + mine + " against 2-star median " + twoMedian);
+                        else
+                            underTwo.Add(def.Id + " x"
+                                + twoShare.ToString("0.00", CultureInfo.InvariantCulture));
                     }
                     long[] terms = split[def.Id];
                     Line("    " + def.Stars + "*  " + def.Id + "  " + mine
@@ -25235,16 +25342,127 @@ namespace Emberfall.DevHarness
                 Line("  [note] no authored 3-star sits in a role with " + StarBandMinFives
                      + " or more authored 5-stars, so the 3-star band has nothing to enforce yet.");
 
-            int ordered = overFour.Count + underFour.Count;
-            if (ordered > 0)
-                Check(overFour.Count == 0,
-                      overFour.Count == 0
-                        ? "all " + ordered + " 3-star(s) in a role with an authored 4-star sit under"
-                          + " that role's 4-star median (" + string.Join(", ", underFour.ToArray()) + ")"
-                        : overFour.Count + " 3-star(s) match or beat the 4-star median for their own"
-                          + " role, so the two tiers stand in the wrong order: "
-                          + string.Join("; ", overFour.ToArray()));
+            TierBandCheck(2, StarBandTwoFloor, StarBandTwoCeiling, tooSmall2, tooBig2, inBand2);
+            TierBandCheck(1, StarBandOneFloor, StarBandOneCeiling, tooSmall1, tooBig1, inBand1);
+
+            TierOrderCheck(3, 4, overFour, underFour);
+            TierOrderCheck(2, 3, overThree, underThree);
+            TierOrderCheck(1, 2, overTwo, underTwo);
             Line("");
+        }
+
+        /// <summary>
+        /// THE STAT-STICK BESIDE THE SUBJECT MUST NOT BE STURDIER THAN THE SUBJECT.
+        ///
+        /// A guard written after the thing it guards against happened. The sweep arena's hitter
+        /// aims at `LowestHpEnemy`, so the smallest body on the player line is the one it works
+        /// on, and the four fillers exist to stand there and contribute nothing. A filler that is
+        /// sturdier than the subject contributes the largest thing in the arena: it hands the
+        /// hitter to the hero being measured. Three of the ninety-four - the two flimsiest
+        /// Tinkerers and the flimsiest Marksman, all at one star - sat under FillerD's built HP
+        /// and died in round one of every seed, reading 0 output whatever their ability numbers
+        /// said. See <see cref="BuildHeroSweepFillers"/> for the fix and what it moved.
+        ///
+        /// Measured through StatMath at the sweep's own level, not off the declared numbers,
+        /// because the declared numbers are not the comparison: StarMultiplier is what made a
+        /// filler declared at 600 stand above a hero declared at 1122.
+        /// </summary>
+        private static void CheckSweepFillerIsFlimsiest(ContentDatabase live)
+        {
+            Line("SWEEP FILLERS (the stat-sticks must be flimsier than every hero they stand beside)");
+
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            if (fillers == null || fillers.Count == 0)
+            { Check(false, "sweep fillers built"); Line(""); return; }
+
+            int weakestFiller = int.MaxValue;
+            string fillerId = "";
+            for (int i = 0; i < fillers.Count; i++)
+            {
+                int hp = (int)Emberfall.Core.Progression.StatMath.ForHero(fillers[i], HeroSweepLevel).MaxHp;
+                if (hp < weakestFiller) { weakestFiller = hp; fillerId = fillers[i].Id; }
+            }
+
+            int weakestHero = int.MaxValue;
+            string heroId = "";
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef def = live.Heroes[i];
+                int hp = (int)Emberfall.Core.Progression.StatMath.ForHero(def, HeroSweepLevel).MaxHp;
+                if (hp < weakestHero) { weakestHero = hp; heroId = def.Id; }
+            }
+
+            Line("  at level " + HeroSweepLevel + ": flimsiest filler " + fillerId + " " + weakestFiller
+                 + ", flimsiest hero " + heroId + " " + weakestHero);
+            Check(weakestFiller < weakestHero,
+                  weakestFiller < weakestHero
+                    ? "the arena's flimsiest filler (" + fillerId + ", " + weakestFiller
+                      + " HP) is under the roster's flimsiest hero (" + heroId + ", " + weakestHero
+                      + " HP), so no subject is ever the hitter's first pick at full health"
+                    : "the arena's flimsiest filler (" + fillerId + ", " + weakestFiller
+                      + " HP) is not under the roster's flimsiest hero (" + heroId + ", "
+                      + weakestHero + " HP), so that hero is the hitter's first pick in its own"
+                      + " sweep and the reading is about the arena rather than the kit");
+            Line("");
+        }
+
+        /// <summary>The middle reading of one tier inside one role, or -1 where that role has
+        /// nobody in it. Shared by the band's four rungs so the four cannot drift apart.</summary>
+        private static long TierMedian(List<HeroDef> inRole, Dictionary<string, long> output, int stars)
+        {
+            List<long> tier = new List<long>();
+            for (int h = 0; h < inRole.Count; h++)
+                if (inRole[h].Stars == stars) tier.Add(output[inRole[h].Id]);
+            if (tier.Count == 0) return -1;
+            tier.Sort();
+            return tier.Count % 2 == 1 ? tier[tier.Count / 2]
+                 : (tier[tier.Count / 2 - 1] + tier[tier.Count / 2]) / 2;
+        }
+
+        /// <summary>One tier against its own pair of edges, worded the way the 4-star rung above
+        /// words it.</summary>
+        private static void TierBandCheck(int stars, float floor, float ceiling,
+                                          List<string> tooSmall, List<string> tooBig, List<string> inBand)
+        {
+            int banded = tooSmall.Count + tooBig.Count + inBand.Count;
+            string tier = stars + "-star";
+            if (banded == 0)
+            {
+                Line("  [note] no authored " + tier + " sits in a role with " + StarBandMinFives
+                     + " or more authored 5-stars, so the " + tier
+                     + " band has nothing to enforce yet.");
+                return;
+            }
+            Check(tooSmall.Count == 0 && tooBig.Count == 0,
+                  tooSmall.Count == 0 && tooBig.Count == 0
+                    ? "all " + banded + " graded " + tier + "(s) read between x"
+                      + floor.ToString("0.00", CultureInfo.InvariantCulture) + " and x"
+                      + ceiling.ToString("0.00", CultureInfo.InvariantCulture)
+                      + " of their role's 5-star median ("
+                      + string.Join(", ", inBand.ToArray()) + ")"
+                    : (tooSmall.Count + tooBig.Count) + " graded " + tier + "(s) fall outside the x"
+                      + floor.ToString("0.00", CultureInfo.InvariantCulture) + " to x"
+                      + ceiling.ToString("0.00", CultureInfo.InvariantCulture) + " band: "
+                      + (tooSmall.Count > 0 ? "below - " + string.Join(", ", tooSmall.ToArray()) : "")
+                      + (tooSmall.Count > 0 && tooBig.Count > 0 ? "; " : "")
+                      + (tooBig.Count > 0 ? "above - " + string.Join(", ", tooBig.ToArray()) : ""));
+        }
+
+        /// <summary>One tier against the median of the tier directly above it, in every role that
+        /// has one. Needs no minimum sample: this is a claim about ORDER, not about a middle.
+        /// </summary>
+        private static void TierOrderCheck(int stars, int above, List<string> over, List<string> under)
+        {
+            int ordered = over.Count + under.Count;
+            if (ordered == 0) return;
+            Check(over.Count == 0,
+                  over.Count == 0
+                    ? "all " + ordered + " " + stars + "-star(s) in a role with an authored "
+                      + above + "-star sit under that role's " + above + "-star median ("
+                      + string.Join(", ", under.ToArray()) + ")"
+                    : over.Count + " " + stars + "-star(s) match or beat the " + above
+                      + "-star median for their own role, so the two tiers stand in the wrong"
+                      + " order: " + string.Join("; ", over.ToArray()));
         }
 
         /// <summary>
@@ -25339,7 +25557,18 @@ namespace Emberfall.DevHarness
                                   // complete at eighteen.
                                   "avera_the_interrupter", "lydia_the_unscheduled",
                                   "roan_the_side_door", "tomas_the_door_jammer",
-                                  "petra_the_unsent_letter", "clara_the_named_remedy" };
+                                  "petra_the_unsent_letter", "clara_the_named_remedy",
+                                  // The 2-star tier, all twelve. Each is a basic and exactly one
+                                  // passive, so a zero here is the whole of that hero's rule
+                                  // never being reached rather than one clause of several. The
+                                  // 1-stars are deliberately absent: a 1-star is a basic and
+                                  // nothing else, so it has no rule for this report to count.
+                                  "arno_the_unfinished_mason", "barr_the_splintered_door",
+                                  "piri_the_match_seller", "dett_the_untied_knot",
+                                  "hod_the_redirected_load", "yara_the_spare_compass",
+                                  "garron_the_stout_frame", "nara_the_road_nurse",
+                                  "wynn_the_hand_me_down", "jax_the_clockwork_rat",
+                                  "kora_the_interrupted_queue", "sena_the_empty_chair" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();
@@ -25678,6 +25907,19 @@ namespace Emberfall.DevHarness
         /// TwoLowestHpAllies resolve to specific, stable bodies - a subject that wards or heals "the
         /// lowest-HP ally" reaches the same filler every run.
         ///
+        /// AND THE FLIMSIEST OF THEM HAS TO BE FLIMSIER THAN THE FLIMSIEST HERO, which is the one
+        /// thing this ladder did not say and the low-star tiers found. The arena's hitter aims at
+        /// LowestHpEnemy, so whichever body on the player line is smallest is the one it works on.
+        /// FillerD's declared 600 is multiplied by StarMultiplier(5) into 804, and Moss, Fenn and
+        /// Till build to 785, 790 and 790 - so for exactly those three the stat-stick meant to
+        /// stand beside the subject was drawing the hitter onto it instead of away, and all three
+        /// died in round one before their first turn. They measured 0 across all five seeds, at any
+        /// ability number: the subject was not small, it was absent. FillerD drops to 580, which
+        /// builds to 777 and puts the whole roster above it, and
+        /// <see cref="CheckSweepFillerIsFlimsiest"/> now asserts the relationship rather than
+        /// leaving it to arithmetic nobody is watching. The change moved 26 of 470 hero-sweep
+        /// fingerprints and 13 of 450 talent ones, and no hero left its band.
+        ///
         /// They are loaded from their own database and handed over on the HeroInstance, so they
         /// never enter heroes.json and cannot be summoned, deployed or counted as content.
         /// </summary>
@@ -25711,7 +25953,7 @@ namespace Emberfall.DevHarness
         ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] } },
     { ""id"": ""sweep_filler_d"", ""name"": ""FillerD"", ""aspect"": ""Ember"", ""role"": ""Striker"",
       ""stars"": 5, ""startingHero"": true,
-      ""hp"": 600, ""attack"": 60, ""defense"": 30, ""speed"": 85, ""critChance"": 0, ""critDamage"": 1.5,
+      ""hp"": 580, ""attack"": 60, ""defense"": 30, ""speed"": 85, ""critChance"": 0, ""critDamage"": 1.5,
       ""growth"": 0.115, ""startEnergy"": 0,
       ""basic"": { ""id"": ""sfd_basic"", ""name"": ""Token"",
         ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.3 } ] },
@@ -28339,10 +28581,16 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// Nothing in shipped content declares a restriction, which is what makes the 72 stage
-        /// fingerprints and the 145 sweep lines unmovable by this pass. Counted from the content
-        /// database rather than asserted, and printed, so the day something authors one the number
-        /// says so.
+        /// THE TRIPWIRE, TURNED AROUND. It used to read "nothing in shipped content declares a
+        /// restriction", which was what made the 72 stage fingerprints and the sweep lines
+        /// unmovable by the pass that built the feature. Yara's Second Bearing is the first
+        /// occupant, so the claim is inverted rather than deleted: it now asserts the mechanic IS
+        /// reached and names the content reaching it, and it goes red again the day that content
+        /// stops.
+        ///
+        /// The entry-borne form - a Restricted status carrying a ban, which Dahlia applies - is a
+        /// different thing and is counted nowhere here; this is the STANDING form, declared on a
+        /// passive and adopted for the whole battle by CombatUnit.AddPassive.
         /// </summary>
         private static void CheckNoShippedTargetBan(ContentDatabase live)
         {
@@ -28350,12 +28598,14 @@ namespace Emberfall.DevHarness
             List<string> named = new List<string>();
             for (int i = 0; i < live.Heroes.Count; i++) CountBans(live.Heroes[i], ref declared, named);
             for (int i = 0; i < live.Enemies.Count; i++) CountBans(live.Enemies[i], ref declared, named);
-            Check(declared == 0,
-                  declared == 0
-                    ? "no shipped passive declares a target restriction, so every unit in every"
-                      + " existing battle reaches the filter with TargetBan.None and leaves it"
-                      + " unchanged"
-                    : declared + " shipped passive(s) declare one: " + string.Join(", ", named.ToArray()));
+            Check(declared > 0,
+                  declared > 0
+                    ? declared + " shipped passive(s) declare a standing target restriction, so the"
+                      + " filter is reached by real content rather than by an arena only: "
+                      + string.Join(", ", named.ToArray())
+                    : "no shipped passive declares a standing target restriction any more - this"
+                      + " check was turned around when Yara's Second Bearing became the first"
+                      + " occupant, so a zero here means that content stopped using the feature");
         }
 
         private static void CountBans(UnitDef def, ref int declared, List<string> named)
