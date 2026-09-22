@@ -25334,7 +25334,12 @@ namespace Emberfall.DevHarness
                                   // The second 3-star batch, same reason.
                                   "linnet_the_misdialed", "oswin_the_refit_surgeon",
                                   "brio_the_patient_record", "elin_the_second_stitch",
-                                  "marn_the_holding_wall", "rusk_the_patchmaker" };
+                                  "marn_the_holding_wall", "rusk_the_patchmaker",
+                                  // The third 3-star batch. With these the 3-star tier is
+                                  // complete at eighteen.
+                                  "avera_the_interrupter", "lydia_the_unscheduled",
+                                  "roan_the_side_door", "tomas_the_door_jammer",
+                                  "petra_the_unsent_letter", "clara_the_named_remedy" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

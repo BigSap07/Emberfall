@@ -9893,25 +9893,67 @@
         "portrait": "avera_the_interrupter"
       },
       "basic": {
-        "id": "avera_the_interrupter_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "avera_offbeat_note",
+        "name": "Offbeat Note",
+        "description": "Deals 380% Attack damage and applies Disrupted for 2 rounds. A Disrupted enemy loses 8 Energy the first time each round it would gain any. Pinoy has the toll land after the enemy casts an active skill; the engine's Disrupted intercepts an Energy gain instead, and the shape that answers a cast needs a second passive a 3-star does not carry. Draft, Pinoy to confirm.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.8
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 8,
+            "status": "Disrupted",
+            "usesPerRound": 1
           }
         ]
       },
       "active": {
-        "id": "avera_the_interrupter_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "avera_break_the_measure",
+        "name": "Break the Measure",
         "energyCost": 100,
+        "description": "Deals 520% Attack damage to all Disrupted enemies and delays each by 15% turn progress. Pinoy gives the delay a 50% chance; EffectDef.Chance is read at the ApplyStatus landing roll and nowhere else, so the delay is certain. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 15.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasStatus",
+            "conditionOn": "Target",
+            "conditionStatus": "Disrupted",
+            "power": 5.2
+          },
+          {
+            "kind": "TurnShift",
+            "target": "AllEnemies",
+            "condition": "HasStatus",
+            "conditionOn": "Target",
+            "conditionStatus": "Disrupted",
+            "magnitude": -0.15
+          }
+        ]
+      },
+      "passive1": {
+        "id": "avera_encore_denied",
+        "name": "Encore Denied",
+        "description": "The first enemy delayed each round takes 10% more damage until its next turn.",
+        "trigger": "OnTurnDelayed",
+        "oncePerBattle": false,
+        "limit": "OncePerRound",
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "BroadcastSubject",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 1,
+            "magnitude": 0.1,
+            "status": "DamageTakenUp"
           }
         ]
       }
@@ -9955,25 +9997,54 @@
         "portrait": "lydia_the_unscheduled"
       },
       "basic": {
-        "id": "lydia_the_unscheduled_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "lydia_platform_change",
+        "name": "Platform Change",
+        "description": "Deals 110% Attack damage and advances Lydia's next turn by 8% turn progress.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.1
+          },
+          {
+            "kind": "TurnShift",
+            "target": "Self",
+            "magnitude": 0.08
           }
         ]
       },
       "active": {
-        "id": "lydia_the_unscheduled_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "lydia_miss_the_train",
+        "name": "Miss the Train",
         "energyCost": 100,
+        "description": "Deals 180% Attack damage to all enemies and delays the slowest enemy by 30% turn progress.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.8
+          },
+          {
+            "kind": "TurnShift",
+            "target": "LowestSpeedEnemy",
+            "magnitude": -0.3
+          }
+        ]
+      },
+      "passive1": {
+        "id": "lydia_no_fixed_departure",
+        "name": "No Fixed Departure",
+        "description": "At the start of each of her turns Lydia gains 10% Damage Reduction until her next turn. Pinoy gates it on her acting before the slowest enemy; a condition can compare the caster against the body an effect LANDS on and against nobody else, and this one lands on Lydia. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 6.",
+        "trigger": "TurnStart",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "duration": 1,
+            "magnitude": 0.1,
+            "status": "DamageReductionUp"
           }
         ]
       }
@@ -10017,25 +10088,66 @@
         "portrait": "roan_the_side_door"
       },
       "basic": {
-        "id": "roan_the_side_door_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "roan_unexpected_entry",
+        "name": "Unexpected Entry",
+        "description": "Deals 256% Attack damage and applies Off Balance for 2 rounds. Off Balance lowers Effect Resist by 15%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.56
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "EffectResistDown"
           }
         ]
       },
       "active": {
-        "id": "roan_the_side_door_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "roan_through_the_service_door",
+        "name": "Through the Service Door",
         "energyCost": 100,
+        "description": "Deals 360% Attack damage to an Off Balance enemy and takes one buff off it.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 3.6
+          },
+          {
+            "kind": "Dispel",
+            "target": "LastTarget",
+            "hits": 1
+          }
+        ]
+      },
+      "passive1": {
+        "id": "roan_leave_before_asked",
+        "name": "Leave Before Asked",
+        "description": "After Roan defeats an Off Balance enemy, Roan cannot be targeted until his next turn.",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "triggerSourceIsSelf": true,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "Defeated",
+            "duration": 1,
+            "status": "Stealth"
           }
         ]
       }
@@ -10079,25 +10191,66 @@
         "portrait": "tomas_the_door_jammer"
       },
       "basic": {
-        "id": "tomas_the_door_jammer_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "tomas_prybar",
+        "name": "Prybar",
+        "description": "Deals 260% Attack damage and takes 10% turn progress off the target.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.6
+          },
+          {
+            "kind": "TurnShift",
+            "target": "LastTarget",
+            "magnitude": -0.1
           }
         ]
       },
       "active": {
-        "id": "tomas_the_door_jammer_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "tomas_force_the_exit",
+        "name": "Force the Exit",
         "energyCost": 100,
+        "description": "Deals 409% Attack damage to the front enemy and Taunts it for 1 round; it loses 15% Speed for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "FrontEnemy",
+            "power": 4.09
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "chance": 1,
+            "duration": 1,
+            "status": "Taunt"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.15,
+            "status": "Slow"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "tomas_keep_moving",
+        "name": "Keep Moving",
+        "description": "When a slowed enemy hits Tomas, he gains a Shield worth 10% of his Max HP for 1 round.",
+        "trigger": "OnDamaged",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Shield",
+            "target": "Self",
+            "condition": "HasStatus",
+            "conditionOn": "LastAttacker",
+            "conditionStatus": "Slow",
+            "duration": 1,
+            "targetMaxHpRatio": 0.1
           }
         ]
       }
@@ -12154,25 +12307,82 @@
         "portrait": "petra_the_unsent_letter"
       },
       "basic": {
-        "id": "petra_the_unsent_letter_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "petra_returned_mail",
+        "name": "Returned Mail",
+        "description": "Deals 251% Attack damage and applies Withheld for 2 rounds. A Withheld body cannot gain new buffs.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.51
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "status": "BuffSuppression"
           }
         ]
       },
       "active": {
-        "id": "petra_the_unsent_letter_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "petra_keep_the_secret",
+        "name": "Keep the Secret",
         "energyCost": 100,
+        "description": "Deals 406% Attack damage to the front enemy and Taunts it for 1 round; it is also Withheld for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "FrontEnemy",
+            "power": 4.06
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "chance": 1,
+            "duration": 1,
+            "status": "Taunt"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "bypassResist": true,
+            "chance": 1,
+            "duration": 2,
+            "status": "BuffSuppression"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "petra_private_address",
+        "name": "Private Address",
+        "description": "When a Withheld enemy strikes an ally, Petra gains 8% Damage Reduction for 1 round. Pinoy writes it on the enemy TARGETING an ally; the window the engine opens is the blow landing, so a strike that misses or is blocked does not reach it. Draft, Pinoy to confirm.",
+        "trigger": "OnEnemyDamagedAlly",
+        "oncePerBattle": false,
+        "includeSelf": true,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "chance": 1,
+            "condition": "HasMyMark",
+            "conditionOn": "LastAttacker",
+            "duration": 1,
+            "magnitude": 0.08,
+            "status": "DamageReductionUp"
           }
         ]
       }
@@ -13786,25 +13996,54 @@
         "portrait": "clara_the_named_remedy"
       },
       "basic": {
-        "id": "clara_the_named_remedy_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "clara_case_note",
+        "name": "Case Note",
+        "description": "Deals 243% Attack damage and removes one debuff from the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.43
+          },
+          {
+            "kind": "Cleanse",
+            "target": "LowestHpAlly",
+            "hits": 1
           }
         ]
       },
       "active": {
-        "id": "clara_the_named_remedy_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "clara_prescribe_exactly",
+        "name": "Prescribe Exactly",
         "energyCost": 100,
+        "description": "Deals 364% Attack damage to all enemies and gives all allies Clarified for 2 rounds. Clarified allies gain 12% Effect Resist.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 3.64
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllAllies",
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.12,
+            "status": "EffectResistUp"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "clara_known_condition",
+        "name": "Known Condition",
+        "description": "When Clara takes a debuff off an ally, that ally gains 12 Energy. Pinoy pays only for a CONTROL debuff; no field and no condition carries the kind a removal took, so every debuff pays. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 18.",
+        "trigger": "OnStatusRemoved",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "BroadcastSubject",
+            "flat": 12
           }
         ]
       }

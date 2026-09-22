@@ -44,6 +44,7 @@ resource.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Celen | "transfer 15 Energy from the highest-Energy ally to the lowest **if their difference is at least 30**" | a condition reading two units at once | the pair is ungated, and self-cancels when the fullest and emptiest bars are the same body | medium |
+| Lydia | "Whenever Lydia **acts before the slowest enemy**, she gains 10% Damage Reduction" | a condition comparing the caster against a body other than the one the effect lands on; `CasterActsBeforeSubject` reads the target, and this effect targets Lydia | the Damage Reduction goes up at the start of every one of her turns, ungated | medium |
 
 ---
 
@@ -128,6 +129,7 @@ Damage, healing, energy and turn-shift effects either happen or do not.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round | small |
+| Avera | "has a **50% chance** to delay each by 15% turn progress" | the same probability gate, on the same kind of effect | the delay is certain against every Disrupted enemy the cast reaches | small |
 
 ---
 
@@ -146,7 +148,8 @@ enemy at a named third body.
 ## 18. Telling WHICH KIND of status a removal took
 
 Both triggers in this group now publish the body the event happened to, so Tamsin's row is gone
-and Lio's has narrowed to its second clause.
+and Lio's has narrowed to its second clause. Clara's is that same clause written for a second
+hero, which is the repeat this file's grouping exists to show.
 
 Nothing says what a removal REMOVED. `OnStatusRemoved` names the remover and now the body it was
 taken from, and `_lastRemovedValue` carries the pending DoT damage that left with it, but no field
@@ -158,6 +161,7 @@ taken at all.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Lio | "**control debuffs** also grant 10 Energy" | the kind a removal took, published for the trigger it raises - the removal-side sibling of `PassiveDef.TriggerStatus` | the 10 Energy pays out for any debuff Lio strips, not only a control one | small |
+| Clara | "When Clara removes a **control debuff**, the ally gains 12 Energy" | the same absence, and the same sentence a second time | the 12 Energy pays out for any debuff Clara strips, not only a control one | small |
 
 ---
 
@@ -328,20 +332,28 @@ time in the same batch that found it unanswerable.
 
 ## Where the counts stand
 
-Twenty-two capabilities, twenty-six clauses, across twenty-two heroes. It began at twenty-two and
-thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
-eighteen kits that carried them, leaving thirteen and fourteen. The 3-star batches have added nine
-groups and twelve clauses since, which is the count going the other way for the first time since
+Twenty-two capabilities, twenty-nine clauses, across twenty-five heroes. It began at twenty-two
+and thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored
+the eighteen kits that carried them, leaving thirteen and fourteen. The three 3-star batches added
+nine groups and fifteen clauses, which is the count going the other way for the first time since
 the pass.
 
-Four groups have more than one occupant:
+Seven groups have more than one occupant, where before the 3-star tier there was one:
 
 | group | capability | clauses |
 |---|---|---|
+| 6 | comparing a resource across two named units | 2 |
 | 11 | swapping a value, rather than moving it one way | 2 |
+| 15 | chance on anything but a status landing | 2 |
+| 18 | telling which kind of status a removal took | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 | 23 | a damage modifier scoped to one kind of hit, or spent by one hit | 2 |
 | 30 | a moved status is not recorded as a removal | 2 |
+
+**The shape of the repeats is the finding.** Three of the seven pair a 3-star with a 4-star or a
+5-star that asked for the same thing first - Lydia beside Celen, Avera beside Finn, Clara beside
+Lio - and each of those three would close two kits at once. The other four are all inside the
+3-star tier. Nothing here is scheduled; the file is still a record.
 
 **Group 23 is the one with a repeat that arrived in a single batch**, which is what this file's
 grouping exists to make visible: Aster's Fracture and Quin's Delivered are the same sentence
