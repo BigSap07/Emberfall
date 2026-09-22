@@ -413,6 +413,27 @@ namespace Emberfall.Core.Combat
             return playerSide ? LastHitPlayerSideRound : LastHitEnemySideRound;
         }
 
+        /// <summary>
+        /// What the last blow this unit took actually removed from its bar, after every
+        /// mitigation. Zero until it has taken one.
+        ///
+        /// ENGINE-GAPS group 1. No EffectCondition could ask about the MAGNITUDE of the hit being
+        /// resolved: the enum's members ask about HP, statuses, stats, energy, action history and
+        /// firing counts, and the damage funnel published nothing about the number it was
+        /// carrying. So "when an ally takes a hit exceeding 25% Max HP" had to become "when an
+        /// ally is hit", and the guard goes up on the first scratch of the round.
+        ///
+        /// ON THE VICTIM rather than in a window field, which is what makes it safe to read from
+        /// inside a passive: a passive answering the blow resolves effects of its own, and a
+        /// simulation-wide "last damage" is rewritten by any of them. The victim's own record is
+        /// not - the passive is not hitting it again.
+        ///
+        /// The REALISED number, written where the bar moves, so Guard, Cover, a link redirect, a
+        /// mitigating Ledger and the shield pool have all already taken their part. "A hit
+        /// exceeding 25% Max HP" is about what got through.
+        /// </summary>
+        public int LastDamageTaken;
+
         /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
         /// Two flags rather than a list: no description asks about more than the last two.</summary>
         public bool LastActionWasActive;

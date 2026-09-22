@@ -17886,6 +17886,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupTwo();
             CheckGapGroupThree();
             CheckGapGroupEight();
+            CheckGapGroupOne();
             Line("");
         }
 
@@ -19276,6 +19277,117 @@ namespace Emberfall.DevHarness
             return RunWith(db, db.GetStage("g8_arena"), 8008, team);
         }
 
+
+        // ------------------------------------------------------------------ group 1
+
+        /// <summary>
+        /// GROUP 1 - answering the blow that is landing, two clauses across two heroes.
+        ///
+        /// No EffectCondition could ask about the MAGNITUDE of a hit, and nothing could reach back
+        /// into one that had already resolved. So Rhys's "when an ally takes a hit exceeding 25%
+        /// Max HP" became "when an ally is hit" - the ward goes up on the first scratch of the
+        /// round - and Toren's "redirects 25% of THAT hit" became a ward that stands for the rest
+        /// of the round and answers the NEXT one.
+        ///
+        /// The arena throws a scratch and a heavy blow at the same body in the same round, which
+        /// is the only shape in which "the hit was big enough" and "the hit happened" read
+        /// differently.
+        /// </summary>
+        private static void CheckGapGroupOne()
+        {
+            Line("  group 1 - the size of the blow, and reaching back into it");
+
+            // --- the condition ----------------------------------------------------------
+            // The watcher answers only a blow above a quarter of the victim's bar. The scratch is
+            // 1% of it and the hammer is 40%, and both land on the same body every round.
+            BattleResult r = RunGapOneArena();
+            int answered = StatusLandedOn(r, StatusKind.DefenseUp, "g1_frail");
+            int blows = HitsTakenBy(r, "g1_frail").Count;
+            Check(blows >= 6,
+                  "control: the warded body takes both a scratch and a hammer blow every round ("
+                  + blows + " hits across the battle)");
+            Check(answered > 0 && answered * 2 <= blows,
+                  "SubjectTookHitAboveMaxHpFraction answers the hammer and not the scratch ("
+                  + answered + " of " + blows + " blows) - which is the difference between 'a hit "
+                  + "exceeding 25% Max HP' and 'a hit'");
+
+            // --- reaching back into the hit that already landed --------------------------
+            // The protector pays the victim a share of the blow it just took, out of its own bar.
+            // scaleByLastDamage on an HpTransfer is what makes that one effect rather than a ward
+            // that stands for the rest of the round and answers the next blow instead.
+            int paidBack = HealingInto(r, "g1_frail");
+            int protectorPaid = DamageTakenBy(r, "g1_shield");
+            Check(paidBack > 0 && protectorPaid > 0,
+                  "an HpTransfer scaled by the last hit moves a share of THAT blow off the victim "
+                  + "and onto the protector (" + paidBack + " restored, " + protectorPaid
+                  + " paid) - a share of a hit that has already resolved, which is what "
+                  + "OnEnemyDamagedAlly fires too late to intercept any other way");
+            Check(paidBack == protectorPaid,
+                  "and the two sides of the move are the same number (" + paidBack + " = "
+                  + protectorPaid + ") - a redirect rather than a heal that invents value");
+
+            Check(FingerprintOf(RunGapOneArena()) == FingerprintOf(RunGapOneArena()),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One body taking two very different blows a round, and a protector that answers only the
+        /// big one. The scratch exists so the arena can tell "the hit was big enough" from "a hit
+        /// happened" - against one blow size the two are the same reading.
+        /// </summary>
+        private static BattleResult RunGapOneArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g1_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1f_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g1_shield"", ""name"": ""Shielder"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1s_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] },
+      ""passive"": { ""id"": ""g1_shared"", ""name"": ""Shared Peril"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""BroadcastVictim"", ""status"": ""DefenseUp"", ""chance"": 1,
+            ""duration"": 1, ""magnitude"": 0.0,
+            ""condition"": ""SubjectTookHitAboveMaxHpFraction"", ""conditionOn"": ""BroadcastSubject"",
+            ""conditionValue"": 0.25 },
+          { ""kind"": ""HpTransfer"", ""target"": ""BroadcastVictim"", ""scaleByLastDamage"": true, ""power"": 0.3,
+            ""condition"": ""SubjectTookHitAboveMaxHpFraction"", ""conditionOn"": ""BroadcastSubject"",
+            ""conditionValue"": 0.25 } ] } }
+  ]
+}";
+            // BOTH BLOWS ARE WRITTEN AS A FRACTION OF THE VICTIM'S BAR rather than as an
+            // Attack value, so the arena measures the threshold rather than the stat table: a
+            // flat attack would have to be reconciled against whatever StatMath makes of a
+            // level-one enemy, and the whole check is about where 25% sits. The scratch is 1% and
+            // the hammer 30%, so the threshold falls between them with room on both sides.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g1_scratch"", ""name"": ""Scratch"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1cb"", ""name"": ""Scratch"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.0, ""targetMaxHpRatio"": 0.01 } ] } },
+    { ""id"": ""g1_hammer"", ""name"": ""Hammer"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1hb"", ""name"": ""Hammer"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.0, ""targetMaxHpRatio"": 0.3 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g1_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g1_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g1_scratch"", ""level"": 1 },
+                                                        { ""id"": ""g1_hammer"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(3), "Gap1");
+            if (db == null) return null;
+            string[] ids = { "g1_frail", "g1_shield" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g1_arena"), 1001, team);
+        }
+
         private static void CheckNineGaps(ContentDatabase live)
         {
             Line("THE NINE GAPS (charges, flat echo, attacker filter, the other end, attacker-keyed");
@@ -19541,7 +19653,9 @@ namespace Emberfall.DevHarness
                     // the engine-gaps pass, group 3: the shape of the blow in flight.
                     "IncomingHitIsArea", "IncomingHitIsSingleTarget",
                     // group 8: who hit MY SIDE, rather than who hit me.
-                    "SubjectDamagedMySideSinceMyTurn"
+                    "SubjectDamagedMySideSinceMyTurn",
+                    // group 1: the size of the blow that just landed.
+                    "SubjectTookHitAboveMaxHpFraction"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
             Check(ok, "EffectCondition enum parity ("

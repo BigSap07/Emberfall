@@ -2244,6 +2244,17 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    // GAP GROUP 1. Sim-side with its neighbours rather than in the pure
+                    // ConditionMet, so the whole family of readings that need the battle's own
+                    // memory stays in one place.
+                    case EffectCondition.SubjectTookHitAboveMaxHpFraction:
+                    {
+                        float bar = subject.EffectiveMaxHp;
+                        first = bar > 0f && subject.LastDamageTaken > 0
+                                && subject.LastDamageTaken >= bar * effect.ConditionValue;
+                        break;
+                    }
+
                     default:
                     {
                         // Everything else, including a Defeated or BroadcastSubject asking an ordinary
@@ -3638,8 +3649,14 @@ namespace Emberfall.Core.Combat
                         if (!source.Alive || !target.Alive) break;
                         CombatUnit donor = effect.TransferFromTarget ? target : source;
                         CombatUnit recipient = effect.TransferFromTarget ? source : target;
+                        // GAP GROUP 1: through ScaledTerm, which is how Damage, Heal and Shield
+                        // already read their Attack term. HpTransfer was the one amount-bearing
+                        // effect that read EffectiveAttack directly, so the whole ScaleBy family
+                        // was invisible to it - and "redirects 25% of THAT hit" is scaleByLastDamage
+                        // on a transfer and nothing else. An effect that sets none of them gets
+                        // EffectiveAttack back, which is the expression that stood here.
                         int amount = (int)Math.Round(
-                            source.EffectiveAttack * effect.Power + effect.Flat
+                            ScaledTerm(effect, source) * effect.Power + effect.Flat
                             + TargetHpTerm(effect, target),
                             MidpointRounding.AwayFromZero);
                         if (amount <= 0) break;
@@ -5269,6 +5286,9 @@ namespace Emberfall.Core.Combat
                 }
 
                 target.LastDamagedRound = _round;
+                // GAP GROUP 1: and HOW BIG it was. The realised number, written where the bar
+                // moved, so every mitigation above this line has already taken its part.
+                target.LastDamageTaken = damage;
                 if (sourceId >= 0)
                 {
                     CombatUnit dealer = FindUnit(sourceId);

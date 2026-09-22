@@ -978,7 +978,25 @@ namespace Emberfall.Core.Data
         /// caster's own side, so an enemy-side caster asks about its own line and gets the mirror
         /// answer rather than a hardcoded one.
         /// </summary>
-        SubjectDamagedMySideSinceMyTurn
+        SubjectDamagedMySideSinceMyTurn,
+
+        /// <summary>
+        /// The last blow the subject took removed at least ConditionValue of its Max HP.
+        ///
+        /// ENGINE-GAPS group 1. No condition could ask about the SIZE of the hit being resolved,
+        /// so "when an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead" had to
+        /// become "when an ally is hit": the ward goes up on the first scratch of the round and
+        /// covers that body for the rest of it, which is a different ability and a much cheaper
+        /// one to trigger.
+        ///
+        /// Reads CombatUnit.LastDamageTaken against EffectiveMaxHp, so it is the REALISED number
+        /// after every mitigation - what actually got through, which is what the sentence is about.
+        /// Inclusive at the boundary, matching HpBelow and OnHpBelowThreshold.
+        ///
+        /// A subject that has taken nothing reads zero and fails, so the condition is false rather
+        /// than vacuously true before the first blow lands.
+        /// </summary>
+        SubjectTookHitAboveMaxHpFraction
     }
 
     /// <summary>
