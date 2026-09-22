@@ -290,8 +290,8 @@
           "environment": "hollow", "gold": 570, "shards": 28, "accountXp": 94,
           "firstClearGold": 850, "firstClearShards": 130, "recommendedPower": 6975,
           "idleGoldPerHour": 456, "idleShardsPerHour": 29,
-          "waveCount": 6, "battleCount": 12, "floorLevel": 19, "ceilingLevel": 21,
-          "enemies": [ { "id": "stone_warden", "level": 19 }, { "id": "ashen_revenant", "level": 13 }, { "id": "cinder_imp", "level": 19 }, { "id": "grave_moth", "level": 19 }, { "id": "hollow_husk", "level": 19 } ]
+          "waveCount": 6, "battleCount": 12, "floorLevel": 19, "ceilingLevel": 22,
+          "enemies": [ { "id": "stone_warden", "level": 19 }, { "id": "ashen_revenant", "level": 13 }, { "id": "cinder_imp", "level": 17 }, { "id": "grave_moth", "level": 17 }, { "id": "hollow_husk", "level": 17 } ]
         },
         {
           "id": "ch1_11", "index": 11, "name": "Pyre of Names", "subtitle": "Everyone who held this pass is stacked and burning.",

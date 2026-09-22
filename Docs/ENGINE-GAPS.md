@@ -957,15 +957,20 @@ x0.79, Edrin x1.53 and Darian x1.48.
 ### The retune, once
 
 `Tools/solve-recommended-power.ps1` converged in 17 iterations and moved 22 of 24 stages, 18 in the
-authored roster; every `recommendedPower` rose, by 0% to 9%. Its 600-sample reading and the gate's
-200-sample one disagreed at two edges, and each was settled with the solver's own kind of move:
-1-11's Hollow Husk down one level (CEIL 77.5% -> 81.5%), and 1-10's ceiling from 22 to 21. 1-10 is
+authored roster; every `recommendedPower` rose, by 0% to 9%. Two stages were then moved by hand with
+the solver's own kind of move. At 1-11 its 600-sample reading and the gate's 200-sample one disagreed
+at the band's edge, and the Hollow Husk went down one level (CEIL 77.5% -> 81.5%). 1-10 is
 floor-pinned, which the solver does not measure and the band excludes, but the instrument's line
-sits one percent over what it asks, and the re-solve had taken its CEIL from 96% to 55% - the
-relief stage after the 1-9 wall reading as the hardest finish in chapter 1. It reads 85.5% now.
+sits one percent over what it asks, and the re-solve had taken its CEIL from 96% to 55% - the relief
+stage after the 1-9 wall reading as the hardest finish in chapter 1. The three units under its
+Stone Warden went two levels down, and it reads 83%. **Its ceiling was the first thing tried, and
+it is the wrong lever**: one level lower read 85.5% at 1-10 and pushed 2-12 over its band, because
+the simulated player's losses at 1-10 change every armor drop after it. Across the moves tried,
+2-12 read anywhere from x0.98 to x1.04, so a late wall's band is only as steady as everything the
+simulated player fights before it.
 
-Bands against the documented ones: ordinary stages x1.14 to x1.20 (x1.10 to x1.30); chapter 1 walls
-x1.02 (x1.00 to x1.05); later walls x0.98 and x1.00 (x0.95 to x1.02); geared CEIL on the stages it
+Bands against the documented ones: ordinary stages x1.14 to x1.21 (x1.10 to x1.30); chapter 1 walls
+x1.02 (x1.00 to x1.05); later walls x1.00 and x0.98 (x0.95 to x1.02); geared CEIL on the stages it
 measures 78.5% to 89.5% (78% to 92%), finales 66.5% and 69.5% (55% to 72%).
 
 ### The baselines, and what moved each line
@@ -974,8 +979,8 @@ Measured by regenerating each baseline at four cumulative states and diffing the
 has the change that first moved it:
 
 - **Stage fingerprints, 72 of 72.** `buffsOnly` moved 69 (Kiva's Broken Links are in every opening
-  battle); the re-solve moved the other 3 and moved 51 of the 69 again. The nine clauses and the
-  Taunt repair moved none.
+  battle); the re-solve and the two hand moves after it moved the other 3 and moved 51 of the 69
+  again. The nine clauses and the Taunt repair moved none.
 - **Hero sweep, 55 of 470.** The nine and the two renumbers, 17: Aminah 5, Marrow 5, Tavia 5, Velis 2.
   The Taunt repair, 8: Hod 5, Wynn 2, Clara 1, and Marrow's 5 again. `buffsOnly`, 30: Hale, Kiva,
   Mireth, Seraphine, Sylven and Vanno, 5 each, and Tavia's 5 again. The re-solve, none.

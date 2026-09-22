@@ -36,10 +36,13 @@ Two runs decide whether the tree is healthy, and they measure different things.
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
   `Tools/solve-recommended-power.ps1` was re-run once, after every other change had landed: 22 of 24
   stages moved, 18 of them in the authored roster, and every `recommendedPower` rose by up to 9%.
-  Two stages were then moved by hand with the solver's own kind of move, where its 600-sample
-  reading and the gate's 200-sample one disagreed at an edge: 1-11's Hollow Husk down one level, and
-  1-10's ceiling from 22 to 21 (floor-pinned, so unmeasured by the solver, and reading 55% at the
-  ceiling the re-solve gave it). The solver and `build-check.ps1` compile the harness from the same
+  Two stages were then moved by hand with the solver's own kind of move: 1-11's Hollow Husk down
+  one level, where the solver's 600-sample reading and the gate's 200-sample one disagreed at the
+  CEIL band's edge, and at 1-10 the three units under its Stone Warden two levels down. 1-10 is
+  floor-pinned, which the solver does not measure, and the re-solve had left it reading 55% at its
+  ceiling; it reads 83%. Lowering 1-10's ceiling instead fixed that and pushed 2-12 over its band,
+  because the simulated player's losses at 1-10 change the whole economy path after it: across the
+  moves tried there, 2-12 read anywhere from x0.98 to x1.04. The solver and `build-check.ps1` compile the harness from the same
   file list now, `SummonTiming.cs` and `GuildDungeonChecks.cs` included.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
@@ -69,8 +72,8 @@ of them needs a stated reason in the commit that moves it.
   stage's opening battle fought by a fresh profile's starting three. The ENGINE-GAPS content pass
   moved all 72, Kael's Unusable Cover and Kiva's Broken Links being in every opening battle.
   **ENGINE-GAPS pass 3 moved all 72 again**, attributed by regenerating at each step: `buffsOnly`
-  moved 69 (Kiva's Broken Links stopped banking off her own Forsaken), and the re-solve moved the
-  other 3 and 51 of the 69 again. Its nine clauses and its Taunt-anchor repair moved none.
+  moved 69 (Kiva's Broken Links stopped banking off her own Forsaken), and the re-solve and the two
+  hand moves after it moved the other 3 and 51 of the 69 again. Its nine clauses and its Taunt-anchor repair moved none.
 - **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
   the whole roster. **ENGINE-GAPS pass 3 moved 55**: its clauses and two renumbers 17 (Aminah 5,
   Marrow 5, Tavia 5, Velis 2); the Taunt-anchor repair 8 (Hod 5, Wynn 2, Clara 1) and Marrow's 5
@@ -688,7 +691,8 @@ instead and is named in the coverage note under **Known bugs**.
    than failing it. Only `1-9`, `1-11` and `1-12` are measured against what they ask for. **The blind
    spot bit once in pass 3**: the solver does not measure a pinned stage, and its re-solve raised
    `1-10`'s ceiling until that stage read 55%, the relief stage after the `1-9` wall reading as the
-   hardest finish in the chapter; its ceiling was put back by one level by hand. Closing the gap
+   hardest finish in the chapter; the three units under the top of its line were taken two levels
+   down by hand, and it reads 83%. Closing the gap
    would need chapter 1 income to roughly quadruple, which is a different game, so the alternative
    is a second cheaper yardstick for the opening stages, or a solver that measures a pinned stage
    whenever the instrument sits within a few percent of what it asks.
