@@ -116,9 +116,14 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// The two riders a card has to carry with the number because they change what it means:
-        /// that it lands on more than one body, and that it lands only when a clause holds.
-        /// Separate from <see cref="Secondary"/> because the card prints one and not the other.
+        /// The two riders that change what a number MEANS without changing its size: that it
+        /// lands on more than one body, and that it lands only when a clause holds.
+        ///
+        /// Separate from <see cref="Secondary"/> because only the breakdown prints them. A card
+        /// is about 150 units wide and its authored-terms line is already the longest thing on
+        /// it; "210% of Attack, each target" does not fit and a clipped rider is worse than one
+        /// that is a tap away. The note under the row is what tells a reader the cards are
+        /// summaries of something larger.
         /// </summary>
         public static string Riders(AbilityValue value)
         {
