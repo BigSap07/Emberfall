@@ -123,11 +123,19 @@ namespace Emberfall.UI
         public const float PillCurrencyWidth = 200f;
         public const float PillRankWidth = 430f;
 
-        /// <summary>Building labels. Uniform height for every marker on the map.</summary>
+        /// <summary>
+        /// Building labels. Uniform height for every marker on the map.
+        ///
+        /// LabelCharWidth is 15 rather than the 12 it was, because the lettering is CINZEL now and
+        /// Cinzel is a wide Roman display face where the previous font was condensed. The width of
+        /// a marker is computed from its own word, so a per-character figure that is too small
+        /// does not clip the text - the label overflows its plate and the longest names on the
+        /// map, DEEP RECITAL and CAMPAIGN, hang out of both ends of their banner.
+        /// </summary>
         public const float LabelHeight = 48f;
         public const float LabelPadX = 44f;
-        public const float LabelMinWidth = 150f;
-        public const float LabelCharWidth = 12f;
+        public const float LabelMinWidth = 170f;
+        public const float LabelCharWidth = 15f;
 
         /// <summary>
         /// How far above its building a label floats, and the tail that reaches back down to it.
@@ -181,24 +189,27 @@ namespace Emberfall.UI
         /// WHICH EDGE THE RAIL HUGS, and the one switch on this screen that is a judgement rather
         /// than a measurement.
         ///
-        /// It is on the RIGHT, as asked for. What a capture then shows is the cost: the painting
-        /// puts the Proving's gatehouse hard against the right edge of the map - it spans roughly
-        /// map-x 0.82 to 0.97 - and the rail's discs land on its right tower at every supported
-        /// aspect. No marker and no label is covered (HubMarkerClamp reserves the rail's column
-        /// for exactly that reason) and the gate's own door at 0.915 stays clear, but the tower
-        /// behind the rail is painted architecture with chrome on it.
+        /// It is on the LEFT. It was on the right, as the Hub brief originally asked for, and what
+        /// a capture then showed was the cost: the painting puts the Proving's gatehouse hard
+        /// against the right edge of the map - it spans roughly map-x 0.82 to 0.97 - and the rail's
+        /// discs landed on its right tower at every supported aspect. No marker and no label was
+        /// covered, because HubMarkerClamp reserves the rail's column for exactly that reason, and
+        /// the gate's own door at 0.915 stayed clear. But the tower behind the rail is painted
+        /// architecture, and the frame was sitting on it.
         ///
-        /// Flipping this to false moves the whole rail, its menu and the marker clamp's reserved
-        /// column to the LEFT edge, where the painting has a rock face and no structure until the
-        /// barracks at about 0.08. That is the one placement that satisfies "no HUD element covers
-        /// a building" outright. It is left as a switch rather than taken, because a right-hand
-        /// rail is what the brief asks for and which of the two rules wins is not this file's
-        /// call.
+        /// The left edge is a rock face with no structure until the barracks at about 0.08, so it
+        /// is the one placement that satisfies "no HUD element covers a building" outright. The
+        /// note that stood here left this as a switch rather than taking it, on the grounds that
+        /// which of the two rules wins was not this file's call. It has been called: the map is
+        /// layer 0 and the frame gives way to it.
+        ///
+        /// Flipping this back moves the whole rail, its menu and the marker clamp's reserved
+        /// column with it. Nothing else has to change, which is what the switch is for.
         ///
         /// static readonly rather than const deliberately: a const bool folds at compile time and
         /// turns the branch it does not take into an unreachable-code warning on every build.
         /// </summary>
-        public static readonly bool RailOnRightEdge = true;
+        public static readonly bool RailOnRightEdge = false;
 
         /// <summary>The right-edge rail: a visible disc inside a TouchMin hit rect.</summary>
         public const float RailDisc = 76f;

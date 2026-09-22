@@ -16,9 +16,10 @@ namespace Emberfall.UI.Screens
     ///      buildings are the primary way into this game and nothing in the layers above may
     ///      cover one or its label.
     ///   1  THE HUD FRAME. Edges only: the player plate and the currencies along the top (both
-    ///      live in the shared HudTopBar), a rail of small icon buttons down the right, a nav bar
-    ///      across the bottom, and the campaign card and idle chest in the bottom right corner.
-    ///      All of it inside Screen.safeArea.
+    ///      live in the shared HudTopBar), a rail of small icon buttons down the LEFT edge, a nav
+    ///      bar across the bottom, and the campaign card and idle chest in the bottom right
+    ///      corner. All of it inside Screen.safeArea, and all of it in Emberforge - see
+    ///      Emberforge.cs for why the map's own plates deliberately are not.
     ///   2  PANELS. Sheets over a dimmed map, hosting screens the router already owns. Opened by
     ///      the player plate and by the nav bar's guild entry. See PanelHost.
     ///   3  POPUPS. The idle claim popup and the rail's overflow menu. See IdleClaimPopup and
@@ -123,15 +124,39 @@ namespace Emberfall.UI.Screens
         /// the art rather than picked: the gate spans roughly x 0.86 to 0.95, and 0.915 sits on
         /// its door.
         ///
-        /// It is the one marker the right-hand rail can reach, which is why HubMarkerClamp now
-        /// takes an inset: the rail is HUD, the gatehouse is a building, and the rule is that the
-        /// frame gives way to the map rather than the other way round. The clamp slides the PLATE
-        /// left until it clears the rail and leaves the tail on the door, so the marker still
-        /// points at the building it names.
+        /// It is the one marker a RIGHT-hand rail could reach, which is why HubMarkerClamp takes
+        /// an inset: the rail is HUD, the gatehouse is a building, and the rule is that the frame
+        /// gives way to the map rather than the other way round. The clamp slides the PLATE clear
+        /// of the rail's column and leaves the tail on the door, so the marker still points at the
+        /// building it names. With the rail on the left that column is the other side now and this
+        /// marker no longer needs the clamp, but the clamp is what makes moving the rail a
+        /// one-line change rather than a re-measurement, so it stays.
         /// </summary>
         private const float ProvingX = 0.915f, ProvingY = 0.500f;   // the walled gatehouse door
 
         private RectTransform _map;
+
+        /// <summary>
+        /// The campaign card, and the numbers the chest beside it is placed from. Shared consts
+        /// rather than a local in each method, because BuildIdleChest positions itself off the
+        /// card's width and the two had already drifted into two copies of 600f.
+        ///
+        /// Taller than the 168 it was: a framed Emberforge panel spends its outer eight units on
+        /// an outline and a gold frame, the ribbon takes the top edge, and the button underneath
+        /// is a full TouchMin rather than the 62 it used to be.
+        /// </summary>
+        private const float CardWidth = 620f;
+        private const float CardHeight = 256f;
+        private const float CardInner = 22f;
+
+        /// <summary>
+        /// Where the card's content starts, measured from its top edge.
+        ///
+        /// The ribbon STRADDLES that edge - half of it hangs above the card - so the first row
+        /// inside has to clear the half that hangs BELOW, not the whole ribbon. The first capture
+        /// of this card cleared neither, and put the cleared-count across the ribbon's own text.
+        /// </summary>
+        private const float CardContentTop = Emberforge.RibbonHeight * 0.5f + Emberforge.Space8;
 
         /// <summary>
         /// Deliberately NOT static, and deliberately not cached between builds. It was a static
@@ -267,8 +292,7 @@ namespace Emberfall.UI.Screens
         /// the anchor still points at the building, the building stays visible, and the label reads
         /// as a caption for it rather than a sticker over it.
         /// </summary>
-        private UIButton BuildNodePlate(string label, float mx, float my,
-                                        float fillAlpha, float edgeAlpha, Color textColor)
+        private UIButton BuildNodePlate(string label, float mx, float my)
         {
             UIButton handle = new UIButton();
             handle.Root = UIBuilder.Node("Node" + label, _map);
@@ -280,9 +304,8 @@ namespace Emberfall.UI.Screens
             // Tail first, plate second. Unity draws a parent's own graphic before its children, so
             // the plate has to be a CHILD created after the tail for it to bury the tail's top half
             // and leave a triangle pointing down at the building.
-            Image tail = HubStyle.Tail(handle.Root, fillAlpha);
-            handle.Background = HubStyle.SurfaceChild("Plate", handle.Root, HubStyle.RadiusLabel,
-                                                      fillAlpha, edgeAlpha, HubStyle.BorderWeight);
+            Image tail = EmberforgeUI.MarkerTail(handle.Root, HubStyle.TailSize);
+            handle.Background = EmberforgeUI.MarkerPlateChild("Plate", handle.Root);
 
             handle.Button = handle.Root.gameObject.AddComponent<Button>();
             handle.Button.targetGraphic = handle.Background;
@@ -297,11 +320,15 @@ namespace Emberfall.UI.Screens
             handle.Button.colors = colors;
             handle.Root.gameObject.AddComponent<ButtonPress>();
 
-            handle.Label = UIBuilder.Label("Text", handle.Root, label, HubStyle.FontLabel, textColor,
-                                           TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(handle.Label.rectTransform, 6f);
-            // The shadow, not a heavier plate, is what holds the word off the painting behind it.
-            UIBuilder.Shadowed(handle.Label, UITheme.InkArt, 1.6f);
+            // Cinzel, because a place on the map is a NAME and the kit's title face is what names
+            // things. Warm white rather than pure white, so it belongs to the same text set as the
+            // panels, and a dark stroke all the way round rather than a drop shadow: this word
+            // lands on a sunlit plaza as often as on a shadowed wall, and a shadow on one side
+            // only holds a label off a background that happens to be darker than it.
+            handle.Label = EmberforgeUI.Title("Text", handle.Root, label, HubStyle.FontLabel,
+                                              Emberforge.TextBody, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(handle.Label.rectTransform, Emberforge.Space8);
+            UIBuilder.Outlined(handle.Label, Emberforge.Outline, Emberforge.StrokeThin);
 
             // The map is WIDER than the window at most aspects this game targets, because its
             // AspectRatioFitter envelopes rather than fits, so a marker anchored near the right of
@@ -324,8 +351,7 @@ namespace Emberfall.UI.Screens
 
         private UIButton AddMapNode(string label, float mx, float my, System.Action action)
         {
-            UIButton node = BuildNodePlate(label, mx, my, HubStyle.PlateAlphaSoft,
-                                           HubStyle.BorderAlpha, HubStyle.LabelText);
+            UIButton node = BuildNodePlate(label, mx, my);
             node.OnClick(action);
             return node;
         }
@@ -360,40 +386,46 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildCampaignCard()
         {
-            const float cardWidth = 600f;
-            const float cardHeight = 168f;
-            const float inner = 18f;
-
             RectTransform card = UIBuilder.Node("Campaign", _hud);
-            UIBuilder.Box(card, -HubStyle.HudEdge, HubStyle.NavBarHeight + UITheme.Space16,
-                          cardWidth, cardHeight, new Vector2(1f, 0f));
+            UIBuilder.Box(card, -HubStyle.HudEdge, HubStyle.NavBarHeight + Emberforge.Space16,
+                          CardWidth, CardHeight, new Vector2(1f, 0f));
+            EmberforgeUI.PanelOn(card, true);
 
-            HubStyle.Surface(card, HubStyle.RadiusPanel, HubStyle.PlateAlpha,
-                             HubStyle.BorderAlphaStrong, HubStyle.BorderWeightHeavy);
+            // The ribbon straddles the card's top edge and overhangs it on both sides, which is
+            // what makes the card read as a labelled object rather than as a box with a heading
+            // inside it. It takes the chapter name, because that is what this card is ABOUT; the
+            // count and the progress belong to the rows under it.
+            //
+            // Its BODY is the card's width less the padding, so the two tails reach out to about
+            // the card's own edges rather than past them. It was 0.62 of the width, and the first
+            // capture showed the title running out of both ends of a ribbon too short to hold it.
+            _chapterLabel = EmberforgeUI.TitleRibbon("Chapter", card, "",
+                                                     CardWidth - Emberforge.Space32 * 2f);
 
-            _chapterLabel = UIBuilder.Label("Chapter", card, "", HubStyle.FontSecondary,
-                                            HubStyle.LabelText, TextAnchor.UpperLeft);
-            UIBuilder.Box(_chapterLabel.rectTransform, inner, -12f, 340f, 24f, new Vector2(0f, 1f));
+            _chapterCount = EmberforgeUI.Label("Count", card, "", HubStyle.FontSecondary,
+                                               Emberforge.TextGold, TextAnchor.UpperRight);
+            UIBuilder.Box(_chapterCount.rectTransform, -CardInner, -CardContentTop, 280f, 28f,
+                          new Vector2(1f, 1f));
+            UIBuilder.Outlined(_chapterCount, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _chapterCount = UIBuilder.Label("Count", card, "", HubStyle.FontSecondary,
-                                            HubStyle.ValueGold, TextAnchor.UpperRight);
-            UIBuilder.Box(_chapterCount.rectTransform, -inner, -12f, 200f, 24f, new Vector2(1f, 1f));
-
-            _chapterFill = UIBuilder.Bar("Bar", card,
-                                         UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid),
-                                         HubStyle.ValueGold);
+            _chapterFill = EmberforgeUI.ProgressBar("Bar", card);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
-            UIBuilder.Box(barRoot, 0f, -44f, cardWidth - inner * 2f, 8f, new Vector2(0.5f, 1f));
-
-            _continueSub = UIBuilder.Label("Sub", card, "", HubStyle.FontCaption,
-                                           HubStyle.TextSecondary, TextAnchor.UpperCenter);
-            UIBuilder.Box(_continueSub.rectTransform, 0f, -58f, cardWidth - inner * 2f, 22f,
+            UIBuilder.Box(barRoot, 0f, -(CardContentTop + 32f), CardWidth - CardInner * 2f, 22f,
                           new Vector2(0.5f, 1f));
 
-            // GoldButton: the primary action. The only other Gold on the Hub is the CLAIM button
-            // inside the idle popup, which is the primary action of that layer.
-            _continueButton = UIBuilder.GoldButton("Continue", card, "CONTINUE CAMPAIGN", HubStyle.FontButton);
-            UIBuilder.Box(_continueButton.Root, 0f, 14f, cardWidth - inner * 2f, 62f, new Vector2(0.5f, 0f));
+            _continueSub = EmberforgeUI.Label("Sub", card, "", HubStyle.FontCaption,
+                                              Emberforge.TextBody, TextAnchor.UpperCenter);
+            UIBuilder.Box(_continueSub.rectTransform, 0f, -(CardContentTop + 60f),
+                          CardWidth - CardInner * 2f, 26f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_continueSub, Emberforge.Outline, Emberforge.StrokeThin);
+
+            // The one primary button on the Hub. The only other Ember-orange button anywhere in
+            // this screen's four layers is CLAIM inside the idle popup, which is the primary
+            // action of that layer - so at any moment there is exactly one orange thing to press.
+            _continueButton = EmberforgeUI.Button("Continue", card, "CONTINUE CAMPAIGN",
+                                                  HubStyle.FontButton, ForgeButtonKind.Primary);
+            UIBuilder.Box(_continueButton.Root, 0f, CardInner, CardWidth - CardInner * 2f,
+                          HubStyle.TouchMin, new Vector2(0.5f, 0f));
             _continueButton.OnClick(OpenCampaign);
         }
 
@@ -405,17 +437,16 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildIdleChest()
         {
-            const float cardWidth = 600f;
-
             _chest = HudWidgets.ChestButton("IdleChest", _hud, OpenClaim);
-            UIBuilder.Box(_chest.Root, -(HubStyle.HudEdge + cardWidth + UITheme.Space16),
-                          HubStyle.NavBarHeight + UITheme.Space16,
+            UIBuilder.Box(_chest.Root, -(HubStyle.HudEdge + CardWidth + Emberforge.Space16),
+                          HubStyle.NavBarHeight + Emberforge.Space16,
                           HubStyle.ChestSize, HubStyle.ChestSize, new Vector2(1f, 0f));
         }
 
         /// <summary>
-        /// The right-hand rail: the doors that are neither places on the map nor the five things
-        /// the nav bar carries.
+        /// The rail: the doors that are neither places on the map nor the five things the nav bar
+        /// carries. Which edge it hangs off is HubStyle.RailOnRightEdge's to say, and it says the
+        /// left, because the right edge is where the painting puts the Proving's gatehouse.
         ///
         /// MAIL IS A PLACEHOLDER AND IS DRAWN AS ONE. There is no mail system in this build - no
         /// service, no screen, no data - so the entry is present and disabled rather than absent:
@@ -539,7 +570,7 @@ namespace Emberfall.UI.Screens
             {
                 _chapterLabel.text = "NO CAMPAIGN CONTENT";
                 _chapterCount.text = "";
-                UIBuilder.SetBar(_chapterFill, 0f);
+                EmberforgeUI.SetProgress(_chapterFill, 0f);
                 return;
             }
 
@@ -550,7 +581,8 @@ namespace Emberfall.UI.Screens
 
             _chapterLabel.text = "CHAPTER " + chapter.Number + "  -  " + chapter.Name.ToUpperInvariant();
             _chapterCount.text = cleared + " / " + chapter.Stages.Count + " CLEARED";
-            UIBuilder.SetBar(_chapterFill, chapter.Stages.Count > 0 ? cleared / (float)chapter.Stages.Count : 0f);
+            EmberforgeUI.SetProgress(_chapterFill,
+                chapter.Stages.Count > 0 ? cleared / (float)chapter.Stages.Count : 0f);
         }
 
         private void Update()
@@ -777,6 +809,8 @@ namespace Emberfall.UI.Screens
                 case "guild": App.Panels.ShowGuild(); break;
                 case "claim": _claimPopup.Show(); break;
                 case "menu": _overflowMenu.Show(_overflowButtonTop); break;
+                case "gallery": _overflowMenu.OpenDesignGallery(); break;
+                case "heroes": Router.Show(ScreenId.Heroes); break;
 
                 // Opens two layers, then presses back twice and once more for luck. What the
                 // capture then shows is the bare Hub: the first back closed the menu, the second

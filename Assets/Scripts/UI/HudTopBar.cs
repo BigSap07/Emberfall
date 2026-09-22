@@ -9,14 +9,25 @@ namespace Emberfall.UI
     /// <summary>Persistent header: account rank, experience and the two currencies.</summary>
     public sealed class HudTopBar
     {
-        /// <summary>The face on the plate, and the rank disc that sits on its corner. Derived from
-        /// the pill's own height so the plate retunes from HubStyle like everything else here.</summary>
-        private const float AvatarSize = HubStyle.PillHeight - HubStyle.PillPadY * 2f;
-        private const float RankBadge = 30f;
-        private const float AvatarGlyphInset = 7f;
+        /// <summary>
+        /// The plate's own size. Wider and taller than the pill it replaces, because a framed
+        /// Emberforge panel spends its outer eight pixels on an outline and a gold frame, and the
+        /// old 430x62 pill had no room to give them: the face, the name, the XP figure and the bar
+        /// were already touching its edges.
+        ///
+        /// Still comfortably inside UITheme.TopBarHeight, and the row it shares - a plate on the
+        /// left and three currency pills on the right - comes to about 1220 of a 1920 canvas, so
+        /// it has margin at every aspect this game targets.
+        /// </summary>
+        private const float PlateWidth = 470f;
+        private const float PlateHeight = 92f;
 
-        /// <summary>Room for "1,240 / 3,000 XP" at the quietest size on the bar.</summary>
-        private const float XpTextWidth = 190f;
+        /// <summary>A currency pill. One width and one height for all three, so they read as
+        /// three of the same object rather than as three different ones.</summary>
+        private const float PillWidth = 224f;
+        private const float PillHeight = 68f;
+
+        private const float AvatarGlyphInset = 9f;
 
         public RectTransform Root;
 
@@ -24,10 +35,7 @@ namespace Emberfall.UI
         private RectTransform _avatarHost;
         private string _avatarBuiltFor = null;
 
-        private Text _rankText;
-        private Text _nameText;
-        private Text _xpText;
-        private Image _xpFill;
+        private ForgePlate _plate;
         private Image _underline;
         private Text _goldText;
         private Text _shardText;
@@ -55,99 +63,53 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// Rank, name and XP in the same pill language as the currencies rather than as bare text
-        /// beside a raw bar. Same height, same radius, same surface; the level disc mirrors a
-        /// currency pill's icon so the whole bar reads as one row of the same object.
+        /// THE PLAYER PLATE, built by the kit and filled here.
         ///
-        /// Nothing is dropped: the level number, the "NAME - RANK n" line and the XP fill are all
-        /// still here, just seated on a plate and measured from HubStyle instead of from literals.
+        /// It was a pill in the Hub's own translucent language, sharing its surface with the
+        /// building markers on the map below it. That was right while the frame and the map were
+        /// one visual system; it is wrong now that the frame is Emberforge and the map's plates
+        /// stayed quiet on purpose - a player plate that matches a signpost is a player plate that
+        /// reads as a signpost.
+        ///
+        /// Nothing is dropped and nothing is added: the face, the rank badge on its corner, the
+        /// name line, the XP figure and the XP bar are all still here, and the plate still opens
+        /// the player panel. What changed is who builds them.
         /// </summary>
         private void BuildRankBlock()
         {
-            RectTransform block = UIBuilder.Node("Rank", Root);
-            UIBuilder.Box(block, UITheme.ScreenPadding, -(UITheme.TopBarHeight - HubStyle.PillHeight) * 0.5f,
-                          HubStyle.PillRankWidth, HubStyle.PillHeight, new Vector2(0f, 1f));
-            HubStyle.Surface(block, HubStyle.RadiusPill, HubStyle.PlateAlpha,
-                             HubStyle.BorderAlpha, HubStyle.BorderWeight);
-
-            // The pill already IS the player - it carries their name, their rank and their XP - so
-            // it is the thing to press to see and change that, rather than a separate Hub node
-            // competing with the buildings for a slot on the map. Nothing about the pill changes
-            // visually: it gains a Button and keeps every pixel, because a top bar that suddenly
-            // looked pressable would read as a new feature rather than as the same object.
-            //
-            // Wired through GameApp.Instance rather than a Router field because this bar is built
-            // once, before the router exists - the same reason ScreenChrome reaches for Instance
-            // for its tap sound.
-            Button open = block.gameObject.AddComponent<Button>();
-            open.transition = Selectable.Transition.None;
-            open.onClick.AddListener(delegate { OpenPlayerPanel(); });
-
-            // THE FACE, which is what this plate was missing and why it read as an empty bar. It
-            // carried a gold disc with a level number in it beside a name and an XP fill, which is
-            // a progress bar with a digit on the end rather than a person. The disc is still here,
-            // it is still the rank, and it is still the only gold thing on the bar - but it is a
-            // badge ON the portrait now, and the portrait is what a player recognises as
-            // themselves.
-            //
-            // The avatar is a PLACEHOLDER by default, deliberately rather than pending: the
-            // profile screen has always let a player make any hero they own their face, and a
-            // fresh account has not picked one. A ringed disc with the Cinder in it says "this is
-            // you, and you have not chosen a face yet" without pretending to be a portrait.
-            _avatarHost = UIBuilder.Node("Avatar", block);
-            UIBuilder.Box(_avatarHost, HubStyle.PillPadX, 0f, AvatarSize, AvatarSize, new Vector2(0f, 0.5f));
-
-            RectTransform badge = UIBuilder.Node("Badge", _avatarHost);
-            UIBuilder.Box(badge, 2f, -2f, RankBadge, RankBadge, new Vector2(1f, 0f));
-            Image badgeFill = badge.gameObject.AddComponent<Image>();
-            badgeFill.sprite = HudSkin.Circle(HudSkin.Disc, 128);
-            badgeFill.color = HubStyle.ValueGold;
-            badgeFill.raycastTarget = false;
-
-            _rankText = UIBuilder.Label("Level", badge, "1", HubStyle.FontCaption,
-                                        UITheme.TextOnAccent, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(_rankText.rectTransform, 0f);
-
-            float textLeft = HubStyle.PillPadX + AvatarSize + HubStyle.PillGapIconToValue;
-            float textWidth = HubStyle.PillRankWidth - textLeft - HubStyle.PillPadX;
-
-            _nameText = UIBuilder.Label("Name", block, "WAYFARER", HubStyle.FontCaption,
-                                        HubStyle.LabelText, TextAnchor.LowerLeft);
-            UIBuilder.Box(_nameText.rectTransform, textLeft, -HubStyle.PillPadY, textWidth - XpTextWidth,
-                          24f, new Vector2(0f, 1f));
-
-            // The XP NUMBERS, on the name's own line, right-aligned against the pill's inner edge.
-            //
-            // Without them the plate was a name and a track, and a track at zero is a black bar the
-            // width of the plate - which is exactly how the Hub's player plate was described when
-            // this pass started, and it was a fair description. A number beside it says what the
-            // bar is measuring even when the bar itself has nothing to show.
-            _xpText = UIBuilder.Label("Xp", block, "", HubStyle.FontSoon,
-                                      HubStyle.TextSecondary, TextAnchor.LowerRight);
-            UIBuilder.Box(_xpText.rectTransform, -HubStyle.PillPadX, -HubStyle.PillPadY,
-                          XpTextWidth, 24f, new Vector2(1f, 1f));
-
-            _xpFill = UIBuilder.Bar("XpBar", block, UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha),
-                                    HubStyle.ValueGold);
-            RectTransform xpRoot = _xpFill.rectTransform.parent as RectTransform;
-            UIBuilder.Box(xpRoot, textLeft, HubStyle.PillPadY, textWidth, 8f, new Vector2(0f, 0f));
+            _plate = EmberforgeUI.PlayerPlate("Plate", Root, PlateWidth, PlateHeight, OpenPlayerPanel);
+            UIBuilder.Box(_plate.Root, UITheme.ScreenPadding,
+                          -(UITheme.TopBarHeight - PlateHeight) * 0.5f,
+                          PlateWidth, PlateHeight, new Vector2(0f, 1f));
+            _avatarHost = _plate.AvatarHost;
         }
 
         /// <summary>
-        /// The three currencies, each a HubStyle pill. Same height, same horizontal padding, same
-        /// surface and the same gold value tone; only the icon tint tells them apart. Spacing is
-        /// derived from the shared pill width rather than from three hand-placed offsets, which is
-        /// what the -440/-220/0 literals here used to be.
+        /// The three currencies, each an Emberforge pill: a dark capsule with a gold line inside
+        /// it, a faceted jewel on the left and the figure in gold on the right. Same height, same
+        /// width, same treatment; only the jewel's colour tells them apart.
+        ///
+        /// NONE OF THEM CARRIES A PLUS, and the component supports one. A plus means "here is
+        /// where you get more of this", and this build has no screen that gives a player gold,
+        /// shards or relic dust in exchange for anything - the summon screen and the relic shop
+        /// both SPEND. A control that opens nothing is worse than no control, so the plus stays in
+        /// the kit, is shown in the component gallery, and gets wired the day a store exists.
         /// </summary>
         private void BuildCurrencies()
         {
-            float step = HubStyle.PillCurrencyWidth + UITheme.Space12;
-            _dustText  = HubStyle.Pill("Dust",   Root, -UITheme.ScreenPadding - step * 2f,
-                                       HubStyle.PillCurrencyWidth, UITheme.Dust,  "D");
-            _goldText  = HubStyle.Pill("Gold",   Root, -UITheme.ScreenPadding - step,
-                                       HubStyle.PillCurrencyWidth, UITheme.Gold,  "G");
-            _shardText = HubStyle.Pill("Shards", Root, -UITheme.ScreenPadding,
-                                       HubStyle.PillCurrencyWidth, UITheme.Shard, "S");
+            float step = PillWidth + UITheme.Space12;
+            _dustText = Pill("Dust", -UITheme.ScreenPadding - step * 2f, UITheme.Dust);
+            _goldText = Pill("Gold", -UITheme.ScreenPadding - step, UITheme.Gold);
+            _shardText = Pill("Shards", -UITheme.ScreenPadding, UITheme.Shard);
+        }
+
+        private Text Pill(string name, float x, Color jewelTint)
+        {
+            ForgePill pill = EmberforgeUI.CurrencyPill(name, Root, PillWidth, PillHeight,
+                                                       jewelTint, null);
+            UIBuilder.Box(pill.Root, x, -(UITheme.TopBarHeight - PillHeight) * 0.5f,
+                          PillWidth, PillHeight, new Vector2(1f, 1f));
+            return pill.Value;
         }
 
         /// <summary>
@@ -208,25 +170,33 @@ namespace Emberfall.UI
                 Object.Destroy(child.gameObject);
             }
 
+            float avatarSize = _avatarHost.rect.height > 0f
+                             ? _avatarHost.rect.height
+                             : PlateHeight - Emberforge.Space12 * 2f;
+
             HeroDef chosen = chosenId.Length == 0 ? null : session.Content.GetHero(chosenId);
             if (chosen != null)
             {
-                RectTransform face = Widgets.Portrait("Face", _avatarHost, chosen, chosen.Stars,
-                                                      AvatarSize, true, true);
+                // The kit's framed portrait, so the face a player chose is rimmed by that hero's
+                // own rarity and glows in their aspect - the same badge the collection draws. The
+                // plate used to draw Widgets.Portrait directly, which gave it an aspect ring and
+                // no rarity read at all.
+                RectTransform face = EmberforgeUI.PortraitFrame("Face", _avatarHost, chosen,
+                                                                chosen.Stars, avatarSize);
                 UIBuilder.FillParent(face, 0f);
                 face.SetAsFirstSibling();
                 return;
             }
 
+            // The PLACEHOLDER, deliberately rather than pending: the profile screen has always let
+            // a player make any hero they own their face, and a fresh account has not picked one.
+            // A framed disc with the Cinder in it says "this is you, and you have not chosen a
+            // face yet" without pretending to be a portrait.
             RectTransform placeholder = UIBuilder.Node("Placeholder", _avatarHost);
             UIBuilder.FillParent(placeholder, 0f);
-            Image disc = UIBuilder.Img("Disc", placeholder, HudSkin.Circle(HudSkin.Disc, 128),
-                                       UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid));
+            Image disc = UIBuilder.Img("Disc", placeholder,
+                                       EmberforgeSkin.Get(EmberforgeArt.Slot.Disc), Color.white);
             UIBuilder.FillParent(disc.rectTransform, 0f);
-            Image rim = UIBuilder.Img("Ring", placeholder,
-                                      HudSkin.Ring(HudSkin.DiscRing, 128, HubStyle.NavRingThickness),
-                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
-            UIBuilder.FillParent(rim.rectTransform, 0f);
             Image mark = UIBuilder.Img("Mark", placeholder, TextureLab.CinderFragment(64),
                                        UITheme.WithAlpha(UITheme.CinderGlass, 0.95f));
             UIBuilder.FillParent(mark.rectTransform, AvatarGlyphInset);
@@ -237,12 +207,13 @@ namespace Emberfall.UI
         {
             if (session == null) return;
             RefreshAvatar(session);
-            _rankText.text = session.Profile.PlayerLevel.ToString();
-            _nameText.text = session.Profile.PlayerName.ToUpperInvariant() + "  -  RANK " + session.Profile.PlayerLevel;
+            _plate.Rank.text = session.Profile.PlayerLevel.ToString();
+            _plate.Name.text = session.Profile.PlayerName.ToUpperInvariant() + "  -  RANK " + session.Profile.PlayerLevel;
 
             int needed = StatMath.PlayerXpForNextLevel(session.Balance, session.Profile.PlayerLevel);
-            UIBuilder.SetBar(_xpFill, needed > 0 ? session.Profile.PlayerXp / (float)needed : 0f);
-            _xpText.text = needed > 0 ? session.Profile.PlayerXp + " / " + needed + " XP" : "MAX RANK";
+            EmberforgeUI.SetProgress(_plate.XpFill,
+                                     needed > 0 ? session.Profile.PlayerXp / (float)needed : 0f);
+            _plate.Xp.text = needed > 0 ? session.Profile.PlayerXp + " / " + needed + " XP" : "MAX RANK";
 
             _dustText.text  = Format(session.Profile.RelicDust);
             _goldText.text  = Format(session.Profile.Gold);

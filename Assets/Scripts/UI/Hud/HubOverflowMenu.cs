@@ -118,6 +118,18 @@ namespace Emberfall.UI
                 Close();
                 OpenDevArena();
             });
+
+            // The component gallery joins the arena in the same guard, for the same reason: it is
+            // a page for whoever is BUILDING this game, and a release player has no row for it
+            // because it has no method. Built lazily - the gallery constructs several dozen live
+            // components, and a menu that assembled all of them to show two rows of text would
+            // pay for a page most sessions never open.
+            rows.Add("DESIGN GALLERY");
+            actions.Add(delegate
+            {
+                Close();
+                OpenDesignGallery();
+            });
 #endif
 
             float height = MenuPad * 2f + rows.Count * HubStyle.TouchMin + (rows.Count - 1) * RowGap;
@@ -125,7 +137,8 @@ namespace Emberfall.UI
 
             for (int i = 0; i < rows.Count; i++)
             {
-                UIButton row = UIBuilder.SecondaryButton("Row" + i, _plate, rows[i], HubStyle.FontButton);
+                UIButton row = EmberforgeUI.Button("Row" + i, _plate, rows[i], HubStyle.FontButton,
+                                                   ForgeButtonKind.Secondary);
                 UIBuilder.Box(row.Root, 0f, -(MenuPad + i * (HubStyle.TouchMin + RowGap)),
                               MenuWidth - MenuPad * 2f, HubStyle.TouchMin, new Vector2(0.5f, 1f));
                 Action action = actions[i];
@@ -140,6 +153,17 @@ namespace Emberfall.UI
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private Dev.DesignGallery _gallery;
+
+        /// <summary>Opens the component gallery, building it the first time it is asked for.
+        /// Public so the capture tool can reach it without going through the menu, which is the
+        /// same door MainMenuScreen.OpenLayerForCapture uses for every other Hub layer.</summary>
+        public void OpenDesignGallery()
+        {
+            if (_gallery == null) _gallery = new Dev.DesignGallery(_app, _layer);
+            _gallery.Show();
+        }
+
         private static void OpenDevArena()
         {
             // Loaded by name so this does not need a reference to the scene asset. The scene is in

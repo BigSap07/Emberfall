@@ -86,6 +86,7 @@ namespace UnityEngine
         public static Vector2 up { get { return new Vector2(0, 1); } }
         public static Vector2 right { get { return new Vector2(1, 0); } }
         public float magnitude { get { return Mathf.Sqrt(x * x + y * y); } }
+        public float sqrMagnitude { get { return x * x + y * y; } }
         public Vector2 normalized { get { float m = magnitude; return m > 0f ? new Vector2(x / m, y / m) : zero; } }
         public static Vector2 operator +(Vector2 a, Vector2 b) { return new Vector2(a.x + b.x, a.y + b.y); }
         public static Vector2 operator -(Vector2 a, Vector2 b) { return new Vector2(a.x - b.x, a.y - b.y); }
@@ -216,6 +217,8 @@ namespace UnityEngine
         public const float Rad2Deg = 180f / PI;
         public const float Epsilon = 1.401298E-45f;
         public static float Sqrt(float f) { return (float)Math.Sqrt(f); }
+        public static float Exp(float f) { return (float)Math.Exp(f); }
+        public static float Log(float f) { return (float)Math.Log(f); }
         public static float Abs(float f) { return Math.Abs(f); }
         public static int Abs(int f) { return Math.Abs(f); }
         public static float Min(float a, float b) { return Math.Min(a, b); }
@@ -516,6 +519,22 @@ namespace UnityEngine
         public void Apply(bool updateMipmaps) { }
         public void Apply(bool updateMipmaps, bool makeNoLongerReadable) { }
         public static Texture2D whiteTexture { get { return null; } }
+    }
+
+    /// <summary>
+    /// Real API: an EXTENSION method class in the com.unity.modules.imageconversion module, which
+    /// is why EncodeToPNG reads as a method on Texture2D at every call site and is not declared on
+    /// the class above. The shim copies that shape rather than adding the method to Texture2D,
+    /// because a project that drops the module would fail to compile in Unity while still passing
+    /// here - and the module IS an explicit dependency in Packages/manifest.json, so the shim
+    /// asserting the same shape is what keeps that dependency honest.
+    /// </summary>
+    public static class ImageConversion
+    {
+        public static byte[] EncodeToPNG(this Texture2D tex) { return new byte[0]; }
+        public static byte[] EncodeToJPG(this Texture2D tex) { return new byte[0]; }
+        public static byte[] EncodeToJPG(this Texture2D tex, int quality) { return new byte[0]; }
+        public static bool LoadImage(this Texture2D tex, byte[] data) { return true; }
     }
 
     public sealed class Sprite : Object
