@@ -28,20 +28,6 @@ damage funnel or the turn loop, which is where every fingerprint in the project 
 
 ---
 
-## 2. Per-round budgets on a standing status
-
-`StatusInstance` carries `UsesPerRound` and `UsesThisRound`, and exactly two places read them:
-`InterceptDisrupted` and the `StatusUseAvailable` condition. `CoverFraction` reads only `Magnitude`,
-so a Covered ward cannot be told to answer once a round; `Guard` spends `Charges`, which do not
-refill at a round boundary.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Rhys | "Rhys takes 30% of it instead, **once per round**" | a per-round use budget honoured by the Covered redirect | `limit: OncePerRound` on the passive, so the ward is APPLIED once a round and then answers every hit for that round | small |
-| Eira | "it reduces the first area hit **each round** by 20%" | the same budget on a Guard charge | one Guard charge for the whole 2-round duration, so it answers one hit rather than one a round | small |
-
----
-
 ## 3. Telling an area hit from a single-target one
 
 Nothing on a resolving Damage effect records how many bodies it was aimed at, so no condition and no
@@ -247,7 +233,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 2 | per-round budgets on a standing status | 2 |
 | 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |

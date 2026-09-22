@@ -8825,7 +8825,7 @@
         "id": "eira_redeploy_cover",
         "name": "Redeploy Cover",
         "energyCost": 100,
-        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the next hit each ally takes by 20%.",
+        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the first hit each round by 20%.",
         "effects": [
           {
             "kind": "Damage",
@@ -8836,10 +8836,10 @@
             "kind": "ApplyStatus",
             "target": "AllAllies",
             "chance": 1,
-            "charges": 1,
             "duration": 2,
             "magnitude": 0.2,
-            "status": "Guard"
+            "status": "Guard",
+            "usesPerRound": 1
           }
         ]
       },
