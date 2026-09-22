@@ -21,9 +21,10 @@ an unauthenticated request or one made as a user the script itself created. The 
 key is never used and must not be set for this.
 
 WHAT IT LEAVES BEHIND: two anonymous users, and their profiles, saves, snapshots and
-friendship. Deleting a user needs the service role, which this script deliberately does not
-hold, so it prints both user ids at the end for deletion from the dashboard
-(Authentication -> Users). Cascades take everything else with them.
+friendship - plus, since the cloud audit's cases were added, about six more throwaway users,
+one of them carrying an example.com address. Deleting a user needs the service role, which
+this script deliberately does not hold, so it prints every user id it made at the end for
+deletion from the dashboard (Authentication -> Users). Cascades take everything else with them.
 
 Standard library only - no pip install, so it runs on a machine that has nothing set up.
 """
@@ -41,6 +42,28 @@ ANON = os.environ.get("SUPABASE_ANON_KEY", "")
 
 PASSES = 0
 FAILURES = 0
+
+
+def looks_secret(key):
+    """True for a key that bypasses RLS: a JWT whose role is not "anon", or a new-format secret
+    key. The guard this replaced tested `"service_role" in key`, which never fires - a JWT's
+    payload is base64url, so the word is never in the key as text (Docs/CLOUD-GAPS.md P12). A JWT
+    whose payload cannot be decoded counts as secret: "could not tell" is not a reason to run."""
+    import base64
+    key = (key or "").strip()
+    if key.startswith("sb_secret_"):
+        return True
+    if key.startswith("sb_publishable_"):
+        return False
+    parts = key.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        segment = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(segment.encode("ascii")).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return True
+    return not isinstance(payload, dict) or payload.get("role") != "anon"
 
 
 # ---------------------------------------------------------------- reporting
@@ -422,6 +445,244 @@ def check_email_linking(a):
     print("        checked here - not whether mail was delivered.")
 
 
+# ---------------------------------------------------------------- the cloud audit (Docs/CLOUD-GAPS.md)
+#
+# Added by the save and cloud audit and NOT YET RUN against the live project: every case below was
+# written from the migrations' text and confirmed to parse, nothing more. A label that says STILL
+# PRESENT asserts a defect the audit wrote up and left alone, so it goes red the day the defect is
+# fixed - flip it then, and move the entry in Docs/CLOUD-GAPS.md. No token is ever printed.
+
+EXTRA_USERS = []
+
+
+def extra_user(who):
+    user = sign_up_anonymous(who)
+    EXTRA_USERS.append(user)
+    return user
+
+
+def stored_revision(user):
+    status, body = request("GET", "/rest/v1/saves?select=revision&user_id=eq." + user["id"], token=user["token"])
+    return body[0]["revision"] if status == 200 and isinstance(body, list) and body else None
+
+
+def race_pushes(user, expected, racers):
+    """`racers` threads call push_save with the same expected revision at one instant."""
+    import threading
+    barrier = threading.Barrier(racers)
+    results = [None] * racers
+    document = {"version": 14, "playerName": "Racer", "playerLevel": 1, "stagesCleared": 0, "heroes": []}
+
+    def run(index):
+        try:
+            barrier.wait(timeout=30)
+        except threading.BrokenBarrierError:
+            pass
+        results[index] = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
+                                 body={"p_expected_revision": expected, "p_save_version": 14,
+                                       "p_device_id": "racer-" + str(index), "p_data": document})
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(racers)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results
+
+
+def check_push_races(a):
+    section("PUSH_SAVE UNDER CONTENTION - one winner, and every loser told")
+
+    before = stored_revision(a)
+    check(before is not None, "A has a stored revision to race from (" + str(before) + ")")
+    if before is None:
+        return
+    for racers in (2, 4):
+        expected = stored_revision(a)
+        results = race_pushes(a, expected, racers)
+        won = [r for r in results if r and r[0] == 200]
+        lost = [r for r in results if r and r[0] == 409]
+        check(len(won) == 1, str(racers) + " DEVICES PUSH REVISION " + str(expected) + " AT ONCE AND EXACTLY ONE WINS",
+              [r[0] for r in results if r])
+        check(len(lost) == racers - 1, "and every other one gets a 409, not a silent success",
+              [r[0] for r in results if r])
+        check(won and isinstance(won[0][1], dict) and won[0][1].get("revision") == expected + 1,
+              "the winner's revision is exactly one higher - no skipped or doubled revision",
+              won and won[0][1])
+        check(stored_revision(a) == expected + 1, "and the stored row agrees")
+
+    fresh = extra_user("race-first")
+    results = race_pushes(fresh, 0, 3)
+    won = [r for r in results if r and r[0] == 200]
+    lost = [r for r in results if r and r[0] == 409]
+    check(len(won) == 1 and len(lost) == 2,
+          "THREE FIRST UPLOADS AT ONCE FOR A USER WITH NO SAVE - one row, two 409s (the primary key's refusal)",
+          [(r[0], r[1].get("message") if isinstance(r[1], dict) else r[1]) for r in results if r])
+    check(stored_revision(fresh) == 1, "and the one row is revision 1")
+
+
+def check_push_accepts_anything():
+    """Docs/CLOUD-GAPS.md S2. push_save checks that a document is present and nothing about what
+    it is. The client no longer sends a non-object (P3), but the database would still store one,
+    and the save_version column is whatever the caller claims."""
+    section("WHAT PUSH_SAVE WILL STORE - checked only for presence")
+    user = extra_user("shape")
+    revision = 0
+    for label, data in (("an empty object", {}), ("a bare string", "not a save"), ("an array", [1, 2, 3])):
+        status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
+                               body={"p_expected_revision": revision, "p_save_version": 14,
+                                     "p_device_id": "shape", "p_data": data})
+        check(status == 200, "STILL PRESENT (S2) - push_save stores " + label + " as a save", (status, body))
+        if status == 200 and isinstance(body, dict):
+            revision = body.get("revision", revision)
+
+    status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
+                           body={"p_expected_revision": revision, "p_save_version": 999,
+                                 "p_device_id": "shape", "p_data": {"version": 14}})
+    check(status == 200, "STILL PRESENT (S2) - and labels it save_version 999 because the caller said so, "
+          "after which every real client refuses to sync this account", (status, body))
+
+    big = {"version": 14, "padding": "x" * (3 * 1024 * 1024)}
+    status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
+                           body={"p_expected_revision": revision + 1 if status == 200 else revision,
+                                 "p_save_version": 14, "p_device_id": "shape", "p_data": big})
+    print("        measured: a 3 MB document answered " + str(status) + " (A-list: no size cap is declared)")
+
+
+def check_third_party(a, b):
+    section("A THIRD PARTY - C is nobody's friend and touches nothing between A and B")
+    c = extra_user("C")
+
+    status, body = request("GET", "/rest/v1/friendships?select=id,requester,addressee,status", token=a["token"])
+    friendship = body[0] if status == 200 and isinstance(body, list) and body else None
+    check(friendship is not None, "A and B have a friendship row to aim at", (status, body))
+    if not friendship:
+        return
+
+    status, body = request("GET", "/rest/v1/friendships?select=id&id=eq." + friendship["id"], token=c["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 0,
+          "C CANNOT READ ANOTHER PAIR'S FRIENDSHIP", (status, body))
+
+    request("DELETE", "/rest/v1/friendships?id=eq." + friendship["id"], token=c["token"])
+    status, body = request("GET", "/rest/v1/friendships?select=id&id=eq." + friendship["id"], token=a["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 1, "nor delete it", (status, body))
+
+    status, _ = request("POST", "/rest/v1/friendships", token=c["token"],
+                        body={"requester": a["id"], "addressee": c["id"], "status": "pending"})
+    check(status not in (200, 201, 204), "nor file a request IN A's NAME", status)
+
+    status, body = request("GET", "/rest/v1/team_snapshots?select=user_id&user_id=eq." + b["id"], token=c["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 0,
+          "nor read B's line", (status, body))
+
+    status, _ = request("POST", "/rest/v1/team_snapshots?on_conflict=user_id", token=c["token"],
+                        body={"user_id": b["id"], "label": "forged", "power_score": 1, "units": []},
+                        prefer="resolution=merge-duplicates,return=minimal")
+    status2, body2 = request("GET", "/rest/v1/team_snapshots?select=label&user_id=eq." + b["id"], token=b["token"])
+    check(status not in (200, 201, 204) and body2 and body2[0]["label"] != "forged",
+          "NOR PUBLISH A LINE AS B through the upsert path the client uses", (status, body2))
+
+    status, body = request("GET", "/rest/v1/saves?select=user_id&user_id=eq." + a["id"], token=c["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 0, "nor read A's save", (status, body))
+
+
+def check_profile_text(a):
+    """Docs/CLOUD-GAPS.md S7. 0004 refuses control characters in every guild text column because a
+    newline breaks a single-line label. profiles.display_name, shown in the same rosters, does not."""
+    section("DISPLAY NAMES - the one free-text column without the guild tables' rule")
+    status, _ = request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"],
+                        body={"display_name": "two\nlines"})
+    check(status in (200, 204), "STILL PRESENT (S7) - a display name carrying a newline is stored", status)
+    status, _ = request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"],
+                        body={"display_name": "   "})
+    check(status in (200, 204), "STILL PRESENT (S7) - and so is one that is nothing but spaces", status)
+    request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"], body={"display_name": "Matthias"})
+
+
+def check_anon_functions():
+    section("THE ANON ROLE AND THE FUNCTIONS 0001 AND 0003 DEFINE")
+    status, body = request("POST", "/rest/v1/rpc/is_friend", body={"other_user": "00000000-0000-0000-0000-000000000000"})
+    check(status not in (200, 201), "the anon role cannot call is_friend", status)
+    status, body = request("POST", "/rest/v1/rpc/generate_friend_code", body={})
+    check(status == 200, "STILL PRESENT (S6) - the anon role CAN call generate_friend_code, which 0001 never revoked",
+          status)
+
+
+def check_email_collision():
+    """Docs/CLOUD-GAPS.md identity. Attaching an email that another account already holds must
+    fail cleanly and leave the anonymous account, its id and its save exactly as they were."""
+    section("LINKING AN EMAIL THAT IS ALREADY TAKEN")
+    email = random_email()
+    status, body = request("POST", "/auth/v1/signup", body={"email": email, "password": "Emberfall-owner-Aa1"})
+    owner = body.get("user", body) if isinstance(body, dict) else None
+    if status not in (200, 201) or not isinstance(owner, dict) or not owner.get("id"):
+        print("        skipped: email sign-ups are not accepted on this project (" + str(status) + ")")
+        return
+    EXTRA_USERS.append({"name": "email-owner", "id": owner["id"]})
+
+    e = extra_user("E")
+    request("POST", "/rest/v1/rpc/push_save", token=e["token"],
+            body={"p_expected_revision": 0, "p_save_version": 14, "p_device_id": "e", "p_data": {"version": 14}})
+    status, body = request("PUT", "/auth/v1/user", token=e["token"], body={"email": email, "password": "Emberfall-e-Aa1"})
+    taken = status >= 400
+    print("        measured: attaching a taken address answered " + str(status) + " "
+          + str(body.get("msg") or body.get("message") or body.get("error_code") if isinstance(body, dict) else ""))
+    status2, me = request("GET", "/auth/v1/user", token=e["token"])
+    check(isinstance(me, dict) and me.get("id") == e["id"] and not me.get("email"),
+          "the anonymous account keeps its id and does not take the address", (status2, me and me.get("email")))
+    check(stored_revision(e) == 1, "and its save is untouched")
+    if not taken:
+        check(isinstance(me, dict) and me.get("new_email") == email,
+              "the server accepted the address as PENDING, so the owner's mailbox gets a link", me)
+
+
+def check_pending_email_cannot_sign_in():
+    """Docs/CLOUD-GAPS.md S4, the server half of P4. With 'Confirm email' on, an address attached to an
+    anonymous account stays pending until its link is clicked. Signing in with it before then
+    fails, which is why a client that let such an account sign out was losing it."""
+    section("A PENDING EMAIL - what signing back in with it does")
+    f = extra_user("F")
+    email = random_email()
+    password = "Emberfall-f-" + email[15:21] + "-Aa1"
+    status, body = request("PUT", "/auth/v1/user", token=f["token"], body={"email": email, "password": password})
+    if status != 200 or not isinstance(body, dict):
+        check(False, "the anonymous account accepts an email and password", (status, body))
+        return
+    pending = bool(body.get("new_email")) and not body.get("email")
+    print("        measured: after linking, email=" + repr(body.get("email")) + " new_email set=" + str(bool(body.get("new_email")))
+          + " is_anonymous=" + repr(body.get("is_anonymous")))
+    if not pending:
+        print("        'Confirm email' is off on this project, so the address is live at once and P4 cannot occur")
+        return
+    status, body = request("POST", "/auth/v1/token?grant_type=password", body={"email": email, "password": password})
+    check(status >= 400, "SIGNING IN WITH A PENDING ADDRESS FAILS - an account signed out in this state is unreachable",
+          (status, body.get("error_code") if isinstance(body, dict) else body))
+
+
+def check_refresh_reuse():
+    """Docs/CLOUD-GAPS.md S3. What the client sees when a refresh token is presented twice - the
+    case a response lost in flight produces. Measured so AccountService.TokenWasRejected can be
+    narrowed against the real answer rather than a guess."""
+    section("A REFRESH TOKEN PRESENTED TWICE")
+    import time
+    g = extra_user("G")
+    status, first = request("POST", "/auth/v1/token?grant_type=refresh_token", body={"refresh_token": g["refresh"]})
+    check(status == 200 and isinstance(first, dict) and first.get("refresh_token"),
+          "a refresh token is exchanged once", status)
+    time.sleep(12)
+    status, body = request("POST", "/auth/v1/token?grant_type=refresh_token", body={"refresh_token": g["refresh"]})
+    code = body.get("error_code") if isinstance(body, dict) else None
+    msg = (body.get("msg") or body.get("error_description") or body.get("message")) if isinstance(body, dict) else body
+    print("        measured: the same token again, past the reuse interval, answered " + str(status)
+          + " error_code=" + repr(code) + " message=" + repr(msg))
+    check(status >= 400, "presenting it again is refused", status)
+    if isinstance(first, dict) and first.get("refresh_token"):
+        status, _ = request("POST", "/auth/v1/token?grant_type=refresh_token",
+                            body={"refresh_token": first["refresh_token"]})
+        print("        measured: the token the first exchange issued now answers " + str(status)
+              + " (not 200 means reuse revoked the whole session - the device that lost the response is signed out)")
+
+
 # ---------------------------------------------------------------- entry point
 
 
@@ -429,7 +690,7 @@ def main():
     if not URL or not ANON:
         print("Set SUPABASE_URL and SUPABASE_ANON_KEY first. See the header of this file.")
         return 2
-    if "service_role" in ANON:
+    if looks_secret(ANON):
         print("That looks like the service role key. Use the ANON PUBLIC key - the service role")
         print("bypasses RLS, so every check here would pass and none of them would mean anything.")
         return 2
@@ -447,6 +708,14 @@ def main():
     check_anon_role()
     if pa and pb:
         check_friendship_and_snapshots(a, b, pa, pb)
+        check_third_party(a, b)
+    check_push_races(a)
+    check_push_accepts_anything()
+    check_profile_text(a)
+    check_anon_functions()
+    check_email_collision()
+    check_pending_email_cannot_sign_in()
+    check_refresh_reuse()
     check_email_linking(a)
 
     print("")
@@ -455,6 +724,8 @@ def main():
     print("Throwaway users left behind - delete them in Authentication -> Users:")
     print("  A  " + a["id"])
     print("  B  " + b["id"])
+    for user in EXTRA_USERS:
+        print("  " + user["name"] + "  " + user["id"])
     print("Deleting a user cascades to its profile, save, snapshot and friendships.")
     return 1 if FAILURES else 0
 

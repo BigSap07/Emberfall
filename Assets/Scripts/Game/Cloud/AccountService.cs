@@ -229,7 +229,12 @@ namespace Emberfall.Game.Cloud
                     if (!response.Ok) { Finish(done, false, response.Error); return; }
                     if (!AdoptSession(response.Body, _state.IsAnonymous, _state.Email))
                     {
-                        Finish(done, false, "refresh returned no session");
+                        // Worded to match NONE of TokenWasRejected's keywords, deliberately. A 2xx
+                        // that is not a session - a captive portal, a proxy - is a device that did
+                        // not reach the auth server, not a server refusing the token. The sentence
+                        // this replaced ("refresh returned no session") contained "refresh", so
+                        // Resume discarded the stored account and made a new anonymous one.
+                        Finish(done, false, "the answer to the sign-in did not carry a session");
                         return;
                     }
                     Finish(done, true, "");
@@ -241,9 +246,13 @@ namespace Emberfall.Game.Cloud
         ///
         /// A minute rather than zero because the clock that decides is the DEVICE's, and a phone
         /// whose clock is slightly fast would otherwise send a token the server has already
-        /// stopped accepting and take a 401 for no reason. Callers that get a 401 anyway retry
-        /// once through here, which covers the case where the device clock is wrong by more than
-        /// a minute.
+        /// stopped accepting and take a 401 for no reason.
+        ///
+        /// NOTHING RETRIES A 401. This comment used to say callers did, once, through here; none
+        /// does, and SupabaseResponse.IsUnauthorised has no reader. A device clock that runs more
+        /// than a minute slow therefore sends an expired token until the next launch refreshes it,
+        /// and every sync in between fails with the server's "JWT expired". Written up in
+        /// Docs/CLOUD-GAPS.md rather than wired here, because a retry is new request behaviour.
         /// </summary>
         public IEnumerator EnsureFreshToken(Action<bool, string> done)
         {
@@ -369,6 +378,9 @@ namespace Emberfall.Game.Cloud
             JsonValue user = root["user"];
             string userId = user != null && user.IsObject ? user.GetString("id", "") : "";
             string userEmail = user != null && user.IsObject ? user.GetString("email", "") : "";
+            bool serverSaysAnonymous = user != null && user.IsObject && user.Has("is_anonymous")
+                ? user.GetBool("is_anonymous", anonymous)
+                : string.IsNullOrEmpty(userEmail) && anonymous;
             if (string.IsNullOrEmpty(userId)) return false;
 
             _client.AccessToken = access;
@@ -384,9 +396,15 @@ namespace Emberfall.Game.Cloud
             // The server's own answer decides whether this is still an anonymous account: an
             // account that linked an email on another device comes back with one, and believing
             // the local flag over that would keep offering to link an email that already exists.
-            _state.IsAnonymous = string.IsNullOrEmpty(userEmail) && anonymous;
+            //
+            // ONLY the server's answer. The email passed in may be an address still waiting for its
+            // confirmation link - LinkEmail stores the pending one - and this used to clear
+            // IsAnonymous whenever any email was known, so the first refresh after an unconfirmed
+            // link enabled Sign Out on an account nobody could sign back into. GoTrue's
+            // is_anonymous is read when present; otherwise a confirmed `email` on the user is the
+            // evidence. See Docs/CLOUD-GAPS.md.
+            _state.IsAnonymous = serverSaysAnonymous;
             _state.Email = !string.IsNullOrEmpty(userEmail) ? userEmail : (email == null ? "" : email.Trim());
-            if (!string.IsNullOrEmpty(_state.Email)) _state.IsAnonymous = false;
             _state.Save();
             return true;
         }
@@ -395,6 +413,11 @@ namespace Emberfall.Game.Cloud
         /// Whether a failed refresh means "this token is dead" rather than "the server could not
         /// be reached". Matched on the message because GoTrue answers a bad refresh token with a
         /// 400 and a body, which is indistinguishable from several other 400s by status alone.
+        ///
+        /// KNOWN TOO WIDE, and written up rather than changed: a gateway 401 "Invalid API key",
+        /// which is what an old build sees after the anon key is rotated, contains "invalid" and
+        /// reads as a dead token, so every such device abandons its account. Narrowing this needs
+        /// GoTrue's real error codes measured against the live project first. Docs/CLOUD-GAPS.md.
         /// </summary>
         private static bool TokenWasRejected(string error)
         {

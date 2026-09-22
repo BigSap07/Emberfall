@@ -214,7 +214,7 @@ namespace Emberfall.Game
             // the path to a playable game: this starts a coroutine and returns, the menu is
             // already drawn, and a device with no network never notices that it did not finish.
             BootStage = "cloud";
-            StartCloud();
+            StartCloud(freshStart);
 
             // The only onboarding this game has, and only ever for a genuinely new install.
             // Keyed to freshStart rather than a saved flag so the save shape is untouched and an
@@ -254,7 +254,7 @@ namespace Emberfall.Game
         /// feature promises cannot happen. Caught here instead: the cloud is left null, one
         /// warning says why, and the menu behind this line is already drawn and already playable.
         /// </summary>
-        private void StartCloud()
+        private void StartCloud(bool bootWasFreshStart)
         {
             try
             {
@@ -270,6 +270,20 @@ namespace Emberfall.Game
                 }
 
                 CloudLocalState state = CloudLocalState.Load();
+
+                // A NEW GAME DOES NOT DESCEND FROM ANY CLOUD SAVE. The base revision says "local
+                // was built on cloud revision N", which stops being true the moment boot replaces
+                // an unusable save with a starter profile - and with it left in place, the first
+                // sync saw cloud == base and uploaded the starter profile over the one copy that
+                // could have restored the player. Forgetting it makes that sync ask instead, with
+                // both saves on the card. See Docs/CLOUD-GAPS.md.
+                if (bootWasFreshStart && state.BaseRevision != 0)
+                {
+                    Debug.LogWarning("Emberfall: this launch started a new game on a device that had synced "
+                                     + "revision " + state.BaseRevision + ", so the next sync will ask which save to keep.");
+                    state.BaseRevision = 0;
+                    state.Save();
+                }
                 SupabaseClient client = new SupabaseClient(config, this);
                 AccountService account = new AccountService(client, state);
                 CloudSaveService saves = new CloudSaveService(client, account, state);

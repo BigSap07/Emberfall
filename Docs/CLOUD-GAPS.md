@@ -1,0 +1,603 @@
+# Emberfall - cloud gaps
+
+**The single worst thing found.** One unusable local save file was enough to lose an account
+twice over. A save the build could not read (a newer build's, one cut short by a crash, one whose
+heroes had all left `heroes.json`) made `SaveService.Load` report "no save". `GameApp.Awake` then
+started a new game and saved it over the old file straight away. Seconds later the boot sync saw
+the cloud still at the revision this device last synced. `SyncPlanner.Decide` read that as "local
+descends from the cloud" and uploaded the starter profile over the cloud save, which was the one
+copy that could have brought the player back. Nothing asked, and nothing logged more than a
+warning. **Fixed**: see P1.
+
+**The service role key was not found anywhere**: not in the tree, not in any commit reachable
+from any ref, not in `ProjectSettings`. The two guards meant to catch it could never have fired,
+though (P12). `Assets/Resources/Config/supabase.json` is not present in this worktree, so the live
+anon key was not inspected. The harness now decodes any key it finds there.
+
+**Migration 0008 is unaudited.** Another agent is writing it on its own branch tonight and it is
+not in this tree. Everything below covers `0001` to `0007` as they stand on main. `CloudChecks`
+reads every migration in the folder, so the day 0008 lands its grants go through the same
+allowlist, and a new client write grant turns the check red until somebody adds it on purpose.
+
+---
+
+**What this file is.** This is the save and cloud path given the treatment the combat engine got
+twice this week. It lists every place where the code does not do what its own comments, the
+migrations or `DESIGN-BUILD-ORDER.md` say it does, ranked by what it would cost a player. Each
+finding says what the code does, what the design claims, how it was proven, and what the fix is
+or would be. It is a record from 2026-09-22, not a work order.
+
+**Proven and suspected are kept apart.** A finding is **proven** when an instrument in this repo
+reproduces it, or when it follows from two proven halves put together (said where that is the
+case). A finding is **suspected** when proving it needs the live Supabase project. The live rules
+tests were not run: this audit had no access to the project and was told not to try. Every
+suspected finding has a case written for it in those tests, marked unrun.
+
+**The three instruments.**
+
+- `Tools/DevHarness/CloudChecks.cs` holds the Core-only checks: the save format, the sync
+  decision, the push body, the conflict card, key recognition, the one network door, a scan of
+  the tree for secret keys, and a lint of every grant in the migrations. It is compiled by
+  `Tools/build-check.ps1` and **runs once Program.Main calls it**. That needs this one line,
+  beside `CheckAccounts(content)`:
+
+      _failures += CloudChecks.Run(content, contentDir);
+
+- `Tools/CloudProbe` runs the real `AccountService`, `CloudSaveService`, `CloudLocalState`,
+  `SupabaseClient`, `SupabaseConfig` and `SaveService` against `FakeEngine.cs`. That fake engine
+  has a `PlayerPrefs` that survives a simulated relaunch, a real temporary folder for the save
+  file, and a web request that answers from a script. It needs no Unity and no network. Run it
+  with `powershell -File Tools/CloudProbe/run-cloud-probe.ps1`. It is not part of build-check.
+- `Tools/supabase-rules-test.py` and `Tools/supabase-guild-rules-test.py` are the live tests.
+  They were extended with a case for every suspected finding. **Both are unrun.** Both parse.
+
+**A defect that was written up and left alone is asserted as STILL PRESENT**, with its number,
+in whichever instrument proves it. That check passes today and goes red the day somebody fixes
+the defect. Flip the check then, and move the entry here to the fixed section. This is the same
+rule the harness uses for its turned-around tripwires.
+
+**What "shipped" means below.** No build has reached a player. The APK is blocked on having a
+device (`DESIGN-BUILD-ORDER.md`, Blocked). The only builds that have ever run are the editor and
+the Windows player on development machines. The cloud schema landed on 2026-09-21, the same day
+the save format reached version 14.
+
+---
+
+## Proven
+
+Ranked by what each finding would cost a player once there are players.
+
+| # | finding | costs a player | state |
+|---|---|---|---|
+| P1 | an unusable local save is overwritten by a new game, and then uploaded over the cloud copy | the whole account, on the device and in the cloud | **fixed** |
+| P2 | a save file that will not parse is uploaded as `{}` | the cloud copy, at a new revision nothing questions | **fixed** |
+| P3 | a save file cut short by a crash is not recovered from its own intact mirror | the whole account on that device, and via P1 the cloud too | **fixed** |
+| P4 | an unconfirmed email unlocks Sign Out on an account nobody can sign back into | the account, its cloud save, its friends and its guild seat | **fixed** |
+| P5 | a sign-in answered by a hotel wifi page throws the account away | as P4, for an anonymous account | **fixed** |
+| P6 | a failed download leaves the device claiming the cloud's revision, so the next sync overwrites the save the player chose | the save the player picked on the conflict card | **fixed** |
+| P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | open |
+| P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open |
+| P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | open, UI |
+| P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open |
+| P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | open |
+| P12 | nothing stopped a service-role key reaching the game, and the Python guards could not fire | every save in the project, if it ever happened | **fixed** |
+| P13 | nothing retries a 401, though the code said it did | failed syncs for the rest of a session on a slow clock | open, comment corrected |
+| P14 | a version field that is not a number reads as version 1 | only a hand-edited save | open |
+
+### P1. An unusable local save is overwritten, then uploaded over the cloud
+
+**What the code did.** `SaveService.Load` returns null for anything it cannot use: a parse
+failure, a newer save version, or no hero that still exists in content. `GameApp.Awake` treats
+null as a fresh install. It builds a starter profile and calls `SaveNow` at once, which overwrites
+both the file and the PlayerPrefs mirror. Then `StartCloud` begins `CloudCoordinator.Begin`, which
+signs in and runs `SyncRoutine` with no player action. `CloudLocalState.BaseRevision` still holds
+the revision this device last synced. If nothing else has written since, the cloud revision
+equals it, and `SyncPlanner.Decide` answers `UploadLocal`. The starter profile replaces the cloud
+save.
+
+**What the design claims.** `SyncPlanner`: "Nothing is ever silently overwritten." Its
+`UploadLocal` is documented as safe only because "local provably descends from the cloud". A
+starter profile descends from nothing.
+
+**How it was proven.** This is two halves put together, and both halves are proven.
+`CloudChecks.CheckFreshStartDecision` shows the planner uploads a local save over cloud revision 9
+when the base is 9. Probe P1 shows `Load` refusing a newer-version save. `GameApp.Awake` follows a
+null load with `SaveNow`, and nothing between the two touches the base revision. The ways into
+this path are all proven: a newer save (probe P1), a partial file (P3), a save with no known hero
+(P10).
+
+**The fix, as made.** It has two parts, and each is enough on its own to stop the cloud copy
+being lost.
+
+- `SaveService.Load` now copies any unusable document it finds, file and mirror, to
+  `emberfall_save.unreadable-<time>-<hash>.json` beside the save before it returns null. Nothing
+  reads that copy. It exists so the progress still exists after the fresh start's overwrite (probe
+  P1).
+- `GameApp.StartCloud` now takes the boot's `freshStart`. When it is true and the device holds a
+  base revision, the base is set to 0. The first sync then sees the cloud ahead of the base and
+  asks, with both saves on the card (`CheckFreshStartDecision`, second half).
+
+### P2. A save that will not parse was uploaded as `{}`
+
+**What the code did.** `CloudSaveCodec.WritePushBody` replaced a document it could not parse with
+an empty object. `push_save` stored it, because it checks only that `p_data` is not null.
+`CloudSaveService.Push` then moved the base revision to the new revision. The local file is read
+by `SaveService.ReadDocument`, which prefers the file, so the trigger is a file cut short by a
+crash or a full disk.
+
+**What the design claims.** The `WritePushBody` comment says the save is embedded "as a PARSED
+value" so the column holds the real document. `CloudSave`'s header says the cloud "stores the save
+unchanged".
+
+**How it was proven.** Probe P2, on the tree as it was, captured the request body the client
+actually sent for a partial file (the device id is left out here):
+
+    [FAIL] no request reached push_save - it sent: {"p_expected_revision":5,"p_save_version":14,"p_device_id":"...","p_data":{}}
+    [FAIL] and the base revision did not move (6)
+
+**The fix, as made.** `WritePushBody` returns null for anything that is not a JSON object, and
+`Push` refuses without sending a request: "the save on this device could not be read, so it was
+not uploaded". That costs one failed sync. The next `SaveNow` rewrites the file. The server half,
+which still accepts anything, is S2.
+
+### P3. A partial save file was not recovered from its intact mirror
+
+**What the code did.** `SaveService.Save` writes the file with `File.WriteAllText`, which is not
+atomic, and then the PlayerPrefs mirror. A process killed during the first write leaves a partial
+file beside an intact mirror. `ReadRaw` returned the file whenever it was non-empty, so `Load`
+found it unreadable and reported no save, and P1 followed.
+
+**What the design claims.** The `SaveService` header says it "mirrors it into PlayerPrefs, so the
+prototype keeps progress". The mirror was written on every save and never read while a file
+existed.
+
+**How it was proven.** `CloudChecks.CheckPartialFilesAreDetectable` cuts a real save at 896
+points. None parses, and neither does an empty file or one of NUL bytes. So a partial file IS
+distinguishable from a complete one, even though the format has no length or checksum: the
+document is one JSON object, and only its last character closes it. Probe P3 on the old tree:
+`Load recovers the save from the mirror` **FAIL**, gold -1 of 123456.
+
+**The fix, as made.** `Load` tries the file, then the mirror, and uses the first that loads with
+at least one hero. Only when neither loads does it keep them aside and return null. The mirror is
+written after the file, so after a crash it holds either the same save or the one before it, and
+either is better than a new game.
+
+**Not done: atomic writes.** Writing to a temporary file and swapping it in would close the
+window entirely. It was left because `File.Replace` on Android storage has not been verified on a
+device, and none exists. With the mirror fallback in place, the window no longer costs a save.
+One narrower case remains. If the file write throws cleanly (a locked file), the mirror gets the
+new save while the old complete file stays, and `Load` prefers that older file. The player loses
+the last save's worth of progress, not the account. The fix would be to compare `lastSaveUnix`
+between the two copies.
+
+### P4. An unconfirmed email unlocked Sign Out on an account nobody can sign back into
+
+**What the code did.** With email confirmation on, `AccountService.LinkEmail` receives the
+address as `new_email`. It stores it in `CloudLocalState.Email` and correctly leaves
+`IsAnonymous` true. On the next launch `RefreshSession` passes that stored address into
+`AdoptSession`. `AdoptSession` cleared `IsAnonymous` whenever any email was known, so the pending
+address counted as a linked one. `CanSignOutSafely` turned true. The Account screen enabled Sign
+Out and told the player "you can sign back in with <address> at any time". Until the link is
+clicked that is false. The account's only key is the refresh token that signing out discards.
+
+**What the design claims.** `CloudLocalState.IsAnonymous`: "signing out of an anonymous account is
+the one action in this system that destroys access to a save with no way back". `LinkEmail` says
+the account "is not recoverable by email until" the link is clicked.
+
+**How it was proven.** Probe P4 runs link, relaunch, refresh against scripted GoTrue answers, both
+with and without the `is_anonymous` field. On the old tree: `AND IT IS STILL ANONYMOUS` **FAIL**
+and `so signing out is still refused` **FAIL**, in both variants. The server half, that a pending
+address cannot sign in, is S4.
+
+**The fix, as made.** `AdoptSession` takes anonymity only from the server: GoTrue's
+`is_anonymous` when it is present, otherwise whether the user object carries a confirmed `email`.
+The pending address is still remembered for display.
+
+### P5. A sign-in answered by a captive portal threw the account away
+
+**What the code did.** `Resume` exchanges the stored refresh token. On failure it asks
+`TokenWasRejected`, which searches the error text for "refresh", "invalid", "expired" or "not
+found". A 2xx answer that is not a session (a hotel wifi login page, a proxy) produced the
+client's own sentence "refresh returned no session". That sentence contains "refresh". So `Resume`
+called `ClearAccount` and signed in anonymously as a new user. The old account stayed on the
+server, unreachable if it was anonymous. The local save then synced into the stranger account.
+
+**What the design claims.** `Resume`: "If the request never reached a server, the token is
+probably fine and throwing it away would strand a real account."
+
+**How it was proven.** Probe P5 on the old tree: the stored account `u-real` became `u-stranger`.
+The probe's control shows a plain transport failure keeping the account, and it still does.
+
+**The fix, as made.** The sentence no longer contains any of the four words. The heuristic itself
+is P8.
+
+### P6. A failed download left the device claiming the cloud's revision
+
+**What the code did.** Both the `DownloadCloud` branch of `CloudSaveService.Sync` and the
+`KeepCloud` branch of `Resolve` set `BaseRevision` to the cloud's revision **before** handing the
+document to `CloudCoordinator.AdoptCloudSave`. `AdoptCloudSave` then wrote the document over the
+local save and only afterwards found out whether it loaded. When it did not (P7 and P10 describe
+documents like that), the running game kept the old profile and the base said "this device holds
+cloud revision N". The next autosave put the old profile back on disk, and the next sync saw
+cloud equal to base and uploaded it. The save the player had chosen on the conflict card was
+overwritten without a word. If the app died before that autosave, the unusable document was on
+disk and P1 followed.
+
+**What the design claims.** `GameApp.AdoptSaveFromDisk`: "Returns false without touching anything
+if the document will not load." The file had already been touched.
+
+**How it was proven.** This is composed from proven halves. The order of writes can be read in
+`Sync` and `Resolve`. Cloud equal to base means `UploadLocal`, which `CheckFreshStartDecision`
+proves. A document that loads with no heroes is shown by `CheckEveryOldVersionLoads` and
+`CheckContentSkewDropsHeroes`. `AdoptCloudSave` needs a live `GameApp`, so neither the probe nor
+the harness runs it directly.
+
+**The fix, as made.** `AdoptCloudSave` deserialises the document with the running content before
+writing anything, and refuses one that is unreadable or has no known hero. Every failure path now
+calls `ForgetBaseAfterFailedAdopt`, which sets the base to 0, so the next sync asks again instead
+of uploading.
+
+### P7. An older build drops heroes it does not know, then deletes them from the cloud
+
+**What the code does.** `SaveSerializer.Deserialize` skips any hero whose `defId` is not in
+content, which its own header gives as the reason removing a hero "never bricks an existing
+save". `save_version` guards the save **format**. Nothing guards the **content**. A phone on the
+new build summons a hero the tablet's `heroes.json` does not have yet. The tablet loads the
+synced save without that hero, and its next save and upload remove the hero from the cloud copy.
+When the phone next syncs it is asked. If the player picks the cloud, the hero is gone.
+
+Armor has a quieter version of the same problem. `ReadArmorPiece` maps an unknown slot, aspect or
+stat name to `Weapon`, `Ember` or `Attack` rather than refusing, so a piece from a newer build
+comes back changed and is saved that way.
+
+**What the design claims.** Version 14's note: `save_version` is its own column "precisely so the
+refusal happens before the document is parsed", so that no silent difference reaches an older
+phone.
+
+**How it was proven.** `CloudChecks.CheckContentSkewDropsHeroes`: the save loads at the same
+version, and the hero is absent from the very next serialisation. Asserted as STILL PRESENT.
+
+**The fix, not made.** Either keep unknown heroes as opaque records that are written back
+unchanged, or carry a content version and refuse a save from newer content the way a newer format
+is refused. Both change the save format and what a player owns, so both are left alone.
+
+### P8. Rotating the anon key makes every old build abandon its account
+
+**What the code does.** Rotate the anon key, and every device on an old build is answered with a
+gateway 401 "Invalid API key". The refresh fails, and `TokenWasRejected` matches "invalid", so
+each device calls `ClearAccount` and tries an anonymous sign-up, which fails for the same reason.
+When the player updates, the new build finds no refresh token and creates a new anonymous
+account. Every anonymous account on an old build is lost that way, with its cloud save, its
+friends and its guild seat. The local save survives and uploads into the new account.
+
+**What the design claims.** The same `Resume` sentence as P5.
+
+**How it was proven.** Probe P8: two scripted 401 "Invalid API key" answers leave `UserId` empty.
+Asserted as STILL PRESENT.
+
+**The fix, not made.** Classify by status code and GoTrue's `error_code`, not by words. The live
+codes have not been measured, and S3 writes the case that measures them. A wrong narrowing could
+leave a dead token retried forever, so no player would ever sync again, and that is worse than
+this.
+
+### P9. The conflict card cannot tell two saves apart except by timestamp
+
+**What the code does.** `ConflictChooser` shows four rows per side, taken from `SaveSummaryReader`:
+name, rank, stages cleared and heroes owned. Under them sits "saved N ago", and on the cloud side
+only, which device wrote it and at what revision. Currencies, hero levels, stars, armor, relics,
+Recital floor and Proving standing are not shown.
+
+**What the design claims.** `ConflictChooser`: "a player comparing ... needs the two columns
+aligned or they are not comparing, they are remembering." For the commonest kind of divergence,
+there is nothing in the columns to compare.
+
+**How it was proven.** `CloudChecks.CheckConflictCardCannotTellApart` takes two saves a week
+apart. One has two million more gold, every hero ten levels higher and Recital floor 40. Both
+describe as "Wayfarer - level 1, 1 stage cleared, 3 heroes". STILL PRESENT.
+
+**The fix, not made (it is UI, which this audit does not touch).** Add total hero levels, the
+highest hero, gold and Recital floor to `SaveSummary`. It is read without deserialising, so the
+card can still describe a save from a build it cannot fully read.
+
+### P10. Every save from versions 1 to 12 loses all its heroes
+
+**The migration table.** Each version was built in the exact key shape its own build wrote. The
+shape was read out of `SaveSerializer.Serialize` at the commit that set `CurrentVersion` to it.
+Each save was then loaded by this build.
+
+| version | first written | what it added | loaded by any check before this audit | with heroes that exist today | with the heroes its build shipped |
+|---|---|---|---|---|---|
+| 1 | 2026-08-20 | the format | yes | migrates | **no heroes** |
+| 2 | 2026-08-21 | 5-slot team | **no** | migrates | **no heroes** |
+| 3 | 2026-08-22 | per-hero `relicId` | yes | migrates, relic becomes owned | **no heroes** |
+| 4 | 2026-08-23 | repeat cap | yes | migrates, relic becomes owned | **no heroes** |
+| 5 | 2026-08-23 | owned relics, dust | yes | migrates | **no heroes** |
+| 6 | 2026-08-29 | event progress | yes | migrates | **no heroes** |
+| 7 | 2026-08-29 | Recital | yes | migrates, Echoes kept | **no heroes** |
+| 8 | 2026-08-29 | armor, Slag | yes | migrates, armor kept | **no heroes** |
+| 9 | 2026-09-05 | The Proving | **no** | migrates | **no heroes** |
+| 10 | 2026-09-05 | avatar | **no** | migrates | **no heroes** |
+| 11 | 2026-09-07 | stage position | yes | migrates | **no heroes** |
+| 12 | 2026-09-10 | Coda | yes | migrates | **no heroes** |
+| 13 | 2026-09-11 | talents | yes | migrates, talent kept | **no heroes** if written before the 94-hero import that evening |
+
+**Which steps are sound.** All thirteen upgrade steps are structurally sound
+(`CloudChecks.CheckEveryOldVersionLoads`, 13 of 13). The defaults are the right ones: a full
+Echo bank before 7, a full Brand bank before 9, a hero-level relic becoming an owned one at 3 and
+4. Each migrated save also survives being saved again at 14.
+
+**Which versions are broken.** Every save from 1 to 12 is broken as a whole, and so is a 13
+written before the 94-hero import. On 2026-09-11 two commits deleted every hero id those builds
+ever wrote: "delete the six placeholder heroes" and "The 94-hero import". Such a save loads with
+zero heroes, `Load` calls it no save, and the boot starts a new game. Before P1 was fixed, that
+new game was written straight over it.
+
+**Which versions are reachable.** None of 1 to 13 is reachable by a shipped build, because none
+has shipped. They exist only on development machines, in the editor and Windows player. No
+cloud row can hold one either, because the schema arrived after version 13.
+
+**How it was proven.** `CheckEveryOldVersionLoads` holds both halves. The loss is asserted as
+STILL PRESENT.
+
+**The fix, not made.** A map from old ids to new would give players heroes they never summoned.
+That alters what a player owns, and no player holds one of these saves. The saves are now kept
+aside instead of overwritten (P1).
+
+### P11. RESET PROGRESS also erases the cloud save
+
+**What the code does.** `GameApp.ResetProgress` deletes the save, saves a starter profile and
+leaves the base revision alone. The next sync sees cloud equal to base and uploads the starter
+profile. The Settings dialog says "starts a fresh account" and "Useful for testing the first-run
+experience". It does not say that the cloud copy goes too, or that the account is the same one.
+
+**How it was proven.** Composed from proven halves: the method body plus
+`CheckFreshStartDecision`'s first half.
+
+**The fix, not made.** This is a product decision, not a bug with one right answer. If resetting
+should keep the cloud copy, forget the base as P1 does, and the next sync will ask. The dialog is
+UI either way.
+
+### P12. Nothing stopped a service-role key reaching the game
+
+**What the code did.** `SupabaseConfig.Load` accepted any key. Both Python rules tests guarded
+against being run with the service key by testing `"service_role" in ANON`. A JWT's payload is
+base64url, so that text never appears in the key, and the guard could not fire.
+
+**How it was proven.** `CloudChecks.CheckSecretKeyRecognition` and probe P12 build a service-role
+JWT and show the text is absent. On the old tree the probe showed the game configuring normally
+on one.
+
+**The fix, as made.** `SupabaseKeys.IsSecret` in Core decodes the payload and reads the role. A
+new-format `sb_secret_` key also counts as secret, and so does a JWT whose payload cannot be read.
+`SupabaseConfig.Load` refuses such a key: the game runs offline, and the error sentence names the
+file, never the key. Both Python tests use a `looks_secret` that decodes the same way.
+`CloudChecks.CheckNoSecretKeyInTheTree` decodes every JWT and secret-key pattern in the tree, and
+is shown firing on a planted one first. It prints the file, never the key. Git history was
+searched separately, across all refs, for the JWT header prefix and for `sb_secret`: neither
+appears.
+
+### P13. Nothing retries a 401
+
+**What the code does.** `EnsureFreshToken` refreshes when the device clock is within a minute of
+`expires_at`. If the device clock is slow by more than that, the client sends an expired token,
+and every request fails with "JWT expired" until a relaunch refreshes it at boot.
+
+**What the design claims.** The comment said "Callers that get a 401 anyway retry once through
+here". `SupabaseResponse.IsUnauthorised` has no reader anywhere in the project. **The comment has
+been corrected**, and the retry is written up rather than wired, because it is new request
+behaviour.
+
+### P14. A version field that is not a number reads as version 1
+
+**What the code does.** `Deserialize` reads `version` with `GetInt(..., 1)`. A string that is not
+a number, a null, or a number too large for an int (it overflows negative) all come back as an
+old save, and are read rather than refused. A missing field reading as 1 is by design.
+
+**How it was proven.** `CloudChecks.CheckVersionField` shows it. The same check confirms the
+documented refusal for a newer version, including one written as a string or as a fraction that
+rounds past 14. STILL PRESENT.
+
+**Why it is left.** No build writes anything but an integer, so only a hand-edited save can reach
+it. Tightening it changes the format's reading rule, and P1's keep-aside makes a wrong refusal
+harmless anyway, but that is still a format decision.
+
+---
+
+## The questions this audit was asked, answered
+
+**Dying mid-write in SaveNow.** A partial file is possible, because `File.WriteAllText` is not
+atomic. It is distinguishable from a complete one, because no strict prefix parses. It now falls
+back to the mirror (P3) and is never uploaded (P2).
+
+**Truncated, corrupt or hand-edited saves.** They are refused, then kept aside, then replaced by a
+new game. The cloud is protected by P1's fix. Hand-edited values are clamped rather than refused:
+a negative purse becomes 0, and a purse written as words becomes 0 with no warning. A hero list
+that is not a list keeps no heroes, and so becomes no save.
+
+**Every migration step.** See P10. Steps 2, 9 and 10 had never been loaded by any check before
+this audit.
+
+**A save from a newer build.** Refused locally, including when the number is written as a string.
+Refused in the cloud by `SyncPlanner` on the `save_version` column, before the document is parsed.
+Not refused when the field is garbage (P14). A newer local save used to be destroyed by the
+overwrite that followed its refusal (P1).
+
+**The push race.** On the client, the loser of a 409 is told in words and its base revision does
+not move (probe S1). On the server, see S1: expected to hold, cases written, unrun.
+
+**ConflictChooser never overwrites silently.** The card itself never does. It has no default, no
+dismiss and no timeout, and the only overwrite is a KeepLocal the player tapped. But three paths
+around the card did overwrite silently: P1, P6 and P11. P1 and P6 are fixed. Whether what it
+shows is enough to choose on: it is not (P9).
+
+**An email that already belongs to another account.** GoTrue should refuse it. The client then
+reports the error and changes nothing. That is expected, not measured: S5. The player's natural
+next step is SIGN IN with that address, which abandons the anonymous account after a warning that
+says so plainly. The conflict card that follows offers the anonymous progress as the local side,
+so KeepLocal carries it into the email account. KeepCloud discards it, and the only other copy is
+now in an account nobody can reach.
+
+**Attach failing halfway.** If the password is set and the email is pending, the account is
+correctly still anonymous now (P4). If the response is lost, local state is unchanged and
+retrying is safe.
+
+**Two accounts and no way back to the first.** Yes, by six routes:
+
+1. signing in with an email from an anonymous account (warned);
+2. reinstalling or clearing app data while anonymous, which is by design: the refresh token is
+   the only key;
+3. P4 (fixed);
+4. P5 (fixed);
+5. P8 (open);
+6. refresh-token reuse after a lost response (S3, suspected).
+
+**Authorisation per table.** The migrations' text grants exactly what the design names. There are
+eleven client write grants, and `CheckMigrationGrants` pins them. No table carries a grant to
+anon, and every table revokes anon and authenticated first. `saves`, chat and dungeon attempts
+have no client write at all. Reading the policies, no caller can read or write another player's
+save or friendship, a guild it is not in or has left, or another guild's attempts. Attempts
+against another cycle are refused. The live measurements are S1, S9 and S10. The one exception
+to "anon is revoked everywhere" is a function, not a table: S6.
+
+**Beating the attempt cap and the cycle clock.** Reading the SQL, neither can be beaten. A CHECK
+bounds the attempt number and a unique key forbids reusing one. Each submission locks the
+member's own row, so four racers queue behind each other. The cycle is computed from the
+server's `now()`. The live guild test already races six submissions and files against last and
+next cycle. This audit added the leave-and-rejoin case. Neither was run here: S9. What can be
+beaten is the seed (S8).
+
+**Offline.** Proven. With no `supabase.json`, `SupabaseConfig.Load` is unconfigured and
+`GameApp.StartCloud` returns before building anything, so `GameApp.Cloud` stays null. Probe
+"offline" drives every account and sync entry point directly over an unconfigured client, and
+**not one request is built**. `CloudChecks.CheckOfflineHasOneDoor` holds the structure: exactly
+one file in `Assets/Scripts` can build a request (`SupabaseClient.cs`), exactly one constructs
+its client (`GameApp.cs`), and that construction comes after the unconfigured return. Unity's
+own analytics, crash reporting and performance reporting are all disabled in
+`ProjectSettings/UnityConnectSettings.asset`.
+
+---
+
+## Suspected, not measured
+
+Each of these needs the live project. Each has a case in one of the two rules tests, written
+against the migrations' text and confirmed to parse, **and not run**.
+
+- **S1. `push_save` under a race: exactly one winner, and every loser told.** Expected to hold.
+  The `UPDATE ... WHERE revision = expected` locks the row. Under READ COMMITTED, a second
+  updater waits and then re-checks the condition against the committed row, finds the revision
+  moved, matches nothing, and raises PT409. Two first uploads both find no row, and the second
+  insert hits the primary key. PostgREST answers that with 409 as well, which the client already
+  treats as a conflict. The case races two and then four pushes at one revision, and three first
+  uploads for a fresh user (`check_push_races`).
+- **S2. `push_save` stores anything, labelled with any version.** Read from 0002. It checks only
+  that `p_data` is not null. An empty object, a bare string or an array is stored as a save, and
+  `save_version` is whatever the caller claims. A push labelled 999 makes every real client
+  answer `RefuseCloudNewerVersion` for that account from then on. Only the account's own token
+  can do it, so the harm is a client bug like P2, not an attack. The fix needs a new migration:
+  require an object whose `version` equals `save_version`. That is not written here, because
+  0008 is in flight elsewhere and a second new file would race it for the number. The case is
+  `check_push_accepts_anything`, and it also measures what a 3 MB document gets back.
+- **S3. A refresh token presented twice.** A response lost after the server rotated the token
+  leaves the device holding a used one. Supabase's reuse detection is expected to refuse it, and
+  may revoke the whole session. P8's heuristic then reads that as "the token is dead", and an
+  anonymous account is lost. Android Auto Backup restoring PlayerPrefs onto a second phone would
+  put two devices on one token chain with the same result. No custom Android manifest exists in
+  the tree to say whether backup is on. The case `check_refresh_reuse` records the real status
+  and `error_code`, which is what P8's fix needs.
+- **S4. A pending email cannot sign in.** This is the server half of P4. The case
+  `check_pending_email_cannot_sign_in` links an address to an anonymous user and tries a
+  password sign-in with it.
+- **S5. Attaching a taken email.** The expected answer is a 4xx, with the anonymous account's id
+  and save untouched. The case is `check_email_collision`, and it skips cleanly if the project
+  refuses email sign-ups.
+- **S6. `generate_friend_code()` is callable with the anon key alone.** From 0001's text: it is
+  the one callable function never revoked from `public` and `anon`. `CloudChecks` pins it as the
+  only one. It returns a random string and reads nothing, so it costs nothing. It is recorded
+  because "anon is revoked everywhere" is not true of functions. The fix is a one-line revoke in
+  a new migration. Cases: `check_anon_functions`, and `check_anon_helpers` in the guild test.
+- **S7. Display names accept control characters and blanks.** From 0001: the only check is a
+  length of 1 to 24. 0004 refuses `[[:cntrl:]]` on every guild text column because a newline
+  breaks a single-line label, and display names appear in the same rosters. The client trims
+  and bounds its own renames, but another client does not have to. The fix is a new migration.
+  Case: `check_profile_text`.
+- **S8. The dungeon seed is trusted as sent.** From 0007: `guild_dungeon_record` stores any
+  `p_seed`. The seed is a pure function of guild and cycle (`GuildDungeon.SeedFor`), so the
+  server could refuse a wrong one, and a board can hold a win against an easier fight. 0007 says
+  plainly that no anti-cheat is claimed and there are no rewards, so the cost is the board's
+  meaning. Case: `check_seed_is_not_checked`.
+- **S9. The attempt cap and cycle under a race, and after leaving and rejoining.** Expected to
+  hold, as argued above. The live test already carries the six-way race and the cycle checks,
+  and `DESIGN-BUILD-ORDER.md` says it last reported clean. This audit cannot see whether that run
+  came after 0007 landed. Added: `check_after_leaving`, which checks that rejoining the same guild
+  in the same cycle numbers the next attempt 2, not 1.
+- **S10. A guild you have left.** Every guild policy is keyed on `my_guild()`, so a former member
+  should read no roster, chat, request, attempt or guild row, and should not be able to post or
+  file. The guild keeps the former member's attempts, which is by design. Case:
+  `check_after_leaving`.
+- **S11. Third parties.** A signed-in stranger should not be able to read, delete or accept
+  another pair's friendship, file a friend request in somebody else's name, publish a snapshot as
+  somebody else through the upsert path, or read either save. Case: `check_third_party`.
+- **S12. The live project matches these files.** Everything above is read from the migrations in
+  the tree. Nothing here can confirm that the project holds exactly what was pasted into it.
+
+---
+
+## What a client can call in a loop (the A-list)
+
+Chat is the only call with a rate limit, at one message per two seconds per account. Everything
+else is unthrottled per account, bounded at most by Supabase's per-IP auth limits. The guild test
+has 30 anonymous sign-ins per hour and 30 sign-ups per 5 minutes as the defaults. The anon key
+ships inside the build, and anonymous sign-up is on. So "signed in" means anyone who unpacks the
+build and asks.
+
+| call | what one call costs | what bounds it | what a loop buys |
+|---|---|---|---|
+| `auth/v1/signup` (anonymous) | an auth user, a profile row, a friend code | per-IP auth limit | unlimited throwaway accounts across addresses, each able to do everything below |
+| `PUT auth/v1/user` with an email | a confirmation mail to any address | the project's mail quota | mail sent to strangers, and a spent quota that blocks real players' confirmation links (suspected: the quota is dashboard config) |
+| `auth/v1/token` refresh | a rotated token | per-IP auth limit | nothing, beyond load |
+| `rpc/push_save` | a full rewrite of one row, WAL and bloat | nothing, and no declared size cap | storage churn on the caller's own row; size is measured by S2's case |
+| `profiles` select | a page of up to the row limit | nothing | every player's id, display name and friend code: accepted in 0001, but anonymous sign-up makes it public in practice |
+| `profiles` display_name update | a row write | nothing | renames in a loop, and control characters (S7) |
+| `friendships` insert and delete | a row | the pair's unique index, only while the row exists | a friend request to every player in the profile table, and after a decline, again |
+| `team_snapshots` upsert | a row with unbounded `label` and `units`; `power_score` is claimed | nothing | storage, and a fake line for friends and guildmates to fight |
+| `rpc/guild_create`, then disband | two rows and a code | one guild at a time per account | guild names squatted, one per throwaway account |
+| `rpc/guild_by_code` | one indexed read | nothing | walking the code space for open guilds; the guild case measures twenty calls in a row |
+| `rpc/guild_request_send`, withdraw | a row | one per guild while it exists | a spammed request queue for officers |
+| `rpc/guild_touch` | a row write | nothing | write load; measured the same way |
+| `rpc/guild_post_message` | a row | **two seconds per account** | multiplied by throwaway accounts inside an open guild |
+| `rpc/guild_dungeon_record` | a row with an unbounded `team` payload | three per floor per cycle per guild | more attempts by hopping guilds, and large payloads |
+| `rpc/generate_friend_code` | nothing | nothing | nothing (S6) |
+
+What the game itself does in a loop is modest. It polls the newest hundred chat lines every four
+seconds while the chat screen is open, calls `guild_touch` at most once a minute, and publishes
+the team snapshot only when the line's fingerprint changes.
+
+---
+
+## What was fixed
+
+Every fix is small, keeps the save format as it is, changes no migration and changes nothing a
+player owns. Each one only turns an automatic overwrite into a refusal or a question, or adds a
+copy.
+
+| fix | where | proven by |
+|---|---|---|
+| an unusable save is kept aside before the fresh start overwrites it | `SaveService.Load`, `KeepAside` | probe P1 |
+| a fresh start forgets the base revision, so the first sync asks | `GameApp.StartCloud` | `CheckFreshStartDecision` |
+| the PlayerPrefs mirror is tried when the file will not load | `SaveService.Load`, `TryLoad` | probe P3 |
+| a document that is not a JSON object is never uploaded | `CloudSaveCodec.WritePushBody`, `CloudSaveService.Push` | probe P2, `CheckUnreadableDocumentIsNotUploadable` |
+| anonymity comes from the server, never from a pending email | `AccountService.AdoptSession` | probe P4 |
+| a 2xx that is not a session no longer reads as a dead token | `AccountService.RefreshSession` | probe P5 |
+| a cloud save is checked before it replaces the local one, and a failed adopt forgets the base | `CloudCoordinator.AdoptCloudSave`, `ForgetBaseAfterFailedAdopt` | composed; see P6 |
+| a service-role or secret key leaves the game unconfigured | `SupabaseKeys.IsSecret`, `SupabaseConfig.Load` | probe P12, `CheckSecretKeyRecognition` |
+| the Python guards decode the key | `looks_secret` in both rules tests | run against built keys; see P12 |
+
+Three comments were corrected against the code in the same commit:
+
+- the 401 retry in `EnsureFreshToken`;
+- "all three tables" in `SupabaseConfig`;
+- `Server/README.md`, which listed migrations only to 0006 and did not mention the unrevoked
+  function.
+
+`DESIGN-BUILD-ORDER.md` was not touched. Another agent owns it tonight. Its accounts entry
+remains accurate as far as it goes.

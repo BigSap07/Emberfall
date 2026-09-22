@@ -139,18 +139,25 @@ namespace Emberfall.Core.Cloud
         /// column is jsonb and PostgREST hands the argument straight to it. Sending it as a string
         /// would store a JSON string whose contents happen to be JSON - valid jsonb, and wrong in
         /// a way nothing would notice until something tried to query inside it.
+        ///
+        /// NULL WHEN THE DOCUMENT IS NOT A JSON OBJECT, and the caller must not send anything. It
+        /// used to substitute an empty object, and push_save accepted it: a save file cut short by
+        /// a process dying mid-write was uploaded as {} at a new revision, replacing the one copy
+        /// that could have restored it, and the base revision moved to match so nothing ever asked.
+        /// See Docs/CLOUD-GAPS.md. Refusing costs one failed sync; the next save rewrites the file.
         /// </summary>
         public static string WritePushBody(int expectedRevision, int saveVersion, string deviceId, string saveJson)
         {
+            JsonValue data;
+            string error;
+            if (string.IsNullOrEmpty(saveJson) || !JsonValue.TryParse(saveJson, out data, out error)
+                || data == null || !data.IsObject)
+                return null;
+
             JsonValue body = JsonValue.NewObject();
             body.Set("p_expected_revision", expectedRevision);
             body.Set("p_save_version", saveVersion);
             body.Set("p_device_id", deviceId == null ? "" : deviceId);
-
-            JsonValue data;
-            string error;
-            if (!JsonValue.TryParse(saveJson, out data, out error) || data == null)
-                data = JsonValue.NewObject();
             body.Set("p_data", data);
             return body.ToJson(false);
         }

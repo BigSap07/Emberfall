@@ -102,28 +102,88 @@ namespace Emberfall.Game
             return anyLanded;
         }
 
-        /// <summary>Returns null when there is no usable save, so the caller can start fresh.</summary>
+        /// <summary>
+        /// Returns null when there is no usable save, so the caller can start fresh.
+        ///
+        /// TWO COPIES, AND BOTH ARE READ. Save writes the file and then the PlayerPrefs mirror, so
+        /// a process killed inside File.WriteAllText leaves a partial file beside an intact mirror.
+        /// This used to read the file alone, find it unreadable and report "no save", and GameApp
+        /// then started a new game and wrote it over both. The mirror is now tried whenever the
+        /// file does not load. See Docs/CLOUD-GAPS.md.
+        ///
+        /// AN UNUSABLE SAVE IS COPIED ASIDE BEFORE NULL IS RETURNED, because null is followed at
+        /// boot by a fresh profile saved over the live file. A save from a newer build, or one
+        /// whose every hero has left content, is refused rather than read - correctly - but the
+        /// refusal used to be followed by its destruction. The copy is the exact text, beside the
+        /// save, and nothing reads it: it exists so the progress still exists.
+        /// </summary>
         public static PlayerProfile Load(ContentDatabase content)
         {
-            string json = ReadRaw();
-            if (string.IsNullOrEmpty(json)) return null;
+            string fromFile = ReadFile();
+            string fromPrefs = ReadPrefs();
+            if (string.IsNullOrEmpty(fromFile) && string.IsNullOrEmpty(fromPrefs)) return null;
+
+            string fileProblem;
+            PlayerProfile profile = TryLoad(fromFile, content, out fileProblem);
+            if (profile != null) return profile;
+
+            string prefsProblem = "same document as the file";
+            if (fromPrefs != fromFile)
+            {
+                profile = TryLoad(fromPrefs, content, out prefsProblem);
+                if (profile != null)
+                {
+                    Debug.LogWarning("Emberfall: the save file was unusable (" + fileProblem
+                        + "), so the PlayerPrefs copy was loaded instead.");
+                    return profile;
+                }
+            }
+
+            KeepAside(fromFile);
+            if (fromPrefs != fromFile) KeepAside(fromPrefs);
+            Debug.LogWarning("Emberfall: no usable save (file: " + fileProblem + "; mirror: " + prefsProblem
+                + "), starting a new game. The unusable copy was kept beside the save.");
+            return null;
+        }
+
+        /// <summary>One candidate document through the deserialiser, with the reason it failed.</summary>
+        private static PlayerProfile TryLoad(string json, ContentDatabase content, out string problem)
+        {
+            problem = "";
+            if (string.IsNullOrEmpty(json)) { problem = "absent"; return null; }
 
             string error;
             PlayerProfile profile = SaveSerializer.Deserialize(json, content, out error);
-            if (profile == null)
-            {
-                Debug.LogWarning("Emberfall: save was unreadable (" + error + "), starting a new game.");
-                return null;
-            }
-            if (profile.Heroes.Count == 0)
-            {
-                Debug.LogWarning("Emberfall: save had no valid heroes, starting a new game.");
-                return null;
-            }
+            if (profile == null) { problem = "unreadable: " + error; return null; }
+            if (profile.Heroes.Count == 0) { problem = "no valid heroes"; return null; }
             return profile;
         }
 
+        /// <summary>Writes an unusable document beside the save under a name nothing loads. Best
+        /// effort: a failure here is logged and must never stop the game booting.</summary>
+        private static void KeepAside(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return;
+            try
+            {
+                string name = "emberfall_save.unreadable-" + TimeUtil.NowUnix() + "-"
+                            + ((uint)json.GetHashCode()).ToString("x8") + ".json";
+                string path = Path.Combine(Application.persistentDataPath, name);
+                if (!File.Exists(path)) File.WriteAllText(path, json);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("Emberfall: could not keep a copy of the unusable save: " + ex.Message);
+            }
+        }
+
         private static string ReadRaw()
+        {
+            string text = ReadFile();
+            return !string.IsNullOrEmpty(text) ? text : ReadPrefs();
+        }
+
+        private static string ReadFile()
         {
             try
             {
@@ -137,7 +197,11 @@ namespace Emberfall.Game
             {
                 Debug.LogWarning("Emberfall: could not read save file: " + ex.Message);
             }
+            return null;
+        }
 
+        private static string ReadPrefs()
+        {
             try
             {
                 if (PlayerPrefs.HasKey(PrefsKey)) return PlayerPrefs.GetString(PrefsKey, null);
