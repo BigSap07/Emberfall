@@ -201,16 +201,21 @@ nothing to multiply.
 
 ---
 
-## 18. Naming the unit an event happened TO, when the trigger names the causer
+## 18. Telling WHICH KIND of status a removal took
 
-Two triggers fire on the unit that caused something and publish no subject, so a passive on either
-can pay the causer and cannot reach the body it happened to. `OnTurnDelayed` sets only
-`_broadcastSourceId`; `OnStatusRemoved` sets the remover and nothing else.
+Both triggers in this group now publish the body the event happened to, so Tamsin's row is gone
+and Lio's has narrowed to its second clause.
+
+Nothing says what a removal REMOVED. `OnStatusRemoved` names the remover and now the body it was
+taken from, and `_lastRemovedValue` carries the pending DoT damage that left with it, but no field
+and no condition carries the KIND - so a rider that is supposed to answer only a control debuff
+answers every debuff. The nearest shapes are `TriggerStatus`, which filters the EXPIRY triggers
+against `_expiredKinds`, and `SubjectLostStatusThisFiring`, which answers whether anything was
+taken at all.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Tamsin | "**The first enemy delayed** each round gains 10% Defense Down" | a broadcast subject on `OnTurnDelayed` | the whole enemy line takes it, once a round | small |
-| Lio | "When Lio removes a debuff, **that ally** recovers 5% missing HP; control debuffs also grant 10 Energy" | a broadcast subject on `OnStatusRemoved` | the heal moves into the ability, where `SubjectLostStatusThisFiring` can see it; the Energy pays the lowest-HP ally, which is the body Tested Touch cleansed by construction | small |
+| Lio | "**control debuffs** also grant 10 Energy" | the kind a removal took, published for the trigger it raises - the removal-side sibling of `PassiveDef.TriggerStatus` | the 10 Energy pays out for any debuff Lio strips, not only a control one | small |
 
 ---
 
@@ -274,7 +279,6 @@ have more than one occupant:
 | 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
 | 17 | counting how many statuses of a class a body carries | 2 |
-| 18 | naming the unit an event happened TO | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 
 **Group 9 is closed.** Two of its five rows were the same exclusion in `OnEnemyDamagedAlly`, met

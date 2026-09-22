@@ -9305,14 +9305,14 @@
       "passive1": {
         "id": "tamsin_unraveling_order",
         "name": "Unraveling Order",
-        "description": "The first time each round Tamsin delays an enemy, every enemy gains 10% Defense Down for 2 rounds.",
+        "description": "The first enemy delayed each round gains 10% Defense Down for 2 rounds.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "limit": "OncePerRound",
         "effects": [
           {
             "kind": "ApplyStatus",
-            "target": "AllEnemies",
+            "target": "BroadcastSubject",
             "bypassResist": true,
             "chance": 1,
             "duration": 2,
@@ -13019,7 +13019,7 @@
       "basic": {
         "id": "lio_tested_touch",
         "name": "Tested Touch",
-        "description": "Deals 130% Attack damage, removes one debuff from the lowest-HP ally, and a cleansed ally recovers 5% of the HP it is missing.",
+        "description": "Deals 130% Attack damage and removes one debuff from the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -13030,13 +13030,6 @@
             "kind": "Cleanse",
             "target": "LowestHpAlly",
             "hits": 1
-          },
-          {
-            "kind": "Heal",
-            "target": "AllAllies",
-            "condition": "SubjectLostStatusThisFiring",
-            "conditionOn": "Target",
-            "targetMissingHpRatio": 0.05
           }
         ]
       },
@@ -13070,14 +13063,19 @@
       "passive1": {
         "id": "lio_exact_treatment",
         "name": "Exact Treatment",
-        "description": "Whenever Lio strips a debuff, the lowest-HP ally gains 10 Energy.",
+        "description": "When Lio removes a debuff, that ally recovers 5% of the HP it is missing and gains 10 Energy.",
         "trigger": "OnStatusRemoved",
         "oncePerBattle": false,
         "limit": "OncePerRound",
         "effects": [
           {
+            "kind": "Heal",
+            "target": "BroadcastSubject",
+            "targetMissingHpRatio": 0.05
+          },
+          {
             "kind": "EnergyGain",
-            "target": "LowestHpAlly",
+            "target": "BroadcastSubject",
             "flat": 10
           }
         ]
