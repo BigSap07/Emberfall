@@ -60,7 +60,10 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
 
 # BattleClips.cs rides with the harness: it is engine-free on purpose, so the sheet reachability
 # check reads the clip vocabulary the battle actually requests rather than a copy of it.
-$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Tools\DevHarness\Program.cs"))
+# GuildDungeonChecks.cs is compiled in whether or not Program.Main calls it yet: it lives in its
+# own file so the guild branch and whoever owns Program.cs do not edit the same lines, and
+# compiling it here means the one-line call can be wired in without touching this script again.
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs"))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 
 $engineSources = @($core + $shim + $runtime + $editor)

@@ -145,5 +145,17 @@
   "recitalCodaBase": 5,
   "recitalCodaPerFloor": 1,
   "recitalCodaGuardianBase": 25,
-  "recitalCodaGuardianPerFloor": 3
+  "recitalCodaGuardianPerFloor": 3,
+
+  // Guild dungeon (prototype). One seeded five-floor fight per guild per cycle, scored on three
+  // boards and never on pass or fail. The attempt cap is a design rule, not a placeholder; the
+  // server holds its own copy (guild_dungeon_attempt_cap, guild_dungeon_floor_count in
+  // Server/supabase/migrations/0007) and the harness checks the two agree. Each floor's enemy
+  // level is solved for a power target; the targets are a first calibration against
+  // GuildDungeonChecks' sample rosters, not a balance pass.
+  "guildDungeonFloors": 5,
+  "guildDungeonAttemptsPerFloor": 3,
+  "guildDungeonFloorOnePower": 21000,
+  "guildDungeonPowerPerFloor": 0.05,
+  "guildDungeonChampionLevelBonus": 3
 }

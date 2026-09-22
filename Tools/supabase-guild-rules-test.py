@@ -8,7 +8,7 @@ remove them, and what happens when thirty devices ask the same question in the s
 The two share nothing but the transport, and merging them would have produced a file where the
 interesting section is the last fifth.
 
-    Run Server/supabase/migrations/0004, 0005 and 0006 first, in order.
+    Run Server/supabase/migrations/0004, 0005, 0006 and 0007 first, in order.
 
     $env:SUPABASE_URL      = 'https://<ref>.supabase.co'
     $env:SUPABASE_ANON_KEY = '<anon public key>'
@@ -650,6 +650,152 @@ def check_snapshots(guild, a, b, c):
           "and a guildmate can read the line but not write it")
 
 
+# ---------------------------------------------------------------- the guild dungeon (0007)
+
+
+DUNGEON_LINE = [{"defId": "kael_the_unyielding", "level": 40, "stars": 5}]
+
+
+def record_attempt(user, cycle, floor, team=None, **overrides):
+    """One guild_dungeon_record call with a well-formed attempt, any argument overridable. The
+    values are what a client would send. The server trusts them, which is the design, so the
+    cases below are about WHO may write, HOW MANY and WHEN, not whether the fight was real."""
+    args = {"p_cycle": cycle, "p_floor": floor, "p_seed": 417005212,
+            "p_team": DUNGEON_LINE if team is None else team,
+            "p_victory": True, "p_turns": 9, "p_power": 12345, "p_avg_stars": 5.0}
+    args.update(overrides)
+    return rpc("guild_dungeon_record", token=user["token"], **args)
+
+
+def dungeon_rows(user, guild_id):
+    status, body = request("GET", "/rest/v1/guild_dungeon_attempts?select=id,user_id,cycle,floor,attempt,"
+                                  "seed,team,victory,turns,power,avg_stars&guild_id=eq." + guild_id
+                                  + "&order=id.asc", token=user["token"])
+    return body if status == 200 and isinstance(body, list) else None
+
+
+def check_dungeon(guild, a, b, c):
+    section("THE GUILD DUNGEON - the server holds the clock and the cap, and nothing else")
+
+    status, body = rpc("guild_dungeon_status", token=a["token"])
+    row = body[0] if status == 200 and isinstance(body, list) and len(body) == 1 else None
+    check(row is not None, "A asks where the dungeon stands and gets one answer", (status, message_of(body)))
+    if row is None:
+        return None
+    cycle = row["cycle"]
+    check(row["guild_id"] == guild["id"], "for A's own guild - the client derives the seed from this id", row)
+    check(isinstance(cycle, int) and cycle >= 0 and row["attempt_cap"] == 3 and row["floor_count"] == 5,
+          "a cycle number, three attempts a floor, five floors (cycle " + str(cycle) + ")", row)
+    check(row["starts_at"] < row["ends_at"], "and the window the cycle covers", row)
+
+    status, body = rpc("guild_dungeon_status", token=c["token"])
+    check(status == 403, "C, in no guild, has no dungeon to ask about", (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle, 1)
+    first = body if status == 200 and isinstance(body, dict) else None
+    check(first is not None, "A records an attempt at floor 1", (status, message_of(body)))
+    if first is None:
+        return None
+    check(first.get("attempt") == 1 and first.get("user_id") == a["id"] and first.get("guild_id") == guild["id"],
+          "numbered 1, and filed under A and A's guild by the server rather than by anything A sent", first)
+    check(first.get("team") == DUNGEON_LINE and first.get("seed") == 417005212,
+          "carrying the seed and the whole line that fought - what a replay needs", first)
+
+    for expected in (2, 3):
+        status, body = record_attempt(a, cycle, 1, p_turns=9 + expected)
+        check(status == 200 and isinstance(body, dict) and body.get("attempt") == expected,
+              "attempt " + str(expected) + " at floor 1 is accepted", (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle, 1)
+    check(status == 409, "A FOURTH ATTEMPT AT THE SAME FLOOR IS REFUSED - three is the rule",
+          (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle, 2)
+    check(status == 200 and isinstance(body, dict) and body.get("attempt") == 1,
+          "while floor 2 still has all three - the cap is per floor", (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle - 1, 3)
+    check(status == 409, "an attempt filed against LAST cycle is refused", (status, message_of(body)))
+    status, body = record_attempt(a, cycle + 1, 3)
+    check(status == 409, "and so is one against NEXT cycle - the server holds the clock", (status, message_of(body)))
+
+    for floor, why in ((0, "floor 0"), (6, "floor 6")):
+        status, body = record_attempt(a, cycle, floor)
+        check(status == 400, why + " does not exist", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, team=[])
+    check(status == 400, "an empty line is refused", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, team=DUNGEON_LINE * 6)
+    check(status == 400, "and so is a line of six", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, team={"defId": "kael_the_unyielding"})
+    check(status == 400, "and so is a team that is not a list", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_turns=-1)
+    check(status == 400, "and a negative turn count", (status, message_of(body)))
+
+    status, body = record_attempt(c, cycle, 1)
+    check(status == 403, "C, IN NO GUILD, CANNOT RECORD AN ATTEMPT", (status, message_of(body)))
+
+    rows = dungeon_rows(b, guild["id"])
+    check(rows is not None and len(rows) == 4 and all(r["user_id"] == a["id"] for r in rows),
+          "B, a guildmate, reads all four of A's attempts - the boards are built from this read",
+          (len(rows) if rows is not None else rows))
+    rows_c = dungeon_rows(c, guild["id"])
+    check(rows_c is not None and len(rows_c) == 0,
+          "C READS NONE OF THEM - zero rows, which is what RLS filtering looks like", rows_c)
+
+    status, body = request("POST", "/rest/v1/guild_dungeon_attempts", token=a["token"],
+                           body={"guild_id": guild["id"], "user_id": a["id"], "cycle": cycle, "floor": 4,
+                                 "attempt": 1, "seed": 1, "team": DUNGEON_LINE, "victory": True,
+                                 "turns": 1, "power": 1, "avg_stars": 1})
+    check(status not in (200, 201, 204),
+          "A CANNOT INSERT AN ATTEMPT DIRECTLY - no client role holds INSERT, so the cap cannot be walked around",
+          (status, message_of(body)))
+
+    status, body = request("PATCH", "/rest/v1/guild_dungeon_attempts?id=eq." + str(first["id"]),
+                           token=a["token"], body={"turns": 1})
+    after = dungeon_rows(a, guild["id"])
+    kept = after is not None and any(r["id"] == first["id"] and r["turns"] == first["turns"] for r in after)
+    check(status not in (200, 204) and kept,
+          "A CANNOT IMPROVE A SCORE AFTER THE FACT - no UPDATE for anybody, its owner included",
+          (status, message_of(body)))
+
+    status, body = request("DELETE", "/rest/v1/guild_dungeon_attempts?id=eq." + str(first["id"]),
+                           token=a["token"])
+    after = dungeon_rows(a, guild["id"])
+    check(after is not None and len(after) == 4,
+          "and cannot delete a bad attempt to get it back - the four rows are still there",
+          (status, len(after) if after is not None else after))
+    return cycle
+
+
+def check_dungeon_race(guild, b, cycle):
+    """The cap as a constraint rather than a count. Six submissions from one account at the same
+    instant, at a floor it has not touched: the member-row lock makes them queue, and the check
+    plus the unique key would refuse a fourth row even if it did not."""
+    section("THE ATTEMPT CAP, UNDER CONTENTION - one member, six submissions, one instant")
+
+    racers = 6
+    barrier = threading.Barrier(racers)
+    results = [None] * racers
+
+    def race(index):
+        try:
+            barrier.wait(timeout=30)
+        except threading.BrokenBarrierError:
+            pass
+        results[index] = record_attempt(b, cycle, 4, p_turns=20 + index)
+
+    with ThreadPoolExecutor(max_workers=racers) as pool:
+        list(pool.map(race, range(racers)))
+
+    accepted = [r for r in results if r and r[0] == 200]
+    refused = [r for r in results if r and r[0] == 409]
+    check(len(accepted) == 3, "EXACTLY THREE OF SIX WERE STORED (" + str(len(accepted)) + ")",
+          [r[0] for r in results if r])
+    check(len(refused) == racers - 3, "and the other three were refused with a 409 (" + str(len(refused)) + ")",
+          [message_of(r[1]) for r in results if r and r[0] not in (200, 409)][:2])
+    numbers = sorted(r[1].get("attempt") for r in accepted if isinstance(r[1], dict))
+    check(numbers == [1, 2, 3], "numbered 1, 2 and 3 - no gap and no repeat", numbers)
+
 def check_friends_keep_access(c, d):
     section("0006 ADDED A POLICY - so a friend who is not a guildmate still reads a line")
 
@@ -681,7 +827,7 @@ def check_friends_keep_access(c, d):
 def check_anon_role():
     section("THE ANON ROLE - no user at all, which is what a leaked anon key gets you")
 
-    for table in ("guilds", "guild_members", "guild_requests", "guild_messages"):
+    for table in ("guilds", "guild_members", "guild_requests", "guild_messages", "guild_dungeon_attempts"):
         status, body = request("GET", "/rest/v1/" + table + "?select=*")
         readable = status == 200 and isinstance(body, list) and len(body) > 0
         check(not readable, "the anon role reads nothing from " + table, (status, body))
@@ -690,7 +836,11 @@ def check_anon_role():
                        ("guild_by_code", {"p_code": "ABC234"}),
                        ("guild_request_send", {"p_code": "ABC234"}),
                        ("guild_post_message", {"p_body": "hello"}),
-                       ("guild_touch", {})):
+                       ("guild_touch", {}),
+                       ("guild_dungeon_status", {}),
+                       ("guild_dungeon_record", {"p_cycle": 0, "p_floor": 1, "p_seed": 1,
+                                                 "p_team": DUNGEON_LINE, "p_victory": True,
+                                                 "p_turns": 1, "p_power": 1, "p_avg_stars": 1})):
         status, body = rpc(name, **args)
         check(status not in (200, 201), "and cannot call " + name, (status, message_of(body)))
 
@@ -816,6 +966,8 @@ def check_disband(a):
     status, body = request("GET", "/rest/v1/guild_messages?select=id&guild_id=eq." + guild_id,
                            token=a["token"])
     messages = len(body) if isinstance(body, list) else 0
+    attempts = dungeon_rows(a, guild_id)
+    attempts = len(attempts) if attempts is not None else 0
 
     status, _ = request("DELETE", "/rest/v1/guilds?id=eq." + guild_id, token=a["token"])
     check(status in (200, 204), "the leader disbands the guild", status)
@@ -827,6 +979,9 @@ def check_disband(a):
     check(status == 200 and isinstance(body, list) and len(body) == 0,
           "and so did its " + str(messages) + " message(s) - nothing is left addressed to a guild "
           "that does not exist", (status, body))
+    rows = dungeon_rows(a, guild_id)
+    check(rows is not None and len(rows) == 0,
+          "and so did its " + str(attempts) + " dungeon attempt(s)", rows)
 
     status, body = rpc("guild_create", token=a["token"], p_name=guild_name("After"), p_description="")
     check(status == 200, "and A, now in no guild, can make another one", (status, message_of(body)))
@@ -927,6 +1082,9 @@ def main():
             check_chat(guild, a, b, c)
             check_presence(a, b)
             check_snapshots(guild, a, b, c)
+            cycle = check_dungeon(guild, a, b, c)
+            if cycle is not None:
+                check_dungeon_race(guild, b, cycle)
             check_one_guild_rule(guild, d)
         check_anon_role()
 
