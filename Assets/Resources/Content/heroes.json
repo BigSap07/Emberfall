@@ -12759,14 +12759,14 @@
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 1.2
+            "power": 0.35,
+            "condition": "AlreadyDamagedSubjectThisRound",
+            "conditionOn": "Target"
           },
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 0.42,
-            "condition": "AlreadyDamagedSubjectThisRound",
-            "conditionOn": "Target"
+            "power": 1.2
           },
           {
             "kind": "Damage",
@@ -12777,7 +12777,8 @@
             "condition2": "HpAboveSnapshot",
             "conditionOn2": "Target"
           }
-        ]
+        ],
+        "description": "Deals 120% Attack damage to the enemy with the highest Attack, and 35% more if Altheon has already damaged that enemy this round. The rider resolves BEFORE the blow it rides, which is what makes its condition a condition: AlreadyDamagedSubjectThisRound reads the round's damage list, and the 120% blow is an entry in that list, so a rider written after it asked a question its own firing had already answered and paid on every basic he ever threw. It was also 42% where Pinoy writes 35%. Ordered this way it fires when something else of his - the Subject's delayed damage, or Fixed in Place - reached that body earlier in the round, which is the sentence the text says. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "active": {
         "id": "altheon_immaculate_record",

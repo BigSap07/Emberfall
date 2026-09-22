@@ -3251,6 +3251,17 @@ namespace Emberfall.Core.Combat
                         for (int i = target.Statuses.Count - 1; i >= 0 && removed < effect.Hits; i--)
                         {
                             if (StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
+                            // BENEFICIAL, NOT "NOT HARMFUL" - the same repair ApplyStatus's
+                            // BuffSuppression gate and CombatUnit's beneficial count already carry,
+                            // and this was the last rule in the engine reading "not harmful" as
+                            // "buff". IsHarmful answers false for the bookkeeping kinds as well as
+                            // for the buffs, so a Dispel walking newest first took a Mark, a
+                            // MarkAlt, a Ledger, a Linked or a Resolve counter before it reached
+                            // anything a player would call a buff. Eight authored Dispels say
+                            // "removes one buff" and not one of them wants a bookmark: Seraphine's
+                            // Contrary Evidence was eating the MarkAlt her own Volume Closed writes,
+                            // which is the finding that sent this here.
+                            if (StatusInfo.IsInert(target.Statuses[i].Kind)) continue;
                             // DispelOwnOnly: only strip buffs this caster applied.
                             if (effect.DispelOwnOnly && target.Statuses[i].SourceId != source.Id) continue;
                             // Exclude the buff that triggered OnEnemyBuffGained, so "when an enemy

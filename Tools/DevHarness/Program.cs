@@ -23450,16 +23450,18 @@ namespace Emberfall.DevHarness
             return false;
         }
 
-        // ------------------------------------------------- the twenty-nine dark talents
+        // ------------------------------------------------- the dark talents
 
         /// <summary>
         /// THE ARENA FOR THE DARK TALENTS, and it is a set of archetypes rather than one line.
         ///
         /// The authored-talent sweep runs every talent in ONE arena, which is what makes its 450
-        /// lines comparable - and also what leaves 27 of them unobserved, because a single enemy
-        /// line cannot raise a kill, a capped ledger, a Stealth gain, a turn-debt threshold and a
-        /// four-stack counter at the same time. The sweep's own comment says so: "the way to light
-        /// the dark ones is a better arena or a repaired talent rather than more dice."
+        /// lines comparable - and also what leaves a double-figure tail of them unobserved,
+        /// because a single enemy line cannot raise a kill, a capped ledger, a Stealth gain, a
+        /// turn-debt threshold and a four-stack counter at the same time. The tail has been 29,
+        /// 27 and 20 and is counted by the run rather than written here, for the reason the note
+        /// under that sweep now gives. The sweep's own comment says so: "the way to light the dark
+        /// ones is a better arena or a repaired talent rather than more dice."
         ///
         /// So the bodies here are DELIBERATELY SPECIALISED, one per gate, and each check below
         /// names the stage it needs: a soft body that dies (a kill), a self-buffing body (an enemy
@@ -23795,6 +23797,28 @@ namespace Emberfall.DevHarness
         ///     refresh rather than the application its text describes. It reads
         ///     SubjectLostStatusThisFiring now - a condition that did not exist.
         /// </summary>
+        /// <summary>
+        /// Every (hero, talent) pair THE DARK TALENTS section fields, in the form the talent sweep
+        /// names them. The note under that sweep counts its overlap with the dark list rather than
+        /// carrying a number somebody has to remember to move.
+        /// </summary>
+        private static readonly string[] DarkTalentsCover = {
+            "kiva_the_forsaken_oath II", "kiva_the_forsaken_oath III",
+            "aeron_the_unbroken_stride II", "merek_the_sequence_thief I",
+            "nysera_the_missing_arrow I", "nysera_the_missing_arrow III",
+            "vaelis_the_unfixed_blade I", "vaelis_the_unfixed_blade II",
+            "vaelis_the_unfixed_blade III", "dahlia_the_wayward_hymn II",
+            "brenna_the_remaining_wall I", "altheon_the_first_witness III",
+            "isolde_the_slow_fading III", "mireth_the_erased_name II",
+            "mireth_the_erased_name III", "rheia_the_revision_scribe I",
+            "rheia_the_revision_scribe II", "rheia_the_revision_scribe III",
+            "rovan_the_adaptive_commander II", "seraphine_the_closed_volume I",
+            "seraphine_the_closed_volume II", "seraphine_the_closed_volume III",
+            "sylven_the_unfading_blade III", "velis_the_hollow_vow III",
+            "isara_the_second_chance II", "elyra_the_patient_warden III",
+            "edrin_the_distant_bell III", "hale_the_relentless_hunter II",
+            "kael_the_unyielding II" };
+
         private static void CheckDarkTalents(ContentDatabase live)
         {
             Line("THE DARK TALENTS (each in the smallest arena that raises what it was waiting on)");
@@ -23948,41 +23972,45 @@ namespace Emberfall.DevHarness
                       + " - the Guard prevented more than 8% of Max HP, so the cap was what was "
                       + "binding and raising it to 12% let the rest through");
 
-            // ---- Altheon III: DARK AGAIN, and the reason is written beside the number rather
-            // than asserted away.
+            // ---- Altheon III: LIT, and it is now a check rather than a note.
             //
-            // THIS CHECK WAS GREEN BECAUSE OF A DEFECT. It needs Immaculate Record's Ledger to
-            // reach its cap, and that Ledger banks 30% of ONE hit a round - ledgerBankLimit is 1 -
-            // against a StoredCap of 1.2x Altheon's Attack, about 1720 at level 40, on an entry
-            // that lives two rounds and auto-releases when it expires. Altheon is Speed 109 and
-            // applies it late in the round, so in practice the squad gets one banking window, and
-            // the cap therefore needs a SINGLE blow of about 5700 landing on the Ledger holder.
+            // THE NOTE THIS REPLACES IS DEAD AND SAID SO FOR A PASS TOO LONG. It read "it needs
+            // one blow of about 5700 on the Ledger holder inside two rounds and the roster's
+            // biggest is about 3600", which was true of the Subject the five-star review found
+            // and false of the Subject it left: the record's ceiling is 50% of Altheon's Attack
+            // now rather than 120%, the entry lives three rounds rather than two, and
+            // ledgerBankFromCaster means it banks HIS blows instead of whichever hit landed
+            // first. No blow of 5700 is wanted by anything any more. The Ledger closes eight
+            // times in this arena and OnLedgerCapped is raised every time, which is the trigger
+            // both Fixed in Place and this talent wait on.
             //
-            // Nothing in the roster lands one. The biggest single damage effect on any 5-star is
-            // Velis at about 3600 and the biggest aimed at HighestAttackEnemy, which is the body
-            // the Ledger sits on, is Vaelis at about 3230. What used to reach it was Arden's
-            // active, whose percent-of-Max-HP term paid 12000 against a 400000-HP body because its
-            // maxHpCap ceilings against the TARGET's Max HP and so could not bind: one cast capped
-            // the Ledger outright. Bounding that term in Arden's own currency, which is the repair
-            // this commit exists for, takes the whole prop away.
-            //
-            // Swapping Vaelis in for Arden was tried and measured first: the Ledger still capped
-            // zero times. So this is not a squad that needs picking better, and asserting on a
-            // number no arena can produce would be a guard that only passes while a defect does.
-            // It is reported, and the standing 20-talent coverage note already carries
-            // "altheon_the_first_witness III needs OnLedgerCapped" as one of the twenty, which is
-            // the instrument that exists for exactly this.
+            // WHAT IT PAYS IS NEGATIVE, AND THAT IS THE READING RATHER THAN A FAULT IN THE CHECK.
+            // Final Record is oncePerBattle: it fires once, pays 20% of Attack per Record held,
+            // and then consumes every Record - which is the sentence Pinoy wrote. But Preserved
+            // Moment spends those same Records as a standing +5% on EVERY blow Altheon lands on a
+            // marked body, so the talent buys at most three 20% blows and sells a 15% output
+            // modifier for as long as it takes him to earn them back. Over thirty rounds that
+            // trade costs more than it pays. The check asserts that it FIRES and that the record
+            // closes, because those are what the five-star review made reachable, and prints the
+            // sign of the trade rather than asserting it: a talent nobody would select is a
+            // balance question for Pinoy, not a broken wire.
             if (!DarkPair("altheon_the_first_witness", 3, "s_buffer_tail", DarkStrikers, 1, false,
                           out a, out b))
                 Check(false, "altheon III arena built");
             else
-                Line("  [note] Altheon III is DARK in this arena: the Ledger capped "
-                     + b.Fires("altheon_fixed_in_place") + " time(s) and the talent fired "
-                     + b.Fires("altheon_final_record") + ", so it adds nothing ("
-                     + b.SubjectDamage + " against " + a.SubjectDamage + " damage). It needs one"
-                     + " blow of about 5700 on the Ledger holder inside two rounds and the roster's"
-                     + " biggest is about 3600. It read green until Arden's percent-of-Max-HP terms"
-                     + " were bounded, and that green was the defect rather than the talent.");
+            {
+                Check(b.Fires("altheon_fixed_in_place") > 0 && b.Fires("altheon_final_record") > 0
+                      && b.SubjectDamage != a.SubjectDamage,
+                      "Altheon III fires on a record that closes (" + b.Fires("altheon_fixed_in_place")
+                      + " cap(s) raised, talent fired " + b.Fires("altheon_final_record")
+                      + " time) - the five-star review's 3-round Subject, 50%-of-Attack ceiling and"
+                      + " caster-only banking are what made OnLedgerCapped reachable at all");
+                Line("  [note] and the trade is a LOSS here: " + b.SubjectDamage + " against "
+                     + a.SubjectDamage + " damage. Final Record pays 20% of Attack per Record and"
+                     + " then consumes them all, and Preserved Moment was spending the same Records"
+                     + " as +5% on every blow against a marked body, so one firing costs more than"
+                     + " it pays over a long fight. Authored that way, reported for Pinoy.");
+            }
 
             // ---- Isolde III: Revelation expiring on four Traces.
             if (!DarkPair("isolde_the_slow_fading", 3, "s_buffer", "", 1, false, out a, out b))
@@ -24065,7 +24093,15 @@ namespace Emberfall.DevHarness
                       + "LastMovedAboveHpFraction needs a Shield that big to have moved at all");
 
             // ---- Seraphine I: a deeper Footnote reaches its own cap sooner.
-            if (!DarkPair("seraphine_the_closed_volume", 1, "s_soft_big", DarkPairUp, 1, false,
+            //
+            // THE SQUAD MOVED OFF DarkPairUp, and for the reason the check's own tail names. The
+            // difference between recording 25% and recording 35% only survives while the record
+            // is still under its 80%-of-Attack cap when it is read; beside Brenna and Kael the
+            // Footnote saturates on every round it is written, so both arms closed the book the
+            // same fourteen times and a deeper record bought nothing. Four Strikers fill it
+            // faster than Seraphine alone but leave the early rounds under the ceiling, which is
+            // where the ten points are worth a closing.
+            if (!DarkPair("seraphine_the_closed_volume", 1, "s_soft_big", DarkStrikers, 1, false,
                           out a, out b))
                 Check(false, "seraphine I arena built");
             else
@@ -24095,7 +24131,16 @@ namespace Emberfall.DevHarness
             // one. THAT CROSS REFERENCE NOW DESTROYS ITS OWN PAYOUT IN A FAST FIGHT IS A FINDING
             // about Seraphine, not a fault in this check: it loads the record toward the ceiling
             // that Volume Closed converts into a buff-lock and 15 Energy instead of into damage.
-            if (!DarkPair("seraphine_the_closed_volume", 2, "s_frail_healer", DarkWall, 1, true,
+            //
+            // AND IT MOVED AGAIN, FOR THE SAME PRECONDITION, when Dispel learned to skip the
+            // bookkeeping kinds. Contrary Evidence stopped eating the MarkAlt and the Mark, so
+            // Volume Closed now closes books it could not reach on s_frail_healer, and the extra
+            // 30% Cross Reference writes is converted into a buff-lock and 15 Energy rather than
+            // released as damage - that arm ran 105319 against 110012 and the talent measured as
+            // a LOSS. One body that buffs itself every turn is the smallest room where the
+            // record is read before it is closed, and there the talent pays 2859 over seven
+            // casts, which is the 30% of her Attack its text promises arriving as damage.
+            if (!DarkPair("seraphine_the_closed_volume", 2, "s_buffer", DarkWall, 1, true,
                           out a, out b))
                 Check(false, "seraphine II arena built");
             else
@@ -24195,14 +24240,29 @@ namespace Emberfall.DevHarness
                       + b.SubjectDamage + " against " + a.SubjectDamage + ")");
 
             // ---- Kael II: Fault Line applied where Take Down the Wall took something away.
-            if (!DarkPair("kael_the_unyielding", 2, "s_buffer", "", 1, false, out a, out b))
+            //
+            // MOVED OFF s_buffer, AND THE MOVE IS THE FINDING. Take Down the Wall's Dispel is
+            // gated on HasMyMark and takes one status walking newest first, and until Dispel
+            // learned to skip the bookkeeping kinds the newest thing on a marked body was Kael's
+            // own Fault Line. So the talent's SubjectLostStatusThisFiring was answering a strip
+            // of the Mark it then re-applied, and it separated against a body that carries no
+            // real buff at all: t_buffer's AttackUp lasts one round and has expired by the time
+            // he casts, so that arena reads "stripped 0" in both arms and the old separation was
+            // the defect measuring itself.
+            //
+            // t_triple keeps four buffs for nine rounds, so the Dispel has something a player
+            // would call a buff to take. Six casts, six strips, six Fault Lines that the arm
+            // without the talent does not lay.
+            if (!DarkPair("kael_the_unyielding", 2, "s_triple", "", 1, false, out a, out b))
                 Check(false, "kael II arena built");
             else
-                Check(b.Count(StatusKind.Mark) > a.Count(StatusKind.Mark),
+                Check(b.BuffsStripped > 0 && b.BuffsStripped == a.BuffsStripped
+                      && b.Count(StatusKind.Mark) - a.Count(StatusKind.Mark) == b.BuffsStripped,
                       "Kael II applies Fault Line to the body his active stripped ("
                       + b.Count(StatusKind.Mark) + " against " + a.Count(StatusKind.Mark)
-                      + ") - gated on HasMyMark it landed on bodies that still carried one, which is"
-                      + " a refresh rather than the application its text names");
+                      + " Fault Lines, one per strip over " + b.BuffsStripped
+                      + ") - the Dispel takes the same buffs either way, so the difference is the"
+                      + " talent and nothing else");
 
             // ---- Nysera III: the second concealment, which nothing authored before this pass.
             //
@@ -24361,13 +24421,31 @@ namespace Emberfall.DevHarness
 
             // WHAT THE RED ABOVE DOES AND DOES NOT CLAIM, said here rather than left to be
             // inferred. "Never observed doing anything HERE" is a statement about this arena, and
-            // 23 of the 27 talents it names are proved to work in THE DARK TALENTS above, each in
-            // a fight built to open its own gate. The four it does not cover are named in that
-            // section's own comment. What is left in this list after that is the honest measure
-            // of what one shared enemy line cannot raise.
-            Line("  [note] 23 of the 27 talents named above are proved in THE DARK TALENTS"
-                 + " section, each in an arena built to raise its own gate; the four it cannot"
-                 + " reach are named there. This red is about THIS arena.");
+            // most of the talents it names are proved to work in THE DARK TALENTS above, each in
+            // a fight built to open its own gate. What is left after that is the honest measure of
+            // what one shared enemy line cannot raise.
+            //
+            // COUNTED RATHER THAN WRITTEN DOWN, and the reason is that it was written down and
+            // went stale: the line read "23 of the 27" for two passes after the list stopped being
+            // 27 long. DarkTalentsCover names the pairs the section fields, the count is the
+            // intersection with what the sweep actually left dark, and any talent this note claims
+            // and the section drops turns up as an uncovered name instead of as a wrong number.
+            List<string> uncovered = new List<string>();
+            for (int i = 0; i < gated.Count; i++)
+            {
+                string name = gated[i];
+                int cut = name.IndexOf(" needs ");
+                if (cut > 0) name = name.Substring(0, cut);
+                if (Array.IndexOf(DarkTalentsCover, name) < 0) uncovered.Add(name);
+            }
+            Line("  [note] " + (gated.Count - uncovered.Count) + " of the " + gated.Count
+                 + " talents named above are proved in THE DARK TALENTS section, each in an arena"
+                 + " built to raise its own gate"
+                 + (uncovered.Count == 0
+                    ? "; none is left uncovered."
+                    : "; the " + uncovered.Count + " it cannot reach: "
+                      + string.Join(", ", uncovered.ToArray()) + ".")
+                 + " This red is about THIS arena.");
 
             // Only among talents that DO something. Two dead talents being identical is the dead
             // check's finding, not this one's, and counting it twice would make this red decorative.
