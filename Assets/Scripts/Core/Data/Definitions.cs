@@ -723,6 +723,45 @@ namespace Emberfall.Core.Data
         /// holder's CURRENT HP. Ignored when HolderHpTick is zero.</summary>
         public bool HolderHpTickCurrent;
 
+        // ---------- the gaps pass, group 17: counting a CLASS of status as a scalar ----------
+        //
+        // The per-stack scaler already existed and already read a count off a chosen subject. What
+        // it could not do was count anything but ONE NAMED KIND, and it had no ceiling - so "6%
+        // turn progress for each target buff, up to 18%" and "damage increases 10% per displayed
+        // buff, up to 40%" both ship as a flat amount that lands whole against a body carrying any
+        // buff at all and not at all against a bare one. Three fields widen the scaler rather than
+        // building a second one beside it, because a second scaler is a second set of rules about
+        // which fields it touches and when the clone happens.
+
+        /// <summary>
+        /// What PerStack counts. NamedKind (the default) reads CountOf(PerStackStatus), which is
+        /// exactly what the scaler always did.
+        /// </summary>
+        public StatusCount PerStackClass = StatusCount.NamedKind;
+
+        /// <summary>
+        /// The largest count PerStack may be multiplied by. Zero (the default) is uncapped, which
+        /// is what every per-stack effect in shipped content is.
+        ///
+        /// A CEILING ON THE COUNT rather than on the resolved amount, because that is the form both
+        /// clauses asking for it take: "up to 40%" is four buffs at ten, "up to 18%" is three at
+        /// six. Capping the amount instead would mean the same ceiling written twice, once as a
+        /// percentage and once as a number of bodies, and the two drifting the first time either
+        /// is retuned.
+        /// </summary>
+        public int PerStackMaxCount;
+
+        /// <summary>
+        /// When true the scaling factor is PerStack * count rather than 1 + PerStack * count, so
+        /// an effect against a subject carrying NOTHING resolves to zero rather than to its base.
+        ///
+        /// The two clauses differ exactly here. Leon's "damage INCREASES 10% per displayed buff"
+        /// is a bonus on a blow that lands anyway; Tamsin's "removes 6% turn progress FOR EACH
+        /// target buff" is the whole of the amount, and against a bare target it removes nothing.
+        /// False (the default) keeps the additive reading every existing per-stack effect has.
+        /// </summary>
+        public bool PerStackFromZero;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -823,6 +862,9 @@ namespace Emberfall.Core.Data
             e.ExtendCap = Math.Max(0, j.GetInt("extendCap", 0));
             e.HolderHpTick = j.GetFloat("holderHpTick", 0f);
             e.HolderHpTickCurrent = j.GetBool("holderHpTickCurrent", false);
+            e.PerStackClass = EnumUtil.Parse(j.GetString("perStackClass", "NamedKind"), StatusCount.NamedKind);
+            e.PerStackMaxCount = Math.Max(0, j.GetInt("perStackMaxCount", 0));
+            e.PerStackFromZero = j.GetBool("perStackFromZero", false);
             return e;
         }
 
@@ -943,6 +985,9 @@ namespace Emberfall.Core.Data
             c.ExtendCap = ExtendCap;
             c.HolderHpTick = HolderHpTick;
             c.HolderHpTickCurrent = HolderHpTickCurrent;
+            c.PerStackClass = PerStackClass;
+            c.PerStackMaxCount = PerStackMaxCount;
+            c.PerStackFromZero = PerStackFromZero;
             return c;
         }
     }

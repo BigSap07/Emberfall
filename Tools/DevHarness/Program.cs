@@ -17880,6 +17880,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupTwelve();
             CheckGapGroupFourteen();
             CheckGapGroupEighteen();
+            CheckGapGroupSeventeen();
             Line("");
         }
 
@@ -18798,6 +18799,112 @@ namespace Emberfall.DevHarness
                 if (def != null) team.Add(MakeInstance(def, 1));
             }
             return RunWith(db, db.GetStage("g18_arena"), 1818, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 17
+
+        /// <summary>
+        /// GROUP 17 - counting how many statuses of a CLASS a body carries, as a scalar.
+        ///
+        /// The per-stack scaler already read a count off a chosen subject; what it could not do
+        /// was count anything but one named kind, and it had no ceiling. So "removes 6% turn
+        /// progress for each target buff, up to 18%" and "damage increases 10% per displayed buff,
+        /// up to 40%" both ship as a flat amount that lands whole against a body carrying ANY buff
+        /// and not at all against a bare one - which is the right answer at exactly one buff and
+        /// wrong at every other number.
+        ///
+        /// Measured across four buff counts in one battle, because a scalar and a flat amount
+        /// agree at one point and the whole question is what happens at the others.
+        /// </summary>
+        private static void CheckGapGroupSeventeen()
+        {
+            Line("  group 17 - per buff, with a ceiling");
+
+            // Damage against a target carrying 0, 1, 3 and 6 buffs. The bonus is 10% a buff,
+            // ceilinged at four.
+            int at0 = DamageDealtBy(RunGapSeventeenArena(0, false), "g17_actor");
+            int at1 = DamageDealtBy(RunGapSeventeenArena(1, false), "g17_actor");
+            int at3 = DamageDealtBy(RunGapSeventeenArena(3, false), "g17_actor");
+            int at4 = DamageDealtBy(RunGapSeventeenArena(4, false), "g17_actor");
+            int at6 = DamageDealtBy(RunGapSeventeenArena(6, false), "g17_actor");
+
+            Check(at0 > 0 && at1 > at0 && at3 > at1,
+                  "perStackClass AnyBeneficial scales with HOW MANY buffs the target carries ("
+                  + at0 + " at none, " + at1 + " at one, " + at3 + " at three) - the count "
+                  + "HasAnyBeneficialStatus could answer yes or no about and never multiply");
+            Check(at4 > at3 && at6 == at4,
+                  "and perStackMaxCount stops it at four: six buffs reads exactly what four reads ("
+                  + at6 + " = " + at4 + "), and four still reads more than three (" + at3
+                  + ") - a ceiling on the COUNT, which is the form 'up to 40%' takes");
+
+            // The from-zero reading: the amount IS the count, so a bare target takes nothing.
+            int zeroFrom0 = DamageDealtBy(RunGapSeventeenArena(0, true), "g17_actor");
+            int zeroFrom2 = DamageDealtBy(RunGapSeventeenArena(2, true), "g17_actor");
+            // Four swings at BalanceConfig.minDamage, which is 1 here: the scaled amount is
+            // genuinely zero and the engine's own damage floor is all that lands. Measured against
+            // the additive arm's 536 rather than against zero, because the floor is a property of
+            // the damage funnel and not of the scaler under test.
+            Check(zeroFrom0 == 4 && zeroFrom0 < at0 / 100,
+                  "perStackFromZero resolves to nothing against a bare target - " + zeroFrom0
+                  + " across four swings, which is the minDamage floor and nothing else, against "
+                  + at0 + " for the additive reading on the same board. That is what 'for EACH "
+                  + "target buff' says and what the additive reading cannot say");
+            Check(zeroFrom2 > 0,
+                  "and to the count times the authored amount once there is something to count ("
+                  + zeroFrom2 + " at two buffs)");
+
+            Check(FingerprintOf(RunGapSeventeenArena(3, false)) == FingerprintOf(RunGapSeventeenArena(3, false)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One actor and one foe the actor decorates with `buffs` beneficial entries before
+        /// striking it. The buffs are distinct kinds rather than stacks of one, because the scaler
+        /// counts a CLASS and stacking one kind would not tell a class count from a kind count.
+        /// </summary>
+        private static BattleResult RunGapSeventeenArena(int buffs, bool fromZero)
+        {
+            string[] kinds = { "AttackUp", "DefenseUp", "SpeedUp", "BlockUp", "EffectHitUp", "CritDamageUp" };
+            string decorate = "";
+            for (int i = 0; i < buffs && i < kinds.Length; i++)
+                decorate += ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"" + kinds[i]
+                          + "\", \"chance\": 1, \"duration\": 9, \"magnitude\": 0.0 }";
+
+            // perStack 0.1 with a ceiling of four is Leon's "10% per displayed buff, up to 40%".
+            // The from-zero arm is Tamsin's shape instead: the count is the whole multiplier.
+            string scaler = ", \"perStack\": " + (fromZero ? "1.0" : "0.1")
+                          + ", \"perStackOn\": \"Target\", \"perStackClass\": \"AnyBeneficial\""
+                          + ", \"perStackMaxCount\": 4"
+                          + (fromZero ? ", \"perStackFromZero\": true" : "");
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g17_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g17a_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0" + scaler + @" } ] },
+      ""passive"": { ""id"": ""g17_decorate"", ""name"": ""Decorate"", ""trigger"": ""RoundStart"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + decorate + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g17_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 100000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g17foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g17_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g17_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g17_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap17");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef def = db.GetHero("g17_actor");
+            if (def != null) team.Add(MakeInstance(def, 1));
+            return RunWith(db, db.GetStage("g17_arena"), 1717, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)

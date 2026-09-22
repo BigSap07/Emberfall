@@ -804,6 +804,28 @@ namespace Emberfall.Core.Combat
         public float EffectiveHolyDamage { get { return HolyDamage + SumMagnitude(StatusKind.HolyDamageUp); } }
 
         /// <summary>
+        /// How many BENEFICIAL statuses this unit carries - what "per displayed buff" counts.
+        /// Stacks count individually, as CountOf does.
+        /// </summary>
+        public int BuffCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Statuses.Count; i++)
+                {
+                    StatusKind k = Statuses[i].Kind;
+                    // Not harmful AND not bookkeeping, which is the predicate
+                    // HasAnyBeneficialStatus reads - a Mark, a Ledger, a Link and a Resolve
+                    // counter are not buffs, and "per displayed buff" means the ones a player
+                    // would count off the bar.
+                    if (!StatusInfo.IsHarmful(k) && !StatusInfo.IsInert(k)) n++;
+                }
+                return n;
+            }
+        }
+
+        /// <summary>
         /// How many harmful statuses this unit carries, counted with the same StatusInfo.IsHarmful
         /// predicate Cleanse and Dispel read - so TargetMode.AllyWithMostDebuffs
         /// picks the ally a Cleanse would do the most for, rather than answering a subtly different

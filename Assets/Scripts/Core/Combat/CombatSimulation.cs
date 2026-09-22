@@ -2499,11 +2499,15 @@ namespace Emberfall.Core.Combat
                     bool perStackOnTarget = effect.PerStackOn == ConditionSubject.Target;
                     if (!perStackOnTarget)
                     {
-                        int casterStacks = caster.CountOf(effect.PerStackStatus);
-                        if (effect.PerStack != 0f && casterStacks > 0)
+                        // A FromZero effect enters with a count of zero, deliberately: "for each
+                        // buff" against a bare body resolves to nothing, and the guard below would
+                        // otherwise let the base amount through. Every effect that does not set it
+                        // takes the guard it always took, since a factor of 1 changes nothing.
+                        int casterStacks = PerStackCount(effect, caster);
+                        if (effect.PerStack != 0f && (casterStacks > 0 || effect.PerStackFromZero))
                         {
                             EffectDef scaled = effect.Clone();
-                            float factor = 1f + effect.PerStack * casterStacks;
+                            float factor = PerStackFactor(effect, caster);
                             scaled.Power = effect.Power * factor;
                             scaled.Magnitude = effect.Magnitude * factor;
                             if (effect.Kind == EffectKind.GainResolve)
@@ -2578,11 +2582,11 @@ namespace Emberfall.Core.Combat
                         EffectDef landed = effect;
                         if (perStackOnTarget && effect.PerStack != 0f)
                         {
-                            int targetStacks = target.CountOf(effect.PerStackStatus);
-                            if (targetStacks > 0)
+                            int targetStacks = PerStackCount(effect, target);
+                            if (targetStacks > 0 || effect.PerStackFromZero)
                             {
                                 EffectDef scaled = effect.Clone();
-                                float factor = 1f + effect.PerStack * targetStacks;
+                                float factor = PerStackFactor(effect, target);
                                 scaled.Power = effect.Power * factor;
                                 scaled.Magnitude = effect.Magnitude * factor;
                                 if (effect.Kind == EffectKind.GainResolve)
@@ -6318,6 +6322,49 @@ namespace Emberfall.Core.Combat
             /// Walks a snapshot, because a passive firing inside the loop can kill somebody and
             /// _units is not safe to index live across that.
             /// </summary>
+            /// <summary>
+            /// How many entries the per-stack scaler counts on this subject.
+            ///
+            /// ENGINE-GAPS group 17. This used to be one line at each of two call sites -
+            /// CountOf(PerStackStatus) - and widening it in one place is what stops the
+            /// caster-side snapshot and the per-target read disagreeing about what a buff is or
+            /// where the ceiling sits. An effect that names no class and no ceiling gets exactly
+            /// the call that stood there.
+            /// </summary>
+            private static int PerStackCount(EffectDef effect, CombatUnit subject)
+            {
+                int count;
+                switch (effect.PerStackClass)
+                {
+                    case StatusCount.AnyBeneficial: count = subject.BuffCount; break;
+                    case StatusCount.AnyHarmful: count = subject.DebuffCount; break;
+                    default: count = subject.CountOf(effect.PerStackStatus); break;
+                }
+                if (effect.PerStackMaxCount > 0 && count > effect.PerStackMaxCount)
+                    count = effect.PerStackMaxCount;
+                return count;
+            }
+
+            /// <summary>
+            /// What the per-stack scaler multiplies Power, Magnitude and a GainResolve's Hits by.
+            ///
+            /// FROM ZERO means the count IS the multiplier rather than a bonus on top of one, and
+            /// the two clauses that asked for this differ exactly there: "damage increases 10% per
+            /// displayed buff" is a bonus on a blow that lands anyway, and "removes 6% turn
+            /// progress for each target buff" is the whole of the amount, which against a bare
+            /// target is nothing.
+            ///
+            /// Returns 1 + PerStack * CountOf(PerStackStatus) for an effect that sets none of the
+            /// three new fields, which is the expression that stood at both call sites.
+            /// </summary>
+            private static float PerStackFactor(EffectDef effect, CombatUnit subject)
+            {
+                int count = PerStackCount(effect, subject);
+                return effect.PerStackFromZero
+                    ? effect.PerStack * count
+                    : 1f + effect.PerStack * count;
+            }
+
             private void BroadcastPassive(bool playerSide, PassiveTrigger trigger, int depth, CombatUnit except)
             {
                 List<CombatUnit> side = new List<CombatUnit>();

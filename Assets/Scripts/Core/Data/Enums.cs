@@ -1442,6 +1442,33 @@ namespace Emberfall.Core.Data
     /// separate kind would have meant two bodies of link bookkeeping - creation, charges, the
     /// from-caster filter, MoveStatus carriage - kept in step by hand.
     /// </summary>
+    /// <summary>
+    /// What EffectDef.PerStack counts: one named StatusKind, or a whole CLASS of them.
+    ///
+    /// ENGINE-GAPS group 17. `StatusStacksAtLeast` and `MyStatusStacksAtLeast` count entries of
+    /// one kind and `HasAnyBeneficialStatus` answers whether a body has one at all, so "6% turn
+    /// progress FOR EACH target buff" and "damage increases 10% PER displayed buff" had nothing to
+    /// multiply - both ship as a flat amount that lands whole against a body carrying any buff at
+    /// all, and not at all against a bare one.
+    ///
+    /// NamedKind is the default and is exactly what the per-stack scaler always did, so an effect
+    /// that does not name a class reads CountOf(PerStackStatus) as before.
+    /// </summary>
+    public enum StatusCount
+    {
+        /// <summary>Entries of PerStackStatus, whoever applied them. The existing behaviour.</summary>
+        NamedKind,
+
+        /// <summary>Every beneficial entry the subject carries - not harmful and not one of the
+        /// bookkeeping kinds, which is the same predicate HasAnyBeneficialStatus reads, so a Mark,
+        /// a Ledger, a Link and a Resolve counter are not buffs here either.</summary>
+        AnyBeneficial,
+
+        /// <summary>Every harmful entry, counted with StatusInfo.IsHarmful - the same predicate
+        /// Cleanse, Dispel and CombatUnit.DebuffCount read.</summary>
+        AnyHarmful
+    }
+
     public enum LinkTransfer
     {
         /// <summary>The link moves no damage. Only OnLinkedUnitTargeted and OnLinkedUnitHit read
