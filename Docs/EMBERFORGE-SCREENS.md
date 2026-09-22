@@ -46,7 +46,9 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Item card (`ItemCard`) | converted | Keeps its chamfered silhouette on purpose - that is the item language, not the chrome language - and gains the kit's outline. |
 | Save conflict chooser | converted | Both answers are primary, deliberately: there is no way out of this card, so teal would be lying. |
 | Overflow menu | converted | Already on the kit. |
-| Component gallery (`DesignGallery`) | converted | Gained the chip, the rule and the stat row. |
+| Component gallery (`DesignGallery`) | converted | Gained the chip, the rule and the stat row. Its own fit guard still passes at 20:9. |
+| Idle claim popup, overflow menu, panel sheet, confirm dialog | converted | All four are Hub LAYERS rather than screens the router owns, so none of them could be photographed by a schedule that only calls `Router.Show`. `PlayModeScreenshot` drives `MainMenuScreen.OpenLayerForCapture` for them now. |
+| First-run prologue | converted by construction | See the First run row. |
 | Battle result | converted | The card grew to 700 and both its lists scroll: the spoils are four rows after a battle and eight after a stage clear, and the damage table is one row per unit that fought, so both used to run out of the bottom of the card. |
 | Battle HUD | converted | The unit tags keep their plain 7-unit bars on purpose - a nine-sliced trough has no middle left to stretch at that height and renders as two squashed corners. The kit reaches the text on them. |
 | Hero detail | converted | The two panels stretch between the header and the action bar now. Fixed at 636 they needed 1056 units of height, so at 20:9 the action bar was drawn up through both of them. No ring round the portrait any more. |
@@ -64,10 +66,10 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Guild | converted | Your own row on the roster stands proud of the sheet and everyone else is set into it, so depth sorts a roster of thirty without a second frame colour. Photographed OFFLINE. |
 | Guild requests | converted | Every row here is waiting on an answer, so every row is framed: the page exists only when there is something to decide. Photographed OFFLINE. |
 | Guild chat | converted | Your own line stands proud and everyone else's is set in, which is depth carrying authorship. Still not right-aligned: at 1180 wide a right-aligned bubble leaves a metre of empty panel. Photographed OFFLINE. |
-| Events | pending | |
-| Deep Recital | pending | |
-| The Proving | pending | |
-| First run | pending | |
+| Events | converted | A running event is framed and an ended one is plain; a claimable milestone stands proud of its track and the rest are set into it. Its progress bar grew from 14 units to 36 for the reason the Rift's did. |
+| Deep Recital | converted | The banner takes what the cycle strip leaves, measured against the short canvas. At a fixed 560 the strip's cells sat below y 1010 and were off a 20:9 screen entirely. |
+| The Proving | converted | The card's height is measured from the blocks inside it rather than guessed, and the Valor purse and the honesty line are anchored to the bottom of the screen rather than to a hand-copied 520. |
+| First run | converted by construction | The prologue draws nothing of its own: eight steps, three of which open `ModalPopup` and five of which run a battle. Both of those wear the kit, so this does. |
 
 ## Components this branch added to the kit
 
@@ -83,3 +85,36 @@ at 20:9 and nowhere else. One aspect is half a check.
 | `EmberforgeUI.Sunken` | (Sunken) | The recess as a child, for a node that already has a Graphic on it. |
 | `EmberforgeUI.SelectableCard` | (Panel, PanelPlain) | A plate you can press, which gains the kit's gold frame while it is the one being acted on. The kit's third pressable thing, and it exists because the other two say the wrong sentence about a container: a button has two voices and neither of them is "a slot", and a tab's unlit plate is the darkest surface in the kit - right over a sheet, far too heavy at the size of a hero card. |
 | `UIBuilder.ScrollStrip` | - | The horizontal counterpart of `ScrollList`. A layout group in a fixed rect does not overflow, it divides. |
+| `Emberforge.OrnamentClearance` | - | How far in from a framed panel's corner a control has to stay to clear the corner diamond. Four screens hung a full-width button off a panel's bottom at the panel's own padding and printed it over the two lower ornaments. |
+| `EmberforgeButtonSkin.SetKind` | - | Changes which voice a built button speaks in. For one shape of control the two voices are a state rather than a property. |
+| `EmberforgeUI.Ground` | - | The page's own ground, as one call rather than the same three lines on every screen. Returned so an embeddable page can hide it inside a panel sheet. |
+
+## What this pass retired
+
+- **`ScreenChrome.Header`.** There were two page headers for the length of the conversion, and
+  the original's own note said it retires when the last caller has moved. Every screen calls
+  `ForgedHeader` now, so it has.
+- **`HubStyle`'s drawing.** `Surface`, `Pill`, `SurfaceChild`, `Tail` and `SoonBadge` drew the
+  Hub's own dialect and had no callers left once the nametags, the currency pills and the player
+  plate moved to the kit. What stays in that file is the METRICS - `TouchMin`, the rail's disc and
+  gap, the nav cell, the sheet's header and its tab row - which are measurements of this game's
+  layout rather than of what a surface looks like, and Emberforge owns only the second.
+- **`UIBuilder.Chip` has no callers.** It is left in place beside the other `UIBuilder` primitives
+  and documented as retired; nothing in the game draws a tag through it.
+
+## Deliberately not converted
+
+- **The unit tags over the battlefield.** Their health, ward and energy bars stay plain
+  rectangles. The kit's trough and fill are nine-sliced with most of their height in their top and
+  bottom borders, so at 7 units tall there is no middle left to stretch and both render as two
+  squashed corners. The kit reaches the NAMES and the status line on those tags, which is where it
+  can do its job.
+- **The item card's silhouette.** It stays chamfered. That is the shape this game draws an OBJECT
+  with, as against the rounded shape it draws chrome with, and rounding it would have made a helm
+  and the panel behind it the same thing. It carries the kit's outline now, which is the one
+  property every element in Emberforge shares.
+- **The signed-in states of Account, Friends, Friend's team, Guild, Guild requests and Guild
+  chat.** All six are photographed OFFLINE, which is what every build with no `supabase.json`
+  shows and is the state this project's offline promise is about. The signed-in ones need a live
+  account, a second live account and a relationship between them; that is `AccountsVerification`'s
+  job and no synthetic seeding could stand in for it.

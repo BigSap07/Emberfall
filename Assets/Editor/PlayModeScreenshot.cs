@@ -518,7 +518,8 @@ namespace Emberfall.EditorTools
             string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Formation", "Summon",
                              "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
                              "Profile", "Account", "Friends", "FriendTeam", "Settings",
-                             "Guild", "GuildRequests", "GuildChat", "Battle", "Result" };
+                             "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
+                             "Claim", "Sheet", "Menu", "Gallery", "Dialog" };
             string[] list = which == "ALL" ? all : new string[] { which };
 
             // Per screen: show at (index * Step), capture at (index * Step + its settle).
@@ -591,6 +592,20 @@ namespace Emberfall.EditorTools
                     case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
                     case "Result": id = ScreenId.Battle; break;
+                }
+
+                // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of
+                // them is a screen the router owns: a popup, a panel sheet and a menu are opened
+                // BY the Hub, over it, and a capture schedule that only ever calls Router.Show
+                // can photograph none of the three. MainMenuScreen.OpenLayerForCapture is the
+                // door they already have, and it opens each one the way a tap does.
+                if (name == "Claim" || name == "Sheet" || name == "Menu"
+                    || name == "Gallery" || name == "Dialog")
+                {
+                    app.Router.Show(ScreenId.MainMenu);
+                    OpenHubLayer(app, name);
+                    Debug.Log("PlayModeScreenshot: opened the Hub layer for " + name);
+                    return;
                 }
                 // HeroDetail is the one generic target that is about a SUBJECT rather than a
                 // screen, so it is handed one the way HeroesScreen hands it one - the first hero
@@ -712,6 +727,18 @@ namespace Emberfall.EditorTools
                 return;
             }
 
+            // The Hub's layers open one frame after the Show that put the Hub up, because
+            // ScreenRouter.Show closes every open layer before it changes screens - opening one
+            // in the same call opens it and closes it again.
+            string pendingLayer = SessionState.GetString(HubLayerKey, "");
+            if (pendingLayer.Length > 0 && frame == showAt + 6)
+            {
+                SessionState.SetString(HubLayerKey, "");
+                MainMenuScreen hub = app.Router.MainMenu;
+                if (hub == null) Debug.LogWarning("PlayModeScreenshot: no Hub screen to open a layer on.");
+                else hub.OpenLayerForCapture(HubLayerName(pendingLayer));
+            }
+
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
         }
@@ -769,6 +796,20 @@ namespace Emberfall.EditorTools
                       + " armor pieces and " + profile.OwnedRelics.Count + " relics.");
         }
 
+        /// <summary>
+        /// Opens one of the Hub's layers, one frame after the Hub itself is shown.
+        ///
+        /// A frame apart on purpose: ScreenRouter.Show closes every open layer before it changes
+        /// screens, so opening a popup in the same call that shows the Hub opens it and closes it
+        /// again. The schedule below runs this on the frame AFTER the Show.
+        /// </summary>
+        private static void OpenHubLayer(GameApp app, string name)
+        {
+            SessionState.SetString(HubLayerKey, name);
+        }
+
+        private const string HubLayerKey = "PlayModeScreenshot.HubLayer";
+
         /// <summary>Requests one screen's PNG and advances the schedule to the next screen.
         ///
         /// The frame size is in the FILE NAME, not only in the log. Two captures of one screen at
@@ -786,6 +827,19 @@ namespace Emberfall.EditorTools
             // this key, so an ALL run that left it set would shoot the second of them on the
             // first one's arming frame and photograph a screen that had not been shown yet.
             SessionState.SetInt(BattleArmKey, 0);
+        }
+
+        /// <summary>The target name a capture asks for, as the door the Hub already has.</summary>
+        private static string HubLayerName(string target)
+        {
+            switch (target)
+            {
+                case "Claim": return "claim";
+                case "Sheet": return "profile";
+                case "Menu": return "menu";
+                case "Gallery": return "gallery";
+            }
+            return "dialog";
         }
 
         private static void PumpRecital(int frame)

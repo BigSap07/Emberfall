@@ -3,55 +3,28 @@ using UnityEngine.UI;
 
 namespace Emberfall.UI
 {
-    /// <summary>Shared page header: back arrow, title, and a subtitle line the screen fills in.</summary>
+    /// <summary>
+    /// Shared page header: a title ribbon across the top of the page, a round back disc beside
+    /// it, and a subtitle line under both which the screen fills in.
+    ///
+    /// THERE IS ONE HEADER AGAIN. There were two for the length of the Emberforge conversion -
+    /// the original, and an opt-in Emberforge one screens moved to a page at a time - and the
+    /// original's own note said it retires when the last caller has moved. Every screen in the
+    /// game calls ForgedHeader now, so it has.
+    /// </summary>
     public static class ScreenChrome
     {
         public const float HeaderTop = UITheme.TopBarHeight + 12f;
 
         /// <summary>
-        /// The header sixteen screens still use, unchanged.
-        ///
-        /// It is left exactly as it was on purpose. Restyling it would have restyled every page in
-        /// the game in one edit, including the fifteen that have not had a visual pass and whose
-        /// content is still measured against this header's metrics - a gold ribbon over a screen
-        /// whose body is still in the old language is worse than either language on its own. A
-        /// screen converts by calling ForgedHeader below, one at a time, and this method retires
-        /// when the last caller has moved.
-        /// </summary>
-        public static RectTransform Header(RectTransform root, string title, ScreenRouter router, out Text subtitle)
-        {
-            RectTransform header = UIBuilder.Node("Header", root);
-            UIBuilder.TopStrip(header, 108f, HeaderTop, UITheme.ScreenPadding);
-
-            UIButton back = UIBuilder.IconButton("Back", header, "<", 76f,
-                                                 UITheme.WithAlpha(UITheme.PanelRaised, 0.95f), UITheme.TextPrimary);
-            UIBuilder.Box(back.Root, 0f, 0f, 76f, 76f, new Vector2(0f, 0.5f));
-            ScreenRouter capturedRouter = router;
-            back.OnClick(delegate
-            {
-                if (Game.GameApp.Instance != null) Game.GameApp.Instance.Audio.Tap();
-                capturedRouter.Back();
-            });
-
-            Text titleLabel = UIBuilder.Label("Title", header, title, UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(titleLabel.rectTransform, 0f, 0f, 760f, 52f, new Vector2(0.5f, 1f));
-            UIBuilder.Shadowed(titleLabel, UITheme.InkPanel, 3f);
-
-            subtitle = UIBuilder.Label("Subtitle", header, "", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(subtitle.rectTransform, 0f, -54f, 860f, 30f, new Vector2(0.5f, 1f));
-
-            return header;
-        }
-
-        /// <summary>
         /// THE SAME HEADER IN EMBERFORGE: a title ribbon across the top of the page and a round
         /// back disc beside it.
         ///
-        /// Same rect, same height, same HeaderTop, same subtitle line underneath, and the subtitle
-        /// still comes back through an out parameter - so a screen converts by changing which of
-        /// these two it calls and nothing else. Every metric a page measures its body against is
-        /// unchanged, which is what keeps a conversion to one screen rather than to a screen and
-        /// everything that happened to sit under its header.
+        /// Same rect, same height, same HeaderTop and the same subtitle line underneath as the
+        /// header it replaced, and the subtitle still comes back through an out parameter - which
+        /// is what let a screen convert by changing which of the two it called and nothing else.
+        /// Every metric a page measures its body against is unchanged, and that is why converting
+        /// twenty screens did not also move everything that happened to sit under their headers.
         ///
         /// The back control is a DISC rather than a chunky button. A rectangular ember button in
         /// the corner of every page would be a second primary action competing with whatever the

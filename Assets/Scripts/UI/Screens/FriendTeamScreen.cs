@@ -88,7 +88,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_note.rectTransform, 0f, -392f, CardWidth - 120f, 46f, new Vector2(0.5f, 1f));
 
             _duelButton = EmberforgeUI.Button("Duel", card, "DUEL", UITheme.FontHeading, ForgeButtonKind.Primary);
-            UIBuilder.Box(_duelButton.Root, 0f, 26f, CardWidth - 68f, 92f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_duelButton.Root, 0f, UITheme.Space24, CardWidth - 96f, 92f, new Vector2(0.5f, 0f));
             _duelButton.OnClick(OnDuel);
 
             Text stakes = EmberforgeUI.Label("Stakes", Root,

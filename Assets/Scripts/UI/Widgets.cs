@@ -544,7 +544,7 @@ namespace Emberfall.UI
             RectTransform stars = StarRow("Stars", card.Root, def.Stars, 20f);
             UIBuilder.Box(stars, 0f, -(CardNameTop + 36f), 140f, 20f, new Vector2(0.5f, 1f));
 
-            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role),
+            RectTransform roleChip = EmberforgeUI.Chip("Role", card.Root, UITheme.RoleName(def.Role),
                                                     UITheme.RoleColor(def.Role), UITheme.FontTiny);
             UIBuilder.Box(roleChip, 0f, -(CardNameTop + 68f), 180f, 34f, new Vector2(0.5f, 1f));
 
@@ -560,7 +560,7 @@ namespace Emberfall.UI
 
             if (deployed)
             {
-                RectTransform badge = UIBuilder.Chip("Deployed", card.Root, "DEPLOYED", UITheme.Success, UITheme.FontTiny);
+                RectTransform badge = EmberforgeUI.Chip("Deployed", card.Root, "DEPLOYED", UITheme.Success, UITheme.FontTiny);
                 UIBuilder.Box(badge, -Emberforge.Space8, -Emberforge.Space8, 160f, 32f, new Vector2(1f, 1f));
             }
 
@@ -581,15 +581,15 @@ namespace Emberfall.UI
             UIBuilder.Box(nameLabel.rectTransform, 0f, -CardNameTop, 300f, 32f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(nameLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            RectTransform aspectChip = UIBuilder.Chip("Aspect", card.Root, AspectChart.DisplayName(def.Aspect),
+            RectTransform aspectChip = EmberforgeUI.Chip("Aspect", card.Root, AspectChart.DisplayName(def.Aspect),
                                                       Emberforge.Accent(def.Aspect), UITheme.FontTiny);
             UIBuilder.Box(aspectChip, 0f, -(CardNameTop + 36f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role),
+            RectTransform roleChip = EmberforgeUI.Chip("Role", card.Root, UITheme.RoleName(def.Role),
                                                     UITheme.RoleColor(def.Role), UITheme.FontTiny);
             UIBuilder.Box(roleChip, 0f, -(CardNameTop + 74f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            RectTransform lockedBadge = UIBuilder.Chip("Locked", card.Root, "LOCKED", Emberforge.TextQuiet, UITheme.FontTiny);
+            RectTransform lockedBadge = EmberforgeUI.Chip("Locked", card.Root, "LOCKED", Emberforge.TextQuiet, UITheme.FontTiny);
             UIBuilder.Box(lockedBadge, -Emberforge.Space8, -Emberforge.Space8, 160f, 32f, new Vector2(1f, 1f));
 
             return card;

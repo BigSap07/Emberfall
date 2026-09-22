@@ -549,7 +549,16 @@ namespace Emberfall.UI
             return rt;
         }
 
-        /// <summary>Small rounded tag - aspect, role, rarity.</summary>
+        /// <summary>
+        /// Small rounded tag - aspect, role, rarity.
+        ///
+        /// NOTHING IN THE GAME CALLS THIS ANY MORE. Every tag goes through EmberforgeUI.Chip,
+        /// which draws the kit's two-piece tag: a dark body carrying the shared outline and a
+        /// tinted hairline over it. This one is a flat translucent rectangle in the tint with a
+        /// matching border, which is the placeholder treatment the Emberforge pass exists to
+        /// remove. It is kept for the same reason ScreenChrome.Header is kept - so the two
+        /// languages can be compared - and it retires with that one.
+        /// </summary>
         public static RectTransform Chip(string name, Transform parent, string text, Color tint, int fontSize)
         {
             RectTransform root = Node(name, parent);

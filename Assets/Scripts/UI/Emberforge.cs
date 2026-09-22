@@ -96,6 +96,19 @@ namespace Emberfall.UI
         public static readonly Color OrnamentInset = UITheme.Hex("E84532");
         public const float OrnamentSize = 26f;
 
+        /// <summary>
+        /// How far in from a framed panel's corner a control has to stay to clear the corner
+        /// diamond, on BOTH axes.
+        ///
+        /// It exists because four screens got this wrong the same way: a full-width button hung
+        /// off the bottom of a panel at the panel's own padding lands exactly on the two lower
+        /// ornaments and prints itself over them. The diamond is centred OrnamentSize * 0.34 in
+        /// from the corner and is OrnamentSize across, so it reaches OrnamentSize * 0.84 - this
+        /// is that, rounded up with a little air, so a caller that uses it is clear rather than
+        /// touching.
+        /// </summary>
+        public const float OrnamentClearance = OrnamentSize + Space4;
+
         // ------------------------------------------------------------------ buttons
         //
         // A button is a FACE sitting on a LIP sitting inside an EDGE. The lip is the part that

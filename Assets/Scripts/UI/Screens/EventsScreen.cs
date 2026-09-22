@@ -49,7 +49,11 @@ namespace Emberfall.UI.Screens
         public override bool HidesTopBar { get { return true; } }
 
         private const float CardPadding = 24f;
-        private const float HeaderBlock = 108f;
+        // 130, not 108: 44 for the name row, 34 for the points line, then 36 for the progress
+        // bar and 16 of air. The bar grew from 14 when it became the kit's, because a nine-sliced
+        // trough keeps most of its height in its top and bottom borders and at 14 has no middle
+        // left to stretch. Miss this and the milestone track is drawn 22 units up into the bar.
+        private const float HeaderBlock = 130f;
         private const float TrackBlock = 244f;
         private const float TierBlock = 250f;
         private const float SectionLabelHeight = 30f;
@@ -62,7 +66,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "EVENTS", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "EVENTS", Router, out _headerSubtitle);
             _currencies.Build(Root);
 
             ScrollRect scroll;
@@ -97,8 +102,8 @@ namespace Emberfall.UI.Screens
 
             if (events.Count == 0)
             {
-                Text empty = UIBuilder.Label("Empty", _listContent, "No events in the content database.",
-                                             UITheme.FontSmall, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text empty = EmberforgeUI.Label("Empty", _listContent, "No events in the content database.",
+                                             UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Sized(empty.rectTransform, 0f, 80f);
             }
         }
@@ -120,24 +125,23 @@ namespace Emberfall.UI.Screens
             RectTransform card = UIBuilder.Node("Event_" + evt.Id, _listContent);
             UIBuilder.Sized(card, 0f, CardHeight(evt));
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(20);
-            bg.type = Image.Type.Sliced;
-            bg.color = active ? UITheme.WithAlpha(UITheme.PanelRaised, 0.92f) : UITheme.Panel;
-            UIBuilder.NotchedFrame("Edge", card,
-                                   UITheme.WithAlpha(active ? UITheme.ChromeBrass : UITheme.BorderSoft,
-                                                     active ? 0.85f : 0.5f), 20, 2);
+            // A RUNNING event is framed and an ended one is a plain plate. The gold frame is
+            // what says "this is live", which is a structural fact about the card rather than a
+            // second colour - and an ended event whose leftover currency is still spendable is
+            // still a real card rather than a dimmed one.
+            if (active) EmberforgeUI.PanelOn(card, false);
+            else EmberforgeUI.PlainPanelOn(card);
 
             float top = CardPadding;
 
             // ---- name, status, and the points line
-            Text nameLabel = UIBuilder.Label("Name", card, evt.Name, UITheme.FontBody,
-                                             UITheme.TextPrimary, TextAnchor.UpperLeft);
+            Text nameLabel = EmberforgeUI.Title("Name", card, evt.Name, UITheme.FontBody,
+                                                Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(nameLabel.rectTransform, 28f, -top, 700f, 38f, new Vector2(0f, 1f));
 
             string statusText; Color statusColor;
             StatusOf(evt, now, out statusText, out statusColor);
-            RectTransform statusChip = UIBuilder.Chip("Status", card, statusText, statusColor, UITheme.FontTiny);
+            RectTransform statusChip = EmberforgeUI.Chip("Status", card, statusText, statusColor, UITheme.FontTiny);
             UIBuilder.Box(statusChip, -28f, -top, 240f, 32f, new Vector2(1f, 1f));
 
             top += 44f;
@@ -146,20 +150,25 @@ namespace Emberfall.UI.Screens
             long denominator = nextThreshold > 0 ? nextThreshold : evt.HighestThreshold;
             float ratio = denominator > 0 ? Mathf.Clamp01(points / (float)denominator) : 1f;
 
-            Text pointsLabel = UIBuilder.Label("Points", card,
+            Text pointsLabel = EmberforgeUI.Label("Points", card,
                 points + (nextThreshold > 0 ? " / " + nextThreshold : "") + "  " + evt.PointsLabel.ToUpperInvariant(),
-                UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperLeft);
+                UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(pointsLabel.rectTransform, 28f, -top, 700f, 30f, new Vector2(0f, 1f));
             top += 34f;
 
-            Image pointsBar = UIBuilder.Bar("PointsBar", card, UITheme.PanelSunken, UITheme.Gold);
-            StretchTop(pointsBar.rectTransform.parent as RectTransform, top, 14f, 28f, 28f);
-            UIBuilder.SetBar(pointsBar, ratio);
-            top += 14f + UITheme.Space16;
+            // THE KIT'S BAR, at the sprite's own height. Its trough and fill keep most of their
+            // height in their top and bottom borders, so a 14-unit track has no middle left to
+            // stretch and both render as a squashed pair of corners - the same fault the Rift's
+            // guarantee bar hit, and the reason that one grew too.
+            Image pointsBar = EmberforgeUI.ProgressBar("PointsBar", card);
+            StretchTop(pointsBar.rectTransform.parent as RectTransform, top, 36f, 28f, 28f);
+            EmberforgeUI.SetProgress(pointsBar, ratio);
+            top += 36f + UITheme.Space16;
 
             // ---- the milestone track
-            Text trackHeading = UIBuilder.Label("TrackHeading", card, "MILESTONES",
-                                                UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+            Text trackHeading = EmberforgeUI.Title("TrackHeading", card, "MILESTONES",
+                                                   UITheme.FontTiny, Emberforge.TextGold,
+                                                   TextAnchor.UpperLeft);
             UIBuilder.Box(trackHeading.rectTransform, 28f, -top, 400f, SectionLabelHeight, new Vector2(0f, 1f));
             top += SectionLabelHeight;
 
@@ -170,7 +179,7 @@ namespace Emberfall.UI.Screens
             if (!evt.HasCurrency) return;
 
             top += UITheme.Space24;
-            Text tierHeading = UIBuilder.Label("TierHeading", card,
+            Text tierHeading = EmberforgeUI.Label("TierHeading", card,
                 evt.CurrencyName.ToUpperInvariant() + "  -  " + currency + " HELD",
                 UITheme.FontTiny, UITheme.EventToken, TextAnchor.UpperLeft);
             UIBuilder.Box(tierHeading.rectTransform, 28f, -top, 600f, SectionLabelHeight, new Vector2(0f, 1f));
@@ -197,8 +206,8 @@ namespace Emberfall.UI.Screens
 
             if (count == 0)
             {
-                Text none = UIBuilder.Label("None", track, "This event authors no milestones.",
-                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text none = EmberforgeUI.Label("None", track, "This event authors no milestones.",
+                                            UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
@@ -247,7 +256,7 @@ namespace Emberfall.UI.Screens
             bool reached = points >= milestone.Threshold;
             bool claimable = reached && !claimed;
 
-            Color tint = claimed ? UITheme.Success : (reached ? UITheme.Gold : UITheme.TextDim);
+            Color tint = claimed ? UITheme.Success : (reached ? UITheme.Gold : Emberforge.TextQuiet);
 
             RectTransform column = UIBuilder.Node("Node_" + milestone.Threshold, track);
             column.anchorMin = new Vector2(centre, 0f);
@@ -271,8 +280,8 @@ namespace Emberfall.UI.Screens
             float top = NodeSize + UITheme.Space8;
 
             // ---- threshold
-            Text threshold = UIBuilder.Label("Threshold", column, milestone.Threshold.ToString(),
-                                             UITheme.FontTiny - 2, reached ? UITheme.TextPrimary : UITheme.TextDim,
+            Text threshold = EmberforgeUI.Label("Threshold", column, milestone.Threshold.ToString(),
+                                             UITheme.FontTiny - 2, reached ? Emberforge.TextBody : Emberforge.TextQuiet,
                                              TextAnchor.UpperCenter);
             UIBuilder.Box(threshold.rectTransform, 0f, -top, 140f, 24f, new Vector2(0.5f, 1f));
             top += 26f;
@@ -281,13 +290,12 @@ namespace Emberfall.UI.Screens
             RectTransform tile = UIBuilder.Node("Tile", column);
             UIBuilder.Box(tile, 0f, -top, TileSize, TileSize, new Vector2(0.5f, 1f));
 
-            Image tileBg = tile.gameObject.AddComponent<Image>();
-            tileBg.sprite = TextureLab.NotchedRect(12);
-            tileBg.type = Image.Type.Sliced;
-            tileBg.color = claimable
-                ? UITheme.WithAlpha(UITheme.Gold, 0.16f)
-                : UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
-            UIBuilder.NotchedFrame("TileEdge", tile, UITheme.WithAlpha(tint, reached ? 0.85f : 0.4f), 12, 2);
+            // A CLAIMABLE milestone stands proud of the track and everything else is set into
+            // it, which is the same depth-carries-state rule the guild roster and the friends
+            // list follow. The tint is left on the mark, where it says which KIND of reward this
+            // rung pays rather than what state the rung is in.
+            if (claimable) EmberforgeUI.PanelOn(tile, false);
+            else EmberforgeUI.SunkenOn(tile);
 
             Sprite glyph = claimed ? TextureLab.Check(64)
                          : (!reached ? TextureLab.Padlock(64)
@@ -309,14 +317,14 @@ namespace Emberfall.UI.Screens
             top += TileSize + UITheme.Space4;
 
             // ---- what it actually is
-            Text reward = UIBuilder.WrappedLabel("Reward", column, milestone.Reward.Describe(),
+            Text reward = EmberforgeUI.Body("Reward", column, milestone.Reward.Describe(),
                                                  UITheme.FontTiny - 6,
-                                                 reached ? UITheme.TextMuted : UITheme.TextDim,
+                                                 reached ? Emberforge.TextQuiet : Emberforge.TextQuiet,
                                                  TextAnchor.UpperCenter);
             UIBuilder.Box(reward.rectTransform, 0f, -top, 140f, 34f, new Vector2(0.5f, 1f));
             top += 36f;
 
-            Text state = UIBuilder.Label("State", column,
+            Text state = EmberforgeUI.Label("State", column,
                                          claimed ? "CLAIMED" : (claimable ? "CLAIM" : ""),
                                          UITheme.FontTiny - 4, tint, TextAnchor.UpperCenter);
             UIBuilder.Box(state.rectTransform, 0f, -top, 140f, 22f, new Vector2(0.5f, 1f));
@@ -337,8 +345,8 @@ namespace Emberfall.UI.Screens
 
             if (count == 0)
             {
-                Text none = UIBuilder.Label("None", row, "Nothing to redeem yet.",
-                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text none = EmberforgeUI.Label("None", row, "Nothing to redeem yet.",
+                                            UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
@@ -359,54 +367,44 @@ namespace Emberfall.UI.Screens
             cardRoot.offsetMin = new Vector2(-150f, 0f);
             cardRoot.offsetMax = new Vector2(150f, 0f);
 
-            Image bg = cardRoot.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.NotchedRect(14);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.92f);
-            UIBuilder.NotchedFrame("Edge", cardRoot,
-                                   UITheme.WithAlpha(UITheme.EventToken, affordable ? 0.85f : 0.4f), 14, 2);
+            // Affordable is framed, out of reach is plain. Depth again, and for the reason the
+            // milestone tiles use it: what the player can act on is what stands up off the page.
+            if (affordable) EmberforgeUI.PanelOn(cardRoot, false);
+            else EmberforgeUI.PlainPanelOn(cardRoot);
 
             float top = UITheme.Space12;
 
             RectTransform tile = UIBuilder.Node("Tile", cardRoot);
             UIBuilder.Box(tile, 0f, -top, 78f, 78f, new Vector2(0.5f, 1f));
 
-            Image tileBg = tile.gameObject.AddComponent<Image>();
-            tileBg.sprite = TextureLab.NotchedRect(10);
-            tileBg.type = Image.Type.Sliced;
-            tileBg.color = UITheme.WithAlpha(UITheme.Panel, 0.95f);
+            Image tileBg = EmberforgeUI.SunkenOn(tile);
             tileBg.raycastTarget = false;
-            UIBuilder.NotchedFrame("TileEdge", tile, UITheme.WithAlpha(UITheme.EventToken, 0.6f), 10, 2);
 
             Image mark = UIBuilder.Img("Mark", tile, TextureLab.GemIcon(64), UITheme.EventToken);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, 40f, 40f, new Vector2(0.5f, 0.5f));
 
             top += 78f + UITheme.Space4;
 
-            Text reward = UIBuilder.WrappedLabel("Reward", cardRoot, tier.Reward.Describe(),
-                                                 UITheme.FontTiny - 4, UITheme.TextPrimary, TextAnchor.UpperCenter);
+            Text reward = EmberforgeUI.Body("Reward", cardRoot, tier.Reward.Describe(),
+                                                 UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(reward.rectTransform, 0f, -top, 276f, 44f, new Vector2(0.5f, 1f));
 
             // ---- cost, in the strip's language
             RectTransform cost = UIBuilder.Node("Cost", cardRoot);
             UIBuilder.Box(cost, 0f, 56f, 260f, 28f, new Vector2(0.5f, 0f));
 
-            Image costPlate = cost.gameObject.AddComponent<Image>();
-            costPlate.sprite = UISkin.Panel(8);
-            costPlate.type = Image.Type.Sliced;
-            costPlate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            Image costPlate = EmberforgeUI.SunkenOn(cost);
             costPlate.raycastTarget = false;
 
             Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.GemIcon(64), UITheme.EventToken);
             UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 20f, 20f, new Vector2(0f, 0.5f));
 
-            Text costText = UIBuilder.Label("Value", cost, tier.Cost.ToString(), UITheme.FontTiny - 2,
-                                            affordable ? UITheme.TextPrimary : UITheme.Danger,
+            Text costText = EmberforgeUI.Label("Value", cost, tier.Cost.ToString(), UITheme.FontTiny - 2,
+                                            affordable ? Emberforge.TextGold : UITheme.Danger,
                                             TextAnchor.MiddleLeft);
             UIBuilder.FillParent(costText.rectTransform, UITheme.Space8 + 20f + UITheme.Space8, 0f, UITheme.Space8, 0f);
 
-            UIButton redeem = UIBuilder.Notch(
-                UIBuilder.SecondaryButton("Redeem", cardRoot, "REDEEM", UITheme.FontTiny), 10);
+            UIButton redeem = EmberforgeUI.Button("Redeem", cardRoot, "REDEEM", UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(redeem.Root, 0f, UITheme.Space12, 260f, 38f, new Vector2(0.5f, 0f));
             redeem.Interactable = affordable;
 
@@ -447,8 +445,8 @@ namespace Emberfall.UI.Screens
         private static void StatusOf(EventDef evt, long now, out string text, out Color color)
         {
             if (evt.IsActive(now)) { text = "ACTIVE"; color = UITheme.Success; return; }
-            if (evt.HasNotStarted(now)) { text = "STARTS IN " + FormatDays(evt.StartUnix - now); color = UITheme.TextMuted; return; }
-            text = "ENDED"; color = UITheme.TextDim;
+            if (evt.HasNotStarted(now)) { text = "STARTS IN " + FormatDays(evt.StartUnix - now); color = Emberforge.TextQuiet; return; }
+            text = "ENDED"; color = Emberforge.TextQuiet;
         }
 
         private static string FormatDays(long seconds)

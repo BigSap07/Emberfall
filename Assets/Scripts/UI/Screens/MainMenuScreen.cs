@@ -414,7 +414,11 @@ namespace Emberfall.UI.Screens
             // action of that layer - so at any moment there is exactly one orange thing to press.
             _continueButton = EmberforgeUI.Button("Continue", card, "CONTINUE CAMPAIGN",
                                                   HubStyle.FontButton, ForgeButtonKind.Primary);
-            UIBuilder.Box(_continueButton.Root, 0f, CardInner, CardWidth - CardInner * 2f,
+            // Inset by the ornament's clearance rather than by the card's own padding: at
+            // CardInner the button's lower corners land exactly on the two bottom corner diamonds
+            // and print over them - see Emberforge.OrnamentClearance.
+            UIBuilder.Box(_continueButton.Root, 0f, CardInner,
+                          CardWidth - Emberforge.OrnamentClearance * 2f,
                           HubStyle.TouchMin, new Vector2(0.5f, 0f));
             _continueButton.OnClick(OpenCampaign);
         }
@@ -800,6 +804,19 @@ namespace Emberfall.UI.Screens
                 case "claim": _claimPopup.Show(); break;
                 case "menu": _overflowMenu.Show(_overflowButtonTop); break;
                 case "gallery": _overflowMenu.OpenDesignGallery(); break;
+
+                // The confirm dialog, on the one question in the game that actually asks it. It
+                // is opened through App.Modal rather than built here, so what a capture sees is
+                // the dialog every screen shares - and it is opened on the RESET copy because
+                // that is the only two-answer dialog with real words in it.
+                case "dialog":
+                    App.Modal.ShowConfirm(
+                        "RESET PROGRESS",
+                        "This wipes your heroes, currency and campaign progress and starts a fresh "
+                        + "account. Useful for testing the first-run experience.",
+                        "RESET", "KEEP PLAYING", null, null);
+                    break;
+
                 case "heroes": Router.Show(ScreenId.Heroes); break;
 
                 // Opens two layers, then presses back twice and once more for luck. What the
