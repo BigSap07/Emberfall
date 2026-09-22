@@ -102,7 +102,14 @@ namespace Emberfall.Battle
         /// </summary>
         public void PlayAttackLunge(Vector3 towards, float speed, float distance)
         {
-            PlayAttackLunge(towards, 0.10f, 0.20f, speed, distance);
+            PlayAttackLunge(BattleClips.Basic, towards, 0.10f, 0.20f, speed, distance);
+        }
+
+        /// <summary>The fixed-timing lunge playing a named basic clip - the Dev Arena's path,
+        /// which alternates basic and basic2 by the same rule as the battle screen.</summary>
+        public void PlayAttackLunge(string clipId, Vector3 towards, float speed, float distance)
+        {
+            PlayAttackLunge(clipId, towards, 0.10f, 0.20f, speed, distance);
         }
 
         /// <summary>
@@ -122,9 +129,40 @@ namespace Emberfall.Battle
         /// </summary>
         public void PlayAttackLunge(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
         {
+            PlayAttackLunge(BattleClips.Basic, towards, outSeconds, backSeconds, speed, distance);
+        }
+
+        /// <summary>
+        /// clipId is which basic clip this swing plays - BattleClips.BasicClipFor decides it from
+        /// the record, and the caller times outSeconds/backSeconds off that same clip. A unit that
+        /// never shipped it plays its fallback (SpriteAnimator.Resolve).
+        /// </summary>
+        public void PlayAttackLunge(string clipId, Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
+        {
             if (!Alive) return;
-            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("basic", false);
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce(clipId, false);
+            _acting = true;
             Restart(LungeRoutine(towards, outSeconds, backSeconds, speed, distance));
+        }
+
+        /// <summary>
+        /// True while this unit's own lunge or cast motion is running. A blow that lands in that
+        /// window still flashes, but does not start a flinch: the flinch would replace the lunge
+        /// coroutine and snap a unit that is still out at its target back home in one frame.
+        /// </summary>
+        private bool _acting;
+
+        /// <summary>
+        /// Shows `controlled` as the rest loop while the unit's turn has been taken away, and idle
+        /// again once it has not. The battle screen calls this off the status mirror it keeps from
+        /// StatusApplied / StatusExpired / StatusSpread; see BattleClips for why Stun is the only
+        /// status that counts. A unit with no controlled clip rests on idle as before, and a
+        /// placeholder mannequin has no animator and ignores it.
+        /// </summary>
+        public void SetControlled(bool controlled)
+        {
+            if (Rig == null || Rig.Animation == null) return;
+            Rig.Animation.SetRest(controlled ? BattleClips.Controlled : BattleClips.Idle);
         }
 
         private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
@@ -138,12 +176,14 @@ namespace Emberfall.Battle
             yield return Move(home, forward, outSeconds / speed, true);
             yield return Move(forward, home, backSeconds / speed, false);
             if (Rig != null) Rig.Root.localPosition = Vector3.zero;
+            _acting = false;
         }
 
         public void PlayCast(float speed)
         {
             if (!Alive) return;
-            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("skill", false);
+            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce(BattleClips.Skill, false);
+            _acting = true;
             Restart(CastRoutine(speed));
         }
 
@@ -168,6 +208,7 @@ namespace Emberfall.Battle
                 Rig.Root.localPosition = Vector3.zero;
                 Rig.SetEmission(0f);
             }
+            _acting = false;
         }
 
         public void PlayHit(bool critical)
@@ -175,7 +216,10 @@ namespace Emberfall.Battle
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
             if (Rig != null) Rig.SetFlash(_flash);
-            if (Rig != null && Rig.Animation != null) Rig.Animation.PlayOnce("hit_reaction", false);
+            // Priority, highest first: death, the unit's own action, the hit reaction. A blow
+            // landing while this unit is still swinging or casting flashes it and nothing more.
+            if (_acting) return;
+            if (Rig != null && Rig.Animation != null && !Rig.Animation.PlayReaction(BattleClips.HitReaction)) return;
             Restart(FlinchRoutine(critical ? 0.24f : 0.15f));
         }
 
@@ -206,7 +250,7 @@ namespace Emberfall.Battle
             get
             {
                 if (Rig == null || Rig.Animation == null) return 0f;
-                float clip = Rig.Animation.ClipDuration("death");
+                float clip = Rig.Animation.ClipDuration(BattleClips.Death);
                 return clip > 0f ? clip + SpriteDeathFadeSeconds : 0f;
             }
         }
@@ -214,6 +258,7 @@ namespace Emberfall.Battle
         public IEnumerator PlayDeath(float speed)
         {
             Alive = false;
+            _acting = false;
             if (_motion != null) StopCoroutine(_motion);
             _motion = null;
             if (Rig == null) yield break;
@@ -262,9 +307,9 @@ namespace Emberfall.Battle
         /// </summary>
         private IEnumerator PlaySpriteDeath(float speed)
         {
-            Rig.Animation.PlayOnce("death", true);
+            Rig.Animation.PlayOnce(BattleClips.Death, true);
 
-            float holdSeconds = Rig.Animation.ClipDuration("death") / Mathf.Max(0.01f, speed);
+            float holdSeconds = Rig.Animation.ClipDuration(BattleClips.Death) / Mathf.Max(0.01f, speed);
             float t = 0f;
             while (t < holdSeconds)
             {
@@ -293,6 +338,9 @@ namespace Emberfall.Battle
         public void Revive()
         {
             Alive = true;
+            _acting = false;
+            if (_motion != null) StopCoroutine(_motion);
+            _motion = null;
             if (Rig == null) return;
             Rig.Root.gameObject.SetActive(true);
             Rig.Root.localPosition = Vector3.zero;
@@ -300,7 +348,11 @@ namespace Emberfall.Battle
             Rig.Body.localPosition = Vector3.zero;
             Rig.SetFade(1f);
             Rig.SetFlash(0f);
-            if (Rig.Animation != null) Rig.Animation.PlayLoop("idle");
+            if (Rig.Animation != null)
+            {
+                Rig.Animation.SetRest(BattleClips.Idle);
+                Rig.Animation.PlayLoop(BattleClips.Idle);
+            }
         }
 
         private void Restart(IEnumerator routine)

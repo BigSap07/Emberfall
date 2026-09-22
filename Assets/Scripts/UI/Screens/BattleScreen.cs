@@ -109,13 +109,17 @@ namespace Emberfall.UI.Screens
         public bool Finished { get { return _finished; } }
 
         /// <summary>
-        /// Nominal (pre-_speed) seconds owed before the NEXT event may render, drained at the top
-        /// of Handle regardless of what event that turns out to be. Exists for a SpriteAnimator
-        /// unit's basic/skill choreography: the event that TRIGGERED the clip only holds long
-        /// enough for the outbound half (so the following Damage event fires exactly when the
-        /// strike connects, not before and not after); the follow-through/return half is deferred
-        /// here so it still finishes before anything else advances, without delaying Damage itself.
-        /// Always 0 for a unit with no SpriteAnimator, so nothing changes for the other six heroes.
+        /// Nominal (pre-_speed) seconds of an attack or skill clip's follow-through still owed.
+        /// The event that TRIGGERED the clip holds only for the outbound half, so the Damage events
+        /// that follow render on the strike frame; the follow-through is owed here and drained
+        /// before the next ACTION opens (OpensBeat), never before the action's own consequences.
+        /// Every Wait while it is owed pays it down, so the damage numbers, hit reactions and
+        /// status tags of the strike play out during the follow-through rather than after it.
+        ///
+        /// It used to drain at the top of the very next Handle, which is the strike's own Damage
+        /// event, so every drawn hero's hit landed a whole follow-through - 1.0 to 1.7 seconds -
+        /// after the frame the clip draws it on. Always 0 for a unit with no SpriteAnimator, so
+        /// placeholder mannequins time exactly as they did.
         /// </summary>
         private float _pendingAnimationTail;
 
@@ -1023,14 +1027,14 @@ namespace Emberfall.UI.Screens
 
         private IEnumerator Handle(int index)
         {
-            if (_pendingAnimationTail > 0f)
+            BattleEvent e = _result.Events[index];
+            if (_pendingAnimationTail > 0f && OpensBeat(e.Type))
             {
                 float tail = _pendingAnimationTail;
                 _pendingAnimationTail = 0f;
                 yield return Wait(tail);
             }
 
-            BattleEvent e = _result.Events[index];
             switch (e.Type)
             {
                 case BattleEventType.RoundStart:
@@ -1077,14 +1081,19 @@ namespace Emberfall.UI.Screens
                     // _pendingAnimationTail so it still finishes before anything else advances,
                     // without delaying Damage itself. Zero for a unit with no such clip: falls
                     // through to the exact original fixed-timing lunge, unchanged.
-                    float clipDuration = source != null && source.Rig != null && source.Rig.Animation != null
-                        ? source.Rig.Animation.ClipDuration("basic") : 0f;
+                    //
+                    // Which basic clip: BattleClips.BasicClipFor alternates basic and basic2 by how
+                    // many basics this unit has made in the record, resolved to what the unit
+                    // actually ships, and the beat is timed off that same clip.
+                    string basicClip = source != null && source.Rig != null && source.Rig.Animation != null
+                        ? source.Rig.Animation.Resolve(BattleClips.BasicClipFor(_result.Events, index)) : null;
+                    float clipDuration = basicClip != null ? source.Rig.Animation.ClipDuration(basicClip) : 0f;
                     if (source != null && clipDuration > 0f)
                     {
-                        float impact = clipDuration * source.Rig.Animation.ImpactFraction("basic");
+                        float impact = clipDuration * source.Rig.Animation.ImpactFraction(basicClip);
                         float outSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
                         float backSeconds = clipDuration - outSeconds;
-                        source.PlayAttackLunge(towards, outSeconds, backSeconds, _speed, approach);
+                        source.PlayAttackLunge(basicClip, towards, outSeconds, backSeconds, _speed, approach);
                         yield return Wait(outSeconds);
                         for (int t = 0; t < targetIds.Count; t++)
                         {
@@ -1129,10 +1138,10 @@ namespace Emberfall.UI.Screens
                     // to _pendingAnimationTail. Zero for a unit with no such clip: falls through to
                     // the exact original fixed timing, unchanged.
                     float clipDuration = source != null && source.Rig != null && source.Rig.Animation != null
-                        ? source.Rig.Animation.ClipDuration("skill") : 0f;
+                        ? source.Rig.Animation.ClipDuration(BattleClips.Skill) : 0f;
                     if (source != null && clipDuration > 0f)
                     {
-                        float impact = clipDuration * source.Rig.Animation.ImpactFraction("skill");
+                        float impact = clipDuration * source.Rig.Animation.ImpactFraction(BattleClips.Skill);
                         float impactSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
                         yield return Wait(impactSeconds);
                         PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
@@ -1234,6 +1243,7 @@ namespace Emberfall.UI.Screens
                     UnitBar bar = BarOf(e.TargetId);
                     UnitActor target = ActorOf(e.TargetId);
                     if (bar != null) SyncStatusCount(bar, e.Status, e.Value);
+                    RefreshControlled(e.TargetId);
                     if (target != null)
                     {
                         Color tint = StatusInfo.IsHarmful(e.Status) ? UITheme.Danger : UITheme.Success;
@@ -1266,6 +1276,7 @@ namespace Emberfall.UI.Screens
                 {
                     UnitBar bar = BarOf(e.TargetId);
                     if (bar != null && bar.Statuses.Remove(e.Status)) RefreshStatusText(bar);
+                    RefreshControlled(e.TargetId);
                     break;
                 }
 
@@ -1278,6 +1289,8 @@ namespace Emberfall.UI.Screens
                     UnitBar bar = BarOf(e.TargetId);
                     UnitActor heir = ActorOf(e.TargetId);
                     if (bar != null) SyncStatusCount(bar, e.Status, 0);
+                    RefreshControlled(e.TargetId);
+                    RefreshControlled(e.SourceId);
                     if (heir != null)
                     {
                         SpawnFloatingText(heir.HeadPosition,
@@ -1333,8 +1346,34 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>
+        /// The events that open a new action, before which an owed clip follow-through is paid in
+        /// full. Everything else in the record is a consequence of the action already on screen
+        /// and plays inside its follow-through. See _pendingAnimationTail.
+        /// </summary>
+        private static bool OpensBeat(BattleEventType type)
+        {
+            return type == BattleEventType.TurnStart || type == BattleEventType.RoundStart
+                   || type == BattleEventType.BasicAttack || type == BattleEventType.AbilityCast
+                   || type == BattleEventType.BattleEnd;
+        }
+
+        /// <summary>
+        /// Puts a unit into or out of its `controlled` rest loop from the status mirror this screen
+        /// already keeps off the record. Reads the bar, never the simulation.
+        /// </summary>
+        private void RefreshControlled(int unitId)
+        {
+            UnitActor actor = ActorOf(unitId);
+            UnitBar bar = BarOf(unitId);
+            if (actor == null || bar == null) return;
+            actor.SetControlled(bar.Statuses.Exists(BattleClips.Controls));
+        }
+
         private IEnumerator Wait(float seconds)
         {
+            // Time spent on anything pays down an owed follow-through: it is on screen either way.
+            if (_pendingAnimationTail > 0f) _pendingAnimationTail = Mathf.Max(0f, _pendingAnimationTail - seconds);
             float remaining = seconds / _speed;
             while (remaining > 0f)
             {
