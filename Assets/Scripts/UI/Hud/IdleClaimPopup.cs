@@ -24,11 +24,13 @@ namespace Emberfall.UI
     public sealed class IdleClaimPopup
     {
         private const float PopupWidth = 760f;
-        // 420, measured against the content rather than picked: heading, amounts, stored
-        // time, the cap sentence and the rate line come to about 270, and the buttons and
-        // padding take the rest. It was 520, and the first capture of it showed a hand's
-        // width of empty plate between the rates and the buttons.
-        private const float PopupHeight = 420f;
+        // Measured against the content rather than picked: the amounts, the stored time and the
+        // well holding the cap sentence and the rate line come to about 290, the buttons take a
+        // full TouchMin, and the frame and the padding take the rest. It was 520 before the Hub
+        // pass, and the first capture of it showed a hand's width of empty plate between the
+        // rates and the buttons; it is taller than the 420 that replaced it because the ribbon
+        // now occupies the top edge and the well has a surface of its own.
+        private const float PopupHeight = 470f;
         private const float RowHeight = 34f;
 
         private readonly GameApp _app;
@@ -114,42 +116,53 @@ namespace Emberfall.UI
             RectTransform popup = HudWidgets.Popup("Plate", safe, PopupWidth, PopupHeight,
                                                    0f, 0f, new Vector2(0.5f, 0.5f));
 
-            Text heading = UIBuilder.Label("Heading", popup, "IDLE REWARDS", HubStyle.FontSecondary,
-                                           HubStyle.SoonText, TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, HubStyle.PanelPadX, -HubStyle.PanelPadY,
-                          420f, RowHeight, new Vector2(0f, 1f));
+            // The heading is a ribbon across the top of the plate rather than a line of text
+            // inside it, which is the whole of what this layer gains from the design system: the
+            // popup now announces itself the way every other framed surface in the game does.
+            EmberforgeUI.TitleRibbon("Heading", popup, "IDLE REWARDS", PopupWidth * 0.56f);
 
-            _amounts = UIBuilder.Label("Amounts", popup, "", UITheme.FontHeading, HubStyle.ValueGold,
-                                       TextAnchor.UpperLeft);
-            UIBuilder.Box(_amounts.rectTransform, HubStyle.PanelPadX, -(HubStyle.PanelPadY + 44f),
-                          PopupWidth - HubStyle.PanelPadX * 2f, 52f, new Vector2(0f, 1f));
+            float inner = Emberforge.Space24;
+            float top = Emberforge.Space24;
 
-            _stored = UIBuilder.Label("Stored", popup, "", HubStyle.FontValue, HubStyle.LabelText,
-                                      TextAnchor.UpperLeft);
-            UIBuilder.Box(_stored.rectTransform, HubStyle.PanelPadX, -(HubStyle.PanelPadY + 112f),
-                          PopupWidth - HubStyle.PanelPadX * 2f, RowHeight, new Vector2(0f, 1f));
+            _amounts = EmberforgeUI.Title("Amounts", popup, "", UITheme.FontHeading,
+                                          Emberforge.TextGold, TextAnchor.UpperCenter);
+            UIBuilder.Box(_amounts.rectTransform, 0f, -top, PopupWidth - inner * 2f, 54f,
+                          new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_amounts, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _cap = UIBuilder.WrappedLabel("Cap", popup, "", HubStyle.FontSecondary,
-                                          HubStyle.TextSecondary, TextAnchor.UpperLeft);
-            UIBuilder.Box(_cap.rectTransform, HubStyle.PanelPadX, -(HubStyle.PanelPadY + 156f),
-                          PopupWidth - HubStyle.PanelPadX * 2f, 64f, new Vector2(0f, 1f));
+            _stored = EmberforgeUI.Label("Stored", popup, "", HubStyle.FontValue,
+                                         Emberforge.TextBody, TextAnchor.UpperCenter);
+            UIBuilder.Box(_stored.rectTransform, 0f, -(top + 60f), PopupWidth - inner * 2f, RowHeight,
+                          new Vector2(0.5f, 1f));
 
-            _rate = UIBuilder.Label("Rate", popup, "", HubStyle.FontSecondary,
-                                    UITheme.WithAlpha(HubStyle.TextSecondary, HubStyle.SoonAlpha),
-                                    TextAnchor.UpperLeft);
-            UIBuilder.Box(_rate.rectTransform, HubStyle.PanelPadX, -(HubStyle.PanelPadY + 228f),
-                          PopupWidth - HubStyle.PanelPadX * 2f, RowHeight, new Vector2(0f, 1f));
+            // The two quiet lines sit in a sunken well, so the popup separates "what you have
+            // earned" from "how this works" by depth rather than by font size alone.
+            RectTransform well = UIBuilder.Node("Well", popup);
+            UIBuilder.Box(well, 0f, -(top + 102f), PopupWidth - inner * 2f, 124f, new Vector2(0.5f, 1f));
+            EmberforgeUI.SunkenOn(well);
 
-            // The only Gold button on this layer, exactly as CLAIM was the only Gold button on the
-            // panel it replaces: Gold is the primary action and there is one of them here.
-            _claim = UIBuilder.GoldButton("Claim", popup, "CLAIM", HubStyle.FontButton);
-            UIBuilder.Box(_claim.Root, -HubStyle.PanelPadX, HubStyle.PanelPadY, 300f, HubStyle.TouchMin,
-                          new Vector2(1f, 0f));
+            _cap = EmberforgeUI.Body("Cap", well, "", HubStyle.FontSecondary,
+                                     Emberforge.TextQuiet, TextAnchor.UpperCenter);
+            UIBuilder.Box(_cap.rectTransform, 0f, -Emberforge.Space16,
+                          PopupWidth - inner * 2f - Emberforge.Space32, 62f, new Vector2(0.5f, 1f));
+
+            _rate = EmberforgeUI.Label("Rate", well, "", HubStyle.FontSecondary,
+                                       Emberforge.TextGold, TextAnchor.LowerCenter);
+            UIBuilder.Box(_rate.rectTransform, 0f, Emberforge.Space12,
+                          PopupWidth - inner * 2f - Emberforge.Space32, RowHeight,
+                          new Vector2(0.5f, 0f));
+
+            // The only primary button on this layer, exactly as CLAIM was the only Gold button on
+            // the panel it replaces: one orange thing to press, and it is the thing the layer
+            // exists for.
+            _claim = EmberforgeUI.Button("Claim", popup, "CLAIM", HubStyle.FontButton,
+                                         ForgeButtonKind.Primary);
+            UIBuilder.Box(_claim.Root, -inner, inner, 300f, HubStyle.TouchMin, new Vector2(1f, 0f));
             _claim.OnClick(ClaimNow);
 
-            UIButton close = UIBuilder.SecondaryButton("Close", popup, "CLOSE", HubStyle.FontButton);
-            UIBuilder.Box(close.Root, HubStyle.PanelPadX, HubStyle.PanelPadY, 260f, HubStyle.TouchMin,
-                          new Vector2(0f, 0f));
+            UIButton close = EmberforgeUI.Button("Close", popup, "CLOSE", HubStyle.FontButton,
+                                                 ForgeButtonKind.Secondary);
+            UIBuilder.Box(close.Root, inner, inner, 260f, HubStyle.TouchMin, new Vector2(0f, 0f));
             close.OnClick(Close);
 
             _root.gameObject.SetActive(false);

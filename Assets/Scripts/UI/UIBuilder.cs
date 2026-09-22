@@ -16,12 +16,29 @@ namespace Emberfall.UI
         public Text SubLabel;
         public CanvasGroup Group;
 
+        /// <summary>
+        /// Told when Interactable changes, so a button whose disabled state is a DIFFERENT SPRITE
+        /// rather than a faded one can swap it.
+        ///
+        /// A hook rather than a poll, and a hook rather than a subclass. Button.interactable is a
+        /// plain property with no change event, so the alternatives were an Update on every button
+        /// in the game comparing a bool, or subclassing Button to override DoStateTransition - and
+        /// the second would put a uGUI internal in the offline compile shim, where a divergence
+        /// between the shim's signature and the engine's would not be caught until the editor
+        /// opened. Every caller in this project already goes through this property, so the hook
+        /// fires wherever the swap is needed.
+        ///
+        /// Null for every button built by UIBuilder, which fades instead. EmberforgeUI sets it.
+        /// </summary>
+        public Action<bool> InteractableChanged;
+
         public bool Interactable
         {
             get { return Button != null && Button.interactable; }
             set
             {
                 if (Button != null) Button.interactable = value;
+                if (InteractableChanged != null) { InteractableChanged(value); return; }
                 if (Group != null) Group.alpha = value ? 1f : 0.45f;
             }
         }

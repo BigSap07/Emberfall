@@ -136,15 +136,79 @@ namespace UnityEditor
         public static EditorBuildSettingsScene[] scenes { get; set; }
     }
 
+    /// <summary>Real API: a [Flags] enum, copied whole rather than trimmed to the one member the
+    /// baker uses - a shim that renumbers an engine enum is a shim that compiles code the engine
+    /// will not.</summary>
+    [Flags]
+    public enum ImportAssetOptions
+    {
+        Default = 0,
+        ForceUpdate = 1,
+        ForceSynchronousImport = 8,
+        ImportRecursive = 256,
+        DontDownloadFromCacheServer = 8192,
+        ForceUncompressedImport = 16384
+    }
+
     public static class AssetDatabase
     {
         public static void Refresh() { }
+        public static void Refresh(ImportAssetOptions options) { }
+        public static void ImportAsset(string path) { }
+        public static void ImportAsset(string path, ImportAssetOptions options) { }
+        public static bool DeleteAsset(string path) { return true; }
+        public static void StartAssetEditing() { }
+        public static void StopAssetEditing() { }
         public static void SaveAssets() { }
         public static T LoadAssetAtPath<T>(string path) where T : UnityEngine.Object { return null; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string GUIDToAssetPath(string guid) { return ""; }
         public static bool IsValidFolder(string path) { return true; }
         public static string CreateFolder(string parent, string newFolderName) { return ""; }
+    }
+
+    // ------------------------------------------------------------------ the sprite importer
+    //
+    // Signature-only, like the rest of this shim, and present for one reason: EmberforgeBaker
+    // sets a nine-slice border on every sprite it writes, and a border that never gets set is the
+    // one failure in that pipeline that is completely silent - the sprite imports, loads and
+    // draws, and only stretches its corners at a size nobody photographed. Type-checking that
+    // call offline is cheap insurance for it.
+
+    public enum TextureImporterType { Default = 0, NormalMap = 1, GUI = 2, Sprite = 8, Cursor = 7, Cookie = 4, Lightmap = 6, SingleChannel = 10 }
+    public enum SpriteImportMode { None = 0, Single = 1, Multiple = 2, Polygon = 3 }
+    public enum TextureImporterCompression { Uncompressed = 0, Compressed = 1, CompressedHQ = 2, CompressedLQ = 3 }
+    public enum SpriteAlignment { Center = 0, TopLeft = 1, TopCenter = 2, TopRight = 3, LeftCenter = 4, RightCenter = 5, BottomLeft = 6, BottomCenter = 7, BottomRight = 8, Custom = 9 }
+
+    public class AssetImporter : UnityEngine.Object
+    {
+        public string assetPath { get; set; }
+        public static AssetImporter GetAtPath(string path) { return null; }
+        public void SaveAndReimport() { }
+    }
+
+    public sealed class TextureImporterSettings
+    {
+        public Vector4 spriteBorder { get; set; }
+        public SpriteMeshType spriteMeshType { get; set; }
+        public int spriteAlignment { get; set; }
+        public Vector2 spritePivot { get; set; }
+    }
+
+    public sealed class TextureImporter : AssetImporter
+    {
+        public TextureImporterType textureType { get; set; }
+        public SpriteImportMode spriteImportMode { get; set; }
+        public float spritePixelsPerUnit { get; set; }
+        public bool mipmapEnabled { get; set; }
+        public bool alphaIsTransparency { get; set; }
+        public bool isReadable { get; set; }
+        public FilterMode filterMode { get; set; }
+        public TextureWrapMode wrapMode { get; set; }
+        public TextureImporterCompression textureCompression { get; set; }
+        public int maxTextureSize { get; set; }
+        public void ReadTextureSettings(TextureImporterSettings dest) { }
+        public void SetTextureSettings(TextureImporterSettings src) { }
     }
 
     public static class EditorUtility

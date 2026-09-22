@@ -87,45 +87,38 @@ namespace Emberfall.UI
             return button;
         }
 
-        // ------------------------------------------------------------------ the right-edge rail
+        // ------------------------------------------------------------------ the rail
 
         /// <summary>
-        /// A rail button: a small warm-rimmed disc inside a full-size hit rect, with an optional
+        /// A rail button: an Emberforge disc inside a full-size hit rect, with an optional
         /// notification dot on its top-right. Friends, Mail, Events and the overflow menu are all
         /// this, so the rail reads as one control strip rather than four decisions.
+        ///
+        /// The disc, its rim and its press are EmberforgeUI.IconButton's now rather than three
+        /// Images assembled here. What is left in this method is the two things that are the
+        /// HUB's rather than the kit's: the notification dot, which only a HUD element has, and
+        /// the HudElement handle the Hub reaches back through to relabel and re-badge.
         /// </summary>
         public static HudElement RailButton(string name, RectTransform parent, string slot,
                                             Sprite fallbackGlyph, Color tint, Action action)
         {
+            ForgeDisc disc = EmberforgeUI.IconButton("Rail" + name, parent, slot, fallbackGlyph,
+                                                     tint, HubStyle.RailDisc, action);
+            HudElement element = Wrap(disc);
+            AddBadge(element, disc.Face);
+            return element;
+        }
+
+        /// <summary>Carries a built disc across into the handle the Hub already speaks in. One
+        /// conversion in one place, rather than every call site knowing both shapes.</summary>
+        private static HudElement Wrap(ForgeDisc disc)
+        {
             HudElement element = new HudElement();
-            element.Root = UIBuilder.Node("Rail" + name, parent);
-            UIBuilder.Size(element.Root, HubStyle.TouchMin, HubStyle.TouchMin);
-            element.Group = element.Root.gameObject.AddComponent<CanvasGroup>();
-
-            Image hit = HitArea(element.Root);
-
-            RectTransform face = UIBuilder.Node("Face", element.Root);
-            UIBuilder.Box(face, 0f, 0f, HubStyle.RailDisc, HubStyle.RailDisc, new Vector2(0.5f, 0.5f));
-
-            element.Disc = UIBuilder.Img("Disc", face, HudSkin.Circle(HudSkin.Disc, 128),
-                                         UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha));
-            UIBuilder.FillParent(element.Disc.rectTransform, 0f);
-
-            Image rim = UIBuilder.Img("Ring", face,
-                                      HudSkin.Ring(HudSkin.DiscRing, 128, HubStyle.NavRingThickness),
-                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
-            UIBuilder.FillParent(rim.rectTransform, 0f);
-
-            element.Glyph = UIBuilder.Img("Glyph", face, HudSkin.Icon(slot, fallbackGlyph), tint);
-            UIBuilder.FillParent(element.Glyph.rectTransform, HubStyle.NavGlyphInset * 0.6f);
-
-            element.Button = new UIButton();
-            element.Button.Root = element.Root;
-            element.Button.Background = hit;
-            element.Button.Group = element.Group;
-            element.Button.Button = Pressable(element.Root, hit, action);
-
-            AddBadge(element, face);
+            element.Root = disc.Root;
+            element.Group = disc.Group;
+            element.Disc = disc.Disc;
+            element.Glyph = disc.Glyph;
+            element.Button = disc.Button;
             return element;
         }
 
@@ -140,8 +133,17 @@ namespace Emberfall.UI
             dot.color = UITheme.Danger;
             dot.raycastTarget = false;
 
-            element.BadgeText = UIBuilder.Label("Count", element.Badge, "", HubStyle.FontSoon,
-                                                UITheme.TextPrimary, TextAnchor.MiddleCenter);
+            // The same dark outline every other element in the kit carries. Without it a red dot
+            // on a gold rim is two saturated colours meeting with nothing between them, which is
+            // the one place on the Hub that reads as a different piece of software.
+            Image ring = UIBuilder.Img("Outline", element.Badge,
+                                       TextureLab.Ring(64, Emberforge.OutlineWeight * 2),
+                                       Emberforge.Outline);
+            UIBuilder.FillParent(ring.rectTransform, 0f);
+            ring.raycastTarget = false;
+
+            element.BadgeText = EmberforgeUI.Label("Count", element.Badge, "", HubStyle.FontSoon,
+                                                   Emberforge.TextOnColor, TextAnchor.MiddleCenter);
             UIBuilder.FillParent(element.BadgeText.rectTransform, 0f);
             element.Badge.gameObject.SetActive(false);
         }
@@ -149,51 +151,40 @@ namespace Emberfall.UI
         // ------------------------------------------------------------------ the bottom nav bar
 
         /// <summary>
-        /// A nav cell: a disc with a glyph in it and a caption underneath, in a cell wide enough
-        /// for the longest word in the row. The whole cell is the target, not the disc, which is
-        /// what makes the row comfortable to hit with a thumb rather than accurate to hit with a
-        /// stylus.
+        /// A nav cell: an Emberforge disc with a glyph in it and a caption underneath, in a cell
+        /// wide enough for the longest word in the row. The whole cell is the target, not the
+        /// disc, which is what makes the row comfortable to hit with a thumb rather than accurate
+        /// to hit with a stylus.
+        ///
+        /// The disc is built at NavIcon and the cell at NavCellWidth x NavCellHeight, so the hit
+        /// rect IconButton gives the disc is deliberately discarded here - the cell replaces it,
+        /// and the cell is larger on both axes than the minimum the disc would have carried.
         /// </summary>
         public static HudElement NavButton(string name, RectTransform parent, string caption,
                                            string slot, Sprite fallbackGlyph, Color tint, Action action)
         {
-            HudElement element = new HudElement();
-            element.Root = UIBuilder.Node("Nav" + name, parent);
+            ForgeDisc disc = EmberforgeUI.IconButton("Nav" + name, parent, slot, fallbackGlyph,
+                                                     tint, HubStyle.NavIcon, action);
+            HudElement element = Wrap(disc);
+
             UIBuilder.Sized(element.Root, HubStyle.NavCellWidth, HubStyle.NavCellHeight);
             UIBuilder.Size(element.Root, HubStyle.NavCellWidth, HubStyle.NavCellHeight);
-            element.Group = element.Root.gameObject.AddComponent<CanvasGroup>();
+            // The disc goes to the TOP of the cell rather than its middle, because the caption
+            // takes the bottom of it. IconButton centres its face, which is right for a rail and
+            // wrong for a cell that is taller than its art.
+            UIBuilder.Box(disc.Face, 0f, 0f, HubStyle.NavIcon, HubStyle.NavIcon, new Vector2(0.5f, 1f));
 
-            Image hit = HitArea(element.Root);
-
-            RectTransform face = UIBuilder.Node("Face", element.Root);
-            UIBuilder.Box(face, 0f, 0f, HubStyle.NavIcon, HubStyle.NavIcon, new Vector2(0.5f, 1f));
-
-            element.Disc = UIBuilder.Img("Disc", face, HudSkin.Circle(HudSkin.Disc, 128),
-                                         UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha));
-            UIBuilder.FillParent(element.Disc.rectTransform, 0f);
-
-            Image rim = UIBuilder.Img("Ring", face,
-                                      HudSkin.Ring(HudSkin.DiscRing, 128, HubStyle.NavRingThickness),
-                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
-            UIBuilder.FillParent(rim.rectTransform, 0f);
-
-            element.Glyph = UIBuilder.Img("Glyph", face, HudSkin.Icon(slot, fallbackGlyph), tint);
-            UIBuilder.FillParent(element.Glyph.rectTransform, HubStyle.NavGlyphInset);
-
-            element.Caption = UIBuilder.Label("Label", element.Root, caption, HubStyle.FontCaption,
-                                              HubStyle.LabelText, TextAnchor.UpperCenter);
+            element.Caption = EmberforgeUI.Label("Label", element.Root, caption, HubStyle.FontCaption,
+                                                 Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(element.Caption.rectTransform, 0f, -(HubStyle.NavIcon + HubStyle.NavIconGap),
                           HubStyle.NavCellWidth, HubStyle.NavCaptionHeight, new Vector2(0.5f, 1f));
-            UIBuilder.Shadowed(element.Caption, UITheme.InkArt, 1.4f);
-
-            element.Button = new UIButton();
-            element.Button.Root = element.Root;
-            element.Button.Background = hit;
-            element.Button.Group = element.Group;
+            // Outlined rather than shadowed: this row sits on the painting's foreground, which is
+            // the brightest part of the map, and a drop shadow on one side does not hold a word
+            // off a light background the way a stroke all the way round does.
+            UIBuilder.Outlined(element.Caption, Emberforge.Outline, Emberforge.StrokeThin);
             element.Button.Label = element.Caption;
-            element.Button.Button = Pressable(element.Root, hit, action);
 
-            AddBadge(element, face);
+            AddBadge(element, disc.Face);
             return element;
         }
 
@@ -207,52 +198,28 @@ namespace Emberfall.UI
         /// </summary>
         public static HudElement ChestButton(string name, RectTransform parent, Action action)
         {
-            HudElement element = new HudElement();
-            element.Root = UIBuilder.Node(name, parent);
-            UIBuilder.Size(element.Root, HubStyle.ChestSize, HubStyle.ChestSize);
-            element.Group = element.Root.gameObject.AddComponent<CanvasGroup>();
-
-            Image hit = HitArea(element.Root);
-
-            // PlateAlphaSolid rather than the rail's PlateAlpha: this is the one round button on
-            // the Hub that sits on the painting's BRIGHT half - the sunlit plaza - and at the
-            // rail's opacity the chest read as a smudge on the stone rather than as an object.
-            element.Disc = UIBuilder.Img("Disc", element.Root, HudSkin.Circle(HudSkin.Disc, 128),
-                                         UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid));
-            UIBuilder.FillParent(element.Disc.rectTransform, 0f);
-
-            Image rim = UIBuilder.Img("Ring", element.Root,
-                                      HudSkin.Ring(HudSkin.DiscRing, 128, HubStyle.NavRingThickness),
-                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
-            UIBuilder.FillParent(rim.rectTransform, 0f);
-
-            element.Glyph = UIBuilder.Img("Glyph", element.Root,
-                                          HudSkin.Icon(HudSkin.IconChest, TextureLab.Chest(64)),
-                                          HubStyle.ValueGold);
-            UIBuilder.FillParent(element.Glyph.rectTransform, HubStyle.ChestGlyphInset);
+            ForgeDisc disc = EmberforgeUI.IconButton(name, parent, HudSkin.IconChest,
+                                                     TextureLab.Chest(64), Emberforge.TextGold,
+                                                     HubStyle.ChestSize, action);
+            HudElement element = Wrap(disc);
 
             // The bubble hangs ABOVE the chest and overlaps its rim slightly, which is what makes
-            // it read as belonging to the chest rather than as a second control stacked on it.
+            // it read as belonging to the chest rather than as a second control stacked on it. It
+            // is a currency pill's plate, because that is what it is: a figure in a dark capsule
+            // with a gold line inside it.
             RectTransform bubble = UIBuilder.Node("Bubble", element.Root);
             UIBuilder.Box(bubble, 0f, HubStyle.BubbleHeight - HubStyle.BubbleLift,
                           HubStyle.BubbleWidth, HubStyle.BubbleHeight, new Vector2(0.5f, 1f));
             Image plate = bubble.gameObject.AddComponent<Image>();
-            plate.sprite = HudSkin.Plate(HudSkin.PlateBubble, HubStyle.RadiusPill);
+            plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Pill);
             plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            plate.color = Color.white;
             plate.raycastTarget = false;
-            UIBuilder.Frame("Edge", bubble, UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong),
-                            HubStyle.RadiusPill, HubStyle.BorderWeight);
 
-            element.Caption = UIBuilder.Label("Stored", bubble, "0", HubStyle.FontCaption,
-                                              HubStyle.ValueGold, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(element.Caption.rectTransform, 4f);
-
-            element.Button = new UIButton();
-            element.Button.Root = element.Root;
-            element.Button.Background = hit;
-            element.Button.Group = element.Group;
-            element.Button.Button = Pressable(element.Root, hit, action);
+            element.Caption = EmberforgeUI.Label("Stored", bubble, "0", HubStyle.FontCaption,
+                                                 Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(element.Caption.rectTransform, Emberforge.Space8);
+            UIBuilder.Outlined(element.Caption, Emberforge.Outline, Emberforge.StrokeThin);
             return element;
         }
 
@@ -288,18 +255,19 @@ namespace Emberfall.UI
             return sheet;
         }
 
-        /// <summary>A popup plate: the small surface a claim or a menu is drawn inside.</summary>
+        /// <summary>
+        /// A popup plate: the small surface a claim or a menu is drawn inside.
+        ///
+        /// An Emberforge panel with its corner ornaments, because a popup is the one surface on
+        /// this screen that a player is LOOKING AT rather than looking past - the map layer's own
+        /// plates stay quiet for the opposite reason, and HubStyle still owns those.
+        /// </summary>
         public static RectTransform Popup(string name, RectTransform parent, float width, float height,
                                           float x, float y, Vector2 anchor)
         {
             RectTransform popup = UIBuilder.Node(name, parent);
             UIBuilder.Box(popup, x, y, width, height, anchor);
-            Image plate = popup.gameObject.AddComponent<Image>();
-            plate.sprite = HudSkin.Plate(HudSkin.PlatePopup, HubStyle.RadiusPopup);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
-            UIBuilder.Frame("Edge", popup, UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong),
-                            HubStyle.RadiusPopup, HubStyle.BorderWeightHeavy);
+            EmberforgeUI.PanelOn(popup, true);
             return popup;
         }
 

@@ -15,21 +15,41 @@ namespace Emberfall.UI.Screens
         private Text _countLabel;
         private Text _emptyLabel;
 
+        /// <summary>
+        /// THE GRID CELL, and the one number the cards and this screen both have to agree about.
+        ///
+        /// Three columns in landscape. The cell is as tall as Widgets.CardHeight rather than as
+        /// tall as a guess: a grid whose cell is shorter than its card clips the bottom off every
+        /// one of them, and that is a fault nothing but a capture catches.
+        /// </summary>
+        private const float CellWidth = 470f;
+        private const float GridGap = 24f;
+
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "YOUR ALLIES", Router, out _countLabel);
+            // The page's own ground. The shared backdrop is the near-black violet every
+            // unconverted screen sits on, and a grid of warm brown cards on it reads as two
+            // different pieces of software. One Image, on one screen, rather than changing the
+            // global colour and restyling twenty pages that have not had a visual pass.
+            Image ground = UIBuilder.Img("Ground", Root, TextureLab.White, Emberforge.PanelLow);
+            UIBuilder.FillParent(ground.rectTransform, 0f);
+            ground.raycastTarget = false;
 
-            // three columns in landscape (3 x 470 + 2 x 20 = 1450 across 1856 usable); the grid
-            // centres the block. Was two columns in portrait.
+            ScreenChrome.ForgedHeader(Root, "YOUR ALLIES", Router, out _countLabel);
+
             ScrollRect scroll;
             _grid = UIBuilder.ScrollGrid("Collection", Root, out scroll,
-                                         new Vector2(470f, 300f), new Vector2(20f, 20f), 3,
+                                         new Vector2(CellWidth, Widgets.CardHeight),
+                                         new Vector2(GridGap, GridGap), 3,
                                          new RectOffset(0, 0, 8, 48));
             RectTransform scrollRoot = scroll.GetComponent<RectTransform>();
-            UIBuilder.FillParent(scrollRoot, UITheme.ScreenPadding, UITheme.TopBarHeight + 130f, UITheme.ScreenPadding, 0f);
+            UIBuilder.FillParent(scrollRoot, UITheme.ScreenPadding,
+                                 UITheme.TopBarHeight + 130f, UITheme.ScreenPadding, 0f);
 
-            _emptyLabel = UIBuilder.Label("Empty", Root, "No heroes yet - visit the Rift to summon one.",
-                                          UITheme.FontBody, UITheme.TextDim, TextAnchor.MiddleCenter);
+            _emptyLabel = EmberforgeUI.Label("Empty", Root,
+                                             "No heroes yet - visit the Rift to summon one.",
+                                             UITheme.FontBody, Emberforge.TextQuiet,
+                                             TextAnchor.MiddleCenter);
             UIBuilder.Box(_emptyLabel.rectTransform, 0f, 0f, 800f, 60f, new Vector2(0.5f, 0.5f));
             _emptyLabel.gameObject.SetActive(false);
         }

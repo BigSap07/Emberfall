@@ -451,105 +451,158 @@ namespace Emberfall.UI
             return root;
         }
 
-        /// <summary>Collection tile. The whole tile is the button.</summary>
+        /// <summary>
+        /// COLLECTION TILE. The whole tile is the button.
+        ///
+        /// An Emberforge plain panel rather than a framed one: this is a grid of forty of these,
+        /// and forty gold frames side by side is a page of frames with heroes in them. The gold on
+        /// a card belongs to the ONE thing it is a picture of, which is the portrait, so the rarity
+        /// frame carries it and the card underneath stays quiet.
+        ///
+        /// The aspect wash behind the whole card is gone. PortraitFrame glows in the hero's aspect
+        /// now, which says the same thing louder and in the right place - the wash tinted the whole
+        /// card, which made a grid of six aspects read as six differently coloured cards rather
+        /// than as one collection.
+        /// </summary>
         public static UIButton HeroCard(string name, Transform parent, HeroInstance hero, bool deployed, Action onClick)
         {
             HeroDef def = hero.Def;
-            UIButton card = new UIButton();
-            card.Root = UIBuilder.Node(name, parent);
-            UIBuilder.Sized(card.Root, 0f, 300f);
+            UIButton card = Tile(name, parent, def, def.Stars, onClick, false);
 
-            card.Background = card.Root.gameObject.AddComponent<Image>();
-            card.Background.sprite = TextureLab.RoundedRect(20);
-            card.Background.type = Image.Type.Sliced;
-            card.Background.color = UITheme.Panel;
+            Text nameLabel = EmberforgeUI.Label("Name", card.Root, def.Name, UITheme.FontSmall,
+                                                Emberforge.TextBody, TextAnchor.UpperCenter);
+            UIBuilder.Box(nameLabel.rectTransform, 0f, -CardNameTop, 300f, 32f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(nameLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            card.Button = card.Root.gameObject.AddComponent<Button>();
-            card.Button.targetGraphic = card.Background;
-            card.Root.gameObject.AddComponent<ButtonPress>();
-            card.OnClick(onClick);
+            RectTransform stars = StarRow("Stars", card.Root, def.Stars, 20f);
+            UIBuilder.Box(stars, 0f, -(CardNameTop + 36f), 140f, 20f, new Vector2(0.5f, 1f));
 
-            Color aspect = UITheme.AspectColor(def.Aspect);
+            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role),
+                                                    UITheme.RoleColor(def.Role), UITheme.FontTiny);
+            UIBuilder.Box(roleChip, 0f, -(CardNameTop + 68f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            Image wash = UIBuilder.Img("Wash", card.Root, TextureLab.Glow(128, 1.5f), UITheme.WithAlpha(aspect, 0.16f));
-            UIBuilder.FillParent(wash.rectTransform, 0f);
+            Text level = EmberforgeUI.Label("Level", card.Root, "Lv " + hero.Level, UITheme.FontTiny,
+                                            Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(level.rectTransform, CardPad, CardPad, 140f, 28f, new Vector2(0f, 0f));
+            UIBuilder.Outlined(level, Emberforge.Outline, Emberforge.StrokeThin);
 
-            card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.StarColor(def.Stars), 0.6f), 20, 2);
-
-            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, true);
-            UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
-
-            Text nameLabel = UIBuilder.Label("Name", card.Root, def.Name, UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
-            UIBuilder.Box(nameLabel.rectTransform, 0f, -156f, 260f, 30f, new Vector2(0.5f, 1f));
-
-            RectTransform stars = StarRow("Stars", card.Root, def.Stars, 18f);
-            UIBuilder.Box(stars, 0f, -190f, 120f, 18f, new Vector2(0.5f, 1f));
-
-            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), UITheme.FontTiny);
-            UIBuilder.Box(roleChip, 0f, -222f, 170f, 32f, new Vector2(0.5f, 1f));
-
-            Text level = UIBuilder.Label("Level", card.Root, "Lv " + hero.Level, UITheme.FontTiny, UITheme.TextMuted, TextAnchor.LowerLeft);
-            UIBuilder.Box(level.rectTransform, 18f, 14f, 120f, 26f, new Vector2(0f, 0f));
-
-            Text power = UIBuilder.Label("Power", card.Root, hero.Power.ToString(), UITheme.FontTiny, UITheme.Gold, TextAnchor.LowerRight);
-            UIBuilder.Box(power.rectTransform, -18f, 14f, 140f, 26f, new Vector2(1f, 0f));
+            Text power = EmberforgeUI.Label("Power", card.Root, hero.Power.ToString(), UITheme.FontTiny,
+                                            Emberforge.TextGold, TextAnchor.LowerRight);
+            UIBuilder.Box(power.rectTransform, -CardPad, CardPad, 160f, 28f, new Vector2(1f, 0f));
+            UIBuilder.Outlined(power, Emberforge.Outline, Emberforge.StrokeThin);
 
             if (deployed)
             {
                 RectTransform badge = UIBuilder.Chip("Deployed", card.Root, "DEPLOYED", UITheme.Success, UITheme.FontTiny);
-                UIBuilder.Box(badge, -10f, -10f, 150f, 30f, new Vector2(1f, 1f));
+                UIBuilder.Box(badge, -Emberforge.Space8, -Emberforge.Space8, 160f, 32f, new Vector2(1f, 1f));
             }
 
             return card;
         }
 
         /// <summary>
-        /// A hero the player hasn't summoned yet: same card shape as HeroCard so the grid reads
-        /// as one collection, but the portrait is a dimmed silhouette and there is no level/power/
-        /// deployed state to show - there's no HeroInstance, only the definition.
+        /// A hero the player has not summoned yet: the same tile so the grid reads as one
+        /// collection, with a dimmed silhouette in place of the portrait and no level, power or
+        /// deployed state to show - there is no HeroInstance, only the definition.
         /// </summary>
         public static UIButton LockedHeroCard(string name, Transform parent, HeroDef def, Action onClick)
         {
-            UIButton card = new UIButton();
-            card.Root = UIBuilder.Node(name, parent);
-            UIBuilder.Sized(card.Root, 0f, 300f);
+            UIButton card = Tile(name, parent, def, def.Stars, onClick, true);
 
-            card.Background = card.Root.gameObject.AddComponent<Image>();
-            card.Background.sprite = TextureLab.RoundedRect(20);
-            card.Background.type = Image.Type.Sliced;
-            card.Background.color = UITheme.PanelSunken;
+            Text nameLabel = EmberforgeUI.Label("Name", card.Root, def.Name, UITheme.FontSmall,
+                                                Emberforge.TextQuiet, TextAnchor.UpperCenter);
+            UIBuilder.Box(nameLabel.rectTransform, 0f, -CardNameTop, 300f, 32f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(nameLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            card.Button = card.Root.gameObject.AddComponent<Button>();
-            card.Button.targetGraphic = card.Background;
-            card.Root.gameObject.AddComponent<ButtonPress>();
-            card.OnClick(onClick);
+            RectTransform aspectChip = UIBuilder.Chip("Aspect", card.Root, AspectChart.DisplayName(def.Aspect),
+                                                      Emberforge.Accent(def.Aspect), UITheme.FontTiny);
+            UIBuilder.Box(aspectChip, 0f, -(CardNameTop + 36f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            card.Frame = UIBuilder.Frame("Edge", card.Root, UITheme.WithAlpha(UITheme.BorderSoft, 0.7f), 20, 2);
+            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role),
+                                                    UITheme.RoleColor(def.Role), UITheme.FontTiny);
+            UIBuilder.Box(roleChip, 0f, -(CardNameTop + 74f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            // allowArt false: a locked hero is a silhouette regardless of whether that hero
-            // happens to have a painted portrait on disk. See the Portrait overload for why.
-            RectTransform portrait = Portrait("Portrait", card.Root, def, def.Stars, 128f, false, true, false);
-            UIBuilder.Box(portrait, 0f, -18f, 128f, 128f, new Vector2(0.5f, 1f));
-            // dimmed silhouette: a dark scrim over the portrait hides the palette/sigil detail
-            // without hiding the shape, and the whole card fades to signal "not yours yet"
-            Image scrim = UIBuilder.Img("Scrim", portrait, TextureLab.Circle(160), UITheme.ScrimModal);
-            UIBuilder.FillParent(scrim.rectTransform, 0f);
-            card.Background.color = UITheme.WithAlpha(card.Background.color, 0.7f);
-
-            Text nameLabel = UIBuilder.Label("Name", card.Root, def.Name, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.UpperCenter);
-            UIBuilder.Box(nameLabel.rectTransform, 0f, -156f, 260f, 30f, new Vector2(0.5f, 1f));
-
-            RectTransform aspectChip = UIBuilder.Chip("Aspect", card.Root, AspectChart.DisplayName(def.Aspect), UITheme.AspectColor(def.Aspect), UITheme.FontTiny);
-            UIBuilder.Box(aspectChip, 0f, -190f, 170f, 32f, new Vector2(0.5f, 1f));
-
-            RectTransform roleChip = UIBuilder.Chip("Role", card.Root, UITheme.RoleName(def.Role), UITheme.RoleColor(def.Role), UITheme.FontTiny);
-            UIBuilder.Box(roleChip, 0f, -226f, 170f, 32f, new Vector2(0.5f, 1f));
-
-            RectTransform lockedBadge = UIBuilder.Chip("Locked", card.Root, "LOCKED", UITheme.TextDim, UITheme.FontTiny);
-            UIBuilder.Box(lockedBadge, -10f, -10f, 150f, 30f, new Vector2(1f, 1f));
+            RectTransform lockedBadge = UIBuilder.Chip("Locked", card.Root, "LOCKED", Emberforge.TextQuiet, UITheme.FontTiny);
+            UIBuilder.Box(lockedBadge, -Emberforge.Space8, -Emberforge.Space8, 160f, 32f, new Vector2(1f, 1f));
 
             return card;
         }
+
+        /// <summary>The card height a collection grid must give these tiles, and where the name
+        /// line sits inside one. Public because the screen that lays the grid out has to know the
+        /// height, and a grid whose cell is shorter than its card clips every one of them.</summary>
+        public const float CardHeight = 330f;
+        public const float CardPortrait = 150f;
+        private const float CardPad = 20f;
+        private const float CardNameTop = CardPad + CardPortrait + Emberforge.Space12;
+
+        /// <summary>
+        /// The half both cards share: the panel, the press, the portrait in its rarity frame, and
+        /// the scrim over it when the hero is locked.
+        ///
+        /// Extracted because the two used to be a hundred lines that agreed about eleven numbers by
+        /// being written twice - and by the time this pass reached them they no longer entirely did.
+        /// </summary>
+        private static UIButton Tile(string name, Transform parent, HeroDef def, int stars,
+                                     Action onClick, bool locked)
+        {
+            UIButton card = new UIButton();
+            card.Root = UIBuilder.Node(name, parent);
+            UIBuilder.Sized(card.Root, 0f, CardHeight);
+
+            card.Background = EmberforgeUI.PlainPanelOn(card.Root);
+
+            card.Button = card.Root.gameObject.AddComponent<Button>();
+            card.Button.targetGraphic = card.Background;
+            card.Button.transition = Selectable.Transition.None;
+            card.Root.gameObject.AddComponent<ButtonPress>();
+            card.OnClick(onClick);
+
+            RectTransform portrait = locked
+                ? LockedFace(card.Root, def, stars)
+                : EmberforgeUI.PortraitFrame("Portrait", card.Root, def, stars, CardPortrait);
+            UIBuilder.Box(portrait, 0f, -CardPad, CardPortrait, CardPortrait, new Vector2(0.5f, 1f));
+
+            if (locked) card.Root.gameObject.AddComponent<CanvasGroup>().alpha = LockedCardAlpha;
+            return card;
+        }
+
+        /// <summary>How far a locked card fades. One number, so a row of them is one state rather
+        /// than a card that happens to look dim.</summary>
+        private const float LockedCardAlpha = 0.72f;
+
+        /// <summary>A locked hero: the abstract portrait under a dark disc, inside the same rarity
+        /// frame at reduced strength.
+        ///
+        /// allowArt false forces the abstract branch even where a painted portrait exists on disk,
+        /// which is the rule the Portrait overload records: an owned hero can only ever look the
+        /// same as, or better than, a locked one, and that has to be structural rather than a
+        /// coincidence of which files happen to have been delivered.
+        ///
+        /// The frame stays the hero's own tier rather than turning grey. The tier is the truth
+        /// about that hero; not owning them does not make them a different rarity, and hiding it
+        /// would remove the one thing a locked card is FOR.
+        /// </summary>
+        private static RectTransform LockedFace(RectTransform card, HeroDef def, int stars)
+        {
+            RectTransform root = UIBuilder.Node("Portrait", card);
+            UIBuilder.Size(root, CardPortrait, CardPortrait);
+
+            RectTransform face = Portrait("Face", root, def, stars, CardPortrait, false, true, false);
+            UIBuilder.FillParent(face, CardPortrait * 0.09f);
+
+            Image scrim = UIBuilder.Img("Scrim", root, TextureLab.Circle(160), UITheme.ScrimModal);
+            UIBuilder.FillParent(scrim.rectTransform, CardPortrait * 0.09f);
+
+            Image frame = UIBuilder.Img("Frame", root,
+                                        EmberforgeSkin.Get(EmberforgeArt.Slot.Frame(stars)),
+                                        UITheme.WithAlpha(Color.white, LockedFrameAlpha));
+            UIBuilder.FillParent(frame.rectTransform, 0f);
+            frame.raycastTarget = false;
+            return root;
+        }
+
+        private const float LockedFrameAlpha = 0.75f;
 
         /// <summary>Small aspect + level tag used under enemy previews in the campaign list.</summary>
         public static RectTransform EnemyPip(string name, Transform parent, UnitDef def, int level, float size)
