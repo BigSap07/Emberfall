@@ -1085,6 +1085,22 @@ namespace Emberfall.Core.Combat
             {
                 _order = null;
                 if (IsBattleOver()) { EndBattle(); return; }
+
+                // ENGINE-GAPS group 14: the round's other boundary. RoundStart has had no mirror,
+                // so "at round end" had to be authored as OnEnemyTurnEnd with a once-a-round
+                // limit - which answers one enemy's turn ending rather than the round's own edge,
+                // and picks whichever enemy happens to move first.
+                //
+                // Raised on every living unit rather than broadcast to a side, exactly as
+                // RoundStart is and for the same reason: the clock belongs to neither team. Before
+                // _round advances, so a passive answering it reads the round it is closing.
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    if (IsBattleOver()) break;
+                    if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundEnd, 0);
+                }
+                if (IsBattleOver()) { EndBattle(); return; }
+
                 _phase = Phase.RoundBegin;
             }
 

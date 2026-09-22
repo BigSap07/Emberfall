@@ -2050,7 +2050,25 @@ namespace Emberfall.Core.Data
         /// Held to one level by a flag: a passive answering an attempt by applying a debuff of its
         /// own would otherwise raise this again from inside itself.
         /// </summary>
-        OnEnemyAppliedStatus
+        OnEnemyAppliedStatus,
+
+        /// <summary>
+        /// The end of a round, raised on every living unit after the last of them has acted and
+        /// before the next round opens.
+        ///
+        /// ENGINE-GAPS group 14. RoundStart has had no mirror since it was added, and OnAllyTurnEnd
+        /// and OnEnemyTurnEnd are per-unit - so "at round end" had to become "as each of them
+        /// finishes", which fires once per body rather than once and answers a unit's own turn
+        /// ending rather than the round's boundary. Against a five-a-side line those are five
+        /// different moments and five chances to fire.
+        ///
+        /// Raised inside CloseRound, after the turn walk and before the round counter advances, so
+        /// a passive answering it reads the round it is closing rather than the one about to open.
+        /// Not raised when the battle is already decided: a round whose last blow ended the fight
+        /// has no end to answer, and raising it there would have a dead unit's side acting after
+        /// the result is in the record.
+        /// </summary>
+        RoundEnd
     }
 
     /// <summary>

@@ -16599,7 +16599,9 @@ namespace Emberfall.DevHarness
                     "AfterActiveCast",
                     // the engine-gaps pass, group 9: an ally receiving Energy, a Guard charge
                     // doing its job, and a unit attempting a debuff.
-                    "OnAllyEnergyGained", "OnGuardPrevented", "OnEnemyAppliedStatus"
+                    "OnAllyEnergyGained", "OnGuardPrevented", "OnEnemyAppliedStatus",
+                    // group 14: the mirror RoundStart never had.
+                    "RoundEnd"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
             Check(ok, "PassiveTrigger enum parity (" + Enum.GetNames(typeof(PassiveTrigger)).Length + " members)");
@@ -17876,6 +17878,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupFour();
             CheckGapGroupFive();
             CheckGapGroupTwelve();
+            CheckGapGroupFourteen();
             Line("");
         }
 
@@ -18579,6 +18582,85 @@ namespace Emberfall.DevHarness
                 if (def != null) team.Add(MakeInstance(def, 1));
             }
             return RunWith(db, db.GetStage("g12_arena"), 1212, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 14
+
+        /// <summary>
+        /// GROUP 14 - a round-end trigger mirroring RoundStart.
+        ///
+        /// The measurement is the COUNT, not that it fired: OnEnemyTurnEnd - what the one shipped
+        /// clause of this shape uses - fires once per enemy that finishes a turn, so against a
+        /// three-body line it is three chances a round rather than one edge. A once-a-round limit
+        /// hides the count and keeps the wrong moment: whichever enemy moved first.
+        /// </summary>
+        private static void CheckGapGroupFourteen()
+        {
+            Line("  group 14 - the round's other boundary");
+
+            BattleResult perTurn = RunGapFourteenArena("OnEnemyTurnEnd");
+            BattleResult perRound = RunGapFourteenArena("RoundEnd");
+            int turnFires = CountPassiveFires(perTurn, "g14_watch_passive");
+            int roundFires = CountPassiveFires(perRound, "g14_watch_passive");
+            int rounds = perRound == null ? 0 : perRound.Rounds;
+
+            Check(turnFires > 0 && roundFires > 0,
+                  "both the per-turn approximation and RoundEnd fire in the same arena ("
+                  + turnFires + " and " + roundFires + ")");
+            Check(roundFires == rounds,
+                  "RoundEnd fires exactly once per round (" + roundFires + " across " + rounds
+                  + " rounds) - it is the clock's own edge and belongs to neither side");
+            Check(turnFires == roundFires * 3,
+                  "and the approximation fires once per ENEMY that finishes a turn (" + turnFires
+                  + " against a three-body line), which is the count a once-a-round limit was "
+                  + "hiding rather than fixing - it still answered whichever enemy moved first");
+
+            Check(FingerprintOf(RunGapFourteenArena("RoundEnd")) == FingerprintOf(RunGapFourteenArena("RoundEnd")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One watcher, three harmless enemies. Three is the point: it is what makes a per-enemy
+        /// trigger and a per-round one read differently at all.
+        /// </summary>
+        private static BattleResult RunGapFourteenArena(string trigger)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g14_watch"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14w_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g14_watch_passive"", ""name"": ""Toll"", ""trigger"": """ + trigger + @""",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 99 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g14_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 30, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14ab"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g14_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14bb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g14_c"", ""name"": ""C"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14cb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g14_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g14_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g14_a"", ""level"": 1 },
+                                                         { ""id"": ""g14_b"", ""level"": 1 },
+                                                         { ""id"": ""g14_c"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap14");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef def = db.GetHero("g14_watch");
+            if (def != null) team.Add(MakeInstance(def, 1));
+            return RunWith(db, db.GetStage("g14_arena"), 1414, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)
@@ -20738,6 +20820,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnTurnDebtRepaid, true, true),
                 C(PassiveTrigger.OnTurnDebtThreshold, true, true),
                 C(PassiveTrigger.OnTurnDelayed, true, false),
+                C(PassiveTrigger.RoundEnd, false, false),
                 C(PassiveTrigger.RoundStart, false, false),
                 C(PassiveTrigger.TurnStart, false, false),
             });
