@@ -17879,6 +17879,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupFive();
             CheckGapGroupTwelve();
             CheckGapGroupFourteen();
+            CheckGapGroupEighteen();
             Line("");
         }
 
@@ -18661,6 +18662,142 @@ namespace Emberfall.DevHarness
             HeroDef def = db.GetHero("g14_watch");
             if (def != null) team.Add(MakeInstance(def, 1));
             return RunWith(db, db.GetStage("g14_arena"), 1414, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 18
+
+        /// <summary>
+        /// GROUP 18 - naming the unit an event happened TO, when the trigger names the causer.
+        ///
+        /// OnStatusRemoved fires on the remover and OnTurnDelayed on the delayer, and neither
+        /// published a subject. So a passive on either could pay the causer and could not reach
+        /// the body it happened to: "that ally recovers 5% missing HP" and "the first enemy
+        /// delayed each round gains 10% Defense Down" are both sentences about one body, and both
+        /// ship as something wider.
+        ///
+        /// Measured by WHO the answer lands on. A subject that is published but wrong reads the
+        /// same as one that is not published at all if the arena has only one candidate, so each
+        /// arm has two - one the event happened to and one it did not.
+        /// </summary>
+        private static void CheckGapGroupEighteen()
+        {
+            Line("  group 18 - the body an event happened to");
+
+            // --- OnStatusRemoved ---------------------------------------------------------
+            // The cleanser takes a debuff off ONE of two wounded allies and its passive heals the
+            // broadcast subject. Only the cleansed body may be healed by it.
+            BattleResult r = RunGapEighteenArena("removed");
+            int onCleansed = HealingInto(r, "g18_cursed");
+            int onOther = HealingInto(r, "g18_other");
+            Check(onCleansed > 0,
+                  "OnStatusRemoved now names the body whose status was taken - BroadcastSubject "
+                  + "resolves to it and the answer lands there (" + onCleansed + " healed)");
+            Check(onOther == 0,
+                  "and on nobody else (" + onOther + " into the ally standing beside it) - which "
+                  + "is what the shipped clause could not say, so it pays the lowest-HP ally and "
+                  + "relies on that being the same body by construction");
+
+            // --- OnTurnDelayed -----------------------------------------------------------
+            // The delayer pushes ONE of two enemies back and its passive marks the broadcast
+            // subject. Only the delayed body may carry the mark.
+            BattleResult d = RunGapEighteenArena("delayed");
+            int markedDelayed = StatusLandedOn(d, StatusKind.DefenseDown, "g18_slow");
+            int markedOther = StatusLandedOn(d, StatusKind.DefenseDown, "g18_fast");
+            Check(markedDelayed > 0,
+                  "OnTurnDelayed now names the unit that was delayed (" + markedDelayed
+                  + " application(s) onto it)");
+            Check(markedOther == 0,
+                  "and leaves the enemy that was not delayed alone (" + markedOther
+                  + ") - the shipped clause takes the whole enemy line because a single body "
+                  + "could not be named");
+
+            Check(FingerprintOf(RunGapEighteenArena("delayed")) == FingerprintOf(RunGapEighteenArena("delayed")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>How many times a status of this kind landed on one named body.</summary>
+        private static int StatusLandedOn(BattleResult r, StatusKind kind, string defId)
+        {
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == kind
+                    && r.Events[i].TargetId == id) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Two candidates per arm, which is the whole design: with one ally and one enemy a
+        /// published subject and an unpublished one are indistinguishable.
+        /// </summary>
+        private static BattleResult RunGapEighteenArena(string mode)
+        {
+            // The actor's own turn. It cleanses the whole line - only one body has anything to
+            // take, so the removal names itself and the arena is not relying on a tie-break - or
+            // it delays the slower of two enemies.
+            string act = mode == "removed"
+                ? ", { \"kind\": \"Cleanse\", \"target\": \"AllAllies\", \"hits\": 1 }"
+                : ", { \"kind\": \"TurnShift\", \"target\": \"LowestSpeedEnemy\", \"magnitude\": -0.9 }";
+
+            string trigger = mode == "removed" ? "OnStatusRemoved" : "OnTurnDelayed";
+            string answer = mode == "removed"
+                ? "{ \"kind\": \"Heal\", \"target\": \"BroadcastSubject\", \"power\": 1.0 }"
+                : "{ \"kind\": \"ApplyStatus\", \"target\": \"BroadcastSubject\", \"status\": \"DefenseDown\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }";
+
+            // The cursed ally re-earns its debuff every round, so there is something to cleanse
+            // after the allies have been wounded - a single battle-start curse is taken in round
+            // one, before anybody is missing HP, and a heal into a full bar restores nothing.
+            // Both allies are wounded, so a heal into either would land.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g18_cursed"", ""name"": ""Cursed"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 4000, ""attack"": 1, ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18c_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g18_curse"", ""name"": ""Curse"", ""trigger"": ""RoundStart"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackDown"", ""bypassResist"": true, ""chance"": 1, ""duration"": 9, ""magnitude"": 0.1 } ] } },
+    { ""id"": ""g18_other"", ""name"": ""Other"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 4000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18o_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g18_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18a_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] },
+      ""passive"": { ""id"": ""g18_answer"", ""name"": ""Answer"", ""trigger"": """ + trigger + @""",
+        ""oncePerBattle"": false,
+        ""effects"": [ " + answer + @" ] } }
+  ]
+}";
+            // The foe wounds the whole player line, so a heal into either ally would land and the
+            // one that does not is a statement about the subject rather than about missing HP.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g18_fast"", ""name"": ""Fast"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 400,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18fb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } },
+    { ""id"": ""g18_slow"", ""name"": ""Slow"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18sb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g18_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g18_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g18_fast"", ""level"": 1 },
+                                                         { ""id"": ""g18_slow"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap18");
+            if (db == null) return null;
+            string[] ids = { "g18_cursed", "g18_other", "g18_actor" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g18_arena"), 1818, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)
@@ -20815,11 +20952,13 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnStackThreshold, false, false),
                 C(PassiveTrigger.OnStatusExpired, false, false),
                 C(PassiveTrigger.OnStatusGained, true, false),
-                C(PassiveTrigger.OnStatusRemoved, true, false),
+                // Both gained a subject in the engine-gaps pass, group 18: the body whose status
+                // was taken, and the body that was delayed.
+                C(PassiveTrigger.OnStatusRemoved, true, true),
                 C(PassiveTrigger.OnTargeted, true, false),
                 C(PassiveTrigger.OnTurnDebtRepaid, true, true),
                 C(PassiveTrigger.OnTurnDebtThreshold, true, true),
-                C(PassiveTrigger.OnTurnDelayed, true, false),
+                C(PassiveTrigger.OnTurnDelayed, true, true),
                 C(PassiveTrigger.RoundEnd, false, false),
                 C(PassiveTrigger.RoundStart, false, false),
                 C(PassiveTrigger.TurnStart, false, false),

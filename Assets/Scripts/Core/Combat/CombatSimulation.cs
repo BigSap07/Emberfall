@@ -3126,7 +3126,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = cleansedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = cleansedValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
@@ -3153,7 +3153,7 @@ namespace Emberfall.Core.Combat
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = dispelledValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = dispelledValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -3252,7 +3252,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) { _lastRemovedValue = strippedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = strippedValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
 
@@ -4369,22 +4369,57 @@ namespace Emberfall.Core.Combat
                 if (!_removedFromThisFiring.Contains(target.Id)) _removedFromThisFiring.Add(target.Id);
             }
 
-            /// <summary>The three removal sites raise one trigger and name one causer.</summary>
-            private void FireRemoval(CombatUnit source, int depth)
+            /// <summary>
+            /// The three removal sites raise one trigger, name one causer - and now name the body
+            /// it happened TO.
+            ///
+            /// ENGINE-GAPS group 18. The trigger fires on the REMOVER and published no subject, so
+            /// a passive on it could pay the remover and could not reach the ally it had just
+            /// cleansed. "When Lio removes a debuff, THAT ALLY recovers 5% missing HP" had to move
+            /// the heal into the ability, where SubjectLostStatusThisFiring can see it, and pay the
+            /// Energy to the lowest-HP ally - the body the cleanse happened to by construction
+            /// rather than by statement.
+            ///
+            /// Null on no call site: every removal knows whose status it took.
+            /// </summary>
+            private void FireRemoval(CombatUnit source, CombatUnit subject, int depth)
             {
                 if (source == null) return;
                 int prev = _broadcastSourceId;
+                CombatUnit prevSubject = _broadcastSubject;
+                CombatUnit prevVictim = _broadcastVictim;
                 _broadcastSourceId = source.Id;
+                _broadcastSubject = subject;
+                _broadcastVictim = subject;
                 TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                _broadcastVictim = prevVictim;
+                _broadcastSubject = prevSubject;
                 _broadcastSourceId = prev;
             }
 
-            /// <summary>Both delay sites raise one trigger and name the unit that caused the delay.</summary>
-            private void FireTurnDelayed(CombatUnit source)
+            /// <summary>
+            /// Both delay sites raise one trigger, name the unit that caused the delay - and now
+            /// name the unit that was delayed.
+            ///
+            /// ENGINE-GAPS group 18, the same absence from the other end. "The FIRST ENEMY DELAYED
+            /// each round gains 10% Defense Down" is a sentence about one body and the trigger
+            /// could only reach the causer, so the shipped clause lands on the whole enemy line.
+            ///
+            /// For a SwapTurnOrder the subject is the body that went backwards, which is the one
+            /// the word "delayed" names; _swapAdvanced and _swapDelayed already record both halves
+            /// for the two target modes that read them.
+            /// </summary>
+            private void FireTurnDelayed(CombatUnit source, CombatUnit delayed)
             {
                 int prev = _broadcastSourceId;
+                CombatUnit prevSubject = _broadcastSubject;
+                CombatUnit prevVictim = _broadcastVictim;
                 _broadcastSourceId = source.Id;
+                _broadcastSubject = delayed;
+                _broadcastVictim = delayed;
                 TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+                _broadcastVictim = prevVictim;
+                _broadcastSubject = prevSubject;
                 _broadcastSourceId = prev;
             }
 
@@ -6525,7 +6560,7 @@ namespace Emberfall.Core.Combat
                     BankTurnDebt(source, target, banksAs, realised, cap, rate, debtDuration);
                 }
 
-                if (destination > at && source != null) FireTurnDelayed(source);
+                if (destination > at && source != null) FireTurnDelayed(source, target);
             }
 
             /// <summary>
@@ -6624,7 +6659,8 @@ namespace Emberfall.Core.Combat
                 e.Status = StatusKind.None;
                 e.Value = earliest - latest;
 
-                if (source != null) FireTurnDelayed(source);
+                // `a` is the body that went backwards, which is what "delayed" names.
+                if (source != null) FireTurnDelayed(source, a);
             }
 
             // ------------------------------------------------------------------ targeting
