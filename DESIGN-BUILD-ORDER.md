@@ -38,7 +38,7 @@ Two runs decide whether the tree is healthy, and they measure different things.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 41 tracked markdown files and reports 122
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 42 tracked markdown files and reports 122
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
@@ -136,6 +136,15 @@ design left waiting in it.
 The **star contract** is the authoritative kit rule and `validate_heroes.py` enforces it at import
 time: 1 star is basicAttack only; 2 adds passive1; 3 adds activeSkill; 4 requires activeSkill and
 passive1 with passive2 optional; 5 is the full kit including all three talents.
+
+**Every ability carries player-facing text with no number in it**, written to
+`Docs/ABILITY-TEXT-STYLE.md`: all 425 basics, actives, passives and talents on the 94 heroes, with
+32 exceptions. 31 are drafting notes whose sentence and kit still disagree, each a yes or no
+question in `Docs/PINOY-LIST.md` section 2f. One, Nysera's False Target, has no text because its
+damage half hits Nysera herself, which is a kit defect. `CheckAbilityTextIsPlayerFacing` enforces
+it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
+and so does a pinned exception that no longer applies. The card still does not show a description
+anywhere; the text is ready for whichever screen shows it first.
 
 ### The star band, and its floor
 
@@ -471,6 +480,11 @@ differs between them.
 
 ## In progress
 
+**`content/ability-text`** carries the ability text above: every basic, active, passive and talent
+rewritten or written so it says what happens without quoting a number, the house style in
+`Docs/ABILITY-TEXT-STYLE.md`, `CheckAbilityTextIsPlayerFacing`, and `Docs/PINOY-LIST.md` section
+2f. It changes descriptions only, so no fingerprint and no baseline moved.
+
 **`balance/talent-traps`** carries `CheckTalentsAreWorthPicking` and its pinned list of the five
 talents that cost their hero output, described under **Talents** above, with the two traps sent to
 `Docs/PINOY-LIST.md` section 2e. It changes no content: neither trap could be mended by a number,
@@ -699,13 +713,13 @@ the day either kit changes the harness says whether the talent became worth pick
 
 Not scheduled and not blocked on anything in **Next**, listed so it is not rediscovered.
 
-- **The ability line on a hero's card**, proposed in
-  [`Docs/DESIGN-DAMAGE-DISPLAY.md`](Docs/DESIGN-DAMAGE-DISPLAY.md) and not built. A 1-star's basic
-  reads 437% of Attack where a 5-star's reads 105%, which a player will read as a bug and which is
-  the star contract and the stat ladder working exactly as decided. The doc measures why, weighs
-  three presentations and recommends flat damage at the hero's current stats with the percentage
-  kept beside it. `AbilityDef.Description` and `PassiveDef.Description` are parsed from the JSON
-  and rendered nowhere today, so there is no ability line to change yet.
+- **Showing the ability text.** The card's number line from
+  [`Docs/DESIGN-DAMAGE-DISPLAY.md`](Docs/DESIGN-DAMAGE-DISPLAY.md) is built: `AbilityText` prints a
+  flat value with the authored percentage under it, and `CheckAbilityNumbersMatchTheSimulation`
+  proves the figures. `AbilityDef.Description` and `PassiveDef.Description` are still rendered
+  nowhere. They now hold player text, so putting them on the ability breakdown is a UI decision
+  rather than a content one. Durations, thresholds, Energy amounts and status sizes are printed
+  nowhere either, and the text no longer carries them.
 - **Guilds phase two.** A guild shop, currency, raids, rewards, guild levels and leaderboards all
   price against the economy, and the economy's shape only settled with the curve re-derivation.
 - **A marketplace.** Nothing built, nothing designed.
