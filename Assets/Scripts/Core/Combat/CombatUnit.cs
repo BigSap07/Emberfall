@@ -388,6 +388,31 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public readonly Dictionary<int, int> LastDamagedRoundBy = new Dictionary<int, int>();
 
+        /// <summary>
+        /// The last round this unit dealt damage to a body on the PLAYER side, and to a body on
+        /// the enemy side. Zero until it has.
+        ///
+        /// ENGINE-GAPS group 8. LastAttackerId and LastDamagedRoundBy are both per-victim and mean
+        /// "the body that hit ME"; nothing kept the same memory for a SIDE, so "if the target
+        /// attacked an ally since Maera's last turn" had no condition to read. The nearest standing
+        /// answer was SubjectActedThisRound, which in this engine's turn shape means it has done
+        /// something rather than that it has hurt anybody of ours.
+        ///
+        /// Two ints on the ATTACKER rather than a walk over five victims, because the question is
+        /// asked of the attacker and the answer is one fact about it. Round-granular, the same
+        /// approximation LastDamagedRound and every other "since my turn" reading carries: two
+        /// units acting inside one round are not ordered against each other by it.
+        /// </summary>
+        public int LastHitPlayerSideRound;
+        public int LastHitEnemySideRound;
+
+        /// <summary>The last round this unit hurt somebody on that side. See the two fields
+        /// above.</summary>
+        public int LastHitSideRound(bool playerSide)
+        {
+            return playerSide ? LastHitPlayerSideRound : LastHitEnemySideRound;
+        }
+
         /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
         /// Two flags rather than a list: no description asks about more than the last two.</summary>
         public bool LastActionWasActive;

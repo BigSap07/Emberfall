@@ -5827,7 +5827,9 @@ namespace Emberfall.DevHarness
                                "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
                                "HighestPendingDoTEnemy", "LowestEnergyEnemy",
                                "SwapAdvancedUnit", "SwapDelayedUnit",
-                               "HighestEnergyAlly", "LargestShieldAlly" },
+                               "HighestEnergyAlly", "LargestShieldAlly",
+                               // the engine-gaps pass, group 8.
+                               "EnemyThatLastDamagedAlly" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -17883,6 +17885,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupSeventeen();
             CheckGapGroupTwo();
             CheckGapGroupThree();
+            CheckGapGroupEight();
             Line("");
         }
 
@@ -19161,6 +19164,118 @@ namespace Emberfall.DevHarness
             return RunWith(db, db.GetStage("g3_arena"), 3003, team);
         }
 
+
+        // ------------------------------------------------------------------ group 8
+
+        /// <summary>
+        /// GROUP 8 - remembering who hit MY SIDE, rather than who hit me. Two clauses on one hero.
+        ///
+        /// LastAttackerId and LastDamagedRoundBy are per-victim and mean "the body that hit me", so
+        /// "the enemy that most recently damaged an ally" and "if the target attacked an ally since
+        /// my last turn" had neither a target mode nor a condition. Both ship as something that
+        /// answers a different question: HighestDamageDealtEnemy is a career TOTAL, and
+        /// SubjectActedThisRound is satisfied by a heal, a self-buff and a miss.
+        ///
+        /// The arena separates the two readings on purpose: one enemy deals the most damage over
+        /// the fight and a DIFFERENT one strikes last. A mode that answered either question by the
+        /// other would pick the wrong body.
+        /// </summary>
+        private static void CheckGapGroupEight()
+        {
+            Line("  group 8 - who hurt one of ours, and when");
+
+            BattleResult r = RunGapEightArena();
+            int onHeavy = DamageTakenBy(r, "g8_heavy");
+            int onRecent = DamageTakenBy(r, "g8_recent");
+            Check(onRecent > 0,
+                  "EnemyThatLastDamagedAlly names the enemy that struck an ally MOST RECENTLY ("
+                  + onRecent + " taken)");
+            Check(onHeavy == 0,
+                  "and never the one that hit our line hardest (" + onHeavy + " taken), which it "
+                  + "did at battle start and has not repeated - the last ACT, not the biggest one");
+
+            // The condition. The passive rider fires against the enemy that has hurt our line and
+            // not against the one that has only ever hit its own side.
+            int riderOnRecent = StatusLandedOn(r, StatusKind.DefenseDown, "g8_recent");
+            int riderOnIdle = StatusLandedOn(r, StatusKind.DefenseDown, "g8_idle");
+            Check(riderOnRecent > 0,
+                  "SubjectDamagedMySideSinceMyTurn holds for an enemy that has hurt one of ours ("
+                  + riderOnRecent + " rider(s) landed)");
+            Check(riderOnIdle == 0,
+                  "and not for one that has acted every round without touching our line ("
+                  + riderOnIdle + ") - which is the difference between it and SubjectActedThisRound, "
+                  + "the condition the clause currently uses");
+
+            Check(FingerprintOf(RunGapEightArena()) == FingerprintOf(RunGapEightArena()),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// Three enemies with three different histories: one that hits our line hard and early and
+        /// then stops, one that hits it late and lightly, and one that never touches it at all but
+        /// acts every round. Any two of those would let one reading stand in for another.
+        ///
+        /// NEITHER HERO DEALS DAMAGE EXCEPT THROUGH THE MODE UNDER TEST, so every point of damage
+        /// an enemy takes is the mode having picked it. A front-enemy poke on the other hero would
+        /// have put the engine's minDamage floor on the wrong body once a round and read as the
+        /// mode choosing it.
+        /// </summary>
+        private static BattleResult RunGapEightArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g8_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8f_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g8_eye"", ""name"": ""Eye"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8e_basic"", ""name"": ""Returning Shot"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""EnemyThatLastDamagedAlly"", ""power"": 1.0 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""DefenseDown"",
+                         ""bypassResist"": true, ""chance"": 1, ""duration"": 1, ""magnitude"": 0.0,
+                         ""condition"": ""SubjectDamagedMySideSinceMyTurn"", ""conditionOn"": ""Target"" } ] } }
+  ]
+}";
+            // g8_heavy lands a single enormous blow at battle start and never swings again, so it
+            // is by far the biggest thing that has ever hit our line and is never the most recent.
+            // g8_recent chips at us every round from the back of the order, so it always is.
+            // g8_idle acts every round and never touches us at all, which is the case
+            // SubjectActedThisRound cannot tell apart from the other two.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g8_heavy"", ""name"": ""Heavy"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 900,
+      ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8hb"", ""name"": ""Tend"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] },
+      ""passive"": { ""id"": ""g8h_open"", ""name"": ""Opening Hammer"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 9.0 } ] } },
+    { ""id"": ""g8_idle"", ""name"": ""Idle"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 100,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8ib"", ""name"": ""Tend"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g8_recent"", ""name"": ""Recent"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 10,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8rb"", ""name"": ""Chip"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g8_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g8_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g8_heavy"", ""level"": 1 },
+                                                        { ""id"": ""g8_idle"", ""level"": 1 },
+                                                        { ""id"": ""g8_recent"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap8");
+            if (db == null) return null;
+            string[] ids = { "g8_frail", "g8_eye" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g8_arena"), 8008, team);
+        }
+
         private static void CheckNineGaps(ContentDatabase live)
         {
             Line("THE NINE GAPS (charges, flat echo, attacker filter, the other end, attacker-keyed");
@@ -19424,7 +19539,9 @@ namespace Emberfall.DevHarness
                     // condition could say. Appended, so every ordinal above is untouched.
                     "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring",
                     // the engine-gaps pass, group 3: the shape of the blow in flight.
-                    "IncomingHitIsArea", "IncomingHitIsSingleTarget"
+                    "IncomingHitIsArea", "IncomingHitIsSingleTarget",
+                    // group 8: who hit MY SIDE, rather than who hit me.
+                    "SubjectDamagedMySideSinceMyTurn"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
             Check(ok, "EffectCondition enum parity ("

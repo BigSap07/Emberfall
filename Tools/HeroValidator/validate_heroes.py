@@ -90,6 +90,8 @@ TARGET_MODES = {
     # already name who receives Energy and nothing could name who gives it; ShieldTransfer
     # could move a pool and nothing could name the ally holding the biggest one.
     "HighestEnergyAlly", "LargestShieldAlly",
+    # the gaps pass, group 8: the last act against our line, as against the biggest career total.
+    "EnemyThatLastDamagedAlly",
 }
 
 # ---------------------------------------------------------------------------

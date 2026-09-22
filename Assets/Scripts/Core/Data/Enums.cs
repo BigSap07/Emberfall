@@ -387,7 +387,24 @@ namespace Emberfall.Core.Data
         /// the most" could not be said, so a kit that redistributes wards rather than granting them
         /// had no donor to point at. Celen's Distribution is that kit.
         /// </summary>
-        LargestShieldAlly
+        LargestShieldAlly,
+
+        /// <summary>
+        /// The enemy that MOST RECENTLY damaged somebody on the caster's side, or nobody when no
+        /// enemy has.
+        ///
+        /// ENGINE-GAPS group 8. HighestDamageDealtEnemy is the nearest standing answer and asks a
+        /// different question: it is a career total, so the enemy that opened the fight hard and
+        /// has done nothing since still wins it, and the one that just struck an ally is not
+        /// named. "The enemy that most recently damaged an ally" is about the last act, not the
+        /// biggest.
+        ///
+        /// Reads the simulation's own record of who last hurt each side rather than walking the
+        /// victims, because the answer is one fact and five bodies would each hold part of it.
+        /// Resolves to NOBODY rather than falling through to the front enemy when no enemy has hit
+        /// the caster's line yet, which is honest about an empty first round.
+        /// </summary>
+        EnemyThatLastDamagedAlly
     }
 
     public enum EffectKind
@@ -942,7 +959,26 @@ namespace Emberfall.Core.Data
 
         /// <summary>The negation, which is what "singled out" means - one body named and struck
         /// on its own.</summary>
-        IncomingHitIsSingleTarget
+        IncomingHitIsSingleTarget,
+
+        /// <summary>
+        /// The subject has damaged somebody on the CASTER'S SIDE since the caster's last turn.
+        ///
+        /// ENGINE-GAPS group 8. SubjectDamagedSinceMyTurn asks whether the subject WAS hurt;
+        /// SubjectDamagedByOtherSinceMyTurn asks the same about a different attacker. Neither can
+        /// ask whether the subject has HURT one of ours, because LastAttackerId and
+        /// LastDamagedRoundBy are per-victim and no memory was kept for a side.
+        ///
+        /// "If the target attacked an ally since Maera's last turn" therefore shipped as
+        /// SubjectActedThisRound, which in this engine's turn shape means it has done something -
+        /// a heal, a buff on itself and a miss all satisfy it.
+        ///
+        /// Round-granular, exactly like its two siblings and carrying the same approximation: two
+        /// units acting inside one round are not ordered against each other by it. Reads the
+        /// caster's own side, so an enemy-side caster asks about its own line and gets the mirror
+        /// answer rather than a hardcoded one.
+        /// </summary>
+        SubjectDamagedMySideSinceMyTurn
     }
 
     /// <summary>

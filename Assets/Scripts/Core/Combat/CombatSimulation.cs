@@ -939,6 +939,21 @@ namespace Emberfall.Core.Combat
             private bool _funnelHitIsArea;
 
             /// <summary>
+            /// The last unit to damage somebody on each side, or -1 before anybody has.
+            ///
+            /// ENGINE-GAPS group 8. Per SIDE rather than per victim, which is the whole of what
+            /// LastAttackerId could not say: a hero asking "which of them just hurt one of us"
+            /// gets one answer rather than five partial ones, and the answer does not depend on
+            /// which ally it happens to ask.
+            ///
+            /// Not cleared when the named unit dies. TargetMode.EnemyThatLastDamagedAlly tests the
+            /// body it resolves to for life, the same way every other mode does, so a dead
+            /// attacker resolves to nobody rather than to a corpse.
+            /// </summary>
+            private int _lastPlayerSideAttackerId = -1;
+            private int _lastEnemySideAttackerId = -1;
+
+            /// <summary>
             /// What the most recent hit actually took off a bar, or 0 at an ability boundary.
             /// EffectKind.EchoDamage's whole input - see that member for why it reads a realised
             /// number rather than recomputing one.
@@ -2216,6 +2231,18 @@ namespace Emberfall.Core.Combat
                     case EffectCondition.IncomingHitIsSingleTarget:
                         first = !_funnelHitIsArea;
                         break;
+
+                    // GAP GROUP 8. Sim-side with the two above rather than in the pure
+                    // ConditionMet, because it reads the caster's side - which the static function
+                    // has, but the whole family of "since my turn" readings already lives beside
+                    // its siblings there and splitting them would be the trap this file keeps
+                    // warning about.
+                    case EffectCondition.SubjectDamagedMySideSinceMyTurn:
+                    {
+                        int when = subject.LastHitSideRound(caster != null && caster.IsPlayer);
+                        first = caster != null && when > 0 && when >= caster.LastTurnRound;
+                        break;
+                    }
 
                     default:
                     {
@@ -5251,6 +5278,19 @@ namespace Emberfall.Core.Combat
                     // applier is long dead - writes nothing, matching LastDamagedRound's own rule
                     // that a blow needs a body behind it to be attributable.
                     target.LastDamagedRoundBy[sourceId] = _round;
+                    // GAP GROUP 8: and the same fact kept for the SIDE rather than for the body.
+                    // Two ints on the attacker and one id on the simulation, which between them
+                    // are everything "the enemy that most recently damaged an ally" and "if the
+                    // target attacked an ally since my last turn" need. Written for every blow the
+                    // funnel carries, a Burn tick and a redirected share included, because they
+                    // are all one side hurting the other.
+                    if (dealer != null)
+                    {
+                        if (target.IsPlayer) dealer.LastHitPlayerSideRound = _round;
+                        else dealer.LastHitEnemySideRound = _round;
+                    }
+                    if (target.IsPlayer) _lastPlayerSideAttackerId = sourceId;
+                    else _lastEnemySideAttackerId = sourceId;
                 }
 
                 // What actually came off the bar, for EffectKind.EchoDamage to repeat a fraction
@@ -7412,6 +7452,26 @@ namespace Emberfall.Core.Combat
                                 || (u.DamageDealtThisRound == picked.DamageDealtThisRound && u.Slot < picked.Slot))
                                 picked = u;
                         }
+                        break;
+                    }
+
+                    // GAP GROUP 8: the last act rather than the biggest total.
+                    // HighestDamageDealtEnemy one case up is a career reading, so the enemy that
+                    // opened hard and has done nothing since still wins it and the one that just
+                    // struck an ally is not named.
+                    //
+                    // Resolves to NOBODY when no enemy has hurt the caster's line yet, or when the
+                    // one that did is dead, excluded or refused by a target ban - the same four
+                    // tests every mode beside it applies, rather than a fallback to the front
+                    // body, which would answer a different question in the first round of every
+                    // fight.
+                    case TargetMode.EnemyThatLastDamagedAlly:
+                    {
+                        int lastId = caster.IsPlayer ? _lastPlayerSideAttackerId : _lastEnemySideAttackerId;
+                        CombatUnit last = lastId >= 0 ? FindUnit(lastId) : null;
+                        if (last != null && last.Alive && last.IsPlayer != caster.IsPlayer
+                            && last != excluded && !Rejected(caster, last))
+                            picked = last;
                         break;
                     }
 
