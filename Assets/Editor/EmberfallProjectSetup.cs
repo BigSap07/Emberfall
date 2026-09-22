@@ -113,7 +113,7 @@ namespace Emberfall.EditorTools
         {
             PlayerSettings.companyName = "Emberfall Studio";
             PlayerSettings.productName = "Emberfall";
-            PlayerSettings.bundleVersion = "0.1.0";
+            PlayerSettings.bundleVersion = "0.2.0";
 
             // LANDSCAPE, mirroring ProjectSettings.asset rather than contradicting it.
             //

@@ -37,7 +37,7 @@ namespace Emberfall.EditorTools
         /// 16:9, and it fits inside a 1920x1080 desktop with its title bar and taskbar still
         /// visible, which a 1920x1080 window does not.
         /// </summary>
-        public const string WindowsFolderName = "Emberfall-0.1.0-dev-win";
+        public const string WindowsFolderName = "Emberfall-0.2.0-dev-win";
         public const string WindowsExeName = "Emberfall.exe";
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace Emberfall.EditorTools
         {
             PlayerSettings.companyName = "Emberfall Studio";
             PlayerSettings.productName = "Emberfall";
-            PlayerSettings.bundleVersion = "0.1.0-dev";
+            PlayerSettings.bundleVersion = "0.2.0-dev";
 
             PlayerSettings.defaultIsNativeResolution = false;
             PlayerSettings.defaultScreenWidth = 1600;
