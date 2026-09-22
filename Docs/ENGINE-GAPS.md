@@ -17,7 +17,9 @@ carried it has been restored, never when the capability alone is built.
 engine could not say. Pass 2 asked which shipped clauses the engine says wrongly - more or less often
 than written, on the wrong body, against a limit nothing reaches - and measured each one. Its
 findings that need a new capability joined the groups below; the rest are either repaired in the
-engine or written up as content instructions in that section.
+engine or written up as content instructions in that section. **The content pass that followed
+it** carried those instructions out, built G4 and G5, and closed groups 34, 36 and 37; what it
+landed, what it rejected and what it found is the last part of that section.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
 arrangement in which a repeat is visible. That arrangement did its job: eleven of the original
@@ -377,29 +379,6 @@ so a hero repeating a target reads "no history" rather than "no change".
 
 ---
 
-## 34. A once-per-battle limit is spent by the trigger, not by the clause
-
-`TriggerPassive` marks `OncePerBattle` as soon as the passive's gates pass, and only then evaluates
-each effect's own condition. So "the first time X happens" is authorable exactly when X is the
-trigger; when X is the trigger PLUS a condition, the limit is spent on the first firing whatever
-the condition said, and the clause can be gone before it has ever landed. `PassiveLimit.OncePerRound`
-is charged at the same point and has the same problem.
-
-**The capability exists now, and the group was far larger than its one row.** Pass 2 built
-`PassiveDef.ChargeOnLanding` (`"chargeOnLanding"` in JSON): a limited passive that sets it gives its
-allowance back when a firing lands nothing, and takes that firing's `PassiveTrigger` event back out
-of the record. It is opt-in, and no shipped passive sets it yet. Nara's row stays until her kit is
-restored, which is now one line of content. The same shape turned up on **twenty-four shipped
-passives** that nobody had recorded, because each of them had been authored with the limit and the
-condition side by side as though the engine charged the clause. Pass 2 below measures all 24 and
-says why the flag is not the rule.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Nara | "**The first time** an ally is healed below 35% HP, they gain 6% Damage Reduction for 1 round" | nothing now: `oncePerBattle` plus `chargeOnLanding` says it | Carry On has no limit at all, so every heal that leaves an ally under 35% pays it. `DamageReductionUp` refreshes rather than stacking, so the ungated form cannot compound | none |
-
----
-
 ## 35. A damage modifier gated on a condition rather than on a status
 
 The engine has two ways to raise damage and both are counted off an entry a body carries:
@@ -415,39 +394,9 @@ blow rolls its own critical and its own variance, where a modifier would ride th
 
 ---
 
-## 36. A condition asked of the board as it stood before the ability
-
-Found by pass 2 rather than by an authoring batch. `AfterBasicAttack` passives read the body the
-basic struck through `ConditionSubject.LastTarget`, and they read it AFTER the basic, so a clause
-about the state the blow met cannot be told from the state the blow left. Moving the question into
-the basic does not help: every effect aimed at `Self` rewrites `_lastTarget` to the caster, so a
-self-aimed grant placed between the blow and a later effect that asks about `LastTarget` breaks that
-later effect.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Elyra | "Whenever an enemy **affected by Slow** takes damage from Elyra, she gains 1 Patience" | a condition read against the struck body as it stood when the ability began, or a `LastTarget` that a self-aimed effect does not rewrite | Slow Growth asks after the basic, and the basic applies the Slow it asks about. Pass 2 measured 5 of 26 Patience granted against a target that was not slowed when the basic began | small |
-
----
-
-## 37. A sequence that replaces an ability rather than adding to it
-
-Also found by pass 2. "His next two attacks use a different firing sequence" is authored inside
-Unfinished Note itself, as effects gated on the sequence's own state, and the ordinary effects
-beside them are gated on nothing that state can switch off. The first altered attack is carried by
-a counter, and `StatusStacksAtLeast` has no "below" form to gate the ordinary blow off while it
-holds. The second is carried by a `MarkAlt` that its own effects remove before the ordinary blow is
-asked.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Oris | "After Oris uses his Active Skill, his **next two attacks use a different firing sequence**" | the negation of `StatusStacksAtLeast`, which with the `MarkAlt` removal moved behind the ordinary blows lets the content gate them off; a replacement basic is the larger alternative | the altered blows are added to the ordinary 125% blow and its speed rider rather than replacing them. Pass 2 measured all 4 altered attacks in the sweep throwing the ordinary blow as well | small |
-
----
-
 ## Where the counts stand
 
-Twenty-eight capabilities, thirty-nine clauses, across thirty-five heroes. **The authoring
+Twenty-five capabilities, thirty-six clauses, across thirty-two heroes. **The authoring
 question is closed and the fidelity one added five rows**: every one of the 94 heroes has a shipped
 kit, so no authoring batch can add a row, but pass 2 read every shipped clause against what the
 engine does with it and found five that were approximations nobody had recorded. It began at
@@ -455,8 +404,9 @@ twenty-two and thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 1
 and restored the eighteen kits that carried them, leaving thirteen and fourteen. The three 3-star
 batches added nine groups and fifteen clauses, the low-star batch added four groups and five
 clauses, and pass 2 added two groups (36 and 37) and five clauses (Hale in 23, Kael in 25, Siofra
-in 30, Elyra, Oris). Group 34's capability now exists and its one row is a line of content away
-from leaving.
+in 30, Elyra, Oris). The content pass after it closed groups 34, 36 and 37 and restored Nara, Elyra
+and Oris, which is the three groups and three clauses that separate twenty-eight and thirty-nine
+from the figures above.
 
 Nine groups have more than one occupant, where before the 3-star tier there was one:
 
@@ -511,6 +461,14 @@ all three.
 | 3 | `areaHitsOnly` on a ward, and the two `IncomingHitIs...` conditions |
 | 8 | `EnemyThatLastDamagedAlly` and `SubjectDamagedMySideSinceMyTurn` |
 | 1 | `SubjectTookHitAboveMaxHpFraction`, and `HpTransfer` reading the `ScaleBy` family |
+
+Pass 2 and the content pass after it closed three more, each with its kit restored in the same pass:
+
+| group | what closed it |
+|---|---|
+| 34 | `PassiveDef.ChargeOnLanding`, built by pass 2 and set on Nara's Carry On with `oncePerBattle` |
+| 36 | `EffectCondition.SubjectHadStatusWhenStruck` (G4): the body the ability's first blow struck, as that blow found it |
+| 37 | `EffectCondition.StatusStacksBelow` (G5): the mirror of `StatusStacksAtLeast`, on a status count or a generalized counter |
 
 **Two rows survived their group's closure and are still here**, because each turned out to be about
 something else. Demos's is a balance finding rather than a capability - group 12 records the
@@ -582,23 +540,23 @@ three seeds a stage, with the balance line's five at a level that climbs with th
 
 | # | clause | mismatch | as it ships -> as it reads | output | resolution |
 |---|---|---|---|---|---|
-| 1 | **bookkeeping heard as a buff** - `OnEnemyBuffGained` and `MoveBuffs` treat a Mark, Ledger or Link as an enemy buff | trigger fires more; subject wrong | 7 of 10 listeners answer their own side's marks: Seraphine's Contrary Evidence 46 of 61 firings, Hale 14 of 29, Nadine 13 of 23, Sylven 5 of 20, Kiva 4 of 15, Mireth 4 of 14, Tavia 3 of 13. The shipped moves carry 10 marks off: Tavia's Cut the Wire 5, Vanno's misdirection 5, onto his own ally | listeners read as buffs-only: Tavia -34.0%, Seraphine -15.3%, Mireth +8.7%; Vanno's move buffs-only +66.1%. Made the rule for the whole roster (a run, not committed): finale 1-12 CEIL 63% -> 22%, 2-12 61.5% -> 50.5%, Tavia x0.33 below the 4-star band | engine capability built, opt-in: `buffsOnly` on a passive and on a MoveBuffs effect; turning it on is content plus a campaign retune |
-| 2 | **limits spent by the trigger** - group 34's shape on 24 shipped passives | trigger lands less | 7 raised by the sweep arena, all land more: Isara III saves 0 -> 5, Maren saves 0 -> 5, Mireth's Missing Page blows 5 -> 18, Branik's Damage Reduction 3 -> 15, Tavia's Dead Channel 6 -> 13, Vanno's misdirection 5 -> 11, Dahlia's Broken Rhythm shields 16 -> 23. The other 17 wait on cases the arena never raises | Isara III +29.8%, Mireth +14.7%, Maren +14.0%. Made the rule: 72 of 72 stage fingerprints move and Mireth lifts the Breaker 5-star median from 81541 to 90536, dropping Aster to x0.29 | engine capability built, opt-in: `chargeOnLanding`; turning it on is content plus an Aster retune |
-| 3 | Kael, Unusable Cover | trigger fires more | 5 Rubble spent on firings that moved no Shield -> 0 | +13.9%; in the live campaign (probe) +6.8% of Kael's damage and shielding, wins unchanged at 50 of 72 | content C1 |
-| 4 | Nereia, Change of Course | subject wrong | 25 lethal saves -> 8; 17 were allies Relief Circuit never covered | -6.8% (the shipped clause is the stronger one) | content C2 |
-| 5 | Velis, No Second Breath | trigger fires more | 110 Energy from heals on enemies at or above half HP -> 0 | -5.9% | content C3 |
-| 6 | Aminah, the emergency release | trigger fires more; scalar stale | 5 releases on allies without Priority, each paying the last release anybody made as damage -> 0 | -4.0% | content C4 |
+| 1 | **bookkeeping heard as a buff** - `OnEnemyBuffGained` and `MoveBuffs` treat a Mark, Ledger or Link as an enemy buff | trigger fires more; subject wrong | 7 of 10 listeners answer their own side's marks: Seraphine's Contrary Evidence 46 of 61 firings, Hale 14 of 29, Nadine 13 of 23, Sylven 5 of 20, Kiva 4 of 15, Mireth 4 of 14, Tavia 3 of 13. The shipped moves carry 10 marks off: Tavia's Cut the Wire 5, Vanno's misdirection 5, onto his own ally | listeners read as buffs-only: Tavia -34.0%, Seraphine -15.3%, Mireth +8.7%; Vanno's move buffs-only +66.1%. Made the rule for the whole roster (a run, not committed): finale 1-12 CEIL 63% -> 22%, 2-12 61.5% -> 50.5%, Tavia x0.33 below the 4-star band | engine capability built, opt-in: `buffsOnly` on a passive and on a MoveBuffs effect; turning it on is content plus a campaign retune. **Still off**: the content pass was told not to turn it on |
+| 2 | **limits spent by the trigger** - group 34's shape on 24 shipped passives | trigger lands less | 7 raised by the sweep arena, all land more: Isara III saves 0 -> 5, Maren saves 0 -> 5, Mireth's Missing Page blows 5 -> 18, Branik's Damage Reduction 3 -> 15, Tavia's Dead Channel 6 -> 13, Vanno's misdirection 5 -> 11, Dahlia's Broken Rhythm shields 16 -> 23. The other 17 wait on cases the arena never raises | Isara III +29.8%, Mireth +14.7%, Maren +14.0%. Made the rule: 72 of 72 stage fingerprints move and Mireth lifts the Breaker 5-star median from 81541 to 90536, dropping Aster to x0.29 | engine capability built, opt-in: `chargeOnLanding`. **Set on all 24 by the content pass (C11)**, with Aster raised 3.3% (Attack 182 to 188), which puts her at x0.302 of the new Breaker median |
+| 3 | Kael, Unusable Cover | trigger fires more | 5 Rubble spent on firings that moved no Shield -> 0 | +13.9%; in the live campaign (probe) +6.8% of Kael's damage and shielding, wins unchanged at 50 of 72 | content C1, **landed**, with the Ward pass gated on the ally's Ward too |
+| 4 | Nereia, Change of Course | subject wrong | 25 lethal saves -> 8; 17 were allies Relief Circuit never covered | -6.8% (the shipped clause is the stronger one) | content C2, **landed**, gated on HER Covered; it moved the geared CEIL and forced the solver |
+| 5 | Velis, No Second Breath | trigger fires more | 110 Energy from heals on enemies at or above half HP -> 0 | -5.9% | content C3, **landed on the two Energy lines only**: the Remnant has no HP in its sentence |
+| 6 | Aminah, the emergency release | trigger fires more; scalar stale | 5 releases on allies without Priority, each paying the last release anybody made as damage -> 0 | -4.0% | content C4, **landed reordered**: as written, the strike's gate read a Ledger the line before it removed |
 | 7 | Kael, Take Down the Wall | scalar | 10 Rubble from 10 casts that removed nothing; the text pays one per effect removed | not measurable until the count exists; the Rubble feeds What Breaks Forward | primitive G1 (group 25) |
 | 8 | Siofra, Prediction Cost | trigger fires more | 9 of 11 basic-attack drains follow a basic that inverted nothing | not measurable until an inversion is recorded | primitive G2 (group 30) |
 | 9 | Caldus, No Uncertain Ground | subject wrong | 5 of 5 blows aimed at Caldus's own last attacker, a different body from the enemy that struck the ally | -0.03% in the sweep arena: the blow is small | **repaired in the engine** |
-| 10 | Nereia, Reversed Flow (III) | trigger fires more; scalar stale | 39 blows against 27 Change of Course saves: 12 read a redirect Change of Course did not make | -0.1% | content C5 |
-| 11 | Elyra, Slow Growth | trigger fires more | 5 of 26 Patience against a target her own basic had just slowed | not measurable until the before-state exists | primitive G4 (group 36) |
-| 12 | Oris, No Fixed Refrain | adds rather than replaces | 4 of 4 altered attacks also threw the ordinary blow | not measurable until the ordinary blow can be gated off | primitive G5 (group 37) |
+| 10 | Nereia, Reversed Flow (III) | trigger fires more; scalar stale | 39 blows against 27 Change of Course saves: 12 read a redirect Change of Course did not make | -0.1% | content C5, **landed**; the blow is gated on Covered too, since Change of Course is |
+| 11 | Elyra, Slow Growth | trigger fires more | 5 of 26 Patience against a target her own basic had just slowed | **-6.7%** once measurable: 184540 to 172177, 26 Patience to 19 | primitive G4 (group 36), **built and landed** |
+| 12 | Oris, No Fixed Refrain | adds rather than replaces | 4 of 4 altered attacks also threw the ordinary blow | **-3.3%** against the kit as it shipped (99830 to 96575); -7.3% against the same sequence with the ordinary gate off | primitive G5 (group 37), **built and landed** |
 | 13 | Hale, Fresh Trail (I) | trigger fires more | 19 Critical Damage grants, each for a whole turn, against 14 new Quarry bodies | not measurable until a per-hit charge exists | primitive G3 (group 23) |
-| 14 | Darian, Unseen Guard | subject wrong | beside Brenna, 6 Veil Charges -> 4; the other 2 came from a Shield Darian did not give | -0.2% | content C7 |
-| 15 | Mireth, The Missing Page | clause dropped; a counter nominal | 0 statuses stripped -> 1; Absence has nothing to count without it | +0.4% | content C9 |
-| 16 | Brenna, What Held Once (III) | trigger fires more | 5 charges banked against 0 Survival saves -> 0 against 0 | none | content C6 |
-| 17 | Caldus, Defined Duty | a counter nominal | 0 Resolve banked by his counterattacks -> 2 | none: 2 counters in five fights | content C10 |
+| 14 | Darian, Unseen Guard | subject wrong | beside Brenna, 6 Veil Charges -> 4; the other 2 came from a Shield Darian did not give | -0.2% | content C7, **landed** |
+| 15 | Mireth, The Missing Page | clause dropped; a counter nominal | 0 statuses stripped -> 1; Absence has nothing to count without it | +0.4% | content C9, **half landed**: the Absence gate. The Dispel was not written, see the content pass |
+| 16 | Brenna, What Held Once (III) | trigger fires more | 5 charges banked against 0 Survival saves -> 0 against 0 | none | content C6, **landed** |
+| 17 | Caldus, Defined Duty | a counter nominal | 0 Resolve banked by his counterattacks -> 2 | none: 2 counters in five fights | content C10, **landed on `LastTarget`** rather than `LastAttacker` |
 
 **Rows 1 and 2 are the pass.** Both are engine rules that reach a whole class of clause rather than
 one hero, both were written against by content that assumed the other reading, and both move the
@@ -627,7 +585,9 @@ with the solver open.
   was only waiting; making it refundable broke the per-subject check that proves exactly that.
   `CheckChargeOnLandingRule` proves it (0 landings in 6 rounds charged at the trigger, 6 charged on
   landing, 6 events), and the 24-row table beside it measures every shipped passive with the shape.
-  Cost: one field, one parse line, one clone line, the refund block, one unit setter.
+  Cost: one field, one parse line, one clone line, the refund block, one unit setter. **The content
+  pass set it on 27 shipped passives**: the 24, Nara's Carry On, Nereia's Change of Course and
+  Aminah's No Wasted Recovery.
 - **`PassiveDef.BuffsOnly` and `EffectDef.BuffsOnly`** (`"buffsOnly"` on either). The listener half
   refuses an `OnEnemyBuffGained` whose status `StatusInfo.IsInert` names; the move half leaves an
   inert entry where it is. The engine already carries this repair at two other sites - the
@@ -646,8 +606,8 @@ Broken Links off the Forsaken her own basic lays.
 | G1 | an amount scaled by how many bodies the PREVIOUS effect changed - removed something from, or landed on - and honoured by `EnergyGain` as well as `GainResolve` | Quin's 12 Energy per target (25), Kael's Rubble per removal (25) | 0 | 1 on `EffectDef`, 1 counter on the simulation set at the four removal and landing sites | 1 synthetic arena; the clone check covers the field | small |
 | G2 | an inversion and a move recorded as a removal for `SubjectLostStatusThisFiring` - `NoteRemovedFrom` only, not `FireRemoval`, so `OnStatusRemoved` listeners do not start hearing moves | Oswin (30), Linnet (30), Siofra (30) | 0 | 0 | 1 arena; four call sites (`MoveStatus` for both move kinds, `TransferStatus`, `InvertStatus`) | small |
 | G3 | a per-hit charge on any stat entry, spent by the blow that reads it, and a crit-only scope | Aster (23), Quin (23), Hale (23) | 0 | `StatusInstance.Charges` exists; 1 crit-scope field on `EffectDef` | 3 read-and-spend sites in the damage funnel, 1 arena | large - it touches the funnel, though a no-op wherever nothing sets a charge |
-| G4 | a condition asked of the struck body as it stood when the ability began | Elyra (36) | 1 `EffectCondition` member | 1 snapshot of the first struck body's status kinds, taken at the ability's first Damage | 1 arena, validator parity | small |
-| G5 | the negation of `StatusStacksAtLeast` | Oris (37) | 1 `EffectCondition` member | 0 | 1 arena, validator parity | small |
+| G4 | a condition asked of the struck body as it stood when the ability began | Elyra (36) | 1 `EffectCondition` member | 1 snapshot of the first struck body's status kinds, taken at the ability's first Damage | 1 arena, validator parity | small, **built**: `SubjectHadStatusWhenStruck` |
+| G5 | the negation of `StatusStacksAtLeast` | Oris (37) | 1 `EffectCondition` member | 0 | 1 arena, validator parity | small, **built**: `StatusStacksBelow` |
 
 G1 and G2 are the cheap pair and each closes a group this file already carried: G1 answers group 25
 whole, G2 answers group 30 whole. G3 is the one group 23 has always wanted, now with a third
@@ -656,68 +616,237 @@ occupant.
 ### Content instructions for the next pass
 
 One line each. Every one is proved by a pair in the harness, and the pair's status note flips from
-"ships as the approximation" to "ships as the sentence" when the line is made.
+"ships as the approximation" to "ships as the sentence" when the line is made. **The content pass
+carried them out**, and each line now ends in what happened to it. Four were not followed as
+written, because the kit said otherwise when it was opened; each says why.
 
 - **C1** `kael_unusable_cover`: give its `RemoveStatus` of Resolve a `condition2` of `HasShield` on
-  `BroadcastSubject`, and set `chargeOnLanding`.
+  `BroadcastSubject`, and set `chargeOnLanding`. **Landed**, and the second `ShieldTransfer`, which
+  passes Kael's Ward on, now asks for the ally's Ward rather than his own: Pinoy's sentence gates the
+  whole clause on that ally holding one. The sweep reads the same either way.
 - **C2** `nereia_change_of_course`: gate both effects on `HasStatus` `Covered` on `BroadcastSubject`,
-  and set `chargeOnLanding`.
+  and set `chargeOnLanding`. **Landed on `MyStatusStacksAtLeast` rather than `HasStatus`**: Marrow's
+  Promise writes the same `Covered` kind, and "under Relief Circuit" means hers.
 - **C3** `velis_no_second_breath`: gate all three effects on `HpBelow` 0.5 on `BroadcastSubject`.
+  **Landed on the two `EnergyGain` lines only.** The third, the Remnant, is What Was Taken's clause -
+  "whenever Hollowed converts healing into damage" - and has no HP in it; gating it would have cost
+  her Remnants the sentence pays.
 - **C4** `aminah_emergency_release`: gate all three effects on `HasStatus` `Ledger` on
-  `BroadcastSubject`, and set `chargeOnLanding`.
+  `BroadcastSubject`, and set `chargeOnLanding`. **Landed reordered and source-filtered.** As
+  written the strike came after the `RemoveStatus` of the Ledger, so its gate read a Ledger the line
+  before it had just taken and it could never land; the static read-after-strip check caught it. The
+  order is release, strike, remove, and the gate is `MyStatusStacksAtLeast`, because Nereia's Reserve
+  and Brenna's Memory are Ledgers too. Her talents II and III append to the same passive, ungated,
+  and would have spent the once-per-battle allowance on an ally without Priority all over again; both
+  appends now sit before the removal with the same gate.
 - **C5** `nereia_reversed_flow` (talent III): make its Damage an append on `passive2` and give the
-  talent trigger `None`.
+  talent trigger `None`. **Landed**, with the appended blow carrying C2's gate, since it rides the
+  same firing.
 - **C6** `brenna_what_held_once` (talent III): make its `GainResolve` an append on `passive2` gated on
-  `SubjectLostStatusThisFiring` on `BroadcastSubject`, and give the talent trigger `None`.
-- **C7** `darian_unseen_guard`: set `triggerSourceIsSelf`.
+  `SubjectLostStatusThisFiring` on `BroadcastSubject`, and give the talent trigger `None`. **Landed.**
+- **C7** `darian_unseen_guard`: set `triggerSourceIsSelf`. **Landed.** It moved the room Brenna I's
+  dark check was fought in, which is recorded beside that check.
 - **C8** `brenna_survival_of_the_stubborn`: gate its `LedgerDeposit` on `SubjectLostStatusThisFiring`
-  on `BroadcastSubject`, and set `chargeOnLanding`.
+  on `BroadcastSubject`, and set `chargeOnLanding`. **Landed.**
 - **C9** `mireth_the_missing_page`: add a `Dispel` of 1 on `BroadcastSubject`, gated on `HasMyMark`,
   as its first effect; and gate `mireth_absence_has_weight` on `HasMyMark` on `BroadcastSubject`, so
-  her own Page spend stops counting as a Focused enemy losing a status.
+  her own Page spend stops counting as a Focused enemy losing a status. **The Absence gate landed;
+  the Dispel was not written.** Inside an `OnEnemyBuffGained` window Dispel skips the kind that raised
+  it, and since the Dispel repair it also skips the bookkeeping kinds, so it strips an OLDER buff
+  when there is one and nothing when there is not - never "that status". Forced in, it stripped 5
+  statuses across 10 firings and 0 of them the one that arrived, and all 10 firings answered
+  Mireth's own Mark. With the gate and without the Dispel, Absence is honest and has nothing in her
+  kit to count; the smallest thing that would let the sentence be said is a Dispel that takes the
+  triggering buff rather than skipping it.
 - **C10** `caldus_defined_duty`: append a `GainResolve` of 1, `maxStacks` 3, gated on `HasMyMark` on
-  `LastAttacker`.
+  `LastAttacker`. **Landed on `LastTarget`.** A Self-aimed line is never refused by the per-target
+  budget, so gated on the attacker it banked Resolve on every counter the once-a-round budget turned
+  away. `LastTarget` is the attacker only when the counter struck it. 2 banked against 2 counters
+  landed.
 - **C11** set `chargeOnLanding` on the 24 limited passives in the table: Isara III, Maren, Mireth's
   Missing Page, Branik, Tavia's Dead Channel, Vanno's misdirection, Dahlia's Broken Rhythm switch,
   Kiva's Broken Links, Marrow's Promise Survives, Brenna's Survival, Rusk, Rhys, Toren, Nadine,
   Isolde's Unfinished Sentence, Cyrra's Carry the Burden, Vaelis's Opening Moves, Merek's Priority
   Inversion, Oris III, Caldus III, Kael's Unusable Cover, Hale's Tracking Habit, Edrin's Still Here
   and Altheon III - then raise Aster about 3%, or accept the Breaker median move, and rerun the
-  star band and `Tools/solve-recommended-power.ps1`.
+  star band and `Tools/solve-recommended-power.ps1`. **Landed on all 24.** Mireth's Missing Page
+  took the Breaker median from 81541 to 90536 (Seraphine's line), which needs Aster at 27161; her
+  Attack went from 182 to 188 and she reads 27347, x0.302. Both scripts were rerun; the content pass
+  section has the tables.
 - **C12** `nara_carry_on`: set `oncePerBattle` and `chargeOnLanding` - "the first time" - which
-  closes group 34's one row.
+  closes group 34's one row. **Landed**, the drafting note came off, and it left
+  `Docs/PINOY-LIST.md` section 2f. In an arena where the first heals land on a healthy ally, the
+  trigger-time charge pays 0 grants and the landing charge 1.
 - **C13** set `buffsOnly` on the eight listeners whose text names a buff or positive effect (Kiva,
   Tavia, Mireth, Seraphine, Hale, Vanno, Sylven, Nadine) and on the `MoveBuffs` effects of Cut the
   Wire, Passed Position, Change Sides and Vanno's misdirection - **only together with a campaign
-  retune**, because made the rule it takes the finale's CEIL from 63% to 22%.
+  retune**, because made the rule it takes the finale's CEIL from 63% to 22%. **Not done, by
+  instruction: `buffsOnly` stays opt-in and off.** Two things about it moved. Hale's buff listener
+  is `hale_no_safe_distance_unseen` now, because his Shield half answers `OnEnemyShielded` and has
+  no buff to filter. And the 63%-to-22% reading was taken before the content pass re-solved the
+  campaign, so it has to be taken again when this is done.
 
 ### Suspected, not measured
 
 A finding without a measurement is a guess, and these are the guesses. Each is read from the data
-and, where marked, confirmed in the engine's code; none has a pair behind it.
+and, where marked, confirmed in the engine's code; none has a pair behind it. **The content pass
+measured all nine**, and each entry now ends in its verdict. The measurements are
+`CheckContentPassTwo` and `CheckSuspectedPassTwo` in the harness section ENGINE GAPS PASS 2 -
+FIDELITY: three confirmed and fixed, one confirmed and half fixed, four confirmed and left, one not
+as suspected.
 
 - **Hale, No Safe Distance** (code confirmed): a Shield from `EffectKind.Shield` never raises
   `OnEnemyBuffGained` - only an `ApplyStatus` does - so "when a Quarry target gains a Shield" is
   answered only when a Quarry body already holding a Shield gains some other status, and "or becomes
-  Untargetable" is not wired at all. The sweep's enemies never shield.
+  Untargetable" is not wired at all. The sweep's enemies never shield. **Confirmed and fixed**, with
+  the one engine addition this pass made beyond G4 and G5: `PassiveTrigger.OnEnemyShielded`, the
+  enemy-side mirror of `OnAllyShielded`, raised from the same line. No Safe Distance answers it,
+  gated on Quarry alone, and a second passive, `hale_no_safe_distance_unseen`, answers a Quarry body
+  gaining Stealth. With every sweep enemy warding itself, the old reading landed 2 times and answered
+  Hale's own Quarry landing 13 times; the new one lands 8. No campaign enemy wards, so no PvE fight
+  moves; a Proving line of heroes does.
 - **Rheia, Applied Revision**: `OnEnemyBuffGained` hears beneficial statuses only, so the debuffs she
   applies and the statuses she removes grant no Revision, where the text counts any status "gained or
-  lost from Rheia's abilities". Neither of her listeners fired once in the sweep.
+  lost from Rheia's abilities". Neither of her listeners fired once in the sweep. **Confirmed and
+  fixed from content.** No trigger hears a caster's own debuff landing, so the Revision rides the two
+  abilities that make the changes: two on a basic that strips Attack Up (the Guard Down it lays and
+  the Attack Up it takes), and four on Rewrite the Outcome, which lays Guard Down on every enemy. The
+  four is one per enemy capped at her limit, written as a flat four because the per-target count
+  (`perTarget`) is a dormant primitive this pass did not light; below four enemies it over-pays. 0
+  Revision in the sweep before, 20 after, output unchanged at 81541 - the Speed it buys does not
+  reorder that arena.
 - **Nereia, Deeper Reservoir and Shared Reserve (I, II)**: both answer the Ledger's expiry whatever
   it held. Deeper Reservoir pays its 10 Energy at every expiry, where the text pays when Reserve is
   consumed for healing; Shared Reserve pays a Shield of a fixed 10% of her Max HP, where the text pays
-  50% of what was stored.
+  50% of what was stored. **Confirmed, and left.** In the sweep Deeper Reservoir answered all 15
+  expiries and all 15 Reserves had released nothing; Shared Reserve paid 16 Wards worth 20864 against
+  0 released. Neither is a content line: nothing can ask whether an expiry paid out, and the
+  auto-release leaves `_lastLedgerRelease` at the LAST release when a Reserve expires empty, so a
+  Shield on `scaleByLastRelease` would pay a stale figure. Both want the auto-release to record an
+  empty release as zero, and Deeper Reservoir wants a condition on it.
 - **Cyrra, Hidden Reserve (II)**: `OnShieldBreak` fires on Cyrra's own Shield breaking, where the
-  text is about the ally's Bury the Burden Shield.
+  text is about the ally's Bury the Burden Shield. **Confirmed, and left.** 13 firings, each on one of
+  her own 13 broken Wards, while 13 Wards broke on other allies unanswered. Moving it to
+  `OnAllyShieldBreak` would fix the body and not the shape: the sentence stores from the Ward's
+  creation and pays when that Ward breaks, and a store keyed to one Ward is not something a Ledger
+  can be - two of her Ledgers on one ally fold into one entry.
 - **Velis, Starve the Light (II)**: answers every heal on a Hollowed enemy, including after Hollowed's
-  one conversion is spent.
+  one conversion is spent. **Not as suspected, and something else is.** Hollowed never spends: the
+  HealIntercept convert path skips a spent `ledgerBankLimit` but never charges it, so one Hollowed
+  with Velis's limit of 1 converted 5 heals in a row, and a listener on `OnEnemyHealed` and one on
+  `OnFunnelConvertFired` both answered all 5. There is no spent conversion for the talent to answer
+  after. The defect is Hollowed's, "it can trigger once before it expires" in the sentence, and
+  repairing it moves Velis's whole kit, so it is recorded here rather than made.
 - **Isolde, Unfinished Sentence**: the "three or more damage-over-time effects" rider needs three
   Burn entries on one body, and Isolde refreshes her own; it never landed in the sweep, and outside a
-  team with two other Burn appliers it is a cap nothing reaches.
+  team with two other Burn appliers it is a cap nothing reaches. **Confirmed, and worse than
+  suspected.** `AddOrRefresh` folds every application of a kind into one entry whoever applied it,
+  and no shipped Burn sets `stackOnReapply`, so three heroes Burning one enemy leave one entry: the
+  rider is unreachable in any team. Burn is the only damage-over-time kind, so "three effects" has no
+  engine meaning at all; which number it should read is Pinoy's call.
 - **Mireth, Absence Has Weight** (code confirmed): `OnStatusRemoved` fires on the remover for any
   removal, so Mireth spending her own Pages counts as a Focused enemy losing a status once the Missing
-  Page lands often enough to fill them. C9 carries the gate.
+  Page lands often enough to fill them. C9 carries the gate. **Fixed**: 4 Absence banked ungated,
+  every one her own Page spend, and 0 gated. See C9 for why nothing else in her kit feeds it.
 - **Marrow, The Cost Is Named**: the Promise heal lands at the ally's turn END rather than at the
   start of their next turn, and a Promise on Marrow himself is never consumed, because
-  `OnAllyTurnEnd` excludes the unit whose turn it is.
+  `OnAllyTurnEnd` excludes the unit whose turn it is. **Confirmed; the self half fixed.** A second
+  passive, `marrow_promise_heal_self`, spends a Promise Marrow holds at his own `TurnStart`, which is
+  the start of his next turn as the sentence says, and Shared Oath's smaller heal reaches it too. 19
+  Promises he laid on himself were never spent; 20 of 25 are now. **It is a large move**: his sweep
+  output goes from 117914 to 170309 (+44.4%), because he is the lowest-HP ally his own basic Promises
+  most often. The ally half stays - 17 Promise heals, all at the ally's turn end - because no trigger
+  opens at an ally's turn start.
 - **Aeron, Unpaid Action (III)**: "repay at least 20% Turn Debt" is not gated; any repayment pays.
+  **Confirmed, and left.** 31 Silences, at least 22 of them after a debt one Press Forward banked on
+  its own, which is 12% at most. Nothing can ask the size of a repayment: the entries are gone and
+  the Energy moved before `OnTurnDebtRepaid` is raised. A second mismatch sits beside it: the Silence
+  lands AT the repayment, at the start of the debtor's own turn, where the sentence has it after that
+  turn ends.
+
+### The content pass
+
+The pass that carried out C1 to C12, built G4 and G5, and measured the nine suspected entries. C13
+and `buffsOnly` were left off on purpose, and G1, G2 and G3 were not in its scope. Every clause it
+touched has a pair in ENGINE GAPS PASS 2 - FIDELITY, and every pair now reads "ships as the
+sentence".
+
+**What it built in the engine, and nothing else.** Two `EffectCondition` members and one
+`PassiveTrigger` member, all appended so no ordinal moved:
+
+- `StatusStacksBelow` (G5), the mirror of `StatusStacksAtLeast`, in the pure `ConditionMet`.
+  `CheckStatusStacksBelowRule` proves it on a Resolve count and on generalized counter 2: every
+  basic answers exactly one of the pair.
+- `SubjectHadStatusWhenStruck` (G4), answered by the Sim beside `SubjectLostStatusThisFiring`, on
+  the same window: a snapshot of the first body a chosen ability's first Damage struck, taken before
+  the blow, cleared at depth 0 and inherited by the passives it wakes. `CheckStruckBodySnapshotRule`
+  proves it: `HasStatus` pays 6 of 6 basics in its arena, this pays 5.
+- `OnEnemyShielded`, for Hale. `CheckEnemyShieldedRule` proves it: 5 of 5 enemy Wards answered,
+  against 0 on Hale's old reading.
+
+**How the kits it restored moved**, in the sweep arena's output total:
+
+| hero | what changed | output |
+|---|---|---|
+| Kael | C1 and C11 on Unusable Cover | 106380 -> 121118 (+13.9%) |
+| Nereia | C2 on Change of Course | 246733 -> 230023 (-6.8%) |
+| Velis | C3, Energy lines only | 39646 -> 37312 (-5.9%) |
+| Aminah | C4, reordered and source-filtered | 97650 -> 93704 (-4.0%) |
+| Elyra | G4 on Slow Growth | 184540 -> 172177 (-6.7%) |
+| Oris | G5 on No Fixed Refrain | 99830 -> 96575 (-3.3%) |
+| Mireth | C11 on The Missing Page, the Absence gate | 80728 -> 92261 (+14.3%) |
+| Marrow | his own Promise, spent at his own turn start | 117914 -> 170309 (+44.4%) |
+| Aster | Attack 182 -> 188 | 26472 -> 27347 (+3.3%) |
+
+**The star band is green in every tier.** Two 5-star medians moved: Breaker from 81541 to 90536,
+because Mireth passed Seraphine, and Striker from 42012 to 40845, because Velis fell. Aster needed
+27161 against the new Breaker median and makes 27347, x0.302; nothing else left its band, and the
+nearest to an edge is Avera at x0.31.
+
+**The campaign was re-solved, because Nereia is on the pinned line.** C2 alone took the geared CEIL
+out of band - 1-9 to 60.5%, 2-1 to 58% - because Change of Course had been saving three times as many
+allies as its sentence covers. `Tools/solve-recommended-power.ps1` (which needed `BattleClips.cs`
+added to its compile to run at all) moved 19 of 24 stages, 15 of them in the authored roster, and
+brought chapter 2's `recommendedPower` down by 3% to 5%. Every campaign band is green: ordinary
+stages at x1.15 to x1.2, the chapter 1 walls at x1.02 and x1.03, the later walls at x0.98, and the
+geared CEIL between 79% and 90% on the stages it can measure, 68% and 65% on the finales. The pinned
+five-body line now blocks one stage at `recommendedPower`, 1-8, which is floor-pinned and reported
+rather than failed.
+
+**The baselines, and why each moved.**
+
+- **Stage fingerprints: 72 of 72.** Kael's Unusable Cover and Kiva's Broken Links, both starters,
+  are in every opening battle; with those two kits restored and the committed campaign, all 72 held.
+  The solver's roster moves on 15 stages re-level those openings on top.
+- **Hero sweep: 127 of 470.** Every line of a kit the pass changed and none of any other: the kits
+  in the table above, the 24 C11 passives that ever fire for nothing (Branik, Brenna with C8 beside it,
+  Cyrra, Dahlia, Isolde, Kiva, Maren, Nadine, Rhys, Rusk, Tavia, Toren, Vaelis, Vanno), Nara (C12), Rheia (Revision)
+  and Hale (the new trigger), and Caldus on the two seeds where a counter lands. Darian's C7 moves
+  nothing here because no second shielder stands beside him.
+- **Talent sweep: 238 of 450.** All three talents of every 5-star whose base kit moved, plus Isara
+  III (C11), Mireth II and III, and Kiva's one seed.
+
+**What the talent checks read now.** 36 talents gain, 46 sit in the noise, 8 lose, where it was 38,
+47 and 5. Velis III left the costly list: once No Second Breath paid only for low enemies, Final
+Denial's cost fell to -341, t -1.4. Four joined, each pinned with its reason: Mireth I is a new trap
+(C11 lets the base passive land every round, which is more than the talent's two per enemy), and
+Marrow I, Mireth III and Rheia III are trades their own sentences name. The coverage note went from
+19 to 21: Brenna III now rides a Survival save and Aminah III a Priority ally, and the sweep raises
+neither; Caldus III had only ever been seen through the empty firing C11 takes back out of the
+record; and Mireth II left, because Pages fill now.
+
+**Found, and left for the next pass.** Each is recorded above where it belongs, and none is built:
+
+- Hollowed's convert path never charges `ledgerBankLimit`, so "once before it expires" converts every
+  heal (Starve the Light, above).
+- A Dispel that takes the buff that raised its window is what C9 needs, and what Absence needs to
+  have anything to count.
+- An auto-released Ledger that expires empty leaves the last release's figure behind (Nereia I and
+  II, above).
+- "Three or more damage-over-time effects" has no engine meaning (Isolde, above).
+- Rheia's four Revision on Rewrite the Outcome is one per enemy only while four stand; `perTarget`
+  would say it exactly.
+- **Suspected, not measured**: a counter the per-target budget refuses still pays a
+  `consumesResolve` its effect carries, because the condition that passed is what `ResolveAbility`
+  reads, and the budget turns the body away after. Caldus's Defined Duty is the shipped effect with
+  that shape, and it spends a Resolve that way whenever he holds one.

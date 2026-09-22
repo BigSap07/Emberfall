@@ -28,11 +28,13 @@ namespace Emberfall.DevHarness
         {
             bool solve = false;
             bool talentValue = false;
+            bool fidelity = false;
             string contentDir = null;
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--solve-recommended-power") { solve = true; continue; }
                 if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
+                if (args[i] == "--fidelity") { fidelity = true; continue; }
                 if (contentDir == null) contentDir = args[i];
             }
             if (contentDir == null) contentDir = FindContentDir();
@@ -55,6 +57,15 @@ namespace Emberfall.DevHarness
             if (talentValue)
             {
                 CheckTalentsAreWorthPicking(content);
+                return _failures == 0 ? 0 : 1;
+            }
+
+            // The fidelity pass and the star band alone, for a content pass that is moving kits
+            // against their sentences and wants both readings without the rest of the harness.
+            if (fidelity)
+            {
+                CheckFidelityPassTwo(content);
+                CheckStarBandByRole(content);
                 return _failures == 0 ? 0 : 1;
             }
 
@@ -17804,7 +17815,9 @@ namespace Emberfall.DevHarness
                     // doing its job, and a unit attempting a debuff.
                     "OnAllyEnergyGained", "OnGuardPrevented", "OnEnemyAppliedStatus",
                     // group 14: the mirror RoundStart never had.
-                    "RoundEnd"
+                    "RoundEnd",
+                    // pass 2: the enemy side hearing a Ward land.
+                    "OnEnemyShielded"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
             Check(ok, "PassiveTrigger enum parity (" + Enum.GetNames(typeof(PassiveTrigger)).Length + " members)");
@@ -20856,7 +20869,10 @@ namespace Emberfall.DevHarness
                     // group 8: who hit MY SIDE, rather than who hit me.
                     "SubjectDamagedMySideSinceMyTurn",
                     // group 1: the size of the blow that just landed.
-                    "SubjectTookHitAboveMaxHpFraction"
+                    "SubjectTookHitAboveMaxHpFraction",
+                    // pass 2: G5, the mirror of a stack count, and G4, the struck body as the
+                    // blow found it.
+                    "StatusStacksBelow", "SubjectHadStatusWhenStruck"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
             Check(ok, "EffectCondition enum parity ("
@@ -21924,7 +21940,7 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static readonly string[] AbilityTextPinnedDraftingNotes =
         {
-            "arno_rubble_resolve", "yara_second_bearing", "nara_carry_on", "kora_first_opening",
+            "arno_rubble_resolve", "yara_second_bearing", "kora_first_opening",
             "sena_unfixed_aim",
             "adric_no_return_mark", "aster_scoring_point", "quin_stamped_parcel",
             "quin_return_to_sender", "quin_urgent_matter", "selka_no_extension",
@@ -22869,6 +22885,9 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnEnemyEnergyThreshold, true, false),
                 C(PassiveTrigger.OnEnemyHealed, true, true),
                 C(PassiveTrigger.OnEnemyHpBelowThreshold, true, true),
+                // ENGINE-GAPS pass 2: the enemy-side mirror of OnAllyShielded, raised from the
+                // same line with the same window.
+                C(PassiveTrigger.OnEnemyShielded, true, true),
                 C(PassiveTrigger.OnEnemyTurnEnd, true, true),
                 C(PassiveTrigger.OnFunnelConvertFired, true, true),
                 C(PassiveTrigger.OnGuardPrevented, true, true),
@@ -24191,7 +24210,7 @@ namespace Emberfall.DevHarness
             new TalentRoom("vaelis_the_unfixed_blade II", "s_soft4_triple", "", 4, false),
             new TalentRoom("vaelis_the_unfixed_blade III", "s_soft_soft_big", "isara_the_second_chance", 2, false),
             new TalentRoom("dahlia_the_wayward_hymn II", "s_caster_bruiser_tail", DarkFive, 1, false),
-            new TalentRoom("brenna_the_remaining_wall I", "s_bruiser_healer", DarkWall, 1, false),
+            new TalentRoom("brenna_the_remaining_wall I", "s_caster_bruiser_tail", DarkFive, 2, false),
             new TalentRoom("altheon_the_first_witness III", "s_buffer_tail", DarkStrikers, 1, false),
             new TalentRoom("isolde_the_slow_fading III", "s_buffer", "", 1, false),
             new TalentRoom("mireth_the_erased_name II", "s_buffer", "", 1, false),
@@ -24201,7 +24220,7 @@ namespace Emberfall.DevHarness
             new TalentRoom("rheia_the_revision_scribe III", "s_selfdown", DarkStrikers, 1, false),
             new TalentRoom("rovan_the_adaptive_commander II", "s_bruiser", "isara_the_second_chance", 1, false),
             new TalentRoom("seraphine_the_closed_volume I", "s_soft_big", DarkStrikers, 1, false),
-            new TalentRoom("seraphine_the_closed_volume II", "s_buffer", DarkWall, 1, true),
+            new TalentRoom("seraphine_the_closed_volume II", "s_buffer", DarkStrikers, 1, true),
             new TalentRoom("seraphine_the_closed_volume III", "s_buffer_tail", DarkStrikers, 1, false),
             new TalentRoom("sylven_the_unfading_blade III", "s_triple", "", 1, false),
             new TalentRoom("velis_the_hollow_vow III", "s_frail_healer", DarkStrikers, 1, false),
@@ -24361,7 +24380,13 @@ namespace Emberfall.DevHarness
                       + " healed onto other bodies)");
 
             // ---- Brenna I: the cap on what a Lasting Guard may record, where the cap binds.
-            if (!DarkPair("brenna_the_remaining_wall", 1, "s_bruiser_healer", DarkWall, 1, false,
+            //
+            // MOVED OFF s_bruiser_healer beside DarkWall by ENGINE-GAPS pass 2 (content C7). That room
+            // raised the binding cap only while Darian's Unseen Guard answered every Ward on an ally,
+            // Brenna's included; the Guard it laid shares one entry with the Lasting Guard beside it.
+            // Answering only his own Ward, it stopped doing that and the cap stopped binding (675
+            // either way). Of every room and seed the section fields, this is the one where it binds.
+            if (!DarkPair("brenna_the_remaining_wall", 1, "s_caster_bruiser_tail", DarkFive, 2, false,
                           out a, out b))
                 Check(false, "brenna I arena built");
             else
@@ -24474,10 +24499,14 @@ namespace Emberfall.DevHarness
                           out a, out b))
                 Check(false, "rheia III arena built");
             else
-                Check(b.ResolveSpent < a.ResolveSpent && b.SubjectDamage > a.SubjectDamage,
-                      "Rheia III stops Second Draft consuming Revision and pays for it in damage ("
-                      + b.ResolveSpent + " Revision spent against " + a.ResolveSpent + ", "
-                      + b.SubjectDamage + " damage against " + a.SubjectDamage + ")");
+                // The damage half is no longer asserted. Since ENGINE-GAPS pass 2 every cast of
+                // hers refills Revision (Applied Revision counts the statuses she changes), so
+                // keeping it buys less than the 10 Energy each full-Revision strike costs, and the
+                // talent reads as a trade in TALENTS WORTH PICKING rather than as a gain.
+                Check(b.ResolveSpent < a.ResolveSpent,
+                      "Rheia III stops Second Draft consuming Revision (" + b.ResolveSpent
+                      + " Revision spent against " + a.ResolveSpent + "); the bigger strike it buys is "
+                      + "paid for in Energy, " + b.SubjectDamage + " damage against " + a.SubjectDamage);
 
             // ---- Rovan II: the Shield he passes is worth Energy to whoever catches it.
             if (!DarkPair("rovan_the_adaptive_commander", 2, "s_bruiser", "isara_the_second_chance",
@@ -24538,7 +24567,13 @@ namespace Emberfall.DevHarness
             // a LOSS. One body that buffs itself every turn is the smallest room where the
             // record is read before it is closed, and there the talent pays 2859 over seven
             // casts, which is the 30% of her Attack its text promises arriving as damage.
-            if (!DarkPair("seraphine_the_closed_volume", 2, "s_buffer", DarkWall, 1, true,
+            //
+            // AND A THIRD TIME, OFF DarkWall, by ENGINE-GAPS pass 2: Kael's Unusable Cover now keeps
+            // its Rubble for a firing that moves a Ward and Darian answers only his own Ward, and
+            // the wall that stood in front of her let the book close again (85259 against 85331).
+            // The same one body that buffs itself, beside the Strikers, reads the record before it
+            // closes.
+            if (!DarkPair("seraphine_the_closed_volume", 2, "s_buffer", DarkStrikers, 1, true,
                           out a, out b))
                 Check(false, "seraphine II arena built");
             else
@@ -24722,12 +24757,23 @@ namespace Emberfall.DevHarness
                 + " Breaks Forward consumes all of it on the very next basic, so Rubble never lives long"
                 + " enough to expire or to pass one stack. It loses in every room it was tried in,"
                 + " including against a body holding four long buffs. A kit conflict, waiting on Pinoy"),
-            new CostlyTalent("velis_the_hollow_vow III", "TRAP",
-                "Final Denial blocks healing on the body What Was Taken just hit, and that body carries"
-                + " her Hollowed record by construction, so the block cancels the heal-to-damage"
-                + " conversion and the No Second Breath Energy her whole kit runs on. Fewer casts, more"
-                + " damage taken, fewer wins. Gating it off Hollowed bodies makes it never fire. A kit"
-                + " conflict, waiting on Pinoy"),
+            new CostlyTalent("mireth_the_erased_name I", "TRAP",
+                "Deeper Erasure trades The Missing Page's once-a-round limit for two landings per enemy,"
+                + " and since ENGINE-GAPS pass 2 (chargeOnLanding, C11) the base passive lands once in"
+                + " every round it is raised, so the trade is fewer landings. firesPerSubject counts the"
+                + " whole battle where the sentence counts one Focus's duration, and nothing can reset a"
+                + " budget when Focus is reapplied. A kit conflict, waiting on Pinoy"),
+            new CostlyTalent("mireth_the_erased_name III", "TRADE",
+                "as written: the strike takes her own Focus off a low enemy, which the sentence names as"
+                + " the cost, and The Missing Page cannot answer that enemy again until she marks it anew;"
+                + " it pays in its own room and costs in the sweep"),
+            new CostlyTalent("marrow_the_irrevocable_vow I", "TRADE",
+                "as written: a third ally holds Promise, so Marrow takes a share of three allies' damage"
+                + " instead of two, which the output total does not count; the smaller Promise heal it"
+                + " pays for now also reaches the Promise he holds himself (ENGINE-GAPS pass 2)"),
+            new CostlyTalent("rheia_the_revision_scribe III", "TRADE",
+                "as written: every full-Revision Second Draft costs 10 Energy, and since ENGINE-GAPS pass 2"
+                + " her casts refill Revision, so not spending it buys less than those casts cost"),
             new CostlyTalent("kiva_the_forsaken_oath III", "TRADE",
                 "survival: the Shield on a kill keeps her alive to the end in every seed of its room"
                 + " where she otherwise dies in every one, and the Energy she stops taking as damage is"
@@ -26675,7 +26721,7 @@ namespace Emberfall.DevHarness
                 "brenna_deep_resolve effect 0",
                 "merek_interjecting_clause effect 2",
                 "cyrra_bury_the_burden effect 5",
-                "aminah_emergency_release effect 2",
+                "aminah_emergency_release effect 1",
                 "aminah_release_damage effect 0"
             };
             Check(SameSet(derived, expectedDerived),
@@ -26691,6 +26737,8 @@ namespace Emberfall.DevHarness
                 "hale_closing_radius effect 1",
                 "kiva_sever_the_return effect 2",
                 "marrow_promise_heal effect 0",
+                // ENGINE-GAPS pass 2: the same Promise heal, on a Promise Marrow holds himself.
+                "marrow_promise_heal_self effect 0",
                 "demos_arrears_tick effect 0",
                 "orelle_hard_remedy effect 2",
                 "orelle_triage_after_loss effect 0",
@@ -31095,10 +31143,10 @@ namespace Emberfall.DevHarness
 
             RedirectProbe nWas = RunRedirectProbe(live, "nereia_the_field_medic", 3,
                                                   "nereia_triage_buffer", "nereia_triage_buffer_heal",
-                                                  "Reversed Flow", true);
+                                                  "Change of Course", true);
             RedirectProbe nIs = RunRedirectProbe(live, "nereia_the_field_medic", 3,
                                                  "nereia_triage_buffer", "nereia_triage_buffer_heal",
-                                                 "Reversed Flow", false);
+                                                 "Change of Course", false);
             if (nWas == null || nIs == null) { Check(false, "Nereia's probe built"); return; }
 
             Check(nWas.Fires == nWas.Blows - HeroSweepSeeds && nWas.Blows > 0,
@@ -31157,9 +31205,14 @@ namespace Emberfall.DevHarness
                 // re-triggered, because a passive with no effects never fires and never emits.
                 if (p.Id == "nereia_triage_buffer_heal") p.Effects.Clear();
             }
+            // Since ENGINE-GAPS pass 2 (content C5) the blow is an append on Change of Course
+            // rather than a passive of its own; either shape is patched.
             PassiveDef reversed = nereia.TalentAt(3);
             if (reversed != null && reversed.Effects.Count > 0)
                 reversed.Effects[0].ScaleByLastRedirect = false;
+            if (reversed != null)
+                for (int i = 0; i < reversed.Appends.Count; i++)
+                    if (reversed.Appends[i].Effect != null) reversed.Appends[i].Effect.ScaleByLastRedirect = false;
         }
 
         private static RedirectProbe RunRedirectProbe(ContentDatabase live, string heroId, int talent,
@@ -31238,6 +31291,12 @@ namespace Emberfall.DevHarness
             CheckChargeOnLandingOnLiveContent();
             CheckBuffsOnlyOnLiveContent();
             CheckFidelityFindings();
+            CheckStatusStacksBelowRule();
+            CheckStruckBodySnapshotRule();
+            CheckEnemyShieldedRule();
+            CheckMissingPageDispel();
+            CheckContentPassTwo();
+            CheckSuspectedPassTwo();
             Line("");
         }
 
@@ -31502,7 +31561,9 @@ namespace Emberfall.DevHarness
             string[] listeners = {
                 "kiva_the_forsaken_oath|kiva_broken_links", "tavia_the_signal_huntress|tavia_dead_channel",
                 "mireth_the_erased_name|mireth_the_missing_page", "seraphine_the_closed_volume|seraphine_contrary_evidence",
-                "hale_the_relentless_hunter|hale_no_safe_distance", "vanno_the_detour_king|vanno_wrong_turn_misdirect",
+                // Hale's Shield half answers OnEnemyShielded since pass 2; his Untargetable half is
+                // the one still listening for a buff, and so the one this pair is about.
+                "hale_the_relentless_hunter|hale_no_safe_distance_unseen", "vanno_the_detour_king|vanno_wrong_turn_misdirect",
                 "sylven_the_unfading_blade|sylven_wounds_remember", "nadine_the_border_clerk|nadine_proper_place",
                 "rheia_the_revision_scribe|rheia_adaptive_reasoning", "rheia_the_revision_scribe|rheia_second_direction" };
             int louder = 0, heardOwn = 0;
@@ -31510,11 +31571,19 @@ namespace Emberfall.DevHarness
             {
                 string[] parts = listeners[i].Split('|');
                 string hid = parts[0], pid = parts[1];
-                FidRuns shipped = FidRun(hid, 0, null, null);
+                // The count is PassiveTrigger events, which a chargeOnLanding passive takes back
+                // out of the record when it lands nothing - so four of these listeners would read
+                // their empty firings as bookkeeping. Both halves charge at the trigger instead, so
+                // the pair keeps measuring what it says: firings HEARD, with and without the flag.
+                FidRuns shipped = FidRun(hid, 0, delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, hid, pid);
+                    if (p != null) p.ChargeOnLanding = false;
+                }, null);
                 FidRuns flagged = FidRun(hid, 0, delegate(ContentDatabase db)
                 {
                     PassiveDef p = FidPassive(db, hid, pid);
-                    if (p != null) p.BuffsOnly = true;
+                    if (p != null) { p.BuffsOnly = true; p.ChargeOnLanding = false; }
                 }, null);
                 if (shipped == null || flagged == null) { Check(false, "buffs-only pair built for " + pid); continue; }
                 int a = FidFirings(shipped, pid), b = FidFirings(flagged, pid);
@@ -31816,6 +31885,7 @@ namespace Emberfall.DevHarness
             List<FidLimited> unreached = FidLimitedPassives(false);
             int reachedUp = 0, fell = 0;
             List<string> fellNames = new List<string>();
+            List<string> notShipped = new List<string>();
             for (int pass = 0; pass < 2; pass++)
             {
                 List<FidLimited> rows = pass == 0 ? reached : unreached;
@@ -31823,7 +31893,13 @@ namespace Emberfall.DevHarness
                 {
                     FidLimited row = rows[i];
                     string hid = row.Hero, pid = row.Passive;
-                    FidRuns shipped = FidRun(hid, row.Talent, null, null);
+                    // BOTH HALVES FORCED. The flag ships on all 24 since the content pass (C11), so
+                    // the half without it is written in memory rather than read off the file.
+                    FidRuns shipped = FidRun(hid, row.Talent, delegate(ContentDatabase db)
+                    {
+                        PassiveDef p = FidPassive(db, hid, pid);
+                        if (p != null) p.ChargeOnLanding = false;
+                    }, null);
                     FidRuns flagged = FidRun(hid, row.Talent, delegate(ContentDatabase db)
                     {
                         PassiveDef p = FidPassive(db, hid, pid);
@@ -31834,6 +31910,7 @@ namespace Emberfall.DevHarness
                         Check(false, "charge-on-landing pair built for " + pid);
                         continue;
                     }
+                    if (!FidPassive(names, hid, pid).ChargeOnLanding) notShipped.Add(pid);
                     int a = FidSum(shipped, row.Measure), b = FidSum(flagged, row.Measure);
                     if (b < a) { fell++; fellNames.Add(pid); }
                     if (pass == 0 && b > a) reachedUp++;
@@ -31850,6 +31927,9 @@ namespace Emberfall.DevHarness
                   "and none of the " + (reached.Count + unreached.Count) + " lands LESS with it ("
                   + (fell == 0 ? "none" : string.Join(", ", fellNames.ToArray()))
                   + "), which is what a refund that only ever gives an allowance back has to mean");
+            Check(notShipped.Count == 0,
+                  "and all " + (reached.Count + unreached.Count) + " SHIP with chargeOnLanding set (content C11)"
+                  + (notShipped.Count == 0 ? "" : " - missing on " + string.Join(", ", notShipped.ToArray())));
         }
 
         // ---- content findings: shipped wiring against the sentence, both forced ----------------
@@ -31919,7 +31999,8 @@ namespace Emberfall.DevHarness
                 });
 
             // 2. Nereia, Change of Course. The text names an ally UNDER RELIEF CIRCUIT; the passive
-            // has no gate, so it answers every ally about to die.
+            // had no gate, so it answered every ally about to die. The gate asks for HER Covered,
+            // source-filtered, because Marrow's Promise writes the same kind.
             FidFinding("Nereia, Change of Course", "nereia_the_field_medic", 0, null,
                 delegate(ContentDatabase db)
                 {
@@ -31934,8 +32015,9 @@ namespace Emberfall.DevHarness
                     if (p == null) return;
                     for (int i = 0; i < p.Effects.Count; i++)
                     {
-                        p.Effects[i].Condition = EffectCondition.HasStatus;
+                        p.Effects[i].Condition = EffectCondition.MyStatusStacksAtLeast;
                         p.Effects[i].ConditionStatus = StatusKind.Covered;
+                        p.Effects[i].ConditionValue = 1;
                         p.Effects[i].ConditionOn = ConditionSubject.BroadcastSubject;
                     }
                     p.ChargeOnLanding = true;
@@ -31943,7 +32025,7 @@ namespace Emberfall.DevHarness
                 delegate(ContentDatabase db)
                 {
                     PassiveDef p = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
-                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HasStatus;
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.MyStatusStacksAtLeast;
                 },
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
@@ -31954,7 +32036,9 @@ namespace Emberfall.DevHarness
                 });
 
             // 3. Velis, No Second Breath. "Whenever an enemy BELOW 50% HP receives healing" - the
-            // 10 Energy has no HP gate and pays for every enemy heal.
+            // 10 Energy had no HP gate and paid for every enemy heal. The gate goes on the two
+            // Energy lines and NOT on the Remnant: C3 as written gated all three, and the Remnant
+            // is What Was Taken's clause - "whenever Hollowed converts healing" - with no HP in it.
             FidFinding("Velis, No Second Breath", "velis_the_hollow_vow", 0, null,
                 delegate(ContentDatabase db) { VelisGate(db, false); },
                 delegate(ContentDatabase db) { VelisGate(db, true); },
@@ -31979,7 +32063,7 @@ namespace Emberfall.DevHarness
                 delegate(ContentDatabase db)
                 {
                     PassiveDef p = FidPassive(db, "aminah_the_true_measure", "aminah_emergency_release");
-                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HasStatus;
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.MyStatusStacksAtLeast;
                 },
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
@@ -31992,24 +32076,17 @@ namespace Emberfall.DevHarness
             // 5. Nereia, Reversed Flow (III). "When Change of Course triggers" - a separate passive
             // on the same trigger, so it fires when Change of Course was refused by its own limit
             // and reads whatever redirect was made last.
+            // Ships as the sentence since the content pass (C5): the blow is an append on Change of
+            // Course. The approximation is rebuilt in memory - its own passive on the same trigger,
+            // ungated, the way it shipped - so the pair still measures what the move bought.
             FidFinding("Nereia, Reversed Flow (III)", "nereia_the_field_medic", 3, null,
+                delegate(ContentDatabase db) { FidUnAppend(db, "nereia_the_field_medic", PassiveTrigger.OnAllyWouldDie, false); },
                 delegate(ContentDatabase db) { },
                 delegate(ContentDatabase db)
                 {
                     HeroDef h = db.GetHero("nereia_the_field_medic");
                     PassiveDef t3 = h == null ? null : h.TalentAt(3);
-                    PassiveDef coc = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
-                    if (t3 == null || coc == null || t3.Effects.Count == 0) return;
-                    coc.Effects = new List<EffectDef>(coc.Effects);
-                    EffectDef moved = t3.Effects[0].Clone();
-                    coc.Effects.Add(moved);
-                    t3.Effects = new List<EffectDef>();
-                },
-                delegate(ContentDatabase db)
-                {
-                    HeroDef h = db.GetHero("nereia_the_field_medic");
-                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
-                    return t3 != null && t3.Trigger != PassiveTrigger.OnAllyWouldDie;
+                    return t3 != null && t3.Trigger == PassiveTrigger.None && FidAppendsTo(t3, "passive2");
                 },
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
@@ -32025,26 +32102,16 @@ namespace Emberfall.DevHarness
             // own passive on the same trigger, so it banks its Resolve on the first ally about to
             // die whether or not Survival saved anyone. Said faithfully it rides Survival itself,
             // gated on the Guard Survival just took.
+            // Ships as the sentence since the content pass (C6); the approximation is rebuilt in
+            // memory, once per battle and ungated, as it shipped.
             FidFinding("Brenna, What Held Once (III)", "brenna_the_remaining_wall", 3, null,
+                delegate(ContentDatabase db) { FidUnAppend(db, "brenna_the_remaining_wall", PassiveTrigger.OnAllyWouldDie, true); },
                 delegate(ContentDatabase db) { },
                 delegate(ContentDatabase db)
                 {
                     HeroDef h = db.GetHero("brenna_the_remaining_wall");
                     PassiveDef t3 = h == null ? null : h.TalentAt(3);
-                    PassiveDef survival = FidPassive(db, "brenna_the_remaining_wall", "brenna_survival_of_the_stubborn");
-                    if (t3 == null || survival == null || t3.Effects.Count == 0) return;
-                    EffectDef bank = t3.Effects[0].Clone();
-                    bank.Condition = EffectCondition.SubjectLostStatusThisFiring;
-                    bank.ConditionOn = ConditionSubject.BroadcastSubject;
-                    survival.Effects = new List<EffectDef>(survival.Effects);
-                    survival.Effects.Add(bank);
-                    t3.Effects = new List<EffectDef>();
-                },
-                delegate(ContentDatabase db)
-                {
-                    HeroDef h = db.GetHero("brenna_the_remaining_wall");
-                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
-                    return t3 != null && t3.Effects.Count == 0;
+                    return t3 != null && t3.Effects.Count == 0 && FidAppendsTo(t3, "passive2");
                 },
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
@@ -32084,23 +32151,25 @@ namespace Emberfall.DevHarness
                     return ca + " Veil Charge(s) as it ships, " + ct + " when only Darian's own Shield counts";
                 });
 
-            // 9. Mireth, The Missing Page. "The first time that enemy receives a positive status,
-            // that status is REMOVED IMMEDIATELY" - the passive strikes and stores a Page and
-            // removes nothing, so Absence, which counts a Focused enemy losing a positive status,
-            // has nothing to count.
-            FidFinding("Mireth, The Missing Page", "mireth_the_erased_name", 0, null,
-                delegate(ContentDatabase db) { MirethRemoval(db, false); },
-                delegate(ContentDatabase db) { MirethRemoval(db, true); },
+            // 9. Mireth, Absence Has Weight - the half of C9 that landed, and the suspected entry
+            // the pass confirmed in code. OnStatusRemoved fires on the remover for ANY removal, so
+            // her own Page spend - a RemoveStatus of Resolve2 on herself - counted as a Focused
+            // enemy losing a positive status. Gated on her mark on the body that lost it. C9's
+            // other half, the Dispel, was not written: see CheckMissingPageDispel.
+            FidFinding("Mireth, Absence Has Weight", "mireth_the_erased_name", 0, null,
+                delegate(ContentDatabase db) { MirethAbsenceGate(db, false); },
+                delegate(ContentDatabase db) { MirethAbsenceGate(db, true); },
                 delegate(ContentDatabase db)
                 {
-                    PassiveDef p = FidPassive(db, "mireth_the_erased_name", "mireth_the_missing_page");
-                    return p != null && FidEffect(p.Effects, EffectKind.Dispel, StatusKind.None) != null;
+                    PassiveDef p = FidPassive(db, "mireth_the_erased_name", "mireth_absence_has_weight");
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HasMyMark;
                 },
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
-                    int ra = MirethStrips(a), rt = MirethStrips(t);
-                    proven = ra == 0 && rt > 0;
-                    return ra + " status(es) stripped from a Focused enemy as it ships, " + rt + " as it reads";
+                    int ga = FidSum(a, FidStatusOnSelf(StatusKind.Resolve)), gt = FidSum(t, FidStatusOnSelf(StatusKind.Resolve));
+                    proven = ga > 0 && gt == 0;
+                    return ga + " Absence banked ungated, every one of them her own Page spend, " + gt
+                           + " gated - nothing in her kit removes a positive status from a marked enemy";
                 });
 
             // 10. Caldus, Defined Duty. "Whenever Caldus counterattacks his Declared Target, he gains
@@ -32117,8 +32186,59 @@ namespace Emberfall.DevHarness
                 delegate(FidRuns a, FidRuns t, out bool proven)
                 {
                     int ra = FidSum(a, FidStatusOnSelf(StatusKind.Resolve)), rt = FidSum(t, FidStatusOnSelf(StatusKind.Resolve));
-                    proven = ra == 0 && rt > 0;
-                    return ra + " Resolve banked by his counterattacks as it ships, " + rt + " as it reads";
+                    int counters = FidSum(t, FidNamedBlows("Defined Duty"));
+                    proven = ra == 0 && rt > 0 && rt <= counters;
+                    return ra + " Resolve banked by his counterattacks without the line, " + rt + " with it, against "
+                           + counters + " counterattack(s) landed - never one banked for a counter the once-a-round "
+                           + "budget refused";
+                });
+
+            // 11. Elyra, Slow Growth. "Whenever an enemy AFFECTED BY Slow takes damage from Elyra" -
+            // asked after the basic, HasStatus read the Mire the basic had just applied itself.
+            // G4 asks about the body as the blow found it. Measured before and after G4 existed:
+            // the finding read "output change: n/a" because this half could not be built.
+            FidFinding("Elyra, Slow Growth (G4)", "elyra_the_patient_warden", 0, null,
+                delegate(ContentDatabase db) { ElyraGate(db, EffectCondition.HasStatus); },
+                delegate(ContentDatabase db) { ElyraGate(db, EffectCondition.SubjectHadStatusWhenStruck); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "elyra_the_patient_warden", "elyra_slow_growth");
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.SubjectHadStatusWhenStruck;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ga, ua, gt, ut;
+                    ElyraPatience(a, out ga, out ua);
+                    ElyraPatience(t, out gt, out ut);
+                    proven = ua > 0 && ut == 0 && gt > 0;
+                    return ua + " of " + ga + " Patience granted against a target the basic slowed itself as it shipped, "
+                           + ut + " of " + gt + " asked of the body as the blow found it";
+                });
+
+            // 12. Oris, No Fixed Refrain. "His next two attacks use a DIFFERENT firing sequence" -
+            // the altered blows were added to the ordinary one. G5 lets the sequence say which of
+            // its two attacks is next, so the ordinary blow can be gated off while one is pending.
+            // The approximation is the shipped kit with that gate taken off again.
+            FidFinding("Oris, No Fixed Refrain (G5)", "oris_the_unwritten_path", 0, null,
+                delegate(ContentDatabase db) { OrisOrdinaryGate(db, false); },
+                delegate(ContentDatabase db) { OrisOrdinaryGate(db, true); },
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("oris_the_unwritten_path");
+                    bool below = false;
+                    if (h != null && h.BasicAttack != null)
+                        for (int i = 0; i < h.BasicAttack.Effects.Count; i++)
+                            if (h.BasicAttack.Effects[i].Condition2 == EffectCondition.StatusStacksBelow) below = true;
+                    return below && OrisOrdinaryGated(db);
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int aa, da, at, dt;
+                    OrisAltered(a, out aa, out da);
+                    OrisAltered(t, out at, out dt);
+                    proven = da > 0 && dt == 0 && at > 0;
+                    return da + " of " + aa + " altered attacks also threw the ordinary blow with the gate off, "
+                           + dt + " of " + at + " with it on";
                 });
 
             // Record-derived findings: the engine cannot yet say the sentence, so there is no
@@ -32126,10 +32246,8 @@ namespace Emberfall.DevHarness
             // answered something its text does not name.
             FidRuns kael = FidRun("kael_the_unyielding", 0, null, null);
             FidRuns siofra = FidRun("siofra_the_turncoat_oracle", 0, null, null);
-            FidRuns elyra = FidRun("elyra_the_patient_warden", 0, null, null);
-            FidRuns oris = FidRun("oris_the_unwritten_path", 0, null, null);
             FidRuns hale = FidRun("hale_the_relentless_hunter", 1, null, null);
-            if (kael == null || siofra == null || elyra == null || oris == null || hale == null)
+            if (kael == null || siofra == null || hale == null)
             {
                 Check(false, "record-derived fidelity arenas built");
                 return;
@@ -32147,23 +32265,925 @@ namespace Emberfall.DevHarness
                   "Siofra, Prediction Cost: " + empty + " of " + fires + " basic-attack drains followed a basic that "
                   + "inverted nothing - an inversion is not recorded as a removal, so no condition can ask (group 30's primitive)");
 
-            int grants, unslowed;
-            ElyraPatience(elyra, out grants, out unslowed);
-            Check(unslowed > 0,
-                  "Elyra, Slow Growth: " + unslowed + " of " + grants + " Patience granted against a target the basic "
-                  + "slowed itself - the grant is asked after the basic, and the basic applies the Slow it asks about");
-
-            int altered, doubled;
-            OrisAltered(oris, out altered, out doubled);
-            Check(doubled > 0,
-                  "Oris, No Fixed Refrain: " + doubled + " of " + altered + " altered attacks also threw the ordinary "
-                  + "blow - the sequence is added to his basic rather than replacing it");
 
             int crit, fresh;
             HaleFreshTrail(hale, out crit, out fresh);
             Check(crit > fresh,
                   "Hale, Fresh Trail (I): " + crit + " Critical Damage grants against " + fresh + " new Quarry bodies - "
                   + "it is paid at every turn start for the whole turn, where the text pays the first attack on a new Quarry");
+        }
+
+        // ---- pass 2 content: helpers the pairs above share ----------------------------------
+
+        /// <summary>
+        /// Rebuilds, in memory, a third talent the content pass turned into an append on its
+        /// host's passive2: its own passive again, on `trigger`, carrying the appended line with
+        /// its gate taken off - the shape it shipped in before C5 and C6.
+        /// </summary>
+        private static void FidUnAppend(ContentDatabase db, string heroId, PassiveTrigger trigger, bool oncePerBattle)
+        {
+            HeroDef h = db.GetHero(heroId);
+            PassiveDef t3 = h == null ? null : h.TalentAt(3);
+            if (t3 == null) return;
+            EffectDef line = null;
+            for (int i = t3.Appends.Count - 1; i >= 0; i--)
+                if (t3.Appends[i].Ability == "passive2") { line = t3.Appends[i].Effect.Clone(); t3.Appends.RemoveAt(i); }
+            if (line == null) return;
+            line.Condition = EffectCondition.None;
+            t3.Trigger = trigger;
+            t3.OncePerBattle = oncePerBattle;
+            t3.Effects = new List<EffectDef>();
+            t3.Effects.Add(line);
+        }
+
+        private static bool FidAppendsTo(PassiveDef talent, string ability)
+        {
+            for (int i = 0; i < talent.Appends.Count; i++) if (talent.Appends[i].Ability == ability) return true;
+            return false;
+        }
+
+        private static void MirethAbsenceGate(ContentDatabase db, bool gated)
+        {
+            PassiveDef p = FidPassive(db, "mireth_the_erased_name", "mireth_absence_has_weight");
+            if (p == null) return;
+            for (int i = 0; i < p.Effects.Count; i++)
+            {
+                p.Effects[i].Condition = gated ? EffectCondition.HasMyMark : EffectCondition.None;
+                p.Effects[i].ConditionOn = ConditionSubject.BroadcastSubject;
+            }
+        }
+
+        private static void ElyraGate(ContentDatabase db, EffectCondition cond)
+        {
+            PassiveDef p = FidPassive(db, "elyra_the_patient_warden", "elyra_slow_growth");
+            if (p == null || p.Effects.Count == 0) return;
+            p.Effects[0].Condition = cond;
+            p.Effects[0].ConditionStatus = StatusKind.Slow;
+            p.Effects[0].ConditionOn = ConditionSubject.LastTarget;
+        }
+
+        /// <summary>The ordinary lines of Oris's basic - both blows and the Speed rider - are the
+        /// ones gated on LacksStatus MarkAlt in their second slot. Gated puts that gate on, and
+        /// ungated takes it off, which is the sequence adding to the basic rather than replacing it.</summary>
+        private static void OrisOrdinaryGate(ContentDatabase db, bool gated)
+        {
+            HeroDef h = db.GetHero("oris_the_unwritten_path");
+            if (h == null || h.BasicAttack == null) return;
+            for (int i = 0; i < h.BasicAttack.Effects.Count; i++)
+            {
+                EffectDef e = h.BasicAttack.Effects[i];
+                if (e.ConditionStatus2 != StatusKind.MarkAlt || e.ConditionOn2 != ConditionSubject.Caster) continue;
+                if (e.Condition2 != EffectCondition.LacksStatus && e.Condition2 != EffectCondition.None) continue;
+                e.Condition2 = gated ? EffectCondition.LacksStatus : EffectCondition.None;
+            }
+        }
+
+        private static bool OrisOrdinaryGated(ContentDatabase db)
+        {
+            HeroDef h = db.GetHero("oris_the_unwritten_path");
+            if (h == null || h.BasicAttack == null) return false;
+            int gated = 0;
+            for (int i = 0; i < h.BasicAttack.Effects.Count; i++)
+                if (h.BasicAttack.Effects[i].Condition2 == EffectCondition.LacksStatus
+                    && h.BasicAttack.Effects[i].ConditionStatus2 == StatusKind.MarkAlt) gated++;
+            return gated >= 4;
+        }
+
+        // ---- G5: StatusStacksBelow, in the smallest arena that sees it --------------------------
+
+        private static string SbHeroes(bool counter)
+        {
+            string gain = counter
+                ? @"{ ""kind"":""GainResolve"", ""target"":""Self"", ""counterIndex"":2, ""maxStacks"":9, ""duration"":99 }"
+                : @"{ ""kind"":""GainResolve"", ""target"":""Self"", ""maxStacks"":9, ""duration"":99 }";
+            string ask = counter ? @"""conditionCounterIndex"":2" : @"""conditionStatus"":""Resolve""";
+            return @"{""heroes"":[
+  { ""id"":""sb_hero"", ""name"":""SbHero"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""sb_b"", ""name"":""Count"", ""effects"":[
+       { ""kind"":""Damage"", ""target"":""HighestHpEnemy"", ""power"":0.1,
+         ""condition"":""StatusStacksBelow"", " + ask + @", ""conditionValue"":2, ""conditionOn"":""Caster"" },
+       { ""kind"":""Damage"", ""target"":""LowestHpEnemy"", ""power"":0.1,
+         ""condition"":""StatusStacksAtLeast"", " + ask + @", ""conditionValue"":2, ""conditionOn"":""Caster"" },
+       " + gain + @" ] },
+    ""active"": { ""id"":""sb_a"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+        }
+
+        private const string SbEnemies = @"{""enemies"":[
+  { ""id"":""sb_big"", ""name"":""SbBig"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""sb_bb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } },
+  { ""id"":""sb_small"", ""name"":""SbSmall"", ""aspect"":""Ember"", ""hp"":800000, ""attack"":1, ""defense"":0,
+    ""speed"":9, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""sb_sb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string SbCampaign = @"{""chapters"":[{""id"":""sb_ch"",""name"":""Sb"",""stages"":[
+  {""id"":""sb_arena"",""index"":1,""enemies"":[{""id"":""sb_big"",""level"":1},{""id"":""sb_small"",""level"":1}]}
+]}]}";
+
+        /// <summary>{basics, blows on the body the Below line names, blows on the body the AtLeast line names}</summary>
+        private static int[] RunSbArena(bool counter, int rounds)
+        {
+            ContentDatabase db = LoadSyntheticContent(SbHeroes(counter), SbEnemies, SbCampaign, ZeroVarianceBalance(rounds), "stacks below");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("sb_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("sb_arena"), 5101, team);
+            if (r == null) return null;
+            int big = -1, small = -1;
+            for (int u = 0; u < r.Units.Count; u++)
+            {
+                if (r.Units[u].DefId == "sb_big") big = r.Units[u].Id;
+                if (r.Units[u].DefId == "sb_small") small = r.Units[u].Id;
+            }
+            int[] n = new int[3];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.BasicAttack) { UnitSnapshot su = r.FindUnit(e.SourceId); if (su != null && su.IsPlayer) n[0]++; }
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Count" && e.TargetId == big) n[1]++;
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Count" && e.TargetId == small) n[2]++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// G5. The hero banks one stack a basic and asks, before banking, "fewer than two?" on one
+        /// line and "at least two?" on the other. Every basic answers exactly one of them, and the
+        /// Below line answers exactly the first two - on a status count and on a generalized
+        /// counter alike, which is the half LacksStatus could never read.
+        /// </summary>
+        private static void CheckStatusStacksBelowRule()
+        {
+            const int rounds = 6;
+            int[] st = RunSbArena(false, rounds);
+            int[] ct = RunSbArena(true, rounds);
+            if (st == null || ct == null) { Check(false, "stacks-below arena built"); return; }
+            Check(st[0] > 2 && st[1] == 2 && st[1] + st[2] == st[0],
+                  "G5: StatusStacksBelow 2 answers the first " + st[1] + " of " + st[0] + " basics on a Resolve count, "
+                  + "StatusStacksAtLeast 2 the other " + st[2] + " - every basic answers exactly one of the pair");
+            Check(ct[0] == st[0] && ct[1] == 2 && ct[1] + ct[2] == ct[0],
+                  "and the same on generalized counter 2 (" + ct[1] + " and " + ct[2] + " of " + ct[0]
+                  + ") - the counter no LacksStatus can read, which is where Oris keeps his first altered attack");
+        }
+
+        // ---- G4: the struck body as the blow found it ------------------------------------------
+
+        private static string SnHeroes(string condition)
+        {
+            return @"{""heroes"":[
+  { ""id"":""sn_hero"", ""name"":""SnHero"", ""role"":""Binder"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""sn_b"", ""name"":""Mire"", ""effects"":[
+       { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.1 },
+       { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Slow"", ""duration"":3, ""chance"":1, ""bypassResist"":true } ] },
+    ""active"": { ""id"":""sn_a"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""sn_p"", ""name"":""Patience"", ""trigger"":""AfterBasicAttack"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""GainResolve"", ""target"":""Self"", ""maxStacks"":99, ""duration"":99,
+                      ""condition"":""" + condition + @""", ""conditionStatus"":""Slow"", ""conditionOn"":""LastTarget"" } ] } }
+]}";
+        }
+
+        private const string SnEnemies = @"{""enemies"":[
+  { ""id"":""sn_foe"", ""name"":""SnFoe"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""sn_fb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string SnCampaign = @"{""chapters"":[{""id"":""sn_ch"",""name"":""Sn"",""stages"":[
+  {""id"":""sn_arena"",""index"":1,""enemies"":[{""id"":""sn_foe"",""level"":1}]}
+]}]}";
+
+        /// <summary>{basics, Patience granted}</summary>
+        private static int[] RunSnArena(string condition, int rounds)
+        {
+            ContentDatabase db = LoadSyntheticContent(SnHeroes(condition), SnEnemies, SnCampaign, ZeroVarianceBalance(rounds), "struck body");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("sn_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("sn_arena"), 5102, team);
+            if (r == null) return null;
+            int[] n = new int[2];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                UnitSnapshot su = e.SourceId >= 0 ? r.FindUnit(e.SourceId) : null;
+                if (su == null || !su.IsPlayer) continue;
+                if (e.Type == BattleEventType.BasicAttack) n[0]++;
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Resolve && e.TargetId == e.SourceId) n[1]++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// G4. A basic strikes, then Slows what it struck; the passive after it pays for a target
+        /// that was Slowed. Asked with HasStatus, the first basic pays for the Slow it laid itself.
+        /// Asked with SubjectHadStatusWhenStruck, it does not - every later basic finds the Slow the
+        /// previous one left, and pays.
+        /// </summary>
+        private static void CheckStruckBodySnapshotRule()
+        {
+            const int rounds = 6;
+            int[] now = RunSnArena("HasStatus", rounds);
+            int[] then = RunSnArena("SubjectHadStatusWhenStruck", rounds);
+            if (now == null || then == null) { Check(false, "struck-body arena built"); return; }
+            Check(now[0] > 1 && now[1] == now[0] && then[0] == now[0] && then[1] == now[0] - 1,
+                  "G4: asked after the basic, HasStatus pays " + now[1] + " of " + now[0] + " basics, the first for the "
+                  + "Slow that basic laid itself; SubjectHadStatusWhenStruck pays " + then[1]
+                  + " - the body as the blow found it");
+        }
+
+        // ---- the enemy side hears a Ward land --------------------------------------------------
+
+        private static string EsHeroes(bool mirror)
+        {
+            string passive = mirror
+                ? @"""trigger"":""OnEnemyShielded"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""Damage"", ""target"":""BroadcastSubject"", ""power"":0.5 } ]"
+                : @"""trigger"":""OnEnemyBuffGained"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""Damage"", ""target"":""BroadcastSubject"", ""power"":0.5,
+                      ""condition"":""HasShield"", ""conditionOn"":""BroadcastSubject"" } ]";
+            return @"{""heroes"":[
+  { ""id"":""es_hero"", ""name"":""EsHero"", ""role"":""Marksman"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""es_b"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""active"": { ""id"":""es_a"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""es_p"", ""name"":""No Distance"", " + passive + @" } }
+]}";
+        }
+
+        private const string EsEnemies = @"{""enemies"":[
+  { ""id"":""es_foe"", ""name"":""EsFoe"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""es_fb"", ""name"":""Ward"", ""effects"":[ { ""kind"":""Shield"", ""target"":""Self"", ""flat"":50, ""duration"":1 } ] } }
+]}";
+
+        private const string EsCampaign = @"{""chapters"":[{""id"":""es_ch"",""name"":""Es"",""stages"":[
+  {""id"":""es_arena"",""index"":1,""enemies"":[{""id"":""es_foe"",""level"":1}]}
+]}]}";
+
+        /// <summary>{Wards the enemy gained, answers}</summary>
+        private static int[] RunEsArena(bool mirror, int rounds)
+        {
+            ContentDatabase db = LoadSyntheticContent(EsHeroes(mirror), EsEnemies, EsCampaign, ZeroVarianceBalance(rounds), "enemy shielded");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("es_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("es_arena"), 5103, team);
+            if (r == null) return null;
+            int[] n = new int[2];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.ShieldGain && !FidIsPlayer(r, e.TargetId)) n[0]++;
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "No Distance") n[1]++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// OnEnemyShielded. An enemy wards itself every turn. The mirror of OnAllyShielded answers
+        /// every one; the reading Hale shipped with - OnEnemyBuffGained gated on HasShield - answers
+        /// none, because a Shield effect raises no buff broadcast at all.
+        /// </summary>
+        private static void CheckEnemyShieldedRule()
+        {
+            const int rounds = 5;
+            int[] heard = RunEsArena(true, rounds);
+            int[] old = RunEsArena(false, rounds);
+            if (heard == null || old == null) { Check(false, "enemy-shielded arena built"); return; }
+            Check(heard[0] > 0 && heard[1] == heard[0] && old[0] == heard[0] && old[1] == 0,
+                  "OnEnemyShielded answers " + heard[1] + " of the enemy's " + heard[0] + " Wards; OnEnemyBuffGained "
+                  + "gated on HasShield, Hale's old reading of \"gains a Shield\", answers " + old[1]);
+        }
+
+        // ---- C9: the Dispel, measured and not written -------------------------------------------
+
+        /// <summary>
+        /// WHY C9's DISPEL WAS NOT WRITTEN. "The first time that enemy receives a positive status,
+        /// THAT STATUS is removed immediately." Dispel inside an OnEnemyBuffGained window skips the
+        /// kind that raised the window - by design, so a clause answering a buff can read it before
+        /// anything strips it - and since the Dispel repair it also skips the bookkeeping kinds. So
+        /// a Dispel on The Missing Page strips some OLDER buff when the enemy has one and nothing
+        /// when it does not, and never the status the sentence names. Forced in, here is the count.
+        /// </summary>
+        private static void CheckMissingPageDispel()
+        {
+            FidRuns runs = FidRun("mireth_the_erased_name", 0, delegate(ContentDatabase db) { MirethRemoval(db, true); }, null);
+            if (runs == null) { Check(false, "missing-page dispel arena built"); return; }
+            int firings = 0, strips = 0, sameKind = 0, onOwnMark = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != "mireth_the_missing_page") continue;
+                    firings++;
+                    StatusKind gained = StatusKind.None;
+                    int gainedOn = -1;
+                    for (int m = k - 1; m >= 0; m--)
+                        if (ev[m].Type == BattleEventType.StatusApplied && !FidIsPlayer(res, ev[m].TargetId)
+                            && !StatusInfo.IsHarmful(ev[m].Status))
+                        { gained = ev[m].Status; gainedOn = ev[m].TargetId; if (ev[m].SourceId == id && gained == StatusKind.Mark) onOwnMark++; break; }
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                        if (ev[m].Type == BattleEventType.StatusExpired && ev[m].SourceId == id && ev[m].TargetId == gainedOn
+                            && ev[m].Status != StatusKind.Mark)
+                        { strips++; if (ev[m].Status == gained) sameKind++; }
+                }
+            }
+            Check(strips > 0 && sameKind == 0,
+                  "C9 NOT WRITTEN: a Dispel on The Missing Page strips " + strips + " status(es) across " + firings
+                  + " firings and " + sameKind + " of them the status that raised the firing - Dispel skips that kind "
+                  + "inside the window, so \"that status is removed\" cannot be said; " + onOwnMark
+                  + " of the firings answered Mireth's own Mark");
+        }
+
+        // ---- C12, and the suspected entries the pass could fix from content ---------------------
+
+        private static int FidStatusGiven(FidRuns runs, StatusKind kind, bool toAllies)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                for (int i = 0; i < res.Events.Count; i++)
+                {
+                    BattleEvent e = res.Events[i];
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == kind && e.SourceId == id
+                        && FidIsPlayer(res, e.TargetId) == toAllies) n++;
+                }
+            }
+            return n;
+        }
+
+        private static void CheckContentPassTwo()
+        {
+            // C12. Nara, Carry On - "the first time". oncePerBattle alone is spent by the battle's
+            // first heal on anybody, whatever their health; with chargeOnLanding it is spent by the
+            // first heal that leaves somebody below 35%. The sweep never leaves an ally that low
+            // after a heal, so the clause is fought as it ships, lifted whole out of heroes.json,
+            // in an arena where the first heals land on a healthy ally.
+            ContentDatabase shipped = BuildHeroSweepArena(null);
+            PassiveDef nara = shipped == null ? null : FidPassive(shipped, "nara_the_road_nurse", "nara_carry_on");
+            int[] open = RunCarryOnArena(nara, false, false);
+            int[] trap = RunCarryOnArena(nara, true, false);
+            int[] first = RunCarryOnArena(nara, true, true);
+            if (nara == null || open == null || trap == null || first == null) Check(false, "Nara arena built");
+            else
+                Check(nara.OncePerBattle && nara.ChargeOnLanding && open[1] > 1 && trap[1] == 0 && first[1] == 1 && first[0] > 1,
+                      "Nara, Carry On (C12): the ally is healed " + first[0] + " times; " + open[1] + " Damage Reduction grant(s) "
+                      + "with no limit, " + trap[1] + " once per battle charged at the trigger - the first heal, on a healthy "
+                      + "ally, spent it - and " + first[1] + " once per battle charged on landing  [ships as the sentence]");
+
+            // Marrow, The Cost Is Named (suspected, confirmed). OnAllyTurnEnd excludes the unit whose
+            // turn it is, so a Promise Marrow gave himself was never spent - it expired. His own
+            // TurnStart is the start of his next turn, which is the sentence's moment.
+            FidFinding("Marrow, a Promise on himself", "marrow_the_irrevocable_vow", 0, null,
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("marrow_the_irrevocable_vow");
+                    if (h != null) h.Passives.RemoveAll(delegate(PassiveDef p) { return p.Id == "marrow_promise_heal_self"; });
+                },
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db) { return FidPassive(db, "marrow_the_irrevocable_vow", "marrow_promise_heal_self") != null; },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int la = FidOwnPromises(a, false), sa = FidOwnPromises(a, true);
+                    int lt = FidOwnPromises(t, false), st = FidOwnPromises(t, true);
+                    proven = la > 0 && sa == 0 && st > 0;
+                    return la + " Promise(s) Marrow laid on himself, " + sa + " spent, without his own turn start; "
+                           + st + " of " + lt + " spent with it";
+                });
+
+            // Rheia, Applied Revision (suspected, confirmed). "Whenever an enemy gains or LOSES a
+            // status from Rheia's abilities" - the only listener hears a buff landing, and she
+            // lands Guard Down and strips Attack Up. No trigger hears a caster's own debuff land, so
+            // the Revision rides the two abilities that make the changes.
+            FidFinding("Rheia, Applied Revision", "rheia_the_revision_scribe", 0, null,
+                delegate(ContentDatabase db) { RheiaRevision(db, false); },
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db) { return RheiaRevision(db, true); },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ra = FidSum(a, FidStatusOnSelf(StatusKind.Resolve)), rt = FidSum(t, FidStatusOnSelf(StatusKind.Resolve));
+                    int dd = FidStatusGiven(t, StatusKind.DefenseDown, false);
+                    proven = ra == 0 && rt > 0 && dd > 0;
+                    return ra + " Revision from the " + dd + " Guard Down(s) she landed and the statuses she stripped without "
+                           + "the lines, " + rt + " with them";
+                });
+
+            // Hale, No Safe Distance (suspected, confirmed in code). The sweep's enemies never ward
+            // themselves, so each of them does here, and the pair is fought in that arena.
+            FidFinding("Hale, No Safe Distance (enemies ward)", "hale_the_relentless_hunter", 0, null,
+                delegate(ContentDatabase db) { HaleWardArena(db); HaleOldReading(db); },
+                delegate(ContentDatabase db) { HaleWardArena(db); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "hale_the_relentless_hunter", "hale_no_safe_distance");
+                    return p != null && p.Trigger == PassiveTrigger.OnEnemyShielded;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    // Read off the Quarry each firing takes rather than off Damage events: the blow
+                    // lands on a Ward that has just gone up, and a hit the Ward absorbs whole writes
+                    // a ShieldAbsorb and no Damage.
+                    int la = FidQuarryTaken(a), lt = FidQuarryTaken(t);
+                    int own = FidAnsweredOwnMark(a, "hale_no_safe_distance");
+                    proven = lt > la && own > 0;
+                    return la + " landing(s) on the old reading, " + own + " of its firings answering Hale's own Quarry "
+                           + "landing rather than a Ward; " + lt
+                           + " when a Quarry body gaining a Ward is what it hears";
+                });
+        }
+
+        /// <summary>
+        /// Carry On as it ships, with its two limit fields forced, on a healer that tops up one ally
+        /// every turn while an enemy wears that ally down from full. {heals, Damage Reduction grants}
+        /// </summary>
+        private static int[] RunCarryOnArena(PassiveDef clause, bool oncePerBattle, bool chargeOnLanding)
+        {
+            if (clause == null || clause.Effects.Count == 0) return null;
+            EffectDef dr = clause.Effects[0];
+            string heroes = @"{""heroes"":[
+  { ""id"":""co_nurse"", ""name"":""CoNurse"", ""role"":""Mender"", ""aspect"":""Ember"", ""stars"":2, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""co_b"", ""name"":""Tend"", ""effects"":[ { ""kind"":""Heal"", ""target"":""LowestHpAlly"", ""flat"":10 } ] },
+    ""active"": { ""id"":""co_a"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""co_p"", ""name"":""Carry On"", ""trigger"":""OnAllyHealed"",
+      ""oncePerBattle"":" + (oncePerBattle ? "true" : "false") + @", ""chargeOnLanding"":" + (chargeOnLanding ? "true" : "false") + @",
+      ""effects"":[ { ""kind"":""ApplyStatus"", ""target"":""BroadcastSubject"", ""status"":""" + dr.Status + @""",
+                      ""chance"":1, ""bypassResist"":true, ""duration"":" + dr.Duration + @", ""magnitude"":"
+                      + dr.Magnitude.ToString(CultureInfo.InvariantCulture) + @",
+                      ""condition"":""" + dr.Condition + @""", ""conditionOn"":""BroadcastSubject"", ""conditionValue"":"
+                      + dr.ConditionValue.ToString(CultureInfo.InvariantCulture) + @" } ] } },
+  { ""id"":""co_ward"", ""name"":""CoWard"", ""role"":""Bulwark"", ""aspect"":""Ember"", ""stars"":2, ""startingHero"":true,
+    ""hp"":1000, ""attack"":1, ""defense"":0, ""speed"":1, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""co_wb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":0 } ] },
+    ""active"": { ""id"":""co_wa"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":0 } ] } }
+]}";
+            string enemies = @"{""enemies"":[
+  { ""id"":""co_foe"", ""name"":""CoFoe"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":100, ""defense"":0,
+    ""speed"":500, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""co_fb"", ""name"":""Wear"", ""effects"":[ { ""kind"":""Damage"", ""target"":""LowestHpEnemy"", ""flat"":110, ""power"":0 } ] } }
+]}";
+            string campaign = @"{""chapters"":[{""id"":""co_ch"",""name"":""Co"",""stages"":[
+  {""id"":""co_arena"",""index"":1,""enemies"":[{""id"":""co_foe"",""level"":1}]}
+]}]}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(8), "carry on");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("co_nurse"), 1));
+            team.Add(MakeInstance(db.GetHero("co_ward"), 1));
+            BattleResult r = RunWith(db, db.GetStage("co_arena"), 5105, team);
+            if (r == null) return null;
+            int[] n = new int[2];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                UnitSnapshot tu = r.FindUnit(e.TargetId);
+                if (tu == null || tu.DefId != "co_ward") continue;
+                if (e.Type == BattleEventType.Heal && e.Value > 0) n[0]++;
+                if (e.Type == BattleEventType.StatusApplied && e.Status == dr.Status) n[1]++;
+            }
+            return n;
+        }
+
+        private static int FidOwnPromises(FidRuns runs, bool spent)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int i = 0; i < ev.Count; i++)
+                {
+                    BattleEvent e = ev[i];
+                    if (e.Status != StatusKind.Mark || e.TargetId != id || e.SourceId != id) continue;
+                    if (!spent && e.Type == BattleEventType.StatusApplied) n++;
+                    if (spent && e.Type == BattleEventType.StatusExpired && e.Duration != 1) n++;
+                }
+            }
+            return n;
+        }
+
+        /// <summary>Removes (or, asked, reports the presence of) the Revision lines the content pass
+        /// added to Rheia's basic and active.</summary>
+        private static bool RheiaRevision(ContentDatabase db, bool askOnly)
+        {
+            HeroDef h = db.GetHero("rheia_the_revision_scribe");
+            if (h == null) return false;
+            int found = 0;
+            AbilityDef[] abs = { h.BasicAttack, h.Active };
+            for (int a = 0; a < abs.Length; a++)
+            {
+                if (abs[a] == null) continue;
+                for (int i = abs[a].Effects.Count - 1; i >= 0; i--)
+                {
+                    if (abs[a].Effects[i].Kind != EffectKind.GainResolve) continue;
+                    found++;
+                    if (!askOnly) abs[a].Effects.RemoveAt(i);
+                }
+            }
+            return found >= 2;
+        }
+
+        private static void HaleWardArena(ContentDatabase db)
+        {
+            string[] foes = { "sweep_straggler", "sweep_hitter", "sweep_healer", "sweep_burner", "sweep_warden" };
+            for (int i = 0; i < foes.Length; i++)
+            {
+                EnemyDef e = db.GetEnemy(foes[i]);
+                if (e == null || e.BasicAttack == null) continue;
+                EffectDef ward = new EffectDef();
+                ward.Kind = EffectKind.Shield;
+                ward.Target = TargetMode.Self;
+                ward.Flat = 200;
+                ward.Duration = 2;
+                e.BasicAttack.Effects.Add(ward);
+            }
+        }
+
+        /// <summary>No Safe Distance as it shipped before pass 2: OnEnemyBuffGained, gated on a Ward
+        /// already held, and no unseen half.</summary>
+        private static void HaleOldReading(ContentDatabase db)
+        {
+            HeroDef h = db.GetHero("hale_the_relentless_hunter");
+            PassiveDef p = FidPassive(db, "hale_the_relentless_hunter", "hale_no_safe_distance");
+            if (h == null || p == null) return;
+            p.Trigger = PassiveTrigger.OnEnemyBuffGained;
+            for (int i = 0; i < p.Effects.Count; i++)
+            {
+                p.Effects[i].Condition2 = EffectCondition.HasShield;
+                p.Effects[i].ConditionOn2 = ConditionSubject.BroadcastSubject;
+            }
+            h.Passives.RemoveAll(delegate(PassiveDef q) { return q.Id == "hale_no_safe_distance_unseen"; });
+        }
+
+        /// <summary>No Safe Distance firings that took Quarry off an enemy - the clause landing.</summary>
+        private static int FidQuarryTaken(FidRuns runs)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.Type != BattleEventType.PassiveTrigger || e.AbilityId == null || !e.AbilityId.StartsWith("hale_no_safe_distance")) continue;
+                    for (int m = k + 1; m < res.Events.Count && !FidBoundary(res.Events[m]); m++)
+                        if (res.Events[m].Type == BattleEventType.StatusExpired && res.Events[m].Status == StatusKind.Mark
+                            && res.Events[m].SourceId == id && !FidIsPlayer(res, res.Events[m].TargetId)) { n++; break; }
+                }
+            }
+            return n;
+        }
+
+        /// <summary>Firings of `passiveId` whose raising event was the owner's own Mark landing.</summary>
+        private static int FidAnsweredOwnMark(FidRuns runs, string passiveId)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 1; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != passiveId) continue;
+                    if (ev[k - 1].Type == BattleEventType.StatusApplied && ev[k - 1].Status == StatusKind.Mark && ev[k - 1].SourceId == id) n++;
+                }
+            }
+            return n;
+        }
+
+        // ---- the suspected list: verdicts the record can give ----------------------------------
+
+        /// <summary>
+        /// The seven entries of the "suspected, not measured" list the pass did not repair from
+        /// content, each read off the record in the hero sweep arena or proved in a small one. A
+        /// line here is a verdict, not a pair: what the engine does, counted, beside what the
+        /// sentence says.
+        /// </summary>
+        private static void CheckSuspectedPassTwo()
+        {
+            // Nereia I and II: both answer every Reserve expiry.
+            FidRuns n1 = FidRun("nereia_the_field_medic", 1, null, null);
+            FidRuns n2 = FidRun("nereia_the_field_medic", 2, null, null);
+            if (n1 == null || n2 == null) Check(false, "Nereia reserve arenas built");
+            else
+            {
+                int expiries, empty, fires, shields;
+                long paid, stored;
+                NereiaReserve(n1, "nereia_deeper_reservoir", out expiries, out empty, out fires, out shields, out paid, out stored);
+                Check(fires == expiries,
+                      "Nereia, Deeper Reservoir (I): answers all " + expiries + " Reserve expiries, " + empty
+                      + " of them a Reserve that released nothing - CONFIRMED in code, " + (empty == 0 ? "not raised here: every Reserve in this arena held something" : "raised here")
+                      + "; nothing can ask whether the expiry paid out");
+                NereiaReserve(n2, "nereia_shared_reserve", out expiries, out empty, out fires, out shields, out paid, out stored);
+                Check(fires == expiries && shields > 0,
+                      "Nereia, Shared Reserve (II): " + shields + " Ward(s) worth " + paid + " in all, against " + stored
+                      + " of Reserve released - the sentence pays 50% of that (" + (stored / 2) + "); CONFIRMED, a fixed share of her "
+                      + "Max HP. Not repaired: an empty Reserve leaves the last release's figure behind, so scaleByLastRelease would pay a stale one");
+            }
+
+            // Cyrra II: OnShieldBreak is heard on her own Ward.
+            FidRuns c2 = FidRun("cyrra_the_burden_bearer", 2, null, null);
+            if (c2 == null) Check(false, "Cyrra arena built");
+            else
+            {
+                int own, ally, fires;
+                CyrraBreaks(c2, out own, out ally, out fires);
+                Check(fires <= own && ally > 0,
+                      "Cyrra, Hidden Reserve (II): " + fires + " firing(s), each on one of her OWN " + own + " broken Wards; "
+                      + ally + " Ward(s) broke on other allies and none was answered - CONFIRMED. Not repaired: the sentence "
+                      + "stores from the Ward's creation and pays at its break, and a store keyed to one Ward is not a thing a Ledger can be");
+            }
+
+            // Velis II: the suspected shape does not hold, and a different defect does. Hollowed is a
+            // HealIntercept Ledger with ledgerBankLimit 1, "it can trigger once before it expires",
+            // and the convert path never charges that limit - so it never spends, and Starve the
+            // Light answering every heal on a Hollowed enemy is answering every conversion.
+            int[] hol = RunHollowedArena();
+            if (hol == null) Check(false, "Hollowed arena built");
+            else
+                Check(hol[0] > 1 && hol[1] == hol[0] && hol[2] == hol[0],
+                      "Velis, Starve the Light (II): NOT AS SUSPECTED - one Hollowed, with the limit Velis ships, converts "
+                      + hol[0] + " heal(s), not 1, and an OnEnemyHealed listener gated on it answers " + hol[1] + " and an "
+                      + "OnFunnelConvertFired one " + hol[2] + ": there is no spent conversion to answer after. The defect is "
+                      + "Hollowed's - the convert path never charges ledgerBankLimit - and moves Velis's kit, so it is reported, not repaired");
+
+            // Isolde: the rider asks for three Burn entries, and the engine keeps one per body.
+            int burnDepth = RunBurnFoldArena();
+            FidRuns iso = FidRun("isolde_the_slow_fading", 0, null, null);
+            int rider = iso == null ? -1 : IsoldeRider(iso);
+            Check(burnDepth == 1 && rider == 0,
+                  "Isolde, Unfinished Sentence: three heroes Burning one enemy leave " + burnDepth + " Burn entry on it, and the "
+                  + "rider landed " + rider + " time(s) - CONFIRMED and worse than suspected: every application folds into one "
+                  + "entry whoever applied it, so \"three or more damage-over-time effects\" is unreachable in any team");
+
+            // Marrow: the ally half of the timing.
+            FidRuns mw = FidRun("marrow_the_irrevocable_vow", 0, null, null);
+            if (mw == null) Check(false, "Marrow arena built");
+            else
+            {
+                int heals = FidFiringHeals(mw, "marrow_promise_heal");
+                Check(heals > 0,
+                      "Marrow, The Cost Is Named: " + heals + " Promise heal(s) on allies, every one at the ally's turn END - CONFIRMED, "
+                      + "the sentence pays at the start of their next turn and no trigger opens there for an ally. The self half is repaired above");
+            }
+
+            // Aeron III: any repayment, of any size.
+            FidRuns a3 = FidRun("aeron_the_unbroken_stride", 3, null, null);
+            if (a3 == null) Check(false, "Aeron arena built");
+            else
+            {
+                int silences, small;
+                AeronUnpaid(a3, out silences, out small);
+                Check(silences > 0 && small > 0,
+                      "Aeron, Unpaid Action (III): " + silences + " Silence(s), at least " + small + " after a repayment below 20% of a turn "
+                      + "- CONFIRMED, nothing can ask how much was repaid. The Silence also lands AT the repayment, on the debtor's "
+                      + "own turn, where the sentence has it after that turn ends");
+            }
+        }
+
+        /// <summary>Heals `passiveId` paid onto somebody other than its owner, read inside each
+        /// firing's own window - a Heal event carries no ability name.</summary>
+        private static int FidFiringHeals(FidRuns runs, string passiveId)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != passiveId) continue;
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                        if (ev[m].Type == BattleEventType.Heal && ev[m].SourceId == id && ev[m].TargetId != id) n++;
+                }
+            }
+            return n;
+        }
+
+        private static void NereiaReserve(FidRuns runs, string passiveId, out int expiries, out int empty, out int fires,
+                                          out int shields, out long paid, out long stored)
+        {
+            expiries = 0; empty = 0; fires = 0; shields = 0; paid = 0; stored = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    BattleEvent e = ev[k];
+                    if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Ledger && e.TargetId == id && e.Duration == 1)
+                    {
+                        expiries++;
+                        // The auto-release heal is written immediately before the entry leaves.
+                        bool released = k > 0 && ev[k - 1].Type == BattleEventType.Heal && ev[k - 1].SourceId == id;
+                        if (!released) empty++; else stored += ev[k - 1].Value;
+                    }
+                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == passiveId)
+                    {
+                        fires++;
+                        for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                            if (ev[m].Type == BattleEventType.ShieldGain && ev[m].SourceId == id) { shields++; paid += ev[m].Value; }
+                    }
+                }
+            }
+        }
+
+        private static void CyrraBreaks(FidRuns runs, out int own, out int ally, out int fires)
+        {
+            own = 0; ally = 0; fires = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "cyrra_hidden_reserve") fires++;
+                    // A broken Ward: the Shield entry leaving by absorption rather than by its clock.
+                    if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Shield && e.Duration != 1
+                        && FidIsPlayer(res, e.TargetId))
+                    { if (e.TargetId == id) own++; else ally++; }
+                }
+            }
+        }
+
+        private static int IsoldeRider(FidRuns runs)
+        {
+            // The rider is the second blow of the same firing: two Unfinished Sentence blows back to back.
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != "isolde_unfinished_sentence") continue;
+                    int blows = 0;
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                        if (ev[m].Type == BattleEventType.Damage && ev[m].SourceId == id && ev[m].AbilityName == "Unfinished Sentence") blows++;
+                    if (blows >= 2) n++;
+                }
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// Velis's Hollowed, lifted from heroes.json, laid once at battle start on an enemy that
+        /// heals itself every turn. {conversions, OnEnemyHealed answers gated on it,
+        /// OnFunnelConvertFired answers}
+        /// </summary>
+        private static int[] RunHollowedArena()
+        {
+            ContentDatabase live = BuildHeroSweepArena(null);
+            HeroDef velis = live == null ? null : live.GetHero("velis_the_hollow_vow");
+            if (velis == null || velis.Active == null) return null;
+            EffectDef hollow = null;
+            for (int i = 0; i < velis.Active.Effects.Count; i++)
+                if (velis.Active.Effects[i].Kind == EffectKind.ApplyStatus && velis.Active.Effects[i].Status == StatusKind.Ledger)
+                    hollow = velis.Active.Effects[i];
+            if (hollow == null) return null;
+            string heroes = @"{""heroes"":[
+  { ""id"":""ho_hero"", ""name"":""HoHero"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""ho_b"", ""name"":""Cut"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":5.0 } ] },
+    ""active"": { ""id"":""ho_a"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive"": { ""id"":""ho_lay"", ""name"":""Lay"", ""trigger"":""BattleStart"", ""effects"":[
+       { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Ledger"", ""duration"":99, ""chance"":1, ""bypassResist"":true,
+         ""magnitude"":" + hollow.Magnitude.ToString(CultureInfo.InvariantCulture) + @", ""ledgerFunnelSource"":""HealIntercept"",
+         ""ledgerFunnelConvert"":true, ""ledgerBankLimit"":" + hollow.LedgerBankLimit + @" } ] },
+    ""passive1"": { ""id"":""ho_heard"", ""name"":""Heard"", ""trigger"":""OnEnemyHealed"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""ApplyStatus"", ""target"":""Self"", ""status"":""AttackUp"", ""magnitude"":0.01, ""duration"":1, ""chance"":1,
+                      ""condition"":""HasStatus"", ""conditionStatus"":""Ledger"", ""conditionOn"":""BroadcastSubject"" } ] },
+    ""passive2"": { ""id"":""ho_conv"", ""name"":""Converted"", ""trigger"":""OnFunnelConvertFired"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""EnergyGain"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+            string enemies = @"{""enemies"":[
+  { ""id"":""ho_foe"", ""name"":""HoFoe"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""ho_fb"", ""name"":""Mend"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":100 } ] } }
+]}";
+            string campaign = @"{""chapters"":[{""id"":""ho_ch"",""name"":""Ho"",""stages"":[
+  {""id"":""ho_arena"",""index"":1,""enemies"":[{""id"":""ho_foe"",""level"":1}]}
+]}]}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, ZeroVarianceBalance(5), "hollowed");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ho_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("ho_arena"), 5106, team);
+            if (r == null) return null;
+            int[] n = new int[3];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && string.IsNullOrEmpty(e.AbilityName) && FidIsPlayer(r, e.SourceId)) n[0]++;
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "ho_heard")
+                    for (int m = i + 1; m < r.Events.Count && !FidBoundary(r.Events[m]); m++)
+                        if (r.Events[m].Type == BattleEventType.StatusApplied && r.Events[m].Status == StatusKind.AttackUp) { n[1]++; break; }
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "ho_conv") n[2]++;
+            }
+            return n;
+        }
+
+        private const string BfHeroes = @"{""heroes"":[
+  { ""id"":""bf_a"", ""name"":""BfA"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""bf_ab"", ""name"":""Burn"", ""effects"":[ { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Burn"", ""magnitude"":0.1, ""duration"":3, ""chance"":1, ""bypassResist"":true } ] },
+    ""active"": { ""id"":""bf_aa"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } },
+  { ""id"":""bf_b"", ""name"":""BfB"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":800, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""bf_bb"", ""name"":""Burn"", ""effects"":[ { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Burn"", ""magnitude"":0.1, ""duration"":3, ""chance"":1, ""bypassResist"":true } ] },
+    ""active"": { ""id"":""bf_ba"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } },
+  { ""id"":""bf_c"", ""name"":""BfC"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":700, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""bf_cb"", ""name"":""Burn"", ""effects"":[ { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Burn"", ""magnitude"":0.1, ""duration"":3, ""chance"":1, ""bypassResist"":true } ] },
+    ""active"": { ""id"":""bf_ca"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string BfEnemies = @"{""enemies"":[
+  { ""id"":""bf_foe"", ""name"":""BfFoe"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""bf_fb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string BfCampaign = @"{""chapters"":[{""id"":""bf_ch"",""name"":""Bf"",""stages"":[
+  {""id"":""bf_arena"",""index"":1,""enemies"":[{""id"":""bf_foe"",""level"":1}]}
+]}]}";
+
+        /// <summary>The deepest Burn stack any StatusApplied reports, with three heroes Burning one enemy.</summary>
+        private static int RunBurnFoldArena()
+        {
+            ContentDatabase db = LoadSyntheticContent(BfHeroes, BfEnemies, BfCampaign, ZeroVarianceBalance(3), "burn fold");
+            if (db == null) return -1;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("bf_a"), 1));
+            team.Add(MakeInstance(db.GetHero("bf_b"), 1));
+            team.Add(MakeInstance(db.GetHero("bf_c"), 1));
+            BattleResult r = RunWith(db, db.GetStage("bf_arena"), 5104, team);
+            if (r == null) return -1;
+            int deepest = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == StatusKind.Burn && r.Events[i].Value > deepest)
+                    deepest = r.Events[i].Value;
+            return deepest;
+        }
+
+        /// <summary>
+        /// Silences Unpaid Action laid, and how many followed a repayment below 20% of a turn. The
+        /// record does not carry a debt's size, so the count is the case that is below 20% by
+        /// construction: a debt banked by ONE Press Forward and nothing else, which delays by 12%
+        /// and banks what it removed. Everything else is left out, so this undercounts.
+        /// </summary>
+        private static void AeronUnpaid(FidRuns runs, out int silences, out int small)
+        {
+            silences = 0; small = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                bool lastWasBasic = false;
+                Dictionary<int, int> basics = new Dictionary<int, int>();
+                Dictionary<int, int> others = new Dictionary<int, int>();
+                bool repaidSmall = false;
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.SourceId == id && e.Type == BattleEventType.BasicAttack) lastWasBasic = true;
+                    if (e.SourceId == id && e.Type == BattleEventType.AbilityCast) lastWasBasic = false;
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.TurnDebt && e.SourceId == id)
+                    {
+                        Dictionary<int, int> d = lastWasBasic ? basics : others;
+                        int c; d.TryGetValue(e.TargetId, out c); d[e.TargetId] = c + 1;
+                    }
+                    if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.TurnDebt && e.SourceId == id)
+                    {
+                        int b, o;
+                        basics.TryGetValue(e.TargetId, out b);
+                        others.TryGetValue(e.TargetId, out o);
+                        repaidSmall = b == 1 && o == 0;
+                        basics[e.TargetId] = 0; others[e.TargetId] = 0;
+                    }
+                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "aeron_unpaid_action")
+                    {
+                        for (int m = k + 1; m < res.Events.Count && !FidBoundary(res.Events[m]); m++)
+                            if (res.Events[m].Type == BattleEventType.StatusApplied && res.Events[m].Status == StatusKind.Silence)
+                            {
+                                silences++;
+                                if (repaidSmall) small++;
+                                break;
+                            }
+                    }
+                }
+            }
         }
 
         private static void MirethRemoval(ContentDatabase db, bool removes)
@@ -32215,8 +33235,12 @@ namespace Emberfall.DevHarness
                 gain.Target = TargetMode.Self;
                 gain.MaxStacks = 3;
                 gain.Duration = 99;
+                // LastTarget, not LastAttacker as C10 wrote it. A Self-aimed line is not refused by
+                // the per-target budget, so gated on the attacker it banked on every counter the
+                // once-a-round budget turned away. LastTarget is the attacker only when the
+                // counter actually struck it; otherwise it is the body the enemy's own ability hit.
                 gain.Condition = EffectCondition.HasMyMark;
-                gain.ConditionOn = ConditionSubject.LastAttacker;
+                gain.ConditionOn = ConditionSubject.LastTarget;
                 kept.Add(gain);
             }
             p.Effects = kept;
@@ -32259,6 +33283,7 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < p.Effects.Count; i++)
             {
                 EffectDef e = p.Effects[i];
+                if (e.Kind != EffectKind.EnergyGain) continue;
                 if (e.Condition == EffectCondition.None || e.Condition == EffectCondition.HpBelow)
                 {
                     e.Condition = gated ? EffectCondition.HpBelow : EffectCondition.None;
@@ -32306,10 +33331,12 @@ namespace Emberfall.DevHarness
         {
             PassiveDef p = FidPassive(db, "aminah_the_true_measure", "aminah_emergency_release");
             if (p == null) return;
+            // HER Priority, source-filtered: Nereia's Reserve and Brenna's Memory are Ledgers too.
             for (int i = 0; i < p.Effects.Count; i++)
             {
-                p.Effects[i].Condition = gated ? EffectCondition.HasStatus : EffectCondition.None;
+                p.Effects[i].Condition = gated ? EffectCondition.MyStatusStacksAtLeast : EffectCondition.None;
                 p.Effects[i].ConditionStatus = StatusKind.Ledger;
+                p.Effects[i].ConditionValue = 1;
                 p.Effects[i].ConditionOn = ConditionSubject.BroadcastSubject;
             }
             p.ChargeOnLanding = gated;
