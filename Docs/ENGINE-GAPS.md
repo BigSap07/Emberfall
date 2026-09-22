@@ -8,11 +8,16 @@ it exists so the same gap is not rediscovered once per batch.
 **It is a record, not a work order.** Nothing here is scheduled. A row is a fact about the engine on
 the date the row was written, and the authoring batches are explicitly forbidden from closing these
 by adding engine features: a batch that meets one of these approximates it, marks the clause draft
-and adds a row here.
+and adds a row here. An ENGINE pass may close them, and one has - eleven groups and twenty-five
+clauses went that way, each as its own capability with its own harness arena, and then each affected
+kit was put back to the sentence Pinoy wrote for it. A row leaves this file only when the kit that
+carried it has been restored, never when the capability alone is built.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
-arrangement in which a repeat is visible. Eleven of the twenty-two groups below have more than one
-occupant, and the largest has five.
+arrangement in which a repeat is visible. That arrangement did its job: eleven of the original
+twenty-two groups had more than one occupant, and the engine pass that closed the cheap repeated
+ones took every group with two or more, leaving thirteen groups and fourteen clauses. Exactly one
+of those groups still has a repeat, and it is the movement one, which is out of scope by design.
 
 **What is deliberately not here.** Numbers. Every authored 4-star's damage and healing values differ
 from Pinoy's originals because `CheckStarBandByRole` moved them, and that is balance rather than
@@ -25,75 +30,6 @@ were both authorable all along and are now authored.
 **How to read the size column.** Small is a field on an existing type plus the code that reads it.
 Medium is a new enum member with its own resolution and its own harness arena. Large touches the
 damage funnel or the turn loop, which is where every fingerprint in the project lives.
-
----
-
-## 1. Answering the blow that is landing
-
-No `EffectCondition` asks about the magnitude of the hit being resolved: the enum's 50 members ask
-about HP, statuses, stats, energy, action history and firing counts, and the damage funnel does not
-publish the number it is carrying. Nor can anything reach back into a hit that has already resolved,
-because every ally-facing hook fires after it.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Rhys | "When an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead" | a condition on the incoming damage as a fraction of the victim's Max HP | the guard goes up on the FIRST strike of each round whatever its size, and covers that ally for the rest of the round | medium |
-| Toren | "redirects 25% of **that hit**" | a way to move a share of a blow that has already landed; `OnEnemyDamagedAlly` fires afterwards | the ward goes up for the rest of the round and answers the next one | medium |
-
----
-
-## 2. Per-round budgets on a standing status
-
-`StatusInstance` carries `UsesPerRound` and `UsesThisRound`, and exactly two places read them:
-`InterceptDisrupted` and the `StatusUseAvailable` condition. `CoverFraction` reads only `Magnitude`,
-so a Covered ward cannot be told to answer once a round; `Guard` spends `Charges`, which do not
-refill at a round boundary.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Rhys | "Rhys takes 30% of it instead, **once per round**" | a per-round use budget honoured by the Covered redirect | `limit: OncePerRound` on the passive, so the ward is APPLIED once a round and then answers every hit for that round | small |
-| Eira | "it reduces the first area hit **each round** by 20%" | the same budget on a Guard charge | one Guard charge for the whole 2-round duration, so it answers one hit rather than one a round | small |
-
----
-
-## 3. Telling an area hit from a single-target one
-
-Nothing on a resolving Damage effect records how many bodies it was aimed at, so no condition and no
-mitigation can ask.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Eira | "it reduces the first **area** hit each round by 20%" | a flag on a resolving hit saying it came from a multi-target effect | the Guard charge answers whichever hit lands first, area or not | medium |
-| Eira | "When an ally with Mobile Cover is **singled out**" | the same flag, read from the other side | `OnEnemyDamagedAlly` gated on the victim carrying the ward, so "singled out" becomes "hit" | medium |
-
----
-
-## 4. Per-source stat modification
-
-Every stat status in `StatusKind` applies to its holder against everybody. `Vulnerable` is the one
-per-source entry in the game - `VulnerableTo(sourceId)` sums only the entries that attacker applied -
-and it exists in the damage-taken direction only. There is no mirror that reduces damage from one
-named body.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Kest | "takes 10% less **from it**" | a per-source damage reduction, the inverse of `Vulnerable` | `DamageReductionUp` at 10%, which reduces damage from everybody | small |
-| Jory | "Taunts the front enemy for 2 rounds; **it** deals 15% less damage to Jory" | the same | `DamageReductionUp` at 15% on Jory for the Taunt's duration, which reduces damage from everybody | small |
-| Tamsin | "Targets above 50% turn progress ... **take 15% more Skill Damage**" | a universal damage-taken modifier; `Vulnerable` is the one per-source entry and reads only its applier's damage | `Vulnerable` at 15%, so only Tamsin's own blows land harder | small |
-| Lio | "Diagnosed allies **receive 18% more healing**" | a healing-received modifier in the upward direction; `HealSuppression` and `HealingReduction` both only cut | Diagnosed is a Mark and Lio's own healing reads it, so the extra comes from him rather than from every source | small |
-
----
-
-## 5. Duration control when a status is moved, inverted or extended
-
-Three separate effect kinds each decide a duration by a rule of their own, and none takes the
-authored `duration` as an override.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Celen | "transfers the largest ally Shield to the lowest-HP ally and **extends it 1 round**" | a duration on `ShieldTransfer`, which re-seats the recipient's Shield entry at a hardcoded 99 rounds | the `ExtendStatus` is authored and lands, but against a 99-round entry it is nominal | small |
-| Siofra | "changes one target buff into its matching debuff **for 2 rounds**" | a duration override on `InvertStatus`, which copies the flipped entry's own `RoundsLeft` | the reversal lasts as long as the buff had left, and the text says so | small |
-| Demos | "extends Arrears by 1 round, **up to 3 rounds**" | a ceiling on `ExtendStatus`, which does `RoundsLeft += added` with no clamp | the cap is dropped; the clause extends without limit | small |
 
 ---
 
@@ -124,35 +60,6 @@ carries no condition.
 
 ---
 
-## 8. Remembering who hit MY SIDE, rather than who hit ME
-
-`LastAttackerId` is per-unit and means "the body that last hit me". Nothing keeps the same memory for
-a side, so "the enemy that hurt one of us" has neither a target mode nor a condition.
-`HighestDamageDealtEnemy` is the nearest standing answer and is a career total rather than a recent
-act.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Maera | "if the target **attacked an ally** since Maera's last turn, deals 25% additional" | a condition asking whether the subject dealt damage to the caster's side | `SubjectActedThisRound`, which in this engine's turn shape means it has attacked | medium |
-| Maera | "the enemy that **most recently damaged an ally**" | a target mode for the side's last attacker | `HighestDamageDealtEnemy`, the enemy that has dealt the most damage so far | medium |
-
----
-
-## 9. Triggers that fire for something an ALLY did or received
-
-The trigger enum is rich on what happens TO a unit and thin on what an ally CAUSES. Three clauses hit
-this from three directions.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Halwen | "**When Reserve prevents damage**, its holder recovers 4% Max HP" | a trigger when a Guard charge is spent; the damage funnel removes the entry inline and only a Ledger with `FunnelSource.GuardMitigation` can observe it, paying out on cap rather than per prevention | `OnEnemyDamagedAlly`, once a round, healing the victim whether or not Reserve answered the blow | medium |
-| Mika | "When an ally **gains Energy** from Loose Parts, Mika gains a Shield" | a trigger for an ally receiving Energy | folded into the one `OnLinkedUnitHit` passive that hands the Energy out, so the grant and the ward are one firing | small |
-| Branik | "The first time each round a Cracked enemy attacks, Branik gains 8% Damage Reduction" | `OnEnemyDamagedAlly` deliberately excludes the body being hit, so it cannot answer for Branik himself | a second passive on `OnDamaged` carrying the identical clause | small |
-| Halwen | "its holder recovers 4% Max HP" - the holder can be Halwen | the same exclusion, hit a second time | a second passive on `OnDamaged` carrying the identical clause | small |
-| Niko | "When a Flustered enemy **attempts a debuff**" | a trigger for a unit APPLYING a status, and no ally-side broadcast for one being received | `OnEnemyActive`, which is when the debuffs come | medium |
-
----
-
 ## 10. Counting firings per subject on an owner-centric trigger
 
 `FiresPerSubject` and the `PassiveFiredOnSubjectAtLeast` condition are the engine's answer to "the
@@ -179,14 +86,25 @@ pool from one body to another and there is no exchange.
 
 ## 12. Amounts written as a percentage of the HOLDER's health
 
-Several magnitudes in this roster are written as "N% Max HP" of a body that is not the caster. The
-engine pays a DoT in the applier's Attack and caps a percent-of-HP damage term against the target's
-own health, which is the wrong unit for a sentence of that shape.
+One row left, and it is no longer an expressibility gap. `holderHpTick` pays a Regen or Burn as a
+fraction of its CARRIER's bar, read fresh at every tick, which is what Maren's clause asked for and
+what closed her row.
+
+**Demos's row stays, and what it records has changed.** The clause is authorable: a Damage effect
+with `targetCurrentHpRatio` says "4% of its current HP" exactly, and the percentage is now Pinoy's
+4% where the shipped kit carried 7%. What cannot go is the `attackCap` Pinoy's sentence does not
+mention. Removing it was tried and measured: Demos reads **x3.40** of his role's 5-star median
+against **x0.28** with the bound in place, because a percentage of a current bar grows with the
+board while a hero's Attack does not. That is not a number a retune reaches - it is a different
+hero.
+
+So the departure is real and it is a BALANCE one rather than a missing capability, and no engine
+feature closes it. A clause of this shape needs either a bound the text does not name or a roster
+whose bars do not outrun a 4-star's Attack, and choosing between those is Pinoy's call.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Maren | "Recovery heals **3% Max HP** each turn" | a Regen tick scaled off the holder's Max HP; `ApplyStatus` resolves a Regen magnitude as `EffectiveAttack * magnitude` | the tick is written in Maren's Attack at the value that comes to about 3% of an ally's bar at the level the number was set against | small |
-| Demos | "At turn end, Arrears loses 4% current HP" | a percent-of-current-HP tick bounded in the caster's own currency; `MaxHpCap` ceilings against the TARGET's Max HP and so cannot bind one | an `attackCap` was added that Pinoy's sentence does not mention, holding the clause at the relationship it was written with | small |
+| Demos | "At turn end, Arrears loses 4% current HP" | nothing - the clause is authorable, and its unbounded form is what the band cannot carry | the percentage is Pinoy's, and an `attackCap` of 105% of Attack that his sentence does not mention bounds it | none |
 
 ---
 
@@ -198,17 +116,6 @@ own health, which is the wrong unit for a sentence of that shape.
 
 ---
 
-## 14. Round-end triggers
-
-`PassiveTrigger` gained `RoundStart` and has no mirror. `OnAllyTurnEnd` and `OnEnemyTurnEnd` are
-per-unit, so "at round end" has to become "as each of them finishes".
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Finn | "**At round end**, Ringing enemies have a 35% chance to be delayed" | a `RoundEnd` trigger beside `RoundStart` | `OnEnemyTurnEnd`, once a round, so it answers a Ringing enemy's own turn ending | small |
-
----
-
 ## 15. Chance on anything but a status landing
 
 `EffectDef.Chance` is read in exactly one place, the `ApplyStatus` landing roll, and nowhere else.
@@ -216,7 +123,7 @@ Damage, healing, energy and turn-shift effects either happen or do not.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain and the passive is limited to once a round instead | small |
+| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round | small |
 
 ---
 
@@ -232,29 +139,21 @@ enemy at a named third body.
 
 ---
 
-## 17. Counting how many statuses of a class a body carries
+## 18. Telling WHICH KIND of status a removal took
 
-`StatusStacksAtLeast` and `MyStatusStacksAtLeast` count entries of ONE named kind.
-`HasAnyBeneficialStatus` answers whether a body has one at all and not how many, so "N per buff" has
-nothing to multiply.
+Both triggers in this group now publish the body the event happened to, so Tamsin's row is gone
+and Lio's has narrowed to its second clause.
 
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Tamsin | "removes 6% turn progress **for each target buff**, up to 18%" | a count of beneficial statuses usable as a scalar | 6% flat, and 18% against a body carrying any buff at all | medium |
-| Leon | "Damage increases **10% per displayed buff**, up to 40%" | the same count | the whole 40% lands against a body carrying any buff at all | medium |
-
----
-
-## 18. Naming the unit an event happened TO, when the trigger names the causer
-
-Two triggers fire on the unit that caused something and publish no subject, so a passive on either
-can pay the causer and cannot reach the body it happened to. `OnTurnDelayed` sets only
-`_broadcastSourceId`; `OnStatusRemoved` sets the remover and nothing else.
+Nothing says what a removal REMOVED. `OnStatusRemoved` names the remover and now the body it was
+taken from, and `_lastRemovedValue` carries the pending DoT damage that left with it, but no field
+and no condition carries the KIND - so a rider that is supposed to answer only a control debuff
+answers every debuff. The nearest shapes are `TriggerStatus`, which filters the EXPIRY triggers
+against `_expiredKinds`, and `SubjectLostStatusThisFiring`, which answers whether anything was
+taken at all.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Tamsin | "**The first enemy delayed** each round gains 10% Defense Down" | a broadcast subject on `OnTurnDelayed` | the whole enemy line takes it, once a round | small |
-| Lio | "When Lio removes a debuff, **that ally** recovers 5% missing HP; control debuffs also grant 10 Energy" | a broadcast subject on `OnStatusRemoved` | the heal moves into the ability, where `SubjectLostStatusThisFiring` can see it; the Energy pays the lowest-HP ally, which is the body Tested Touch cleansed by construction | small |
+| Lio | "**control debuffs** also grant 10 Energy" | the kind a removal took, published for the trigger it raises - the removal-side sibling of `PassiveDef.TriggerStatus` | the 10 Energy pays out for any debuff Lio strips, not only a control one | small |
 
 ---
 
@@ -307,35 +206,40 @@ its own side. There is no placement, no ordering and nothing that forbids either
 
 ## Where the counts stand
 
-Twenty-two capabilities, thirty-nine clauses, across twenty heroes and four authoring batches.
-**All twenty are 4-stars**, which is twenty of the twenty-six in the tier; the other six authored
-cleanly. No 5-star is in this file, and an earlier version of this line that said four of them were
-was wrong - checked hero by hero against `heroes.json`. Eleven groups have more than one occupant:
+Thirteen capabilities, fourteen clauses, across thirteen heroes. It began at twenty-two and
+thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
+eighteen kits that carried them.
+
+Exactly one group still has more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 9 | triggers for what an ALLY did or received | 5 |
-| 4 | per-source stat modification | 4 |
-| 5 | duration on a moved, inverted or extended status | 3 |
-| 1 | answering the blow that is landing | 2 |
-| 2 | per-round budgets on a standing status | 2 |
-| 3 | telling an area hit from a single-target one | 2 |
-| 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
-| 12 | amounts written as a percentage of the HOLDER's health | 2 |
-| 17 | counting how many statuses of a class a body carries | 2 |
-| 18 | naming the unit an event happened TO | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 
-**Group 9 is the one to close first, and most of it is one line of code.** Three of its five rows
-are the same exclusion in `OnEnemyDamagedAlly`, met three times by Branik, Halwen and Toren and
-answered three times by pasting the passive onto `OnDamaged` as well. A flag on `PassiveDef` saying
-"and me" would delete three overflow passives from the shipped roster and stop the next batch
-writing a fourth. Group 4 is the next best value: four clauses across four heroes all asking for a
-per-source stat modifier, which is one status kind beside `Vulnerable` pointing the other way.
+**What the pass built**, in the order the groups were taken:
+
+| group | what closed it |
+|---|---|
+| 9 | `PassiveDef.IncludeSelf`, and the `OnAllyEnergyGained`, `OnGuardPrevented` and `OnEnemyAppliedStatus` triggers |
+| 4 | `StatusKind.Blunted`, `DamageTakenUp` with a skill scope, and `HealingReceivedUp` |
+| 5 | `shieldTransferDuration`, `invertDuration` and `extendCap` |
+| 12 | `holderHpTick`, which pays a Burn or Regen in its carrier's own bar |
+| 14 | the `RoundEnd` trigger |
+| 18 | a broadcast subject on `OnStatusRemoved` and `OnTurnDelayed` |
+| 17 | `perStackClass`, `perStackMaxCount` and `perStackFromZero` on the existing scaler |
+| 2 | `UsesPerRound` honoured by the Covered redirect and by a Guard |
+| 3 | `areaHitsOnly` on a ward, and the two `IncomingHitIs...` conditions |
+| 8 | `EnemyThatLastDamagedAlly` and `SubjectDamagedMySideSinceMyTurn` |
+| 1 | `SubjectTookHitAboveMaxHpFraction`, and `HpTransfer` reading the `ScaleBy` family |
+
+**Two rows survived their group's closure and are still here**, because each turned out to be about
+something else. Demos's is a balance finding rather than a capability - group 12 records the
+measurement. Lio's narrowed to its second clause, which is a different absence - group 18 was
+retitled around it.
 
 **Groups 20 and 22 are different in kind and should not be read as debt.** An information layer and
-a movement system are games this one is not; the clauses that ask for them are two sentences out of
-thirty-nine, and both heroes work without them.
+a movement system are games this one is not; the clauses that ask for them are three sentences out
+of the fourteen left, and all three heroes work without them.
 
 One caution, from the pass that produced several of these rows. `MaxHpCap` reads like the ceiling a
 percent-of-HP clause wants and is not: it ceilings against the TARGET's Max HP, so `0.02` of Max HP

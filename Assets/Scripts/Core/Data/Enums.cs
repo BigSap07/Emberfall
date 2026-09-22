@@ -387,7 +387,24 @@ namespace Emberfall.Core.Data
         /// the most" could not be said, so a kit that redistributes wards rather than granting them
         /// had no donor to point at. Celen's Distribution is that kit.
         /// </summary>
-        LargestShieldAlly
+        LargestShieldAlly,
+
+        /// <summary>
+        /// The enemy that MOST RECENTLY damaged somebody on the caster's side, or nobody when no
+        /// enemy has.
+        ///
+        /// ENGINE-GAPS group 8. HighestDamageDealtEnemy is the nearest standing answer and asks a
+        /// different question: it is a career total, so the enemy that opened the fight hard and
+        /// has done nothing since still wins it, and the one that just struck an ally is not
+        /// named. "The enemy that most recently damaged an ally" is about the last act, not the
+        /// biggest.
+        ///
+        /// Reads the simulation's own record of who last hurt each side rather than walking the
+        /// victims, because the answer is one fact and five bodies would each hold part of it.
+        /// Resolves to NOBODY rather than falling through to the front enemy when no enemy has hit
+        /// the caster's line yet, which is honest about an empty first round.
+        /// </summary>
+        EnemyThatLastDamagedAlly
     }
 
     public enum EffectKind
@@ -923,7 +940,63 @@ namespace Emberfall.Core.Data
         /// The window is the ability a unit CHOSE - cleared at depth 0 in ResolveAbility and
         /// inherited by the passives that ability triggers, the same boundary LastTarget uses.
         /// </summary>
-        SubjectLostStatusThisFiring
+        SubjectLostStatusThisFiring,
+
+        // ---------- the gaps pass, group 3: what SHAPE the blow in flight had ----------
+        //
+        // Both read the same fact from the two directions two clauses need it. Sim state, like the
+        // turn-progress members, because the shape of the effect in flight is a property of the
+        // ability resolving rather than of two units.
+        //
+        // Meaningful only inside a window raised from the damage funnel - OnDamaged,
+        // OnEnemyDamagedAlly and their siblings - which is where every clause asking about it is
+        // written. Outside one they read the effect currently resolving, and false at an ability
+        // boundary.
+
+        /// <summary>The Damage effect now resolving was aimed at more than one body. Splash
+        /// counts: an effect that names one target and strikes its neighbours hit a line.</summary>
+        IncomingHitIsArea,
+
+        /// <summary>The negation, which is what "singled out" means - one body named and struck
+        /// on its own.</summary>
+        IncomingHitIsSingleTarget,
+
+        /// <summary>
+        /// The subject has damaged somebody on the CASTER'S SIDE since the caster's last turn.
+        ///
+        /// ENGINE-GAPS group 8. SubjectDamagedSinceMyTurn asks whether the subject WAS hurt;
+        /// SubjectDamagedByOtherSinceMyTurn asks the same about a different attacker. Neither can
+        /// ask whether the subject has HURT one of ours, because LastAttackerId and
+        /// LastDamagedRoundBy are per-victim and no memory was kept for a side.
+        ///
+        /// "If the target attacked an ally since Maera's last turn" therefore shipped as
+        /// SubjectActedThisRound, which in this engine's turn shape means it has done something -
+        /// a heal, a buff on itself and a miss all satisfy it.
+        ///
+        /// Round-granular, exactly like its two siblings and carrying the same approximation: two
+        /// units acting inside one round are not ordered against each other by it. Reads the
+        /// caster's own side, so an enemy-side caster asks about its own line and gets the mirror
+        /// answer rather than a hardcoded one.
+        /// </summary>
+        SubjectDamagedMySideSinceMyTurn,
+
+        /// <summary>
+        /// The last blow the subject took removed at least ConditionValue of its Max HP.
+        ///
+        /// ENGINE-GAPS group 1. No condition could ask about the SIZE of the hit being resolved,
+        /// so "when an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead" had to
+        /// become "when an ally is hit": the ward goes up on the first scratch of the round and
+        /// covers that body for the rest of it, which is a different ability and a much cheaper
+        /// one to trigger.
+        ///
+        /// Reads CombatUnit.LastDamageTaken against EffectiveMaxHp, so it is the REALISED number
+        /// after every mitigation - what actually got through, which is what the sentence is about.
+        /// Inclusive at the boundary, matching HpBelow and OnHpBelowThreshold.
+        ///
+        /// A subject that has taken nothing reads zero and fails, so the condition is false rather
+        /// than vacuously true before the first blow lands.
+        /// </summary>
+        SubjectTookHitAboveMaxHpFraction
     }
 
     /// <summary>
@@ -1360,7 +1433,80 @@ namespace Emberfall.Core.Data
         ///
         /// Harmful: it is done TO a unit, so a Cleanse takes it and a Dispel does not.
         /// </summary>
-        Restricted
+        Restricted,
+
+        // ---------- the gaps pass, group 4: the three modifiers that pointed only one way ----------
+        //
+        // Every stat status in this enum applies to its holder against EVERYBODY, with exactly one
+        // exception - Vulnerable, which sums only the entries its applier placed. So the damage
+        // pipeline had one per-source term and it pointed upward, and the healing pipeline had a
+        // reduction and no increase. Four clauses across four heroes ask for the missing
+        // directions, and all four ship today as approximations that answer the whole field where
+        // the text names one body, or read only their own healer where the text names every source.
+
+        /// <summary>
+        /// A UNIT WHOSE BLOWS AGAINST THE BODY THAT APPLIED THIS LAND SOFTER. The mirror of
+        /// Vulnerable, and the only other per-source entry in the game.
+        ///
+        /// "Takes 10% less from it" and "it deals 15% less damage to Jory" are both sentences about
+        /// one attacker, and DamageReductionUp - what both currently use - softens the holder
+        /// against the entire enemy line. The difference is not cosmetic in a five-a-side fight:
+        /// one of those is a duel clause and the other is a team aura.
+        ///
+        /// HELD BY THE ATTACKER, KEYED TO THE PROTECTED BODY, which is the only direction a hero
+        /// can author. Vulnerable works because the caster IS the attacker - Kest marks an enemy
+        /// and his own blows read it back. The reduction runs the other way: Jory is the one being
+        /// protected, so an entry keyed the same way would have to be applied to Jory BY the
+        /// enemy, and no effect can stamp a SourceId that is not its own caster. So the entry goes
+        /// on the enemy and names Jory, and the funnel asks the ATTACKER what it is blunted
+        /// against - CombatUnit.BluntedAgainst.
+        ///
+        /// Zero against anybody who has not applied one, and `raw * (1f - 0f)` is exact, so it
+        /// cannot move a battle nobody authored it into. Clamped at 0.9 so a deep enough stack
+        /// cannot make an attacker harmless.
+        ///
+        /// Harmful: it is done TO the body that carries it, so a Cleanse takes it and a Dispel
+        /// does not - the same side of that line as Vulnerable, which it mirrors in every other
+        /// respect too.
+        /// </summary>
+        Blunted,
+
+        /// <summary>
+        /// MORE DAMAGE FROM EVERY SOURCE. What Vulnerable is usually mistaken for.
+        ///
+        /// "Targets above 50% turn progress take 15% more Skill Damage" names no attacker, and
+        /// Vulnerable - the only thing that could be authored for it - made the clause pay out
+        /// only for its own applier's blows. That is a materially smaller ability, and nothing in
+        /// this enum could say the larger one.
+        ///
+        /// SKILL-SCOPED WHEN THE ENTRY SAYS SO, through EffectDef.DamageTakenSkillOnly stamped on
+        /// the instance. "Skill Damage" is not a synonym for damage in this engine: step 4 of the
+        /// damage pipeline already divides Active and passive-sourced hits from Basic Attacks, and
+        /// a modifier that ignored that division would be answering a different sentence. An entry
+        /// that does not set it answers every hit.
+        ///
+        /// Unpaired in Opposite(), exactly like Vulnerable, because its inverse is a per-source
+        /// entry and a universal one cannot flip into a source-keyed one.
+        ///
+        /// Harmful: done TO a unit, so a Cleanse takes it and a Dispel does not.
+        /// </summary>
+        DamageTakenUp,
+
+        /// <summary>
+        /// MORE HEALING RECEIVED, from every source.
+        ///
+        /// The upward direction of a pipeline that had only the two downward ones: HealSuppression
+        /// refuses a heal outright and HealingReduction cuts it, and nothing could raise one.
+        /// "Diagnosed allies receive 18% more healing" therefore had to become "Lio heals them 18%
+        /// more", which is a smaller clause that also stops being true the moment a second Mender
+        /// stands beside him.
+        ///
+        /// Deepest entry wins rather than the entries stacking, the same reading HealingReduction
+        /// takes two lines above it in ApplyHealValue, so two 18% grants are 18%.
+        ///
+        /// Beneficial: a Dispel takes it, a Cleanse does not.
+        /// </summary>
+        HealingReceivedUp
     }
 
     /// <summary>
@@ -1377,6 +1523,33 @@ namespace Emberfall.Core.Data
     /// separate kind would have meant two bodies of link bookkeeping - creation, charges, the
     /// from-caster filter, MoveStatus carriage - kept in step by hand.
     /// </summary>
+    /// <summary>
+    /// What EffectDef.PerStack counts: one named StatusKind, or a whole CLASS of them.
+    ///
+    /// ENGINE-GAPS group 17. `StatusStacksAtLeast` and `MyStatusStacksAtLeast` count entries of
+    /// one kind and `HasAnyBeneficialStatus` answers whether a body has one at all, so "6% turn
+    /// progress FOR EACH target buff" and "damage increases 10% PER displayed buff" had nothing to
+    /// multiply - both ship as a flat amount that lands whole against a body carrying any buff at
+    /// all, and not at all against a bare one.
+    ///
+    /// NamedKind is the default and is exactly what the per-stack scaler always did, so an effect
+    /// that does not name a class reads CountOf(PerStackStatus) as before.
+    /// </summary>
+    public enum StatusCount
+    {
+        /// <summary>Entries of PerStackStatus, whoever applied them. The existing behaviour.</summary>
+        NamedKind,
+
+        /// <summary>Every beneficial entry the subject carries - not harmful and not one of the
+        /// bookkeeping kinds, which is the same predicate HasAnyBeneficialStatus reads, so a Mark,
+        /// a Ledger, a Link and a Resolve counter are not buffs here either.</summary>
+        AnyBeneficial,
+
+        /// <summary>Every harmful entry, counted with StatusInfo.IsHarmful - the same predicate
+        /// Cleanse, Dispel and CombatUnit.DebuffCount read.</summary>
+        AnyHarmful
+    }
+
     public enum LinkTransfer
     {
         /// <summary>The link moves no damage. Only OnLinkedUnitTargeted and OnLinkedUnitHit read
@@ -1921,7 +2094,89 @@ namespace Emberfall.Core.Data
         /// so a passive answering it sees a finished turn rather than a cast still in flight.
         /// Not raised for a cancelled cast: nothing resolved, so nothing followed it.
         /// </summary>
-        AfterActiveCast
+        AfterActiveCast,
+
+        // ---------- the gaps pass: three ally-side moments nothing could hear ----------
+        //
+        // ENGINE-GAPS group 9. The trigger enum is rich on what happens TO a unit and thin on what
+        // an ALLY causes or receives, and three of that group's five rows are three different
+        // shapes of the same absence. The fourth and fifth are the "and me" exclusion, which is
+        // PassiveDef.IncludeSelf rather than a trigger, because the moment already exists and only
+        // its audience was wrong.
+
+        /// <summary>
+        /// An ally of the owner GAINED Energy. Broadcast to the recipient's own side after the bar
+        /// has actually moved, with _broadcastSubject and _broadcastVictim set to the recipient and
+        /// _broadcastSourceId to whoever granted it. The recipient is excluded, since a unit
+        /// answering its own gain is a different ability.
+        ///
+        /// The mirror of OnEnemyEnergyDrained, which fires on the unit that TOOK Energy across the
+        /// line. Nothing fired for Energy arriving: "when an ally gains Energy from Loose Parts"
+        /// had to be folded into the passive that hands the Energy out, so the grant and the
+        /// reaction were one firing and could not be limited, conditioned or read apart.
+        ///
+        /// Only a gain, only when the bar moved, and only when a granter is named. A unit's own
+        /// turn refill carries a granter of -1 and is not somebody handing it anything, so it does
+        /// not raise this. Re-entrancy is held to one level by a flag rather than by a depth, the
+        /// same way OnEnemyEnergyDrained holds itself: a passive that answers a gain by granting
+        /// Energy is a loop, not a wrong number.
+        /// </summary>
+        OnAllyEnergyGained,
+
+        /// <summary>
+        /// A StatusKind.Guard charge PREVENTED damage. Broadcast to the side of the unit that
+        /// APPLIED the Guard, with _broadcastSubject and _broadcastVictim set to the holder whose
+        /// charge was spent and _broadcastSourceId to the Guard's applier - so TriggerSourceIsSelf
+        /// reads "a Guard I placed", which is what every clause asking for this says.
+        ///
+        /// Raised once per prevention, from inside the funnel where the charge is spent, and only
+        /// when the charge actually removed damage: a Guard meeting a zero-damage hit prevented
+        /// nothing. `_lastMoved` for the applier holds the amount prevented, so an answer can
+        /// scale off it.
+        ///
+        /// A Ledger with FunnelSource.GuardMitigation was the nearest standing answer and asks a
+        /// different question - it banks the amount and pays out when the bank fills, which is per
+        /// CAP rather than per prevention.
+        /// </summary>
+        OnGuardPrevented,
+
+        /// <summary>
+        /// A unit on the other side ATTEMPTED to apply a harmful status. Broadcast to the side
+        /// opposite the applier, with _broadcastSubject set to the APPLIER and _broadcastVictim to
+        /// the body it was aiming at.
+        ///
+        /// Raised BEFORE the landing roll, which is what makes it "attempts" rather than "lands":
+        /// a debuff that was resisted was still attempted, and the clauses asking for this - "when
+        /// a Flustered enemy attempts a debuff" - are about the attempt. OnEnemyActive was the
+        /// nearest standing answer and is a claim about a cast rather than about a debuff, so it
+        /// also fired for an active that applied nothing.
+        ///
+        /// Harmful statuses only. A buff, a Mark, a Ledger and a Link are not debuffs, and
+        /// StatusInfo.IsHarmful is the same predicate Cleanse and Dispel read, so the trigger and
+        /// the removal rules cannot disagree about what a debuff is.
+        ///
+        /// Held to one level by a flag: a passive answering an attempt by applying a debuff of its
+        /// own would otherwise raise this again from inside itself.
+        /// </summary>
+        OnEnemyAppliedStatus,
+
+        /// <summary>
+        /// The end of a round, raised on every living unit after the last of them has acted and
+        /// before the next round opens.
+        ///
+        /// ENGINE-GAPS group 14. RoundStart has had no mirror since it was added, and OnAllyTurnEnd
+        /// and OnEnemyTurnEnd are per-unit - so "at round end" had to become "as each of them
+        /// finishes", which fires once per body rather than once and answers a unit's own turn
+        /// ending rather than the round's boundary. Against a five-a-side line those are five
+        /// different moments and five chances to fire.
+        ///
+        /// Raised inside CloseRound, after the turn walk and before the round counter advances, so
+        /// a passive answering it reads the round it is closing rather than the one about to open.
+        /// Not raised when the battle is already decided: a round whose last blow ended the fight
+        /// has no end to answer, and raising it there would have a dead unit's side acting after
+        /// the result is in the record.
+        /// </summary>
+        RoundEnd
     }
 
     /// <summary>
@@ -2473,6 +2728,12 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.HealingReduction
                 // A restriction is done TO a unit, so it sits with Provoked and Vulnerable.
                 || kind == StatusKind.Restricted
+                // The universal half of Vulnerable, and on the same side of the line as it. So is
+                // Blunted, which is applied to an ENEMY and weakens it. HealingReceivedUp is
+                // deliberately absent: it is a benefit to the body that carries it, which makes it
+                // Dispel's business the way Covered and Guard are.
+                || kind == StatusKind.DamageTakenUp
+                || kind == StatusKind.Blunted
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
                 || kind == StatusKind.Disrupted
                 // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
@@ -2588,6 +2849,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "Linked";
                 case StatusKind.HealingReduction: return "Healing Reduction";
                 case StatusKind.Restricted: return "Displaced";
+                case StatusKind.Blunted: return "Blunted";
+                case StatusKind.DamageTakenUp: return "Exposed II";
+                case StatusKind.HealingReceivedUp: return "Receptive";
             }
             return kind.ToString();
         }
@@ -2650,6 +2914,9 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "LNK";
                 case StatusKind.HealingReduction: return "H-RED";
                 case StatusKind.Restricted: return "DSP";
+                case StatusKind.Blunted: return "BLNT";
+                case StatusKind.DamageTakenUp: return "DMG+";
+                case StatusKind.HealingReceivedUp: return "H-UP";
             }
             return "?";
         }

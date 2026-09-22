@@ -642,6 +642,141 @@ namespace Emberfall.Core.Data
         public TargetBan TargetBanKind = TargetBan.None;
         public StatusKind TargetBanStatus = StatusKind.None;
 
+        /// <summary>
+        /// Stamps a StatusKind.DamageTakenUp entry so it answers SKILL damage only - an Active or
+        /// a passive-sourced hit, which is the same division step 4 of the damage pipeline already
+        /// makes and the only definition of "Skill Damage" this engine has.
+        ///
+        /// False (the default) answers every hit, which is what the plain reading of "takes N%
+        /// more damage" means. Read only by that one status; every other application ignores it.
+        /// </summary>
+        public bool DamageTakenSkillOnly;
+
+        // ---------- the gaps pass, group 5: three effects that each decided a clock by a rule
+        // of their own, and none of which took the authored one ----------
+        //
+        // MoveDuration and TransferDuration already exist and already do this for MoveDebuffs,
+        // MoveBuffs and TransferStatus. Three more effect kinds create or re-clock an entry and
+        // none of them could be told what clock to use, so three clauses that name a duration in
+        // as many words shipped with it dropped or nominal. These are named for the effect they
+        // belong to rather than folded into one field, because a reader asking "which duration
+        // does this effect read" must not have to know which of five fields the engine happens to
+        // consult here - that is precisely the trap MaxHpCap and AttackCap set once already.
+
+        /// <summary>
+        /// Rounds to put on the recipient's Shield entry after an EffectKind.ShieldTransfer. Zero
+        /// (the default) leaves whatever clock the recipient had, which for a body with no Shield
+        /// is the hardcoded 99 rounds the transfer creates.
+        ///
+        /// A RE-CLOCK RATHER THAN AN AddOrRefresh, which is the only reading that can say what the
+        /// clause says: AddOrRefresh keeps the longer of the two, so against a 99-round entry an
+        /// authored 2 would be silently discarded. "Transfers the largest ally Shield to the
+        /// lowest-HP ally and extends it 1 round" is a sentence about a ward with a real clock,
+        /// and against a 99-round entry the extension it names is nominal.
+        /// </summary>
+        public int ShieldTransferDuration;
+
+        /// <summary>
+        /// Rounds to put on the entry EffectKind.InvertStatus produces. Zero (the default) copies
+        /// the flipped buff's own RoundsLeft, which is what every inversion did before this.
+        ///
+        /// "Changes one target buff into its matching debuff FOR 2 ROUNDS" is a fixed sentence and
+        /// the copied clock is a variable one: the same ability lasts six rounds against a fresh
+        /// buff and one against a spent one, which is a different ability depending on when it is
+        /// cast.
+        /// </summary>
+        public int InvertDuration;
+
+        /// <summary>
+        /// Ceiling on RoundsLeft after an EffectKind.ExtendStatus. Zero (the default) is no
+        /// ceiling, which is what every extension did before this.
+        ///
+        /// ExtendStatus does RoundsLeft += added with no clamp, so "extends Arrears by 1 round, UP
+        /// TO 3 ROUNDS" could only be authored as the half before the comma. An entry already at
+        /// or above the ceiling is left exactly where it is rather than being shortened - a cap is
+        /// a limit on what this effect may add, not a rule about what the entry may be.
+        /// </summary>
+        public int ExtendCap;
+
+        // ---------- the gaps pass, group 12: a tick written in the HOLDER's health ----------
+
+        /// <summary>
+        /// Makes a Burn or Regen entry tick as a FRACTION OF ITS HOLDER'S OWN HP rather than as a
+        /// multiple of the applier's Attack. Zero (the default) is the existing behaviour and the
+        /// one every DoT in shipped content uses.
+        ///
+        /// "Recovery heals 3% Max HP each turn" and "at turn end, Arrears loses 4% current HP" are
+        /// both numbers about the body carrying the entry, and ApplyStatus resolves a Burn or
+        /// Regen magnitude as EffectiveAttack * magnitude - a number about the body that applied
+        /// it. On a Mender's Regen that means the tick is right at exactly one level and one ally's
+        /// bar; on a percent-of-current-HP debuff it cannot be said at all, so the shipped
+        /// approximation is a second passive on a turn-end trigger carrying a Damage effect and an
+        /// attackCap the sentence never mentions.
+        ///
+        /// READ AT TICK TIME, not stamped at apply time, and that is the whole point of the
+        /// current-HP half: a percentage of a bar that is draining has to be re-read as it drains.
+        /// The Max HP half is re-read too, so a Max HP buff that lands mid-fight is answered.
+        /// </summary>
+        public float HolderHpTick;
+
+        /// <summary>Which pool HolderHpTick reads: false (the default) is Max HP, true is the
+        /// holder's CURRENT HP. Ignored when HolderHpTick is zero.</summary>
+        public bool HolderHpTickCurrent;
+
+        // ---------- the gaps pass, group 17: counting a CLASS of status as a scalar ----------
+        //
+        // The per-stack scaler already existed and already read a count off a chosen subject. What
+        // it could not do was count anything but ONE NAMED KIND, and it had no ceiling - so "6%
+        // turn progress for each target buff, up to 18%" and "damage increases 10% per displayed
+        // buff, up to 40%" both ship as a flat amount that lands whole against a body carrying any
+        // buff at all and not at all against a bare one. Three fields widen the scaler rather than
+        // building a second one beside it, because a second scaler is a second set of rules about
+        // which fields it touches and when the clone happens.
+
+        /// <summary>
+        /// What PerStack counts. NamedKind (the default) reads CountOf(PerStackStatus), which is
+        /// exactly what the scaler always did.
+        /// </summary>
+        public StatusCount PerStackClass = StatusCount.NamedKind;
+
+        /// <summary>
+        /// The largest count PerStack may be multiplied by. Zero (the default) is uncapped, which
+        /// is what every per-stack effect in shipped content is.
+        ///
+        /// A CEILING ON THE COUNT rather than on the resolved amount, because that is the form both
+        /// clauses asking for it take: "up to 40%" is four buffs at ten, "up to 18%" is three at
+        /// six. Capping the amount instead would mean the same ceiling written twice, once as a
+        /// percentage and once as a number of bodies, and the two drifting the first time either
+        /// is retuned.
+        /// </summary>
+        public int PerStackMaxCount;
+
+        /// <summary>
+        /// When true the scaling factor is PerStack * count rather than 1 + PerStack * count, so
+        /// an effect against a subject carrying NOTHING resolves to zero rather than to its base.
+        ///
+        /// The two clauses differ exactly here. Leon's "damage INCREASES 10% per displayed buff"
+        /// is a bonus on a blow that lands anyway; Tamsin's "removes 6% turn progress FOR EACH
+        /// target buff" is the whole of the amount, and against a bare target it removes nothing.
+        /// False (the default) keeps the additive reading every existing per-stack effect has.
+        /// </summary>
+        public bool PerStackFromZero;
+
+        // ---------- the gaps pass, group 3: telling an area hit from a single-target one ----------
+
+        /// <summary>
+        /// Stamps a Guard or Covered entry so it answers ONLY a blow that came from a multi-target
+        /// effect. False (the default) answers whichever hit lands first, which is every ward in
+        /// shipped content.
+        ///
+        /// Nothing on a resolving Damage effect recorded how many bodies it was aimed at, so no
+        /// mitigation could ask - and "it reduces the first AREA hit each round by 20%" had to
+        /// become "the first hit". Against a line that opens with single-target blows those are
+        /// different abilities: the ward is spent on a poke before the sweep it was raised for
+        /// arrives.
+        /// </summary>
+        public bool AreaHitsOnly;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -736,6 +871,16 @@ namespace Emberfall.Core.Data
             e.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
             e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
+            e.DamageTakenSkillOnly = j.GetBool("damageTakenSkillOnly", false);
+            e.ShieldTransferDuration = Math.Max(0, j.GetInt("shieldTransferDuration", 0));
+            e.InvertDuration = Math.Max(0, j.GetInt("invertDuration", 0));
+            e.ExtendCap = Math.Max(0, j.GetInt("extendCap", 0));
+            e.HolderHpTick = j.GetFloat("holderHpTick", 0f);
+            e.HolderHpTickCurrent = j.GetBool("holderHpTickCurrent", false);
+            e.PerStackClass = EnumUtil.Parse(j.GetString("perStackClass", "NamedKind"), StatusCount.NamedKind);
+            e.PerStackMaxCount = Math.Max(0, j.GetInt("perStackMaxCount", 0));
+            e.PerStackFromZero = j.GetBool("perStackFromZero", false);
+            e.AreaHitsOnly = j.GetBool("areaHitsOnly", false);
             return e;
         }
 
@@ -850,6 +995,16 @@ namespace Emberfall.Core.Data
             c.TargetBanKind = TargetBanKind;
             c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
+            c.DamageTakenSkillOnly = DamageTakenSkillOnly;
+            c.ShieldTransferDuration = ShieldTransferDuration;
+            c.InvertDuration = InvertDuration;
+            c.ExtendCap = ExtendCap;
+            c.HolderHpTick = HolderHpTick;
+            c.HolderHpTickCurrent = HolderHpTickCurrent;
+            c.PerStackClass = PerStackClass;
+            c.PerStackMaxCount = PerStackMaxCount;
+            c.PerStackFromZero = PerStackFromZero;
+            c.AreaHitsOnly = AreaHitsOnly;
             return c;
         }
     }
@@ -1151,6 +1306,29 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool TriggerSourceIsAlly;
 
+        /// <summary>
+        /// ON AN ALLY-FACING BROADCAST, "AND ME". False on every passive in shipped content, and a
+        /// false one is excluded exactly as it always was.
+        ///
+        /// Every ally broadcast in this engine skips the unit the news is ABOUT, on the stated
+        /// ground that it has an owner-centric trigger of its own for the same event. That is true
+        /// of the event and false of the sentence: "the first time each round a Cracked enemy
+        /// attacks" and "when Reserve prevents damage, its holder recovers" are one clause each,
+        /// and the holder can be the hero. Both shipped kits answer it by carrying a SECOND passive
+        /// on OnDamaged with the identical body - two passives, two independent once-a-round
+        /// budgets, and a description that has to be written twice and kept in step by hand.
+        ///
+        /// A flag rather than a per-trigger decision, because which triggers exclude the subject is
+        /// a fact about the dispatch and whether one PARTICULAR clause means to include it is a
+        /// fact about the clause. Read in TriggerPassive against the unit the dispatch excluded, so
+        /// a passive that does not set it is skipped there and never fires - which is what keeps
+        /// the walk identical for every existing battle.
+        ///
+        /// Costs nothing when nobody sets it: the simulation computes one bool at battle build and
+        /// the excluded unit is not even added to the walk unless that bool is true.
+        /// </summary>
+        public bool IncludeSelf;
+
         // ---------- batch three: resolve-to-stat scaling ----------
 
         /// <summary>Which stacking status on the owner adds to a base stat. None means no scaling
@@ -1205,6 +1383,7 @@ namespace Emberfall.Core.Data
             p.OutputModMarkedOnly = j.GetBool("outputModMarkedOnly", false);
             p.TriggerSourceIsSelf = j.GetBool("triggerSourceIsSelf", false);
             p.TriggerSourceIsAlly = j.GetBool("triggerSourceIsAlly", false);
+            p.IncludeSelf = j.GetBool("includeSelf", false);
             p.StatModStatus = EnumUtil.Parse(j.GetString("statModStatus", "None"), StatusKind.None);
             p.StatModPerStack = j.GetFloat("statModPerStack", 0f);
             p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);

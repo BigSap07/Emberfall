@@ -72,6 +72,7 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAllyDonorModes(content);
+            CheckEngineGapsPass(content);
             CheckAuthoredHeroSweep(content);
             CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
@@ -5826,7 +5827,9 @@ namespace Emberfall.DevHarness
                                "OtherLinkedUnit", "AllLinkedUnits", "BroadcastSource",
                                "HighestPendingDoTEnemy", "LowestEnergyEnemy",
                                "SwapAdvancedUnit", "SwapDelayedUnit",
-                               "HighestEnergyAlly", "LargestShieldAlly" },
+                               "HighestEnergyAlly", "LargestShieldAlly",
+                               // the engine-gaps pass, group 8.
+                               "EnemyThatLastDamagedAlly" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -5857,7 +5860,8 @@ namespace Emberfall.DevHarness
                                "GuaranteedCrit", "BuffSuppression",
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
-                               "Resolve2", "Linked", "HealingReduction", "Restricted" },
+                               "Resolve2", "Linked", "HealingReduction", "Restricted",
+                               "Blunted", "DamageTakenUp", "HealingReceivedUp" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
@@ -16594,10 +16598,15 @@ namespace Emberfall.DevHarness
                     // and the drain heard on the unit that caused it
                     "OnEnemyEnergyDrained",
                     // the far side of a unit's own Active
-                    "AfterActiveCast"
+                    "AfterActiveCast",
+                    // the engine-gaps pass, group 9: an ally receiving Energy, a Guard charge
+                    // doing its job, and a unit attempting a debuff.
+                    "OnAllyEnergyGained", "OnGuardPrevented", "OnEnemyAppliedStatus",
+                    // group 14: the mirror RoundStart never had.
+                    "RoundEnd"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (52 members)");
+            Check(ok, "PassiveTrigger enum parity (" + Enum.GetNames(typeof(PassiveTrigger)).Length + " members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -17848,6 +17857,1537 @@ namespace Emberfall.DevHarness
         // fired. Ordinal pins and the standing guards come first, because a gap closed by a
         // renumbered enum would rewrite the record of every battle ever resolved.
 
+
+        // ==================================================================================
+        // THE ENGINE-GAPS PASS
+        //
+        // Docs/ENGINE-GAPS.md is a record of sentences Pinoy wrote that this engine could not
+        // say. Each section below closes one of its GROUPS - the arrangement the document itself
+        // uses, because a group is one capability met several times rather than several problems
+        // that look alike.
+        //
+        // Every one of them is DEFAULT-OFF by construction: a new field reads zero or false on
+        // every effect and passive in shipped content, and a new trigger is raised at a point the
+        // simulation already reached. Each arena below therefore runs the SAME content twice and
+        // differs only by the opt-in, so "it works" and "it changes nothing unless content asks"
+        // are the same measurement rather than two claims.
+        // ==================================================================================
+
+        private static void CheckEngineGapsPass(ContentDatabase live)
+        {
+            Line("ENGINE GAPS - closing the repeated ones (Docs/ENGINE-GAPS.md)");
+            CheckGapGroupNine();
+            CheckGapGroupFour();
+            CheckGapGroupFive();
+            CheckGapGroupTwelve();
+            CheckGapGroupFourteen();
+            CheckGapGroupEighteen();
+            CheckGapGroupSeventeen();
+            CheckGapGroupTwo();
+            CheckGapGroupThree();
+            CheckGapGroupEight();
+            CheckGapGroupOne();
+            Line("");
+        }
+
+        /// <summary>Zero-variance balance with NO energy refill, so a bar only ever moves because
+        /// something in the arena moved it. The ordinary ZeroVarianceBalance fills every bar off
+        /// the first basic attack, which would make an energy-gain trigger untestable.</summary>
+        private static string GapBalance(int maxRounds)
+        {
+            return "{ \"defenseConstant\": 300, \"defensePerLevel\": 0, \"damageVariance\": 0, \"speedVariance\": 0,"
+                 + " \"minDamage\": 1, \"maxRounds\": " + maxRounds + ", \"energyMax\": 100,"
+                 + " \"energyPerBasicAttack\": 0, \"energyOnDamaged\": 0, \"maxTeamSize\": 5 }";
+        }
+
+        // ------------------------------------------------------------------ group 9
+
+        /// <summary>
+        /// GROUP 9 - triggers for something an ALLY did or received, five clauses across four
+        /// heroes and four different shapes.
+        ///
+        /// Three of the five are answered by one flag. OnEnemyDamagedAlly excludes the body being
+        /// hit, so Branik, Halwen and Toren each shipped a SECOND passive on OnDamaged carrying a
+        /// duplicate of the first - two independent once-a-round budgets standing in for one
+        /// clause. PassiveDef.IncludeSelf lets the one passive hear it about itself.
+        ///
+        /// The other two are moments nothing raised at all: an ally receiving Energy, and a Guard
+        /// charge actually preventing damage. Plus the applier-side one Niko needs - a unit
+        /// ATTEMPTING a debuff, which is a different event from casting an active.
+        /// </summary>
+        private static void CheckGapGroupNine()
+        {
+            Line("  group 9 - what an ally did or received");
+
+            // --- the "and me" exclusion -------------------------------------------------
+            // The victim carries the passive. Without the flag it is the excluded body and never
+            // hears its own news; with it, the same passive on the same trigger fires.
+            int victimOff = CountPassiveFires(RunGapNineArena("self", false), "g9_victim_passive");
+            int victimOn = CountPassiveFires(RunGapNineArena("self", true), "g9_victim_passive");
+            Check(victimOff == 0,
+                  "OnEnemyDamagedAlly still excludes the body being hit (" + victimOff
+                  + " firings) - the exclusion every shipped ally broadcast relies on is untouched");
+            Check(victimOn > 0,
+                  "and includeSelf lets the SAME passive hear it about itself (" + victimOn
+                  + " firings) - which is the one clause Branik, Halwen and Toren each answered "
+                  + "by pasting a duplicate onto OnDamaged");
+
+            // The ally that was not hit hears it either way, so the flag widens the audience
+            // rather than replacing it.
+            int bystanderOff = CountPassiveFires(RunGapNineArena("self", false), "g9_bystander_passive");
+            int bystanderOn = CountPassiveFires(RunGapNineArena("self", true), "g9_bystander_passive");
+            Check(bystanderOff > 0 && bystanderOff == bystanderOn,
+                  "and an ALLY of the victim hears it identically with the flag set and unset ("
+                  + bystanderOff + " = " + bystanderOn + ") - the flag adds one listener, it does "
+                  + "not move the others");
+
+            // --- an ally gains Energy ---------------------------------------------------
+            int energyOn = CountPassiveFires(RunGapNineArena("energy", true), "g9_watch_passive");
+            int energyOff = CountPassiveFires(RunGapNineArena("energy", false), "g9_watch_passive");
+            Check(energyOn > 0,
+                  "OnAllyEnergyGained fires when somebody hands an ally Energy (" + energyOn + ")");
+            Check(energyOff == 0,
+                  "and does not fire when the same battle hands out none (" + energyOff
+                  + ") - a unit's own refill carries no granter and is not somebody giving it "
+                  + "anything");
+
+            // --- a Guard charge prevents damage ----------------------------------------
+            int guardOn = CountPassiveFires(RunGapNineArena("guard", true), "g9_watch_passive");
+            int guardOff = CountPassiveFires(RunGapNineArena("guard", false), "g9_watch_passive");
+            Check(guardOn > 0,
+                  "OnGuardPrevented fires when a Guard charge actually removes damage (" + guardOn + ")");
+            Check(guardOff == 0,
+                  "and does not fire in the same battle with no Guard in it (" + guardOff
+                  + ") - so it answers the prevention rather than the blow");
+
+            // --- an enemy attempts a debuff --------------------------------------------
+            int debuffOn = CountPassiveFires(RunGapNineArena("attempt", true), "g9_watch_passive");
+            int debuffOff = CountPassiveFires(RunGapNineArena("attempt", false), "g9_watch_passive");
+            Check(debuffOn > 0,
+                  "OnEnemyAppliedStatus fires when an enemy attempts a harmful status (" + debuffOn + ")");
+            Check(debuffOff == 0,
+                  "and does not fire when the enemy's only application is a BUFF on itself ("
+                  + debuffOff + ") - StatusInfo.IsHarmful is what the trigger means by debuff, "
+                  + "the same predicate Cleanse and Dispel read");
+
+            Check(FingerprintOf(RunGapNineArena("guard", true)) == FingerprintOf(RunGapNineArena("guard", true)),
+                  "and every arm of this arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One arena, four arms. The armed flag is always the opt-in and never the content: both
+        /// runs of an arm build the same bodies, the same abilities and the same enemy, so
+        /// anything that differs between them is the capability under test and nothing else.
+        /// </summary>
+        private static BattleResult RunGapNineArena(string mode, bool armed)
+        {
+            // What the watcher listens on. An unarmed run listens on a trigger this arena never
+            // raises, so the passive exists, is walked, and answers nothing.
+            string watched = "OnBlock";
+            if (armed)
+            {
+                if (mode == "energy") watched = "OnAllyEnergyGained";
+                else if (mode == "guard") watched = "OnGuardPrevented";
+                else if (mode == "attempt") watched = "OnEnemyAppliedStatus";
+            }
+            // The self arm is the one where the flag rather than the trigger is the variable.
+            string includeSelf = mode == "self" && armed ? "true" : "false";
+
+            // The giver's extra effect, present only in the arm that needs it.
+            string give = "";
+            if (mode == "energy" && armed)
+                give = ", { \"kind\": \"EnergyGain\", \"target\": \"LowestEnergyAlly\", \"flat\": 9 }";
+            else if (mode == "guard" && armed)
+                give = ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Guard\","
+                     + " \"chance\": 1, \"charges\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+
+            // The foe's extra effect. The attempt arm needs a debuff to attempt; its control needs
+            // an application that is NOT a debuff, so the difference measured is harmfulness.
+            string foeExtra = mode == "attempt"
+                ? (armed
+                    ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"AttackDown\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }"
+                    : ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"AttackUp\","
+                      + " \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }")
+                : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g9_victim"", ""name"": ""Victim"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9v_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g9_victim_passive"", ""name"": ""And Me"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false, ""includeSelf"": " + includeSelf + @",
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""g9_bystander"", ""name"": ""Bystander"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9b_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g9_bystander_passive"", ""name"": ""Ordinary"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""g9_watch"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9w_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + give + @" ] },
+      ""passive"": { ""id"": ""g9_watch_passive"", ""name"": ""Answer"", ""trigger"": """ + watched + @""",
+        ""oncePerBattle"": false, ""triggerSourceIsSelf"": " + (mode == "guard" ? "true" : "false") + @",
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 99 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g9_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 300,
+      ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }" + foeExtra + @" ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g9_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g9_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g9_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap9");
+            if (db == null) return null;
+            string[] ids = { "g9_victim", "g9_bystander", "g9_watch" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g9_arena"), 9009, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 4
+
+        /// <summary>
+        /// GROUP 4 - per-source and upward stat modification, four clauses across four heroes.
+        ///
+        /// Vulnerable was the ONE per-source entry in the game and it pointed upward only, and the
+        /// healing pipeline had a total refusal and a partial cut and no increase at all. So every
+        /// clause naming one attacker had to be authored as an aura, and every clause raising
+        /// healing had to be authored as the healer paying more.
+        ///
+        /// Measured as arithmetic on real hits rather than as "a status appeared": the whole point
+        /// of a per-source term is WHO it answers for, and only two attackers in one arena can
+        /// show that.
+        /// </summary>
+        private static void CheckGapGroupFour()
+        {
+            Line("  group 4 - per-source and upward modifiers");
+
+            // --- Blunted: one attacker softened, the other untouched --------------------
+            BattleResult plain = RunGapFourArena("none");
+            BattleResult warded = RunGapFourArena("blunted");
+            int namedPlain = DamageDealtBy(plain, "g4_named");
+            int otherPlain = DamageDealtBy(plain, "g4_other");
+            int namedWard = DamageDealtBy(warded, "g4_named");
+            int otherWard = DamageDealtBy(warded, "g4_other");
+            Check(namedPlain > 0 && otherPlain > 0,
+                  "control: both foes connect with nothing applied (named " + namedPlain
+                  + ", other " + otherPlain + ")");
+            Check(namedWard < namedPlain,
+                  "Blunted softens the attacker it names (" + namedPlain + " -> " + namedWard + ")");
+            Check(otherWard == otherPlain,
+                  "and leaves every other attacker at full strength (" + otherPlain + " -> " + otherWard
+                  + ") - which is the whole difference between it and DamageReductionUp, the aura "
+                  + "Kest and Jory currently ship");
+
+            // --- DamageTakenUp: every source, and the skill scope ----------------------
+            BattleResult taken = RunGapFourArena("takenup");
+            int namedTaken = DamageDealtBy(taken, "g4_named");
+            int otherTaken = DamageDealtBy(taken, "g4_other");
+            Check(namedTaken > namedPlain && otherTaken > otherPlain,
+                  "DamageTakenUp raises damage from BOTH attackers (named " + namedPlain + " -> "
+                  + namedTaken + ", other " + otherPlain + " -> " + otherTaken
+                  + ") - the universal half Vulnerable never had");
+
+            // Each foe throws two equal blows a turn - a Basic Attack and a passive-sourced one,
+            // which is the other side of step 4's division. A skill-scoped entry must raise the
+            // second and leave the first alone, so the arm lands on EXACTLY HALF the increase the
+            // unscoped one produced. "Half" is the measurement: a scope that did nothing would
+            // read the control and one that leaked would read the unscoped arm.
+            BattleResult skill = RunGapFourArena("takenup-skill");
+            int namedSkill = DamageDealtBy(skill, "g4_named");
+            int otherSkill = DamageDealtBy(skill, "g4_other");
+            Check(namedSkill > namedPlain && namedSkill < namedTaken,
+                  "a skill-scoped entry raises the passive-sourced blow and not the Basic Attack ("
+                  + namedPlain + " control, " + namedSkill + " skill-scoped, " + namedTaken
+                  + " unscoped)");
+            Check(namedSkill - namedPlain == (namedTaken - namedPlain) / 2
+                  && otherSkill - otherPlain == (otherTaken - otherPlain) / 2,
+                  "and the increase is EXACTLY HALF the unscoped one on both attackers, which is "
+                  + "the half of each turn that is a skill (" + (namedSkill - namedPlain) + " of "
+                  + (namedTaken - namedPlain) + ", " + (otherSkill - otherPlain) + " of "
+                  + (otherTaken - otherPlain) + ")");
+
+            // --- HealingReceivedUp -----------------------------------------------------
+            int healPlain = HealingInto(RunGapFourArena("none"), "g4_hurt");
+            int healUp = HealingInto(RunGapFourArena("healup"), "g4_hurt");
+            Check(healPlain > 0, "control: the mender heals the hurt ally (" + healPlain + ")");
+            Check(healUp > healPlain,
+                  "HealingReceivedUp raises what the SAME heal delivers (" + healPlain + " -> "
+                  + healUp + ") - a property of the body being healed rather than of the healer, "
+                  + "which is what Lio's text says and what his Mark cannot say");
+
+            Check(FingerprintOf(RunGapFourArena("blunted")) == FingerprintOf(RunGapFourArena("blunted")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Total healing one unit RECEIVED across the battle, by def id.</summary>
+        private static int HealingInto(BattleResult r, string defId)
+        {
+            if (r == null) return 0;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return 0;
+            int total = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Heal && r.Events[i].TargetId == id)
+                    total += r.Events[i].Value;
+            return total;
+        }
+
+        /// <summary>
+        /// A hurt body, a mender that heals it, and TWO enemies that hit it - one of which the
+        /// applied status names and one of which it does not. Two attackers is the whole design:
+        /// a per-source term and an aura are indistinguishable against a single foe.
+        ///
+        /// The status is applied at battle start by the hurt body onto itself, so every arm of the
+        /// arena fights the identical battle and differs only by which entry is standing.
+        ///
+        /// Each foe also throws a passive-sourced blow of the same size as its Basic Attack, which
+        /// is what makes the skill scope measurable: AbilityDef.Kind defaults to Active, so a
+        /// passive's damage is on the SKILL side of the division step 4 makes and a Basic Attack
+        /// is not.
+        /// </summary>
+        private static BattleResult RunGapFourArena(string mode)
+        {
+            // Applied by the hurt body to itself. The named attacker is enemy slot 0, which the
+            // FrontEnemy mode resolves to from the player side.
+            string apply = "";
+            if (mode == "takenup")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"DamageTakenUp\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+            else if (mode == "takenup-skill")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"DamageTakenUp\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5,"
+                      + " \"damageTakenSkillOnly\": true }";
+            else if (mode == "healup")
+                apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"HealingReceivedUp\","
+                      + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+
+            // Blunted goes ON the attacker and NAMES the body it must not hurt, so the protected
+            // hero applies it to one of the two foes - which is exactly how a hero authors it, and
+            // the whole reason the entry is keyed that way round.
+            string blunt = mode == "blunted"
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Blunted\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }"
+                : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g4_hurt"", ""name"": ""Hurt"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4h_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g4_hurt_passive"", ""name"": ""Mark Self"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + blunt + @" ] } },
+    { ""id"": ""g4_mender"", ""name"": ""Mender"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4m_basic"", ""name"": ""Mend"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""Heal"", ""target"": ""LowestHpAlly"", ""power"": 1.0 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g4_named"", ""name"": ""Named"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4nb"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""passive"": { ""id"": ""g4n_skill"", ""name"": ""Follow Through"", ""trigger"": ""AfterBasicAttack"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""g4_other"", ""name"": ""Other"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 700, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g4ob"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
+      ""passive"": { ""id"": ""g4o_skill"", ""name"": ""Follow Through"", ""trigger"": ""AfterBasicAttack"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g4_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g4_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g4_named"", ""level"": 1 },
+                                                        { ""id"": ""g4_other"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap4");
+            if (db == null) return null;
+            string[] ids = { "g4_hurt", "g4_mender" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g4_arena"), 4004, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 5
+
+        /// <summary>
+        /// GROUP 5 - duration control when a status is moved, inverted or extended. Three clauses,
+        /// three effect kinds, each of which decided a clock by a rule of its own and none of which
+        /// took the authored one.
+        ///
+        /// Measured as the clock the entry actually carries, read off the StatusApplied event that
+        /// reports it, rather than as "the effect ran": every one of these three DID run before
+        /// this pass and produced the wrong number.
+        /// </summary>
+        private static void CheckGapGroupFive()
+        {
+            Line("  group 5 - the clock on a moved, inverted or extended entry");
+
+            // --- InvertStatus ----------------------------------------------------------
+            // The buff being flipped is applied with six rounds on it, so the copied clock and an
+            // authored one cannot be confused for each other.
+            int copied = FirstStatusDuration(RunGapFiveArena("invert", 0), StatusKind.AttackDown);
+            int authored = FirstStatusDuration(RunGapFiveArena("invert", 2), StatusKind.AttackDown);
+            Check(copied == 6,
+                  "control: InvertStatus still copies the flipped buff's own clock (" + copied
+                  + " rounds off a 6-round buff) when no duration is authored");
+            Check(authored == 2,
+                  "and invertDuration re-clocks it as it lands (" + authored
+                  + " rounds) - so 'changes one target buff into its matching debuff FOR 2 ROUNDS' "
+                  + "stops meaning 'for however long the buff had left'");
+
+            // --- ExtendStatus ----------------------------------------------------------
+            // The actor extends the SAME entry twice in one turn, by 3 rounds each time, against
+            // a debuff that starts at 2. Uncapped both extensions land; capped at 3 the first
+            // takes the entry to the ceiling and the second is refused - silently, so it emits
+            // nothing at all rather than an event reporting that nothing moved.
+            int extendsUncapped = CountExtensions(RunGapFiveArena("extend", 0));
+            int extendsCapped = CountExtensions(RunGapFiveArena("extend", 3));
+            Check(extendsUncapped > 0 && extendsUncapped % 2 == 0,
+                  "control: ExtendStatus with no ceiling lands both extensions every turn ("
+                  + extendsUncapped + " across the battle)");
+            Check(extendsCapped == extendsUncapped / 2,
+                  "and extendCap refuses the one that would pass the ceiling (" + extendsCapped
+                  + " of " + extendsUncapped + ") - silently, so the event reports what actually "
+                  + "moved, which is the reading preventExtend already takes");
+
+            // --- ShieldTransfer --------------------------------------------------------
+            // Measured by whether the moved pool ever RUNS OUT. The transfer creates a 99-round
+            // entry on a recipient that had none, so an unauthored clock never expires inside a
+            // battle; an authored one does, and the pool goes with it.
+            int neverExpires = CountStatusExpiredOn(RunGapFiveArena("shield", 0), StatusKind.Shield, "g5_taker");
+            int expires = CountStatusExpiredOn(RunGapFiveArena("shield", 2), StatusKind.Shield, "g5_taker");
+            Check(neverExpires == 0,
+                  "control: a transferred pool still lands on the hardcoded 99-round entry and "
+                  + "outlives the battle (" + neverExpires + " expiries)");
+            Check(expires > 0,
+                  "and shieldTransferDuration re-clocks it so it genuinely runs out (" + expires
+                  + " expiry) - against 99 rounds the 'and extends it 1 round' beside it was "
+                  + "nominal, which is exactly what Celen's Distribution shipped with");
+
+            Check(FingerprintOf(RunGapFiveArena("extend", 3)) == FingerprintOf(RunGapFiveArena("extend", 3)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Rounds on the FIRST StatusApplied event naming this kind, or -1.</summary>
+        private static int FirstStatusDuration(BattleResult r, StatusKind kind)
+        {
+            if (r == null) return -1;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == kind)
+                    return r.Events[i].Duration;
+            return -1;
+        }
+
+        /// <summary>
+        /// How many EXTENSIONS landed on the arena's debuff. ExtendStatus emits a StatusApplied
+        /// whose Duration is the number of rounds ADDED and whose Value is how many entries moved;
+        /// the application that created the entry carries the entry's own duration instead. The
+        /// two are told apart by that number, which is 3 for an extension here and 2 for the
+        /// application.
+        /// </summary>
+        private static int CountExtensions(BattleResult r)
+        {
+            if (r == null) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.DefenseDown
+                    && e.Duration == 3) n++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// How many times a status of this kind left ONE NAMED BODY across the battle.
+        ///
+        /// Scoped to a body rather than counted over the record, because the donor of a
+        /// ShieldTransfer also sheds its Shield entry the moment the transfer empties its pool -
+        /// which is a correct expiry of a different ward, and counting it would make the control
+        /// arm read as though the recipient's clock had run out.
+        /// </summary>
+        private static int CountStatusExpiredOn(BattleResult r, StatusKind kind, string defId)
+        {
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusExpired && r.Events[i].Status == kind
+                    && r.Events[i].TargetId == id) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Three arms, one arena. `value` is the authored clock or ceiling under test and zero is
+        /// always the control, so each pair differs by one number in one field.
+        /// </summary>
+        private static BattleResult RunGapFiveArena(string mode, int value)
+        {
+            string invertDur = value > 0 ? ", \"invertDuration\": " + value : "";
+            string extendCap = value > 0 ? ", \"extendCap\": " + value : "";
+            string shieldDur = value > 0 ? ", \"shieldTransferDuration\": " + value : "";
+
+            // What the actor does on every basic. One arm per effect kind under test.
+            string act = "";
+            if (mode == "invert")
+                act = ", { \"kind\": \"InvertStatus\", \"target\": \"FrontEnemy\", \"hits\": 1" + invertDur + " }";
+            else if (mode == "extend")
+                act = ", { \"kind\": \"ExtendStatus\", \"target\": \"FrontEnemy\", \"status\": \"DefenseDown\","
+                    + " \"duration\": 3" + extendCap + " }"
+                    + ", { \"kind\": \"ExtendStatus\", \"target\": \"FrontEnemy\", \"status\": \"DefenseDown\","
+                    + " \"duration\": 3" + extendCap + " }";
+            // The shield arm acts ONCE, at battle start, so the recipient's clock is not topped
+            // up again every turn - a re-clock that repeats can never be seen to run out.
+            string actorPassive = "";
+            if (mode == "shield")
+                actorPassive = ", \"passive\": { \"id\": \"g5_give\", \"name\": \"Hand It Over\","
+                    + " \"trigger\": \"BattleStart\", \"oncePerBattle\": true, \"effects\": ["
+                    + " { \"kind\": \"Shield\", \"target\": \"Self\", \"power\": 5.0, \"duration\": 9 },"
+                    + " { \"kind\": \"ShieldTransfer\", \"target\": \"LowestHpAlly\", \"magnitude\": 1.0"
+                    + shieldDur + " } ] }";
+
+            // What the foe carries into the fight. The invert arm needs a buff with a LONG clock,
+            // so a copied one and an authored one cannot read alike; the extend arm needs a debuff
+            // short enough that a ceiling of 3 is reachable and meaningful.
+            string foePassive = "";
+            if (mode == "invert")
+                foePassive = @", ""passive"": { ""id"": ""g5_foe_buff"", ""name"": ""Brace"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""chance"": 1, ""duration"": 6, ""magnitude"": 0.1 } ] }";
+            else if (mode == "extend")
+                foePassive = @", ""passive"": { ""id"": ""g5_foe_debuff"", ""name"": ""Crack"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseDown"", ""bypassResist"": true, ""chance"": 1, ""duration"": 2, ""magnitude"": 0.1 } ] }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g5_taker"", ""name"": ""Taker"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5t_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g5_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5a_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] }" + actorPassive + @" }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g5_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + foePassive + @" } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g5_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g5_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g5_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(5), "Gap5");
+            if (db == null) return null;
+            string[] ids = { "g5_taker", "g5_actor" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g5_arena"), 5005, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 12
+
+        /// <summary>
+        /// GROUP 12 - amounts written as a percentage of the HOLDER's health, two clauses.
+        ///
+        /// ApplyStatus resolves a Burn or Regen magnitude as EffectiveAttack * magnitude, which is
+        /// a number about the body that APPLIED the entry. "Recovery heals 3% Max HP each turn"
+        /// and "at turn end, Arrears loses 4% current HP" are both numbers about the body carrying
+        /// it, and the difference is not small: a Mender's Attack and an ally's bar are unrelated
+        /// quantities that happen to coincide at one level.
+        ///
+        /// Measured against two carriers with DIFFERENT Max HP in the same battle. An
+        /// Attack-scaled tick pays them the same amount and a holder-scaled one does not, and
+        /// nothing else in the arena can produce that difference.
+        /// </summary>
+        private static void CheckGapGroupTwelve()
+        {
+            Line("  group 12 - a tick written in the holder's own health");
+
+            // --- Regen off Max HP -------------------------------------------------------
+            BattleResult attackScaled = RunGapTwelveArena("regen", false);
+            BattleResult holderScaled = RunGapTwelveArena("regen", true);
+            int bigAttack = HealingInto(attackScaled, "g12_big");
+            int smallAttack = HealingInto(attackScaled, "g12_small");
+            int bigHolder = HealingInto(holderScaled, "g12_big");
+            int smallHolder = HealingInto(holderScaled, "g12_small");
+
+            Check(bigAttack == smallAttack && bigAttack > 0,
+                  "control: an Attack-scaled Regen pays the same tick to both carriers ("
+                  + bigAttack + " and " + smallAttack + ") whatever their bars are");
+            Check(bigHolder > smallHolder && smallHolder > 0,
+                  "holderHpTick pays each carrier a share of its OWN Max HP (" + bigHolder
+                  + " to the larger body, " + smallHolder + " to the one a fifth its size) - which is "
+                  + "what 'heals 3% Max HP each turn' says and what an applier's Attack cannot say");
+            Check(bigHolder >= smallHolder * 4 && bigHolder <= smallHolder * 6,
+                  "and the ratio between them tracks the ratio of their bars, which are five to "
+                  + "one (" + bigHolder + " against " + smallHolder + ") - the same fraction, read "
+                  + "off two different bodies");
+
+            // --- Burn off CURRENT HP ----------------------------------------------------
+            // A percentage of a draining bar has to be re-read as it drains, so the ticks must
+            // DECREASE across the battle. An Attack-scaled Burn pays the same number every time.
+            List<int> flat = DotTicksOn(RunGapTwelveArena("burn", false), "g12_big");
+            List<int> proportional = DotTicksOn(RunGapTwelveArena("burn", true), "g12_big");
+            Check(flat.Count >= 3 && AllEqual(flat),
+                  "control: an Attack-scaled Burn pays an identical tick every round ("
+                  + Join(flat) + ")");
+            Check(proportional.Count >= 3 && StrictlyDecreasing(proportional),
+                  "and holderHpTickCurrent re-reads the bar every tick, so the ticks shrink as it "
+                  + "drains (" + Join(proportional) + ") - stamping the amount once would have "
+                  + "produced the control's flat line");
+
+            Check(FingerprintOf(RunGapTwelveArena("burn", true)) == FingerprintOf(RunGapTwelveArena("burn", true)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Every Burn tick one named body took, in order.</summary>
+        private static List<int> DotTicksOn(BattleResult r, string defId)
+        {
+            List<int> ticks = new List<int>();
+            if (r == null) return ticks;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return ticks;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == id && e.Status == StatusKind.Burn)
+                    ticks.Add(e.Value);
+            }
+            return ticks;
+        }
+
+        private static bool AllEqual(List<int> values)
+        {
+            for (int i = 1; i < values.Count; i++) if (values[i] != values[0]) return false;
+            return values.Count > 0;
+        }
+
+        private static bool StrictlyDecreasing(List<int> values)
+        {
+            for (int i = 1; i < values.Count; i++) if (values[i] >= values[i - 1]) return false;
+            return values.Count > 1;
+        }
+
+        /// <summary>
+        /// Two carriers with a five-to-one difference in authored HP, and one actor whose Attack
+        /// is the same for both. That ratio is the measurement: an Attack-scaled tick cannot
+        /// produce it and a holder-scaled one cannot avoid it.
+        ///
+        /// Both carriers share a ROLE, because StatMath scales a hero's bar by it - two roles
+        /// would have made the ratio under test a product of the authored HP and a role table,
+        /// which is a different claim from the one the check makes.
+        /// </summary>
+        private static BattleResult RunGapTwelveArena(string mode, bool holderScaled)
+        {
+            // 0.03 of Max HP against an Attack term chosen to pay the SAME amount to the smaller
+            // body, so the control arm is not merely a different number - it is the number the
+            // holder-scaled arm produces for one of the two carriers.
+            string holder = holderScaled
+                ? (mode == "burn" ? ", \"holderHpTick\": 0.1, \"holderHpTickCurrent\": true"
+                                  : ", \"holderHpTick\": 0.03")
+                : "";
+            string status = mode == "burn" ? "Burn" : "Regen";
+            // Attack 100 x magnitude 0.6 = 60, which is 0.03 of the small body's 2000 Max HP.
+            string apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"" + (mode == "burn" ? "AllEnemies" : "AllAllies")
+                         + "\", \"status\": \"" + status + "\", \"bypassResist\": true, \"chance\": 1,"
+                         + " \"duration\": 9, \"magnitude\": 0.6" + holder + " }";
+
+            // The Regen arm heals allies, so the two carriers are heroes and the enemy wounds
+            // both of them every turn - HARDER THAN THE BIGGEST TICK, because a heal is clamped to
+            // the HP actually missing and a wound smaller than the tick would measure the clamp
+            // rather than the tick. The Burn arm damages enemies, so the carriers are enemies
+            // there. Both arms keep the same two bars, five to one.
+            string bigHero = mode == "burn" ? "" : @",
+    { ""id"": ""g12_big"", ""name"": ""Big"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 60000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12bh"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g12_small"", ""name"": ""Small"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 12000, ""attack"": 1, ""defense"": 0, ""speed"": 7, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12sh"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g12_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Mender"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12a_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g12_apply"", ""name"": ""Lay It On"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } }" + bigHero + @"
+  ]
+}";
+            // The Burn arm's carriers. Harmless attackers: the arena measures ticks, not a fight.
+            string burnFoes = mode == "burn" ? @",
+    { ""id"": ""g12_small"", ""name"": ""Small"", ""aspect"": ""Ember"", ""hp"": 2000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12sf"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }" : "";
+            string bigFoe = mode == "burn"
+                ? @"{ ""id"": ""g12_big"", ""name"": ""Big"", ""aspect"": ""Ember"", ""hp"": 10000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12bf"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                : @"{ ""id"": ""g12_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 3000,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12f"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } }";
+
+            string enemies = @"{ ""enemies"": [ " + bigFoe + burnFoes + @" ] }";
+            string spawns = mode == "burn"
+                ? @"{ ""id"": ""g12_big"", ""level"": 1 }, { ""id"": ""g12_small"", ""level"": 1 }"
+                : @"{ ""id"": ""g12_foe"", ""level"": 1 }";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g12_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g12_arena"", ""index"": 1, ""enemies"": [ " + spawns + @" ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap12");
+            if (db == null) return null;
+            string[] ids = mode == "burn"
+                ? new string[] { "g12_actor" }
+                : new string[] { "g12_actor", "g12_big", "g12_small" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g12_arena"), 1212, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 14
+
+        /// <summary>
+        /// GROUP 14 - a round-end trigger mirroring RoundStart.
+        ///
+        /// The measurement is the COUNT, not that it fired: OnEnemyTurnEnd - what the one shipped
+        /// clause of this shape uses - fires once per enemy that finishes a turn, so against a
+        /// three-body line it is three chances a round rather than one edge. A once-a-round limit
+        /// hides the count and keeps the wrong moment: whichever enemy moved first.
+        /// </summary>
+        private static void CheckGapGroupFourteen()
+        {
+            Line("  group 14 - the round's other boundary");
+
+            BattleResult perTurn = RunGapFourteenArena("OnEnemyTurnEnd");
+            BattleResult perRound = RunGapFourteenArena("RoundEnd");
+            int turnFires = CountPassiveFires(perTurn, "g14_watch_passive");
+            int roundFires = CountPassiveFires(perRound, "g14_watch_passive");
+            int rounds = perRound == null ? 0 : perRound.Rounds;
+
+            Check(turnFires > 0 && roundFires > 0,
+                  "both the per-turn approximation and RoundEnd fire in the same arena ("
+                  + turnFires + " and " + roundFires + ")");
+            Check(roundFires == rounds,
+                  "RoundEnd fires exactly once per round (" + roundFires + " across " + rounds
+                  + " rounds) - it is the clock's own edge and belongs to neither side");
+            Check(turnFires == roundFires * 3,
+                  "and the approximation fires once per ENEMY that finishes a turn (" + turnFires
+                  + " against a three-body line), which is the count a once-a-round limit was "
+                  + "hiding rather than fixing - it still answered whichever enemy moved first");
+
+            Check(FingerprintOf(RunGapFourteenArena("RoundEnd")) == FingerprintOf(RunGapFourteenArena("RoundEnd")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One watcher, three harmless enemies. Three is the point: it is what makes a per-enemy
+        /// trigger and a per-round one read differently at all.
+        /// </summary>
+        private static BattleResult RunGapFourteenArena(string trigger)
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g14_watch"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14w_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g14_watch_passive"", ""name"": ""Toll"", ""trigger"": """ + trigger + @""",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 99 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g14_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 30, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14ab"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g14_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 20, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14bb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g14_c"", ""name"": ""C"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g14cb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g14_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g14_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g14_a"", ""level"": 1 },
+                                                         { ""id"": ""g14_b"", ""level"": 1 },
+                                                         { ""id"": ""g14_c"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap14");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef def = db.GetHero("g14_watch");
+            if (def != null) team.Add(MakeInstance(def, 1));
+            return RunWith(db, db.GetStage("g14_arena"), 1414, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 18
+
+        /// <summary>
+        /// GROUP 18 - naming the unit an event happened TO, when the trigger names the causer.
+        ///
+        /// OnStatusRemoved fires on the remover and OnTurnDelayed on the delayer, and neither
+        /// published a subject. So a passive on either could pay the causer and could not reach
+        /// the body it happened to: "that ally recovers 5% missing HP" and "the first enemy
+        /// delayed each round gains 10% Defense Down" are both sentences about one body, and both
+        /// ship as something wider.
+        ///
+        /// Measured by WHO the answer lands on. A subject that is published but wrong reads the
+        /// same as one that is not published at all if the arena has only one candidate, so each
+        /// arm has two - one the event happened to and one it did not.
+        /// </summary>
+        private static void CheckGapGroupEighteen()
+        {
+            Line("  group 18 - the body an event happened to");
+
+            // --- OnStatusRemoved ---------------------------------------------------------
+            // The cleanser takes a debuff off ONE of two wounded allies and its passive heals the
+            // broadcast subject. Only the cleansed body may be healed by it.
+            BattleResult r = RunGapEighteenArena("removed");
+            int onCleansed = HealingInto(r, "g18_cursed");
+            int onOther = HealingInto(r, "g18_other");
+            Check(onCleansed > 0,
+                  "OnStatusRemoved now names the body whose status was taken - BroadcastSubject "
+                  + "resolves to it and the answer lands there (" + onCleansed + " healed)");
+            Check(onOther == 0,
+                  "and on nobody else (" + onOther + " into the ally standing beside it) - which "
+                  + "is what the shipped clause could not say, so it pays the lowest-HP ally and "
+                  + "relies on that being the same body by construction");
+
+            // --- OnTurnDelayed -----------------------------------------------------------
+            // The delayer pushes ONE of two enemies back and its passive marks the broadcast
+            // subject. Only the delayed body may carry the mark.
+            BattleResult d = RunGapEighteenArena("delayed");
+            int markedDelayed = StatusLandedOn(d, StatusKind.DefenseDown, "g18_slow");
+            int markedOther = StatusLandedOn(d, StatusKind.DefenseDown, "g18_fast");
+            Check(markedDelayed > 0,
+                  "OnTurnDelayed now names the unit that was delayed (" + markedDelayed
+                  + " application(s) onto it)");
+            Check(markedOther == 0,
+                  "and leaves the enemy that was not delayed alone (" + markedOther
+                  + ") - the shipped clause takes the whole enemy line because a single body "
+                  + "could not be named");
+
+            Check(FingerprintOf(RunGapEighteenArena("delayed")) == FingerprintOf(RunGapEighteenArena("delayed")),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>How many times a status of this kind landed on one named body.</summary>
+        private static int StatusLandedOn(BattleResult r, StatusKind kind, string defId)
+        {
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == kind
+                    && r.Events[i].TargetId == id) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Two candidates per arm, which is the whole design: with one ally and one enemy a
+        /// published subject and an unpublished one are indistinguishable.
+        /// </summary>
+        private static BattleResult RunGapEighteenArena(string mode)
+        {
+            // The actor's own turn. It cleanses the whole line - only one body has anything to
+            // take, so the removal names itself and the arena is not relying on a tie-break - or
+            // it delays the slower of two enemies.
+            string act = mode == "removed"
+                ? ", { \"kind\": \"Cleanse\", \"target\": \"AllAllies\", \"hits\": 1 }"
+                : ", { \"kind\": \"TurnShift\", \"target\": \"LowestSpeedEnemy\", \"magnitude\": -0.9 }";
+
+            string trigger = mode == "removed" ? "OnStatusRemoved" : "OnTurnDelayed";
+            string answer = mode == "removed"
+                ? "{ \"kind\": \"Heal\", \"target\": \"BroadcastSubject\", \"power\": 1.0 }"
+                : "{ \"kind\": \"ApplyStatus\", \"target\": \"BroadcastSubject\", \"status\": \"DefenseDown\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }";
+
+            // The cursed ally re-earns its debuff every round, so there is something to cleanse
+            // after the allies have been wounded - a single battle-start curse is taken in round
+            // one, before anybody is missing HP, and a heal into a full bar restores nothing.
+            // Both allies are wounded, so a heal into either would land.
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g18_cursed"", ""name"": ""Cursed"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 4000, ""attack"": 1, ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18c_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g18_curse"", ""name"": ""Curse"", ""trigger"": ""RoundStart"", ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackDown"", ""bypassResist"": true, ""chance"": 1, ""duration"": 9, ""magnitude"": 0.1 } ] } },
+    { ""id"": ""g18_other"", ""name"": ""Other"", ""aspect"": ""Ember"", ""role"": ""Warden"",
+      ""hp"": 4000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18o_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g18_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18a_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] },
+      ""passive"": { ""id"": ""g18_answer"", ""name"": ""Answer"", ""trigger"": """ + trigger + @""",
+        ""oncePerBattle"": false,
+        ""effects"": [ " + answer + @" ] } }
+  ]
+}";
+            // The foe wounds the whole player line, so a heal into either ally would land and the
+            // one that does not is a statement about the subject rather than about missing HP.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g18_fast"", ""name"": ""Fast"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 400,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18fb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } },
+    { ""id"": ""g18_slow"", ""name"": ""Slow"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 200, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g18sb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g18_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g18_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g18_fast"", ""level"": 1 },
+                                                         { ""id"": ""g18_slow"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap18");
+            if (db == null) return null;
+            string[] ids = { "g18_cursed", "g18_other", "g18_actor" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g18_arena"), 1818, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 17
+
+        /// <summary>
+        /// GROUP 17 - counting how many statuses of a CLASS a body carries, as a scalar.
+        ///
+        /// The per-stack scaler already read a count off a chosen subject; what it could not do
+        /// was count anything but one named kind, and it had no ceiling. So "removes 6% turn
+        /// progress for each target buff, up to 18%" and "damage increases 10% per displayed buff,
+        /// up to 40%" both ship as a flat amount that lands whole against a body carrying ANY buff
+        /// and not at all against a bare one - which is the right answer at exactly one buff and
+        /// wrong at every other number.
+        ///
+        /// Measured across four buff counts in one battle, because a scalar and a flat amount
+        /// agree at one point and the whole question is what happens at the others.
+        /// </summary>
+        private static void CheckGapGroupSeventeen()
+        {
+            Line("  group 17 - per buff, with a ceiling");
+
+            // Damage against a target carrying 0, 1, 3 and 6 buffs. The bonus is 10% a buff,
+            // ceilinged at four.
+            int at0 = DamageDealtBy(RunGapSeventeenArena(0, false), "g17_actor");
+            int at1 = DamageDealtBy(RunGapSeventeenArena(1, false), "g17_actor");
+            int at3 = DamageDealtBy(RunGapSeventeenArena(3, false), "g17_actor");
+            int at4 = DamageDealtBy(RunGapSeventeenArena(4, false), "g17_actor");
+            int at6 = DamageDealtBy(RunGapSeventeenArena(6, false), "g17_actor");
+
+            Check(at0 > 0 && at1 > at0 && at3 > at1,
+                  "perStackClass AnyBeneficial scales with HOW MANY buffs the target carries ("
+                  + at0 + " at none, " + at1 + " at one, " + at3 + " at three) - the count "
+                  + "HasAnyBeneficialStatus could answer yes or no about and never multiply");
+            Check(at4 > at3 && at6 == at4,
+                  "and perStackMaxCount stops it at four: six buffs reads exactly what four reads ("
+                  + at6 + " = " + at4 + "), and four still reads more than three (" + at3
+                  + ") - a ceiling on the COUNT, which is the form 'up to 40%' takes");
+
+            // The from-zero reading: the amount IS the count, so a bare target takes nothing.
+            int zeroFrom0 = DamageDealtBy(RunGapSeventeenArena(0, true), "g17_actor");
+            int zeroFrom2 = DamageDealtBy(RunGapSeventeenArena(2, true), "g17_actor");
+            // Four swings at BalanceConfig.minDamage, which is 1 here: the scaled amount is
+            // genuinely zero and the engine's own damage floor is all that lands. Measured against
+            // the additive arm's 536 rather than against zero, because the floor is a property of
+            // the damage funnel and not of the scaler under test.
+            Check(zeroFrom0 == 4 && zeroFrom0 < at0 / 100,
+                  "perStackFromZero resolves to nothing against a bare target - " + zeroFrom0
+                  + " across four swings, which is the minDamage floor and nothing else, against "
+                  + at0 + " for the additive reading on the same board. That is what 'for EACH "
+                  + "target buff' says and what the additive reading cannot say");
+            Check(zeroFrom2 > 0,
+                  "and to the count times the authored amount once there is something to count ("
+                  + zeroFrom2 + " at two buffs)");
+
+            Check(FingerprintOf(RunGapSeventeenArena(3, false)) == FingerprintOf(RunGapSeventeenArena(3, false)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One actor and one foe the actor decorates with `buffs` beneficial entries before
+        /// striking it. The buffs are distinct kinds rather than stacks of one, because the scaler
+        /// counts a CLASS and stacking one kind would not tell a class count from a kind count.
+        /// </summary>
+        private static BattleResult RunGapSeventeenArena(int buffs, bool fromZero)
+        {
+            string[] kinds = { "AttackUp", "DefenseUp", "SpeedUp", "BlockUp", "EffectHitUp", "CritDamageUp" };
+            string decorate = "";
+            for (int i = 0; i < buffs && i < kinds.Length; i++)
+                decorate += ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"" + kinds[i]
+                          + "\", \"chance\": 1, \"duration\": 9, \"magnitude\": 0.0 }";
+
+            // perStack 0.1 with a ceiling of four is Leon's "10% per displayed buff, up to 40%".
+            // The from-zero arm is Tamsin's shape instead: the count is the whole multiplier.
+            string scaler = ", \"perStack\": " + (fromZero ? "1.0" : "0.1")
+                          + ", \"perStackOn\": \"Target\", \"perStackClass\": \"AnyBeneficial\""
+                          + ", \"perStackMaxCount\": 4"
+                          + (fromZero ? ", \"perStackFromZero\": true" : "");
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g17_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g17a_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0" + scaler + @" } ] },
+      ""passive"": { ""id"": ""g17_decorate"", ""name"": ""Decorate"", ""trigger"": ""RoundStart"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + decorate + @" ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g17_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 100000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g17foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g17_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g17_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g17_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap17");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroDef def = db.GetHero("g17_actor");
+            if (def != null) team.Add(MakeInstance(def, 1));
+            return RunWith(db, db.GetStage("g17_arena"), 1717, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 2
+
+        /// <summary>
+        /// GROUP 2 - per-round budgets on a standing status, two clauses.
+        ///
+        /// StatusInstance has carried UsesPerRound and UsesThisRound since the per-round-uses pass
+        /// and exactly two places read them, neither of them in the damage funnel. So a Covered
+        /// ward could be told to answer once a round and would answer every hit, and a Guard's
+        /// charges count DOWN to removal and never refill - which is one absorb across a two-round
+        /// ward where the text says one a round.
+        ///
+        /// Measured as WHICH HITS were softened rather than as a total, because a budget is a
+        /// statement about the second hit of a round and a total cannot tell one hit taken twice
+        /// from two hits taken once.
+        /// </summary>
+        private static void CheckGapGroupTwo()
+        {
+            Line("  group 2 - a ward that answers once a round");
+
+            // --- Covered ---------------------------------------------------------------
+            // Two enemies strike the warded body every round. Unbudgeted the protector takes a
+            // share of both; budgeted it takes a share of the first only, and the second lands
+            // whole on the body it was meant to protect.
+            int protectorUnbudgeted = DamageTakenBy(RunGapTwoArena("cover", 0), "g2_guardian");
+            int protectorBudgeted = DamageTakenBy(RunGapTwoArena("cover", 1), "g2_guardian");
+            int victimUnbudgeted = DamageTakenBy(RunGapTwoArena("cover", 0), "g2_frail");
+            int victimBudgeted = DamageTakenBy(RunGapTwoArena("cover", 1), "g2_frail");
+
+            Check(protectorUnbudgeted > 0 && protectorBudgeted > 0,
+                  "control: the ward answers in both arms (" + protectorUnbudgeted + " and "
+                  + protectorBudgeted + " moved onto the protector)");
+            Check(protectorBudgeted * 2 == protectorUnbudgeted,
+                  "usesPerRound 1 makes a Covered ward answer exactly ONE of the two blows a round ("
+                  + protectorBudgeted + ", half of the " + protectorUnbudgeted + " it moves "
+                  + "unbudgeted) - which is what Rhys's 'once per round' says, where a limit on "
+                  + "the PASSIVE only budgets how often the ward is applied");
+            Check(victimBudgeted > victimUnbudgeted,
+                  "and the blow the ward declined lands whole on the body it was protecting ("
+                  + victimUnbudgeted + " -> " + victimBudgeted + ")");
+
+            // --- Guard -----------------------------------------------------------------
+            // A two-round ward. One charge answers one hit in the whole battle; a per-round budget
+            // answers one a round, which is the sentence.
+            List<int> byCharge = HitsTakenBy(RunGapTwoArena("guard", 0), "g2_frail");
+            List<int> byBudget = HitsTakenBy(RunGapTwoArena("guard", 1), "g2_frail");
+            int softenedByCharge = CountSoftened(byCharge);
+            int softenedByBudget = CountSoftened(byBudget);
+            Check(softenedByCharge == 1,
+                  "control: a one-charge Guard softens exactly one hit in the whole battle ("
+                  + Join(byCharge) + ") - charges count down to removal and never refill");
+            Check(softenedByBudget > softenedByCharge,
+                  "and usesPerRound 1 softens one hit EACH ROUND instead (" + Join(byBudget)
+                  + ", " + softenedByBudget + " softened against " + softenedByCharge
+                  + ") - which is what 'reduces the first area hit each round' says");
+
+            Check(FingerprintOf(RunGapTwoArena("cover", 1)) == FingerprintOf(RunGapTwoArena("cover", 1)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>How many hits in this list came in below the largest one - i.e. were softened
+        /// by something. Every foe in the arena hits for the same amount, so a smaller reading is
+        /// a reduction and nothing else.</summary>
+        private static int CountSoftened(List<int> hits)
+        {
+            int biggest = 0;
+            for (int i = 0; i < hits.Count; i++) if (hits[i] > biggest) biggest = hits[i];
+            int n = 0;
+            for (int i = 0; i < hits.Count; i++) if (hits[i] < biggest) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// A frail body struck TWICE a round by two identical enemies, and a protector standing
+        /// behind it. Two blows a round is the whole design: a budget of one is invisible against
+        /// a line that only swings once.
+        /// </summary>
+        private static BattleResult RunGapTwoArena(string mode, int usesPerRound)
+        {
+            string budget = usesPerRound > 0 ? ", \"usesPerRound\": " + usesPerRound : "";
+            string apply = mode == "cover"
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Covered\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5" + budget + " }"
+                // A CHARGE AND A BUDGET ARE DIFFERENT INSTRUMENTS, and the arms author one each
+                // rather than both: a charge counts down to removal, so an entry carrying one
+                // alongside a budget is gone after its first absorb whatever the budget says.
+                // That is correct behaviour and it is also the control's behaviour, which would
+                // make the two arms read alike and measure nothing.
+                : ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Guard\","
+                  + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5"
+                  + (usesPerRound > 0 ? budget : ", \"charges\": 1") + " }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g2_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2f_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g2_guardian"", ""name"": ""Guardian"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2g_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g2_ward"", ""name"": ""Stand There"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } }
+  ]
+}";
+            // Two identical foes, so every round carries two identical blows and the second one is
+            // where a budget of one becomes visible.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g2_foe_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2fa"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""g2_foe_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2fb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g2_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g2_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g2_foe_a"", ""level"": 1 },
+                                                        { ""id"": ""g2_foe_b"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap2");
+            if (db == null) return null;
+            string[] ids = { "g2_frail", "g2_guardian" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g2_arena"), 2002, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 3
+
+        /// <summary>
+        /// GROUP 3 - telling an area hit from a single-target one, two clauses on one hero.
+        ///
+        /// Nothing on a resolving Damage effect recorded how many bodies it was aimed at, so no
+        /// mitigation and no condition could ask. Eira's ward answers "the first hit" where her
+        /// text says "the first AREA hit", and her passive answers "when an ally is hit" where her
+        /// text says "singled out" - the two halves of the same missing fact, met from opposite
+        /// sides.
+        ///
+        /// The arena throws BOTH shapes at the same body in the same battle: a single-target poke
+        /// and a line-wide sweep. A flag that did nothing would leave the two arms identical.
+        /// </summary>
+        private static void CheckGapGroupThree()
+        {
+            Line("  group 3 - an area hit, and a single-target one");
+
+            // --- the ward that answers only a sweep --------------------------------------
+            List<int> plain = HitsTakenBy(RunGapThreeArena(false), "g3_frail");
+            List<int> areaOnly = HitsTakenBy(RunGapThreeArena(true), "g3_frail");
+            int softenedPlain = CountSoftened(plain);
+            int softenedArea = CountSoftened(areaOnly);
+            Check(softenedPlain > 0,
+                  "control: an ordinary Guard answers whichever hit lands first (" + Join(plain)
+                  + ")");
+            Check(softenedArea > 0 && !SameList(plain, areaOnly),
+                  "areaHitsOnly makes the SAME ward decline the single-target blow and answer the "
+                  + "sweep instead (" + Join(areaOnly) + " against the control's " + Join(plain)
+                  + ") - the ward is no longer spent on a poke before the sweep it was raised for");
+
+            // --- the condition, from the other side --------------------------------------
+            // The watcher answers only when the blow that woke it was single-target. It must fire
+            // for the poke and not for the sweep, in a battle that carries both.
+            // Counted as the status each watcher APPLIES, not as the passive firing: the trigger
+            // fires for every blow whatever its shape, and it is the condition inside it that is
+            // under test. CountPassiveFires would have read the trigger and reported the same
+            // number for both.
+            BattleResult shapes = RunGapThreeArena(false);
+            int single = StatusLandedOn(shapes, StatusKind.AttackUp, "g3_ward");
+            int sweeps = StatusLandedOn(shapes, StatusKind.DefenseUp, "g3_ward");
+            Check(single > 0 && sweeps > 0,
+                  "both conditions land somewhere in a battle that carries both shapes (singled "
+                  + single + ", swept " + sweeps + ")");
+            Check(single == sweeps * 2,
+                  "and each answers only its own shape - the poker strikes the warded body TWICE a "
+                  + "round and the sweeper once, and the two readings come back in that ratio ("
+                  + single + " and " + sweeps + ") rather than both counting every blow");
+
+            Check(FingerprintOf(RunGapThreeArena(true)) == FingerprintOf(RunGapThreeArena(true)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        private static bool SameList(List<int> a, List<int> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Two enemies: one pokes the front body TWICE, one sweeps the whole line once. The poke
+        /// lands first every round, which is what makes an area-only ward measurable - an ordinary
+        /// one is spent on the poke and never meets the sweep. Two pokes to one sweep is what lets
+        /// the two conditions be told apart by their counts rather than by their both being
+        /// non-zero.
+        /// </summary>
+        private static BattleResult RunGapThreeArena(bool areaOnly)
+        {
+            string flag = areaOnly ? ", \"areaHitsOnly\": true" : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g3_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3f_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g3_ward"", ""name"": ""Warder"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3w_basic"", ""name"": ""Raise"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Guard"",
+                         ""chance"": 1, ""duration"": 9, ""magnitude"": 0.5, ""usesPerRound"": 1" + flag + @" } ] },
+      ""passive"": { ""id"": ""g3_singled"", ""name"": ""Singled Out"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""chance"": 1,
+                         ""duration"": 1, ""magnitude"": 0.0, ""condition"": ""IncomingHitIsSingleTarget"" } ] },
+      ""passives"": [
+        { ""id"": ""g3_swept"", ""name"": ""Swept"", ""trigger"": ""OnEnemyDamagedAlly"",
+          ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseUp"", ""chance"": 1,
+                           ""duration"": 1, ""magnitude"": 0.0, ""condition"": ""IncomingHitIsArea"" } ] } ] }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g3_poker"", ""name"": ""Poker"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3pb"", ""name"": ""Poke"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""hits"": 2 } ] } },
+    { ""id"": ""g3_sweeper"", ""name"": ""Sweeper"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3sb"", ""name"": ""Sweep"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g3_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g3_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g3_poker"", ""level"": 1 },
+                                                        { ""id"": ""g3_sweeper"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap3");
+            if (db == null) return null;
+            string[] ids = { "g3_frail", "g3_ward" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g3_arena"), 3003, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 8
+
+        /// <summary>
+        /// GROUP 8 - remembering who hit MY SIDE, rather than who hit me. Two clauses on one hero.
+        ///
+        /// LastAttackerId and LastDamagedRoundBy are per-victim and mean "the body that hit me", so
+        /// "the enemy that most recently damaged an ally" and "if the target attacked an ally since
+        /// my last turn" had neither a target mode nor a condition. Both ship as something that
+        /// answers a different question: HighestDamageDealtEnemy is a career TOTAL, and
+        /// SubjectActedThisRound is satisfied by a heal, a self-buff and a miss.
+        ///
+        /// The arena separates the two readings on purpose: one enemy deals the most damage over
+        /// the fight and a DIFFERENT one strikes last. A mode that answered either question by the
+        /// other would pick the wrong body.
+        /// </summary>
+        private static void CheckGapGroupEight()
+        {
+            Line("  group 8 - who hurt one of ours, and when");
+
+            BattleResult r = RunGapEightArena();
+            int onHeavy = DamageTakenBy(r, "g8_heavy");
+            int onRecent = DamageTakenBy(r, "g8_recent");
+            Check(onRecent > 0,
+                  "EnemyThatLastDamagedAlly names the enemy that struck an ally MOST RECENTLY ("
+                  + onRecent + " taken)");
+            Check(onHeavy == 0,
+                  "and never the one that hit our line hardest (" + onHeavy + " taken), which it "
+                  + "did at battle start and has not repeated - the last ACT, not the biggest one");
+
+            // The condition. The passive rider fires against the enemy that has hurt our line and
+            // not against the one that has only ever hit its own side.
+            int riderOnRecent = StatusLandedOn(r, StatusKind.DefenseDown, "g8_recent");
+            int riderOnIdle = StatusLandedOn(r, StatusKind.DefenseDown, "g8_idle");
+            Check(riderOnRecent > 0,
+                  "SubjectDamagedMySideSinceMyTurn holds for an enemy that has hurt one of ours ("
+                  + riderOnRecent + " rider(s) landed)");
+            Check(riderOnIdle == 0,
+                  "and not for one that has acted every round without touching our line ("
+                  + riderOnIdle + ") - which is the difference between it and SubjectActedThisRound, "
+                  + "the condition the clause currently uses");
+
+            Check(FingerprintOf(RunGapEightArena()) == FingerprintOf(RunGapEightArena()),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// Three enemies with three different histories: one that hits our line hard and early and
+        /// then stops, one that hits it late and lightly, and one that never touches it at all but
+        /// acts every round. Any two of those would let one reading stand in for another.
+        ///
+        /// NEITHER HERO DEALS DAMAGE EXCEPT THROUGH THE MODE UNDER TEST, so every point of damage
+        /// an enemy takes is the mode having picked it. A front-enemy poke on the other hero would
+        /// have put the engine's minDamage floor on the wrong body once a round and read as the
+        /// mode choosing it.
+        /// </summary>
+        private static BattleResult RunGapEightArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g8_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 4, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8f_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g8_eye"", ""name"": ""Eye"", ""aspect"": ""Ember"", ""role"": ""Marksman"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 3, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8e_basic"", ""name"": ""Returning Shot"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""EnemyThatLastDamagedAlly"", ""power"": 1.0 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""AllEnemies"", ""status"": ""DefenseDown"",
+                         ""bypassResist"": true, ""chance"": 1, ""duration"": 1, ""magnitude"": 0.0,
+                         ""condition"": ""SubjectDamagedMySideSinceMyTurn"", ""conditionOn"": ""Target"" } ] } }
+  ]
+}";
+            // g8_heavy lands a single enormous blow at battle start and never swings again, so it
+            // is by far the biggest thing that has ever hit our line and is never the most recent.
+            // g8_recent chips at us every round from the back of the order, so it always is.
+            // g8_idle acts every round and never touches us at all, which is the case
+            // SubjectActedThisRound cannot tell apart from the other two.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g8_heavy"", ""name"": ""Heavy"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 900,
+      ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8hb"", ""name"": ""Tend"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] },
+      ""passive"": { ""id"": ""g8h_open"", ""name"": ""Opening Hammer"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 9.0 } ] } },
+    { ""id"": ""g8_idle"", ""name"": ""Idle"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 100,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8ib"", ""name"": ""Tend"",
+        ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g8_recent"", ""name"": ""Recent"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 10,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g8rb"", ""name"": ""Chip"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g8_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g8_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g8_heavy"", ""level"": 1 },
+                                                        { ""id"": ""g8_idle"", ""level"": 1 },
+                                                        { ""id"": ""g8_recent"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap8");
+            if (db == null) return null;
+            string[] ids = { "g8_frail", "g8_eye" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g8_arena"), 8008, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 1
+
+        /// <summary>
+        /// GROUP 1 - answering the blow that is landing, two clauses across two heroes.
+        ///
+        /// No EffectCondition could ask about the MAGNITUDE of a hit, and nothing could reach back
+        /// into one that had already resolved. So Rhys's "when an ally takes a hit exceeding 25%
+        /// Max HP" became "when an ally is hit" - the ward goes up on the first scratch of the
+        /// round - and Toren's "redirects 25% of THAT hit" became a ward that stands for the rest
+        /// of the round and answers the NEXT one.
+        ///
+        /// The arena throws a scratch and a heavy blow at the same body in the same round, which
+        /// is the only shape in which "the hit was big enough" and "the hit happened" read
+        /// differently.
+        /// </summary>
+        private static void CheckGapGroupOne()
+        {
+            Line("  group 1 - the size of the blow, and reaching back into it");
+
+            // --- the condition ----------------------------------------------------------
+            // The watcher answers only a blow above a quarter of the victim's bar. The scratch is
+            // 1% of it and the hammer is 40%, and both land on the same body every round.
+            BattleResult r = RunGapOneArena();
+            int answered = StatusLandedOn(r, StatusKind.DefenseUp, "g1_frail");
+            int blows = HitsTakenBy(r, "g1_frail").Count;
+            Check(blows >= 6,
+                  "control: the warded body takes both a scratch and a hammer blow every round ("
+                  + blows + " hits across the battle)");
+            Check(answered > 0 && answered * 2 <= blows,
+                  "SubjectTookHitAboveMaxHpFraction answers the hammer and not the scratch ("
+                  + answered + " of " + blows + " blows) - which is the difference between 'a hit "
+                  + "exceeding 25% Max HP' and 'a hit'");
+
+            // --- reaching back into the hit that already landed --------------------------
+            // The protector pays the victim a share of the blow it just took, out of its own bar.
+            // scaleByLastDamage on an HpTransfer is what makes that one effect rather than a ward
+            // that stands for the rest of the round and answers the next blow instead.
+            int paidBack = HealingInto(r, "g1_frail");
+            int protectorPaid = DamageTakenBy(r, "g1_shield");
+            Check(paidBack > 0 && protectorPaid > 0,
+                  "an HpTransfer scaled by the last hit moves a share of THAT blow off the victim "
+                  + "and onto the protector (" + paidBack + " restored, " + protectorPaid
+                  + " paid) - a share of a hit that has already resolved, which is what "
+                  + "OnEnemyDamagedAlly fires too late to intercept any other way");
+            Check(paidBack == protectorPaid,
+                  "and the two sides of the move are the same number (" + paidBack + " = "
+                  + protectorPaid + ") - a redirect rather than a heal that invents value");
+
+            Check(FingerprintOf(RunGapOneArena()) == FingerprintOf(RunGapOneArena()),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One body taking two very different blows a round, and a protector that answers only the
+        /// big one. The scratch exists so the arena can tell "the hit was big enough" from "a hit
+        /// happened" - against one blow size the two are the same reading.
+        /// </summary>
+        private static BattleResult RunGapOneArena()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g1_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1f_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] } },
+    { ""id"": ""g1_shield"", ""name"": ""Shielder"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1s_basic"", ""name"": ""Brace"", ""effects"": [ { ""kind"": ""Heal"", ""target"": ""Self"", ""power"": 0.1 } ] },
+      ""passive"": { ""id"": ""g1_shared"", ""name"": ""Shared Peril"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [
+          { ""kind"": ""ApplyStatus"", ""target"": ""BroadcastVictim"", ""status"": ""DefenseUp"", ""chance"": 1,
+            ""duration"": 1, ""magnitude"": 0.0,
+            ""condition"": ""SubjectTookHitAboveMaxHpFraction"", ""conditionOn"": ""BroadcastSubject"",
+            ""conditionValue"": 0.25 },
+          { ""kind"": ""HpTransfer"", ""target"": ""BroadcastVictim"", ""scaleByLastDamage"": true, ""power"": 0.3,
+            ""condition"": ""SubjectTookHitAboveMaxHpFraction"", ""conditionOn"": ""BroadcastSubject"",
+            ""conditionValue"": 0.25 } ] } }
+  ]
+}";
+            // BOTH BLOWS ARE WRITTEN AS A FRACTION OF THE VICTIM'S BAR rather than as an
+            // Attack value, so the arena measures the threshold rather than the stat table: a
+            // flat attack would have to be reconciled against whatever StatMath makes of a
+            // level-one enemy, and the whole check is about where 25% sits. The scratch is 1% and
+            // the hammer 30%, so the threshold falls between them with room on both sides.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g1_scratch"", ""name"": ""Scratch"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1cb"", ""name"": ""Scratch"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.0, ""targetMaxHpRatio"": 0.01 } ] } },
+    { ""id"": ""g1_hammer"", ""name"": ""Hammer"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g1hb"", ""name"": ""Hammer"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.0, ""targetMaxHpRatio"": 0.3 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g1_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g1_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g1_scratch"", ""level"": 1 },
+                                                        { ""id"": ""g1_hammer"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(3), "Gap1");
+            if (db == null) return null;
+            string[] ids = { "g1_frail", "g1_shield" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g1_arena"), 1001, team);
+        }
+
         private static void CheckNineGaps(ContentDatabase live)
         {
             Line("THE NINE GAPS (charges, flat echo, attacker filter, the other end, attacker-keyed");
@@ -18109,10 +19649,17 @@ namespace Emberfall.DevHarness
                     "PassiveFiredOnSubjectAtLeast", "PassiveFiredOnSubjectBelow",
                     // the kit-defect pass: the two clauses two shipped talents needed and no
                     // condition could say. Appended, so every ordinal above is untouched.
-                    "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring"
+                    "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring",
+                    // the engine-gaps pass, group 3: the shape of the blow in flight.
+                    "IncomingHitIsArea", "IncomingHitIsSingleTarget",
+                    // group 8: who hit MY SIDE, rather than who hit me.
+                    "SubjectDamagedMySideSinceMyTurn",
+                    // group 1: the size of the blow that just landed.
+                    "SubjectTookHitAboveMaxHpFraction"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (50 members)");
+            Check(ok, "EffectCondition enum parity ("
+                  + Enum.GetNames(typeof(EffectCondition)).Length + " members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
@@ -19955,6 +21502,9 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.AfterBasicAttack, true, false),
                 C(PassiveTrigger.BattleStart, false, false),
                 C(PassiveTrigger.OnAllyDefeated, true, true),
+                // The engine-gaps pass, group 9. All three fill in both fields, because all three
+                // exist to let a passive act ON the body the news was about.
+                C(PassiveTrigger.OnAllyEnergyGained, true, true),
                 C(PassiveTrigger.OnAllyHealed, true, true),
                 C(PassiveTrigger.OnAllyHpBelowThreshold, true, true),
                 C(PassiveTrigger.OnAllyLedgerBanked, true, true),
@@ -19972,6 +21522,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnDodge, true, false),
                 C(PassiveTrigger.OnEchoFired, true, true),
                 C(PassiveTrigger.OnEnemyActive, true, true),
+                C(PassiveTrigger.OnEnemyAppliedStatus, true, true),
                 C(PassiveTrigger.OnEnemyActiveResolved, true, true),
                 C(PassiveTrigger.OnEnemyBuffGained, true, true),
                 C(PassiveTrigger.OnEnemyChangedTarget, true, true),
@@ -19983,6 +21534,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnEnemyHpBelowThreshold, true, true),
                 C(PassiveTrigger.OnEnemyTurnEnd, true, true),
                 C(PassiveTrigger.OnFunnelConvertFired, true, true),
+                C(PassiveTrigger.OnGuardPrevented, true, true),
                 C(PassiveTrigger.OnHealApplied, true, true),
                 C(PassiveTrigger.OnHpBelowThreshold, true, false),
                 C(PassiveTrigger.OnKill, true, true),
@@ -19995,11 +21547,14 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnStackThreshold, false, false),
                 C(PassiveTrigger.OnStatusExpired, false, false),
                 C(PassiveTrigger.OnStatusGained, true, false),
-                C(PassiveTrigger.OnStatusRemoved, true, false),
+                // Both gained a subject in the engine-gaps pass, group 18: the body whose status
+                // was taken, and the body that was delayed.
+                C(PassiveTrigger.OnStatusRemoved, true, true),
                 C(PassiveTrigger.OnTargeted, true, false),
                 C(PassiveTrigger.OnTurnDebtRepaid, true, true),
                 C(PassiveTrigger.OnTurnDebtThreshold, true, true),
-                C(PassiveTrigger.OnTurnDelayed, true, false),
+                C(PassiveTrigger.OnTurnDelayed, true, true),
+                C(PassiveTrigger.RoundEnd, false, false),
                 C(PassiveTrigger.RoundStart, false, false),
                 C(PassiveTrigger.TurnStart, false, false),
             });

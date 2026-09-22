@@ -89,6 +89,35 @@ namespace Emberfall.Core.Combat
         public int UsesThisRound;
         public int UsesPerRound;
 
+        /// <summary>
+        /// On a StatusKind.DamageTakenUp entry: answer SKILL damage only, the division step 4 of
+        /// the damage pipeline already makes. False on every other kind and on every entry in
+        /// shipped content.
+        ///
+        /// On the ENTRY rather than on the unit, for the reason Disrupted's parameters are: two
+        /// marks from two casters are two rules, and a field on the unit would be one value they
+        /// fought over.
+        /// </summary>
+        public bool SkillOnly;
+
+        /// <summary>
+        /// On a Burn or Regen entry: the fraction of the HOLDER'S OWN HP this ticks for, read
+        /// fresh every tick. Zero on every entry in shipped content, where the tick is
+        /// Magnitude - a multiple of the applier's Attack resolved once, at apply time.
+        ///
+        /// HolderHpTickCurrent picks the pool: false is Max HP, true is current HP. On the entry
+        /// rather than on the unit because two DoTs from two casters are two rules.
+        /// </summary>
+        public float HolderHpTick;
+        public bool HolderHpTickCurrent;
+
+        /// <summary>
+        /// On a Guard or Covered entry: answer only a blow that came from a multi-target effect.
+        /// False on every entry in shipped content, where a ward answers whichever hit lands
+        /// first.
+        /// </summary>
+        public bool AreaHitsOnly;
+
         // ---------------------------------------------------------------- tier eight: ledger extensions
         //
         // Carried on the Ledger entry alongside Stored and StoredCap, because they are properties
@@ -359,6 +388,52 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public readonly Dictionary<int, int> LastDamagedRoundBy = new Dictionary<int, int>();
 
+        /// <summary>
+        /// The last round this unit dealt damage to a body on the PLAYER side, and to a body on
+        /// the enemy side. Zero until it has.
+        ///
+        /// ENGINE-GAPS group 8. LastAttackerId and LastDamagedRoundBy are both per-victim and mean
+        /// "the body that hit ME"; nothing kept the same memory for a SIDE, so "if the target
+        /// attacked an ally since Maera's last turn" had no condition to read. The nearest standing
+        /// answer was SubjectActedThisRound, which in this engine's turn shape means it has done
+        /// something rather than that it has hurt anybody of ours.
+        ///
+        /// Two ints on the ATTACKER rather than a walk over five victims, because the question is
+        /// asked of the attacker and the answer is one fact about it. Round-granular, the same
+        /// approximation LastDamagedRound and every other "since my turn" reading carries: two
+        /// units acting inside one round are not ordered against each other by it.
+        /// </summary>
+        public int LastHitPlayerSideRound;
+        public int LastHitEnemySideRound;
+
+        /// <summary>The last round this unit hurt somebody on that side. See the two fields
+        /// above.</summary>
+        public int LastHitSideRound(bool playerSide)
+        {
+            return playerSide ? LastHitPlayerSideRound : LastHitEnemySideRound;
+        }
+
+        /// <summary>
+        /// What the last blow this unit took actually removed from its bar, after every
+        /// mitigation. Zero until it has taken one.
+        ///
+        /// ENGINE-GAPS group 1. No EffectCondition could ask about the MAGNITUDE of the hit being
+        /// resolved: the enum's members ask about HP, statuses, stats, energy, action history and
+        /// firing counts, and the damage funnel published nothing about the number it was
+        /// carrying. So "when an ally takes a hit exceeding 25% Max HP" had to become "when an
+        /// ally is hit", and the guard goes up on the first scratch of the round.
+        ///
+        /// ON THE VICTIM rather than in a window field, which is what makes it safe to read from
+        /// inside a passive: a passive answering the blow resolves effects of its own, and a
+        /// simulation-wide "last damage" is rewritten by any of them. The victim's own record is
+        /// not - the passive is not hitting it again.
+        ///
+        /// The REALISED number, written where the bar moves, so Guard, Cover, a link redirect, a
+        /// mitigating Ledger and the shield pool have all already taken their part. "A hit
+        /// exceeding 25% Max HP" is about what got through.
+        /// </summary>
+        public int LastDamageTaken;
+
         /// <summary>Whether the last two turns this unit took were both an Active, or both a Basic.
         /// Two flags rather than a list: no description asks about more than the last two.</summary>
         public bool LastActionWasActive;
@@ -547,15 +622,52 @@ namespace Emberfall.Core.Combat
         /// Zero when nobody is covering it.</summary>
         public float CoverFraction(out int protectorId)
         {
+            StatusInstance ignored;
+            return CoverFraction(out protectorId, out ignored);
+        }
+
+        /// <summary>
+        /// The same question, with the ENTRY that answered it handed back so the caller can charge
+        /// a use against it.
+        ///
+        /// ENGINE-GAPS group 2. StatusInstance has carried UsesPerRound and UsesThisRound since
+        /// the per-round-uses pass and exactly two places read them - InterceptDisrupted and the
+        /// StatusUseAvailable condition - so a ward could be told to answer once a round and the
+        /// funnel would ignore it. Rhys's "Rhys takes 30% of it instead, ONCE PER ROUND" ships as
+        /// a once-a-round limit on the PASSIVE instead, which budgets how often the ward is
+        /// APPLIED and then lets it answer every hit for the rest of the round.
+        ///
+        /// A budgeted entry whose budget is spent is skipped entirely rather than returning a
+        /// share of zero, so a second, unbudgeted ward underneath it can still answer the blow.
+        /// Zero on every Covered entry in shipped content, which skips nothing.
+        /// </summary>
+        public float CoverFraction(out int protectorId, out StatusInstance entry)
+        {
+            return CoverFraction(out protectorId, out entry, false);
+        }
+
+        /// <summary>
+        /// The same question again, told whether the blow in flight was aimed at more than one
+        /// body, so a ward stamped AreaHitsOnly can decline a single-target one.
+        ///
+        /// ENGINE-GAPS group 3. The shape of the hit is the simulation's to know, so it is passed
+        /// in rather than read here - CombatUnit has no view of the effect resolving, and giving
+        /// it one would be the second place that decides what an area hit is.
+        /// </summary>
+        public float CoverFraction(out int protectorId, out StatusInstance entry, bool hitIsArea)
+        {
             protectorId = -1;
+            entry = null;
             float best = 0f;
             for (int i = 0; i < Statuses.Count; i++)
             {
                 StatusInstance c = Statuses[i];
                 if (c.Kind != StatusKind.Covered || c.Magnitude <= 0f) continue;
+                if (c.UsesPerRound > 0 && c.UsesThisRound >= c.UsesPerRound) continue;
+                if (c.AreaHitsOnly && !hitIsArea) continue;
                 // The deepest cover wins rather than the shares summing, so two protectors cannot
                 // between them take more than the whole hit and leave the holder untouched.
-                if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; }
+                if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; entry = c; }
             }
             return best;
         }
@@ -569,6 +681,47 @@ namespace Emberfall.Core.Combat
             for (int i = 0; i < Statuses.Count; i++)
                 if (Statuses[i].Kind == StatusKind.Vulnerable && Statuses[i].SourceId == sourceId)
                     total += Statuses[i].Magnitude;
+            return total;
+        }
+
+        /// <summary>
+        /// How much softer THIS UNIT'S blows land against that one specifically, summed over the
+        /// Blunted entries that body applied to it. Zero against anybody else, which is what makes
+        /// "takes 10% less FROM IT" a duel clause rather than a team aura.
+        ///
+        /// ASKED OF THE ATTACKER, keyed to the protected body - the opposite bookkeeping from
+        /// VulnerableTo, which is asked of the victim and keyed to the attacker. Both are the same
+        /// pair of units; which one carries the entry is decided by which one can author it, and
+        /// an effect can only stamp its own caster's id. See StatusKind.Blunted.
+        /// </summary>
+        public float BluntedAgainst(int protectedId)
+        {
+            if (protectedId < 0) return 0f;
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+                if (Statuses[i].Kind == StatusKind.Blunted && Statuses[i].SourceId == protectedId)
+                    total += Statuses[i].Magnitude;
+            return total;
+        }
+
+        /// <summary>
+        /// Extra damage this unit takes from EVERY source - the universal half Vulnerable never
+        /// had. `isSkill` is the caller's answer to step 4's question, and an entry stamped
+        /// SkillOnly contributes nothing to a Basic Attack.
+        ///
+        /// Summed rather than deepest-wins, matching VulnerableTo, so two marks from two heroes
+        /// are two modifiers. Exactly zero when nothing carries the kind.
+        /// </summary>
+        public float DamageTakenUpAgainst(bool isSkill)
+        {
+            float total = 0f;
+            for (int i = 0; i < Statuses.Count; i++)
+            {
+                StatusInstance d = Statuses[i];
+                if (d.Kind != StatusKind.DamageTakenUp) continue;
+                if (d.SkillOnly && !isSkill) continue;
+                total += d.Magnitude;
+            }
             return total;
         }
 
@@ -743,6 +896,28 @@ namespace Emberfall.Core.Combat
         }
 
         public float EffectiveHolyDamage { get { return HolyDamage + SumMagnitude(StatusKind.HolyDamageUp); } }
+
+        /// <summary>
+        /// How many BENEFICIAL statuses this unit carries - what "per displayed buff" counts.
+        /// Stacks count individually, as CountOf does.
+        /// </summary>
+        public int BuffCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Statuses.Count; i++)
+                {
+                    StatusKind k = Statuses[i].Kind;
+                    // Not harmful AND not bookkeeping, which is the predicate
+                    // HasAnyBeneficialStatus reads - a Mark, a Ledger, a Link and a Resolve
+                    // counter are not buffs, and "per displayed buff" means the ones a player
+                    // would count off the bar.
+                    if (!StatusInfo.IsHarmful(k) && !StatusInfo.IsInert(k)) n++;
+                }
+                return n;
+            }
+        }
 
         /// <summary>
         /// How many harmful statuses this unit carries, counted with the same StatusInfo.IsHarmful

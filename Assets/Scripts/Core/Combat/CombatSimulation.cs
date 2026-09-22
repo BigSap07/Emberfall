@@ -713,10 +713,19 @@ namespace Emberfall.Core.Combat
             /// scaling off the removal of a non-DoT therefore resolves to nothing, which is the
             /// honest answer - and is visible, since a heal of zero emits no event.
             /// </summary>
-            private static float RemainingDotDamage(StatusInstance entry)
+            private static float RemainingDotDamage(StatusInstance entry, CombatUnit carrier)
             {
                 if (entry == null || entry.Kind != StatusKind.Burn) return 0f;
                 int rounds = entry.RoundsLeft > 0 ? entry.RoundsLeft : 0;
+                // A holder-HP Burn carries no Magnitude, so the per-tick amount has to be asked of
+                // the body it is sitting on - which is also the only reading that makes "the
+                // damage the cleanse prevented" true of such an entry. Zero on every Burn in
+                // shipped content, which takes the Magnitude branch it always took.
+                if (entry.HolderHpTick > 0f && carrier != null)
+                {
+                    float pool = entry.HolderHpTickCurrent ? carrier.Hp : carrier.EffectiveMaxHp;
+                    return pool * entry.HolderHpTick * rounds;
+                }
                 return entry.Magnitude * rounds;
             }
             private float _lastLedgerBankedStored;
@@ -862,6 +871,87 @@ namespace Emberfall.Core.Combat
             /// TransferStatus, and getting that wrong would silently disable a live link.
             /// </summary>
             private bool _anyLinks;
+
+            /// <summary>
+            /// Whether any unit in this battle carries a passive with PassiveDef.IncludeSelf.
+            /// Computed once at build, the same shape and for the same reason as _anyLinks: a
+            /// battle nobody authored it into pays one already-loaded bool comparison per
+            /// broadcast and the excluded unit never enters the walk.
+            /// </summary>
+            private bool _anyIncludeSelf;
+
+            /// <summary>
+            /// The unit an ally-facing broadcast would ordinarily skip - the victim, the recipient,
+            /// the carrier - or null outside such a dispatch. Read in TriggerPassive, which lets
+            /// only an IncludeSelf passive through on that one body.
+            ///
+            /// Saved and restored around every broadcast, like every other window field here, so a
+            /// dispatch nested inside another cannot inherit or destroy the outer one's exclusion.
+            /// </summary>
+            private CombatUnit _broadcastExcept;
+
+            /// <summary>Holds OnAllyEnergyGained to one level: a passive that answers a gain by
+            /// granting Energy would otherwise raise it again from inside itself. The same
+            /// discipline _inDrainTrigger keeps for the other direction.</summary>
+            private bool _inEnergyGainTrigger;
+
+            /// <summary>Holds OnEnemyAppliedStatus to one level, for the same reason: a passive
+            /// that answers a debuff attempt by attempting one is a loop, not a wrong number.
+            /// </summary>
+            private bool _inStatusAttemptTrigger;
+
+            /// <summary>
+            /// Whether the Damage effect now resolving was aimed at more than one body.
+            ///
+            /// ENGINE-GAPS group 3. Nothing on a resolving hit recorded how many bodies it was
+            /// aimed at, so no mitigation and no condition could ask - and both halves of "the
+            /// first AREA hit each round" and "when an ally is SINGLED OUT" had to be written as
+            /// though every blow were the same shape.
+            ///
+            /// Set and restored around the per-target loop in ApplyEffect, so it names the effect
+            /// in flight and nothing else. Outside one - a Burn tick, a Ledger release on expiry,
+            /// a redirect delivered from the funnel - it reads false, which is correct: none of
+            /// those was aimed at a line.
+            ///
+            /// SPLASH COUNTS. An effect that names one body and strikes its neighbours has hit
+            /// more than one, which is what every sentence asking about this means.
+            /// </summary>
+            private bool _hitIsArea;
+
+            /// <summary>
+            /// The shape of the blow THE FUNNEL IS CARRYING, latched from _hitIsArea for the whole
+            /// of one DealRawDamage and everything it wakes.
+            ///
+            /// The second field is not redundancy. _hitIsArea names the effect currently
+            /// resolving, which is what the ward gates want - and a passive woken BY the funnel
+            /// resolves effects of its own, so by the time its condition is asked _hitIsArea has
+            /// been rewritten to describe the passive's own single-target effect rather than the
+            /// blow the passive is answering. Every condition in this group is written from inside
+            /// such a window, so they read the latch.
+            ///
+            /// Set and restored around the DealRawDamage call in ApplyDamageEffect, which is the
+            /// one place a damage effect becomes a blow. A redirected share re-enters the funnel
+            /// from inside that window and correctly inherits it: a share of a sweep is part of a
+            /// sweep. A Burn tick, a Ledger release on expiry and a Mirrored Wound reach the funnel
+            /// from outside any damage effect and read false, which is correct - none of them was
+            /// aimed at a line.
+            /// </summary>
+            private bool _funnelHitIsArea;
+
+            /// <summary>
+            /// The last unit to damage somebody on each side, or -1 before anybody has.
+            ///
+            /// ENGINE-GAPS group 8. Per SIDE rather than per victim, which is the whole of what
+            /// LastAttackerId could not say: a hero asking "which of them just hurt one of us"
+            /// gets one answer rather than five partial ones, and the answer does not depend on
+            /// which ally it happens to ask.
+            ///
+            /// Not cleared when the named unit dies. TargetMode.EnemyThatLastDamagedAlly tests the
+            /// body it resolves to for life, the same way every other mode does, so a dead
+            /// attacker resolves to nobody rather than to a corpse.
+            /// </summary>
+            private int _lastPlayerSideAttackerId = -1;
+            private int _lastEnemySideAttackerId = -1;
 
             /// <summary>
             /// What the most recent hit actually took off a bar, or 0 at an ability boundary.
@@ -1048,6 +1138,22 @@ namespace Emberfall.Core.Combat
             {
                 _order = null;
                 if (IsBattleOver()) { EndBattle(); return; }
+
+                // ENGINE-GAPS group 14: the round's other boundary. RoundStart has had no mirror,
+                // so "at round end" had to be authored as OnEnemyTurnEnd with a once-a-round
+                // limit - which answers one enemy's turn ending rather than the round's own edge,
+                // and picks whichever enemy happens to move first.
+                //
+                // Raised on every living unit rather than broadcast to a side, exactly as
+                // RoundStart is and for the same reason: the clock belongs to neither team. Before
+                // _round advances, so a passive answering it reads the round it is closing.
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    if (IsBattleOver()) break;
+                    if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundEnd, 0);
+                }
+                if (IsBattleOver()) { EndBattle(); return; }
+
                 _phase = Phase.RoundBegin;
             }
 
@@ -1208,6 +1314,16 @@ namespace Emberfall.Core.Combat
                         UnitStats stats = StatMath.ForEnemy(def, spawns[i].Level);
                         _units.Add(CombatUnit.FromDef(def, stats, spawns[i].Level, false, i, id++, _cfg.EnergyMax));
                     }
+                }
+
+                // One walk, once, over a roster that is at most ten bodies and two passives each.
+                // Everything downstream reads the bool - see _anyIncludeSelf - so a battle nobody
+                // authored IncludeSelf into never pays for the flag again.
+                for (int i = 0; i < _units.Count && !_anyIncludeSelf; i++)
+                {
+                    CombatUnit u = _units[i];
+                    for (int pi = 0; pi < u.Passives.Count; pi++)
+                        if (u.Passives[pi] != null && u.Passives[pi].IncludeSelf) { _anyIncludeSelf = true; break; }
                 }
             }
 
@@ -1403,6 +1519,7 @@ namespace Emberfall.Core.Combat
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
                 p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
+                p.IncludeSelf = src.IncludeSelf;
                 // THE SAME DEFECT EffectDef.Clone() HAD, found by running the same audit against
                 // this method while adding the two lines below it. ClonePassive rebuilds a passive
                 // a talent has appended to or overridden, and it was dropping the three fields an
@@ -1729,7 +1846,17 @@ namespace Emberfall.Core.Combat
 
                     if (s.Kind == StatusKind.Burn)
                     {
-                        float burnDmg = s.Magnitude;
+                        // ENGINE-GAPS group 12: a tick written in the HOLDER'S health.
+                        //
+                        // Magnitude is a multiple of the applier's Attack resolved once at apply
+                        // time, which is the right unit for "deals 40% of Attack each turn" and
+                        // the wrong one for "loses 4% current HP". Read fresh every tick rather
+                        // than stamped, because a percentage of a bar that is draining has to be
+                        // re-read as it drains. Zero on every Burn in shipped content, and a zero
+                        // takes the branch the engine always took.
+                        float burnDmg = s.HolderHpTick > 0f
+                            ? (s.HolderHpTickCurrent ? unit.Hp : unit.EffectiveMaxHp) * s.HolderHpTick
+                            : s.Magnitude;
                         CombatUnit dotSource = s.SourceId >= 0 ? FindUnit(s.SourceId) : null;
                         burnDmg *= OutputModMultiplier(dotSource, unit, OutputModScope.DoTOnly);
                         int damage = (int)Math.Round(burnDmg, MidpointRounding.AwayFromZero);
@@ -1809,7 +1936,14 @@ namespace Emberfall.Core.Combat
                     }
                     else if (s.Kind == StatusKind.Regen)
                     {
-                        int heal = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
+                        // The same reading from the other direction. "Recovery heals 3% Max HP
+                        // each turn" is a number about the ally carrying it, and resolving it as
+                        // the Mender's Attack makes it right at exactly one level against exactly
+                        // one bar.
+                        float regen = s.HolderHpTick > 0f
+                            ? (s.HolderHpTickCurrent ? unit.Hp : unit.EffectiveMaxHp) * s.HolderHpTick
+                            : s.Magnitude;
+                        int heal = (int)Math.Round(regen, MidpointRounding.AwayFromZero);
                         if (heal < 1) heal = 1;
                         ApplyHealValue(s.SourceId, unit, heal, "heal", false);
                     }
@@ -2087,6 +2221,39 @@ namespace Emberfall.Core.Combat
                     case EffectCondition.LastMovedAboveHpFraction:
                         first = LastMovedAboveFraction(caster, subject, effect.ConditionValue);
                         break;
+
+                    // GAP GROUP 3, both directions. Sim state for the same reason: the shape of
+                    // the effect in flight belongs to the ability resolving, not to two units.
+                    case EffectCondition.IncomingHitIsArea:
+                        first = _funnelHitIsArea;
+                        break;
+
+                    case EffectCondition.IncomingHitIsSingleTarget:
+                        first = !_funnelHitIsArea;
+                        break;
+
+                    // GAP GROUP 8. Sim-side with the two above rather than in the pure
+                    // ConditionMet, because it reads the caster's side - which the static function
+                    // has, but the whole family of "since my turn" readings already lives beside
+                    // its siblings there and splitting them would be the trap this file keeps
+                    // warning about.
+                    case EffectCondition.SubjectDamagedMySideSinceMyTurn:
+                    {
+                        int when = subject.LastHitSideRound(caster != null && caster.IsPlayer);
+                        first = caster != null && when > 0 && when >= caster.LastTurnRound;
+                        break;
+                    }
+
+                    // GAP GROUP 1. Sim-side with its neighbours rather than in the pure
+                    // ConditionMet, so the whole family of readings that need the battle's own
+                    // memory stays in one place.
+                    case EffectCondition.SubjectTookHitAboveMaxHpFraction:
+                    {
+                        float bar = subject.EffectiveMaxHp;
+                        first = bar > 0f && subject.LastDamageTaken > 0
+                                && subject.LastDamageTaken >= bar * effect.ConditionValue;
+                        break;
+                    }
 
                     default:
                     {
@@ -2418,11 +2585,15 @@ namespace Emberfall.Core.Combat
                     bool perStackOnTarget = effect.PerStackOn == ConditionSubject.Target;
                     if (!perStackOnTarget)
                     {
-                        int casterStacks = caster.CountOf(effect.PerStackStatus);
-                        if (effect.PerStack != 0f && casterStacks > 0)
+                        // A FromZero effect enters with a count of zero, deliberately: "for each
+                        // buff" against a bare body resolves to nothing, and the guard below would
+                        // otherwise let the base amount through. Every effect that does not set it
+                        // takes the guard it always took, since a factor of 1 changes nothing.
+                        int casterStacks = PerStackCount(effect, caster);
+                        if (effect.PerStack != 0f && (casterStacks > 0 || effect.PerStackFromZero))
                         {
                             EffectDef scaled = effect.Clone();
-                            float factor = 1f + effect.PerStack * casterStacks;
+                            float factor = PerStackFactor(effect, caster);
                             scaled.Power = effect.Power * factor;
                             scaled.Magnitude = effect.Magnitude * factor;
                             if (effect.Kind == EffectKind.GainResolve)
@@ -2462,6 +2633,18 @@ namespace Emberfall.Core.Combat
                         targets.AddRange(extras);
                     }
 
+                    // GAP 3: how many bodies this effect was aimed at, published for the length
+                    // of its own resolution. Saved and restored rather than set and cleared,
+                    // because a passive firing inside one effect resolves effects of its own and
+                    // must not leave the outer one's answer rewritten.
+                    //
+                    // Counted BEFORE the condition filter, on purpose: "an area hit" is a fact
+                    // about what the ability aimed at, and an AoE that only one enemy qualified
+                    // for was still a sweep. The alternative would make the same cast area or
+                    // single-target depending on the board it met.
+                    bool prevArea = _hitIsArea;
+                    _hitIsArea = targets.Count > 1;
+
                     // Per target, not per effect. A conditional AoE asks about each enemy on its
                     // own, so "deal damage to all enemies below 40% HP" is one effect rather than a
                     // targeting mode nobody has to invent.
@@ -2497,11 +2680,11 @@ namespace Emberfall.Core.Combat
                         EffectDef landed = effect;
                         if (perStackOnTarget && effect.PerStack != 0f)
                         {
-                            int targetStacks = target.CountOf(effect.PerStackStatus);
-                            if (targetStacks > 0)
+                            int targetStacks = PerStackCount(effect, target);
+                            if (targetStacks > 0 || effect.PerStackFromZero)
                             {
                                 EffectDef scaled = effect.Clone();
-                                float factor = 1f + effect.PerStack * targetStacks;
+                                float factor = PerStackFactor(effect, target);
                                 scaled.Power = effect.Power * factor;
                                 scaled.Magnitude = effect.Magnitude * factor;
                                 if (effect.Kind == EffectKind.GainResolve)
@@ -2567,10 +2750,12 @@ namespace Emberfall.Core.Combat
                         _lastTarget = target;
                         if (IsBattleOver())
                         {
+                            _hitIsArea = prevArea;
                             if (depth > 0) { _lastTarget = prevLastTarget; _lastDamageDealt = prevLastDamage; }
                             return;
                         }
                     }
+                    _hitIsArea = prevArea;
 
                     // An effect whose condition held for nobody did not happen, so it does not pay
                     // its Resolve either - spending the counter emits a StatusExpired, and a
@@ -2704,6 +2889,44 @@ namespace Emberfall.Core.Combat
                     case EffectKind.ApplyStatus:
                     {
                         if (!target.Alive || effect.Status == StatusKind.None) break;
+
+                        // ENGINE-GAPS group 9: the other side hears a debuff being ATTEMPTED.
+                        //
+                        // BEFORE THE LANDING ROLL, deliberately. A debuff that was resisted was
+                        // still attempted, and "when a Flustered enemy attempts a debuff" is a
+                        // sentence about the attempt; raising it after the roll would make the
+                        // clause silently depend on the victim's Effect Resist. It also means the
+                        // trigger draws no RNG of its own and cannot shift the stream.
+                        //
+                        // Harmful only, read through the same StatusInfo.IsHarmful that Cleanse and
+                        // Dispel read, so "debuff" means one thing across the engine - a Mark, a
+                        // Ledger, a Link and every buff are not attempts at one.
+                        //
+                        // The APPLIER is the subject, because every clause asking for this then
+                        // wants to do something to it; the body being aimed at is the victim. Held
+                        // to one level by a flag, since the natural answer to a debuff attempt is a
+                        // debuff.
+                        if (StatusInfo.IsHarmful(effect.Status) && !_inStatusAttemptTrigger)
+                        {
+                            _inStatusAttemptTrigger = true;
+                            CombatUnit prevAsSubject = _broadcastSubject;
+                            CombatUnit prevAsVictim = _broadcastVictim;
+                            int prevAsSource = _broadcastSourceId;
+                            _broadcastSubject = source;
+                            _broadcastVictim = target;
+                            _broadcastSourceId = source.Id;
+                            BroadcastPassive(!source.IsPlayer, PassiveTrigger.OnEnemyAppliedStatus, depth, null);
+                            _broadcastSourceId = prevAsSource;
+                            _broadcastVictim = prevAsVictim;
+                            _broadcastSubject = prevAsSubject;
+                            _inStatusAttemptTrigger = false;
+                            // A passive answering the attempt can kill the applier, the target, or
+                            // end the fight. Each makes the application meaningless, so it does not
+                            // happen - the same three re-checks every other pre-resolution hook in
+                            // this engine applies.
+                            if (!target.Alive || !source.Alive || IsBattleOver()) break;
+                        }
+
                         float landing = effect.BypassResist
                             ? effect.Chance
                             : ResolveLandingChance(effect.Chance, effect.Status,
@@ -2828,6 +3051,40 @@ namespace Emberfall.Core.Combat
                                     us.UsesPerRound = effect.UsesPerRound;
                                     us.UsesThisRound = 0;
                                 }
+                            }
+
+                        // The area-only flag on a ward, stamped the way Charges and the
+                        // per-round budget above are. False on every Guard and Covered entry in
+                        // shipped content, so no existing ward gains a shape test nobody authored.
+                        if (effect.AreaHitsOnly)
+                            for (int ao = 0; ao < target.Statuses.Count; ao++)
+                            {
+                                StatusInstance aw = target.Statuses[ao];
+                                if (aw.Kind == effect.Status && aw.SourceId == source.Id) aw.AreaHitsOnly = true;
+                            }
+
+                        // The holder-HP tick, stamped the way Charges and the per-round budget
+                        // above are. Zero on every Burn and Regen in shipped content, so no
+                        // existing tick changes what it reads.
+                        if (effect.HolderHpTick > 0f
+                            && (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen))
+                            for (int hh = 0; hh < target.Statuses.Count; hh++)
+                            {
+                                StatusInstance hs = target.Statuses[hh];
+                                if (hs.Kind != effect.Status || hs.SourceId != source.Id) continue;
+                                hs.HolderHpTick = effect.HolderHpTick;
+                                hs.HolderHpTickCurrent = effect.HolderHpTickCurrent;
+                            }
+
+                        // The skill scope of a DamageTakenUp entry, stamped the way Charges and
+                        // the per-round budget above are. False on every entry in shipped content,
+                        // so no existing modifier gains a scope nobody authored.
+                        if (effect.Status == StatusKind.DamageTakenUp && effect.DamageTakenSkillOnly)
+                            for (int sk = 0; sk < target.Statuses.Count; sk++)
+                            {
+                                StatusInstance ds = target.Statuses[sk];
+                                if (ds.Kind == StatusKind.DamageTakenUp && ds.SourceId == source.Id)
+                                    ds.SkillOnly = true;
                             }
 
                         // PreventExtend on an APPLICATION as well as on a transfer, so the flag
@@ -2979,11 +3236,11 @@ namespace Emberfall.Core.Combat
                             if (!StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
-                            cleansedValue += RemainingDotDamage(target.Statuses[i]);
+                            cleansedValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = cleansedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = cleansedValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
                     case EffectKind.Dispel:
@@ -3006,11 +3263,11 @@ namespace Emberfall.Core.Combat
                             // Dispel that stripped the tag and left the pool would be the same
                             // disagreement, reached by a different door.
                             if (target.Statuses[i].Kind == StatusKind.Shield) target.Shield = 0f;
-                            dispelledValue += RemainingDotDamage(target.Statuses[i]);
+                            dispelledValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
-                        if (removed > 0) { _lastRemovedValue = dispelledValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = dispelledValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
                     case EffectKind.EnergyGain:
@@ -3101,7 +3358,7 @@ namespace Emberfall.Core.Combat
                             // opposite direction and a different question.
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
-                            strippedValue += RemainingDotDamage(target.Statuses[i]);
+                            strippedValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -3109,7 +3366,7 @@ namespace Emberfall.Core.Combat
                         // takes three stacks answers the trigger once. Handed `depth`, so a
                         // removal passive that itself removes something is bounded by the same
                         // MaxPassiveDepth as any other passive calling a passive.
-                        if (removed > 0) { _lastRemovedValue = strippedValue; NoteRemovedFrom(target); FireRemoval(source, depth); }
+                        if (removed > 0) { _lastRemovedValue = strippedValue; NoteRemovedFrom(target); FireRemoval(source, target, depth); }
                         break;
                     }
 
@@ -3168,10 +3425,14 @@ namespace Emberfall.Core.Combat
                             BattleEvent gone = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             gone.Status = entry.Kind;
 
-                            target.AddOrRefresh(opposite, entry.RoundsLeft, entry.Magnitude, source.Id);
+                            // The flipped entry's clock. Zero - every inversion before this pass -
+                            // copies the buff's own RoundsLeft, which makes the same ability last
+                            // six rounds against a fresh buff and one against a spent one.
+                            int flipRounds = effect.InvertDuration > 0 ? effect.InvertDuration : entry.RoundsLeft;
+                            target.AddOrRefresh(opposite, flipRounds, entry.Magnitude, source.Id);
                             BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                             e.Status = opposite;
-                            e.Duration = entry.RoundsLeft;
+                            e.Duration = flipRounds;
                             e.Value = target.CountOf(opposite);
                             flipped++;
                         }
@@ -3304,7 +3565,18 @@ namespace Emberfall.Core.Combat
                             // it is not counted as extended, so the event reports what actually
                             // moved. False on every entry in every battle before this pass.
                             if (entry.NoExtend) continue;
-                            entry.RoundsLeft += added;
+                            // The ceiling "up to 3 rounds" names. Zero - every extension before
+                            // this pass - is uncapped. An entry already at or above the ceiling is
+                            // left exactly where it is rather than shortened, and is not counted
+                            // as extended, so the event reports what actually moved. That is the
+                            // same silence NoExtend one line up keeps, for the same reason.
+                            if (effect.ExtendCap > 0)
+                            {
+                                if (entry.RoundsLeft >= effect.ExtendCap) continue;
+                                int room = effect.ExtendCap - entry.RoundsLeft;
+                                entry.RoundsLeft += added > room ? room : added;
+                            }
+                            else entry.RoundsLeft += added;
                             extended++;
                         }
                         if (extended > 0)
@@ -3377,8 +3649,14 @@ namespace Emberfall.Core.Combat
                         if (!source.Alive || !target.Alive) break;
                         CombatUnit donor = effect.TransferFromTarget ? target : source;
                         CombatUnit recipient = effect.TransferFromTarget ? source : target;
+                        // GAP GROUP 1: through ScaledTerm, which is how Damage, Heal and Shield
+                        // already read their Attack term. HpTransfer was the one amount-bearing
+                        // effect that read EffectiveAttack directly, so the whole ScaleBy family
+                        // was invisible to it - and "redirects 25% of THAT hit" is scaleByLastDamage
+                        // on a transfer and nothing else. An effect that sets none of them gets
+                        // EffectiveAttack back, which is the expression that stood here.
                         int amount = (int)Math.Round(
-                            source.EffectiveAttack * effect.Power + effect.Flat
+                            ScaledTerm(effect, source) * effect.Power + effect.Flat
                             + TargetHpTerm(effect, target),
                             MidpointRounding.AwayFromZero);
                         if (amount <= 0) break;
@@ -3419,6 +3697,16 @@ namespace Emberfall.Core.Combat
                         recipient.Shield += moved;
                         if (!recipient.Has(StatusKind.Shield))
                             recipient.AddOrRefresh(StatusKind.Shield, 99, 0f, source.Id);
+                        // The authored clock on the pool that just arrived. A RE-CLOCK rather than
+                        // an AddOrRefresh, because AddOrRefresh keeps the longer of the two and the
+                        // entry created one line up is 99 rounds - so an authored 2 would be
+                        // silently discarded and an ExtendStatus written beside it would be
+                        // nominal. Zero, which is every transfer before this pass, leaves whatever
+                        // clock the recipient had.
+                        if (effect.ShieldTransferDuration > 0)
+                            for (int shi = 0; shi < recipient.Statuses.Count; shi++)
+                                if (recipient.Statuses[shi].Kind == StatusKind.Shield)
+                                    recipient.Statuses[shi].RoundsLeft = effect.ShieldTransferDuration;
                         BattleEvent se = Emit(BattleEventType.ShieldGain, source.Id, recipient.Id);
                         se.Value = (int)Math.Round(moved, MidpointRounding.AwayFromZero);
                         // GAP 7: keyed to the CASTER - the unit whose effect moved the pool - and
@@ -4003,6 +4291,32 @@ namespace Emberfall.Core.Combat
                 float vulnerable = target.VulnerableTo(source.Id);
                 if (vulnerable != 0f) raw *= 1f + vulnerable;
 
+                // 7.6. Blunted - THE MIRROR OF THE LINE ABOVE, and the only other per-source
+                // entry in the game. "Takes 10% less from it" and "it deals 15% less damage to
+                // Jory" are sentences about ONE attacker; DamageReductionUp, which both currently
+                // use, softens the holder against the whole enemy line.
+                //
+                // Asked of the ATTACKER and keyed to the body being protected, which is the
+                // opposite bookkeeping from Vulnerable one line up and the only direction a hero
+                // can author - see StatusKind.Blunted. Zero when the attacker carries none, and
+                // `raw * (1f - 0f)` is exact.
+                //
+                // Clamped at 0.9 rather than 1.0 so no depth of stacking makes an attacker
+                // harmless - the same discipline the damageReduction step keeps one block up.
+                float resistant = source.BluntedAgainst(target.Id);
+                if (resistant != 0f)
+                {
+                    if (resistant > 0.9f) resistant = 0.9f;
+                    raw *= 1f - resistant;
+                }
+
+                // 7.7. DamageTakenUp - the UNIVERSAL half Vulnerable never had, and the one thing
+                // "takes 15% more Skill Damage" actually says. Skill-scoped per entry, read
+                // against the same ability.Kind division step 4 makes, so the two cannot disagree
+                // about what a skill is. Exactly zero when nothing carries the kind.
+                float damageTakenUp = target.DamageTakenUpAgainst(ability.Kind != AbilityKind.BasicAttack);
+                if (damageTakenUp != 0f) raw *= 1f + damageTakenUp;
+
                 // 8. Variance, round, clamp
                 raw *= 1f + _rng.Spread(_cfg.DamageVariance);
 
@@ -4031,7 +4345,12 @@ namespace Emberfall.Core.Combat
                 }
                 string vfx = ability != null ? ability.Vfx : "impact";
                 string abilityName = ability != null ? ability.Name : "";
+                // GAP GROUP 3: the blow's shape, latched for the whole of the funnel and everything
+                // it wakes. See _funnelHitIsArea for why the effect-level field cannot serve.
+                bool prevFunnelArea = _funnelHitIsArea;
+                _funnelHitIsArea = _hitIsArea;
                 DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
+                _funnelHitIsArea = prevFunnelArea;
 
                 if (critical && source.Alive)
                 {
@@ -4179,22 +4498,57 @@ namespace Emberfall.Core.Combat
                 if (!_removedFromThisFiring.Contains(target.Id)) _removedFromThisFiring.Add(target.Id);
             }
 
-            /// <summary>The three removal sites raise one trigger and name one causer.</summary>
-            private void FireRemoval(CombatUnit source, int depth)
+            /// <summary>
+            /// The three removal sites raise one trigger, name one causer - and now name the body
+            /// it happened TO.
+            ///
+            /// ENGINE-GAPS group 18. The trigger fires on the REMOVER and published no subject, so
+            /// a passive on it could pay the remover and could not reach the ally it had just
+            /// cleansed. "When Lio removes a debuff, THAT ALLY recovers 5% missing HP" had to move
+            /// the heal into the ability, where SubjectLostStatusThisFiring can see it, and pay the
+            /// Energy to the lowest-HP ally - the body the cleanse happened to by construction
+            /// rather than by statement.
+            ///
+            /// Null on no call site: every removal knows whose status it took.
+            /// </summary>
+            private void FireRemoval(CombatUnit source, CombatUnit subject, int depth)
             {
                 if (source == null) return;
                 int prev = _broadcastSourceId;
+                CombatUnit prevSubject = _broadcastSubject;
+                CombatUnit prevVictim = _broadcastVictim;
                 _broadcastSourceId = source.Id;
+                _broadcastSubject = subject;
+                _broadcastVictim = subject;
                 TriggerPassive(source, PassiveTrigger.OnStatusRemoved, depth);
+                _broadcastVictim = prevVictim;
+                _broadcastSubject = prevSubject;
                 _broadcastSourceId = prev;
             }
 
-            /// <summary>Both delay sites raise one trigger and name the unit that caused the delay.</summary>
-            private void FireTurnDelayed(CombatUnit source)
+            /// <summary>
+            /// Both delay sites raise one trigger, name the unit that caused the delay - and now
+            /// name the unit that was delayed.
+            ///
+            /// ENGINE-GAPS group 18, the same absence from the other end. "The FIRST ENEMY DELAYED
+            /// each round gains 10% Defense Down" is a sentence about one body and the trigger
+            /// could only reach the causer, so the shipped clause lands on the whole enemy line.
+            ///
+            /// For a SwapTurnOrder the subject is the body that went backwards, which is the one
+            /// the word "delayed" names; _swapAdvanced and _swapDelayed already record both halves
+            /// for the two target modes that read them.
+            /// </summary>
+            private void FireTurnDelayed(CombatUnit source, CombatUnit delayed)
             {
                 int prev = _broadcastSourceId;
+                CombatUnit prevSubject = _broadcastSubject;
+                CombatUnit prevVictim = _broadcastVictim;
                 _broadcastSourceId = source.Id;
+                _broadcastSubject = delayed;
+                _broadcastVictim = delayed;
                 TriggerPassive(source, PassiveTrigger.OnTurnDelayed, 0);
+                _broadcastVictim = prevVictim;
+                _broadcastSubject = prevSubject;
                 _broadcastSourceId = prev;
             }
 
@@ -4490,21 +4844,83 @@ namespace Emberfall.Core.Combat
                 // the shield pool, so a guarded ward meets a smaller hit. Walked backwards because
                 // a spent charge removes its entry.
                 int damageBeforeGuard = damage;
+                // Who placed the charge that answered this blow, or -1 when none did. Read one
+                // block down by OnGuardPrevented, and captured here because the entry is removed
+                // inline the moment its last charge is spent.
+                int guardPreventerId = -1;
                 for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
                 {
                     StatusInstance guard = target.Statuses[gi];
-                    if (guard.Kind != StatusKind.Guard || guard.Charges <= 0 || guard.Magnitude <= 0f) continue;
+                    if (guard.Kind != StatusKind.Guard || guard.Magnitude <= 0f) continue;
+                    // GAP GROUP 3: a ward raised against sweeps declines a single-target blow.
+                    // False on every Guard in shipped content, which declines nothing.
+                    if (guard.AreaHitsOnly && !_funnelHitIsArea) continue;
+                    // ENGINE-GAPS group 2: a per-round budget, honoured here for the first time.
+                    //
+                    // Charges count DOWN to removal and never refill, which is the wrong shape for
+                    // "it reduces the first area hit EACH ROUND by 20%" - one charge across a
+                    // two-round ward answers one hit in total rather than one a round. A budgeted
+                    // entry is gated on its budget instead and keeps its charges, if it has any;
+                    // an entry with no budget still needs a charge, which is every Guard in
+                    // shipped content and the exact test that stood here.
+                    bool budgeted = guard.UsesPerRound > 0;
+                    if (budgeted) { if (guard.UsesThisRound >= guard.UsesPerRound) continue; }
+                    else if (guard.Charges <= 0) continue;
                     float cut = guard.Magnitude > 1f ? 1f : guard.Magnitude;
                     damage -= (int)Math.Round(damage * cut, MidpointRounding.AwayFromZero);
-                    guard.Charges--;
-                    if (guard.Charges <= 0)
+                    guardPreventerId = guard.SourceId;
+                    if (budgeted) guard.UsesThisRound++;
+                    // Charges are still spent when the entry has them, so a ward can carry both a
+                    // per-round budget and a lifetime one and run out of either. Unbudgeted
+                    // entries reach this with the same Charges > 0 they were gated on above.
+                    if (guard.Charges > 0)
                     {
-                        target.Statuses.RemoveAt(gi);
-                        BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
-                        spent.Status = StatusKind.Guard;
+                        guard.Charges--;
+                        if (guard.Charges <= 0)
+                        {
+                            target.Statuses.RemoveAt(gi);
+                            BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
+                            spent.Status = StatusKind.Guard;
+                        }
                     }
                     if (damage <= 0) { damage = 0; break; }
                     break;   // one guard a hit, so two cannot stack into immunity
+                }
+
+                // ENGINE-GAPS group 9: somebody can hear a Guard charge do its job.
+                //
+                // The charge is spent inline above and the entry is gone by the time anything else
+                // runs, so the only thing that could observe a prevention was a Ledger with
+                // FunnelSource.GuardMitigation - which banks the amount and pays out when the bank
+                // FILLS, once per cap rather than once per prevention. "When Reserve prevents
+                // damage, its holder recovers 4% Max HP" is a sentence about each prevention.
+                //
+                // Broadcast to the APPLIER'S side with the applier as the source, so
+                // TriggerSourceIsSelf reads "a Guard I placed" and a hero cannot answer for
+                // somebody else's ward. The holder is the subject and is excluded the way every
+                // ally broadcast excludes the body the news is about; when the holder IS the
+                // applier, PassiveDef.IncludeSelf is what lets the clause reach it.
+                //
+                // Raised only when the charge actually removed damage, and only when the applier is
+                // still on the field. `_lastMoved` for the applier carries the amount prevented.
+                if (guardPreventerId >= 0 && damageBeforeGuard - damage > 0)
+                {
+                    CombatUnit warder = FindUnit(guardPreventerId);
+                    if (warder != null && warder.Alive)
+                    {
+                        NoteMoved(warder.Id, damageBeforeGuard - damage);
+                        CombatUnit prevGpSubject = _broadcastSubject;
+                        CombatUnit prevGpVictim = _broadcastVictim;
+                        int prevGpSource = _broadcastSourceId;
+                        _broadcastSubject = target;
+                        _broadcastVictim = target;
+                        _broadcastSourceId = warder.Id;
+                        BroadcastPassive(warder.IsPlayer, PassiveTrigger.OnGuardPrevented, 0, target);
+                        _broadcastSourceId = prevGpSource;
+                        _broadcastVictim = prevGpVictim;
+                        _broadcastSubject = prevGpSubject;
+                        if (!target.Alive || IsBattleOver()) return;
+                    }
                 }
 
                 // Funnel banking: GuardMitigation entries bank the amount Guard prevented.
@@ -4576,8 +4992,19 @@ namespace Emberfall.Core.Combat
                 if (!_inRedirect)
                 {
                     int protectorId;
-                    float share = target.CoverFraction(out protectorId);
+                    StatusInstance ward;
+                    float share = target.CoverFraction(out protectorId, out ward, _funnelHitIsArea);
                     CombatUnit protector = share > 0f ? FindUnit(protectorId) : null;
+                    // ENGINE-GAPS group 2: the ward's per-round budget, charged BEFORE the share
+                    // is delivered - the same discipline SpendLinkCharge keeps one block down, and
+                    // for the same reason: the delivery re-enters this funnel, and a budget
+                    // charged afterwards could be spent twice by one blow.
+                    //
+                    // Charged only when the ward is actually about to answer: a protector that is
+                    // dead or missing leaves `protector` null and RedirectShare returns without
+                    // moving anything, which is not a use.
+                    if (ward != null && ward.UsesPerRound > 0 && protector != null)
+                        ward.UsesThisRound++;
                     // The ward's owner IS the protector, so the rule owner and the destination are
                     // the same unit here and RedirectShare's second NoteMoved is skipped.
                     if (!RedirectShare(sourceId, target, protector, share, ref damage,
@@ -4863,6 +5290,9 @@ namespace Emberfall.Core.Combat
                 }
 
                 target.LastDamagedRound = _round;
+                // GAP GROUP 1: and HOW BIG it was. The realised number, written where the bar
+                // moved, so every mitigation above this line has already taken its part.
+                target.LastDamageTaken = damage;
                 if (sourceId >= 0)
                 {
                     CombatUnit dealer = FindUnit(sourceId);
@@ -4872,6 +5302,19 @@ namespace Emberfall.Core.Combat
                     // applier is long dead - writes nothing, matching LastDamagedRound's own rule
                     // that a blow needs a body behind it to be attributable.
                     target.LastDamagedRoundBy[sourceId] = _round;
+                    // GAP GROUP 8: and the same fact kept for the SIDE rather than for the body.
+                    // Two ints on the attacker and one id on the simulation, which between them
+                    // are everything "the enemy that most recently damaged an ally" and "if the
+                    // target attacked an ally since my last turn" need. Written for every blow the
+                    // funnel carries, a Burn tick and a redirected share included, because they
+                    // are all one side hurting the other.
+                    if (dealer != null)
+                    {
+                        if (target.IsPlayer) dealer.LastHitPlayerSideRound = _round;
+                        else dealer.LastHitEnemySideRound = _round;
+                    }
+                    if (target.IsPlayer) _lastPlayerSideAttackerId = sourceId;
+                    else _lastEnemySideAttackerId = sourceId;
                 }
 
                 // What actually came off the bar, for EffectKind.EchoDamage to repeat a fraction
@@ -5234,6 +5677,27 @@ namespace Emberfall.Core.Combat
                     if (amount <= 0) return;
                 }
 
+                // And the direction this pipeline never had. HealSuppression refuses a heal and
+                // HealingReduction cuts one; nothing could raise one, so "Diagnosed allies receive
+                // 18% more healing" had to become "Lio heals them 18% more" - a smaller clause
+                // that also stops being true the moment a second Mender stands beside him.
+                //
+                // Deepest entry wins rather than the entries stacking, which is the reading the
+                // block directly above takes and the one every other magnitude-bearing status in
+                // this engine takes. Exactly zero when nothing carries the kind.
+                float healBoost = 0f;
+                for (int hu = 0; hu < target.Statuses.Count; hu++)
+                {
+                    StatusInstance hb = target.Statuses[hu];
+                    if (hb.Kind != StatusKind.HealingReceivedUp) continue;
+                    if (hb.Magnitude > healBoost) healBoost = hb.Magnitude;
+                }
+                if (healBoost > 0f)
+                {
+                    amount = (int)Math.Round(amount * (1f + healBoost), MidpointRounding.AwayFromZero);
+                    if (amount <= 0) return;
+                }
+
                 target.LastHealedRound = _round;
 
                 CombatUnit healerUnit = FindUnit(sourceId);
@@ -5455,6 +5919,35 @@ namespace Emberfall.Core.Combat
                 // shipped content applies TurnDebt, so this branch is unreachable today.
                 if (amount > 0 && energyBefore >= 0)
                     CheckEnergyThreshold(unit, energyBefore);
+
+                // --- and the recipient's own side hears that the bar moved ---
+                // ENGINE-GAPS group 9. The mirror of OnEnemyEnergyDrained below, which fires on
+                // whoever TOOK Energy across the line; nothing fired for Energy arriving, so "when
+                // an ally gains Energy" had to be folded into the passive that hands it out.
+                //
+                // Four things have to hold, and each drops a case the clause does not mean: a
+                // gain rather than a drain, a bar that actually moved rather than one already
+                // full, a named granter rather than a unit's own turn refill (which passes -1),
+                // and one level of re-entrancy rather than a passive that answers a gain by
+                // granting. The recipient is excluded the way every ally broadcast excludes the
+                // body the news is about, and PassiveDef.IncludeSelf is how a clause says
+                // otherwise.
+                if (amount > 0 && energyBefore >= 0 && unit.Energy != energyBefore
+                    && sourceId >= 0 && !_inEnergyGainTrigger)
+                {
+                    _inEnergyGainTrigger = true;
+                    CombatUnit prevEgSubject = _broadcastSubject;
+                    CombatUnit prevEgVictim = _broadcastVictim;
+                    int prevEgSource = _broadcastSourceId;
+                    _broadcastSubject = unit;
+                    _broadcastVictim = unit;
+                    _broadcastSourceId = sourceId;
+                    BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAllyEnergyGained, 0, unit);
+                    _broadcastSourceId = prevEgSource;
+                    _broadcastVictim = prevEgVictim;
+                    _broadcastSubject = prevEgSubject;
+                    _inEnergyGainTrigger = false;
+                }
 
                 // --- and the mirror of it: somebody took Energy off an enemy ---
                 // After the clamp, so "lost Energy" means the bar actually moved rather than a
@@ -5785,6 +6278,11 @@ namespace Emberfall.Core.Combat
 
                     PassiveDef passive = owner.Passives[i];
                     if (passive == null || passive.Trigger != trigger) continue;
+                    // The other half of PassiveDef.IncludeSelf. This owner is in the walk only
+                    // because SOME passive on it opted in; the ones that did not are still the
+                    // excluded body and are skipped here. Null outside a broadcast, so the test is
+                    // one reference comparison on every other dispatch in the engine.
+                    if (owner == _broadcastExcept && !passive.IncludeSelf) continue;
                     if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
                     if (!LimitAllows(owner, i, passive)) continue;
                     if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
@@ -5997,20 +6495,86 @@ namespace Emberfall.Core.Combat
             /// Walks a snapshot, because a passive firing inside the loop can kill somebody and
             /// _units is not safe to index live across that.
             /// </summary>
+            /// <summary>
+            /// How many entries the per-stack scaler counts on this subject.
+            ///
+            /// ENGINE-GAPS group 17. This used to be one line at each of two call sites -
+            /// CountOf(PerStackStatus) - and widening it in one place is what stops the
+            /// caster-side snapshot and the per-target read disagreeing about what a buff is or
+            /// where the ceiling sits. An effect that names no class and no ceiling gets exactly
+            /// the call that stood there.
+            /// </summary>
+            private static int PerStackCount(EffectDef effect, CombatUnit subject)
+            {
+                int count;
+                switch (effect.PerStackClass)
+                {
+                    case StatusCount.AnyBeneficial: count = subject.BuffCount; break;
+                    case StatusCount.AnyHarmful: count = subject.DebuffCount; break;
+                    default: count = subject.CountOf(effect.PerStackStatus); break;
+                }
+                if (effect.PerStackMaxCount > 0 && count > effect.PerStackMaxCount)
+                    count = effect.PerStackMaxCount;
+                return count;
+            }
+
+            /// <summary>
+            /// What the per-stack scaler multiplies Power, Magnitude and a GainResolve's Hits by.
+            ///
+            /// FROM ZERO means the count IS the multiplier rather than a bonus on top of one, and
+            /// the two clauses that asked for this differ exactly there: "damage increases 10% per
+            /// displayed buff" is a bonus on a blow that lands anyway, and "removes 6% turn
+            /// progress for each target buff" is the whole of the amount, which against a bare
+            /// target is nothing.
+            ///
+            /// Returns 1 + PerStack * CountOf(PerStackStatus) for an effect that sets none of the
+            /// three new fields, which is the expression that stood at both call sites.
+            /// </summary>
+            private static float PerStackFactor(EffectDef effect, CombatUnit subject)
+            {
+                int count = PerStackCount(effect, subject);
+                return effect.PerStackFromZero
+                    ? effect.PerStack * count
+                    : 1f + effect.PerStack * count;
+            }
+
             private void BroadcastPassive(bool playerSide, PassiveTrigger trigger, int depth, CombatUnit except)
             {
                 List<CombatUnit> side = new List<CombatUnit>();
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (!u.Alive || u.IsPlayer != playerSide || u == except) continue;
+                    if (!u.Alive || u.IsPlayer != playerSide) continue;
+                    // THE EXCLUSION, AND THE ONE WAY PAST IT. The excluded unit enters the walk
+                    // only when it carries a passive that both answers this trigger and says "and
+                    // me" - see PassiveDef.IncludeSelf. Gated on _anyIncludeSelf first, so a
+                    // battle nobody authored it into builds the identical list it always did and
+                    // the unit keeps its natural position when somebody does.
+                    if (u == except && !(_anyIncludeSelf && HearsAsSubject(u, trigger))) continue;
                     side.Add(u);
                 }
+                CombatUnit prevExcept = _broadcastExcept;
+                _broadcastExcept = except;
                 for (int i = 0; i < side.Count; i++)
                 {
-                    if (IsBattleOver()) return;
+                    if (IsBattleOver()) break;
                     TriggerPassive(side[i], trigger, depth);
                 }
+                _broadcastExcept = prevExcept;
+            }
+
+            /// <summary>Whether this unit carries a passive that answers `trigger` AND opts in to
+            /// hearing it about itself. Walks a list that is one or two entries long on a hero and
+            /// usually empty on an enemy, and is reached only when _anyIncludeSelf is true.
+            /// </summary>
+            private static bool HearsAsSubject(CombatUnit u, PassiveTrigger trigger)
+            {
+                for (int i = 0; i < u.Passives.Count; i++)
+                {
+                    PassiveDef p = u.Passives[i];
+                    if (p != null && p.IncludeSelf && p.Trigger == trigger) return true;
+                }
+                return false;
             }
 
             /// <summary>
@@ -6216,7 +6780,7 @@ namespace Emberfall.Core.Combat
                     BankTurnDebt(source, target, banksAs, realised, cap, rate, debtDuration);
                 }
 
-                if (destination > at && source != null) FireTurnDelayed(source);
+                if (destination > at && source != null) FireTurnDelayed(source, target);
             }
 
             /// <summary>
@@ -6315,7 +6879,8 @@ namespace Emberfall.Core.Combat
                 e.Status = StatusKind.None;
                 e.Value = earliest - latest;
 
-                if (source != null) FireTurnDelayed(source);
+                // `a` is the body that went backwards, which is what "delayed" names.
+                if (source != null) FireTurnDelayed(source, a);
             }
 
             // ------------------------------------------------------------------ targeting
@@ -6914,6 +7479,26 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    // GAP GROUP 8: the last act rather than the biggest total.
+                    // HighestDamageDealtEnemy one case up is a career reading, so the enemy that
+                    // opened hard and has done nothing since still wins it and the one that just
+                    // struck an ally is not named.
+                    //
+                    // Resolves to NOBODY when no enemy has hurt the caster's line yet, or when the
+                    // one that did is dead, excluded or refused by a target ban - the same four
+                    // tests every mode beside it applies, rather than a fallback to the front
+                    // body, which would answer a different question in the first round of every
+                    // fight.
+                    case TargetMode.EnemyThatLastDamagedAlly:
+                    {
+                        int lastId = caster.IsPlayer ? _lastPlayerSideAttackerId : _lastEnemySideAttackerId;
+                        CombatUnit last = lastId >= 0 ? FindUnit(lastId) : null;
+                        if (last != null && last.Alive && last.IsPlayer != caster.IsPlayer
+                            && last != excluded && !Rejected(caster, last))
+                            picked = last;
+                        break;
+                    }
+
                     case TargetMode.HighestDoTDealtEnemy:
                     {
                         for (int i = 0; i < _units.Count; i++)
@@ -6943,7 +7528,7 @@ namespace Emberfall.Core.Combat
                             CombatUnit u = _units[i];
                             if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             float pending = 0f;
-                            for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s]);
+                            for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s], u);
                             if (pending <= 0f) continue;
                             if (picked == null || pending > best || (pending == best && u.Slot < picked.Slot))
                             {
@@ -7304,6 +7889,10 @@ namespace Emberfall.Core.Combat
                     landed.StoredHighHp = status.StoredHighHp;
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
+                    landed.SkillOnly = status.SkillOnly;
+                    landed.HolderHpTick = status.HolderHpTick;
+                    landed.HolderHpTickCurrent = status.HolderHpTickCurrent;
+                    landed.AreaHitsOnly = status.AreaHitsOnly;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
                     landed.BanKind = status.BanKind;
