@@ -98,6 +98,14 @@ occupant. Where Pinoy's text could not be said, each batch approximated it, mark
 and recorded a row rather than growing the engine; `Docs/ENGINE-GAPS.md` is the whole record and is
 now a closed list, because no hero is left to author.
 
+**The fidelity pass (ENGINE-GAPS pass 2) added three fields no shipped content sets yet**:
+`PassiveDef.ChargeOnLanding`, which gives a limited passive its allowance back when a firing lands
+nothing, and `PassiveDef.BuffsOnly` and `EffectDef.BuffsOnly`, which stop a listener or a buff move
+treating a Mark, Ledger or Link as a buff. Both are opt-in because each, made the rule, moves the
+balance line. It also repaired `TargetMode.LastAttacker` inside a broadcast about another body, which
+moved Caldus and nothing else. The harness section ENGINE GAPS PASS 2 - FIDELITY proves all three and
+measures every shipped clause they reach.
+
 ### Content
 
 Seven JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
@@ -497,18 +505,16 @@ review included.
 
 In order.
 
-1. **The second engine gaps pass, and it is now a closed list.** `Docs/ENGINE-GAPS.md` is the
-   input: 26 capabilities, 34 clauses, 30 heroes, grouped by what is missing rather than by hero so
-   a repeat is visible. The roster is authored end to end, so no further batch can add a row and
-   the file will not grow again. It is still a record rather than a work order, so the first job is
-   deciding which groups are debt and which are games this one is not. Three are already named.
-   **The eight groups with more than one occupant are where the value is**, and three of them pair
-   a low-star hero with a 4-star or 5-star that asked for the same thing first, so each closes two
-   kits at once. **Groups 23 and 35 are the pair to weigh together**: one wants an existing damage
-   modifier narrowed to a single hit, the other wants one widened to take a condition, and a single
-   conditioned chargeable modifier answers three clauses across three heroes. **Groups 20 and 22
-   are marked as different in kind rather than as debt**, because an information layer and a
-   movement system are games this one is not.
+1. **The content pass the fidelity pass wrote up.** ENGINE-GAPS pass 2 read every shipped clause
+   against what the engine does with it and ranked seventeen findings by how much they change a
+   fight. Its section of `Docs/ENGINE-GAPS.md` ends in thirteen one-line content instructions,
+   C1 to C13, each proved by a harness pair whose status note flips when the line is made. Two of
+   them are balance decisions rather than wiring: C11 turns `chargeOnLanding` on across 24 passives
+   and drops Aster under the 3-star band unless she is raised about 3%, and C13 turns `buffsOnly` on
+   and takes the finale's CEIL from 63% to 22% unless the campaign is retuned with it. The file now
+   holds 28 capabilities and 39 clauses; five proposed primitives (G1 to G5), four of them small,
+   would close groups 25, 30, 23, 36 and 37. **Groups 20 and 22 stay marked as different in kind rather than as debt**,
+   because an information layer and a movement system are games this one is not.
 2. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
    not: they read `UITheme` for colour and reference resolution and then write their own metrics at
    the call site. `HubStyle`'s own scope note says it is the Hub's chrome language rather than the

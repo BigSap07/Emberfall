@@ -114,6 +114,7 @@ namespace Emberfall.DevHarness
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
             CheckKitDefects(content);
+            CheckFidelityPassTwo(content);
             CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
             CheckTalentsAreWorthPicking(content);
@@ -31210,6 +31211,1309 @@ namespace Emberfall.DevHarness
                 }
             }
             return p;
+        }
+
+        // ================================================ ENGINE GAPS PASS 2: FIDELITY, NOT AUTHORING
+
+        /// <summary>
+        /// THE SECOND ENGINE-GAPS PASS, AND A DIFFERENT QUESTION FROM THE FIRST. Pass one asked
+        /// which of Pinoy's sentences the engine could not say; the roster is authored end to end,
+        /// so that question is closed. This one asks which SHIPPED clauses the engine runs more or
+        /// less often than they say, on a body other than the one they name, or against a limit
+        /// nothing can reach - the shape the redirect family had while it was wired to OnDamaged.
+        ///
+        /// Every finding here is a PAIR, measured the way THE REDIRECT FAMILY section measures:
+        /// the same fight twice, once wired the way it ships and once patched in memory to the
+        /// sentence, and the pair is the evidence. Nothing on disk is touched. The content pairs
+        /// FORCE both halves rather than trusting either to be what ships, so each check keeps
+        /// holding after the content pass restores the kit, and a status note says which half
+        /// the shipped kit currently reads as. Docs/ENGINE-GAPS.md, pass 2, is the ledger.
+        /// </summary>
+        private static void CheckFidelityPassTwo(ContentDatabase live)
+        {
+            Line("ENGINE GAPS PASS 2 - FIDELITY (shipped clauses the engine runs more or less often than they say)");
+            CheckChargeOnLandingRule();
+            CheckLastAttackerInABroadcast();
+            CheckBuffsOnlyRule();
+            CheckChargeOnLandingOnLiveContent();
+            CheckBuffsOnlyOnLiveContent();
+            CheckFidelityFindings();
+            Line("");
+        }
+
+        // ---- the rule, in the smallest arena that sees it --------------------------------------
+
+        private static string ColHeroes(string limit, bool chargeOnLanding)
+        {
+            return @"{""heroes"":[
+  { ""id"":""col_hero"", ""name"":""ColHero"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":100, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""col_b"", ""name"":""Tag"", ""effects"":[
+       { ""kind"":""ApplyStatus"", ""target"":""HighestHpEnemy"", ""status"":""Mark"", ""duration"":2, ""chance"":1 } ] },
+    ""active"": { ""id"":""col_a"", ""name"":""Noop"", ""energyCost"":9999,
+       ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""col_p"", ""name"":""Answer"", ""trigger"":""OnEnemyBuffGained"", " + limit + @",
+      ""chargeOnLanding"": " + (chargeOnLanding ? "true" : "false") + @",
+      ""effects"":[ { ""kind"":""Damage"", ""target"":""BroadcastSubject"", ""power"":0.5,
+                      ""condition"":""HasMyMark"", ""conditionOn"":""BroadcastSubject"" } ] } }
+]}";
+        }
+
+        private const string ColEnemies = @"{""enemies"":[
+  { ""id"":""col_quick"", ""name"":""ColQuick"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":1, ""defense"":0,
+    ""speed"":500, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""col_q"", ""name"":""Brace"", ""effects"":[
+       { ""kind"":""ApplyStatus"", ""target"":""Self"", ""status"":""AttackUp"", ""magnitude"":0.01, ""duration"":1, ""chance"":1 } ] } },
+  { ""id"":""col_slow"", ""name"":""ColSlow"", ""aspect"":""Ember"", ""hp"":800000, ""attack"":1, ""defense"":0,
+    ""speed"":400, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""col_s"", ""name"":""Brace"", ""effects"":[
+       { ""kind"":""ApplyStatus"", ""target"":""Self"", ""status"":""AttackUp"", ""magnitude"":0.01, ""duration"":1, ""chance"":1 } ] } }
+]}";
+
+        private const string ColCampaign = @"{""chapters"":[{""id"":""col_ch"",""name"":""Col"",""stages"":[
+  {""id"":""col_arena"",""index"":1,""enemies"":[{""id"":""col_quick"",""level"":1},{""id"":""col_slow"",""level"":1}]}
+]}]}";
+
+        /// <summary>
+        /// A LIMIT CHARGED WHEN THE CLAUSE LANDS, against the same arena with the limit charged
+        /// when the trigger arrives. Two enemies buff themselves every round, the fast one first;
+        /// the hero marks only the slow one, and answers a MARKED enemy's buff. So each round the
+        /// first buff to arrive is the one the clause does not name.
+        ///
+        /// Charged at the trigger, the unmarked buff spends the allowance and the marked one is
+        /// refused - the clause never lands, in any round. Charged on landing, the empty firing
+        /// gives it back and the marked buff is answered, once a round, every round. The event
+        /// count says the second half of the rule: an empty firing that gave its allowance back
+        /// leaves no PassiveTrigger in the record, so the screen does not announce a clause that
+        /// did nothing.
+        /// </summary>
+        private static void CheckChargeOnLandingRule()
+        {
+            const int rounds = 6;
+            int[] perRoundOff = RunColArena(@"""limit"":""OncePerRound"", ""oncePerBattle"":false", false, rounds);
+            int[] perRoundOn = RunColArena(@"""limit"":""OncePerRound"", ""oncePerBattle"":false", true, rounds);
+            int[] perBattleOff = RunColArena(@"""oncePerBattle"":true", false, rounds);
+            int[] perBattleOn = RunColArena(@"""oncePerBattle"":true", true, rounds);
+            if (perRoundOff == null || perRoundOn == null || perBattleOff == null || perBattleOn == null)
+            {
+                Check(false, "charge-on-landing arena built");
+                return;
+            }
+
+            Check(perRoundOff[0] == 0 && perRoundOff[1] == rounds,
+                  "OncePerRound charged at the trigger: the clause landed " + perRoundOff[0] + " time(s) in "
+                  + rounds + " rounds, and the passive announced itself " + perRoundOff[1] + " time(s) - "
+                  + "once a round, every one of them on the unmarked enemy whose buff arrived first");
+            Check(perRoundOn[0] == rounds && perRoundOn[1] == perRoundOn[0],
+                  "and with chargeOnLanding the same arena lands it " + perRoundOn[0] + " time(s), once a "
+                  + "round, with " + perRoundOn[1] + " PassiveTrigger event(s) - one per landing, the "
+                  + "empty firings taken back out of the record");
+            Check(perBattleOff[0] == 0 && perBattleOn[0] == 1,
+                  "oncePerBattle answers the same way: " + perBattleOff[0] + " landing(s) charged at the "
+                  + "trigger, where the first buff of the fight spent it, against " + perBattleOn[0]
+                  + " charged on landing");
+        }
+
+        /// <summary>Returns { passive blows landed, PassiveTrigger events for the passive }.</summary>
+        private static int[] RunColArena(string limit, bool chargeOnLanding, int rounds)
+        {
+            ContentDatabase db = LoadSyntheticContent(ColHeroes(limit, chargeOnLanding), ColEnemies, ColCampaign,
+                                                      ZeroVarianceBalance(rounds), "charge on landing");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("col_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("col_arena"), 3402, team);
+            if (r == null) return null;
+            int[] n = new int[2];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Answer") n[0]++;
+                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "col_p") n[1]++;
+            }
+            return n;
+        }
+
+        // ---- LastAttacker names one body inside a broadcast ------------------------------------
+
+        private const string LaHeroes = @"{""heroes"":[
+  { ""id"":""la_guard"", ""name"":""LaGuard"", ""role"":""Vanguard"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":1, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""la_gb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""active"": { ""id"":""la_ga"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""la_p"", ""name"":""Answer"", ""trigger"":""OnEnemyDamagedAlly"", ""oncePerBattle"":false,
+      ""effects"":[ { ""kind"":""Damage"", ""target"":""LastAttacker"", ""power"":0.5 } ] } },
+  { ""id"":""la_ward"", ""name"":""LaWard"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":800000, ""attack"":1, ""defense"":0, ""speed"":2, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""la_wb"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""active"": { ""id"":""la_wa"", ""name"":""Noop"", ""energyCost"":9999, ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string LaEnemies = @"{""enemies"":[
+  { ""id"":""la_prod"", ""name"":""LaProd"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":10, ""defense"":0,
+    ""speed"":500, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""la_pb"", ""name"":""Prod"", ""effects"":[ { ""kind"":""Damage"", ""target"":""FrontEnemy"", ""power"":0.1 } ] } },
+  { ""id"":""la_strike"", ""name"":""LaStrike"", ""aspect"":""Ember"", ""hp"":900000, ""attack"":10, ""defense"":0,
+    ""speed"":400, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""la_sb"", ""name"":""Strike"", ""effects"":[ { ""kind"":""Damage"", ""target"":""LowestHpEnemy"", ""power"":0.1 } ] } }
+]}";
+
+        private const string LaCampaign = @"{""chapters"":[{""id"":""la_ch"",""name"":""La"",""stages"":[
+  {""id"":""la_arena"",""index"":1,""enemies"":[{""id"":""la_prod"",""level"":1},{""id"":""la_strike"",""level"":1}]}
+]}]}";
+
+        /// <summary>
+        /// TargetMode.LastAttacker INSIDE A BROADCAST ABOUT ANOTHER BODY. The guard stands in front,
+        /// so one enemy prods it every round; the other strikes the guard's lower-HP ally, which
+        /// raises OnEnemyDamagedAlly on the guard. Its answer aims at LastAttacker.
+        ///
+        /// The target mode used to read the CASTER's attacker while ConditionSubject.LastAttacker
+        /// read the broadcast subject's, so an answer gated on the enemy that struck the ally landed
+        /// on the enemy that last struck the guard. Measured before the repair: every answer in this
+        /// arena landed on LaProd. Caldus's No Uncertain Ground is the shipped passive with this
+        /// shape; its pair is in the findings below.
+        /// </summary>
+        private static void CheckLastAttackerInABroadcast()
+        {
+            ContentDatabase db = LoadSyntheticContent(LaHeroes, LaEnemies, LaCampaign, ZeroVarianceBalance(4), "last attacker");
+            if (db == null) return;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("la_guard"), 1));
+            team.Add(MakeInstance(db.GetHero("la_ward"), 1));
+            BattleResult r = RunWith(db, db.GetStage("la_arena"), 3403, team);
+            if (r == null) { Check(false, "last-attacker arena built"); return; }
+            int onStriker = 0, onProd = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type != BattleEventType.Damage || e.AbilityName != "Answer") continue;
+                UnitSnapshot t = r.FindUnit(e.TargetId);
+                if (t == null) continue;
+                if (t.Name == "LaStrike") onStriker++;
+                else if (t.Name == "LaProd") onProd++;
+            }
+            Check(onStriker > 0 && onProd == 0,
+                  "an OnEnemyDamagedAlly answer aimed at LastAttacker lands on the enemy that struck the "
+                  + "ally (" + onStriker + ") and never on the one that last struck its owner (" + onProd
+                  + ") - the body ConditionSubject.LastAttacker names in the same window. It was "
+                  + onStriker + " on LaProd and 0 on LaStrike before the repair");
+        }
+
+        // ---- a Mark is not a buff: the listening half and the moving half ---------------------
+
+        private static string BoHeroes(bool buffsOnly)
+        {
+            string flag = buffsOnly ? "true" : "false";
+            return @"{""heroes"":[
+  { ""id"":""bo_hero"", ""name"":""BoHero"", ""role"":""Striker"", ""aspect"":""Ember"", ""stars"":5, ""startingHero"":true,
+    ""hp"":900000, ""attack"":100, ""defense"":0, ""speed"":900, ""critChance"":0, ""critDamage"":1.0, ""growth"":0.1,
+    ""basic"": { ""id"":""bo_b"", ""name"":""Tag"", ""effects"":[
+       { ""kind"":""ApplyStatus"", ""target"":""FrontEnemy"", ""status"":""Mark"", ""duration"":2, ""chance"":1 },
+       { ""kind"":""MoveBuffs"", ""target"":""FrontEnemy"", ""secondaryTarget"":""HighestHpEnemy"", ""hits"":5,
+         ""buffsOnly"": " + flag + @" } ] },
+    ""active"": { ""id"":""bo_a"", ""name"":""Noop"", ""energyCost"":9999,
+       ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] },
+    ""passive1"": { ""id"":""bo_p"", ""name"":""Answer"", ""trigger"":""OnEnemyBuffGained"", ""oncePerBattle"":false,
+      ""buffsOnly"": " + flag + @",
+      ""effects"":[ { ""kind"":""Damage"", ""target"":""BroadcastSubject"", ""power"":0.5 } ] } }
+]}";
+        }
+
+        private const string BoEnemies = @"{""enemies"":[
+  { ""id"":""bo_front"", ""name"":""BoFront"", ""aspect"":""Ember"", ""hp"":400000, ""attack"":1, ""defense"":0,
+    ""speed"":10, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""bo_f"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } },
+  { ""id"":""bo_back"", ""name"":""BoBack"", ""aspect"":""Ember"", ""hp"":800000, ""attack"":1, ""defense"":0,
+    ""speed"":9, ""critChance"":0, ""critDamage"":1.0,
+    ""basic"": { ""id"":""bo_k"", ""name"":""Wait"", ""effects"":[ { ""kind"":""Heal"", ""target"":""Self"", ""flat"":1 } ] } }
+]}";
+
+        private const string BoCampaign = @"{""chapters"":[{""id"":""bo_ch"",""name"":""Bo"",""stages"":[
+  {""id"":""bo_arena"",""index"":1,""enemies"":[{""id"":""bo_front"",""level"":1},{""id"":""bo_back"",""level"":1}]}
+]}]}";
+
+        /// <summary>
+        /// A MARK IS NOT A BUFF, asked of both places that treated it as one. Nothing in this arena
+        /// ever gains a real buff: the only non-harmful entry that ever lands on an enemy is the
+        /// hero's own Mark. The hero answers OnEnemyBuffGained, and its basic then moves the front
+        /// enemy's buffs to the back one.
+        ///
+        /// Without buffsOnly, both halves act on the Mark: the listener strikes the body the hero
+        /// has just tagged, and the move carries the Mark to the back enemy, once for every Mark
+        /// the basic lays. With it, neither has anything to act on. The shipped roster keeps the old reading
+        /// on purpose - see PassiveDef.BuffsOnly - and the pairs after this arena say what each
+        /// shipped listener and mover does with it.
+        /// </summary>
+        private static void CheckBuffsOnlyRule()
+        {
+            int[] off = RunBoArena(false);
+            int[] on = RunBoArena(true);
+            if (off == null || on == null) { Check(false, "buffs-only arena built"); return; }
+            Check(off[0] > 0 && off[1] == off[0],
+                  "without buffsOnly the hero's own Mark is an enemy buff to both halves: " + off[0]
+                  + " answer(s) to it and " + off[1] + " Mark(s) carried off by the move - one of each "
+                  + "for every Mark the basic lays, across " + off[2] + " basic(s)");
+            Check(on[0] == 0 && on[1] == 0,
+                  "and with it neither acts on a Mark (" + on[0] + " answer(s), " + on[1] + " carried)");
+        }
+
+        /// <summary>Returns { passive blows, Marks moved, hero basics }.</summary>
+        private static int[] RunBoArena(bool buffsOnly)
+        {
+            ContentDatabase db = LoadSyntheticContent(BoHeroes(buffsOnly), BoEnemies, BoCampaign, ZeroVarianceBalance(4), "buffs only");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("bo_hero"), 1));
+            BattleResult r = RunWith(db, db.GetStage("bo_arena"), 3404, team);
+            if (r == null) return null;
+            int[] n = new int[3];
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.AbilityName == "Answer") n[0]++;
+                if (e.Type == BattleEventType.StatusSpread && e.Status == StatusKind.Mark) n[1]++;
+                if (e.Type == BattleEventType.BasicAttack) n[2]++;
+            }
+            return n;
+        }
+
+        private static AbilityDef FidAbility(ContentDatabase db, string heroId, string abilityId)
+        {
+            HeroDef h = db.GetHero(heroId);
+            if (h == null) return null;
+            if (h.BasicAttack != null && h.BasicAttack.Id == abilityId) return h.BasicAttack;
+            if (h.Active != null && h.Active.Id == abilityId) return h.Active;
+            return null;
+        }
+
+        /// <summary>
+        /// Every shipped listener at OnEnemyBuffGained and every shipped buff move, as it ships and
+        /// with buffsOnly set in memory. For a listener the count is its firings - the ones the
+        /// flag removes are firings that answered a Mark, Ledger or Link rather than a buff. For a
+        /// move it is the bookkeeping entries the move carried to another body.
+        ///
+        /// Asserted in one direction only: the flag never makes a listener hear more or a move
+        /// carry more bookkeeping. How much each hero leans on the old reading is the finding, and
+        /// the output column is the size of it; turning the flag on is a balance decision, and
+        /// ENGINE-GAPS pass 2 records what the whole roster does when it is made the rule.
+        /// </summary>
+        private static void CheckBuffsOnlyOnLiveContent()
+        {
+            string[] listeners = {
+                "kiva_the_forsaken_oath|kiva_broken_links", "tavia_the_signal_huntress|tavia_dead_channel",
+                "mireth_the_erased_name|mireth_the_missing_page", "seraphine_the_closed_volume|seraphine_contrary_evidence",
+                "hale_the_relentless_hunter|hale_no_safe_distance", "vanno_the_detour_king|vanno_wrong_turn_misdirect",
+                "sylven_the_unfading_blade|sylven_wounds_remember", "nadine_the_border_clerk|nadine_proper_place",
+                "rheia_the_revision_scribe|rheia_adaptive_reasoning", "rheia_the_revision_scribe|rheia_second_direction" };
+            int louder = 0, heardOwn = 0;
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                string[] parts = listeners[i].Split('|');
+                string hid = parts[0], pid = parts[1];
+                FidRuns shipped = FidRun(hid, 0, null, null);
+                FidRuns flagged = FidRun(hid, 0, delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, hid, pid);
+                    if (p != null) p.BuffsOnly = true;
+                }, null);
+                if (shipped == null || flagged == null) { Check(false, "buffs-only pair built for " + pid); continue; }
+                int a = FidFirings(shipped, pid), b = FidFirings(flagged, pid);
+                if (b > a) louder++;
+                if (b < a) heardOwn++;
+                Line("  [pair] " + pid.PadRight(34) + "firings " + a + " -> " + b + " (" + (a - b)
+                     + " answered bookkeeping)   output " + shipped.Output + " -> " + flagged.Output
+                     + " (" + FidDelta(shipped.Output, flagged.Output) + ")");
+            }
+
+            string[] movers = {
+                "tavia_the_signal_huntress|tavia_cut_the_wire|", "vaelis_the_unfixed_blade|vaelis_passed_position|",
+                "rhys_the_fence_walker|rhys_change_sides|", "vanno_the_detour_king||vanno_wrong_turn_misdirect" };
+            int carried = 0, leaked = 0;
+            for (int i = 0; i < movers.Length; i++)
+            {
+                string[] parts = movers[i].Split('|');
+                string hid = parts[0], aid = parts[1], pid = parts[2];
+                FidRuns shipped = FidRun(hid, 0, null, null);
+                FidRuns flagged = FidRun(hid, 0, delegate(ContentDatabase db)
+                {
+                    List<EffectDef> effects = null;
+                    if (aid.Length > 0) { AbilityDef ab = FidAbility(db, hid, aid); if (ab != null) effects = ab.Effects; }
+                    else { PassiveDef p = FidPassive(db, hid, pid); if (p != null) effects = p.Effects; }
+                    if (effects == null) return;
+                    for (int k = 0; k < effects.Count; k++)
+                        if (effects[k].Kind == EffectKind.MoveBuffs) effects[k].BuffsOnly = true;
+                }, null);
+                if (shipped == null || flagged == null) { Check(false, "buffs-only move pair built for " + hid); continue; }
+                int a = FidInertMoves(shipped), b = FidInertMoves(flagged);
+                carried += a; leaked += b;
+                Line("  [pair] " + (aid.Length > 0 ? aid : pid).PadRight(34) + "bookkeeping carried " + a + " -> " + b
+                     + "   output " + shipped.Output + " -> " + flagged.Output + " (" + FidDelta(shipped.Output, flagged.Output) + ")");
+            }
+
+            Check(heardOwn > 0 && louder == 0,
+                  heardOwn + " of " + listeners.Length + " shipped OnEnemyBuffGained listeners answer a Mark, Ledger or "
+                  + "Link their own side wrote, and none hears more with buffsOnly");
+            Check(carried > 0 && leaked == 0,
+                  "the shipped buff moves carried " + carried + " bookkeeping entr(ies) to another body as they ship, "
+                  + "and " + leaked + " with buffsOnly");
+        }
+
+        private static int FidFirings(FidRuns runs, string passiveId)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                for (int k = 0; k < ev.Count; k++)
+                    if (ev[k].Type == BattleEventType.PassiveTrigger && ev[k].AbilityId == passiveId) n++;
+            }
+            return n;
+        }
+
+        private static int FidInertMoves(FidRuns runs)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                for (int k = 0; k < ev.Count; k++)
+                    if (ev[k].Type == BattleEventType.StatusSpread && StatusInfo.IsInert(ev[k].Status)
+                        && ev[k].Value == runs.Subjects[r]) n++;
+            }
+            return n;
+        }
+
+        // ---- the shipped passives the rule serves ---------------------------------------------
+
+        private delegate int FidSignal(BattleResult r, int subjectId);
+
+        private sealed class FidRuns
+        {
+            public readonly List<BattleResult> Results = new List<BattleResult>();
+            public readonly List<int> Subjects = new List<int>();
+            public long Output;
+        }
+
+        private static PassiveDef FidPassive(ContentDatabase db, string heroId, string passiveId)
+        {
+            HeroDef h = db.GetHero(heroId);
+            if (h == null) return null;
+            for (int i = 0; i < h.Passives.Count; i++) if (h.Passives[i].Id == passiveId) return h.Passives[i];
+            for (int t = 1; t <= HeroDef.MaxTalents; t++)
+            {
+                PassiveDef p = h.TalentAt(t);
+                if (p != null && p.Id == passiveId) return p;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The hero-sweep arena at the sweep's own seeds, with the database patched in memory
+        /// first. A second body can stand beside the subject in place of the first filler, for a
+        /// clause that needs an ally doing something the fillers never do.
+        /// </summary>
+        private static FidRuns FidRun(string heroId, int talent, Action<ContentDatabase> patch, string beside)
+        {
+            ContentDatabase arena = BuildHeroSweepArena(null);
+            if (arena == null) return null;
+            if (patch != null) patch(arena);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena.GetStage("sweep_arena");
+            HeroDef def = arena.GetHero(heroId);
+            if (fillers == null || stage == null || def == null) return null;
+            FidRuns runs = new FidRuns();
+            for (int s = 1; s <= HeroSweepSeeds; s++)
+            {
+                List<HeroInstance> team = new List<HeroInstance>();
+                HeroInstance me = MakeInstance(def, HeroSweepLevel);
+                me.SelectedTalent = talent;
+                team.Add(me);
+                int skip = 0;
+                if (beside != null)
+                {
+                    HeroDef other = arena.GetHero(beside);
+                    if (other == null) return null;
+                    team.Add(MakeInstance(other, HeroSweepLevel));
+                    skip = 1;
+                }
+                for (int f = skip; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], HeroSweepLevel));
+                BattleResult r = RunWith(arena, stage, HeroSweepSeed(heroId, s), team);
+                if (r == null) return null;
+                int id = -1;
+                for (int u = 0; u < r.Units.Count; u++)
+                    if (r.Units[u].IsPlayer && r.Units[u].DefId == heroId) { id = r.Units[u].Id; break; }
+                runs.Results.Add(r);
+                runs.Subjects.Add(id);
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.SourceId == id && (e.Type == BattleEventType.Damage || e.Type == BattleEventType.Heal
+                                             || e.Type == BattleEventType.ShieldGain))
+                        runs.Output += e.Value;
+                }
+            }
+            return runs;
+        }
+
+        private static int FidSum(FidRuns runs, FidSignal signal)
+        {
+            int n = 0;
+            for (int i = 0; i < runs.Results.Count; i++) n += signal(runs.Results[i], runs.Subjects[i]);
+            return n;
+        }
+
+        private static int FidSaves(BattleResult r, int id)
+        {
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.Heal && r.Events[i].SourceId == id && r.Events[i].Vfx == "redirect") n++;
+            return n;
+        }
+
+        private static FidSignal FidNamedBlows(string abilityName)
+        {
+            return delegate(BattleResult r, int id)
+            {
+                int n = 0;
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.Damage && r.Events[i].SourceId == id
+                        && r.Events[i].AbilityName == abilityName) n++;
+                return n;
+            };
+        }
+
+        private static FidSignal FidStatusOnSelf(StatusKind kind)
+        {
+            return delegate(BattleResult r, int id)
+            {
+                int n = 0;
+                for (int i = 0; i < r.Events.Count; i++)
+                    if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == kind
+                        && r.Events[i].SourceId == id && r.Events[i].TargetId == id) n++;
+                return n;
+            };
+        }
+
+
+
+        private static string FidDelta(long before, long after)
+        {
+            if (before == 0) return "n/a";
+            float pct = (after - before) * 100f / before;
+            return (pct >= 0 ? "+" : "") + pct.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+        }
+
+        /// <summary>
+        /// Events for which one predicate holds, walking the record with who is acting known: the
+        /// unit whose TurnStart came last. A clause that pays out on somebody else's turn is told
+        /// apart from its hero's own ability that way when the two emit the same kind of event.
+        /// </summary>
+        private delegate bool FidEventTest(BattleEvent e, int subjectId, int actorId, BattleResult r);
+
+        private static FidSignal FidCount(FidEventTest test)
+        {
+            return delegate(BattleResult r, int id)
+            {
+                int n = 0, actor = -1;
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.TurnStart) actor = e.SourceId;
+                    if (test(e, id, actor, r)) n++;
+                }
+                return n;
+            };
+        }
+
+        private static bool FidIsPlayer(BattleResult r, int unitId)
+        {
+            UnitSnapshot u = unitId >= 0 ? r.FindUnit(unitId) : null;
+            return u != null && u.IsPlayer;
+        }
+
+        /// <summary>
+        /// One shipped passive with a limit beside a conditional effect, and the one event only its
+        /// landing produces. Chosen per passive rather than read off the PassiveTrigger count, which
+        /// FALLS with the flag - the empty firings leave the record - and would read as the clause
+        /// happening less when it happens more.
+        /// </summary>
+        private sealed class FidLimited
+        {
+            public readonly string Hero, Passive, Signal;
+            public readonly int Talent;
+            public readonly FidSignal Measure;
+            public FidLimited(string hero, string passive, int talent, string signal, FidSignal measure)
+            { Hero = hero; Passive = passive; Talent = talent; Signal = signal; Measure = measure; }
+        }
+
+        private static List<FidLimited> FidLimitedPassives(bool reached)
+        {
+            List<FidLimited> rows = new List<FidLimited>();
+            if (reached)
+            {
+                rows.Add(new FidLimited("isara_the_second_chance", "isara_second_chance", 3, "saves", FidSaves));
+                rows.Add(new FidLimited("maren_the_long_sleeper", "maren_do_not_disturb", 0, "saves", FidSaves));
+                rows.Add(new FidLimited("mireth_the_erased_name", "mireth_the_missing_page", 0, "blows", FidNamedBlows("The Missing Page")));
+                rows.Add(new FidLimited("branik_the_siege_mason", "branik_salvaged_cover", 0, "Damage Reduction taken", FidStatusOnSelf(StatusKind.DamageReductionUp)));
+                rows.Add(new FidLimited("tavia_the_signal_huntress", "tavia_dead_channel", 0, "blows", FidNamedBlows("Dead Channel")));
+                rows.Add(new FidLimited("vanno_the_detour_king", "vanno_wrong_turn_misdirect", 0, "buffs misdirected",
+                    FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                    { return e.Type == BattleEventType.StatusSpread && FidIsPlayer(r, e.TargetId) && !FidIsPlayer(r, e.SourceId); })));
+                rows.Add(new FidLimited("dahlia_the_wayward_hymn", "dahlia_broken_rhythm_switch", 0, "shields given",
+                    FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                    { return e.Type == BattleEventType.ShieldGain && e.SourceId == id; })));
+                return rows;
+            }
+            rows.Add(new FidLimited("kiva_the_forsaken_oath", "kiva_broken_links", 0, "Broken Links", FidStatusOnSelf(StatusKind.Resolve)));
+            rows.Add(new FidLimited("marrow_the_irrevocable_vow", "marrow_promise_survives", 0, "saves", FidSaves));
+            rows.Add(new FidLimited("brenna_the_remaining_wall", "brenna_survival_of_the_stubborn", 0, "saves", FidSaves));
+            rows.Add(new FidLimited("rusk_the_patchmaker", "rusk_borrowed_time", 0, "saves", FidSaves));
+            rows.Add(new FidLimited("rhys_the_fence_walker", "rhys_shared_peril", 0, "hits shared off his turn",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.Damage && e.SourceId == id && e.TargetId == id && actor != id; })));
+            rows.Add(new FidLimited("toren_the_closed_door", "toren_unasked_question", 0, "shields on himself",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.ShieldGain && e.SourceId == id && e.TargetId == id; })));
+            rows.Add(new FidLimited("nadine_the_border_clerk", "nadine_proper_place", 0, "blows", FidNamedBlows("Proper Place")));
+            rows.Add(new FidLimited("isolde_the_slow_fading", "isolde_unfinished_sentence", 0, "blows", FidNamedBlows("Unfinished Sentence")));
+            rows.Add(new FidLimited("cyrra_the_burden_bearer", "cyrra_carry_the_burden", 0, "Veiled Weight spent off her turn",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Resolve && e.TargetId == id && actor != id; })));
+            rows.Add(new FidLimited("vaelis_the_unfixed_blade", "vaelis_opening_moves", 0, "advances",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.TurnOrderShift && e.SourceId == id && e.TargetId == id && e.Value < 0; })));
+            rows.Add(new FidLimited("merek_the_sequence_thief", "merek_priority_inversion", 0, "allies advanced",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.TurnOrderShift && e.SourceId == id && e.TargetId != id && FidIsPlayer(r, e.TargetId) && e.Value < 0; })));
+            rows.Add(new FidLimited("oris_the_unwritten_path", "oris_open_ending", 3, "blows", FidNamedBlows("Open Ending")));
+            rows.Add(new FidLimited("caldus_the_appointed_guard", "caldus_final_verdict", 3, "Resolve", FidStatusOnSelf(StatusKind.Resolve)));
+            rows.Add(new FidLimited("kael_the_unyielding", "kael_unusable_cover", 0, "Rubble spent off his turn",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Resolve && e.TargetId == id && actor != id; })));
+            rows.Add(new FidLimited("hale_the_relentless_hunter", "hale_tracking_habit", 0, "Quarry moved",
+                FidCount(delegate(BattleEvent e, int id, int actor, BattleResult r)
+                { return e.Type == BattleEventType.StatusSpread && e.Status == StatusKind.Mark && e.Value == id; })));
+            rows.Add(new FidLimited("edrin_the_distant_bell", "edrin_still_here", 0, "blows", FidNamedBlows("Still Here")));
+            rows.Add(new FidLimited("altheon_the_first_witness", "altheon_final_record", 3, "blows", FidNamedBlows("Final Record")));
+            return rows;
+        }
+
+        /// <summary>
+        /// THE TWENTY-FOUR SHIPPED PASSIVES THAT CARRY A LIMIT BESIDE A CONDITIONAL EFFECT, each
+        /// fought as it ships and again with chargeOnLanding set in memory. The flag is opt-in and
+        /// no shipped passive sets it yet - turning it on is the content pass's call, because made
+        /// the rule it lifts Mireth's Missing Page far enough to move the Breaker 5-star median and
+        /// drop Aster under the 3-star band.
+        ///
+        /// Seven are raised in this arena and each must land more with the flag than without. The
+        /// rest wait on a case the arena does not raise - a Forsaken enemy gaining a buff after
+        /// another enemy did, a Guarded ally dying - and are the same rule the arena above proves.
+        /// </summary>
+        private static void CheckChargeOnLandingOnLiveContent()
+        {
+            ContentDatabase names = BuildHeroSweepArena(null);
+            List<FidLimited> reached = FidLimitedPassives(true);
+            List<FidLimited> unreached = FidLimitedPassives(false);
+            int reachedUp = 0, fell = 0;
+            List<string> fellNames = new List<string>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                List<FidLimited> rows = pass == 0 ? reached : unreached;
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    FidLimited row = rows[i];
+                    string hid = row.Hero, pid = row.Passive;
+                    FidRuns shipped = FidRun(hid, row.Talent, null, null);
+                    FidRuns flagged = FidRun(hid, row.Talent, delegate(ContentDatabase db)
+                    {
+                        PassiveDef p = FidPassive(db, hid, pid);
+                        if (p != null) p.ChargeOnLanding = true;
+                    }, null);
+                    if (shipped == null || flagged == null || names == null || FidPassive(names, hid, pid) == null)
+                    {
+                        Check(false, "charge-on-landing pair built for " + pid);
+                        continue;
+                    }
+                    int a = FidSum(shipped, row.Measure), b = FidSum(flagged, row.Measure);
+                    if (b < a) { fell++; fellNames.Add(pid); }
+                    if (pass == 0 && b > a) reachedUp++;
+                    Line("  [pair] " + pid.PadRight(34) + row.Signal + " " + a + " -> " + b
+                         + "   output " + shipped.Output + " -> " + flagged.Output + " (" + FidDelta(shipped.Output, flagged.Output) + ")"
+                         + (pass == 0 ? "" : "   (the missing case is not raised here)"));
+                }
+            }
+            Check(reachedUp == reached.Count,
+                  "every one of the " + reached.Count + " limited passives this arena reaches lands MORE with its "
+                  + "limit charged on landing (" + reachedUp + " of " + reached.Count + ") - a clause that was "
+                  + "being spent by a trigger its own condition refused");
+            Check(fell == 0,
+                  "and none of the " + (reached.Count + unreached.Count) + " lands LESS with it ("
+                  + (fell == 0 ? "none" : string.Join(", ", fellNames.ToArray()))
+                  + "), which is what a refund that only ever gives an allowance back has to mean");
+        }
+
+        // ---- content findings: shipped wiring against the sentence, both forced ----------------
+
+        private static EffectDef FidEffect(List<EffectDef> effects, EffectKind kind, StatusKind status)
+        {
+            for (int i = 0; i < effects.Count; i++)
+                if (effects[i].Kind == kind && (status == StatusKind.None || effects[i].Status == status)) return effects[i];
+            return null;
+        }
+
+        private delegate string FidReport(FidRuns approximation, FidRuns text, out bool proven);
+
+        /// <summary>
+        /// One finding: the clause as it ships and as it reads, each forced in memory, and a status
+        /// saying which of the two the shipped kit matches today. A patch that cannot find what it
+        /// is looking for fails loudly rather than measuring the wrong effect.
+        /// </summary>
+        private static void FidFinding(string label, string hero, int talent, string beside,
+                                       Action<ContentDatabase> approximate, Action<ContentDatabase> faithful,
+                                       Func<ContentDatabase, bool> shipsFaithful, FidReport report)
+        {
+            FidRuns a = FidRun(hero, talent, approximate, beside);
+            FidRuns t = FidRun(hero, talent, faithful, beside);
+            if (a == null || t == null) { Check(false, label + ": pair built"); return; }
+            bool proven;
+            string said = report(a, t, out proven);
+            ContentDatabase shipped = BuildHeroSweepArena(null);
+            string status = shipped == null ? "" : (shipsFaithful(shipped) ? "  [ships as the sentence]" : "  [ships as the approximation]");
+            Check(proven, label + ": " + said + "; output " + a.Output + " -> " + t.Output + " (" + FidDelta(a.Output, t.Output) + ")" + status);
+        }
+
+        private static void CheckFidelityFindings()
+        {
+            // 1. Kael, Unusable Cover. The Rubble line asks only whether Rubble is held, so the first
+            // ally turn end of a round pays one whether or not that ally carries a Shield to move.
+            FidFinding("Kael, Unusable Cover", "kael_the_unyielding", 0, null,
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "kael_the_unyielding", "kael_unusable_cover");
+                    EffectDef spend = p == null ? null : FidEffect(p.Effects, EffectKind.RemoveStatus, StatusKind.Resolve);
+                    if (spend != null) { spend.Condition2 = EffectCondition.None; p.ChargeOnLanding = false; }
+                },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "kael_the_unyielding", "kael_unusable_cover");
+                    EffectDef spend = p == null ? null : FidEffect(p.Effects, EffectKind.RemoveStatus, StatusKind.Resolve);
+                    if (spend != null)
+                    {
+                        spend.Condition2 = EffectCondition.HasShield;
+                        spend.ConditionOn2 = ConditionSubject.BroadcastSubject;
+                        p.ChargeOnLanding = true;
+                    }
+                },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "kael_the_unyielding", "kael_unusable_cover");
+                    EffectDef spend = p == null ? null : FidEffect(p.Effects, EffectKind.RemoveStatus, StatusKind.Resolve);
+                    return spend != null && spend.Condition2 == EffectCondition.HasShield && p.ChargeOnLanding;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int wastedA = KaelWastedRubble(a), wastedT = KaelWastedRubble(t);
+                    proven = wastedA > 0 && wastedT == 0 && t.Output > a.Output;
+                    return wastedA + " Rubble spent on a firing that moved no Shield as it ships, " + wastedT
+                           + " as it reads - the Rubble stays for What Breaks Forward";
+                });
+
+            // 2. Nereia, Change of Course. The text names an ally UNDER RELIEF CIRCUIT; the passive
+            // has no gate, so it answers every ally about to die.
+            FidFinding("Nereia, Change of Course", "nereia_the_field_medic", 0, null,
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
+                    if (p == null) return;
+                    for (int i = 0; i < p.Effects.Count; i++) p.Effects[i].Condition = EffectCondition.None;
+                    p.ChargeOnLanding = false;
+                },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
+                    if (p == null) return;
+                    for (int i = 0; i < p.Effects.Count; i++)
+                    {
+                        p.Effects[i].Condition = EffectCondition.HasStatus;
+                        p.Effects[i].ConditionStatus = StatusKind.Covered;
+                        p.Effects[i].ConditionOn = ConditionSubject.BroadcastSubject;
+                    }
+                    p.ChargeOnLanding = true;
+                },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HasStatus;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int sa = FidSum(a, FidSaves), st = FidSum(t, FidSaves);
+                    proven = sa > st;
+                    return sa + " lethal saves as it ships against " + st + " as it reads, so " + (sa - st)
+                           + " were allies Relief Circuit never covered";
+                });
+
+            // 3. Velis, No Second Breath. "Whenever an enemy BELOW 50% HP receives healing" - the
+            // 10 Energy has no HP gate and pays for every enemy heal.
+            FidFinding("Velis, No Second Breath", "velis_the_hollow_vow", 0, null,
+                delegate(ContentDatabase db) { VelisGate(db, false); },
+                delegate(ContentDatabase db) { VelisGate(db, true); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "velis_the_hollow_vow", "velis_no_second_breath");
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HpBelow;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ea = VelisEnergy(a), et = VelisEnergy(t);
+                    proven = ea > et;
+                    return ea + " Energy from enemy heals as it ships, " + et + " as it reads - the difference is "
+                           + "heals on enemies at or above half HP";
+                });
+
+            // 4. Aminah, the emergency release. Once per battle, answering the first ally under 30%
+            // whether or not it carries Priority, and paying the LAST release anybody made.
+            FidFinding("Aminah, emergency release", "aminah_the_true_measure", 0, null,
+                delegate(ContentDatabase db) { AminahGate(db, false); },
+                delegate(ContentDatabase db) { AminahGate(db, true); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "aminah_the_true_measure", "aminah_emergency_release");
+                    return p != null && p.Effects.Count > 0 && p.Effects[0].Condition == EffectCondition.HasStatus;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int fa = AminahFirings(a), ft = AminahFirings(t);
+                    proven = fa > ft;
+                    return fa + " release(s) on an ally below 30% as it ships, " + ft + " when the ally has to carry "
+                           + "Priority - the rest released nothing and paid a stale amount as damage";
+                });
+
+            // 5. Nereia, Reversed Flow (III). "When Change of Course triggers" - a separate passive
+            // on the same trigger, so it fires when Change of Course was refused by its own limit
+            // and reads whatever redirect was made last.
+            FidFinding("Nereia, Reversed Flow (III)", "nereia_the_field_medic", 3, null,
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("nereia_the_field_medic");
+                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
+                    PassiveDef coc = FidPassive(db, "nereia_the_field_medic", "nereia_change_of_course");
+                    if (t3 == null || coc == null || t3.Effects.Count == 0) return;
+                    coc.Effects = new List<EffectDef>(coc.Effects);
+                    EffectDef moved = t3.Effects[0].Clone();
+                    coc.Effects.Add(moved);
+                    t3.Effects = new List<EffectDef>();
+                },
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("nereia_the_field_medic");
+                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
+                    return t3 != null && t3.Trigger != PassiveTrigger.OnAllyWouldDie;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int blows = FidSum(a, FidNamedBlows("Reversed Flow")), saves = FidSum(a, FidSaves);
+                    int tied = FidSum(t, FidNamedBlows("Change of Course"));
+                    proven = blows > saves && tied > 0;
+                    return blows + " Reversed Flow blows against " + saves + " Change of Course saves as it ships, so "
+                           + (blows - saves) + " read a redirect Change of Course did not make; " + tied
+                           + " when the blow rides Change of Course itself";
+                });
+
+            // 6. Brenna, What Held Once (III). "AFTER Survival of the Stubborn triggers" - it is its
+            // own passive on the same trigger, so it banks its Resolve on the first ally about to
+            // die whether or not Survival saved anyone. Said faithfully it rides Survival itself,
+            // gated on the Guard Survival just took.
+            FidFinding("Brenna, What Held Once (III)", "brenna_the_remaining_wall", 3, null,
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("brenna_the_remaining_wall");
+                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
+                    PassiveDef survival = FidPassive(db, "brenna_the_remaining_wall", "brenna_survival_of_the_stubborn");
+                    if (t3 == null || survival == null || t3.Effects.Count == 0) return;
+                    EffectDef bank = t3.Effects[0].Clone();
+                    bank.Condition = EffectCondition.SubjectLostStatusThisFiring;
+                    bank.ConditionOn = ConditionSubject.BroadcastSubject;
+                    survival.Effects = new List<EffectDef>(survival.Effects);
+                    survival.Effects.Add(bank);
+                    t3.Effects = new List<EffectDef>();
+                },
+                delegate(ContentDatabase db)
+                {
+                    HeroDef h = db.GetHero("brenna_the_remaining_wall");
+                    PassiveDef t3 = h == null ? null : h.TalentAt(3);
+                    return t3 != null && t3.Effects.Count == 0;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int banked = FidSum(a, FidStatusOnSelf(StatusKind.Resolve)), saves = FidSum(a, FidSaves);
+                    int bankedT = FidSum(t, FidStatusOnSelf(StatusKind.Resolve)), savesT = FidSum(t, FidSaves);
+                    proven = banked > saves && bankedT == savesT;
+                    return banked + " What Held Once charge(s) banked as it ships against " + saves
+                           + " Survival saves for it to follow; " + bankedT + " against " + savesT + " as it reads";
+                });
+
+            // 7. Caldus, No Uncertain Ground. The engine repair: its blow now lands on the enemy
+            // that struck the ally. Measured on the record: how often his own last attacker - the
+            // body the old target mode named - was somebody else.
+            FidFinding("Caldus, No Uncertain Ground", "caldus_the_appointed_guard", 0, null,
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db) { },
+                delegate(ContentDatabase db) { return true; },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int blows, onStriker, differed;
+                    CaldusAim(a, out blows, out onStriker, out differed);
+                    proven = blows > 0 && onStriker == blows && differed > 0;
+                    return blows + " blow(s), " + onStriker + " on the enemy that struck the ally; in " + differed
+                           + " of them Caldus's own last attacker, which the target mode named before the repair, was a different body";
+                });
+
+            // 8. Darian, Unseen Guard. "Receives a Shield FROM DARIAN" - the passive has no source
+            // filter, so a second shielder's ward pays Veil Charges too. Needs that second shielder.
+            FidFinding("Darian, Unseen Guard (beside Brenna)", "darian_the_hidden_bulwark", 0, "brenna_the_remaining_wall",
+                delegate(ContentDatabase db) { PassiveDef p = FidPassive(db, "darian_the_hidden_bulwark", "darian_unseen_guard"); if (p != null) p.TriggerSourceIsSelf = false; },
+                delegate(ContentDatabase db) { PassiveDef p = FidPassive(db, "darian_the_hidden_bulwark", "darian_unseen_guard"); if (p != null) p.TriggerSourceIsSelf = true; },
+                delegate(ContentDatabase db) { PassiveDef p = FidPassive(db, "darian_the_hidden_bulwark", "darian_unseen_guard"); return p != null && p.TriggerSourceIsSelf; },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ca = DarianCharges(a), ct = DarianCharges(t);
+                    proven = ca > ct;
+                    return ca + " Veil Charge(s) as it ships, " + ct + " when only Darian's own Shield counts";
+                });
+
+            // 9. Mireth, The Missing Page. "The first time that enemy receives a positive status,
+            // that status is REMOVED IMMEDIATELY" - the passive strikes and stores a Page and
+            // removes nothing, so Absence, which counts a Focused enemy losing a positive status,
+            // has nothing to count.
+            FidFinding("Mireth, The Missing Page", "mireth_the_erased_name", 0, null,
+                delegate(ContentDatabase db) { MirethRemoval(db, false); },
+                delegate(ContentDatabase db) { MirethRemoval(db, true); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "mireth_the_erased_name", "mireth_the_missing_page");
+                    return p != null && FidEffect(p.Effects, EffectKind.Dispel, StatusKind.None) != null;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ra = MirethStrips(a), rt = MirethStrips(t);
+                    proven = ra == 0 && rt > 0;
+                    return ra + " status(es) stripped from a Focused enemy as it ships, " + rt + " as it reads";
+                });
+
+            // 10. Caldus, Defined Duty. "Whenever Caldus counterattacks his Declared Target, he gains
+            // 1 Resolve" - nothing in the base kit grants one, so the counter's per-Resolve bonus
+            // reads zero without his third talent.
+            FidFinding("Caldus, Defined Duty", "caldus_the_appointed_guard", 0, null,
+                delegate(ContentDatabase db) { CaldusResolve(db, false); },
+                delegate(ContentDatabase db) { CaldusResolve(db, true); },
+                delegate(ContentDatabase db)
+                {
+                    PassiveDef p = FidPassive(db, "caldus_the_appointed_guard", "caldus_defined_duty");
+                    return p != null && FidEffect(p.Effects, EffectKind.GainResolve, StatusKind.None) != null;
+                },
+                delegate(FidRuns a, FidRuns t, out bool proven)
+                {
+                    int ra = FidSum(a, FidStatusOnSelf(StatusKind.Resolve)), rt = FidSum(t, FidStatusOnSelf(StatusKind.Resolve));
+                    proven = ra == 0 && rt > 0;
+                    return ra + " Resolve banked by his counterattacks as it ships, " + rt + " as it reads";
+                });
+
+            // Record-derived findings: the engine cannot yet say the sentence, so there is no
+            // faithful half to force. The count IS the finding and says how often the clause
+            // answered something its text does not name.
+            FidRuns kael = FidRun("kael_the_unyielding", 0, null, null);
+            FidRuns siofra = FidRun("siofra_the_turncoat_oracle", 0, null, null);
+            FidRuns elyra = FidRun("elyra_the_patient_warden", 0, null, null);
+            FidRuns oris = FidRun("oris_the_unwritten_path", 0, null, null);
+            FidRuns hale = FidRun("hale_the_relentless_hunter", 1, null, null);
+            if (kael == null || siofra == null || elyra == null || oris == null || hale == null)
+            {
+                Check(false, "record-derived fidelity arenas built");
+                return;
+            }
+
+            int casts, removed, rubble;
+            KaelWallRubble(kael, out casts, out removed, out rubble);
+            Check(rubble > removed,
+                  "Kael, Take Down the Wall: " + rubble + " Rubble from " + casts + " casts that removed " + removed
+                  + " effect(s) - one Rubble a cast, where the text pays one per effect removed (group 25's primitive)");
+
+            int fires, empty;
+            SiofraDrains(siofra, "siofra_prediction_cost", out fires, out empty);
+            Check(empty > 0,
+                  "Siofra, Prediction Cost: " + empty + " of " + fires + " basic-attack drains followed a basic that "
+                  + "inverted nothing - an inversion is not recorded as a removal, so no condition can ask (group 30's primitive)");
+
+            int grants, unslowed;
+            ElyraPatience(elyra, out grants, out unslowed);
+            Check(unslowed > 0,
+                  "Elyra, Slow Growth: " + unslowed + " of " + grants + " Patience granted against a target the basic "
+                  + "slowed itself - the grant is asked after the basic, and the basic applies the Slow it asks about");
+
+            int altered, doubled;
+            OrisAltered(oris, out altered, out doubled);
+            Check(doubled > 0,
+                  "Oris, No Fixed Refrain: " + doubled + " of " + altered + " altered attacks also threw the ordinary "
+                  + "blow - the sequence is added to his basic rather than replacing it");
+
+            int crit, fresh;
+            HaleFreshTrail(hale, out crit, out fresh);
+            Check(crit > fresh,
+                  "Hale, Fresh Trail (I): " + crit + " Critical Damage grants against " + fresh + " new Quarry bodies - "
+                  + "it is paid at every turn start for the whole turn, where the text pays the first attack on a new Quarry");
+        }
+
+        private static void MirethRemoval(ContentDatabase db, bool removes)
+        {
+            PassiveDef p = FidPassive(db, "mireth_the_erased_name", "mireth_the_missing_page");
+            if (p == null) return;
+            List<EffectDef> kept = new List<EffectDef>();
+            for (int i = 0; i < p.Effects.Count; i++) if (p.Effects[i].Kind != EffectKind.Dispel) kept.Add(p.Effects[i]);
+            if (removes)
+            {
+                EffectDef strip = new EffectDef();
+                strip.Kind = EffectKind.Dispel;
+                strip.Target = TargetMode.BroadcastSubject;
+                strip.Hits = 1;
+                strip.Condition = EffectCondition.HasMyMark;
+                strip.ConditionOn = ConditionSubject.BroadcastSubject;
+                kept.Insert(0, strip);
+            }
+            p.Effects = kept;
+        }
+
+        private static int MirethStrips(FidRuns runs)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.Type == BattleEventType.StatusExpired && e.SourceId == id && e.TargetId != id
+                        && !FidIsPlayer(res, e.TargetId) && e.Status != StatusKind.Mark) n++;
+                }
+            }
+            return n;
+        }
+
+        private static void CaldusResolve(ContentDatabase db, bool grants)
+        {
+            PassiveDef p = FidPassive(db, "caldus_the_appointed_guard", "caldus_defined_duty");
+            if (p == null) return;
+            List<EffectDef> kept = new List<EffectDef>();
+            for (int i = 0; i < p.Effects.Count; i++) if (p.Effects[i].Kind != EffectKind.GainResolve) kept.Add(p.Effects[i]);
+            if (grants)
+            {
+                EffectDef gain = new EffectDef();
+                gain.Kind = EffectKind.GainResolve;
+                gain.Target = TargetMode.Self;
+                gain.MaxStacks = 3;
+                gain.Duration = 99;
+                gain.Condition = EffectCondition.HasMyMark;
+                gain.ConditionOn = ConditionSubject.LastAttacker;
+                kept.Add(gain);
+            }
+            p.Effects = kept;
+        }
+
+        private static int KaelWastedRubble(FidRuns runs)
+        {
+            int wasted = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != "kael_unusable_cover") continue;
+                    bool spent = false, moved = false;
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                    {
+                        if (ev[m].Type == BattleEventType.StatusExpired && ev[m].Status == StatusKind.Resolve && ev[m].TargetId == id) spent = true;
+                        if (ev[m].Type == BattleEventType.ShieldGain) moved = true;
+                    }
+                    if (spent && !moved) wasted++;
+                }
+            }
+            return wasted;
+        }
+
+        /// <summary>Where one firing's own events end: the next firing, turn or cast.</summary>
+        private static bool FidBoundary(BattleEvent e)
+        {
+            return e.Type == BattleEventType.PassiveTrigger || e.Type == BattleEventType.TurnStart
+                || e.Type == BattleEventType.BasicAttack || e.Type == BattleEventType.AbilityCast
+                || e.Type == BattleEventType.RoundStart;
+        }
+
+        private static void VelisGate(ContentDatabase db, bool gated)
+        {
+            PassiveDef p = FidPassive(db, "velis_the_hollow_vow", "velis_no_second_breath");
+            if (p == null) return;
+            for (int i = 0; i < p.Effects.Count; i++)
+            {
+                EffectDef e = p.Effects[i];
+                if (e.Condition == EffectCondition.None || e.Condition == EffectCondition.HpBelow)
+                {
+                    e.Condition = gated ? EffectCondition.HpBelow : EffectCondition.None;
+                    e.ConditionValue = 0.5f;
+                    e.ConditionOn = ConditionSubject.BroadcastSubject;
+                }
+                else
+                {
+                    e.Condition2 = gated ? EffectCondition.HpBelow : EffectCondition.None;
+                    e.ConditionValue2 = 0.5f;
+                    e.ConditionOn2 = ConditionSubject.BroadcastSubject;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Energy Velis granted herself through No Second Breath. EnergyChanged carries the bar's
+        /// NEW total rather than the change, so the change is read against the last total the
+        /// record showed for her, starting from her StartEnergy.
+        /// </summary>
+        private static int VelisEnergy(FidRuns runs)
+        {
+            int gained = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                UnitSnapshot me = res.FindUnit(id);
+                int bar = me == null ? 0 : me.StartEnergy;
+                bool inFiring = false;
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.Type == BattleEventType.PassiveTrigger) inFiring = e.AbilityId == "velis_no_second_breath";
+                    else if (inFiring && FidBoundary(e)) inFiring = false;
+                    if (e.Type != BattleEventType.EnergyChanged || e.TargetId != id) continue;
+                    if (inFiring && e.SourceId == id && e.Value > bar) gained += e.Value - bar;
+                    bar = e.Value;
+                }
+            }
+            return gained;
+        }
+
+        private static void AminahGate(ContentDatabase db, bool gated)
+        {
+            PassiveDef p = FidPassive(db, "aminah_the_true_measure", "aminah_emergency_release");
+            if (p == null) return;
+            for (int i = 0; i < p.Effects.Count; i++)
+            {
+                p.Effects[i].Condition = gated ? EffectCondition.HasStatus : EffectCondition.None;
+                p.Effects[i].ConditionStatus = StatusKind.Ledger;
+                p.Effects[i].ConditionOn = ConditionSubject.BroadcastSubject;
+            }
+            p.ChargeOnLanding = gated;
+        }
+
+        private static int AminahFirings(FidRuns runs)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                for (int k = 0; k < ev.Count; k++)
+                    if (ev[k].Type == BattleEventType.PassiveTrigger && ev[k].AbilityId == "aminah_emergency_release") n++;
+            }
+            return n;
+        }
+
+        private static void CaldusAim(FidRuns runs, out int blows, out int onStriker, out int differed)
+        {
+            blows = 0; onStriker = 0; differed = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                BattleResult res = runs.Results[r];
+                int id = runs.Subjects[r];
+                int lastOnMe = -1, lastOnAlly = -1;
+                for (int k = 0; k < res.Events.Count; k++)
+                {
+                    BattleEvent e = res.Events[k];
+                    if (e.Type != BattleEventType.Damage) continue;
+                    if (e.SourceId == id && e.AbilityName == "No Uncertain Ground")
+                    {
+                        blows++;
+                        if (e.TargetId == lastOnAlly) onStriker++;
+                        if (lastOnMe != lastOnAlly) differed++;
+                        continue;
+                    }
+                    UnitSnapshot src = e.SourceId >= 0 ? res.FindUnit(e.SourceId) : null;
+                    UnitSnapshot dst = res.FindUnit(e.TargetId);
+                    if (src == null || src.IsPlayer || dst == null || !dst.IsPlayer) continue;
+                    if (e.TargetId == id) lastOnMe = e.SourceId; else lastOnAlly = e.SourceId;
+                }
+            }
+        }
+
+        private static int DarianCharges(FidRuns runs)
+        {
+            int n = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != "darian_unseen_guard") continue;
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                        if (ev[m].Type == BattleEventType.StatusApplied && ev[m].Status == StatusKind.Resolve2) { n++; break; }
+                }
+            }
+            return n;
+        }
+
+        private static void KaelWallRubble(FidRuns runs, out int casts, out int removed, out int rubble)
+        {
+            casts = 0; removed = 0; rubble = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.AbilityCast || ev[k].SourceId != id) continue;
+                    casts++;
+                    for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                    {
+                        if (ev[m].Type == BattleEventType.StatusExpired && ev[m].SourceId == id && ev[m].TargetId != id) removed++;
+                        if (ev[m].Type == BattleEventType.StatusApplied && ev[m].Status == StatusKind.Resolve && ev[m].TargetId == id) rubble++;
+                    }
+                }
+            }
+        }
+
+        private static void SiofraDrains(FidRuns runs, string passiveId, out int fires, out int empty)
+        {
+            fires = 0; empty = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                int lastAct = -1;
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if ((ev[k].Type == BattleEventType.BasicAttack || ev[k].Type == BattleEventType.AbilityCast) && ev[k].SourceId == id) lastAct = k;
+                    if (ev[k].Type != BattleEventType.PassiveTrigger || ev[k].AbilityId != passiveId) continue;
+                    fires++;
+                    bool inverted = false;
+                    // An inversion is a harmful entry landing where a beneficial one just left,
+                    // on the same body, by Siofra: the StatusExpired and the StatusApplied it
+                    // writes back to back.
+                    for (int m = lastAct + 1; m < k; m++)
+                        if (m > 0 && ev[m].Type == BattleEventType.StatusApplied && ev[m].SourceId == id && ev[m].TargetId != id
+                            && ev[m - 1].Type == BattleEventType.StatusExpired && ev[m - 1].TargetId == ev[m].TargetId)
+                            inverted = true;
+                    if (!inverted) empty++;
+                }
+            }
+        }
+
+        /// <summary>Replays StatusApplied, StatusExpired and deaths to answer whether a body carried
+        /// a kind of status at a given point in the record.</summary>
+        private sealed class FidCarry
+        {
+            private readonly Dictionary<long, bool> _held = new Dictionary<long, bool>();
+            private static long Key(int unit, StatusKind kind) { return ((long)unit << 16) | (long)(int)kind; }
+            public void Step(BattleEvent e)
+            {
+                if (e.Type == BattleEventType.StatusApplied) _held[Key(e.TargetId, e.Status)] = true;
+                else if (e.Type == BattleEventType.StatusExpired) _held.Remove(Key(e.TargetId, e.Status));
+                else if (e.Type == BattleEventType.Death)
+                {
+                    List<long> gone = new List<long>();
+                    foreach (long k in _held.Keys) if ((int)(k >> 16) == e.TargetId) gone.Add(k);
+                    for (int i = 0; i < gone.Count; i++) _held.Remove(gone[i]);
+                }
+            }
+            public bool Has(int unit, StatusKind kind) { return _held.ContainsKey(Key(unit, kind)); }
+        }
+
+        private static void ElyraPatience(FidRuns runs, out int grants, out int unslowed)
+        {
+            grants = 0; unslowed = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                FidCarry carry = new FidCarry();
+                bool inBasic = false, slowedAtStart = false;
+                int target = -1;
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    BattleEvent e = ev[k];
+                    if (e.Type == BattleEventType.BasicAttack && e.SourceId == id) { inBasic = true; target = -1; }
+                    if (inBasic && target < 0 && e.Type == BattleEventType.Damage && e.SourceId == id)
+                    {
+                        target = e.TargetId;
+                        slowedAtStart = carry.Has(target, StatusKind.Slow);
+                    }
+                    if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "elyra_slow_growth")
+                    {
+                        for (int m = k + 1; m < ev.Count && !FidBoundary(ev[m]); m++)
+                            if (ev[m].Type == BattleEventType.StatusApplied && ev[m].Status == StatusKind.Resolve && ev[m].TargetId == id)
+                            {
+                                grants++;
+                                if (!slowedAtStart) unslowed++;
+                                break;
+                            }
+                        inBasic = false;
+                    }
+                    carry.Step(e);
+                }
+            }
+        }
+
+        private static void OrisAltered(FidRuns runs, out int altered, out int doubled)
+        {
+            altered = 0; doubled = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    if (ev[k].Type != BattleEventType.BasicAttack || ev[k].SourceId != id) continue;
+                    int blows = 0;
+                    bool alt = false;
+                    for (int m = k + 1; m < ev.Count && ev[m].Type != BattleEventType.TurnStart && ev[m].Type != BattleEventType.PassiveTrigger; m++)
+                    {
+                        if (ev[m].Type == BattleEventType.Damage && ev[m].SourceId == id) blows++;
+                        // An altered attack spends the sequence's own state - the MarkAlt that
+                        // carries the second attack, or the counter that carries the first.
+                        if (ev[m].TargetId == id && (ev[m].Status == StatusKind.MarkAlt || ev[m].Status == StatusKind.Resolve)
+                            && (ev[m].Type == BattleEventType.StatusExpired || ev[m].Type == BattleEventType.StatusApplied))
+                            alt = true;
+                    }
+                    if (alt) { altered++; if (blows >= 2) doubled++; }
+                }
+            }
+        }
+
+        private static void HaleFreshTrail(FidRuns runs, out int crit, out int fresh)
+        {
+            crit = 0; fresh = 0;
+            for (int r = 0; r < runs.Results.Count; r++)
+            {
+                List<BattleEvent> ev = runs.Results[r].Events;
+                int id = runs.Subjects[r];
+                FidCarry carry = new FidCarry();
+                for (int k = 0; k < ev.Count; k++)
+                {
+                    BattleEvent e = ev[k];
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.CritDamageUp && e.TargetId == id && e.SourceId == id) crit++;
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Mark && e.SourceId == id && !carry.Has(e.TargetId, StatusKind.Mark)) fresh++;
+                    if (e.Type == BattleEventType.StatusSpread && e.Status == StatusKind.Mark) fresh++;
+                    carry.Step(e);
+                }
+            }
         }
 
         private static BattleResult RunRoleArena()

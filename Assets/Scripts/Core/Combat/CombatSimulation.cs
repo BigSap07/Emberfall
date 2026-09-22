@@ -814,6 +814,16 @@ namespace Emberfall.Core.Combat
             /// </summary>
             private List<int> _perTargetAdmitted;
 
+            /// <summary>
+            /// Whether the passive firing now resolving has reached ApplyEffect for any effect on
+            /// any target. Set in ResolveAbility at the one line every effect passes on its way in,
+            /// read by TriggerPassive to decide whether a limit the firing charged was spent on a
+            /// clause that happened or on a trigger whose every condition said no. Saved and
+            /// restored around each firing, so a passive that fires inside another answers for
+            /// itself and cannot make its host look as if it landed.
+            /// </summary>
+            private bool _firingLanded;
+
             /// <summary>StatusKinds that expired in the current ExpireStatuses sweep. Set before
             /// TriggerPassive(OnStatusExpired) so a passive with TriggerStatus can filter.</summary>
             private readonly List<StatusKind> _expiredKinds = new List<StatusKind>();
@@ -1515,6 +1525,8 @@ namespace Emberfall.Core.Combat
                 p.PerTargetLimit = src.PerTargetLimit;
                 p.PerTargetPerRound = src.PerTargetPerRound;
                 p.FiresPerSubject = src.FiresPerSubject;
+                p.ChargeOnLanding = src.ChargeOnLanding;
+                p.BuffsOnly = src.BuffsOnly;
                 p.SlotKey = src.SlotKey;
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
@@ -2746,6 +2758,7 @@ namespace Emberfall.Core.Combat
                             _perTargetAdmitted.Add(target.Id);
                         }
 
+                        _firingLanded = true;
                         ApplyEffect(caster, target, landed, ability, depth);
                         _lastTarget = target;
                         if (IsBattleOver())
@@ -3211,6 +3224,13 @@ namespace Emberfall.Core.Combat
                         // the unit, so a passive answering it sees the board it is answering; and
                         // handed `depth`, so a buff-gained passive that itself buffs somebody
                         // cascades no further than MaxPassiveDepth already allows.
+                        //
+                        // RAISED FOR "NOT HARMFUL", which includes the bookkeeping kinds - a Mark, a
+                        // Ledger, a Link - that the applier writes on an enemy. So every listener
+                        // hears its own hero's marks as an enemy gaining a buff. A listener that
+                        // says PassiveDef.BuffsOnly hears real buffs only; the rest are unchanged,
+                        // because the balance line was tuned with them hearing both. ENGINE-GAPS
+                        // pass 2 has the measurement.
                         if (!StatusInfo.IsHarmful(effect.Status))
                         {
                             CombatUnit prevSubject = _broadcastSubject;
@@ -3406,6 +3426,13 @@ namespace Emberfall.Core.Combat
                         {
                             StatusInstance entry = target.Statuses[i];
                             if (StatusInfo.IsHarmful(entry.Kind) != wantHarmful) continue;
+                            // A bookkeeping entry is not a buff, and a move that treats it as one
+                            // carries the applier's own claim off to another body: Tavia's Cut the
+                            // Wire takes her Exposed Frequency off the body it names, and Vanno's
+                            // misdirection can give his own Mark to his ally. EffectDef.BuffsOnly
+                            // asks the predicate Dispel and the BuffSuppression gate already read;
+                            // opt-in, for the reason the OnEnemyBuffGained raise gives.
+                            if (!wantHarmful && effect.BuffsOnly && StatusInfo.IsInert(entry.Kind)) continue;
                             // Shield is skipped by construction rather than by a special case: the
                             // absorbing pool is a float on the unit and does not travel with the
                             // status row, so moving the entry alone would hand the recipient a
@@ -6351,6 +6378,10 @@ namespace Emberfall.Core.Combat
                     if (trigger == PassiveTrigger.OnStatusGained
                         && passive.TriggerStatus != StatusKind.None
                         && passive.TriggerStatus != _gainedKind) continue;
+                    // A real buff, not a Mark, Ledger, Link or Resolve counter the applier wrote.
+                    // See PassiveDef.BuffsOnly; false on every shipped passive.
+                    if (trigger == PassiveTrigger.OnEnemyBuffGained && passive.BuffsOnly
+                        && StatusInfo.IsInert(_broadcastBuff)) continue;
                     // Stack-threshold filter: check the owner's stack count against the
                     // passive's threshold, and consume if met.
                     if (trigger == PassiveTrigger.OnStackThreshold)
@@ -6396,14 +6427,24 @@ namespace Emberfall.Core.Combat
                     }
                     CombatUnit budgetSubject = passive.FiresPerSubject > 0 ? _broadcastSubject : null;
 
+                    // CHARGED HERE, and for a passive that says ChargeOnLanding, REFUNDED BELOW IF
+                    // NOTHING LANDED. The charge has to be taken before the effects run, because a
+                    // passive whose own effects raise its own trigger would otherwise fire again
+                    // from inside itself before it had paid. What such a passive must not do is stay
+                    // spent on a firing whose every condition said no: "the first time an ally WITH
+                    // PROMISE would be defeated" is a sentence about the clause, and an allowance
+                    // used up by the first ally to fall without Promise is a clause that can be gone
+                    // before it has ever landed. ENGINE-GAPS group 34 and pass 2. Opt-in, so every
+                    // passive that does not set the field is charged exactly as it always was.
+                    int roundBefore = owner.PassiveLastRound(i);
                     if (passive.OncePerBattle) owner.MarkPassiveFired(i);
                     if (passive.Limit != PassiveLimit.Unlimited) owner.MarkPassiveRound(i, _round);
 
-                    firedAny = true;
                     BattleEvent e = Emit(BattleEventType.PassiveTrigger, owner.Id, owner.Id);
                     e.AbilityId = passive.Id;
                     e.AbilityName = passive.Name;
                     e.Vfx = passive.Vfx;
+                    int triggerEventCount = _result.Events.Count;
 
                     AbilityDef wrapper = new AbilityDef();
                     wrapper.Id = passive.Id;
@@ -6430,8 +6471,44 @@ namespace Emberfall.Core.Combat
                     _firedPassiveIndex = i;
                     CombatUnit prevFiredOwner = _firedPassiveOwner;
                     _firedPassiveOwner = owner;
+                    bool prevLanded = _firingLanded;
+                    _firingLanded = false;
 
                     ResolveAbility(owner, wrapper, depth + 1);
+
+                    // The refund. A ChargeOnLanding firing that reached ApplyEffect for nothing -
+                    // every effect's condition false, every target list empty, every body refused by
+                    // its per-target budget - gives back the allowance it took. An unlimited passive
+                    // never enters, and neither does one that did not ask.
+                    //
+                    // AND IT TAKES ITS PassiveTrigger EVENT BACK OUT, when that event is still the
+                    // last thing in the record. Under the trigger-time charge a limited passive
+                    // arrives at most once per window, so an empty firing costs one line in the
+                    // record; once the allowance comes back it can arrive at every ally's turn end,
+                    // and Kael's Unusable Cover would put its name on the screen five times a round
+                    // for a clause that did nothing. A firing that emitted anything at all after its
+                    // own event - a Resolve spent by an unconditional effect aimed at nobody - keeps
+                    // it, because the record has to explain that entry.
+                    //
+                    // A refunded firing is also not a firing to whoever asked: DispatchLinkPassive
+                    // spends a link's record only when its listener fired, and a listener that gave
+                    // its allowance back has not used the record either.
+                    //
+                    // THE PER-SUBJECT BUDGET IS NOT REFUNDED, because it is a count as well as a
+                    // cap: PassiveFiredOnSubjectAtLeast reads it, and "the second time this happens
+                    // to one body" has to count a first firing whose only effect was waiting for
+                    // the second. Giving it back would make every such clause unreachable.
+                    bool refunded = passive.ChargeOnLanding && !_firingLanded
+                        && (passive.OncePerBattle || passive.Limit != PassiveLimit.Unlimited);
+                    if (!refunded) firedAny = true;
+                    if (refunded)
+                    {
+                        if (passive.OncePerBattle) owner.ClearPassiveFired(i);
+                        if (passive.Limit != PassiveLimit.Unlimited) owner.MarkPassiveRound(i, roundBefore);
+                        if (_result.Events.Count == triggerEventCount && _result.Events[triggerEventCount - 1] == e)
+                            _result.Events.RemoveAt(triggerEventCount - 1);
+                    }
+                    _firingLanded = prevLanded;
 
                     _firedPassiveIndex = prevFired;
                     _firedPassiveOwner = prevFiredOwner;
@@ -7321,7 +7398,19 @@ namespace Emberfall.Core.Combat
                 {
                     case TargetMode.LastAttacker:
                     {
-                        CombatUnit remembered = FindUnit(caster.LastAttackerId);
+                        // INSIDE A BROADCAST ABOUT SOMEBODY ELSE, THAT BODY'S ATTACKER - the one
+                        // ConditionSubject.LastAttacker has always named. The two used to disagree:
+                        // the condition read the broadcast subject and this read the caster, so one
+                        // passive could gate on the enemy that just hit an ally and then strike the
+                        // enemy that last hit its owner. Caldus's No Uncertain Ground is that
+                        // passive - "when the Declared Target attacks another ally, Caldus deals 45%
+                        // of Attack damage to THAT enemy" checked the Declared Target and hit
+                        // whoever had last reached Caldus. At OnDamaged the subject IS the caster,
+                        // so every counterattack written against the caster's own attacker is
+                        // untouched.
+                        CombatUnit about = _broadcastSubject != null && _broadcastSubject != caster
+                                           ? _broadcastSubject : caster;
+                        CombatUnit remembered = FindUnit(about.LastAttackerId);
                         if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
                         {
                             result.Add(remembered);

@@ -1070,6 +1070,13 @@ namespace Emberfall.Core.Combat
             if (index >= 0 && index < _passiveFired.Count) _passiveFired[index] = true;
         }
 
+        /// <summary>Gives a oncePerBattle allowance back, for a firing that landed nothing. See
+        /// the refund in CombatSimulation.TriggerPassive.</summary>
+        public void ClearPassiveFired(int index)
+        {
+            if (index >= 0 && index < _passiveFired.Count) _passiveFired[index] = false;
+        }
+
         public int PassiveLastRound(int index)
         {
             return index >= 0 && index < _passiveLastRound.Count ? _passiveLastRound[index] : 0;

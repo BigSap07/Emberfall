@@ -87,11 +87,11 @@ cal_the_alternate_angle|2|e986a6202db93aef
 cal_the_alternate_angle|3|79549d829c52a4ac
 cal_the_alternate_angle|4|4b680ea67ad1fe84
 cal_the_alternate_angle|5|5524ec3c9bdb21a1
-caldus_the_appointed_guard|1|abf900f0a536666f
+caldus_the_appointed_guard|1|024983ec7365f62e
 caldus_the_appointed_guard|2|cbdb7d09a7a0579d
-caldus_the_appointed_guard|3|6dffe1f321f1253c
-caldus_the_appointed_guard|4|6be9005f9c7b1955
-caldus_the_appointed_guard|5|d3b70df218c886f5
+caldus_the_appointed_guard|3|c1907213380f607c
+caldus_the_appointed_guard|4|ca18f1cb550538ce
+caldus_the_appointed_guard|5|3839c99723b66b04
 celen_the_open_hand|1|c90fb9b50b65bcbf
 celen_the_open_hand|2|eef19ad8de433005
 celen_the_open_hand|3|3618d9ef8e015e1e

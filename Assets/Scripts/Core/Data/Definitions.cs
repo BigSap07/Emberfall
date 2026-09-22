@@ -807,6 +807,14 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool AreaHitsOnly;
 
+        /// <summary>
+        /// MoveBuffs carries real buffs only, and leaves a Mark, a Ledger, a Link or a Resolve
+        /// counter where it is. Without it the walk takes whatever is not harmful, so a move off a
+        /// marked body can carry the mover's own mark away with it. The PassiveDef field of the same
+        /// name is the listening half of the same distinction. ENGINE-GAPS pass 2.
+        /// </summary>
+        public bool BuffsOnly;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -911,6 +919,7 @@ namespace Emberfall.Core.Data
             e.PerStackMaxCount = Math.Max(0, j.GetInt("perStackMaxCount", 0));
             e.PerStackFromZero = j.GetBool("perStackFromZero", false);
             e.AreaHitsOnly = j.GetBool("areaHitsOnly", false);
+            e.BuffsOnly = j.GetBool("buffsOnly", false);
             return e;
         }
 
@@ -1035,6 +1044,7 @@ namespace Emberfall.Core.Data
             c.PerStackMaxCount = PerStackMaxCount;
             c.PerStackFromZero = PerStackFromZero;
             c.AreaHitsOnly = AreaHitsOnly;
+            c.BuffsOnly = BuffsOnly;
             return c;
         }
     }
@@ -1248,6 +1258,35 @@ namespace Emberfall.Core.Data
         public int FiresPerSubject;
 
         /// <summary>
+        /// Charge OncePerBattle and Limit only when a firing LANDS - when at least one effect
+        /// reaches a target that passed its conditions. Off, a limited passive is spent the moment
+        /// its trigger arrives and its gates pass, and each effect's own condition is asked after
+        /// that, so "the first time an ally WITH PROMISE would be defeated" can be used up by an
+        /// ally without Promise and never land at all. On, a firing that landed nothing gives the
+        /// allowance back and takes its PassiveTrigger event out of the record.
+        ///
+        /// ENGINE-GAPS group 34 and pass 2. Opt-in rather than the rule, measured: made the rule,
+        /// it moves every stage fingerprint and lifts one 5-star far enough to move its role's
+        /// median, which is a content decision rather than an engine one. FiresPerSubject is NOT
+        /// refunded by it, because that budget is also the count PassiveFiredOnSubjectAtLeast
+        /// reads, and "the second time" has to count a first firing that was only waiting.
+        /// </summary>
+        public bool ChargeOnLanding;
+
+        /// <summary>
+        /// At OnEnemyBuffGained, answer a REAL buff only - never a Mark, a Ledger, a Link or a
+        /// Resolve counter. The trigger is raised for every kind that is not harmful, which
+        /// includes the bookkeeping kinds an applier writes on an enemy, so a listener without
+        /// this hears its own hero's marks as the enemy gaining a buff: Kiva banks a Broken Link
+        /// off the Forsaken her own basic laid. StatusInfo.IsInert is the predicate.
+        ///
+        /// ENGINE-GAPS pass 2. Opt-in rather than a repair of the raise itself, measured: made
+        /// the rule it moves 69 of 72 stage fingerprints and takes the finale's CEIL from 63% to
+        /// 22%, because the balance line was tuned with Kiva hearing both.
+        /// </summary>
+        public bool BuffsOnly;
+
+        /// <summary>
         /// Parameter overrides this passive applies to another ability on the same unit, if any.
         /// Only meaningful on a talent - a passive that is appended at unit-build time - because
         /// that is the only moment the override is applied.
@@ -1403,6 +1442,8 @@ namespace Emberfall.Core.Data
             p.PerTargetLimit = Math.Max(0, j.GetInt("perTargetLimit", 0));
             p.PerTargetPerRound = j.GetBool("perTargetPerRound", false);
             p.FiresPerSubject = j.GetInt("firesPerSubject", 0);
+            p.ChargeOnLanding = j.GetBool("chargeOnLanding", false);
+            p.BuffsOnly = j.GetBool("buffsOnly", false);
             p.TriggerStatus = EnumUtil.Parse(j.GetString("triggerStatus", "None"), StatusKind.None);
             p.TriggerAbilityId = j.GetString("triggerAbilityId", "");
             p.TargetBanKind = EnumUtil.Parse(j.GetString("targetBan", "None"), TargetBan.None);
