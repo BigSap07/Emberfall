@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Emberfall.Battle;
 using Emberfall.Core.Cloud;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
@@ -59,6 +60,7 @@ namespace Emberfall.DevHarness
 
             CheckContent(content);
             CheckSpriteDelivery(content, contentDir);
+            CheckEveryDeliveredSheetIsPlayed(content, contentDir);
             CheckPortraitDelivery(content, contentDir);
             CheckHeroRoleOrdinals(content);
             CheckEnumParity(content);
@@ -3929,6 +3931,221 @@ namespace Emberfall.DevHarness
             Check(pending.Count == 1 && broken.Count == 0,
                   "the SAME missing file, declared pending, is silent - the two cases are told apart"
                   + " by the declaration, not by the failed load");
+        }
+
+        // ---------------------------------------------------------------- sheet reachability
+
+        /// <summary>
+        /// Sheets that are delivered and deliberately played by nothing, each with the reason. A
+        /// pin that no longer matches a file fails, so this list cannot outlive what it excuses.
+        /// </summary>
+        private static readonly Dictionary<string, string> KnownUnplayedSheets = new Dictionary<string, string>
+        {
+            { "rheia_the_revision_scribe_idle2",
+              "delivered where her skill should be; no battle beat plays a second idle, and playing it as her"
+              + " skill would put a standing loop on her cast. Docs/PINOY-LIST.md asks for the skill sheet" },
+        };
+
+        /// <summary>
+        /// Clips that no call site names directly, and the BattleClips helper that returns them.
+        /// basic2 is only ever reached through BasicClipFor, so that call is what has to exist.
+        /// </summary>
+        private static readonly Dictionary<string, string> ReachedThroughHelper = new Dictionary<string, string>
+        {
+            { BattleClips.Basic2, "BattleClips.BasicClipFor" },
+        };
+
+        /// <summary>
+        /// EVERY DELIVERED SHEET IS PLAYED BY SOME BATTLE BEAT, so a delivery cannot sit in the
+        /// project unused again without this saying so.
+        ///
+        /// That is how 49 sheets sat unplayed: 24 basic2 and 25 controlled were imported beside
+        /// every other clip, the loader would have found them, and no line of the battle ever
+        /// asked for them. Nothing failed, because asking for a clip nobody ships is silent by
+        /// design and so is shipping a clip nobody asks for.
+        ///
+        /// Three halves, because a sheet is reachable only if all three hold:
+        ///
+        ///   1. its clip name is one BattleClips.Played lists - the vocabulary the battle requests;
+        ///   2. every entry in that list is actually requested by runtime code outside
+        ///      BattleClips.cs, so the list cannot claim a clip nothing plays;
+        ///   3. the .png and its .json sidecar are both there, which is what BattleAssets.UnitAnimClip
+        ///      needs to load either.
+        ///
+        /// Reads the folder, like CheckSpriteDelivery, and compiles BattleClips.cs itself beside the
+        /// core, so the list checked here is the list the battle uses rather than a copy of it.
+        /// </summary>
+        private static void CheckEveryDeliveredSheetIsPlayed(ContentDatabase db, string contentDir)
+        {
+            Line("");
+            Line("SHEET REACHABILITY");
+
+            string resources = Path.GetDirectoryName(contentDir.TrimEnd(Path.DirectorySeparatorChar));
+            string units = Path.Combine(resources, Path.Combine("Sprites", "Units"));
+            string scripts = Path.Combine(Path.GetDirectoryName(resources), "Scripts");
+            if (!Directory.Exists(units) || !Directory.Exists(scripts))
+            {
+                Check(false, "the unit sprite folder and the scripts folder exist beside the content");
+                return;
+            }
+
+            List<string> sprites = new List<string>();
+            for (int i = 0; i < db.Heroes.Count; i++) AddSprite(sprites, db.Heroes[i].Visual.Sprite);
+            for (int i = 0; i < db.Enemies.Count; i++) AddSprite(sprites, db.Enemies[i].Visual.Sprite);
+
+            List<string> unplayed = new List<string>();
+            List<string> halves = new List<string>();
+            Dictionary<string, int> perClip = new Dictionary<string, int>();
+            HashSet<string> pinsSeen = new HashSet<string>();
+            FindUnreachableSheets(units, sprites, KnownUnplayedSheets, unplayed, halves, perClip, pinsSeen);
+
+            string counts = "";
+            for (int i = 0; i < BattleClips.Played.Length; i++)
+            {
+                int n;
+                perClip.TryGetValue(BattleClips.Played[i], out n);
+                counts += (i > 0 ? ", " : "") + BattleClips.Played[i] + " " + n;
+            }
+            Line("  delivered sheets by clip: " + counts);
+            foreach (KeyValuePair<string, string> pin in KnownUnplayedSheets)
+                if (pinsSeen.Contains(pin.Key)) Line("  pinned unplayed: " + pin.Key + " - " + pin.Value);
+            for (int i = 0; i < unplayed.Count; i++) Line("  UNPLAYED: " + unplayed[i]);
+            for (int i = 0; i < halves.Count; i++) Line("  HALF:     " + halves[i]);
+
+            Check(unplayed.Count == 0,
+                  "every delivered sheet is a clip some battle beat requests (BattleClips.Played) - a sheet listed"
+                  + " UNPLAYED above is in the project and nothing will ever show it");
+            Check(halves.Count == 0,
+                  "every delivered sheet has both its .png and its .json sidecar - the loader needs both");
+            List<string> stalePins = new List<string>();
+            foreach (string key in KnownUnplayedSheets.Keys) if (!pinsSeen.Contains(key)) stalePins.Add(key);
+            Check(stalePins.Count == 0,
+                  "every pinned unplayed sheet still exists"
+                  + (stalePins.Count > 0 ? " (stale: " + string.Join(", ", stalePins.ToArray()) + ")" : ""));
+
+            List<string> unrequested = UnrequestedClips(scripts);
+            Check(unrequested.Count == 0,
+                  "every clip in BattleClips.Played is requested by runtime code outside BattleClips.cs"
+                  + (unrequested.Count > 0 ? " (nothing asks for: " + string.Join(", ", unrequested.ToArray()) + ")" : ""));
+
+            CheckTheUnplayedDetectorActuallyFires();
+        }
+
+        private static void AddSprite(List<string> sprites, string sprite)
+        {
+            if (!string.IsNullOrEmpty(sprite) && !sprites.Contains(sprite)) sprites.Add(sprite);
+        }
+
+        /// <summary>
+        /// Walks one folder. A file belongs to the LONGEST declared sprite id it starts with plus an
+        /// underscore, so an id that happens to prefix another cannot claim the other's sheets;
+        /// files that belong to no declared unit are out of scope here (they are orphans, not
+        /// unplayed clips).
+        /// </summary>
+        private static void FindUnreachableSheets(string units, List<string> sprites, Dictionary<string, string> pins,
+                                                  List<string> unplayed, List<string> halves,
+                                                  Dictionary<string, int> perClip, HashSet<string> pinsSeen)
+        {
+            HashSet<string> stems = new HashSet<string>();
+            foreach (string file in Directory.GetFiles(units))
+            {
+                string ext = Path.GetExtension(file).ToLowerInvariant();
+                if (ext == ".png" || ext == ".json") stems.Add(Path.GetFileNameWithoutExtension(file));
+            }
+
+            List<string> sorted = new List<string>(stems);
+            sorted.Sort(StringComparer.Ordinal);
+            foreach (string stem in sorted)
+            {
+                string owner = null;
+                for (int i = 0; i < sprites.Count; i++)
+                    if (stem.StartsWith(sprites[i] + "_", StringComparison.Ordinal)
+                        && (owner == null || sprites[i].Length > owner.Length)) owner = sprites[i];
+                if (owner == null) continue;
+                if (pins.ContainsKey(stem)) { pinsSeen.Add(stem); continue; }
+
+                string clip = stem.Substring(owner.Length + 1);
+                if (Array.IndexOf(BattleClips.Played, clip) < 0)
+                {
+                    unplayed.Add(stem + " (clip \"" + clip + "\" is not one BattleClips.Played lists)");
+                    continue;
+                }
+                bool png = File.Exists(Path.Combine(units, stem + ".png"));
+                bool json = File.Exists(Path.Combine(units, stem + ".json"));
+                if (!png || !json)
+                {
+                    halves.Add(stem + " has " + (png ? ".png without .json" : ".json without .png"));
+                    continue;
+                }
+                int n;
+                perClip.TryGetValue(clip, out n);
+                perClip[clip] = n + 1;
+            }
+        }
+
+        /// <summary>Every Played clip whose constant, or the helper that returns it, is named by no
+        /// runtime file other than BattleClips.cs. Dev Arena and Core files do not count: a clip the
+        /// battle itself never asks for is exactly what this looks for.</summary>
+        private static List<string> UnrequestedClips(string scripts)
+        {
+            StringBuilder runtime = new StringBuilder();
+            foreach (string file in Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories))
+            {
+                string rel = file.Substring(scripts.Length).Replace(Path.DirectorySeparatorChar, '/');
+                if (rel.StartsWith("/Core/") || rel.StartsWith("/Dev/") || rel.EndsWith("/BattleClips.cs")) continue;
+                runtime.Append(File.ReadAllText(file)).Append('\n');
+            }
+            string text = runtime.ToString();
+
+            List<string> missing = new List<string>();
+            foreach (System.Reflection.FieldInfo f in typeof(BattleClips).GetFields())
+            {
+                if (!f.IsLiteral || f.FieldType != typeof(string)) continue;
+                string clip = (string)f.GetRawConstantValue();
+                if (Array.IndexOf(BattleClips.Played, clip) < 0) continue;
+                string helper;
+                bool named = System.Text.RegularExpressions.Regex.IsMatch(text, @"\bBattleClips\." + f.Name + @"\b");
+                bool viaHelper = ReachedThroughHelper.TryGetValue(clip, out helper) && text.Contains(helper);
+                if (!named && !viaHelper) missing.Add(clip);
+            }
+            return missing;
+        }
+
+        /// <summary>
+        /// A deliberate unreachable delivery, so the check above is known to be able to fail: a
+        /// probe unit with a basic3 sheet, a basic2 with no sidecar and a complete skill, written to
+        /// a temp folder and removed again.
+        /// </summary>
+        private static void CheckTheUnplayedDetectorActuallyFires()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "emberfall_sheet_probe_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                const string probe = "harness_sheet_probe";
+                File.WriteAllText(Path.Combine(dir, probe + "_basic3.png"), "");
+                File.WriteAllText(Path.Combine(dir, probe + "_basic3.json"), "{}");
+                File.WriteAllText(Path.Combine(dir, probe + "_basic2.png"), "");
+                File.WriteAllText(Path.Combine(dir, probe + "_skill.png"), "");
+                File.WriteAllText(Path.Combine(dir, probe + "_skill.json"), "{}");
+
+                List<string> unplayed = new List<string>();
+                List<string> halves = new List<string>();
+                Dictionary<string, int> perClip = new Dictionary<string, int>();
+                HashSet<string> pinsSeen = new HashSet<string>();
+                FindUnreachableSheets(dir, new List<string> { probe }, new Dictionary<string, string>(),
+                                      unplayed, halves, perClip, pinsSeen);
+
+                Check(unplayed.Count == 1 && unplayed[0].Contains("basic3"),
+                      "a delivered sheet under a clip name no beat requests IS reported unplayed (the detector fires)");
+                Check(halves.Count == 1 && halves[0].Contains("basic2") && !perClip.ContainsKey("basic2")
+                      && perClip.ContainsKey("skill"),
+                      "a sheet with no sidecar IS reported, and a complete one beside it is not");
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
         }
 
         // ---------------------------------------------------------------- portrait delivery

@@ -35,8 +35,11 @@ namespace Emberfall.Dev
     /// </summary>
     public sealed class DevArena : MonoBehaviour
     {
-        private static readonly string[] ClipIds =
-            { "idle", "basic", "basic2", "skill", "hit_reaction", "death", "controlled" };
+        private static readonly string[] ClipIds = BattleClips.Played;
+
+        /// <summary>How many controlling statuses each unit carries, counted off the record the
+        /// same way the battle screen's status mirror is, so `controlled` plays here too.</summary>
+        private readonly Dictionary<int, int> _controls = new Dictionary<int, int>();
 
         private ContentDatabase _content;
         private readonly DevArenaBoard _board = new DevArenaBoard();
@@ -148,6 +151,7 @@ namespace Emberfall.Dev
             _session = CombatSimulation.Begin(req);
             _stage.Populate(_session.Result);
             _cursor = 0;
+            _controls.Clear();
             _selected = -1;
             _pendingActor = -1;
             ClearLog();
@@ -249,7 +253,7 @@ namespace Emberfall.Dev
                             ? 0f : UnitActor.ApproachDistance;
                         Vector3 towards = victim != null ? victim.transform.position
                                                          : src.transform.position + Vector3.right;
-                        src.PlayAttackLunge(towards, _speed, reach);
+                        src.PlayAttackLunge(BattleClips.BasicClipFor(_session.Events, index), towards, _speed, reach);
                     }
                     yield return Wait(0.16f);
                     break;
@@ -306,6 +310,7 @@ namespace Emberfall.Dev
 
                 case BattleEventType.StatusApplied:
                     Log("    " + NameOf(e.TargetId) + " gains " + e.Status + " (" + e.Duration + "r)", e.SourceId, e.TargetId);
+                    CountControl(e, tgt, +1);
                     yield return Wait(0.06f);
                     break;
 
@@ -316,6 +321,7 @@ namespace Emberfall.Dev
 
                 case BattleEventType.StatusExpired:
                     Log("    " + NameOf(e.TargetId) + " loses " + e.Status, -1, e.TargetId);
+                    CountControl(e, tgt, -1);
                     yield return Wait(0.04f);
                     break;
 
@@ -347,6 +353,16 @@ namespace Emberfall.Dev
                     yield return null;
                     break;
             }
+        }
+
+        private void CountControl(BattleEvent e, UnitActor unit, int delta)
+        {
+            if (!BattleClips.Controls(e.Status)) return;
+            int have;
+            _controls.TryGetValue(e.TargetId, out have);
+            have = Mathf.Max(0, have + delta);
+            _controls[e.TargetId] = have;
+            if (unit != null) unit.SetControlled(have > 0);
         }
 
         /// <summary>Who this action is about to hit, read out of the record rather than guessed, so

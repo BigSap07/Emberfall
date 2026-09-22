@@ -92,7 +92,7 @@ namespace Emberfall.Battle
     /// </summary>
     public sealed class SpriteAnimator
     {
-        private const string IdleClip = "idle";
+        private const string IdleClip = BattleClips.Idle;
 
         private readonly string _spriteId;
         private readonly Dictionary<string, SpriteAnimClip> _clips = new Dictionary<string, SpriteAnimClip>();
@@ -101,13 +101,26 @@ namespace Emberfall.Battle
         private float _canvasHeight;
 
         private SpriteAnimClip _current;
+        private string _currentId;
         private float _frameTime;
         private bool _looping;
         private bool _returnToIdleOnFinish;
 
+        /// <summary>
+        /// The loop a one-shot returns to: idle, or `controlled` while the unit's turn has been
+        /// taken away. Changed only through SetRest, which the battle screen drives off the status
+        /// mirror it already keeps from the record.
+        /// </summary>
+        private string _restClip = IdleClip;
+
         public Texture2D Texture { get { return _current != null ? _current.Texture : null; } }
         public int FrameWidth { get { return _current != null ? _current.FrameWidth : 0; } }
         public int FrameHeight { get { return _current != null ? _current.FrameHeight : 0; } }
+
+        /// <summary>The clip on screen now and its frame within that clip. Read-only, for the
+        /// capture tooling that has to say which clip a unit was showing at a given beat.</summary>
+        public string CurrentClip { get { return _currentId; } }
+        public int CurrentFrame { get { return _current != null ? Math.Min((int)_frameTime, _current.FrameCount - 1) : 0; } }
 
         /// <summary>
         /// Nominal (1x battle speed) seconds a single play-through of this clip takes at its own
@@ -136,6 +149,44 @@ namespace Emberfall.Battle
         {
             SpriteAnimClip clip = GetOrLoad(clipId);
             return clip != null ? clip.ImpactFraction : 0.5f;
+        }
+
+        /// <summary>
+        /// The clip this unit will actually play when asked for clipId: clipId itself if it
+        /// shipped, else BattleClips.FallbackFor's chain, else null. Every caller that times a beat
+        /// off a clip asks this first, so a basic2 request from a hero with no basic2 is timed as
+        /// the basic it will really play.
+        /// </summary>
+        public string Resolve(string clipId)
+        {
+            for (string id = clipId; id != null; id = BattleClips.FallbackFor(id))
+                if (GetOrLoad(id) != null) return id;
+            return null;
+        }
+
+        /// <summary>
+        /// Sets the rest loop. A unit already resting switches at once, because the event that
+        /// changed its state is the beat; a unit mid one-shot keeps playing it and comes back to
+        /// the new rest loop when it finishes. A clip the unit never shipped rests on idle.
+        /// </summary>
+        public void SetRest(string clipId)
+        {
+            string rest = Resolve(clipId) ?? IdleClip;
+            if (rest == _restClip) return;
+            _restClip = rest;
+            if (_looping) PlayLoop(_restClip);
+        }
+
+        /// <summary>
+        /// A hit reaction, which yields to the unit's own action: a basic or skill clip still
+        /// playing is never cut short by a blow that lands during it. Returns false when it
+        /// yielded, so the caller can hold back the flinch that goes with it too.
+        /// </summary>
+        public bool PlayReaction(string clipId)
+        {
+            if (!_looping && _returnToIdleOnFinish && BattleClips.IsAction(_currentId)) return false;
+            PlayOnce(clipId, false);
+            return true;
         }
 
         public static SpriteAnimator TryCreate(string spriteId)
@@ -178,6 +229,7 @@ namespace Emberfall.Battle
             SpriteAnimClip clip = GetOrLoad(clipId);
             if (clip == null) return;
             _current = clip;
+            _currentId = clipId;
             _frameTime = 0f;
             _looping = true;
             _returnToIdleOnFinish = false;
@@ -194,13 +246,15 @@ namespace Emberfall.Battle
         /// </summary>
         public void PlayOnce(string clipId, bool holdOnFinish)
         {
-            SpriteAnimClip clip = GetOrLoad(clipId);
+            clipId = Resolve(clipId);
+            SpriteAnimClip clip = clipId != null ? GetOrLoad(clipId) : null;
             if (clip == null)
             {
-                PlayLoop(IdleClip);
+                PlayLoop(_restClip);
                 return;
             }
             _current = clip;
+            _currentId = clipId;
             _frameTime = 0f;
             _looping = false;
             _returnToIdleOnFinish = !holdOnFinish;
@@ -233,7 +287,7 @@ namespace Emberfall.Battle
 
             ApplyFrame(local);
 
-            if (finished && _returnToIdleOnFinish) PlayLoop(IdleClip);
+            if (finished && _returnToIdleOnFinish) PlayLoop(_restClip);
         }
 
         private void ApplyFootPosition()

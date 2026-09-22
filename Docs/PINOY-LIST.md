@@ -379,7 +379,10 @@ the project.
 Elyra, Isara, Isolde, Marrow, Merek, Nysera, Oris, Rheia, Rovan, Talren, Vaelis, Velis, Zella.
 
 That is **69 of 85 attack clips still on a derived fraction.** They are not wrong by default; the
-derived number happens to be close on a side swing. What is wanted is a pass over the contact sheets
+derived number happens to be close on a side swing. **They matter more than they did**: the battle
+used to hold every hit until the attacker's whole clip had finished, so a wrong strike frame was
+hidden behind a late number. The hit now lands on the frame this value names, and 24 `basic2`
+clips play in battle for the first time, so a misjudged frame shows as a number appearing mid-windup. What is wanted is a pass over the contact sheets
 naming the ones that read wrong, starting with the twenty above that have had no pass at all.
 
 **One clip is missing rather than mistimed.** Rheia's delivery included an `idle2` where `skill`
@@ -416,9 +419,8 @@ Not a question, listed so it is in one place with everything else.
   `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with their
   name under its feet, so the game can say "not drawn yet" separately from "this hero's art is
   broken". By tier that is all 8 one-stars, all 12 two-stars, all 18 three-stars and 25 of the 26
-  four-stars. The clip set `SpriteAnimator` plays is `idle`, `basic`, `basic2`, `skill`,
-  `hit_reaction`, `death` and `controlled`; a clip a hero never shipped falls back to idle rather
-  than breaking, and the 31 drawn heroes do not all carry all seven today.
+  four-stars. Of the 31 drawn heroes, **22 carry all seven clips** and 9 are short of one or two;
+  section 5a is the per-hero list.
 - **Chapters 3 to 6 are blocked on backdrops.** `DESIGN-WORLD`'s contested-region proposal for
   chapter 3 is moot until they exist.
 - **Optional: rarity-coloured frame variants for the badges** - gold, purple, blue, green and grey,
@@ -434,3 +436,81 @@ Not a question, listed so it is in one place with everything else.
   roster swap - `kalyx_emberwright`, `maeve_corrin`, `nyx_serrow`, `orrin_kaal`, `ryn_solvarr` and
   `wren_ilyra` - referenced by nothing. Deleting them needs no answer from Pinoy; it is noted here so
   nobody re-delivers against them.
+
+### 5a. Battle clips per drawn hero: what plays, and what is still missing
+
+**Every delivered clip now plays in battle.** Until this pass `basic2` and `controlled` were
+imported beside every other sheet and nothing in the battle asked for them: 24 `basic2` and 25
+`controlled` sheets sat unused. The harness check `CheckEveryDeliveredSheetIsPlayed` now fails if a
+sheet is delivered under a clip name no battle beat requests, if a sheet is missing its `.json`
+sidecar, or if a clip the battle claims to play is asked for by no code, so a delivery cannot sit
+unused again without the build saying so.
+
+**When each clip plays**, all of it read from the fight record, none of it changing the fight:
+
+| clip | plays when |
+|---|---|
+| `idle` | resting, whenever nothing below applies |
+| `basic` / `basic2` | a basic attack. A hero's basics alternate: first, third, fifth play `basic`, second and fourth play `basic2` |
+| `skill` | the hero casts their active |
+| `hit_reaction` | the hero takes damage, unless they are still mid-way through their own basic or skill, which a hit never cuts short |
+| `death` | the hero dies, held on its last frame |
+| `controlled` | the resting loop, in place of `idle`, while the hero is Stunned. Silence does not count, because a silenced hero still acts |
+
+**A hero missing a clip plays what it played before**: no `basic2` means every basic plays
+`basic`, no `controlled` means a stunned hero rests on `idle`, and no `skill` keeps the resting loop
+through the cast. The 63 heroes on the placeholder mannequin have no clips and see none of this.
+
+**The strike frame is the beat.** An attack clip holds the fight until its strike frame, the hit
+lands there, and the rest of the clip plays out while the damage numbers, hit reactions and status
+tags of that strike appear. The next action waits for the follow-through to finish. Every delivered
+attack clip is 2.0 to 2.4 seconds, so the beat stretches to the clip rather than the clip being cut
+to the beat.
+
+**`controlled` is wired and no shipped battle shows it yet.** Stun is the only status that takes a
+turn away, and the only Stun in content is Corin's Weight of Time, which needs the target at three
+stacks of his Settling. Settling lasts two rounds and he adds one stack per basic, so in practice it
+tops out at two: 1,400 simulated battles across six lineups built to favour it produced no Stun,
+and the highest Settling stack any of them recorded was two. That is a kit question
+rather than an art one, and the sheets are right to have been drawn; they will show the day a Stun
+can land.
+
+| hero | delivered | newly playing | still missing |
+|---|---|---|---|
+| Aeron | 5 of 7 | none | `basic2`, `controlled` |
+| Altheon | 7 of 7 | `basic2`, `controlled` | none |
+| Aminah | 7 of 7 | `basic2`, `controlled` | none |
+| Arden | 7 of 7 | `basic2`, `controlled` | none |
+| Brenna | 7 of 7 | `basic2`, `controlled` | none |
+| Caldus | 7 of 7 | `basic2`, `controlled` | none |
+| Celen | 7 of 7, but Nereia's body (section 1a) | `basic2`, `controlled` | a set drawn for Celen |
+| Cyrra | 7 of 7 | `basic2`, `controlled` | none |
+| Dahlia | 5 of 7 | none | `basic2`, `controlled` |
+| Darian | 7 of 7 | `basic2`, `controlled` | none |
+| Edrin | 7 of 7 | `basic2`, `controlled` | none |
+| Elyra | 7 of 7 | `basic2`, `controlled` | none |
+| Hale | 7 of 7 | `basic2`, `controlled` | none |
+| Isara | 7 of 7 | `basic2`, `controlled` | none |
+| Isolde | 7 of 7 | `basic2`, `controlled` | none |
+| Kael | 7 of 7 | `basic2`, `controlled` | none |
+| Kiva | 7 of 7 | `basic2`, `controlled` | none |
+| Marrow | 7 of 7 | `basic2`, `controlled` | none |
+| Merek | 5 of 7 | none | `basic2`, `controlled` |
+| Mireth | 6 of 7 | `basic2` | `controlled` |
+| Nereia | 7 of 7 | `basic2`, `controlled` | none |
+| Nysera | 7 of 7 | `basic2`, `controlled` | none |
+| Oris | 5 of 7 | none | `basic2`, `controlled` |
+| Rheia | 6 of 7, plus an `idle2` that nothing plays | `basic2`, `controlled` | `skill` (section 3) |
+| Rovan | 7 of 7 | `basic2`, `controlled` | none |
+| Seraphine | 7 of 7 | `basic2`, `controlled` | none |
+| Sylven | 7 of 7 | `basic2`, `controlled` | none |
+| Talren | 6 of 7 | `controlled` | `basic2` |
+| Vaelis | 6 of 7 | `controlled` | `basic2` |
+| Velis | 7 of 7 | `basic2`, `controlled` | none |
+| Zella | 5 of 7 | none | `basic2`, `controlled` |
+
+**What is still wanted, in one line each:** `basic2` for Aeron, Dahlia, Merek, Oris, Talren, Vaelis
+and Zella; `controlled` for Aeron, Dahlia, Merek, Mireth, Oris and Zella; `skill` for Rheia; a whole
+set for Celen; and all seven clips for each of the 63 heroes on the mannequin. Rheia's `idle2` is
+pinned in the harness as delivered and deliberately unplayed, so it is not mistaken for an unused
+clip; it can be deleted once her `skill` arrives.

@@ -58,7 +58,9 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
     $editor = @(Get-ChildItem (Join-Path $root "Assets\Editor") -Filter *.cs -Recurse | Select-Object -Expand FullName)
 }
 
-$harness = @($core + (Join-Path $root "Tools\DevHarness\Program.cs"))
+# BattleClips.cs rides with the harness: it is engine-free on purpose, so the sheet reachability
+# check reads the clip vocabulary the battle actually requests rather than a copy of it.
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Tools\DevHarness\Program.cs"))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 
 $engineSources = @($core + $shim + $runtime + $editor)
