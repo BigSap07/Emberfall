@@ -15,14 +15,17 @@ namespace Emberfall.UI.Screens
     /// ---- visual pass ----
     /// ONE DOMINANT IMAGE. The screen used to be a spinning portal on the left and a stack of odds,
     /// purse and two buttons on the right - two competing halves, neither of them a subject. It is
-    /// now a single banner stage carrying the featured hero at size, with the action beneath it.
+    /// now a single stage with the action beneath it.
     ///
-    /// WHICH HERO IS "FEATURED", AND WHY IT IS DERIVED. There is no banner concept in content:
-    /// heroes.json has no featured flag and no banner definition, and content was out of scope for
-    /// this pass. So the face of the banner is DERIVED - the highest-star hero in the summon pool,
-    /// resolved in content order so it is stable between sessions and between players. That is a
-    /// stand-in for a real rotating banner, not an implementation of one, and it is written up in
-    /// the report rather than left to look like a feature.
+    /// THE STAGE CARRIES NO HERO, and it used to. There is no banner concept in content - no
+    /// featured flag, no banner definition - so the stage's face was DERIVED: the first 5-star
+    /// with art, in content order. Read cold, a hero standing in the rift is either a featured
+    /// banner or the last one you pulled, and it was neither, so the screen was making a claim
+    /// about the next pull that nothing in the game backs. It now says what IS true of the next
+    /// pull, in the stage's own large type: the opening guarantee while it lasts, and how much of
+    /// the pool is still new to you once it is spent, over the one-line odds. Every word of it is
+    /// read off the session, and the reveal itself stays in SummonSequence, which OnShow aborts,
+    /// so nothing a previous visit pulled can still be standing here when you come back.
     ///
     /// THE PITY BAR SHOWS THE GUARANTEE THAT ACTUALLY EXISTS. The mockup puts a progress bar and a
     /// chest under the pull button, which in most games of this shape means a recurring pity
@@ -85,19 +88,18 @@ namespace Emberfall.UI.Screens
         private const float ActionBlockHeight = UITheme.Space16 + PullHeight + UITheme.Space12
                                               + PityRowHeight + 6f + 24f + 4f + 24f + UITheme.Space16;
 
-        /// <summary>The band at the bottom of the stage the name and the title occupy, which is
-        /// the space the featured portrait is centred ABOVE rather than in.</summary>
+        /// <summary>The band at the bottom of the stage the headline and its line occupy, which is
+        /// the space the rift is centred ABOVE rather than in.</summary>
         private const float NameBand = 130f;
 
         private Text _headerSubtitle;
         private readonly CurrencyStrip _currencies = new CurrencyStrip();
 
-        private RectTransform _portraitHost;
         private Image _portalRingOuter;
         private Image _portalRingInner;
         private Image _portalCore;
-        private Text _featuredName;
-        private Text _featuredTitle;
+        private Text _stageHeadline;
+        private Text _stageLine;
 
         private UIButton _pullOne;
         private UIButton _pullTen;
@@ -113,7 +115,6 @@ namespace Emberfall.UI.Screens
 
         private float _spin;
         private bool _busy;
-        private string _featuredId = "";
 
         protected override void Build()
         {
@@ -133,7 +134,7 @@ namespace Emberfall.UI.Screens
             if (shortest < NameBand + 200f)
                 Debug.LogError("SummonScreen: the banner stage is only " + shortest + " units tall"
                     + " on the shortest canvas this game targets, which is not enough for the"
-                    + " featured hero and their name. Shorten the action block.");
+                    + " rift and its headline. Shorten the action block.");
 
             BuildActions(UITheme.Space16);
 
@@ -142,7 +143,7 @@ namespace Emberfall.UI.Screens
             if (SummonAudio.Hook == null) SummonAudio.Hook = new SfxSummonAudio(App.Audio);
         }
 
-        /// <summary>The banner stage: the rift behind, the featured hero in front of it.</summary>
+        /// <summary>The stage: the rift, and under it what the next pull will do.</summary>
         private void BuildStage(float top)
         {
             RectTransform stage = UIBuilder.Node("Stage", Root);
@@ -156,9 +157,9 @@ namespace Emberfall.UI.Screens
 
             EmberforgeUI.PanelOn(stage, true);
 
-            // The featured hero is centred in the space ABOVE the name band rather than in the
-            // stage, so a shorter stage moves the portrait up into the room it still has instead
-            // of printing the name across the bottom of the art.
+            // The rift is centred in the space ABOVE the headline band rather than in the stage,
+            // so a shorter stage moves it up into the room it still has instead of printing the
+            // headline across it.
             RectTransform focus = UIBuilder.Node("Focus", stage);
             focus.anchorMin = new Vector2(0.5f, 0f);
             focus.anchorMax = new Vector2(0.5f, 1f);
@@ -166,10 +167,8 @@ namespace Emberfall.UI.Screens
             focus.sizeDelta = new Vector2(StageWidth, -NameBand);
             focus.anchoredPosition = new Vector2(0f, NameBand * 0.5f);
 
-            // The rift itself, kept but demoted: it is the light the hero stands in now rather than
-            // the subject of the screen. Same rings, same Update-driven spin, smaller and behind.
-            // Lifted off centre and tightened to 340, so it reads as an aura around the hero
-            // rather than as a hoop the layout has to work around.
+            // The rift itself: the stage's one image now that no hero stands in it. Same rings,
+            // same Update-driven spin.
             RectTransform portal = UIBuilder.Node("Portal", focus);
             UIBuilder.Box(portal, 0f, 0f, PortalSize, PortalSize, new Vector2(0.5f, 0.5f));
 
@@ -189,19 +188,15 @@ namespace Emberfall.UI.Screens
                                         UITheme.WithAlpha(UITheme.StarColor(5), 0.4f));
             UIBuilder.FillParent(_portalCore.rectTransform, 110f);
 
-            // The featured hero, filled in on OnShow once the session is readable.
-            _portraitHost = UIBuilder.Node("Featured", focus);
-            UIBuilder.Box(_portraitHost, 0f, 0f, FeaturedSize, FeaturedSize, new Vector2(0.5f, 0.5f));
+            _stageHeadline = EmberforgeUI.Title("Headline", stage, "", UITheme.FontTitle,
+                                                Emberforge.TextGold, TextAnchor.LowerCenter);
+            UIBuilder.Box(_stageHeadline.rectTransform, 0f, 62f, StageWidth - 120f, 54f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_stageHeadline, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _featuredName = EmberforgeUI.Title("FeaturedName", stage, "", UITheme.FontTitle,
-                                               Emberforge.TextGold, TextAnchor.LowerCenter);
-            UIBuilder.Box(_featuredName.rectTransform, 0f, 62f, StageWidth - 120f, 54f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_featuredName, Emberforge.Outline, Emberforge.StrokeThick);
-
-            _featuredTitle = EmberforgeUI.Label("FeaturedTitle", stage, "", UITheme.FontSmall,
-                                                Emberforge.TextQuiet, TextAnchor.LowerCenter);
-            UIBuilder.Box(_featuredTitle.rectTransform, 0f, 24f, StageWidth - 120f, 34f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_featuredTitle, Emberforge.Outline, Emberforge.StrokeThin);
+            _stageLine = EmberforgeUI.Label("Line", stage, "", UITheme.FontSmall,
+                                            Emberforge.TextQuiet, TextAnchor.LowerCenter);
+            UIBuilder.Box(_stageLine.rectTransform, 0f, 24f, StageWidth - 120f, 34f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_stageLine, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>
@@ -212,9 +207,8 @@ namespace Emberfall.UI.Screens
         /// subject that deserves the room, so they are one line - the same sentence BuildRates
         /// composed, with the same single-tier special case, just not framed like a feature.
         /// </summary>
-        /// <summary>The featured badge, and the rift ring behind it. The ring is 1.13 times the
-        /// badge so a ribbon of it shows past the rim rather than being buried by it.</summary>
-        private const float FeaturedSize = 250f;
+        /// <summary>The rift ring, at the size it had round the old featured badge. The stage
+        /// leaves about 274 units above the headline band on the shortest canvas.</summary>
         private const float PortalSize = 283f;
 
         /// <summary>
@@ -336,8 +330,8 @@ namespace Emberfall.UI.Screens
         {
             App.RefreshHud();
             _busy = false;
+            // Whatever a previous visit left in the reveal goes, before anything is drawn.
             _sequence.Abort();
-            RefreshFeatured();
             Refresh();
         }
 
@@ -357,64 +351,6 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        /// <summary>
-        /// The banner's face. Rebuilt only when the featured hero CHANGES, which in practice means
-        /// once - the portrait is a real sprite load and tearing it down every OnShow would be
-        /// waste for a subject that cannot move without a content change.
-        /// </summary>
-        private void RefreshFeatured()
-        {
-            HeroDef featured = FeaturedHero();
-            if (featured == null || featured.Id == _featuredId) return;
-            _featuredId = featured.Id;
-
-            for (int i = _portraitHost.childCount - 1; i >= 0; i--)
-                Destroy(_portraitHost.GetChild(i).gameObject);
-
-            RectTransform portrait = EmberforgeUI.PortraitFrame("Featured", _portraitHost, featured,
-                                                                featured.Stars, FeaturedSize);
-            UIBuilder.FillParent(portrait, 0f);
-
-            _featuredName.text = featured.Name;
-            _featuredName.color = UITheme.StarColor(featured.Stars);
-            _featuredTitle.text = featured.Title.ToUpperInvariant() + "   -   "
-                                + UITheme.RoleName(featured.Role) + "   -   "
-                                + AspectChart.DisplayName(featured.Aspect).ToUpperInvariant();
-        }
-
-        /// <summary>
-        /// The face of the banner: the highest-star hero WHO HAS BEEN DRAWN, in content order.
-        ///
-        /// A STAND-IN for a real banner, not one. There is no featured flag in heroes.json and no
-        /// banner definition anywhere, and content was out of scope, so this picks a hero rather
-        /// than reading one. It is deterministic - same hero every session, same hero for every
-        /// player - which is the least misleading thing an undefined banner can be.
-        ///
-        /// The art check is the whole point of the two passes. Ranking on stars alone selected
-        /// Orrin Kaal, who was awaiting art, so the single dominant image this screen is built
-        /// around rendered as the procedural placeholder blob. Orrin has since been deleted and
-        /// all 94 heroes now declare a profile badge, so the art pass changes nothing today - it
-        /// is kept because the next roster addition arrives undrawn like every other one. A
-        /// banner face
-        /// with no face is worse than a lower-rarity hero, so heroes with art are preferred and
-        /// rarity only breaks the tie among them. The fallback still returns SOMETHING if no hero
-        /// has art at all, because a screen with no subject is worse than a placeholder one.
-        /// </summary>
-        private HeroDef FeaturedHero()
-        {
-            List<HeroDef> heroes = App.Session.Content.Heroes;
-            HeroDef drawn = null;
-            HeroDef any = null;
-            for (int i = 0; i < heroes.Count; i++)
-            {
-                HeroDef h = heroes[i];
-                if (any == null || h.Stars > any.Stars) any = h;
-                if (!Widgets.HasPortraitArt(h)) continue;
-                if (drawn == null || h.Stars > drawn.Stars) drawn = h;
-            }
-            return drawn != null ? drawn : any;
-        }
-
         private void Refresh()
         {
             long now = TimeUtil.NowUnix();
@@ -427,6 +363,42 @@ namespace Emberfall.UI.Screens
             RefreshPullButton(_pullTen, unit * 10L, shards);
             RefreshPity();
             RefreshOdds();
+            RefreshStage();
+        }
+
+        /// <summary>
+        /// What the stage says when nothing is being pulled: the one fact about the NEXT pull a
+        /// player most wants, in the stage's own large type.
+        ///
+        /// While the opening guarantee lasts, that is the guarantee. Once it is spent, it is how
+        /// much of the pool is still new to you, which is the question every pull after the
+        /// guarantee is really asking. The odds sit under it either way. No hero, because no hero
+        /// is on offer more than any other.
+        /// </summary>
+        private void RefreshStage()
+        {
+            int left = Mathf.Max(0, GameSession.PityGuaranteedSummons - App.Session.Profile.TotalSummons);
+            BalanceConfig balance = App.Session.Balance;
+            float[] w = { balance.SummonWeight1, balance.SummonWeight2, balance.SummonWeight3,
+                          balance.SummonWeight4, balance.SummonWeight5 };
+            int pool = 0, unowned = 0;
+            List<HeroDef> heroes = App.Session.Content.Heroes;
+            for (int i = 0; i < heroes.Count; i++)
+            {
+                int stars = heroes[i].Stars;
+                if (stars < 1 || stars > 5 || w[stars - 1] <= 0f) continue;
+                pool++;
+                if (!App.Session.Profile.Owns(heroes[i].Id)) unowned++;
+            }
+
+            if (left > 0)
+                _stageHeadline.text = left == 1 ? "YOUR NEXT PULL IS A HERO YOU DO NOT HAVE"
+                                                : "YOUR NEXT " + left + " PULLS ARE HEROES YOU DO NOT HAVE";
+            else if (unowned == 0)
+                _stageHeadline.text = "YOU HOLD ALL " + pool + " HEROES THE RIFT OFFERS";
+            else
+                _stageHeadline.text = unowned + " OF THE RIFT'S " + pool + " HEROES ARE NOT YET YOURS";
+            _stageLine.text = _oddsLabel.text;
         }
 
         /// <summary>

@@ -1563,26 +1563,12 @@ namespace Emberfall.Core.Combat
                 return p;
             }
 
+            /// <summary>The field list lives in TalentMath.TryApplyDelta, so the talent screen
+            /// prints a change exactly when this applies one. A field it does not know is
+            /// dropped here as it always was.</summary>
             private static void ApplyDelta(EffectDef e, string field, float delta)
             {
-                switch (field.ToLowerInvariant())
-                {
-                    case "power":      e.Power += delta; break;
-                    case "magnitude":  e.Magnitude += delta; break;
-                    case "maxstacks":  e.MaxStacks += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
-                    case "duration":   e.Duration += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
-                    case "flat":       e.Flat += delta; break;
-                    case "chance":     e.Chance += delta; break;
-                    case "selfhpratio": e.SelfHpRatio += delta; break;
-                    case "targetmaxhpratio": e.TargetMaxHpRatio += delta; break;
-                    case "targetmissinghpratio": e.TargetMissingHpRatio += delta; break;
-                    case "storedcap":  e.StoredCap += delta; break;
-                    case "hits":       e.Hits += (int)Math.Round(delta, MidpointRounding.AwayFromZero); break;
-                    case "perstack":   e.PerStack += delta; break;
-                    case "conditionvalue": e.ConditionValue += delta; break;
-                    case "conditionvalue3": e.ConditionValue3 += delta; break;
-                    case "ignoredefense": e.IgnoreDefense += delta; break;
-                }
+                TalentMath.TryApplyDelta(e, field, delta);
             }
 
             // ------------------------------------------------------------------ turn loop
@@ -1989,6 +1975,14 @@ namespace Emberfall.Core.Combat
                 _expiredSourceIds.Clear();
                 for (int i = unit.Statuses.Count - 1; i >= 0; i--)
                 {
+                    // THE LIST CAN SHRINK UNDER THIS LOOP. A Ledger's auto-release below deals
+                    // damage or pays a heal, and what that sets off can take statuses off this
+                    // same unit - a ward the payout broke, a passive that cleanses - so an index
+                    // walked down from the old Count can land past the new end. It used to throw
+                    // there, and a mirror match of one ordinary deployed line reached it in 3 of
+                    // 200 seeds. Skipping only the indices that no longer exist changes nothing
+                    // about any fight that did not throw.
+                    if (i >= unit.Statuses.Count) continue;
                     StatusInstance s = unit.Statuses[i];
                     s.RoundsLeft--;
                     if (s.RoundsLeft > 0) continue;
@@ -2057,7 +2051,15 @@ namespace Emberfall.Core.Combat
                         }
                     }
 
-                    unit.Statuses.RemoveAt(i);
+                    // The same shrink, met at the removal: the payout above is the only thing in
+                    // this loop that can move the list, and when it has moved it past i the entry
+                    // is found by identity rather than by a position that no longer exists.
+                    if (i < unit.Statuses.Count) unit.Statuses.RemoveAt(i);
+                    else
+                    {
+                        int at = unit.Statuses.IndexOf(s);
+                        if (at >= 0) unit.Statuses.RemoveAt(at);
+                    }
 
                     // THE SHIELD POOL FOLLOWS ITS OWN STATUS. Without this the entry is removed and
                     // CombatUnit.Shield keeps absorbing: the tag leaves the bar while the ward is

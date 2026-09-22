@@ -28,7 +28,8 @@ namespace Emberfall.UI
         Guild,
         GuildRequests,
         GuildChat,
-        Settings
+        Settings,
+        Talents
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -113,6 +114,7 @@ namespace Emberfall.UI
         public Screens.GuildRequestsScreen GuildRequests;
         public Screens.GuildChatScreen GuildChat;
         public Screens.SettingsScreen Settings;
+        public Screens.TalentsScreen Talents;
 
         public UIScreen Current { get; private set; }
 
@@ -152,6 +154,9 @@ namespace Emberfall.UI
             // built here with everything else: PanelHost hosts UIScreens, and a screen the router
             // does not own would be the one thing in the panel with a different lifetime.
             Settings = Create<Screens.SettingsScreen>();
+
+            // Reached from the hero page's TALENTS button, for one hero at a time.
+            Talents = Create<Screens.TalentsScreen>();
         }
 
         /// <summary>

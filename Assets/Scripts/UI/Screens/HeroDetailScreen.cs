@@ -175,6 +175,8 @@ namespace Emberfall.UI.Screens
         private UiLayerStack.Layer _abilitySheetLayer;
 
         private UIButton _openFormation;
+        private UIButton _openTalents;
+        private Text _talentRunning;
         private UIButton _levelUpButton;
         private UIButton _levelUpTenButton;
         private UIButton _obtainButton;
@@ -331,6 +333,21 @@ namespace Emberfall.UI.Screens
 
             _starHost = UIBuilder.Node("Stars", _right);
             UIBuilder.Box(_starHost, UITheme.Space24 + 88f, -(top + 20f), 300f, 30f, new Vector2(0f, 1f));
+
+            // THE DOOR TO THE TALENT PAGE, in the badge band's empty right end, mirroring CHANGE
+            // BANNER on the other panel: teal, because it is a way OUT of this page. The line
+            // beside it says which talent is running, so the pick is visible from the hero it
+            // belongs to without opening anything.
+            _openTalents = EmberforgeUI.Button("Talents", _right, "TALENTS", UITheme.FontTiny,
+                                               ForgeButtonKind.Secondary);
+            UIBuilder.Box(_openTalents.Root, -UITheme.Space24, -top, BannerButtonWidth, 48f, new Vector2(1f, 1f));
+            _openTalents.OnClick(OpenTalents);
+
+            _talentRunning = EmberforgeUI.Label("TalentRunning", _right, "", UITheme.FontTiny - 4,
+                                                Emberforge.TextQuiet, TextAnchor.UpperRight);
+            UIBuilder.Box(_talentRunning.rectTransform, -UITheme.Space24, -(top + 50f), 420f, 20f,
+                          new Vector2(1f, 1f));
+            UIBuilder.Outlined(_talentRunning, Emberforge.Outline, Emberforge.StrokeThin);
 
             top += BadgeBandHeight;
             Divider(top);
@@ -650,7 +667,7 @@ namespace Emberfall.UI.Screens
             if (def.Active != null) { abilities.Add(def.Active); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
             // One card per passive rather than one card for "the passive": a hero can carry more
             // than one, and the row already sizes itself from the count. No talent card - talents
-            // are selected, not innate, and the screen that picks them does not exist yet.
+            // are selected, not innate, and TalentsScreen is where they are compared and picked.
             for (int i = 0; i < def.Passives.Count; i++)
             { abilities.Add(AbilityMath.AsAbility(def.Passives[i])); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
             _abilityNote.gameObject.SetActive(abilities.Count > 0);
@@ -983,6 +1000,7 @@ namespace Emberfall.UI.Screens
                   + (deployedSlot == 0 ? "  -  the front of the line" : "")
                 : "On the bench";
             _slotStatus.color = deployedSlot >= 0 ? UITheme.Success : Emberforge.TextQuiet;
+            RefreshTalentDoor();
         }
 
         /// <summary>
@@ -1096,6 +1114,7 @@ namespace Emberfall.UI.Screens
         private void RefreshLocked()
         {
             if (_lockedDef == null) return;
+            RefreshTalentDoor();
             _levelLabel.text = "";
             _powerLabel.text = "LOCKED";
             _attunementLabel.text = "";
@@ -1149,6 +1168,32 @@ namespace Emberfall.UI.Screens
         /// <summary>Routes to the Inventory, which owns every equip action in the game. Shows the
         /// screen and nothing else - no state is set and no piece is chosen here, because choosing
         /// is what the screen being opened is for.</summary>
+        /// <summary>Any owned hero opens the page. One with no talents opens it too, and is told
+        /// so there with the player's own 5-stars beside it, rather than meeting a dead button.</summary>
+        private void OpenTalents()
+        {
+            if (_hero == null || _prologueView) return;
+            App.Audio.Tap();
+            Router.Talents.SetHero(_hero);
+            Router.Show(ScreenId.Talents);
+        }
+
+        private void RefreshTalentDoor()
+        {
+            bool show = _hero != null && !_prologueView;
+            _openTalents.Root.gameObject.SetActive(show);
+            _talentRunning.gameObject.SetActive(show);
+            if (!show) return;
+            HeroDef def = _hero.Def;
+            bool has = def != null && def.Talents.Count > 0;
+            _openTalents.SetText(has ? "TALENTS" : "5-STAR TALENTS");
+            PassiveDef running = has ? def.TalentAt(_hero.SelectedTalent) : null;
+            _talentRunning.text = !has ? "NONE ON A " + (def != null ? def.Stars : 0) + "-STAR"
+                                : running != null ? "RUNNING  " + running.Name.ToUpperInvariant()
+                                : "NO TALENT RUNNING";
+            _talentRunning.color = running != null ? Emberforge.TextGold : Emberforge.TextQuiet;
+        }
+
         private void OpenInventory()
         {
             App.Audio.Tap();
