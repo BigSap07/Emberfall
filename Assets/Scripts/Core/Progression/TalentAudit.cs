@@ -1,0 +1,65 @@
+namespace Emberfall.Core.Progression
+{
+    /// <summary>A talent the audit found costing its own hero output, and what it buys for it.</summary>
+    public sealed class AuditedTalent
+    {
+        public readonly string HeroId;
+        public readonly int Selection;
+
+        /// <summary>True for a talent that buys nothing back: a trap, waiting on a kit change.
+        /// False for a trade, which buys something the output total cannot see.</summary>
+        public readonly bool Trap;
+
+        /// <summary>One player-facing sentence: what it costs and what, if anything, it buys.</summary>
+        public readonly string Note;
+
+        public AuditedTalent(string heroId, int selection, bool trap, string note)
+        {
+            HeroId = heroId;
+            Selection = selection;
+            Trap = trap;
+            Note = note;
+        }
+    }
+
+    /// <summary>
+    /// THE AUDITED LIST, as the game can read it: the five talents Docs/PINOY-LIST.md section 2e
+    /// and the harness's KnownCostlyTalents record as costing their own hero output across every
+    /// arena that reaches them.
+    ///
+    /// WHY THE SCREEN NEEDS IT AS WELL AS ITS OWN MEASUREMENT. TalentTrial measures one line, and
+    /// in some lines a trap reads inside the noise - the harness found both traps below across
+    /// every room it built, and one player's line is one room. A screen that let the reading in a
+    /// quiet line stand in for the audit would hide a trap exactly where it was quietest.
+    ///
+    /// A COPY, and it can drift. The harness's KnownCostlyTalents is the list the build proves; this
+    /// is what the game is allowed to see, because the harness is not compiled into it. The two
+    /// are meant to be checked equal by the harness, which is a check this branch could not add
+    /// (Tools/DevHarness/Program.cs was owned elsewhere while it was written).
+    /// </summary>
+    public static class TalentAudit
+    {
+        public static readonly AuditedTalent[] Costly =
+        {
+            new AuditedTalent("kael_the_unyielding", 3, true,
+                "Audited as a trap: it costs Kael damage in every test fight, and What Breaks Forward"
+                + " spends Rubble before it could ever expire or stack."),
+            new AuditedTalent("velis_the_hollow_vow", 3, true,
+                "Audited as a trap: blocking healing on that enemy also blocks the healing Velis turns"
+                + " into damage and Energy."),
+            new AuditedTalent("kiva_the_forsaken_oath", 3, false,
+                "Audited as a trade: Kiva deals less, and lives through fights she otherwise loses."),
+            new AuditedTalent("nysera_the_missing_arrow", 1, false,
+                "Audited as a trade: Nysera deals less, and strips a buff off whoever targets her."),
+            new AuditedTalent("rheia_the_revision_scribe", 1, false,
+                "Audited as a trade: fewer casts that each land harder.")
+        };
+
+        public static AuditedTalent For(string heroId, int selection)
+        {
+            for (int i = 0; i < Costly.Length; i++)
+                if (Costly[i].HeroId == heroId && Costly[i].Selection == selection) return Costly[i];
+            return null;
+        }
+    }
+}

@@ -108,12 +108,22 @@ namespace Emberfall.Core.Progression
         /// </summary>
         public static BattleLoadout GhostOf(ContentDatabase content, PlayerProfile profile, string label)
         {
+            return GhostOf(content, profile, profile != null ? profile.TeamHeroes() : null, label);
+        }
+
+        /// <summary>
+        /// The same ghost, of a line named explicitly rather than read off the profile's deployed
+        /// team. TalentTrial fields a benched hero in the back slot and needs the mirror of THAT
+        /// line; everything else about the snapshot, armor by value included, is GhostOf's.
+        /// </summary>
+        public static BattleLoadout GhostOf(ContentDatabase content, PlayerProfile profile,
+                                            List<HeroInstance> team, string label)
+        {
             BattleLoadout loadout = new BattleLoadout();
             loadout.Label = string.IsNullOrEmpty(label) ? "Your Own Line" : label;
             loadout.IsGhost = true;
-            if (content == null || profile == null) return loadout;
+            if (content == null || profile == null || team == null) return loadout;
 
-            List<HeroInstance> team = profile.TeamHeroes();
             for (int i = 0; i < team.Count; i++)
             {
                 HeroInstance hero = team[i];
