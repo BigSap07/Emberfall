@@ -298,5 +298,25 @@ namespace Emberfall.UI
         /// frame it reaches as a fraction of the frame's own size.</summary>
         public const float AccentGlowAlpha = 0.62f;
         public const float AccentGlowSpread = 0.15f;
+
+        /// <summary>
+        /// How far a rarity PLATE reaches outside the badge it sits behind, as a fraction of the
+        /// badge's own size.
+        ///
+        /// A hero whose portrait Pinoy has drawn arrives as a finished badge with its own gold
+        /// frame, so putting a rarity frame around one is two frames on one object. Rarity moves
+        /// BEHIND the badge instead: a disc in the tier's colour, reaching out just past the
+        /// badge's rim, with the kit's dark outline round it. The badge itself is not resized by
+        /// this, which is the point of reaching outward rather than insetting - every screen that
+        /// already draws one keeps the portrait at exactly the size it had.
+        ///
+        /// The four cardinal spikes on the badge art cross the plate, which is why this reads as
+        /// a rosette rather than as a coaster under a coin.
+        /// </summary>
+        public const float BadgePlateSpread = 0.05f;
+
+        /// <summary>The plate's own colours: the tier's deep stop, with its lit stop catching the
+        /// top of the rim so the ring is a struck edge rather than a flat circle.</summary>
+        public const float BadgePlateLitAlpha = 0.55f;
     }
 }

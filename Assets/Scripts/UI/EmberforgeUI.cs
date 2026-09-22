@@ -533,21 +533,49 @@ namespace Emberfall.UI
         // ------------------------------------------------------------------ portraits
 
         /// <summary>
-        /// A PORTRAIT IN ITS RARITY FRAME, with its aspect glowing behind it.
+        /// A PORTRAIT WITH ITS RARITY AND ITS ASPECT BOTH READABLE, in one of two shapes.
         ///
-        /// The frame says the tier and the glow says the aspect, and they are separate readings on
-        /// separate parts of the badge on purpose: a single ring cannot carry both, which is
-        /// exactly the collision Widgets.Portrait records - it dropped its rarity read to keep its
-        /// aspect one, because it only had one ring to spend. A frame plus a glow has two.
+        /// Tier and aspect are separate readings on separate parts of the badge on purpose: a
+        /// single ring cannot carry both, which is exactly the collision Widgets.Portrait records -
+        /// it dropped its rarity read to keep its aspect one, because it only had one ring to
+        /// spend. This has two channels, and which two depends on what the hero arrives as.
         ///
-        /// The portrait itself still comes from Widgets, so a hero with painted art and a hero
-        /// without resolve exactly as they do everywhere else in the game.
+        ///   A DRAWN BADGE already carries a gold frame, so it gets no frame from here at all.
+        ///   Rarity is a coloured plate BEHIND it and aspect is the glow outside that. Drawing a
+        ///   rarity ring round one of these was the double-border fault: two frames on one
+        ///   portrait, with the badge's four cardinal spikes clipped against the inner edge of the
+        ///   outer ring.
+        ///
+        ///   EVERYTHING ELSE - an undrawn hero, an enemy, a locked silhouette - gets the full
+        ///   rarity frame, because there is no frame in the art for it to collide with.
+        ///
+        /// The portrait itself still comes from Widgets either way, so a hero with painted art and
+        /// a hero without resolve exactly as they do everywhere else in the game.
         /// </summary>
         public static RectTransform PortraitFrame(string name, Transform parent, UnitDef def,
                                                   int stars, float size)
         {
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Size(root, size, size);
+
+            // A HERO WHOSE BADGE SOMEBODY DREW ALREADY HAS A GOLD FRAME, so it gets no second one.
+            //
+            // This was the fault: the badges Pinoy delivers are finished objects with their own
+            // frame and four spikes reaching the edge of the image, and wrapping a rarity ring
+            // round one puts two frames on one portrait and clips the spikes against the inner
+            // edge of the outer ring. Every hero in the roster is delivered framed, so this was
+            // not an edge case - it was every owned portrait in the game.
+            //
+            // Rarity moves BEHIND the badge instead, as a coloured plate reaching out past its
+            // rim, and the star row beside it says the number. Widgets owns that treatment because
+            // seven screens draw badges without ever coming through here; showRing is what asks
+            // for it, exactly as it already asked for the aspect glow.
+            if (Widgets.HasDeclaredBadge(def))
+            {
+                RectTransform badge = Widgets.Portrait("Face", root, def, stars, size, true);
+                UIBuilder.FillParent(badge, 0f);
+                return root;
+            }
 
             Image glow = UIBuilder.Img("AspectGlow", root, TextureLab.Glow(128, 1.9f),
                                        UITheme.WithAlpha(Emberforge.Accent(def.Aspect),

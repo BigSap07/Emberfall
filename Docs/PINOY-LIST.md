@@ -236,6 +236,15 @@ Not a question, listed so it is in one place with everything else.
   four-stars.
 - **Chapters 3 to 6 are blocked on backdrops.** `DESIGN-WORLD`'s contested-region proposal for
   chapter 3 is moot until they exist.
+- **Optional: rarity-coloured frame variants for the badges** - gold, purple, blue, green and grey,
+  matching the five star tiers. The badges as delivered all carry the SAME gold frame, so the game
+  cannot let the frame carry rarity and instead reads it off a coloured plate drawn behind the
+  badge plus the star row beside it. That works, but rarity in the frame itself is the stronger
+  read and it is what this genre's players expect. Five recolours of the existing frame would drop
+  straight into the override slots with no code change - see `DESIGN-EMBERFORGE` for how a PNG at
+  `Resources/Sprites/Hud` wins over the generated kit. Not a blocker, and not worth redrawing any
+  badge art for; only worth doing if the frame is a separate layer in the source files already.
+
 - **Six orphaned sprite PNGs** sit under `Assets/Resources/Sprites/Units` for heroes deleted in the
   roster swap - `kalyx_emberwright`, `maeve_corrin`, `nyx_serrow`, `orrin_kaal`, `ryn_solvarr` and
   `wren_ilyra` - referenced by nothing. Deleting them needs no answer from Pinoy; it is noted here so

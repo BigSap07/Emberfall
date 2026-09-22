@@ -130,6 +130,62 @@ namespace Emberfall.UI
         public const string PortraitFolder = "Sprites/Portraits/";
 
         /// <summary>
+        /// True when this unit has a badge somebody DREW, as opposed to a frameless portrait file
+        /// or nothing at all.
+        ///
+        /// The distinction matters to exactly one caller and it is worth a named question rather
+        /// than a null check at the call site: a declared badge arrives with its own gold frame
+        /// already on it, so it is the one case where a rarity FRAME must not be drawn. See
+        /// EmberforgeUI.PortraitFrame.
+        /// </summary>
+        public static bool HasDeclaredBadge(UnitDef def)
+        {
+            return FramedPortrait(def) != null;
+        }
+
+        /// <summary>
+        /// THE RARITY READ FOR A BADGE THAT ALREADY HAS A FRAME: a disc in the tier's colour
+        /// reaching out just past the badge's rim, with the kit's dark outline round it.
+        ///
+        /// Drawn BEHIND the badge and reaching OUTWARD rather than insetting it, which is what
+        /// keeps every screen already drawing one at exactly the portrait size it had. The badge's
+        /// four cardinal spikes cross the ring, so it reads as a rosette rather than as a coaster
+        /// under a coin.
+        ///
+        /// The outline is in absolute units rather than a fraction, because it is the same dark
+        /// line every other element in the kit carries and a 3-unit line that scaled with the
+        /// portrait would be 9 units on a summon reveal and one on a profile row.
+        ///
+        /// Colours come from Emberforge's rarity ramp rather than UITheme.StarColor. The two are
+        /// close but not equal, and this ring is new work in the design-system pass, so it speaks
+        /// that pass's palette. Nothing here touches the aspect glow above it, which stays on
+        /// UITheme.AspectColor along with every other unconverted screen - see UITheme.AspectAccent
+        /// for why those two must converge in a pass that owns every screen at once, and not here.
+        /// </summary>
+        private static void RarityPlate(RectTransform root, int stars, float size)
+        {
+            float plate = size * Emberforge.BadgePlateSpread;
+
+            Image edge = UIBuilder.Img("RarityEdge", root, TextureLab.Circle(160), Emberforge.Outline);
+            UIBuilder.FillParent(edge.rectTransform, -(plate + Emberforge.OutlineWeight));
+            edge.raycastTarget = false;
+
+            Image face = UIBuilder.Img("RarityPlate", root, TextureLab.Circle(160),
+                                       Emberforge.RarityDeep(stars));
+            UIBuilder.FillParent(face.rectTransform, -plate);
+            face.raycastTarget = false;
+
+            // The lit stop, as a hairline at the plate's OUTER edge where it meets the dark
+            // outline. A glow was tried here first and was wasted: a radial falloff concentrates
+            // in the centre, which is the one part of the plate the badge covers completely.
+            Image lit = UIBuilder.Img("RarityLit", root, TextureLab.Ring(160, 5),
+                                      UITheme.WithAlpha(Emberforge.RarityLit(stars),
+                                                        Emberforge.BadgePlateLitAlpha));
+            UIBuilder.FillParent(lit.rectTransform, -plate);
+            lit.raycastTarget = false;
+        }
+
+        /// <summary>
         /// The painted portrait for a unit, or null if it has none.
         ///
         /// Presence of the file IS the rule, so nothing here needs to know what an aspect is. That
@@ -238,9 +294,17 @@ namespace Emberfall.UI
             {
                 if (showRing)
                 {
-                    Image aspectGlow = UIBuilder.Img("AspectGlow", root, TextureLab.Glow(128, 1.9f),
-                                                     UITheme.WithAlpha(UITheme.AspectColor(def.Aspect), 0.5f));
-                    UIBuilder.FillParent(aspectGlow.rectTransform, -size * 0.12f);
+                    // The glow has to CLEAR the rarity plate that sits inside it, or the plate
+                    // simply covers it and the badge loses its aspect read entirely. So it spreads
+                    // past both, and its falloff is softer than the one behind an unframed
+                    // portrait because it now has to carry across a wider band to be seen at all.
+                    float spread = size * (Emberforge.BadgePlateSpread + Emberforge.AccentGlowSpread);
+                    Image aspectGlow = UIBuilder.Img("AspectGlow", root, TextureLab.Glow(128, 1.5f),
+                                                     UITheme.WithAlpha(UITheme.AspectColor(def.Aspect),
+                                                                       Emberforge.AccentGlowAlpha));
+                    UIBuilder.FillParent(aspectGlow.rectTransform, -spread);
+
+                    RarityPlate(root, stars, size);
                 }
 
                 Image badge = UIBuilder.Img("Badge", root, framed, Color.white);
