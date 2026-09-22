@@ -12813,23 +12813,25 @@
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Mark",
-            "duration": 2
+            "duration": 3
           },
           {
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Ledger",
             "magnitude": 0.3,
-            "duration": 2,
-            "storedCap": 1.2,
+            "duration": 3,
+            "storedCap": 0.5,
             "ledgerAutoRelease": true,
-            "ledgerBankLimit": 1
+            "ledgerBankLimit": 1,
+            "ledgerBankFromCaster": true
           },
           {
             "kind": "SnapshotHp",
             "target": "HighestAttackEnemy"
           }
-        ]
+        ],
+        "description": "Deals 185% Attack damage to all enemies and marks the enemy with the highest Attack as the Subject for 3 rounds. The first time the Subject takes damage from Altheon each round, record 30% of that damage, up to 50% of Altheon's Attack. When the Subject expires it takes damage equal to the whole record. Pinoy writes the Subject as 2 rounds and the ceiling as 120% of Attack; at those numbers the ceiling needs a single blow of four times Altheon's Attack and the Subject outruns him, so the record got one blow a round and never closed. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "passive": {
         "id": "altheon_preserved_moment_stats",
