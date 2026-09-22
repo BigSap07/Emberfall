@@ -44,6 +44,7 @@ resource.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Celen | "transfer 15 Energy from the highest-Energy ally to the lowest **if their difference is at least 30**" | a condition reading two units at once | the pair is ungated, and self-cancels when the fullest and emptiest bars are the same body | medium |
+| Lydia | "Whenever Lydia **acts before the slowest enemy**, she gains 10% Damage Reduction" | a condition comparing the caster against a body other than the one the effect lands on; `CasterActsBeforeSubject` reads the target, and this effect targets Lydia | the Damage Reduction goes up at the start of every one of her turns, ungated | medium |
 
 ---
 
@@ -78,9 +79,13 @@ always reads zero.
 Every transfer primitive in the engine is one-directional. `HpTransfer` and `ShieldTransfer` move a
 pool from one body to another and there is no exchange.
 
+`HpTransfer` also only ever moves HP BETWEEN THE CASTER AND ITS TARGET, so a clause naming two
+bodies that are both somebody else cannot be said one way either.
+
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Rhys | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | a two-way HP exchange; `HpTransfer` only moves HP one way | Rhys pays 45% of what the ally is missing out of his own bar, clamped by the engine to leave him at 1 HP | medium |
+| Rhys | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | a two-way HP exchange; `HpTransfer` only moves HP one way | Rhys pays 20% of what the ally is missing out of his own bar, clamped by the engine to leave him at 1 HP | medium |
+| Bren | "swaps the target's present HP percentage with the **highest-HP enemy**" | a two-way exchange, and a one-way one between two bodies neither of which is the caster | Take Another Route is aimed at the highest-HP enemy instead, so the blow goes where the swap would have sent the health | medium |
 
 ---
 
@@ -124,6 +129,7 @@ Damage, healing, energy and turn-shift effects either happen or do not.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round | small |
+| Avera | "has a **50% chance** to delay each by 15% turn progress" | the same probability gate, on the same kind of effect | the delay is certain against every Disrupted enemy the cast reaches | small |
 
 ---
 
@@ -142,7 +148,8 @@ enemy at a named third body.
 ## 18. Telling WHICH KIND of status a removal took
 
 Both triggers in this group now publish the body the event happened to, so Tamsin's row is gone
-and Lio's has narrowed to its second clause.
+and Lio's has narrowed to its second clause. Clara's is that same clause written for a second
+hero, which is the repeat this file's grouping exists to show.
 
 Nothing says what a removal REMOVED. `OnStatusRemoved` names the remover and now the body it was
 taken from, and `_lastRemovedValue` carries the pending DoT damage that left with it, but no field
@@ -154,6 +161,7 @@ taken at all.
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
 | Lio | "**control debuffs** also grant 10 Energy" | the kind a removal took, published for the trigger it raises - the removal-side sibling of `PassiveDef.TriggerStatus` | the 10 Energy pays out for any debuff Lio strips, not only a control one | small |
+| Clara | "When Clara removes a **control debuff**, the ally gains 12 Energy" | the same absence, and the same sentence a second time | the 12 Energy pays out for any debuff Clara strips, not only a control one | small |
 
 ---
 
@@ -204,17 +212,152 @@ its own side. There is no placement, no ordering and nothing that forbids either
 
 ---
 
+## 23. A damage modifier scoped to one kind of hit, or spent by one hit
+
+`Vulnerable`, `Blunted` and `DamageTakenUp` are the three entries that change what a blow is worth,
+and all three answer every blow for as long as they last. `DamageTakenUp` can narrow itself to
+skill damage, which is the only scope any of them has. Nothing narrows one to a CRITICAL hit, and
+nothing spends one on a single blow: `charges` is stamped on a status as it lands and is read by
+`Guard` and by the `Covered` redirect, not by the damage modifiers.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Aster | "Fracture causes the **next critical hit** to deal 15% more damage" | a crit-scoped damage modifier, and a per-hit charge on one | Fracture is a `DamageTakenUp` of 15% that answers every blow for its 2 rounds | small |
+| Quin | "Delivered targets take 8% more damage from the **next** active skill" | a per-hit charge on a damage modifier; the skill scope itself is authorable | Delivered carries the skill-scoped 8% for its 2 rounds rather than for one cast | small |
+
+---
+
+## 24. A miss that somebody other than the dodger can hear
+
+`OnDodge` fires on the body that was missed and publishes the attacker as its source, which is the
+right shape for "when she evades, she counters". Nothing raises it on the applier of the accuracy
+debuff that caused the miss, and no trigger reaches a third party at all.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Adric | "When an enemy with Lost Route **misses**, Adric gains 8 Energy" | a miss window the applier can hear, rather than only the body that dodged | the 8 Energy pays only when the missed blow was aimed at Adric himself | small |
+
+---
+
+## 25. An amount that counts the bodies an effect reached
+
+`perStack` scales an effect by how many entries of a named status, or of a whole class, sit on one
+named subject. Nothing scales an amount by HOW MANY TARGETS the effect resolved onto, so "per
+target" has no arithmetic behind it. `_hitIsArea` records that a blow reached more than one body
+and is a boolean, not a count.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Quin | "removes Delivered to give Quin **12 Energy per target**" | an amount multiplied by the number of bodies an effect resolved onto | a flat 12 Energy for the cast, whatever it reached | small |
+
+---
+
+## 26. Changing what an ability costs
+
+`energyCost` is a field on `AbilityDef` and the one thing that moves it is a `TalentOverrideDef`,
+which is applied at unit-build time from the SELECTED TALENT. A passive carries an `overrides`
+list in its JSON and nothing reads it outside the talent path, so a hero below five stars has no
+way to author a cost change at all.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Quin | "Quin's **first active skill each battle costs 15 less Energy**" | an ability cost modifier reachable from a passive rather than from a talent override | a `BattleStart` passive that banks 15 Energy, which is the same first cast one turn earlier and a different thing on every cast after it | small |
+
+---
+
+## 27. Refusing a cleanse
+
+`Cleanse` walks the target's harmful entries newest first and takes the first `hits` of them.
+Nothing on a `StatusInstance` and no condition anywhere says "not this one". `NoExtend` refuses an
+`ExtendStatus` and is the only refusal an entry can carry.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Selka | "Overdue **cannot be cleansed** during the round it was applied" | a per-entry cleanse immunity | No Extension writes Overdue back onto its carrier at every round start, so it cannot be shaken off at all rather than for one round | small |
+
+---
+
+## 28. Which effect of a cast landed the blow
+
+A defeat publishes the killer and the defeated body. It does not publish which EFFECT of the
+killer's ability did it, so a clause that answers only one line of a multi-effect cast cannot tell
+itself apart from the rest of the cast. `TriggerAbilityId` narrows a defeat trigger to one ABILITY,
+which is as fine as the record gets.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Cal | "When **Offset splash** defeats an enemy, Cal gains a guaranteed Critical Hit" | the effect within a cast that landed a killing blow | any defeat Cal lands on an Offset enemy pays the guaranteed critical | small |
+
+---
+
+## 29. A debuff landing on an enemy
+
+`OnEnemyBuffGained` is the window for a BENEFICIAL status arriving on the other side, and Vanno
+and Tavia both build on it. There is no harmful mirror of it. `OnStatusGained` fires on the
+CARRIER, so a hero watching the enemy line for an incoming debuff has nothing to listen to, and
+`OnEnemyAppliedStatus` answers an enemy CASTING one rather than one arriving.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Linnet | "Crossed Line: the target's **first debuff each round** goes to a random enemy" | a window for a harmful status arriving on an enemy, the mirror of `OnEnemyBuffGained` | Open Circuit reroutes one debuff already on the Crossed Line body at round start instead of catching one as it lands | small |
+
+---
+
+## 30. A moved status is not recorded as a removal
+
+`NoteRemovedFrom` is what `SubjectLostStatusThisFiring` reads and what `FireRemoval` raises
+`OnStatusRemoved` on, and exactly three effects call it: `Cleanse`, `Dispel` and `RemoveStatus`.
+`MoveDebuffs`, `MoveBuffs` and `TransferStatus` take an entry off a body without either, so a
+clause that pays the bodies a move took something from cannot tell which ones they were.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Oswin | "**Allies who lose a debuff to Oswin** gain 8% Defense for 2 rounds" | a move recorded as a removal, so the gate has something to read | every ally gains the 8% after Reposition the Hurt, whether or not a debuff left them | small |
+| Linnet | "**When Crossed Line redirects a debuff**, Linnet gains 10 Energy" | the same record, read as a gate on the payout rather than on a rider | the 10 Energy pays at round start whether or not the reroute found anything to move | small |
+
+---
+
+## 31. Negating a miss chance
+
+The miss check subtracts `EvasionUp` on the defender and `AccuracyDown` on the attacker from a hit
+chance of 1. Nothing sets it back to 1, and nothing exempts one attacker or one target from the
+roll, so "cannot miss" has no term to write. Adric's Lost Route made this reachable for the first
+time in the same batch that found it unanswerable.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Brio | "Attacks against Accounted **cannot miss**" | an exemption from the miss roll | carried in the text only; the Mark does the rest of Accounted's work | small |
+
+---
+
 ## Where the counts stand
 
-Thirteen capabilities, fourteen clauses, across thirteen heroes. It began at twenty-two and
-thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
-eighteen kits that carried them.
+Twenty-two capabilities, twenty-nine clauses, across twenty-five heroes. It began at twenty-two
+and thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored
+the eighteen kits that carried them, leaving thirteen and fourteen. The three 3-star batches added
+nine groups and fifteen clauses, which is the count going the other way for the first time since
+the pass.
 
-Exactly one group still has more than one occupant:
+Seven groups have more than one occupant, where before the 3-star tier there was one:
 
 | group | capability | clauses |
 |---|---|---|
+| 6 | comparing a resource across two named units | 2 |
+| 11 | swapping a value, rather than moving it one way | 2 |
+| 15 | chance on anything but a status landing | 2 |
+| 18 | telling which kind of status a removal took | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
+| 23 | a damage modifier scoped to one kind of hit, or spent by one hit | 2 |
+| 30 | a moved status is not recorded as a removal | 2 |
+
+**The shape of the repeats is the finding.** Three of the seven pair a 3-star with a 4-star or a
+5-star that asked for the same thing first - Lydia beside Celen, Avera beside Finn, Clara beside
+Lio - and each of those three would close two kits at once. The other four are all inside the
+3-star tier. Nothing here is scheduled; the file is still a record.
+
+**Group 23 is the one with a repeat that arrived in a single batch**, which is what this file's
+grouping exists to make visible: Aster's Fracture and Quin's Delivered are the same sentence
+written twice, and one per-hit charge on the damage modifiers would close both.
 
 **What the pass built**, in the order the groups were taken:
 

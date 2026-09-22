@@ -9,13 +9,16 @@ It is one file so it can be sent as one message, and it is maintained here rathe
 1. **Deliveries to identify** - two heroes ship the same battle body, and three profile icons
    arrived under a name no hero has.
 2. **Kit text to confirm** - clauses where the shipped kit does not do exactly what the sentence in
-   `import/Heroes.json` says, either because the engine cannot say it or because the number had to
-   change. None of these was quietly reworded.
+   `import/Heroes.json` says, because the engine cannot say it, because the star band had to move
+   the number, or because a 3-star has no slot for the shape the sentence needs. None of these was
+   quietly reworded.
 3. **Strike frames to set by hand** - where a clip's impact frame is a derived guess rather than a
    judgement.
 4. **A note for the next painting** - one constraint on future hub art.
 
-Checked against the tree on 2026-09-22.
+Checked against the tree on 2026-09-22, after the 3-star tier was authored. Section 2b was
+rebuilt against the shipped kits in that pass rather than carried forward: the engine gaps
+pass had retired nine of its rows and this file had not been told.
 
 ---
 
@@ -100,67 +103,85 @@ same thing. **If the answer is no, both come back together.**
 
 ### 2b. Clauses the engine could not say as written
 
-`Docs/ENGINE-GAPS.md` is the full record: **22 capabilities, 39 clauses, 20 heroes**, grouped by
+`Docs/ENGINE-GAPS.md` is the full record: **22 capabilities, 29 clauses, 25 heroes**, grouped by
 what is missing rather than by hero so a repeat is visible. Every row carries the sentence as
-written, what the engine lacks, and what the shipped kit does instead. What follows is the same 39
-regrouped **by hero**, because that is the order they are easiest to answer in.
+written, what the engine lacks, and what the shipped kit does instead. What follows is the same 29
+regrouped **by hero**, because that is the order they are easiest to answer in, plus a short second
+table of departures that are not engine gaps at all.
 
-Nothing here was reworded quietly, and nothing here is a number. The 4-star values all differ from
-the originals because the star band moved them, which is balance rather than expressibility.
+**This section was 38 rows and is now 29, and the difference is not a retreat.** It was written
+before the engine gaps pass, which built eleven capabilities and then put eighteen kits back to the
+sentence Pinoy wrote for them. Every row that pass retired has come out of this table, checked one
+at a time against what the shipped kit actually does rather than against the old list. Branik's
+second passive, Celen's shield extension, Demos's extension cap, Eira's area ward and her
+single-target gate, Finn's round-end hook, both of Halwen's, Jory's and Kest's "from it", Leon's
+per-buff scaling, Lio's healing bonus, both of Maera's timing rows, Maren's holder tick, Mika's
+energy fold, Niko's debuff window, both of Rhys's hit-size rows, Siofra's reversal clock, Tamsin's
+skill scope, her per-buff scaling and her named delay subject, and Toren's redirect are all
+authored as written now and need no answer.
+
+Nothing here was reworded quietly, and nothing here is a number. Every 4-star and 3-star damage
+value differs from the original because the star band moved it, which is balance rather than
+expressibility.
 
 **Three kinds of answer are useful:** *the approximation is fine, keep it*; *the approximation is
 wrong, here is a sentence the engine can say*; or *this clause is worth an engine change*.
 
 | hero | clause as written | what ships instead |
 |---|---|---|
-| **Branik** | "The first time each round a Cracked enemy attacks, Branik gains 8% Damage Reduction" | a second passive on `OnDamaged` carrying the identical clause, because the ally trigger excludes him |
+| **Adric** | "When an enemy with Lost Route **misses**, Adric gains 8 Energy" | the 8 Energy pays only when the missed blow was aimed at Adric himself; the engine raises its miss window on the body that dodged |
+| **Aster** | "Fracture causes the **next critical hit** to deal 15% more damage" | Fracture raises damage taken by 15% from every blow, for its whole 2 rounds |
+| **Avera** | "has a **50% chance** to delay each by 15% turn progress" | the delay is certain |
+| **Brio** | "Attacks against Accounted **cannot miss**" | carried in the text only; the Mark does the rest of Accounted's work |
+| **Bren** | "swaps the target's present HP percentage with the **highest-HP enemy**" | the blow is aimed at the highest-HP enemy instead, so it goes where the swap would have sent the health |
+| **Cal** | "When **Offset splash** defeats an enemy, Cal gains a guaranteed Critical Hit" | any defeat Cal lands on an Offset enemy pays it; nothing records which effect of a cast landed a blow |
 | **Celen** | "transfer 15 Energy from the highest-Energy ally to the lowest **if their difference is at least 30**" | the pair is ungated, and self-cancels when the fullest and emptiest bars are the same body |
-| **Celen** | "transfers the largest ally Shield to the lowest-HP ally and **extends it 1 round**" | the extension is authored and lands, but against a 99-round entry it is nominal |
-| **Demos** | "extends Arrears by 1 round, **up to 3 rounds**" | the cap is dropped; the clause extends without limit |
+| **Clara** | "When Clara removes a **control debuff**, the ally gains 12 Energy" | the 12 Energy pays for any debuff she strips |
 | **Demos** | "At turn end, Arrears loses 4% current HP" | an `attackCap` was added that the sentence does not mention, holding the clause at the relationship it was written with |
-| **Eira** | "it reduces the first **area** hit **each round** by 20%" | one Guard charge for the whole 2-round duration, answering whichever hit lands first, area or not |
-| **Eira** | "When an ally with Mobile Cover is **singled out**" | gated on the victim carrying the ward, so "singled out" becomes "hit" |
 | **Eira** | "moves the target **to the back** if another enemy is alive" | a position swap, which displaces it but not reliably to the back |
-| **Finn** | "**At round end**, Ringing enemies have a 35% chance to be delayed" | fires on a Ringing enemy's own turn ending, once a round |
-| **Finn** | "have a **35% chance** to be delayed by 15% turn progress" | the delay is certain and the passive is limited to once a round instead |
-| **Halwen** | "**When Reserve prevents damage**, its holder recovers 4% Max HP" | fires once a round on an ally being damaged, healing the victim whether or not Reserve answered the blow |
-| **Halwen** | "its holder recovers 4% Max HP" - the holder can be Halwen | a second passive on `OnDamaged` carrying the identical clause |
+| **Finn** | "have a **35% chance** to be delayed by 15% turn progress" | the delay is certain |
 | **Iolan** | "removes one target buff; **if none is removed**, applies 10% Effect Hit Down" | the rider lands whether or not the Dispel found anything |
-| **Jory** | "Taunts the front enemy for 2 rounds; **it** deals 15% less damage to Jory" | 15% damage reduction on Jory for the Taunt's duration, which reduces damage from everybody |
 | **Jory** | "If the **same enemy hits Jory twice** in a round, he counterattacks" | limited to once a round, so the first enemy to strike him is counterattacked |
-| **Kest** | "takes 10% less **from it**" | 10% damage reduction, which reduces damage from everybody |
-| **Leon** | "Damage increases **10% per displayed buff**, up to 40%" | the whole 40% lands against a body carrying any buff at all |
 | **Leon** | "assigns Case Number ..., **revealing current HP, Energy, and buffs to allies**" | carried in the text only; the Mark does the mechanical half |
-| **Lio** | "Diagnosed allies **receive 18% more healing**" | Diagnosed is a Mark and Lio's own healing reads it, so the extra comes from him rather than from every source |
-| **Lio** | "When Lio removes a debuff, **that ally** recovers 5% missing HP; control debuffs also grant 10 Energy" | the heal moves into the ability where the cleansed body can be seen; the Energy pays the lowest-HP ally, which is that body by construction |
-| **Maera** | "if the target **attacked an ally** since Maera's last turn, deals 25% additional" | "has acted this round", which in this engine's turn shape means it has attacked |
-| **Maera** | "the enemy that **most recently damaged an ally**" | the enemy that has dealt the most damage so far |
+| **Linnet** | "Crossed Line: the target's **first debuff each round** goes to a random enemy" | one debuff already on that body is rerouted at round start instead of one being caught as it lands |
+| **Linnet** | "**When Crossed Line redirects a debuff**, Linnet gains 10 Energy" | the 10 Energy pays whether or not the reroute found anything to move |
+| **Lio** | "**control debuffs** also grant 10 Energy" | the 10 Energy pays for any debuff Lio strips |
+| **Lydia** | "Whenever Lydia **acts before the slowest enemy**, she gains 10% Damage Reduction" | the Damage Reduction goes up at the start of every one of her turns, ungated |
 | **Maera** | "and **she cannot be controlled**" | **the clause is dropped.** The guaranteed critical half of the passive is authored and the immunity half is not |
-| **Maren** | "Recovery heals **3% Max HP** each turn" | the tick is written in Maren's Attack at the value that comes to about 3% of an ally's bar at the level the number was set against |
 | **Mika** | "moves each effect to **an unmarked enemy**" | moves to the highest-HP enemy, the answer Demos's No Appeal already gives to the same question |
-| **Mika** | "When an ally **gains Energy** from Loose Parts, Mika gains a Shield" | folded into the one passive that hands the Energy out, so the grant and the ward are one firing |
 | **Nadine** | "Registered targets **cannot become Concealed or Untargetable**" | Proper Place strips the concealment the moment it lands instead of preventing it |
 | **Nadine** | "marks the target position for 2 rounds. **It cannot move**" | **the clause is dropped.** Hold the Line keeps its damage rider |
-| **Niko** | "When a Flustered enemy **attempts a debuff**" | fires when an enemy casts an active, which is when the debuffs come |
 | **Niko** | "forces its next Basic Attack onto **a random ally**" | Provoked, so the blow lands on Niko |
-| **Rhys** | "When an ally takes a hit **exceeding 25% Max HP**, Rhys takes 30% of it instead" | the guard goes up on the first strike of each round whatever its size, and covers that ally for the rest of the round |
-| **Rhys** | "Rhys takes 30% of it instead, **once per round**" | the ward is applied once a round and then answers every hit for that round |
-| **Rhys** | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | Rhys pays 45% of what the ally is missing out of his own bar, clamped to leave him at 1 HP. There is no swap in the engine |
-| **Siofra** | "changes one target buff into its matching debuff **for 2 rounds**" | the reversal lasts as long as the buff had left, and the text says so |
-| **Tamsin** | "Targets above 50% turn progress ... **take 15% more Skill Damage**" | only Tamsin's own blows land harder |
-| **Tamsin** | "removes 6% turn progress **for each target buff**, up to 18%" | 6% flat, and 18% against a body carrying any buff at all |
-| **Tamsin** | "**The first enemy delayed** each round gains 10% Defense Down" | the whole enemy line takes it, once a round |
-| **Toren** | "redirects 25% of **that hit**" | the ward goes up for the rest of the round and answers the next one |
+| **Oswin** | "**Allies who lose a debuff to Oswin** gain 8% Defense for 2 rounds" | every ally gains it after the cast, whether or not a debuff left them |
+| **Quin** | "Delivered targets take 8% more damage from the **next** active skill" | Delivered carries the skill-scoped 8% for its whole 2 rounds |
+| **Quin** | "removes Delivered to give Quin **12 Energy per target**" | a flat 12 Energy for the cast, whatever it reached |
+| **Quin** | "Quin's **first active skill each battle costs 15 less Energy**" | a battle-start passive that banks 15 Energy instead |
+| **Rhys** | "**swaps HP percentage** with the lowest-HP ally if they are below 50%" | Rhys pays 20% of what the ally is missing out of his own bar, clamped to leave him at 1 HP. There is no swap in the engine |
+| **Selka** | "Overdue **cannot be cleansed** during the round it was applied" | Overdue is written back onto its carrier at every round start, so it cannot be shaken off at all rather than for one round |
 
-**The two dropped clauses are the ones to read first**: Maera's control immunity and Nadine's hold.
-Both are in the shipped kit's text as nothing at all rather than as an approximation, so a player
-reading either hero gets a shorter ability than the design describes.
+**The three dropped clauses are the ones to read first**: Maera's control immunity, Nadine's hold
+and Brio's "cannot miss". All three are in the shipped kit's text as nothing at all rather than as
+an approximation, so a player reading any of those heroes gets a shorter ability than the design
+describes.
 
 **Two earlier draft flags are withdrawn and need no answer.** Celen's "at round start" and Siofra's
 second hook were both marked draft in their batches on the strength of a scan that read 46 of
 `PassiveTrigger`'s 52 members and dropped the two that answered them. Both sentences are authored
 unchanged now.
 
+### 2c. Three departures the engine could say and a 3-star has no room for
+
+These are not in `Docs/ENGINE-GAPS.md`, because the engine can say all three. They are in the
+shipped kit differently because **a 3-star is authored as a basic, an active and one passive and
+nothing else**, where a 4-star may carry an extra passive in the overflow list for a described
+clause that answers a trigger of its own. That rule is the batch's, not the engine's, so the answer
+to any of these could be "give that hero the second passive" rather than "change the engine".
+
+| hero | clause as written | what ships instead | what the faithful shape would cost |
+|---|---|---|---|
+| **Avera** | "Disrupted targets lose 8 Energy **after an active skill**" | the engine's own `Disrupted`, which takes the 8 off the first Energy gain each round instead | a second passive on `OnEnemyActive`, which is exactly what Finn's Ringing Slug carries |
+| **Cal** | "The **next ally attack** on the target also deals 25% damage to an adjacent enemy" | Cal's own shot carries 25% into the bodies beside the target | a link plus a second passive on `OnLinkedUnitHit`, which is what Mika's Loose Parts carries |
+| **Petra** | "When a Withheld enemy **targets** an ally, Petra gains 8% Damage Reduction" | it answers the blow landing, so a strike that misses or is blocked does not reach it | nothing in the engine; `OnTargeted` fires on the body being aimed at, not on a watcher |
 ---
 
 ## 3. Strike frames
