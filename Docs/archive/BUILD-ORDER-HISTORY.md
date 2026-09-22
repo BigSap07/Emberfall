@@ -4355,3 +4355,446 @@ those, leaving the coverage note alone at 1.
 it paid 2236 before Severance Paid was repaired, because Abandoned Support banks at most one Broken
 Link a round and Severance Paid spends one on every basic against a Forsaken body. That is a number
 for the 4-star pass to decide, not a defect to fold in here.
+
+---
+
+# The 4-star tier, the economy and the campaign curve: 2026-09-21 and 2026-09-22
+
+One entry per branch merged since the status and the history were split apart, newest last, each
+dated by the day its work landed. They are recorded here because `DESIGN-BUILD-ORDER.md` carries
+only what is true now, and every one of these carries reasoning that outlives its own numbers.
+
+## 2026-09-21 - Five 4-star kits, and an instrument that says a 4-star is smaller than a 5-star
+
+Merged from `content/four-star-b1`. Branik, Demos, Kest, Orelle and Tavia leave the placeholder
+tier: basic, active and `passive1` per the star contract, plus the overflow `passives` list where
+one described clause answers a trigger of its own. No talents and no stat-block passive, because
+those are what a 5-star has and a 4-star does not. Every number and every sentence is Pinoy's text
+out of `import/Heroes.json`.
+
+**Celen was left out deliberately.** Nothing Hoarded moves Energy from the highest-Energy ally and
+Distribution moves the largest ally Shield, and `TargetMode` had `LowestEnergyAlly` and no
+highest-anything for an ally at all. Both clauses needed a new ally pick, which is an engine
+addition this pass was told not to make, so the hero was stopped rather than approximated.
+
+**The star band by role is the new standing instrument.** `validate_heroes.py` enforced the star
+contract's shape and nothing enforced its size: a 4-star with a 300% active satisfied every check
+in the project and was a better hero than the 5-star beside it. The band measures each authored
+hero's own output - damage dealt plus healing paid plus shielding granted, credited by source -
+over the hero sweep's five seeds, and asserts that every authored hero below five stars sits under
+the median of its own role's authored 5-stars. Within a role only: the sum is not a cross-role
+currency and the block says so in as many words.
+
+**It found two targeting faults on its first run, and both were the Taunt anchor.** Orelle warded
+604,154 in five battles where she should have warded about 3,000, and the diagnostic put the ward
+on an enemy: `BroadcastSubject` resolves AFTER the anchor, so a living enemy Taunt holder answered
+for its side and a 12%-of-Max-HP shield landed on a 1.2M-HP body. `BroadcastVictim` names the same
+ally and resolves before the anchor. Demos's Arrears tick had the identical fault in the other
+direction and takes `BroadcastSource`. Neither would have been visible in any existing check.
+
+**One harness guard was wrong against the engine and was repaired.** Ability potency credited the
+three target-HP terms for a Damage effect and did not for a Heal or a Shield, though `ApplyEffect`
+assembles all three kinds from the identical sum, so "heals for 8% of the ally's missing HP" was
+reported as an effect worth nothing while the engine paid it in full.
+
+**Kest's follow-through is `OnEnemyDefeated` and not `OnKill`, and the harness is why:**
+`DealRawDamage` raises `OnKill` at a hardcoded depth 0, so a lethal `OnKill` passive is unbounded
+recursion and a standing check forbids one outright. The defeat broadcast is bounded by the defeat
+dispatch flag instead, and a trigger ability id narrows it back to the one cast the text names.
+
+`validate_heroes.py` 56 to 51. All 24 stage fingerprints stable; the hero-sweep baseline gains 25
+lines and loses none.
+
+## 2026-09-21 - Kiva III paid nothing, and the clause that had to stop asking for a Broken Link
+
+Merged from `content/four-star-b1`. Unclaimed Victory paid exactly zero, for a rate rather than for
+a bug: all three of its Shield clauses gated on her holding a Broken Link, and repairing Severance
+Paid turned the spend on. Abandoned Support banks at most one link a round and Severance Paid
+consumes one on every basic against a Forsaken body - the same basic whose own Mark banked it - so
+she opens every turn at zero and a kill finds nothing to consume. The kit-defect pass named it and
+left it, and the four-star-prep pass looked at it and left it again, both saying the number belonged
+to a balance decision about Kiva rather than to a defect pass.
+
+**The smallest repair that answers the rate.** The first of the three Shield clauses is ungated;
+the two link-gated clauses are untouched, at the same 12% of Max HP and the same Resolve thresholds
+of 1 and 2. It pays on the kill its own text names rather than on a resource the rest of her kit
+spends before the kill arrives, and it is still worth more to a Kiva who held links than to one who
+did not. **This is a design change and not a transcription, and it is still waiting on Pinoy.**
+
+The dark-talent check asserts a Shield again, at 1118 against 0 with no talent selected. It had
+been reduced to a note reading zero with the reason beside it, which is the correct thing for an
+unrepaired rate and the wrong thing once the rate is answered.
+
+## 2026-09-21 - Rarity was in the engine and not in the file, so a 4-star out-statted a 5-star
+
+Merged from `content/four-star-b1`. Kest read hp 1306 / atk 195 / crit 0.13 / critDmg 1.65 against
+Kiva's 1268 / 195 / 0.12 / 1.55, and Tavia read the same shape against Hale.
+
+**The cause is that rarity reached a hero's numbers in one place only** - the `rarityMultiplier`
+`StatMath.ForHero` hands `Build`, out of `StatMath.StarMultiplier` - and `Build` multiplies three
+fields by it: MaxHp, Attack and Defense. Speed, CritChance, CritDamage, EffectHit and EffectResist
+are flat pass-throughs, and the five fields the runtime does not scale were exactly the five where a
+4-star out-read a 5-star. `Tools/convert_import.py` did not carry rarity either, because
+`StarMultiplier`'s own comment says star tier is applied at runtime "so base stats stay
+role-comparable". The file then broke that bargain from the other side.
+
+`DESIGN-COMBAT-STATS.md` has no rarity stat rule to apply - its one rarity statement is that Effect
+Hit and Effect Resist must not scale with level or rarity, which is a rule about the multiplier and
+not about the authored value. **So this proposes one:** a non-5-star's stat total is a fixed
+fraction of its role's 5-star mean, 0.88 at four stars, 0.76 / 0.64 / 0.52 below that. Stat total is
+`StatMath.PowerScore` of the line `StatMath.ForHero` builds at level 1, which already contains
+`StarMultiplier`. The ladder is within 0.02 of the ratios `StarMultiplier` already produced on HP,
+Attack and Defence; what changes is that the whole line obeys it. `Tools/_rarity_stat_pass.py`
+carries the derivation.
+
+Checked rather than assumed: all three starters and all five bodies of the pinned line are 5-stars,
+so none of them moved. 25 of 175 hero-sweep lines moved, five seeds each for the five authored
+4-stars and nobody else.
+
+## 2026-09-21 - The star band grew a floor, and the first batch had to climb up to it
+
+Merged from `content/four-star-b1`. The band asserted one thing - a 4-star reads below its role's
+5-star median - and a hero at x0.12 of that median passed it as comfortably as one at x0.84.
+"Smaller" was the whole claim, and **a tier authored to be smaller with nothing saying how much
+smaller is a tier nobody would field.** Four of the first five were sitting in it.
+
+**So the band has two edges: x0.45 to x0.85.** Talents stay excluded because the sweep arena fields
+none, which is why the ceiling is 0.85 rather than 1.00 - a 4-star reading nine tenths of a 5-star
+without the 5-star's three talents is not a smaller hero. **The floor is enforced only where the
+median is one.** A role with fewer than three authored 5-stars prints its ratio and is named
+ungraded, because a floor is a claim about where the middle of a role sits and one or two readings
+have no middle.
+
+Then the batch was brought up to it, **in numbers and nothing else**: every edit is a magnitude on
+an effect that already existed, plus the matching number in the description. No effect added,
+removed or retargeted; no trigger, condition or target changed.
+
+**Demos is the one this could not close, and it is reported rather than forced.** Binder has exactly
+one authored 5-star and Elyra reads 184,540, so x0.45 of her is 83,043 - which would make a 4-star
+three and a half times the size of Kest. He is tuned to stand alongside the batch instead, and he
+wants re-grading the day a second and third Binder 5-star are authored.
+
+## 2026-09-21 - Two names for who gives, and the hero the first batch could not author
+
+Merged from `content/four-star-b1`. `LowestEnergyAlly` had been in the enum since the stat-status
+pass and says who RECEIVES; nothing said who gives, so "transfer Energy from the fullest bar to the
+emptiest" was not tunable down or approximable, it was **unsayable**. `ShieldTransfer` had the same
+hole on the other resource: it moves a pool between the caster and its target, and "whichever ally
+happens to hold the most" had no name, so a kit that redistributes wards rather than granting them
+had no donor to point at.
+
+`HighestEnergyAlly` and `LargestShieldAlly` close both, **appended at 38 and 39 so no existing
+`TargetMode` value moves**, and they are the only engine addition in the batch. `HighestEnergyAlly`
+is `LowestEnergyAlly`'s exact mirror down to the front-slot tie-break, because a donor and a
+recipient picked by rules that disagreed in any detail would move Energy for reasons nobody wrote.
+`LargestShieldAlly` reads the pool in points rather than the status entry that only marks its
+presence, and answers nobody when no ally holds one.
+
+Six new harness lines, in both directions. Two arenas prove the modes read what they claim - a mode
+silently resolving to the front body would satisfy any content scan ever written - and each arena's
+ability kills its only enemy on its last effect so the fight is one turn and the reading is one
+reading. Two content lines are confirmations from the first day rather than dormancy tripwires,
+because the modes and the kit that needs them land together and a tripwire would have been red on
+arrival.
+
+The transfer goes through Celen because that is the shape of `ShieldTransfer` rather than a choice:
+in from the largest ally pool, out to the lowest-HP ally. Giving that effect a secondary target
+would have been a second engine addition in a batch allowed one.
+
+## 2026-09-21 - Slow the economy, and give the power curve an instrument that can fail
+
+Merged from `balance/economy-curve`. The simulated player walked into chapter 2 at 1.55 to 3.2 times
+every stage's `recommendedPower` and cleared all 24 ceilings at 100%. **Nothing failed, because
+nothing was measuring it:** the campaign balance table printed the ratio as a column to interpret
+rather than a check to pass.
+
+**An instrument.** `CheckCampaignPowerCurve` reads the power a simulated player brings to their
+FIRST ATTEMPT of each stage - not the exit reading the balance table shows, which by construction
+can never show a wall - and fails when a stage leaves its band. `ReportPowerSources` counts every
+channel a coin arrives through and splits the power number into roster, levels and armor, because
+"where does the power come from" had only ever been answered by reading the content files, and
+reading them got it wrong.
+
+**A derivation the guard does for itself.** A player's power never goes down, so once an earlier
+stage's band has demanded a power, no later stage can be asked for less than it. `recommendedPower`
+was not monotonic - it rose 6.6% into the chapter 1 finale while the band under it dropped 27%, and
+it FELL 26% across the chapter boundary - so the high end of a band is raised to the running maximum
+of every earlier low and each relaxation prints the `recommendedPower` that would retire it. Nothing
+to remember to delete.
+
+**The tuning: two levers.** `idleGoldPerHour` is derived from the stage's own purse rather than
+hand-authored, which restores `DESIGN-IDLE-PROGRESSION`'s own rule; the hand-authored table had let
+the implied multiple slide from 1.63 at 1-1 to 0.51 at 2-12, so the cache paid relatively less the
+deeper a player got. The hero level cost loses its quadratic term and gains a constant, because
+power is LINEAR in level and a quadratic cost makes the gold needed to hold a ratio grow as the cube
+of it. `duplicateGold` drops to 150, because a duplicate's refund was an eighth of all gold and the
+only large channel whose size nobody chose.
+
+The player then arrived between x0.95 and x1.54, and 1-9 became a real wall: 29.2% at its ceiling
+against 100% before, 133 retries, four extra sittings to pass. No `recommendedPower`, `floorLevel`,
+`ceilingLevel` or authored enemy level moved, and all 72 stage fingerprints were byte-identical.
+
+## 2026-09-21 - Four more 4-stars, and the first shipped effect to move HP between two bodies
+
+Merged from `content/four-star-b2`. Mika, Rhys, Siofra and Vanno, on the same star contract. Every
+mechanic reused; no engine addition beyond the two ally target modes Celen needed, and none of these
+four names either one.
+
+**One dormant tripwire lit, and flipped rather than deleted.** Rhys's Crossing Cut is the first
+shipped effect to use `EffectKind.HpTransfer`, so the guard that asserted nothing reached it now
+asserts the opposite and names the ability, and goes red the day that stops being true.
+
+Loose Parts is a Mark plus a Link, which is the batch-one pattern rather than a new idea: every
+named effect in this tier is a Mark plus whatever its description does, and "the next ALLY to hit
+it" is expressible in exactly one way. Mika holds the entry and the enemy is the partner, because
+the link dispatch fires on whoever carries the entry naming the body that was hit. The link is inert
+as a damage path and moves nothing on its own.
+
+**Four places marked DRAFT, for Pinoy, rather than quietly reworded**, covering a swap the engine
+does not have, a per-hit magnitude no condition reads, an inversion whose duration the engine
+decides, and a negation of a target mode that cannot be named.
+
+## 2026-09-21 - Two of batch two's seven gaps were not gaps, because the trigger list was read wrong
+
+Merged from `feature/batch-two-gaps`. `PassiveTrigger` has fifty-two members. The scan that produced
+the batch-two report found forty-six, because the pattern it matched dropped every member whose
+declaration line was shaped differently, and `RoundStart` and `AfterActiveCast` were both in the
+dropped set. **Two clauses were approximated and two sentences of Pinoy's were reworded for a reason
+that does not exist.**
+
+Celen's Nothing Hoarded goes back on `RoundStart` and Pinoy's wording goes back unchanged. It turns
+out to matter: the passive is reached 26 times over the five sweep seeds against 21, because it no
+longer waits for Celen's turn to come round, and the Energy it hands down lets him cast eight actives
+against five.
+
+Siofra's Prediction Cost becomes one rule on two hooks. The clause is "whenever Siofra changes a
+buff into a debuff", and both her abilities do; it had been authored as a passive on
+`AfterBasicAttack` plus a copy of the drain inlined into the active, because the report said nothing
+could hear an active finish. `AfterActiveCast` exists and calls itself the mirror of
+`AfterBasicAttack`.
+
+The remaining five batch-two gaps stand and were re-checked against corrected enum dumps rather than
+against the earlier scan.
+
+## 2026-09-21 - The hub is four layers now, and the buttons stopped covering the village
+
+Merged from `ui/hub-layers`. The Hub had grown by bolting controls onto the map: ACCOUNT, FRIENDS
+and GUILD sat as three slabs over the top left with the HEROES marker behind them, GUILD existed
+twice a thumb apart, DEV overlapped both the PROVING marker and the button it was stacked under, the
+idle panel held a quarter of the painting to show five lines about a number, the player plate was a
+name beside an empty black bar, and a read-only copy of the squad ran along the bottom of a screen
+that has a formation page for exactly that.
+
+It is four layers with one rule each: **0** the map, where nothing above may cover a building or its
+label; **1** the HUD frame, edges only, all of it inside the safe area with every target at least
+108 logical units, which is 44dp on the narrowest phone this game targets; **2** panels, sheets over
+a dimmed map hosting screens the router already owns; **3** popups. One back stack for all of it.
+Escape and the Android back key - legacy Input reports both as Escape - close the topmost layer and
+nothing else. The conflict chooser registers as BLOCKING, so back is swallowed rather than escaping
+a decision the sync is waiting on.
+
+The market stall is the RELIC SHOP rather than a locked MARKETPLACE sign, because **a door to a
+built screen beats a sign for an unbuilt one.** No screen was rewritten: an embedded flag hides the
+page header the sheet already draws, and that is the whole of it. Every sprite in the frame resolves
+through `HudSkin` and every metric comes from `HubStyle`, so there is no art and no style literal at
+a call site.
+
+**The measurement found the one conflict the layout side cannot resolve.** `DESIGN-HUB-DELIVERY`'s
+section 3 said its covered-zone numbers were an estimate because the hub did not exist to measure;
+section 3a carries the measured bands now. The painting puts the Proving's gatehouse hard against
+the right edge, inside the rail column that document reserved, so the rail's discs sit on its tower
+at every aspect. No marker or label is covered, but chrome is on painted architecture.
+`HubStyle.RailOnRightEdge` moves the whole rail, its menu and the reserved column to the left edge,
+where the painting has rock and nothing built, if that is the answer wanted.
+
+Two tooling fixes the captures needed. `RefreshOnDemand` makes an unfocused editor compile on
+request, because Unity's automatic refresh runs on window focus and two checkouts mean two editors;
+`focus-unity.ps1` picks the editor whose window title matches this project folder instead of
+whichever Windows listed first.
+
+## 2026-09-21 - Six more 4-stars, a Stun the fingerprint premise had to make room for, and the gaps file
+
+Merged from `content/four-star-b3`. Corin, Halwen, Jory, Maera, Maren and Eira. Sixteen of
+twenty-six authored. No engine addition.
+
+**One dormant tripwire lit and flipped.** Maera's Watch the Water is the first shipped content to
+apply `StatusKind.GuaranteedCrit`.
+
+**A third named exception in the fingerprint premise, and the claim is re-earned rather than
+inherited.** `CheckNoContentAuthorsNewMechanicsYet` asserted that nothing shipped applies Stun,
+because that is what makes every new branch in `TakeTurn` structurally unreachable and the
+determinism fingerprints a valid no-op proof. Corin's Weight of Time Stuns a target carrying three
+stacks of his own Slow, which is the payoff of the kit rather than a number that can be dropped. The
+argument is Zella's: what the premise protects is a fresh profile fielding three starters against
+authored enemies, and Corin is neither a starter, an enemy, nor a body of the pinned line. The 72
+stage fingerprints were dumped at this work and at the merge base and **diffed line for line rather
+than argued about.**
+
+**The Stun bypasses Effect Resist, and that is the engine's own answer rather than a choice.** A
+harmful status authored at a 1.0 chance goes through the landing-chance resolver, where the hit and
+resist terms evaluate to 0.99999994 when the two are equal, and the standing guard on that trap
+caught it immediately. Pinoy's sentence says targets at 24% Speed Down ARE Stunned, so it is
+authored as the certainty it is written as.
+
+Settling needed no Mark: "enemies with Settling" is a my-status-stacks condition on Slow, which
+counts only entries whose source is the caster, and "8% each round up to 24%" is stack-on-reapply
+with a cap of three, because adding a stack adds a separate entry per application to a cap and
+effective speed sums every Slow magnitude.
+
+**`Docs/ENGINE-GAPS.md` lands with them.** Thirteen capabilities, twenty-four clauses, twelve heroes,
+grouped by what is missing rather than by hero so a repeat is visible.
+
+## 2026-09-21 - Re-derive the campaign curve, and give chapter 1 a ladder it can walk
+
+Merged from `balance/campaign-curve`. The economy pass proved the remaining misses were the
+`recommendedPower` table rather than the economy: it fell 26% from 1-12 into 2-1, was flat from 1-9
+to 2-3, and the finales rose 6.6% and 10.3% where a wall needs about 20%.
+
+**`waveCount` is authored per stage.** It was 12 everywhere, which is 144 battles, which at a
+40-battle sitting costs four sittings before difficulty has been consulted at all: chapter 1 took
+about 26 days of a twice-a-day player's time and none of it was the game being hard. 1-1 to 1-4 are
+3 waves now, 1-5 to 1-12 are 6, chapter 2 keeps 12. **Chapter 1 falls from 52 sittings to 20.**
+`ExpectedWaveCount` in the harness is where the authored shape lives, and the checks that had 12 and
+144 written into them read it instead. A save written under the old shape does not strand, and a
+check proves it for every shortened stage through the real serializer.
+
+**The wall band is per chapter:** x1.00 to x1.05 in chapter 1, x0.95 to x1.02 from chapter 2 on,
+ordinary unchanged at x1.10 to x1.30. `recommendedPower` is re-derived for all 24 stages from the
+simulated player's entry power against the middle of each stage's own band, and `floorLevel`,
+`ceilingLevel` and the authored enemy levels follow so the CEIL band still reads in range at the new
+number.
+
+**Two costs, both measured rather than argued, and both written into `campaign.json` so the next
+pass does not rediscover them.** The CEIL band no longer measures chapter 1: the instrument's own
+geared level-1 line is worth about 7,000 to 7,400 power and chapter 1 now asks for 2,977 to 8,748,
+so eight of its twelve stages report FLOOR-PINNED, and closing that would need chapter 1 income to
+roughly quadruple. And a mid-chapter wall cannot bite under these two bands together: two sittings
+carry eight spare battles on a 72-battle stage, and an ordinary CEIL of 78% to 92% costs a player
+arriving at x1.00 to x1.05 about one, so all four walls resolve in zero extra sittings.
+
+**The 72 stage fingerprints are now pinned to `stage-fingerprint-baseline.txt` rather than to a
+recollection**, with one line per stage attributing this pass's move. 48 of 72 moved, on the 16
+stages whose authored roster moved; the 8 that did not are the proof that no engine or starter-kit
+change rode along.
+
+## 2026-09-21 - Arden's five caps were written in the wrong currency, and one talent check was living off it
+
+Merged from `content/four-star-b4`. Find the Measure, Define the Weak Point and Exact Calculation
+carry five Damage effects whose whole amount is a percentage of the target's Max HP, and each
+carried a `maxHpCap`. **That field ceilings the term against the TARGET's own Max HP, so a cap of
+1.0 bounds a 0.02 ratio at 100% of the bar it is already 2% of.** It can only bind when the ratio
+exceeds the cap and none of the five came within a factor of thirty of that, so all five were
+uncapped in practice. Against the sweep arena's 190,000 to 300,000 HP bodies a single 3% term paid
+about 9,000 where his 1.25-power blow paid about 1,745, and he read 748,365, seven and a half times
+the all-role 5-star median. Zeroing the five terms took him to 38,440, so 95% of what he read was
+them.
+
+**The repair is a field name.** `AttackCap` is the ceiling written in the CASTER's currency and is
+applied to the whole assembled amount, which for a power-0.0 effect is exactly the term. The five
+values already in the file read as attack multiples, and Arden's own talent III already used
+`attackCap`, which is the strongest evidence that the numbers were always in his currency and were
+put in the field that reads the target's. `maxHpCap` is removed rather than left beside the new
+field: dead config under a name one letter of intent away from the live one is the exact confusion
+this repair exists to end.
+
+**The scale is doubled, measured rather than guessed.** Moving the values across unchanged bounds
+him correctly and leaves him the SMALLEST Tinkerer, which is the wrong answer for a hero whose whole
+concept is taking a slice off the biggest bar on the field. Doubled, he reads 110,043: the biggest
+Tinkerer by a little, x1.10 of the all-role median against x7.52. His identity is untouched - the
+term still pays more against a big bar than a small one, it just stops now.
+
+**Two guards answered, and both answers are the guards working.** The `maxHpCap` confirmation went
+red because Arden was its only occupant; it is turned back around into the dormancy tripwire it was
+before him, with the reason recorded. And **Altheon III went dark**: it needs Immaculate Record's
+Ledger to cap, that Ledger banks 30% of one hit a round against 1.2x his Attack on an entry that
+lives two rounds, and Altheon at Speed 109 applies it late, so capping it takes a SINGLE blow of
+about 5,700 on the Ledger holder. Nothing in the roster lands one - the biggest single damage effect
+on any 5-star is about 3,600. Arden's 12,000 term was capping it outright. Swapping Vaelis in was
+tried and measured first and the Ledger still capped zero times, **so this is not a squad that needs
+picking better.**
+
+## 2026-09-21 - Five more 4-stars, and a fingerprint premise said against what it protects
+
+Merged from `content/four-star-b4`. Finn, Niko, Sable, Tamsin and Iolan. Twenty-one of twenty-six
+authored.
+
+**The Silence and Stun premise is restated rather than given a third name.** The check began as
+"nothing shipped applies Silence or Stun". Zella broke it first and was named, Corin broke it second
+and was named, and Niko's Ruin the Agenda would have been the third. **Three names in three batches
+is a rule being widened one exception at a time rather than a guard**, so it now asserts the property
+those fingerprints actually depend on: both checks field a FRESH PROFILE, which deploys the three
+starters against the authored enemies and nothing else, so what has to hold is that no starter, no
+body of the pinned line and no enemy applies Silence or Stun. It reads the pinned line itself rather
+than a second copy of the list, it stays true as the roster fills, and it goes red the day somebody
+authors one onto a body those battles field. Kael keeps his named exception on Block, because that
+is a stat on `UnitDef` rather than a status and he IS a starter.
+
+Finn joins the cast-in-flight family as its fourth occupant and its first 4-star to CANCEL a cast
+rather than name an ability id. No Quiet Moment cancels rather than interrupting, because an
+interrupt sets a bar to zero all-or-nothing and Pinoy's sentence cancels the cast AND takes 20
+Energy, which are two things.
+
+**One ordering defect caught by the guard that exists for it.** Ruin the Agenda's three effects all
+gate on the Mark, and the first shape stripped it before the later two ran, which is the
+appended-effect defect five talents were once repaired for.
+
+Three passives read zero in the sweep arena and **that is a fact about the arena rather than about
+them**: Finn's, Niko's and Iolan's all hang on an enemy casting an active, and not one of the five
+bodies in that arena authors an active at all. The kit exercise report prints the zero, which is
+what it is for.
+
+## 2026-09-21 - The last five, and the 4-star tier is authored
+
+Merged from `content/four-star-b4`. Ruma, Toren, Leon, Lio and Nadine. **Twenty-six of twenty-six
+4-stars have real kits.** No engine addition.
+
+**Ruma is one mechanic read carefully rather than a new one.** The redirect-share deflect path
+requires the link to be HELD by the attacker and to have been created BY the body being hit, so a
+link Ruma stamps on an enemy, naming another enemy as its partner, moves a blow aimed at RUMA onto
+that other enemy and nobody else's blow anywhere. That is Decoy Round exactly, and "the redirected
+target takes 20% less damage" is the deflect's own magnitude rather than a second clause: at 0.8
+four fifths of the blow moves and the path discards the remainder instead of leaving it on her,
+which its own comment states in as many words. Her passive is the first shipped use of
+`OnRedirectSent`, a trigger that existed and had nobody.
+
+Toren is `BuffSuppression`'s second author after Seraphine's Volume Closed, **so the engine comment
+next to the gate saying Volume Closed is the only effect in the content that applies it is corrected
+in the same commit rather than left to go stale.**
+
+Toren took three passes at the band, at x0.26, x0.99 and x0.40, because his Taunt changes how long
+he lives and his ward's output is a fire count rather than a magnitude. Ruma opened at x1.18, above
+the ceiling, which the universal ceiling caught.
+
+`Docs/ENGINE-GAPS.md` closes the tier at **22 capabilities and 39 clauses across 20 heroes, with 11
+groups holding more than one.** Group 9 is named as the one to close first and most of it is one
+line of code: three of its five rows are the same exclusion in `OnEnemyDamagedAlly`, met by Branik,
+Halwen and Toren and answered three times by pasting the passive onto `OnDamaged` as well. Groups 20
+and 22 are marked as **different in kind rather than as debt**, because an information layer and a
+movement system are games this one is not.
+
+## 2026-09-22 - The status document is rebuilt from the tree, and the Pinoy list becomes its own file
+
+A documentation pass. No code and no content change. `DESIGN-BUILD-ORDER.md` had been
+stale since the split: it still described a 4-star tier that was about to be written, a harness at
+one failure, a validator at 56, a hub with no layers, and an economy question that two merged
+branches had already answered.
+
+**Four claims in it were wrong against the tree and are corrected here so they are not inherited
+again.** The five bodies it called "the pinned yardstick" and said were partly placeholders are two
+different lists: `PinnedLine` is five named 5-stars and has no placeholder in it at all, while the
+line the campaign balance pass fields is picked at runtime by `PlayerProfile.NormaliseTeam`, which
+fills an empty slot with the strongest bench hero by Power and **never displaces one already
+deployed**. That line is therefore sticky rather than pinned, and it is what moves when the roster
+changes. The 4-star it named, `maera_the_tidewatcher`, does not exist; the hero is
+`maera_the_harbor_eye`, and she is not in that line today - Adric and Orelle are, and only Adric is
+still a placeholder. And the economy open decision it led with is closed by the economy retune and
+the curve re-derivation together.
+
+**The Celen and Nereia claim was overstated and is now measured.** The file said every clip file for
+one had the same checksum as the matching file for the other. Four of the seven do; the other three
+differ by 29, 117 and 416 pixels out of 4,118,400, which is under a hundredth of a percent and is
+the same drawing either way. The finding survives; the wording did not.
+
+**`Docs/PINOY-LIST.md` is new** and is now the only place the art and text questions are maintained,
+because they were spread across a section of the status file, the engine gaps file and four commit
+messages, and they need to be sendable as one message.
