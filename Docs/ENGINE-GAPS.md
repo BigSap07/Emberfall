@@ -28,18 +28,6 @@ damage funnel or the turn loop, which is where every fingerprint in the project 
 
 ---
 
-## 3. Telling an area hit from a single-target one
-
-Nothing on a resolving Damage effect records how many bodies it was aimed at, so no condition and no
-mitigation can ask.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Eira | "it reduces the first **area** hit each round by 20%" | a flag on a resolving hit saying it came from a multi-target effect | the Guard charge answers whichever hit lands first, area or not | medium |
-| Eira | "When an ally with Mobile Cover is **singled out**" | the same flag, read from the other side | `OnEnemyDamagedAlly` gated on the victim carrying the ward, so "singled out" becomes "hit" | medium |
-
----
-
 ## 6. Comparing a resource across two named units
 
 `ConditionSubject` has seven members - Target, Caster, Defeated, BroadcastSubject, LastAttacker,
@@ -233,7 +221,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 

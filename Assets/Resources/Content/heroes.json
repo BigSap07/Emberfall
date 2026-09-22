@@ -8825,7 +8825,7 @@
         "id": "eira_redeploy_cover",
         "name": "Redeploy Cover",
         "energyCost": 100,
-        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the first hit each round by 20%.",
+        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the first area hit each round by 20%.",
         "effects": [
           {
             "kind": "Damage",
@@ -8839,17 +8839,17 @@
             "duration": 2,
             "magnitude": 0.2,
             "status": "Guard",
-            "usesPerRound": 1
+            "usesPerRound": 1,
+            "areaHitsOnly": true
           }
         ]
       },
       "passive1": {
         "id": "eira_leave_no_corner",
         "name": "Leave No Corner",
-        "description": "The first time each round an ally with Mobile Cover is struck, its turn progress advances by 12%.",
+        "description": "When an ally with Mobile Cover is singled out, its turn progress advances by 12%.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
-        "limit": "OncePerRound",
         "effects": [
           {
             "kind": "TurnShift",
@@ -8857,7 +8857,9 @@
             "condition": "HasStatus",
             "conditionOn": "Target",
             "conditionStatus": "Guard",
-            "magnitude": 0.12
+            "magnitude": 0.12,
+            "condition2": "IncomingHitIsSingleTarget",
+            "conditionOn2": "Target"
           }
         ]
       }
