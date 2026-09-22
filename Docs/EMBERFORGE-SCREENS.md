@@ -42,7 +42,7 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Close cross, tab bar (`HudWidgets`) | converted | Both forward to `EmberforgeUI`, so a sheet's cross and a popup's cross cannot drift. |
 | Top bar backing (`HudTopBar`) | converted | The seam between the two languages. A recess with a gold rule under it. |
 | Currency strip (`CurrencyStrip`) | converted | Shared by the shop, the Rift, the Recital and Events. |
-| Stat rows, ability cards (`Widgets`) | converted | Shared by every page with a stat block. |
+| Stat rows, ability cards (`Widgets`) | converted | `Widgets.StatRow` is shared by every page with a stat block. `Widgets.AbilityCard` is RETIRED and has no callers - it takes a `description`, and an ability's description is authored prose that several dozen abilities disagree with their own effects about and that some use to address a designer. The hero page builds its own cells from `AbilityMath` and `AbilityText` instead. |
 | Item card (`ItemCard`) | converted | Keeps its chamfered silhouette on purpose - that is the item language, not the chrome language - and gains the kit's outline. |
 | Save conflict chooser | converted | Both answers are primary, deliberately: there is no way out of this card, so teal would be lying. |
 | Overflow menu | converted | Already on the kit. |
@@ -51,7 +51,8 @@ at 20:9 and nowhere else. One aspect is half a check.
 | First-run prologue | converted by construction | See the First run row. |
 | Battle result | converted | The card grew to 700 and both its lists scroll: the spoils are four rows after a battle and eight after a stage clear, and the damage table is one row per unit that fought, so both used to run out of the bottom of the card. |
 | Battle HUD | converted | The unit tags keep their plain 7-unit bars on purpose - a nine-sliced trough has no middle left to stretch at that height and renders as two squashed corners. The kit reaches the text on them. |
-| Hero detail | converted | The two panels stretch between the header and the action bar now. Fixed at 636 they needed 1056 units of height, so at 20:9 the action bar was drawn up through both of them. No ring round the portrait any more. |
+| Hero detail | converted | The two panels stretch between the header and the action bar now. Fixed at 636 they needed 1056 units of height, so at 20:9 the action bar was drawn up through both of them. No ring round the portrait any more. **Every ability card now carries the ability's own NUMBER** - a flat value at this hero's stats with the authored percentage under it - and one note under the row carries the single caveat rather than five cards repeating it. The row grew 24 units for the two extra lines; they came from the matchup row, the top pad, the badge band and three gaps, and the panel's own fit guard is back to 22 units of slack against the shortest canvas. The hero's sigil left the card: it was drawn from the HERO, so five abilities carried five copies of one emblem and identified none of them. |
+| Ability breakdown | converted | A layer of the hero page, opened by tapping any ability card, listing every damage, healing and ward figure that ability carries. Built rather than borrowed from `Overlays.ModalPopup`, and the capture is what decided it: that dialog's body is a fixed block of static text, and Kael's WHAT BREAKS FORWARD carries eight numbers - six fitted and the rest were not drawn. This list scrolls. It sits on the app's OVERLAY layer, like every other dialog: parented to the screen instead, its title ribbon slid under the top bar at 20:9 and nowhere else. `Tools/capture-ui.sh AbilityNumbers`. |
 | Summon | converted | The banner stage stretches the same way: the action block was off the bottom of a 20:9 screen entirely. The guarantee bar is the kit's progress bar, at the sprite's own height - at 18 units it rendered as a lens. |
 | Inventory | converted | The category rail is a tab bar rather than eight buttons. The capture seeds real armour and relics, because the empty state proves nothing about the grid or the detail panel. |
 | Campaign | converted | The painting stays the ground. The chapter row is a tab bar and the stage stepper's pips are the kit's disc in its two depths, so "you are here" is told by depth rather than by a tint on a baked bevel. |
@@ -101,6 +102,10 @@ at 20:9 and nowhere else. One aspect is half a check.
   layout rather than of what a surface looks like, and Emberforge owns only the second.
 - **`UIBuilder.Chip` has no callers.** It is left in place beside the other `UIBuilder` primitives
   and documented as retired; nothing in the game draws a tag through it.
+- **`Widgets.AbilityCard` has no callers either**, and is retired the same way and in the same
+  place. Its signature is the reason: it takes a `description`, and the hero page's cards are
+  built from the effect DATA now, through `AbilityMath` in Core and `AbilityText` in UI. See
+  `Docs/DESIGN-DAMAGE-DISPLAY.md` for why a percentage is not the number to lead with.
 
 ## Deliberately not converted
 

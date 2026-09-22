@@ -170,10 +170,15 @@ computed honestly for the half of the roster whose kit is not damage.
 - **It changes no balance.** Every authored percentage stays exactly where the star band put it.
   Nothing here is a reason to retune a tier, and a tier retuned to make its card read better would
   fail `CheckStarBandByRole` on the way out.
-- **It writes no UI.** `HeroDetailScreen` parses `description` today and does not render it;
-  `AbilityDef.Description` and `PassiveDef.Description` are read from the JSON and displayed
-  nowhere. Whoever builds the ability line owns the question of where the text and the computed
-  number meet, and that is a screen decision this document has no business making.
+- **It writes no UI.** `HeroDetailScreen` does not read `description` at all: its ability cards
+  carry a kind and a name. `AbilityDef.Description` and `PassiveDef.Description` are read from the
+  JSON and displayed nowhere. Whoever builds the ability line owns the question of where the text
+  and the computed number meet, and that is a screen decision this document has no business
+  making. *(Correction made when the recommendation was built: the sentence here originally said
+  the screen "parses `description` today and does not render it", which was never true of the
+  code. The screen that answered the question above reads the effect DATA and still shows no
+  prose - see `AbilityMath` in `Assets/Scripts/Core/Progression` and `AbilityText` in
+  `Assets/Scripts/UI`.)*
 - **It does not touch the ability text itself.** The sentences in `heroes.json` are Pinoy's, or are
   departures recorded against his in `Docs/PINOY-LIST.md`. A display layer that needs the sentence
   to change is a display layer that has got the split wrong.
