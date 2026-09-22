@@ -17881,6 +17881,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupFourteen();
             CheckGapGroupEighteen();
             CheckGapGroupSeventeen();
+            CheckGapGroupTwo();
             Line("");
         }
 
@@ -18905,6 +18906,138 @@ namespace Emberfall.DevHarness
             HeroDef def = db.GetHero("g17_actor");
             if (def != null) team.Add(MakeInstance(def, 1));
             return RunWith(db, db.GetStage("g17_arena"), 1717, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 2
+
+        /// <summary>
+        /// GROUP 2 - per-round budgets on a standing status, two clauses.
+        ///
+        /// StatusInstance has carried UsesPerRound and UsesThisRound since the per-round-uses pass
+        /// and exactly two places read them, neither of them in the damage funnel. So a Covered
+        /// ward could be told to answer once a round and would answer every hit, and a Guard's
+        /// charges count DOWN to removal and never refill - which is one absorb across a two-round
+        /// ward where the text says one a round.
+        ///
+        /// Measured as WHICH HITS were softened rather than as a total, because a budget is a
+        /// statement about the second hit of a round and a total cannot tell one hit taken twice
+        /// from two hits taken once.
+        /// </summary>
+        private static void CheckGapGroupTwo()
+        {
+            Line("  group 2 - a ward that answers once a round");
+
+            // --- Covered ---------------------------------------------------------------
+            // Two enemies strike the warded body every round. Unbudgeted the protector takes a
+            // share of both; budgeted it takes a share of the first only, and the second lands
+            // whole on the body it was meant to protect.
+            int protectorUnbudgeted = DamageTakenBy(RunGapTwoArena("cover", 0), "g2_guardian");
+            int protectorBudgeted = DamageTakenBy(RunGapTwoArena("cover", 1), "g2_guardian");
+            int victimUnbudgeted = DamageTakenBy(RunGapTwoArena("cover", 0), "g2_frail");
+            int victimBudgeted = DamageTakenBy(RunGapTwoArena("cover", 1), "g2_frail");
+
+            Check(protectorUnbudgeted > 0 && protectorBudgeted > 0,
+                  "control: the ward answers in both arms (" + protectorUnbudgeted + " and "
+                  + protectorBudgeted + " moved onto the protector)");
+            Check(protectorBudgeted * 2 == protectorUnbudgeted,
+                  "usesPerRound 1 makes a Covered ward answer exactly ONE of the two blows a round ("
+                  + protectorBudgeted + ", half of the " + protectorUnbudgeted + " it moves "
+                  + "unbudgeted) - which is what Rhys's 'once per round' says, where a limit on "
+                  + "the PASSIVE only budgets how often the ward is applied");
+            Check(victimBudgeted > victimUnbudgeted,
+                  "and the blow the ward declined lands whole on the body it was protecting ("
+                  + victimUnbudgeted + " -> " + victimBudgeted + ")");
+
+            // --- Guard -----------------------------------------------------------------
+            // A two-round ward. One charge answers one hit in the whole battle; a per-round budget
+            // answers one a round, which is the sentence.
+            List<int> byCharge = HitsTakenBy(RunGapTwoArena("guard", 0), "g2_frail");
+            List<int> byBudget = HitsTakenBy(RunGapTwoArena("guard", 1), "g2_frail");
+            int softenedByCharge = CountSoftened(byCharge);
+            int softenedByBudget = CountSoftened(byBudget);
+            Check(softenedByCharge == 1,
+                  "control: a one-charge Guard softens exactly one hit in the whole battle ("
+                  + Join(byCharge) + ") - charges count down to removal and never refill");
+            Check(softenedByBudget > softenedByCharge,
+                  "and usesPerRound 1 softens one hit EACH ROUND instead (" + Join(byBudget)
+                  + ", " + softenedByBudget + " softened against " + softenedByCharge
+                  + ") - which is what 'reduces the first area hit each round' says");
+
+            Check(FingerprintOf(RunGapTwoArena("cover", 1)) == FingerprintOf(RunGapTwoArena("cover", 1)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>How many hits in this list came in below the largest one - i.e. were softened
+        /// by something. Every foe in the arena hits for the same amount, so a smaller reading is
+        /// a reduction and nothing else.</summary>
+        private static int CountSoftened(List<int> hits)
+        {
+            int biggest = 0;
+            for (int i = 0; i < hits.Count; i++) if (hits[i] > biggest) biggest = hits[i];
+            int n = 0;
+            for (int i = 0; i < hits.Count; i++) if (hits[i] < biggest) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// A frail body struck TWICE a round by two identical enemies, and a protector standing
+        /// behind it. Two blows a round is the whole design: a budget of one is invisible against
+        /// a line that only swings once.
+        /// </summary>
+        private static BattleResult RunGapTwoArena(string mode, int usesPerRound)
+        {
+            string budget = usesPerRound > 0 ? ", \"usesPerRound\": " + usesPerRound : "";
+            string apply = mode == "cover"
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Covered\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5" + budget + " }"
+                // A CHARGE AND A BUDGET ARE DIFFERENT INSTRUMENTS, and the arms author one each
+                // rather than both: a charge counts down to removal, so an entry carrying one
+                // alongside a budget is gone after its first absorb whatever the budget says.
+                // That is correct behaviour and it is also the control's behaviour, which would
+                // make the two arms read alike and measure nothing.
+                : ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Guard\","
+                  + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5"
+                  + (usesPerRound > 0 ? budget : ", \"charges\": 1") + " }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g2_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2f_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g2_guardian"", ""name"": ""Guardian"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2g_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g2_ward"", ""name"": ""Stand There"", ""trigger"": ""BattleStart"", ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } }
+  ]
+}";
+            // Two identical foes, so every round carries two identical blows and the second one is
+            // where a budget of one becomes visible.
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g2_foe_a"", ""name"": ""A"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2fa"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
+    { ""id"": ""g2_foe_b"", ""name"": ""B"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g2fb"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g2_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g2_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g2_foe_a"", ""level"": 1 },
+                                                        { ""id"": ""g2_foe_b"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap2");
+            if (db == null) return null;
+            string[] ids = { "g2_frail", "g2_guardian" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g2_arena"), 2002, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)

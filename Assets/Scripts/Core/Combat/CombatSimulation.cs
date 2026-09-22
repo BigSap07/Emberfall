@@ -4726,16 +4726,34 @@ namespace Emberfall.Core.Combat
                 for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
                 {
                     StatusInstance guard = target.Statuses[gi];
-                    if (guard.Kind != StatusKind.Guard || guard.Charges <= 0 || guard.Magnitude <= 0f) continue;
+                    if (guard.Kind != StatusKind.Guard || guard.Magnitude <= 0f) continue;
+                    // ENGINE-GAPS group 2: a per-round budget, honoured here for the first time.
+                    //
+                    // Charges count DOWN to removal and never refill, which is the wrong shape for
+                    // "it reduces the first area hit EACH ROUND by 20%" - one charge across a
+                    // two-round ward answers one hit in total rather than one a round. A budgeted
+                    // entry is gated on its budget instead and keeps its charges, if it has any;
+                    // an entry with no budget still needs a charge, which is every Guard in
+                    // shipped content and the exact test that stood here.
+                    bool budgeted = guard.UsesPerRound > 0;
+                    if (budgeted) { if (guard.UsesThisRound >= guard.UsesPerRound) continue; }
+                    else if (guard.Charges <= 0) continue;
                     float cut = guard.Magnitude > 1f ? 1f : guard.Magnitude;
                     damage -= (int)Math.Round(damage * cut, MidpointRounding.AwayFromZero);
                     guardPreventerId = guard.SourceId;
-                    guard.Charges--;
-                    if (guard.Charges <= 0)
+                    if (budgeted) guard.UsesThisRound++;
+                    // Charges are still spent when the entry has them, so a ward can carry both a
+                    // per-round budget and a lifetime one and run out of either. Unbudgeted
+                    // entries reach this with the same Charges > 0 they were gated on above.
+                    if (guard.Charges > 0)
                     {
-                        target.Statuses.RemoveAt(gi);
-                        BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
-                        spent.Status = StatusKind.Guard;
+                        guard.Charges--;
+                        if (guard.Charges <= 0)
+                        {
+                            target.Statuses.RemoveAt(gi);
+                            BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
+                            spent.Status = StatusKind.Guard;
+                        }
                     }
                     if (damage <= 0) { damage = 0; break; }
                     break;   // one guard a hit, so two cannot stack into immunity
@@ -4846,8 +4864,19 @@ namespace Emberfall.Core.Combat
                 if (!_inRedirect)
                 {
                     int protectorId;
-                    float share = target.CoverFraction(out protectorId);
+                    StatusInstance ward;
+                    float share = target.CoverFraction(out protectorId, out ward);
                     CombatUnit protector = share > 0f ? FindUnit(protectorId) : null;
+                    // ENGINE-GAPS group 2: the ward's per-round budget, charged BEFORE the share
+                    // is delivered - the same discipline SpendLinkCharge keeps one block down, and
+                    // for the same reason: the delivery re-enters this funnel, and a budget
+                    // charged afterwards could be spent twice by one blow.
+                    //
+                    // Charged only when the ward is actually about to answer: a protector that is
+                    // dead or missing leaves `protector` null and RedirectShare returns without
+                    // moving anything, which is not a use.
+                    if (ward != null && ward.UsesPerRound > 0 && protector != null)
+                        ward.UsesThisRound++;
                     // The ward's owner IS the protector, so the rule owner and the destination are
                     // the same unit here and RedirectShare's second NoteMoved is skipped.
                     if (!RedirectShare(sourceId, target, protector, share, ref damage,

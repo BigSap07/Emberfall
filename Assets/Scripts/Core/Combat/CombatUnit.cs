@@ -569,15 +569,38 @@ namespace Emberfall.Core.Combat
         /// Zero when nobody is covering it.</summary>
         public float CoverFraction(out int protectorId)
         {
+            StatusInstance ignored;
+            return CoverFraction(out protectorId, out ignored);
+        }
+
+        /// <summary>
+        /// The same question, with the ENTRY that answered it handed back so the caller can charge
+        /// a use against it.
+        ///
+        /// ENGINE-GAPS group 2. StatusInstance has carried UsesPerRound and UsesThisRound since
+        /// the per-round-uses pass and exactly two places read them - InterceptDisrupted and the
+        /// StatusUseAvailable condition - so a ward could be told to answer once a round and the
+        /// funnel would ignore it. Rhys's "Rhys takes 30% of it instead, ONCE PER ROUND" ships as
+        /// a once-a-round limit on the PASSIVE instead, which budgets how often the ward is
+        /// APPLIED and then lets it answer every hit for the rest of the round.
+        ///
+        /// A budgeted entry whose budget is spent is skipped entirely rather than returning a
+        /// share of zero, so a second, unbudgeted ward underneath it can still answer the blow.
+        /// Zero on every Covered entry in shipped content, which skips nothing.
+        /// </summary>
+        public float CoverFraction(out int protectorId, out StatusInstance entry)
+        {
             protectorId = -1;
+            entry = null;
             float best = 0f;
             for (int i = 0; i < Statuses.Count; i++)
             {
                 StatusInstance c = Statuses[i];
                 if (c.Kind != StatusKind.Covered || c.Magnitude <= 0f) continue;
+                if (c.UsesPerRound > 0 && c.UsesThisRound >= c.UsesPerRound) continue;
                 // The deepest cover wins rather than the shares summing, so two protectors cannot
                 // between them take more than the whole hit and leave the holder untouched.
-                if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; }
+                if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; entry = c; }
             }
             return best;
         }
