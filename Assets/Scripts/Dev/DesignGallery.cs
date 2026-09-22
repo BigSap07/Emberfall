@@ -54,8 +54,20 @@ namespace Emberfall.Dev
 
         /// <summary>Vertical space a section costs on top of its body: the half of the ribbon that
         /// hangs above the panel, plus a little air. The other half is buried by the panel.</summary>
-        private const float RibbonReserve = Emberforge.RibbonHeight * 0.5f + 10f;
-        private const float SectionGap = 16f;
+        private const float RibbonReserve = Emberforge.RibbonHeight * 0.5f + 6f;
+        private const float SectionGap = 12f;
+
+        /// <summary>
+        /// The tallest the two columns may be, and the number every section height below is
+        /// checked against.
+        ///
+        /// It is the SHORTEST logical canvas this game targets, not the editor window: the canvas
+        /// scales on the geometric blend of the two aspect ratios, so a 20:9 phone lands at about
+        /// 2147x966 while the 16:9 editor sits at 1920x1080. Sizing against 1080 is what put the
+        /// progress bars through the bottom of their own panel in the 20:9 capture and nowhere
+        /// else. Left is 150 + 390 + 150 plus three reserves and two gaps, which is 816.
+        /// </summary>
+        private const float ShortestCanvasHeight = 966f;
 
         private readonly GameApp _app;
         private readonly RectTransform _layer;
@@ -120,11 +132,14 @@ namespace Emberfall.Dev
             float y = 0f;
             y = Surfaces(left, y);
             y = Buttons(left, y);
-            Bars(left, y);
+            y = Bars(left, y);
 
             float ry = 0f;
             ry = Portraits(right, ry);
-            PlateTabsAndCurrency(right, ry);
+            ry = PlateTabsAndCurrency(right, ry);
+
+            CheckFits("left", y);
+            CheckFits("right", ry);
 
             _root.gameObject.SetActive(false);
         }
@@ -147,6 +162,27 @@ namespace Emberfall.Dev
             UIBuilder.Box(close.Root, -Margin, -Emberforge.Space12, 240f, HubStyle.TouchMin,
                           new Vector2(1f, 1f));
             close.OnClick(Close);
+        }
+
+        /// <summary>
+        /// Says out loud when a column has outgrown the shortest canvas this game targets.
+        ///
+        /// It exists because the failure is SILENT on the machine it is authored on: at 16:9 the
+        /// canvas is 1080 tall and everything fits, and the section that runs through the bottom
+        /// of its own panel only appears on the 20:9 capture. Somebody adding a seventh component
+        /// here should be told by the console rather than by a screenshot taken a week later.
+        ///
+        /// A log rather than a clamp: shrinking a section to fit would silently show the kit at a
+        /// size the game never draws it at, which is the one thing this page must not do.
+        /// </summary>
+        private static void CheckFits(string column, float used)
+        {
+            float available = ShortestCanvasHeight - HeaderHeight - Margin;
+            if (used <= available) return;
+            Debug.LogError("DesignGallery: the " + column + " column needs " + used
+                + " units but the shortest canvas this game targets leaves only " + available
+                + ". It fits at 16:9 and runs off the bottom at 20:9. Shorten a section body in "
+                + "this file rather than letting the capture find it.");
         }
 
         private static RectTransform Column(RectTransform safe, string name, float x, float width)
@@ -205,9 +241,9 @@ namespace Emberfall.Dev
 
         private float Surfaces(RectTransform column, float y)
         {
-            RectTransform body = Section(column, "SURFACES", LeftWidth, 175f, ref y);
+            RectTransform body = Section(column, "SURFACES", LeftWidth, 150f, ref y);
             float w = 200f;
-            float h = 112f;
+            float h = 96f;
             float gap = 22f;
             float top = RibbonReserve + Emberforge.Space8;
 
@@ -242,9 +278,10 @@ namespace Emberfall.Dev
             const float buttonWidth = 200f;
             const float buttonHeight = 100f;
             const float buttonGap = 22f;
-            const float rowGap = 44f;
+            const float rowGap = 30f;
+            const float headerDrop = 28f;
 
-            RectTransform body = Section(column, "BUTTONS", LeftWidth, 360f, ref y);
+            RectTransform body = Section(column, "BUTTONS", LeftWidth, 390f, ref y);
             float top = RibbonReserve + Emberforge.Space8;
 
             string[] states = new string[] { "NORMAL", "PRESSED", "DISABLED" };
@@ -252,7 +289,7 @@ namespace Emberfall.Dev
 
             for (int row = 0; row < voices.Length; row++)
             {
-                float rowTop = top + row * (buttonHeight + rowGap + 30f);
+                float rowTop = top + row * (buttonHeight + rowGap + headerDrop);
 
                 Text header = EmberforgeUI.Label("H" + voices[row], body, voices[row],
                                                  UITheme.FontTiny, Emberforge.TextGold,
@@ -267,20 +304,26 @@ namespace Emberfall.Dev
                                                           UITheme.FontTiny, kind);
                     UIBuilder.Box(button.Root,
                                   Emberforge.Space32 + col * (buttonWidth + buttonGap),
-                                  -(rowTop + 30f), buttonWidth, buttonHeight, new Vector2(0f, 1f));
+                                  -(rowTop + headerDrop), buttonWidth, buttonHeight,
+                                  new Vector2(0f, 1f));
 
                     if (states[col] == "DISABLED") button.Interactable = false;
                     if (states[col] == "PRESSED") HoldDown(button);
                 }
             }
 
+            // One line at BOTH aspects, which is a shorter line than it looks. The dynamic font
+            // rasterises at 16 logical units on the 16:9 canvas and about 18 on the 20:9 one, and
+            // the rounding of the glyph advances differs enough between the two that a note which
+            // just fits at 20:9 loses its last word at 16:9 - which is exactly what the first pair
+            // of captures showed.
             Text note = EmberforgeUI.Body("Note", body,
                 "A press is the lip shrinking from " + Emberforge.ButtonLip + " to "
                 + Emberforge.ButtonLipPressed + " and the face dropping "
-                + Emberforge.ButtonPressDrop + " into the space it frees. The outer silhouette "
-                + "never moves.", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16,
-                          LeftWidth - Emberforge.Space32 * 2f, 48f, new Vector2(0f, 0f));
+                + Emberforge.ButtonPressDrop + " into it.",
+                UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space12,
+                          LeftWidth - Emberforge.Space32 * 2f, 30f, new Vector2(0f, 0f));
             return y;
         }
 
@@ -300,14 +343,14 @@ namespace Emberfall.Dev
 
         private float Bars(RectTransform column, float y)
         {
-            RectTransform body = Section(column, "PROGRESS", LeftWidth, 140f, ref y);
-            float top = RibbonReserve + Emberforge.Space8;
+            RectTransform body = Section(column, "PROGRESS", LeftWidth, 150f, ref y);
+            float top = RibbonReserve + Emberforge.Space4;
             float barWidth = LeftWidth - Emberforge.Space32 * 2f - 110f;
 
             float[] ratios = new float[] { 0f, 0.18f, 0.55f, 1f };
             for (int i = 0; i < ratios.Length; i++)
             {
-                float rowTop = top + i * 28f;
+                float rowTop = top + i * 25f;
 
                 Image fill = EmberforgeUI.ProgressBar("Bar" + i, body);
                 RectTransform root = fill.rectTransform.parent as RectTransform;
@@ -349,7 +392,7 @@ namespace Emberfall.Dev
             }
 
             const float size = 160f;
-            const float gap = 42f;
+            const float gap = 36f;
 
             for (int i = 0; i < picks.Count; i++)
             {
@@ -436,14 +479,15 @@ namespace Emberfall.Dev
             BuildTabs(body, top + 92f + 22f);
             BuildPills(body, top + 92f + 22f + 68f + 26f);
 
+            // One line, and it has to STAY one line: the section has 30 units of clear plate
+            // under the pills and a note that wraps to two is a note with its second line cut off,
+            // which is what the first 20:9 capture of this page showed.
             Text note = EmberforgeUI.Body("Note", body,
-                "The fourth disc is disabled and the first pill carries no plus, because gold is "
-                + "earned rather than bought. A rail disc is " + (int)HubStyle.RailDisc
-                + " of art inside a " + (int)HubStyle.TouchMin + "-unit hit rect: a target's size "
-                + "is a property of the control rather than of the drawing.",
-                UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16,
-                          RightWidth - Emberforge.Space32 * 2f, 48f, new Vector2(0f, 0f));
+                "The fourth disc is disabled; the first pill has no plus, because gold is earned "
+                + "rather than bought.", UITheme.FontTiny - 4, Emberforge.TextQuiet,
+                TextAnchor.LowerLeft);
+            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space12,
+                          RightWidth - Emberforge.Space32 * 2f, 30f, new Vector2(0f, 0f));
             return y;
         }
 
