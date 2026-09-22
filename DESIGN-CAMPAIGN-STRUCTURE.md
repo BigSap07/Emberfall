@@ -128,3 +128,25 @@ strand a player arrives from a file.
 The 20,736 arithmetic in the sections above is therefore a statement about the 12-chapter
 shape this document proposed, not about what ships. What ships today is 24 stages over two
 chapters and 2,448 battles: 4 x 36 plus 8 x 72 in chapter 1, and 12 x 144 in chapter 2.
+
+## Amended 2026-09-22: the recommendedPower table is re-derived by a command
+
+`recommendedPower` is not authored. It is the simulated player's ENTRY power at a stage
+divided by the middle of that stage's difficulty band, which makes it a function of what a
+player can field and therefore stale the moment anything a player fields changes. The
+campaign-curve pass derived the whole table that way by hand and it was out of band two
+merges later, because the kit and rarity passes made the simulated line a few percent
+stronger while the table stood still. **Run `pwsh Tools/solve-recommended-power.ps1` after
+any change to a hero the balance line fields, and after any change to the economy** - a
+purse, a first-clear reward, an idle rate, the sitting budget, the starting roster. It
+walks the economy, sets every stage's `recommendedPower` to entry power over its band
+middle, re-solves `floorLevel`, `ceilingLevel` and the authored enemy levels underneath
+the answer, and repeats the whole walk on what it just wrote until a walk proposes
+nothing. It touches **four fields per stage in `campaign.json` and nothing else**: no
+purse, no reward, no idle rate, no `waveCount`, no roster composition, no code, and not
+one line of that file's commentary. `-WhatIf` runs it against a copy and writes nothing.
+It asserts nothing about its own output, so run `Tools/build-check.ps1` afterwards:
+`CheckCampaignPowerCurve` is the guard on the numbers and the geared curve's CEIL band is
+the guard on the levels under them. Where it moved authored enemy levels it moved the
+stage fingerprints with them, and regenerating that baseline stays a separate deliberate
+act (`EMBERFALL_REGEN_STAGE_FP=1`).

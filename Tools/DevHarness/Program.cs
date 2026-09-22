@@ -25,7 +25,19 @@ namespace Emberfall.DevHarness
 
         private static int Main(string[] args)
         {
-            string contentDir = args.Length > 0 ? args[0] : FindContentDir();
+            bool solve = false;
+            string contentDir = null;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--solve-recommended-power") { solve = true; continue; }
+                if (contentDir == null) contentDir = args[i];
+            }
+            if (contentDir == null) contentDir = FindContentDir();
+
+            // THE SOLVER IS NOT A CHECK, and it deliberately does not run beside them: it WRITES
+            // campaign.json, so it returns before one check has read the file it is about to
+            // change. The guards run on the NEXT build-check, against what it wrote.
+            if (solve) return RunRecommendedPowerSolver(contentDir);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
@@ -3728,6 +3740,9 @@ namespace Emberfall.DevHarness
         }
 
         private static string Fmt(float v) { return v.ToString("0.##", CultureInfo.InvariantCulture); }
+        /// <summary>Three decimals, for the solver's band middles. x1.025 rounds to "1.03" under
+        /// Fmt, and a band middle printed to two decimals is a band middle nobody can check.</summary>
+        private static string Fmt3(float v) { return v.ToString("0.###", CultureInfo.InvariantCulture); }
         private static string Pct(float v) { return (v * 100f).ToString("0.#", CultureInfo.InvariantCulture) + "%"; }
 
         // ---------------------------------------------------------------- sprite delivery
@@ -14262,6 +14277,16 @@ namespace Emberfall.DevHarness
         private const float CeilTargetOrdinary = 0.85f;
         private const float CeilTargetFinale = 0.65f;
 
+        /// <summary>
+        /// THE BAND CheckArmoredCurveDelta ENFORCES, named once rather than written out at the one
+        /// place that tests it. The recPwr solver aims at the same numbers, and a band that lived
+        /// as four literals inside the check could be aimed at only by copying them.
+        /// </summary>
+        private const float GearedCeilBandLowOrdinary = 0.78f;
+        private const float GearedCeilBandHighOrdinary = 0.92f;
+        private const float GearedCeilBandLowFinale = 0.55f;
+        private const float GearedCeilBandHighFinale = 0.72f;
+
         /// <summary>The last stage of its own chapter, found by index rather than assumed to be 12,
         /// so a chapter of a different length still resolves its own finale.</summary>
         private static bool IsChapterFinale(ContentDatabase db, StageDef stage)
@@ -14469,12 +14494,26 @@ namespace Emberfall.DevHarness
                 if (ceil < loCeil) loCeil = ceil;
                 if (ceil > hiCeil) hiCeil = ceil;
 
-                // Band check: skip floor-pinned stages (trivially 100%) and verify the rest
-                if (ceil < 0.995f)
+                // BAND CHECK, and the exclusion below now asks the real question instead of a
+                // proxy for it.
+                //
+                // Floor-pinned stages have to be excluded: the instrument cannot place its line
+                // BELOW its own level-1 geared value, so where a stage asks for less than that, the
+                // CEIL reading describes the instrument and not the stage. The test used to be
+                // "CEIL is at least 99.5%", which was true of every pinned stage on the day it was
+                // written and is a coincidence rather than a definition. The recPwr solver moved
+                // 1-8 to 5,986 against a pinned line worth 7,394; the stage is pinned by 23% and
+                // read 99%, so the proxy failed it for being a fraction less than certain.
+                //
+                // IsFloorPinned asks whether the line can be placed at all, which is the thing the
+                // exclusion is for. It is stricter in the other direction too: a stage that reads
+                // 100% while its line SITS at its recommendedPower is now checked, where the proxy
+                // waved it through.
+                bool floorPinned = IsFloorPinned(db, stage);
+                if (!floorPinned)
                 {
-                    bool finale = IsChapterFinale(db, stage);
-                    float bandLo = finale ? 0.55f : 0.78f;
-                    float bandHi = finale ? 0.72f : 0.92f;
+                    float bandLo = CeilBandLow(db, stage);
+                    float bandHi = CeilBandHigh(db, stage);
                     if (ceil < bandLo || ceil > bandHi)
                     {
                         outOfBand++;
@@ -14491,6 +14530,8 @@ namespace Emberfall.DevHarness
                      + Pct(floor).PadLeft(8)
                      + Pct(ceil).PadLeft(8)
                      + (block > 0 ? ("b" + block) : "none").PadLeft(8)
+                     + (floorPinned ? "   FLOOR-PINNED (the level-1 geared line is already worth more"
+                                      + " than this stage asks for, so CEIL reads the instrument)" : "")
                      + (floor < 0.9f ? "   FLOOR UNDER 90%" : ""));
             }
 
@@ -14510,7 +14551,7 @@ namespace Emberfall.DevHarness
                   + Pct(loCeil) + " to " + Pct(hiCeil) + ")");
 
             Check(outOfBand == 0,
-                  "every non-pinned stage's CEIL sits inside its target band"
+                  "every stage the instrument can actually be placed at has its CEIL inside the band"
                   + " (ordinary [78%, 92%], finale [55%, 72%])"
                   + (firstOutOfBand == null ? "" : " - first miss: " + firstOutOfBand));
             Line("");
@@ -15459,6 +15500,775 @@ namespace Emberfall.DevHarness
             }
             Line("    extra hours counts the gap between sittings, which is where the idle income that"
                  + " resolves a wall is actually earned.");
+        }
+
+        // ==================================================================== the recPwr solver
+        //
+        // THE CURVE PASS, TURNED BACK INTO A COMMAND.
+        //
+        // balance/campaign-curve derived this whole table by hand. It ran the economy walk, read
+        // each stage's ENTRY power, divided by the middle of that stage's own band, and then moved
+        // floorLevel, ceilingLevel and the authored enemy levels underneath the answer so the CEIL
+        // band still read in range at the new number. The derivation was right and the table went
+        // out of band anyway, because the kit and rarity passes merged after it: the simulated
+        // player's line got a few percent stronger, entry power rose with it, recommendedPower did
+        // not, and six stages drifted over their high edge.
+        //
+        // That is the shape of the problem rather than an accident of one merge. recommendedPower
+        // is derived from what a player can field, so it goes stale the moment anything a player
+        // fields changes, and a derivation only a human can re-run is a derivation that stops being
+        // re-run. This is the same arithmetic as one command:
+        //
+        //     pwsh Tools/solve-recommended-power.ps1
+        //
+        // WHAT IT SETS, per stage, in this order.
+        //
+        //   recommendedPower = entry power / the MIDDLE of that stage's band. x1.20 on an ordinary
+        //   chapter 1 stage and on the four tutorial stages, x1.025 on a chapter 1 wall, x1.15 on
+        //   an ordinary chapter 2 stage, x0.985 on a chapter 2 wall. The middle rather than an edge
+        //   is the entire point: an edge is in band on the day it is written and out of band on the
+        //   next thing that moves player power, which is exactly what happened here.
+        //
+        //   The levels underneath it, so the CEIL band still reads in range at the new number.
+        //   Required power tracks enemy scale almost exactly - every enemy in enemies.json carries
+        //   growth 0.12, so scale(level) = 1 + 0.12 * (level - 1) - and the two readings have one
+        //   lever each. The FLOOR reading is the authored roster, so the roster shifts as one piece
+        //   by whatever keeps its MEAN level's scale in proportion to the new recommendedPower, and
+        //   floorLevel shifts with it because floorLevel has to equal the top authored level. The
+        //   CEIL reading is that same roster shifted by (ceilingLevel - floorLevel), so ceilingLevel
+        //   is then placed to keep THAT mean's scale in proportion. Both are inversions of one
+        //   formula. Neither is a search, and no battle is fought to find either of them.
+        //
+        // WHERE IT IS NARROWER THAN THE HAND PASS, said plainly. The curve pass moved individual
+        // units against their roster's top on five chapter 1 stages, and moved 2-1's roster UP while
+        // its recommendedPower went down. Those are shaping decisions about how a stage OPENS and
+        // they are not recoverable from any ratio. This moves a roster as one piece and does
+        // nothing else to it, so a stage's composition and its internal spread survive every
+        // re-run. Shaping a roster is still a human edit to campaign.json; re-deriving the curve
+        // over whatever shape is there is this.
+        //
+        // WHY IT ITERATES. recommendedPower is not an input to the walk - nothing under
+        // Assets/Scripts/Core reads it - but the levels are, and they move with it. Harder stages
+        // cost the simulated player retries and farming runs, farming earns gold, so stage N's new
+        // levels change stage N+1's entry power and its recommendedPower with it. The loop runs the
+        // whole walk again on the numbers it just wrote, and stops when a walk proposes nothing.
+        //
+        // EVERY ITERATION DERIVES FROM THE COMMITTED TABLE, never from the iteration before it, so
+        // the whole answer is one rounding of one ratio however many walks it takes to settle. See
+        // StageBaseline for what re-rounding an already-rounded table did when it was allowed to.
+
+        private const float SolverMiddleOrdinaryChapter1 = 1.20f;
+        private const float SolverMiddleWallChapter1 = 1.025f;
+        private const float SolverMiddleOrdinaryLater = 1.15f;
+        private const float SolverMiddleWallLater = 0.985f;
+
+        /// <summary>Every enemy in enemies.json carries this. The solver checks it rather than
+        /// trusting it: the level-to-power inversion below is only valid while it is one number for
+        /// the whole cast.</summary>
+        private const float EnemyGrowthPerLevel = 0.12f;
+
+        private const int SolverMaxIterations = 25;
+
+        /// <summary>
+        /// The band middle one stage is derived against. The four tutorial stages have no band to
+        /// sit in, and the curve pass put them on chapter 1's ordinary middle: the committed 2,977
+        /// at 1-1 is exactly that stage's entry power over x1.20, which is where the reading comes
+        /// from.
+        /// </summary>
+        private static float SolverBandMiddle(StageDef stage, int walkIndex)
+        {
+            bool chapterOne = stage != null && stage.ChapterNumber == 1;
+            if (BandKindOf(stage, walkIndex).StartsWith("wall"))
+                return chapterOne ? SolverMiddleWallChapter1 : SolverMiddleWallLater;
+            return chapterOne ? SolverMiddleOrdinaryChapter1 : SolverMiddleOrdinaryLater;
+        }
+
+        private static float EnemyScaleAt(float level) { return 1f + EnemyGrowthPerLevel * (level - 1f); }
+
+        private static float EnemyLevelForScale(float scale)
+        {
+            return 1f + (scale - 1f) / EnemyGrowthPerLevel;
+        }
+
+        /// <summary>
+        /// One stage exactly as campaign.json committed it, taken once before the first walk.
+        ///
+        /// THE LEVEL SOLVE IS ANCHORED HERE AND NOT ON THE PREVIOUS ITERATION, and the difference
+        /// is not cosmetic. Anchoring on the last iteration's output re-rounds an already-rounded
+        /// table every time round the loop, and the quantisation compounds in one direction: the
+        /// multiplicative map widens (ceilingLevel - floorLevel) whenever recommendedPower rises,
+        /// each widening rounds up, and the next iteration widens the wider number again. Measured,
+        /// over fourteen iterations: 2-10 ended four levels of ceiling span above its floor where
+        /// the ratio asked for three, and its CEIL reading fell from 80.5% to 57% - a stage pushed
+        /// clean out of the band by nothing but repeated rounding.
+        ///
+        /// Anchored on the committed table, the whole derivation is one rounding of one ratio no
+        /// matter how many walks it takes to settle, and re-running the solver on a tree it has
+        /// already solved is a no-op rather than another nudge.
+        /// </summary>
+        private sealed class StageBaseline
+        {
+            public int Recommended;
+            public int Floor;
+            public int Ceiling;
+            public int[] Levels;
+            public float Mean;
+            public int Lowest;
+        }
+
+        private static StageBaseline BaselineOf(StageDef stage)
+        {
+            StageBaseline b = new StageBaseline();
+            b.Recommended = stage.RecommendedPower;
+            b.Floor = stage.FloorLevel;
+            b.Ceiling = stage.CeilingLevel;
+            b.Levels = new int[stage.Enemies.Count];
+            b.Lowest = int.MaxValue;
+            float sum = 0f;
+            for (int i = 0; i < stage.Enemies.Count; i++)
+            {
+                b.Levels[i] = stage.Enemies[i].Level;
+                sum += b.Levels[i];
+                if (b.Levels[i] < b.Lowest) b.Lowest = b.Levels[i];
+            }
+            if (b.Levels.Length > 0) b.Mean = sum / b.Levels.Length;
+            else { b.Mean = b.Floor; b.Lowest = b.Floor; }
+            return b;
+        }
+
+        private sealed class RecPowerProposal
+        {
+            public StageDef Stage;
+            public int EntryPower;
+            public float BandMiddle;
+            public int NewRecommended;
+            public int NewFloor;
+            public int NewCeiling;
+            public int RosterShift;
+            /// <summary>What the inversion asked for, before the measured trim moved it. Kept so
+            /// the report can show how far a stage's ceiling had to be walked off the
+            /// arithmetic.</summary>
+            public int SeededCeiling;
+            /// <summary>The CEIL rate the chosen levels actually landed on, or -1 where the stage
+            /// is floor-pinned and there was nothing to measure.</summary>
+            public float LandedCeilRate = -1f;
+            /// <summary>How many single-unit steps the measured search walked off the inversion's
+            /// seed. Zero means the arithmetic landed in band on its own.</summary>
+            public int UnitsMoved;
+            public bool FloorPinned;
+
+            /// <summary>What the stage held when this iteration started, captured before the
+            /// proposal overwrote it. The loop has settled when no stage's four numbers move, and
+            /// that question can only be asked against the PREVIOUS state. The report asks a
+            /// different question, against the committed table, and the two coincide only on the
+            /// first iteration.</summary>
+            public int PriorRecommended, PriorFloor, PriorCeiling;
+
+            public bool ChangesAnything
+            {
+                get
+                {
+                    return PriorRecommended != NewRecommended
+                           || PriorFloor != NewFloor
+                           || PriorCeiling != NewCeiling;
+                }
+            }
+        }
+
+        private static RecPowerProposal ProposeRecommendedPower(EconomyStageOutcome outcome, int walkIndex,
+                                                               StageBaseline baseline)
+        {
+            StageDef stage = outcome.Stage;
+            RecPowerProposal p = new RecPowerProposal();
+            p.Stage = stage;
+            p.EntryPower = outcome.EntryPower;
+            p.BandMiddle = SolverBandMiddle(stage, walkIndex);
+            p.PriorRecommended = stage.RecommendedPower;
+            p.PriorFloor = stage.FloorLevel;
+            p.PriorCeiling = stage.CeilingLevel;
+
+            p.NewRecommended = (int)Math.Round(p.EntryPower / (double)p.BandMiddle);
+            if (p.NewRecommended < 1) p.NewRecommended = 1;
+
+            float ratio = baseline.Recommended > 0
+                ? p.NewRecommended / (float)baseline.Recommended : 1f;
+
+            float ceilingMeanBase = baseline.Mean + (baseline.Ceiling - baseline.Floor);
+            float meanWanted = EnemyLevelForScale(ratio * EnemyScaleAt(baseline.Mean));
+            float ceilingMeanWanted = EnemyLevelForScale(ratio * EnemyScaleAt(ceilingMeanBase));
+
+            // ONE shift for the whole roster, clamped once by its lowest member rather than per
+            // unit. Clamping each level on its own would silently re-spread a roster this is
+            // supposed to carry intact, which is the one thing the hand pass was allowed to do and
+            // this is not.
+            int shift = (int)Math.Round((double)(meanWanted - baseline.Mean));
+            if (baseline.Lowest + shift < 1) shift = 1 - baseline.Lowest;
+            p.RosterShift = shift;
+            p.NewFloor = baseline.Floor + shift;
+
+            // The ceiling absorbs the roster's rounding rather than adding to it: it is placed
+            // against the mean the roster ACTUALLY landed on, so the two errors cannot stack.
+            p.NewCeiling = (int)Math.Round(
+                (double)(p.NewFloor + (ceilingMeanWanted - (baseline.Mean + shift))));
+            // A ladder cannot descend. The ceiling battle is the stage's hardest by construction,
+            // and LevelDelta would hand every battle after the first a NEGATIVE shift if a ceiling
+            // below its floor were ever written.
+            if (p.NewCeiling < p.NewFloor) p.NewCeiling = p.NewFloor;
+            p.SeededCeiling = p.NewCeiling;
+            return p;
+        }
+
+        /// <summary>
+        /// WHY THE LEVELS ARE MEASURED AND NOT MERELY CALCULATED.
+        ///
+        /// The scale inversion above places them to within a level, and a level is nowhere near
+        /// close enough. DeriveRecommendedPower already says why in its own comment - "one level
+        /// can swing a ceiling ten points" - and the band those levels have to land inside is
+        /// fourteen points wide for an ordinary stage and seventeen for a finale. Measured on the
+        /// seeded table before any of this existed: 1-10 read 63.5% and 2-3 read 99.5%, both off
+        /// level choices within one of what the ratio asked for.
+        ///
+        /// So the levels are SEEDED by the inversion and then SET by measurement, against the same
+        /// 85% / 65% that recommendedPower is defined against in the first place. The two are two
+        /// halves of one sentence - at recommendedPower, a geared line clears this stage's ceiling
+        /// about 85% of the time - and once the economy has fixed one half, the other is the only
+        /// thing left to move.
+        ///
+        /// WHAT IS ACTUALLY SEARCHED is the CEILING BATTLE's level vector, one unit at a time.
+        /// Moving the whole roster by a level is far too coarse: 1-9 reads 93.5% at one level and
+        /// about 70% at the next, and 1-12 jumps 23 points on the Sundered Colossus alone. Moving
+        /// ONE unit against the roster's top is the finest lever the content has, which is exactly
+        /// what DESIGN-CAMPAIGN-STRUCTURE says, and WHICH unit matters as much as how many: a
+        /// stage's top unit is worth several times its bottom one, so the unit to move is CHOSEN by
+        /// measurement each step rather than taken off a fixed order.
+        ///
+        /// Fairness is enforced by rounds. Inside a round every unit may move at most once, so the
+        /// search can never walk one unit away from its roster; a completed round is exactly one
+        /// whole level and the next round starts over. That bounds the distortion this can apply
+        /// to an authored roster at one level against its top, which is the size of edit the hand
+        /// pass made by eye.
+        ///
+        /// floorLevel and ceilingLevel are OUTPUTS here, not inputs. The ceiling vector and the
+        /// stage's authored ramp (ceilingLevel - floorLevel, taken from the inversion) determine
+        /// the authored roster; floorLevel is then the roster's top, which is the invariant
+        /// campaign.json states, and ceilingLevel is floorLevel plus the ramp.
+        /// </summary>
+        /// <summary>
+        /// THREE TIMES THE GUARD'S SAMPLE COUNT, and the reason is that the two are doing
+        /// different jobs with the same measurement.
+        ///
+        /// The guard reads one configuration once and asks whether it is in band; 200 samples of a
+        /// rate near 85% carry a standard error of 2.5 points, which is fine against a band seven
+        /// points either side of the middle. This has to CHOOSE between configurations three or
+        /// four points apart, and at 200 samples the noise is larger than the thing being chosen
+        /// between - it picks a candidate whose true rate is 79% believing it read 82%, and the
+        /// guard, sampling the same configuration at its own seed base, then reads 77% and fails
+        /// it. That happened: 2-2 landed on 82% to the solver and 77% to the guard, and 2-11 on
+        /// 86% and 93%. Neither was a tuning miss. Both were one number measured twice.
+        ///
+        /// At 600 the standard error is 1.4 points, so the candidate the search keeps is the one
+        /// whose TRUE rate is nearest the middle, and the guard's own reading of it is then a
+        /// 200-sample draw around a middle rather than around an edge.
+        /// </summary>
+        private const int SolverCeilSamples = 3 * ReportSamples;
+
+        /// <summary>Stop searching as soon as a candidate sits this far inside BOTH edges. Five
+        /// points leaves the guard's own 200-sample reading about two standard errors of room on
+        /// either side, which is what a landing has to survive to mean anything.</summary>
+        private const float SolverBandCushion = 0.05f;
+
+        private const int SolverMaxProbesPerStage = 60;
+
+        private static float CeilBandLow(ContentDatabase db, StageDef stage)
+        {
+            return IsChapterFinale(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
+        }
+
+        private static float CeilBandHigh(ContentDatabase db, StageDef stage)
+        {
+            return IsChapterFinale(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
+        }
+
+        /// <summary>How far inside both edges a reading sits. Negative outside, and the more
+        /// negative the further out, so one comparison orders every candidate.</summary>
+        private static float CeilBandMargin(ContentDatabase db, StageDef stage, float rate)
+        {
+            float low = rate - CeilBandLow(db, stage);
+            float high = CeilBandHigh(db, stage) - rate;
+            return low < high ? low : high;
+        }
+
+        private sealed class LevelConfig
+        {
+            public int[] Ceiling;    // the ceiling battle's level per unit
+            public float Rate = -1f; // its measured CEIL win rate at recommendedPower
+            public int UnitsMoved;   // how far the search walked from the inversion's seed
+        }
+
+        /// <summary>
+        /// Writes one ceiling vector onto the stage: the authored roster is the vector less the
+        /// ramp, floorLevel is that roster's top, and ceilingLevel is floorLevel plus the ramp.
+        /// </summary>
+        private static void SolverApplyCeiling(StageDef stage, int[] ceiling, int ramp)
+        {
+            int top = 1;
+            for (int i = 0; i < stage.Enemies.Count; i++)
+            {
+                int authored = Math.Max(1, ceiling[i] - ramp);
+                stage.Enemies[i].Level = authored;
+                if (authored > top) top = authored;
+            }
+            stage.FloorLevel = top;
+            stage.CeilingLevel = top + Math.Max(0, ramp);
+        }
+
+        private static LevelConfig SolveStageLevels(ContentDatabase db, StageDef stage, int[] roster,
+                                                   int ramp, ref int probes)
+        {
+            float target = TargetCeilRate(db, stage);
+            // Fixed per stage, so the search fights identical battles every time it runs and
+            // re-solving a tree that is already solved changes nothing.
+            int seed = 9100000 + stage.GlobalIndex * 131;
+            int n = roster.Length;
+
+            int[] ceiling = new int[n];
+            for (int i = 0; i < n; i++) ceiling[i] = roster[i] + ramp;
+
+            LevelConfig best = SolverProbe(db, stage, ceiling, ramp, 0, seed, ref probes);
+            if (CeilBandMargin(db, stage, best.Rate) >= SolverBandCushion)
+            {
+                SolverApplyCeiling(stage, best.Ceiling, ramp);
+                return best;
+            }
+
+            int direction = best.Rate > target ? 1 : -1;
+            bool[] movedThisRound = new bool[n];
+            int movedCount = 0;
+            int walked = 0;
+
+            while (probes < SolverMaxProbesPerStage)
+            {
+                if (movedCount == n) { movedThisRound = new bool[n]; movedCount = 0; }
+
+                LevelConfig chosen = null;
+                int chosenUnit = -1;
+                for (int u = 0; u < n; u++)
+                {
+                    if (movedThisRound[u]) continue;
+                    // Neither the ceiling battle's level nor the authored level it implies may
+                    // fall below 1. The second is the binding one on a stage with a long ramp.
+                    if (ceiling[u] + direction < 1) continue;
+                    if (ceiling[u] + direction - ramp < 1) continue;
+                    if (probes >= SolverMaxProbesPerStage) break;
+
+                    ceiling[u] += direction;
+                    LevelConfig probe = SolverProbe(db, stage, ceiling, ramp, walked + 1, seed, ref probes);
+                    ceiling[u] -= direction;
+
+                    // Strictly closer, so a tie keeps the lower index. Units are walked in
+                    // order, which makes that the deterministic choice without a second rule.
+                    if (chosen == null
+                        || Math.Abs(probe.Rate - target) < Math.Abs(chosen.Rate - target))
+                    {
+                        chosen = probe;
+                        chosenUnit = u;
+                    }
+                }
+                if (chosen == null) break;
+
+                if (CeilBandMargin(db, stage, chosen.Rate) > CeilBandMargin(db, stage, best.Rate))
+                    best = chosen;
+
+                // Crossed: the target now sits between the step before and this one, and no
+                // further step in this direction can improve on what has already been seen.
+                bool crossed = direction > 0 ? chosen.Rate <= target : chosen.Rate >= target;
+                if (crossed) break;
+                if (CeilBandMargin(db, stage, best.Rate) >= SolverBandCushion) break;
+
+                ceiling[chosenUnit] += direction;
+                movedThisRound[chosenUnit] = true;
+                movedCount++;
+                walked++;
+            }
+
+            SolverApplyCeiling(stage, best.Ceiling, ramp);
+            return best;
+        }
+
+        private static LevelConfig SolverProbe(ContentDatabase db, StageDef stage, int[] ceiling,
+                                               int ramp, int walked, int seed, ref int probes)
+        {
+            LevelConfig c = new LevelConfig();
+            c.Ceiling = (int[])ceiling.Clone();
+            c.UnitsMoved = walked;
+            SolverApplyCeiling(stage, ceiling, ramp);
+
+            // CheckArmoredCurveDelta's CEIL reading exactly, at this solver's own seed base: the
+            // same line, the same battle, the same sample count and the same seed STRIDE.
+            //
+            // The stride is not a detail. CeilRateAtPower, which the EMBERFALL_DERIVE search uses,
+            // walks 200 consecutive seeds; CurveRate, which the guard uses, strides them by 31.
+            // Two estimators over different sample sets, and the difference was measured rather
+            // than assumed: with the consecutive form here, 2-8 read 87% to the solver and 73% to
+            // the guard on the SAME levels - fourteen points apart on a band fourteen wide. Tuning
+            // against one estimator while being graded by another is not a tuning problem, it is
+            // two different numbers sharing one name.
+            GameSession line = BuildPinnedLineAt(db, stage, true, stage.RecommendedPower);
+            c.Rate = CurveRate(line, stage, Math.Max(1, stage.WaveCount),
+                               Math.Max(1, stage.BattleCount), SolverCeilSamples, seed,
+                               _gearedCurveOrdinals);
+            probes++;
+            return c;
+        }
+
+        /// <summary>
+        /// FLOOR-PINNED: the geared instrument line at level 1 is already worth more than the stage
+        /// asks for, so there is no power at which to place the line and its CEIL reading is the
+        /// instrument's own floor rather than anything about the stage. campaign.json records which
+        /// stages this covers and why it is not closeable by tuning.
+        /// </summary>
+        private static bool IsFloorPinned(ContentDatabase db, StageDef stage)
+        {
+            return stage.RecommendedPower <= MinAttainablePower(db, stage);
+        }
+
+        private static string SolverRosterText(StageDef stage)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < stage.Enemies.Count; i++)
+            {
+                if (i > 0) sb.Append('/');
+                sb.Append(stage.Enemies[i].Level);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>Everything the solver writes, as one string, so a repeat is detectable. An
+        /// oscillation between two tables is a real outcome for an integer fixed point, and it has
+        /// to be reported as one rather than burning the iteration budget looking like
+        /// divergence.</summary>
+        private static string SolverStateKey(ContentDatabase db)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef s = db.AllStages[i];
+                sb.Append(s.Id).Append(':').Append(s.RecommendedPower).Append('/')
+                  .Append(s.FloorLevel).Append('/').Append(s.CeilingLevel).Append('/')
+                  .Append(SolverRosterText(s)).Append(';');
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// The command. Loads content, walks the economy, writes the table, walks it again on what
+        /// it just wrote, and stops when a walk proposes nothing. Returns a process exit code: it
+        /// writes campaign.json only on a converged run, and says why on every other outcome.
+        /// </summary>
+        private static int RunRecommendedPowerSolver(string contentDir)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            Line("EMBERFALL RECOMMENDED POWER SOLVER");
+            Line("content: " + contentDir);
+            Line("");
+
+            ContentDatabase db = LoadContent(contentDir);
+            if (db == null) return 1;
+
+            Line("");
+            Line("  recommendedPower = the simulated player's ENTRY power / the middle of that stage's band.");
+            Line("  Middles: ordinary chapter 1 and tutorial x" + Fmt3(SolverMiddleOrdinaryChapter1)
+                 + ", chapter 1 wall x" + Fmt3(SolverMiddleWallChapter1)
+                 + ", ordinary later x" + Fmt3(SolverMiddleOrdinaryLater)
+                 + ", later wall x" + Fmt3(SolverMiddleWallLater) + ".");
+            Line("  A wall is a chapter finale or one of " + string.Join(", ", MidChapterWallStageIds)
+                 + "; the first " + EconomyTutorialStages + " stages are the tutorial.");
+            Line("  floorLevel, ceilingLevel and the authored enemy levels follow by inverting"
+                 + " scale(level) = 1 + " + Fmt(EnemyGrowthPerLevel) + " * (level - 1).");
+            Line("");
+
+            for (int i = 0; i < db.Enemies.Count; i++)
+            {
+                if (Math.Abs(db.Enemies[i].Growth - EnemyGrowthPerLevel) < 0.0001f) continue;
+                Line("  ABORT: " + db.Enemies[i].Id + " has growth " + Fmt(db.Enemies[i].Growth)
+                     + " rather than " + Fmt(EnemyGrowthPerLevel) + ". The level-to-power inversion"
+                     + " this solver uses is only valid while the whole cast shares one growth rate,"
+                     + " so the formula has to be re-derived before the solver may write anything.");
+                return 1;
+            }
+
+            // What campaign.json said before any of this ran. The report names the move from the
+            // COMMITTED numbers rather than from the previous iteration's, which is the only
+            // version of the move a reader of the diff can check.
+            Dictionary<string, StageBaseline> baseline = new Dictionary<string, StageBaseline>();
+            Dictionary<string, string> wasRoster = new Dictionary<string, string>();
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef s = db.AllStages[i];
+                baseline[s.Id] = BaselineOf(s);
+                wasRoster[s.Id] = SolverRosterText(s);
+            }
+
+            Dictionary<string, RecPowerProposal> last = new Dictionary<string, RecPowerProposal>();
+            List<string> seen = new List<string>();
+            seen.Add(SolverStateKey(db));
+
+            int iterations = 0;
+            bool settled = false;
+            while (iterations < SolverMaxIterations)
+            {
+                iterations++;
+                EconomyRun run = SimulateEconomy(db, false);
+                if (run.StuckAt >= 0)
+                {
+                    Line("  ABORT on iteration " + iterations + ": the simulated player got STUCK at "
+                         + db.AllStages[run.StuckAt].DisplayCode + " and never reached the stages"
+                         + " after it, so there is no entry power to divide. campaign.json was not"
+                         + " written and is still the committed table.");
+                    return 1;
+                }
+
+                int moved = 0;
+                int probes = 0;
+                for (int i = 0; i < run.Stages.Count; i++)
+                {
+                    StageBaseline was = baseline[run.Stages[i].Stage.Id];
+                    RecPowerProposal p = ProposeRecommendedPower(run.Stages[i], i, was);
+
+                    // recommendedPower and the seeded roster go in FIRST, because both are
+                    // inputs to the measurement that follows: the walk fields a line levelled to
+                    // recommendedPower against that roster at the candidate levels.
+                    int[] shifted = new int[was.Levels.Length];
+                    for (int e = 0; e < shifted.Length; e++) shifted[e] = was.Levels[e] + p.RosterShift;
+                    int ramp = p.SeededCeiling - p.NewFloor;
+
+                    p.Stage.RecommendedPower = p.NewRecommended;
+                    int[] seededCeiling = new int[shifted.Length];
+                    for (int e = 0; e < shifted.Length; e++) seededCeiling[e] = shifted[e] + ramp;
+                    SolverApplyCeiling(p.Stage, seededCeiling, ramp);
+
+                    p.FloorPinned = IsFloorPinned(db, p.Stage);
+                    if (!p.FloorPinned)
+                    {
+                        int stageProbes = 0;
+                        LevelConfig landed = SolveStageLevels(db, p.Stage, shifted, ramp, ref stageProbes);
+                        p.LandedCeilRate = landed.Rate;
+                        p.UnitsMoved = landed.UnitsMoved;
+                        probes += stageProbes;
+                    }
+                    p.NewFloor = p.Stage.FloorLevel;
+                    p.NewCeiling = p.Stage.CeilingLevel;
+
+                    last[p.Stage.Id] = p;
+                    if (p.ChangesAnything) moved++;
+                }
+
+                Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
+                     + " ceiling probe(s) at " + SolverCeilSamples + " samples each");
+                if (moved == 0) { settled = true; break; }
+
+                string key = SolverStateKey(db);
+                int repeat = seen.IndexOf(key);
+                if (repeat >= 0)
+                {
+                    Line("  The table has returned to a state it already held, so this is a CYCLE"
+                         + " rather than slow convergence: integer rounding on at least one stage has"
+                         + " no fixed point. The state reached here is written. Both members of a"
+                         + " one-level cycle sit the same distance from their band middle, so either"
+                         + " is in band or neither is, and the check downstream is what decides.");
+                    settled = true;
+                    break;
+                }
+                seen.Add(key);
+            }
+
+            if (!settled)
+            {
+                Line("  ABORT: no fixed point after " + SolverMaxIterations + " iterations and no"
+                     + " cycle either, so the table is still moving. campaign.json was not written."
+                     + " A walk that keeps proposing bigger numbers is the economy feeding itself -"
+                     + " harder stages cost more retries, retries are paid for by farming, farming"
+                     + " buys power, and power asks for harder stages.");
+                return 1;
+            }
+
+            Line("");
+            Line("  stage  name                    entryPwr  middle    recPwr was ->  now   delta"
+                 + "    floor     ceiling   seed  step  CEIL@rec   roster");
+            int changed = 0;
+            int rostersMoved = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef s = db.AllStages[i];
+                RecPowerProposal p;
+                last.TryGetValue(s.Id, out p);
+                StageBaseline was = baseline[s.Id];
+                string roster = SolverRosterText(s);
+                bool rosterMoved = roster != wasRoster[s.Id];
+                int delta = s.RecommendedPower - was.Recommended;
+                bool stageMoved = delta != 0 || rosterMoved
+                                  || s.CeilingLevel != was.Ceiling
+                                  || s.FloorLevel != was.Floor;
+                if (stageMoved) changed++;
+                if (rosterMoved) rostersMoved++;
+
+                Line("  " + s.DisplayCode.PadRight(6)
+                     + " " + Trim(s.Name, 23).PadRight(23)
+                     + (p == null ? "?" : p.EntryPower.ToString()).PadLeft(9)
+                     + (p == null ? "?" : "x" + Fmt3(p.BandMiddle)).PadLeft(9)
+                     + was.Recommended.ToString().PadLeft(10)
+                     + s.RecommendedPower.ToString().PadLeft(7)
+                     + ((delta >= 0 ? "+" : "") + delta).PadLeft(8)
+                     + ("  " + was.Floor + "->" + s.FloorLevel).PadRight(10)
+                     + (was.Ceiling + "->" + s.CeilingLevel).PadRight(10)
+                     + (p == null ? "?" : p.SeededCeiling.ToString()).PadLeft(5)
+                     + (p == null ? "?" : p.UnitsMoved.ToString()).PadLeft(6)
+                     + (p == null ? "?" : (p.FloorPinned ? "PINNED" : Pct(p.LandedCeilRate))).PadLeft(10)
+                     + "   " + (rosterMoved ? (wasRoster[s.Id] + " -> " + roster) : (roster + " unmoved")));
+            }
+
+            Line("");
+            Line("  " + changed + " of " + db.AllStages.Count + " stage(s) moved, "
+                 + rostersMoved + " of them in the authored roster. A roster move is the only kind"
+                 + " that reaches a stage fingerprint, because a fingerprint is the stage's OPENING"
+                 + " battle and an opening battle is the roster at floorLevel.");
+            Line("  seed is the ceiling the scale inversion asked for, step is how many"
+                 + " single-unit moves the measured search made off that seed, and CEIL@rec is what"
+                 + " the chosen levels measured at "
+                 + SolverCeilSamples + " samples against a target of "
+                 + Pct(CeilTargetOrdinary) + ", or " + Pct(CeilTargetFinale) + " for a finale."
+                 + " PINNED means the geared instrument line at level 1 is already worth more than"
+                 + " the stage asks for, so there was nothing to measure and the inversion's"
+                 + " ceiling stands.");
+            Line("");
+
+            string error;
+            string path = Path.Combine(contentDir, "campaign.json");
+            if (!WriteCampaignJson(db, path, out error))
+            {
+                Line("  ABORT: campaign.json was NOT written - " + error);
+                return 1;
+            }
+            Line("  wrote " + path);
+            Line("");
+            Line("  Next: run Tools/build-check.ps1. CheckCampaignPowerCurve is the guard on the"
+                 + " numbers above and the geared curve's CEIL band is the guard on the levels"
+                 + " under them; neither is asserted here, on purpose, because an instrument that"
+                 + " marks its own homework is not an instrument.");
+            return 0;
+        }
+
+        /// <summary>
+        /// campaign.json, rewritten in place: recommendedPower, floorLevel, ceilingLevel and the
+        /// authored enemy levels, and not one other byte.
+        ///
+        /// It is a line rewrite rather than a serialize, and that is deliberate. This file is two
+        /// thirds commentary - the reasoning behind every number in it, written across several
+        /// passes - and a round trip through a JSON writer would delete all of it, reflow what was
+        /// left and produce a diff nobody could read. So the file is walked line by line, a stage
+        /// header line sets which stage the following lines belong to, and only the four fields
+        /// named above are substituted. Comment lines are skipped outright, so prose that happens
+        /// to quote a field name cannot be edited by accident.
+        /// </summary>
+        private static bool WriteCampaignJson(ContentDatabase db, string path, out string error)
+        {
+            error = null;
+            if (!File.Exists(path)) { error = path + " does not exist"; return false; }
+
+            Dictionary<string, StageDef> byId = new Dictionary<string, StageDef>();
+            for (int i = 0; i < db.AllStages.Count; i++) byId[db.AllStages[i].Id] = db.AllStages[i];
+
+            // Read as one string and split on '\n' only, so a CRLF file keeps its '\r' inside the
+            // line content and comes back out byte-identical where nothing was substituted.
+            string text = File.ReadAllText(path);
+            string[] lines = text.Split('\n');
+
+            System.Text.RegularExpressions.Regex header = new System.Text.RegularExpressions.Regex(
+                "\"id\"\\s*:\\s*\"([A-Za-z0-9_]+)\"\\s*,\\s*\"index\"");
+            System.Text.RegularExpressions.Regex level = new System.Text.RegularExpressions.Regex(
+                "(\"level\"\\s*:\\s*)(-?\\d+)");
+
+            StageDef current = null;
+            int enemyLinesWritten = 0;
+            List<string> unknown = new List<string>();
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                string trimmed = line.TrimStart();
+                if (trimmed.StartsWith("//")) continue;
+
+                System.Text.RegularExpressions.Match m = header.Match(line);
+                if (m.Success)
+                {
+                    string id = m.Groups[1].Value;
+                    if (!byId.TryGetValue(id, out current))
+                    {
+                        current = null;
+                        unknown.Add(id);
+                    }
+                    continue;
+                }
+                if (current == null) continue;
+
+                if (line.Contains("\"recommendedPower\""))
+                    line = ReplaceIntField(line, "recommendedPower", current.RecommendedPower);
+                if (line.Contains("\"floorLevel\""))
+                    line = ReplaceIntField(line, "floorLevel", current.FloorLevel);
+                if (line.Contains("\"ceilingLevel\""))
+                    line = ReplaceIntField(line, "ceilingLevel", current.CeilingLevel);
+
+                if (line.Contains("\"enemies\""))
+                {
+                    int seen = 0;
+                    StageDef stage = current;
+                    line = level.Replace(line, delegate(System.Text.RegularExpressions.Match hit)
+                    {
+                        string replacement = seen < stage.Enemies.Count
+                            ? hit.Groups[1].Value + stage.Enemies[seen].Level
+                            : hit.Value;
+                        seen++;
+                        return replacement;
+                    });
+                    if (seen != stage.Enemies.Count)
+                    {
+                        error = stage.Id + " has " + stage.Enemies.Count + " enemies loaded but "
+                                + seen + " level fields on its enemies line, so the two cannot be"
+                                + " matched up positionally";
+                        return false;
+                    }
+                    enemyLinesWritten++;
+                }
+
+                lines[i] = line;
+            }
+
+            if (unknown.Count > 0)
+            {
+                error = "campaign.json names stage(s) the loader did not hand back: "
+                        + string.Join(", ", unknown.ToArray());
+                return false;
+            }
+            if (enemyLinesWritten != db.AllStages.Count)
+            {
+                error = "rewrote " + enemyLinesWritten + " enemy line(s) for "
+                        + db.AllStages.Count + " stage(s), so the file's shape is not the one this"
+                        + " rewrite assumes - every stage must carry its enemies on a single line";
+                return false;
+            }
+
+            // UTF-8 WITHOUT A BOM, the same idiom CLAUDE.md spells out for the webhook payload and
+            // build-check's response files. Writing this one with a BOM would change the first
+            // three bytes of a file whose whole point is that only four fields moved.
+            File.WriteAllText(path, string.Join("\n", lines), new UTF8Encoding(false));
+            return true;
+        }
+
+        private static string ReplaceIntField(string line, string field, int value)
+        {
+            System.Text.RegularExpressions.Regex rx = new System.Text.RegularExpressions.Regex(
+                "(\"" + field + "\"\\s*:\\s*)(-?\\d+)");
+            return rx.Replace(line, "${1}" + value, 1);
         }
 
         /// <summary>
