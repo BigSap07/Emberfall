@@ -390,5 +390,43 @@ namespace Emberfall.UI
         /// <summary>The plate's own colours: the tier's deep stop, with its lit stop catching the
         /// top of the rim so the ring is a struck edge rather than a flat circle.</summary>
         public const float BadgePlateLitAlpha = 0.55f;
+
+        // ------------------------------------------------------------------ the summon tell
+        //
+        // The light a summon builds up commits to a colour before the hero is shown, and that
+        // colour IS the rarity frame's colour. It is read off RarityDeep and RarityLit rather than
+        // written again here, so the tell and the frame the hero then arrives in can never drift
+        // apart: a blue light that reveals a hero in a blue frame is one statement made twice, and
+        // a blue light beside a differently blue frame is two statements that nearly agree.
+        //
+        // See DESIGN-SUMMON-PRESENTATION for the beats these colour.
+
+        /// <summary>
+        /// The colour the light holds BEFORE it commits: a cool near-white, so it belongs to no
+        /// tier and the tell has to move away from it, never stop at it.
+        ///
+        /// The first pass used a warm cream, and the timing strip showed what that costs: cream
+        /// sits next to gold, so the gold tell was the SMALLEST colour change of the three and
+        /// the neutral light half-suggested gold before anything had been decided on screen.
+        /// </summary>
+        public static readonly Color SummonNeutral = UITheme.Hex("EEF0F6");
+
+        /// <summary>The committed colour of the light for a rolled tier: the frame's deep stop.</summary>
+        public static Color SummonTell(int stars)
+        {
+            return RarityDeep(stars);
+        }
+
+        /// <summary>The white-hot centre of the committed light: the frame's lit stop.</summary>
+        public static Color SummonTellHot(int stars)
+        {
+            return RarityLit(stars);
+        }
+
+        /// <summary>How dark the room goes behind a summon. Near black rather than black, so the
+        /// screen underneath is still faintly there and the summon reads as happening IN the Rift
+        /// rather than on a different screen. Measured in the captures: the Rift's brightest
+        /// furniture sits at about 17 of 255 under it.</summary>
+        public const float SummonDim = 0.93f;
     }
 }
