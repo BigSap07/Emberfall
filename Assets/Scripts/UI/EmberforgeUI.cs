@@ -141,6 +141,29 @@ namespace Emberfall.UI
         }
 
         /// <summary>
+        /// THE PAGE'S OWN GROUND: one flat Image in the kit's darkest panel tone, behind
+        /// everything else on the screen.
+        ///
+        /// The shared backdrop is the near-black violet every unconverted screen sat on, and warm
+        /// brown panels on it read as two different pieces of software. Changing that global
+        /// colour would have restyled every page in one edit, including the ones that had not had
+        /// a visual pass; one Image per converted screen is the smaller, reversible move, and it
+        /// is what HeroesScreen laid down first.
+        ///
+        /// Returned so an embeddable screen can hide it: a page drawn inside a panel sheet is
+        /// already sitting on the sheet's surface, and a second ground over it would cover the
+        /// sheet's own face.
+        /// </summary>
+        public static Image Ground(RectTransform root)
+        {
+            Image ground = UIBuilder.Img("Ground", root, TextureLab.White, Emberforge.PanelLow);
+            UIBuilder.FillParent(ground.rectTransform, 0f);
+            ground.raycastTarget = false;
+            ground.rectTransform.SetAsFirstSibling();
+            return ground;
+        }
+
+        /// <summary>
         /// A SHEET: the large framed surface a hosted screen or a full-page card is drawn inside.
         ///
         /// It is a Panel with its ornaments, not a slot of its own. A sheet and a panel are the
@@ -550,14 +573,20 @@ namespace Emberfall.UI
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Sized(root, 0f, height);
 
+            // Both labels leave the rule's own height AND a little air clear at the bottom.
+            // Filling the whole row centres the text on the row and puts its descenders straight
+            // through the gold line under it; leaving exactly the rule's height still let a
+            // lowercase g or y touch the top of it. Space4 is what buys the gap.
             Text labelText = Label("Label", root, label, UITheme.FontSmall, Emberforge.TextQuiet,
                                    TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(labelText.rectTransform, Emberforge.Space16, 0f, 0f, 0f);
+            UIBuilder.FillParent(labelText.rectTransform, Emberforge.Space16, 0f, 0f,
+                                 Emberforge.RuleHeight + Emberforge.Space4);
             UIBuilder.Outlined(labelText, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text valueText = Label("Value", root, value, UITheme.FontSmall, valueColor,
                                    TextAnchor.MiddleRight);
-            UIBuilder.FillParent(valueText.rectTransform, 0f, 0f, Emberforge.Space16, 0f);
+            UIBuilder.FillParent(valueText.rectTransform, 0f, 0f, Emberforge.Space16,
+                                 Emberforge.RuleHeight + Emberforge.Space4);
             UIBuilder.Outlined(valueText, Emberforge.Outline, Emberforge.StrokeThin);
 
             Image rule = UIBuilder.Img("Rule", root, EmberforgeSkin.Get(EmberforgeArt.Slot.Rule),

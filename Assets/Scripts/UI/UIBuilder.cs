@@ -319,6 +319,38 @@ namespace Emberfall.UI
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         }
 
+        /// <summary>
+        /// A horizontally scrolling STRIP: one row of things, as many as there are, reachable by
+        /// dragging rather than by being squeezed.
+        ///
+        /// It exists because a HorizontalLayoutGroup in a fixed rect does not overflow - it runs
+        /// with childControlWidth, so it divides the width it HAS between however many children
+        /// it is given. Seven faces in the profile's avatar picker looked correct and thirty-two
+        /// were fifty pixels each, overlapping, with their names printed through one another.
+        /// A row whose length is a property of the player's roster needs somewhere to go.
+        /// </summary>
+        public static RectTransform ScrollStrip(string name, Transform parent, out ScrollRect scrollRect,
+                                                float spacing, RectOffset padding)
+        {
+            RectTransform content = ScrollShell(name, parent, out scrollRect);
+            scrollRect.horizontal = true;
+            scrollRect.vertical = false;
+
+            // The content grows RIGHTWARDS from the left edge, so it anchors to the left rather
+            // than stretching, and the fitter sizes it on the axis the strip actually scrolls.
+            content.anchorMin = new Vector2(0f, 0f);
+            content.anchorMax = new Vector2(0f, 1f);
+            content.pivot = new Vector2(0f, 0.5f);
+            content.offsetMin = Vector2.zero;
+            content.offsetMax = Vector2.zero;
+
+            HStack(content, spacing, padding, TextAnchor.MiddleLeft);
+            ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+            return content;
+        }
+
         /// <summary>Scroll rect, viewport and mask. The caller decides how content is laid out.</summary>
         private static RectTransform ScrollShell(string name, Transform parent, out ScrollRect scrollRect)
         {

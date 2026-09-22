@@ -26,6 +26,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private RectTransform _header;
+        private Image _ground;
         private ScrollRect _scroll;
 
         private UIButton _soundButton;
@@ -34,7 +35,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            _header = ScreenChrome.Header(Root, "SETTINGS", Router, out _headerSubtitle);
+            _ground = EmberforgeUI.Ground(Root);
+            _header = ScreenChrome.ForgedHeader(Root, "SETTINGS", Router, out _headerSubtitle);
 
             RectTransform content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                                          new RectOffset(0, 0, 8, 48));
@@ -55,6 +57,10 @@ namespace Emberfall.UI.Screens
         {
             base.SetEmbedded(embedded);
             if (_header != null) _header.gameObject.SetActive(!embedded);
+            // The ground goes with the header. Inside a panel sheet this page is already sitting
+            // on the sheet's own framed surface, and a second ground over it would cover that
+            // face with a flat rectangle - see EmberforgeUI.Ground.
+            if (_ground != null) _ground.enabled = !embedded;
             ApplyContentInset();
         }
 
@@ -74,12 +80,13 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 200f);
             Heading(card, "SOUND");
 
-            _soundButton = UIBuilder.SecondaryButton("Sound", card, "", HubStyle.FontButton);
+            _soundButton = EmberforgeUI.Button("Sound", card, "", HubStyle.FontButton,
+                                               ForgeButtonKind.Secondary);
             UIBuilder.Box(_soundButton.Root, 30f, -56f, 320f, HubStyle.TouchMin, new Vector2(0f, 1f));
             _soundButton.OnClick(ToggleSound);
 
-            _soundNote = UIBuilder.WrappedLabel("Note", card, "", UITheme.FontTiny, UITheme.TextMuted,
-                                                TextAnchor.UpperLeft);
+            _soundNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
+                                           TextAnchor.UpperLeft);
             UIBuilder.Box(_soundNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
         }
 
@@ -88,8 +95,8 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 190f);
             Heading(card, "YOUR SAVE");
 
-            _saveNote = UIBuilder.WrappedLabel("Note", card, "", UITheme.FontSmall, UITheme.TextPrimary,
-                                               TextAnchor.UpperLeft);
+            _saveNote = EmberforgeUI.Body("Note", card, "", UITheme.FontSmall, Emberforge.TextBody,
+                                          TextAnchor.UpperLeft);
             UIBuilder.Box(_saveNote.rectTransform, 30f, -56f, CardWidth - 90f, 110f, new Vector2(0f, 1f));
         }
 
@@ -103,13 +110,18 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 230f);
             Heading(card, "START OVER");
 
-            Text note = UIBuilder.WrappedLabel("Note", card,
+            Text note = EmberforgeUI.Body("Note", card,
                 "Wipes your heroes, currency and campaign progress and starts a fresh account. "
                 + "There is no way back from this.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(note.rectTransform, 30f, -56f, CardWidth - 90f, 70f, new Vector2(0f, 1f));
 
-            UIButton reset = UIBuilder.SecondaryButton("Reset", card, "RESET PROGRESS", HubStyle.FontButton);
+            // TEAL, and that is the point rather than an oversight. The kit has two voices and
+            // ember is the thing to press; the one destructive control in the game is deliberately
+            // NOT the thing to press, which is the same reasoning that put the destructive answer
+            // on the confirm dialog's secondary button.
+            UIButton reset = EmberforgeUI.Button("Reset", card, "RESET PROGRESS", HubStyle.FontButton,
+                                                 ForgeButtonKind.Secondary);
             UIBuilder.Box(reset.Root, 30f, 24f, 420f, HubStyle.TouchMin, new Vector2(0f, 0f));
             reset.OnClick(ConfirmReset);
         }
@@ -175,23 +187,21 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ shared
 
+        /// <summary>
+        /// A section heading, and deliberately not a ribbon: this page is a column of three cards
+        /// and a ribbon laid across each of them would be three banners in a stack. See the note
+        /// on EmberforgeUI.Heading.
+        /// </summary>
         private static void Heading(RectTransform card, string text)
         {
-            Text label = UIBuilder.Label("Heading", card, text, UITheme.FontTiny, UITheme.TextDim,
-                                         TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 30f, -22f, 600f, 26f, new Vector2(0f, 1f));
+            EmberforgeUI.Heading("Heading", card, text, 30f, -22f);
         }
 
         private static RectTransform Card(RectTransform parent, float height)
         {
             RectTransform card = UIBuilder.Node("Card", parent);
             UIBuilder.Sized(card, CardWidth, height);
-
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(card, false);
             return card;
         }
     }

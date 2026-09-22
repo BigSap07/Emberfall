@@ -176,9 +176,7 @@ namespace Emberfall.UI.Screens
             // The page's own ground. The shared backdrop is the near-black violet an unconverted
             // screen sits on, and two warm brown panels on it read as two different pieces of
             // software - the same one Image, on one screen, that HeroesScreen lays down.
-            Image ground = UIBuilder.Img("Ground", Root, TextureLab.White, Emberforge.PanelLow);
-            UIBuilder.FillParent(ground.rectTransform, 0f);
-            ground.raycastTarget = false;
+            EmberforgeUI.Ground(Root);
 
             ScreenChrome.ForgedHeader(Root, "HERO", Router, out _headerSubtitle);
             BuildLeftPanel();

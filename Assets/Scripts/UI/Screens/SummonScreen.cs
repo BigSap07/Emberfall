@@ -120,9 +120,7 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            Image ground = UIBuilder.Img("Ground", Root, TextureLab.White, Emberforge.PanelLow);
-            UIBuilder.FillParent(ground.rectTransform, 0f);
-            ground.raycastTarget = false;
+            EmberforgeUI.Ground(Root);
 
             ScreenChrome.ForgedHeader(Root, "THE RIFT", Router, out _headerSubtitle);
             _headerSubtitle.text = "BIND A NEW ALLY TO YOUR BANNER";

@@ -52,10 +52,10 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Hero detail | converted | The two panels stretch between the header and the action bar now. Fixed at 636 they needed 1056 units of height, so at 20:9 the action bar was drawn up through both of them. No ring round the portrait any more. |
 | Summon | converted | The banner stage stretches the same way: the action block was off the bottom of a 20:9 screen entirely. The guarantee bar is the kit's progress bar, at the sprite's own height - at 18 units it rendered as a lens. |
 | Inventory | converted | The category rail is a tab bar rather than eight buttons. The capture seeds real armour and relics, because the empty state proves nothing about the grid or the detail panel. |
-| Campaign | pending | |
-| Settings | pending | |
-| Profile | pending | |
-| Account | pending | |
+| Campaign | converted | The painting stays the ground. The chapter row is a tab bar and the stage stepper's pips are the kit's disc in its two depths, so "you are here" is told by depth rather than by a tint on a baked bevel. |
+| Settings | converted | RESET PROGRESS is teal on purpose: the kit's ember voice is the thing to press, and the one destructive control in the game is not it. |
+| Profile | converted | The avatar picker scrolls horizontally and its faces are tabs. A layout group in a fixed rect does not overflow, it divides - thirty-two owned heroes were fifty pixels each with their names printed through one another. |
+| Account | converted | Five cards, five text fields, and the kit's disabled button art doing the work the offline state needs. |
 | Forge | pending | |
 | Formation | pending | |
 | Relic shop | pending | |

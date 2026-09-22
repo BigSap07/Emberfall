@@ -99,9 +99,7 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            Image ground = UIBuilder.Img("Ground", Root, TextureLab.White, Emberforge.PanelLow);
-            UIBuilder.FillParent(ground.rectTransform, 0f);
-            ground.raycastTarget = false;
+            EmberforgeUI.Ground(Root);
 
             ScreenChrome.ForgedHeader(Root, "INVENTORY", Router, out _headerSubtitle);
 

@@ -60,11 +60,13 @@ namespace Emberfall.UI.Screens
         private UIButton _signOutButton;
         private Text _signOutNote;
 
+        private Image _ground;
         private float _tick;
 
         protected override void Build()
         {
-            _header = ScreenChrome.Header(Root, "ACCOUNT", Router, out _headerSubtitle);
+            _ground = EmberforgeUI.Ground(Root);
+            _header = ScreenChrome.ForgedHeader(Root, "ACCOUNT", Router, out _headerSubtitle);
 
             RectTransform content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                                          new RectOffset(0, 0, 8, 48));
@@ -88,6 +90,9 @@ namespace Emberfall.UI.Screens
         public override void SetEmbedded(bool embedded)
         {
             base.SetEmbedded(embedded);
+            // The ground goes with the header: inside a panel sheet this page already sits on the
+            // sheet's framed surface - see EmberforgeUI.Ground.
+            if (_ground != null) _ground.enabled = !embedded;
             if (_header != null) _header.gameObject.SetActive(!embedded);
             ApplyContentInset();
         }
@@ -107,15 +112,16 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 190f);
             Heading(card, "STATUS");
 
-            _statusValue = UIBuilder.Label("Value", card, "", UITheme.FontHeading, UITheme.TextPrimary,
+            _statusValue = EmberforgeUI.Title("Value", card, "", UITheme.FontHeading, Emberforge.TextBody,
                                            TextAnchor.UpperLeft);
             UIBuilder.Box(_statusValue.rectTransform, 30f, -56f, 760f, 44f, new Vector2(0f, 1f));
 
-            _statusNote = UIBuilder.WrappedLabel("Note", card, "", UITheme.FontTiny, UITheme.TextMuted,
+            _statusNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                                  TextAnchor.UpperLeft);
             UIBuilder.Box(_statusNote.rectTransform, 30f, -104f, 760f, 64f, new Vector2(0f, 1f));
 
-            _syncButton = UIBuilder.GoldButton("Sync", card, "SYNC NOW", UITheme.FontBody);
+            _syncButton = EmberforgeUI.Button("Sync", card, "SYNC NOW", UITheme.FontBody,
+                                              ForgeButtonKind.Primary);
             UIBuilder.Box(_syncButton.Root, -30f, 0f, 300f, 92f, new Vector2(1f, 0.5f));
             _syncButton.OnClick(OnSyncNow);
         }
@@ -131,30 +137,32 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 296f);
             Heading(card, "WHO YOU ARE");
 
-            _nameField = UIBuilder.TextField("Name", card, "Your name", UITheme.FontSmall, NameLimit, false);
+            _nameField = EmberforgeUI.TextField("Name", card, "Your name", UITheme.FontSmall, NameLimit, false);
             UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 30f, -56f, 620f, 76f, new Vector2(0f, 1f));
 
-            _nameButton = UIBuilder.SecondaryButton("SaveName", card, "SAVE NAME", UITheme.FontSmall);
+            _nameButton = EmberforgeUI.Button("SaveName", card, "SAVE NAME", UITheme.FontSmall,
+                                              ForgeButtonKind.Secondary);
             UIBuilder.Box(_nameButton.Root, 670f, -56f, 260f, 76f, new Vector2(0f, 1f));
             _nameButton.OnClick(OnSaveName);
 
-            Text nameHint = UIBuilder.Label("NameHint", card,
+            Text nameHint = EmberforgeUI.Label("NameHint", card,
                 "The name a friend sees on your line. Separate from the one on your top bar.",
-                UITheme.FontTiny - 2, UITheme.TextDim, TextAnchor.UpperLeft);
+                UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(nameHint.rectTransform, 30f, -140f, 900f, 26f, new Vector2(0f, 1f));
 
-            Text codeLabel = UIBuilder.Label("CodeLabel", card, "FRIEND CODE", UITheme.FontTiny,
-                                             UITheme.TextDim, TextAnchor.UpperLeft);
+            Text codeLabel = EmberforgeUI.Label("CodeLabel", card, "FRIEND CODE", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(codeLabel.rectTransform, 30f, -176f, 400f, 26f, new Vector2(0f, 1f));
 
             // Big, monospaced by spacing rather than by font - this is a string a player reads out
             // loud to somebody, so it is set at title size with the dash the alphabet's own
             // formatter puts in.
-            _friendCode = UIBuilder.Label("Code", card, "------", UITheme.FontTitle, UITheme.Gold,
+            _friendCode = EmberforgeUI.Title("Code", card, "------", UITheme.FontTitle, Emberforge.TextGold,
                                           TextAnchor.UpperLeft);
             UIBuilder.Box(_friendCode.rectTransform, 30f, -206f, 500f, 54f, new Vector2(0f, 1f));
 
-            _copyButton = UIBuilder.SecondaryButton("Copy", card, "COPY", UITheme.FontSmall);
+            _copyButton = EmberforgeUI.Button("Copy", card, "COPY", UITheme.FontSmall,
+                                              ForgeButtonKind.Secondary);
             UIBuilder.Box(_copyButton.Root, 540f, -202f, 220f, 62f, new Vector2(0f, 1f));
             _copyButton.OnClick(OnCopyCode);
         }
@@ -179,17 +187,18 @@ namespace Emberfall.UI.Screens
             // which in this case was "Link an email and it becomes recoverable from anywhere", the
             // sentence the whole card exists to deliver. A capture caught it; the maths would not
             // have, because how many lines a wrapped string takes is a font metric.
-            _linkWarning = UIBuilder.WrappedLabel("Warning", _linkCard, "", UITheme.FontSmall,
+            _linkWarning = EmberforgeUI.Body("Warning", _linkCard, "", UITheme.FontSmall,
                                                   UITheme.Warning, TextAnchor.UpperLeft);
             UIBuilder.Box(_linkWarning.rectTransform, 30f, -56f, CardWidth - 120f, 108f, new Vector2(0f, 1f));
 
-            _emailField = UIBuilder.TextField("Email", _linkCard, "your@email", UITheme.FontSmall, 96, false);
+            _emailField = EmberforgeUI.TextField("Email", _linkCard, "your@email", UITheme.FontSmall, 96, false);
             UIBuilder.Box(_emailField.GetComponent<RectTransform>(), 30f, -174f, 520f, 76f, new Vector2(0f, 1f));
 
-            _passwordField = UIBuilder.TextField("Password", _linkCard, "a password", UITheme.FontSmall, 72, true);
+            _passwordField = EmberforgeUI.TextField("Password", _linkCard, "a password", UITheme.FontSmall, 72, true);
             UIBuilder.Box(_passwordField.GetComponent<RectTransform>(), 570f, -174f, 380f, 76f, new Vector2(0f, 1f));
 
-            _linkButton = UIBuilder.GoldButton("Link", _linkCard, "LINK EMAIL", UITheme.FontBody);
+            _linkButton = EmberforgeUI.Button("Link", _linkCard, "LINK EMAIL", UITheme.FontBody,
+                                              ForgeButtonKind.Primary);
             UIBuilder.Box(_linkButton.Root, 30f, -266f, 460f, 84f, new Vector2(0f, 1f));
             _linkButton.OnClick(OnLinkEmail);
         }
@@ -201,19 +210,20 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 300f);
             Heading(card, "SIGN IN ON THIS DEVICE");
 
-            Text note = UIBuilder.WrappedLabel("Note", card,
+            Text note = EmberforgeUI.Body("Note", card,
                 "If you linked an email on another phone, sign in with it here to bring that account "
                 + "to this device. You will be asked which save to keep before anything is replaced.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(note.rectTransform, 30f, -56f, CardWidth - 120f, 60f, new Vector2(0f, 1f));
 
-            _signInEmail = UIBuilder.TextField("SignInEmail", card, "your@email", UITheme.FontSmall, 96, false);
+            _signInEmail = EmberforgeUI.TextField("SignInEmail", card, "your@email", UITheme.FontSmall, 96, false);
             UIBuilder.Box(_signInEmail.GetComponent<RectTransform>(), 30f, -124f, 520f, 76f, new Vector2(0f, 1f));
 
-            _signInPassword = UIBuilder.TextField("SignInPassword", card, "your password", UITheme.FontSmall, 72, true);
+            _signInPassword = EmberforgeUI.TextField("SignInPassword", card, "your password", UITheme.FontSmall, 72, true);
             UIBuilder.Box(_signInPassword.GetComponent<RectTransform>(), 570f, -124f, 380f, 76f, new Vector2(0f, 1f));
 
-            _signInButton = UIBuilder.SecondaryButton("SignIn", card, "SIGN IN", UITheme.FontBody);
+            _signInButton = EmberforgeUI.Button("SignIn", card, "SIGN IN", UITheme.FontBody,
+                                               ForgeButtonKind.Secondary);
             UIBuilder.Box(_signInButton.Root, 30f, -216f, 460f, 84f, new Vector2(0f, 1f));
             _signInButton.OnClick(OnSignInWithEmail);
         }
@@ -225,11 +235,12 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 190f);
             Heading(card, "SIGN OUT");
 
-            _signOutNote = UIBuilder.WrappedLabel("Note", card, "", UITheme.FontTiny,
-                                                  UITheme.TextMuted, TextAnchor.UpperLeft);
+            _signOutNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny,
+                                                  Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(_signOutNote.rectTransform, 30f, -56f, 760f, 68f, new Vector2(0f, 1f));
 
-            _signOutButton = UIBuilder.SecondaryButton("SignOut", card, "SIGN OUT", UITheme.FontBody);
+            _signOutButton = EmberforgeUI.Button("SignOut", card, "SIGN OUT", UITheme.FontBody,
+                                                ForgeButtonKind.Secondary);
             UIBuilder.Box(_signOutButton.Root, -30f, 0f, 300f, 84f, new Vector2(1f, 0.5f));
             _signOutButton.OnClick(OnSignOut);
         }
@@ -277,7 +288,7 @@ namespace Emberfall.UI.Screens
                 // nobody has pointed at a project.
                 _headerSubtitle.text = "LOCAL ONLY";
                 _statusValue.text = "NO ACCOUNT SERVICE";
-                _statusValue.color = UITheme.TextMuted;
+                _statusValue.color = Emberforge.TextQuiet;
                 _statusNote.text = "This build has no cloud configured. Your progress is saved on this "
                                  + "device and nowhere else, and everything in the game works as normal.";
                 SetAll(false);
@@ -365,15 +376,15 @@ namespace Emberfall.UI.Screens
             {
                 case CloudStatus.NotConfigured:
                     _statusValue.text = "NO ACCOUNT SERVICE";
-                    _statusValue.color = UITheme.TextMuted;
+                    _statusValue.color = Emberforge.TextQuiet;
                     break;
                 case CloudStatus.Offline:
                     _statusValue.text = "OFFLINE";
-                    _statusValue.color = UITheme.TextMuted;
+                    _statusValue.color = Emberforge.TextQuiet;
                     break;
                 case CloudStatus.Working:
                     _statusValue.text = "WORKING";
-                    _statusValue.color = UITheme.Gold;
+                    _statusValue.color = Emberforge.TextGold;
                     break;
                 case CloudStatus.Failed:
                     _statusValue.text = "LAST SYNC FAILED";
@@ -570,20 +581,16 @@ namespace Emberfall.UI.Screens
             RectTransform card = UIBuilder.Node("Card", parent);
             UIBuilder.Sized(card, CardWidth, height);
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(card, false);
             return card;
         }
 
+        /// <summary>A section heading, and deliberately not a ribbon: this page is a column of
+        /// five cards, and five ribbons stacked down it would be five banners fighting each
+        /// other. See the note on EmberforgeUI.Heading.</summary>
         private Text Heading(RectTransform card, string text)
         {
-            Text label = UIBuilder.Label("Heading", card, text, UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 30f, -22f, 700f, 26f, new Vector2(0f, 1f));
-            return label;
+            return EmberforgeUI.Heading("Heading", card, text, 30f, -22f);
         }
     }
 }
