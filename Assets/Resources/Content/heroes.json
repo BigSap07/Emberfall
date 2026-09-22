@@ -107,7 +107,8 @@
             "magnitude": 0.1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Hale fights the whole battle with Attack Up and Focus."
       },
       "passive1": {
         "id": "hale_tracking_habit",
@@ -171,7 +172,8 @@
             "condition2": "HasShield",
             "conditionOn2": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "When an enemy marked as Quarry gains a buff while it holds a Ward, Hale strikes it and Quarry comes off. Once per enemy."
       },
       "talents": {
         "talentI": {
@@ -187,7 +189,8 @@
               "magnitude": 0.2,
               "duration": 1
             }
-          ]
+          ],
+          "description": "At the start of each of his turns, Hale gains Crit Damage Up."
         },
         "talentII": {
           "id": "hale_cornered",
@@ -201,7 +204,8 @@
               "field": "conditionValue3",
               "delta": 1.5
             }
-          ]
+          ],
+          "description": "Closing Radius’s missing-HP blow also lands while Hale is at low HP, even if no ally has struck Quarry."
         },
         "talentIII": {
           "id": "hale_pursuit_continues",
@@ -226,7 +230,8 @@
               "condition": "HasMyMark",
               "conditionOn": "Defeated"
             }
-          ]
+          ],
+          "description": "When an enemy marked as Quarry is defeated, Hale marks the lowest-HP enemy as Quarry, and Hale hits it harder."
         }
       }
     },
@@ -282,7 +287,8 @@
             "status": "Mark",
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Fault Line."
       },
       "active": {
         "id": "kael_take_down_the_wall",
@@ -307,7 +313,8 @@
             "maxStacks": 4,
             "duration": 3
           }
-        ]
+        ],
+        "description": "Strikes every enemy and strips a buff from each enemy with Fault Line. Kael gains Rubble, up to a limit."
       },
       "passive": {
         "id": "kael_unusable_cover_stats",
@@ -328,7 +335,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Kael fights the whole battle with Guard Up and Block Up."
       },
       "passive1": {
         "id": "kael_unusable_cover",
@@ -370,7 +378,8 @@
             "conditionValue": 1,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "Once per round, when an ally ends their turn while Kael holds Rubble, Kael spends a Rubble. If that ally holds a Ward, Kael takes a share of it, then passes all of Kael’s Ward to the lowest-HP ally."
       },
       "passive2": {
         "id": "kael_what_breaks_forward",
@@ -460,7 +469,8 @@
             "conditionValue": 1,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "After Kael’s basic attack, Kael spends all Rubble. The attack deals additional damage for each Rubble spent, and the lowest-HP ally gains a Ward worth a share of Kael’s Max HP for each."
       },
       "talents": {
         "talentI": {
@@ -478,7 +488,8 @@
               "condition": "HasMyMark",
               "conditionOn": "Target"
             }
-          ]
+          ],
+          "description": "After Kael’s basic attack, an enemy with Fault Line also gains Effect Resist Down."
         },
         "talentII": {
           "id": "kael_clear_the_debris",
@@ -497,7 +508,8 @@
                 "conditionOn": "Target"
               }
             }
-          ]
+          ],
+          "description": "Take Down the Wall applies Fault Line to every enemy it stripped a buff from."
         },
         "talentIII": {
           "id": "kael_lasting_materials",
@@ -523,7 +535,8 @@
               "field": "power",
               "delta": -0.21
             }
-          ]
+          ],
+          "description": "Rubble from Take Down the Wall lasts for the rest of the battle and Kael can hold more of it, but Take Down the Wall deals less damage."
         }
       }
     },
@@ -580,7 +593,8 @@
             "duration": 2,
             "status": "Mark"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP and applies Forsaken."
       },
       "active": {
         "id": "kiva_sever_the_return",
@@ -644,7 +658,8 @@
             "consumesResolve": true,
             "flat": -15
           }
-        ]
+        ],
+        "description": "Strikes a Forsaken enemy. If it gained a Ward or was healed since Kiva’s last turn, she strips its Ward and deals additional damage from its missing HP, up to a limit. If Kiva holds a Broken Link, she spends it to apply Heal Suppression, or to take Energy off an enemy that already cannot be healed."
       },
       "passive": {
         "id": "kiva_abandoned_support_stats",
@@ -672,7 +687,8 @@
             "magnitude": 0.08,
             "status": "Focus"
           }
-        ]
+        ],
+        "description": "Kiva fights the whole battle with Attack Up, Quickened and Focus."
       },
       "passive1": {
         "id": "kiva_broken_links",
@@ -689,7 +705,8 @@
             "duration": 99,
             "maxStacks": 2
           }
-        ]
+        ],
+        "description": "The first time each round a Forsaken enemy gains a buff, Kiva gains a Broken Link, holding up to a limit."
       },
       "passive2": {
         "id": "kiva_severance_paid",
@@ -727,7 +744,8 @@
             "consumesResolve": true,
             "flat": -15
           }
-        ]
+        ],
+        "description": "After Kiva’s basic attack against a Forsaken enemy, she spends a Broken Link to apply Heal Suppression. If that enemy cannot be healed, it also loses Energy. Each enemy once per round."
       },
       "talents": {
         "talentI": {
@@ -748,7 +766,8 @@
                 "status": "BlockDown"
               }
             }
-          ]
+          ],
+          "description": "Cut the Escort also applies Block Down to its target."
         },
         "talentII": {
           "id": "kiva_cut_the_last_line",
@@ -765,7 +784,8 @@
               "duration": 2,
               "status": "Mark"
             }
-          ]
+          ],
+          "description": "When Kiva defeats a Forsaken enemy, she applies Forsaken to the enemy with the highest HP."
         },
         "talentIII": {
           "id": "kiva_unclaimed_victory",
@@ -886,7 +906,8 @@
             "condition": "SubjectDamagedSinceMyTurn",
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and heals the lowest-HP ally. If that ally took damage since Marrow’s last turn, it also gains Promise, and Marrow takes a share of the damage it takes."
       },
       "active": {
         "id": "marrow_vow_kept",
@@ -911,7 +932,8 @@
             "magnitude": 0.2,
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes every enemy and gives the two lowest-HP allies Promise. While Promise lasts, Marrow takes a share of the damage they take."
       },
       "passive": {
         "id": "marrow_cost_is_named_stats",
@@ -932,7 +954,8 @@
             "magnitude": 0.1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Marrow fights the whole battle with Max HP Up and Effect Resist Up."
       },
       "passive1": {
         "id": "marrow_promise_heal",
@@ -971,7 +994,8 @@
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "When an ally holding Promise ends their turn, Promise is spent: it heals them for a share of their Max HP and removes a debuff."
       },
       "passive2": {
         "id": "marrow_promise_survives",
@@ -1019,7 +1043,8 @@
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "The first time an ally holding Promise would be defeated, Promise is spent, the ally is left barely standing and Marrow takes the rest of the blow. Marrow then briefly cannot be healed. Once per battle."
       },
       "talents": {
         "talentI": {
@@ -1055,7 +1080,8 @@
                 "duration": 2
               }
             }
-          ]
+          ],
+          "description": "Vow Kept gives Promise to the three lowest-HP allies instead of two, but the Promise heal is smaller."
         },
         "talentII": {
           "id": "marrow_visible_cost",
@@ -1068,7 +1094,8 @@
               "target": "BroadcastSource",
               "flat": -5
             }
-          ]
+          ],
+          "description": "When Marrow takes damage on an ally’s behalf, the attacker loses Energy."
         },
         "talentIII": {
           "id": "marrow_no_withdrawal",
@@ -1104,7 +1131,8 @@
               "conditionValue": 1,
               "conditionOn": "Caster"
             }
-          ]
+          ],
+          "description": "After Promise Survives saves an ally, Marrow immediately strikes the lowest-HP enemy and heals the lowest-HP ally."
         }
       }
     },
@@ -1169,7 +1197,8 @@
             "storedCap": 0.8,
             "ledgerBankLimit": 1
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Footnote. Footnote records a share of the first damage the enemy takes each round, up to a limit."
       },
       "active": {
         "id": "seraphine_contradiction_filed",
@@ -1215,7 +1244,8 @@
             "storedCap": 0.8,
             "ledgerBankLimit": 1
           }
-        ]
+        ],
+        "description": "Strikes every enemy. Each enemy with Footnote takes damage equal to its record and loses Footnote, then Footnote is written onto the enemy with the highest Energy."
       },
       "passive": {
         "id": "seraphine_contrary_evidence_stats",
@@ -1243,7 +1273,8 @@
             "magnitude": 0.1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Seraphine fights the whole battle with Attack Up, Effect Hit Up and Skill Damage Up."
       },
       "passive1": {
         "id": "seraphine_contrary_evidence",
@@ -1265,7 +1296,8 @@
             "condition": "HasMyMark",
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "When an enemy with Footnote gains a buff, Seraphine strips a buff from it and adds to its record."
       },
       "passive2": {
         "id": "seraphine_volume_closed",
@@ -1349,7 +1381,8 @@
               "field": "magnitude",
               "delta": 0.1
             }
-          ]
+          ],
+          "description": "Footnote records a larger share of the damage, whether Marginal Note or Contradiction Filed wrote it."
         },
         "talentII": {
           "id": "seraphine_cross_reference",
@@ -1365,7 +1398,8 @@
                 "power": 0.3
               }
             }
-          ]
+          ],
+          "description": "The Footnote that Contradiction Filed writes onto the highest-Energy enemy starts with a record already in it."
         },
         "talentIII": {
           "id": "seraphine_no_revision",
@@ -1379,7 +1413,8 @@
               "field": "magnitude",
               "delta": -0.1
             }
-          ]
+          ],
+          "description": "When Volume Closed fires, the enemy also loses turn progress."
         }
       }
     },
@@ -1424,7 +1459,7 @@
       "basic": {
         "id": "branik_faultline_tap",
         "name": "Faultline Tap",
-        "description": "Deals 155% Attack damage and applies Cracked for 2 rounds. Cracked reduces Block by 18%.",
+        "description": "Strikes the front enemy and applies Cracked. Cracked reduces its Block.",
         "effects": [
           {
             "kind": "Damage",
@@ -1452,7 +1487,7 @@
         "id": "branik_demolition_right",
         "name": "Demolition Right",
         "energyCost": 100,
-        "description": "Deals 340% Attack damage to the front enemy. If it is Cracked, removes Cracked and grants Branik a Shield equal to 34% Max HP for 2 rounds.",
+        "description": "Strikes the front enemy. If it is Cracked, removes Cracked and grants Branik a Ward worth a share of his Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -1488,7 +1523,7 @@
       "passive1": {
         "id": "branik_salvaged_cover",
         "name": "Salvaged Cover",
-        "description": "The first time each round a Cracked enemy attacks, Branik gains 12% Damage Reduction until round end.",
+        "description": "The first time each round a Cracked enemy attacks, Branik gains Bulwark until round end.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -1575,7 +1610,7 @@
         "id": "demos_compounding_sentence",
         "name": "Compounding Sentence",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to enemies with Arrears and extends Arrears by 1 round, up to 3 rounds.",
+        "description": "Strikes every enemy with Arrears and extends Arrears, up to a limit.",
         "effects": [
           {
             "kind": "Damage",
@@ -1607,7 +1642,7 @@
       "passive1": {
         "id": "demos_no_appeal",
         "name": "No Appeal",
-        "description": "Enemies with Arrears receive 30% less healing; on defeat, their Arrears moves to the highest-HP enemy.",
+        "description": "Enemies with Arrears receive less healing; on defeat, their Arrears moves to the highest-HP enemy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -1691,7 +1726,7 @@
       "basic": {
         "id": "kest_commitment_cut",
         "name": "Commitment Cut",
-        "description": "Deals 120% Attack damage. If Kest attacked this target last turn, deals 35% additional Attack damage.",
+        "description": "Strikes Kest’s last target. If he attacked it last turn, deals additional damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -1711,7 +1746,7 @@
         "id": "kest_no_way_back",
         "name": "No Way Back",
         "energyCost": 100,
-        "description": "Deals 260% Attack damage to Kest’s last target. On defeat, attacks the lowest-HP enemy for 100% Attack damage.",
+        "description": "Strikes Kest’s last target. On defeat, attacks the lowest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -1723,7 +1758,7 @@
       "passive1": {
         "id": "kest_commit_to_the_return",
         "name": "Commit to the Return",
-        "description": "Kest cannot change targets while his target lives, but deals 12% more damage to it and takes 10% less from it.",
+        "description": "Kest cannot change targets while his target lives, but deals more damage to it and takes less from it.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "effects": [
@@ -1812,7 +1847,7 @@
       "basic": {
         "id": "orelle_measured_tap",
         "name": "Measured Tap",
-        "description": "Deals 140% Attack damage and heals the lowest-HP ally for 90% Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -1830,7 +1865,7 @@
         "id": "orelle_hard_remedy",
         "name": "Hard Remedy",
         "energyCost": 100,
-        "description": "Deals 240% Attack damage to all enemies, removes one debuff from each ally, and cleansed allies recover 15% missing HP.",
+        "description": "Strikes every enemy, removes a debuff from each ally, and cleansed allies recover a share of their missing HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -1854,7 +1889,7 @@
       "passive1": {
         "id": "orelle_triage_after_loss",
         "name": "Triage After Loss",
-        "description": "The first time an ally falls below 35% HP, grant them a 22% Max HP Shield for 2 rounds.",
+        "description": "The first time an ally falls to low HP, grant them a Ward worth a share of their Max HP.",
         "trigger": "OnAllyHpBelowThreshold",
         "threshold": 0.35,
         "oncePerBattle": true,
@@ -1909,7 +1944,7 @@
       "basic": {
         "id": "tavia_rangefinder_bolt",
         "name": "Rangefinder Bolt",
-        "description": "Deals 175% Attack damage to the highest-Attack enemy and applies Exposed Frequency for 2 rounds. Allied attacks ignore 14% Defense against it.",
+        "description": "Strikes the highest-Attack enemy and applies Exposed Frequency. Allied attacks ignore some of its Defense.",
         "effects": [
           {
             "kind": "Damage",
@@ -1937,7 +1972,7 @@
         "id": "tavia_cut_the_wire",
         "name": "Cut the Wire",
         "energyCost": 100,
-        "description": "Deals 370% Attack damage to an enemy with Exposed Frequency, then transfers its buffs to the lowest-HP enemy for 1 round.",
+        "description": "Strikes an enemy with Exposed Frequency, then transfers its buffs to the lowest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -1956,7 +1991,7 @@
       "passive1": {
         "id": "tavia_dead_channel",
         "name": "Dead Channel",
-        "description": "When an enemy with Exposed Frequency gains a buff, Tavia deals 85% Attack damage to it once per round.",
+        "description": "When an enemy with Exposed Frequency gains a buff, Tavia strikes it, once per round.",
         "trigger": "OnEnemyBuffGained",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -2012,7 +2047,7 @@
       "basic": {
         "id": "adric_mapcase_bash",
         "name": "Mapcase Bash",
-        "description": "Deals 255% Attack damage and applies Lost Route for 2 rounds. Lost Route reduces Accuracy by 12%.",
+        "description": "Strikes the front enemy and applies Lost Route. Lost Route reduces its Accuracy.",
         "effects": [
           {
             "kind": "Damage",
@@ -2040,7 +2075,7 @@
         "id": "adric_erase_the_road",
         "name": "Erase the Road",
         "energyCost": 100,
-        "description": "Deals 400% Attack damage to all enemies with Lost Route and grants Adric a Shield equal to 12% Max HP for 2 rounds.",
+        "description": "Strikes every enemy with Lost Route and grants Adric a Ward worth a share of his Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -2143,7 +2178,7 @@
         "id": "aster_shatterproof",
         "name": "Shatterproof",
         "energyCost": 100,
-        "description": "Deals 540% Attack damage to an enemy with Fracture and spreads Fracture to the enemies beside it for 1 round.",
+        "description": "Strikes an enemy with Fracture and spreads Fracture to the enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
@@ -2172,7 +2207,7 @@
       "passive1": {
         "id": "aster_stress_line",
         "name": "Stress Line",
-        "description": "When an enemy with Fracture is defeated, all remaining enemies lose 6 Energy.",
+        "description": "When an enemy with Fracture is defeated, all remaining enemies lose Energy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -2344,7 +2379,7 @@
       "basic": {
         "id": "selka_filed_objection",
         "name": "Filed Objection",
-        "description": "Deals 190% Attack damage and applies Overdue for 2 rounds. Overdue reduces received healing by 15%.",
+        "description": "Strikes the front enemy and applies Overdue. Overdue reduces the healing it receives.",
         "effects": [
           {
             "kind": "Damage",
@@ -2372,7 +2407,7 @@
         "id": "selka_deadline",
         "name": "Deadline",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to an Overdue enemy. If it is below 35% HP, deals 103% additional Attack damage.",
+        "description": "Strikes an Overdue enemy. If it is at low HP, deals additional damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -2455,7 +2490,7 @@
       "basic": {
         "id": "arno_chisel_strike",
         "name": "Chisel Strike",
-        "description": "Deals 402% Attack damage to the front enemy, and 70% more if that enemy's Shield is still standing.",
+        "description": "Strikes the front enemy, and hits it again if its Ward is still standing.",
         "effects": [
           {
             "kind": "Damage",
@@ -2533,7 +2568,7 @@
       "basic": {
         "id": "barr_splintering_blow",
         "name": "Splintering Blow",
-        "description": "Deals 323% Attack damage to the front enemy and gives Barr 8% Damage Reduction for 1 round.",
+        "description": "Strikes the front enemy and gives Barr Bulwark.",
         "effects": [
           {
             "kind": "Damage",
@@ -2554,7 +2589,7 @@
       "passive1": {
         "id": "barr_give_way",
         "name": "Give Way",
-        "description": "The first time Barr falls below 40% HP, he gains a Shield equal to 10% of his Max HP for 2 rounds.",
+        "description": "The first time Barr falls to low HP, he gains a Ward worth a share of his Max HP.",
         "trigger": "OnHpBelowThreshold",
         "threshold": 0.4,
         "oncePerBattle": true,
@@ -2609,7 +2644,7 @@
       "basic": {
         "id": "piri_price_breaker",
         "name": "Price Breaker",
-        "description": "Deals 335% Attack damage to the front enemy and takes 5 Energy off it.",
+        "description": "Strikes the front enemy and takes some Energy off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -2626,7 +2661,7 @@
       "passive1": {
         "id": "piri_cheap_kindling",
         "name": "Cheap Kindling",
-        "description": "When Piri defeats an enemy, the ally with the emptiest bar gains 15 Energy. Pinoy pays the 15 to Piri; a 2-star has no active skill to spend Energy on, so the spark is passed to somebody who does. See Docs/PINOY-LIST.md section 2c.",
+        "description": "When Piri defeats an enemy, the ally with the emptiest bar gains Energy.",
         "trigger": "OnKill",
         "oncePerBattle": false,
         "effects": [
@@ -2679,7 +2714,7 @@
       "basic": {
         "id": "fenn_cargo_spark",
         "name": "Cargo Spark",
-        "description": "Deals 286% Attack damage to the enemy with the lowest HP.",
+        "description": "Strikes the enemy with the lowest HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -2730,7 +2765,7 @@
       "basic": {
         "id": "ulric_signpost_strike",
         "name": "Signpost Strike",
-        "description": "Deals 377% Attack damage to the front enemy.",
+        "description": "Strikes the front enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -2818,7 +2853,8 @@
             "conditionValue": 4,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and heals the lowest-HP ally. While Nereia is near full health, she also heals them for a share of her Max HP. At full Flow, she heals that ally again and spends all her Flow."
       },
       "active": {
         "id": "nereia_relief_circuit",
@@ -2854,7 +2890,8 @@
             "ledgerAutoReleaseAsHeal": true,
             "ledgerAutoReleaseTarget": "LowestHpAlly"
           }
-        ]
+        ],
+        "description": "Strikes every enemy and heals the two lowest-HP allies, who become Covered: a share of the damage they take goes to Nereia instead. Nereia banks part of the damage she takes as Reserve, up to a limit, and when Reserve ends it heals the lowest-HP ally."
       },
       "passive": {
         "id": "nereia_triage_buffer_stats",
@@ -2875,7 +2912,8 @@
             "magnitude": 0.1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Nereia fights the whole battle with Max HP Up and Effect Resist Up."
       },
       "passive1": {
         "id": "nereia_triage_buffer",
@@ -2889,7 +2927,8 @@
             "maxStacks": 4,
             "duration": 99
           }
-        ]
+        ],
+        "description": "When damage is redirected onto Nereia, she gains Flow, up to a limit."
       },
       "passive2": {
         "id": "nereia_change_of_course",
@@ -2909,7 +2948,8 @@
             "power": 0.01,
             "targetMaxHpRatio": 0.12
           }
-        ]
+        ],
+        "description": "The first time each round an ally would fall, Nereia takes the killing blow's excess herself, leaves them standing and heals them for a share of their Max HP."
       },
       "talents": {
         "talentI": {
@@ -2932,7 +2972,8 @@
               "field": "storedCap",
               "delta": 0.05
             }
-          ]
+          ],
+          "description": "Relief Circuit's Reserve can hold more, and when Reserve ends Nereia gains Energy."
         },
         "talentII": {
           "id": "nereia_shared_reserve",
@@ -2947,7 +2988,8 @@
               "selfHpRatio": 0.1,
               "duration": 2
             }
-          ]
+          ],
+          "description": "When Reserve ends, the lowest-HP ally also gains a Ward worth a share of Nereia's Max HP."
         },
         "talentIII": {
           "id": "nereia_reversed_flow",
@@ -2961,7 +3003,8 @@
               "power": 0.8,
               "scaleByLastRedirect": true
             }
-          ]
+          ],
+          "description": "When an ally would fall, Nereia strikes the enemy with the highest Attack for part of the damage she last took in their place."
         }
       },
       "skills": {
@@ -2980,7 +3023,8 @@
               "conditionValue": 0.4,
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "When Nereia heals an ally at low HP, she gains Flow, up to a limit."
         }
       }
     },
@@ -3046,7 +3090,8 @@
             "status": "AttackUp",
             "hits": 1
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack. If it has Attack Up, Rheia applies Guard Down and strips the Attack Up."
       },
       "active": {
         "id": "rheia_rewrite_the_outcome",
@@ -3088,7 +3133,8 @@
             "status": "AttackDown",
             "hits": 1
           }
-        ]
+        ],
+        "description": "Strikes every enemy and applies Guard Down. Any enemy with Attack Down has it rewritten: it gains Attack Up, takes an extra hit and loses the Attack Down."
       },
       "passive": {
         "id": "rheia_adaptive_reasoning_stats",
@@ -3119,7 +3165,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Rheia fights the whole battle with Attack Up, Effect Hit Up and Skill Damage Up. Each Revision she holds also raises her Speed."
       },
       "passive1": {
         "id": "rheia_adaptive_reasoning",
@@ -3141,7 +3188,8 @@
             "target": "Self",
             "flat": 5
           }
-        ]
+        ],
+        "description": "When an enemy gains a buff from Rheia, she gains Revision, up to a limit, and gains Energy. This pays out only so often each round."
       },
       "passive2": {
         "id": "rheia_second_direction",
@@ -3193,7 +3241,8 @@
             "conditionValue2": 4,
             "conditionOn2": "Caster"
           }
-        ]
+        ],
+        "description": "Once per enemy each round, when an enemy with Guard Down gains a buff from Rheia, she strikes it and gains Energy. At full Revision she strikes it again, harder, and spends all her Revision."
       },
       "talents": {
         "talentI": {
@@ -3214,7 +3263,8 @@
               "field": "power",
               "delta": 0.2
             }
-          ]
+          ],
+          "description": "Applied Revision pays less Energy, and Rewrite the Outcome's extra hit on a rewritten enemy lands harder."
         },
         "talentII": {
           "id": "rheia_counterrevision",
@@ -3258,7 +3308,8 @@
                 "conditionOn2": "Caster"
               }
             }
-          ]
+          ],
+          "description": "When Second Draft fires at full Revision, the target also gains Attack Down if it holds Attack Up, and Rheia gains Guard Up."
         },
         "talentIII": {
           "id": "rheia_perfect_reversal",
@@ -3296,7 +3347,8 @@
                 "conditionOn2": "Caster"
               }
             }
-          ]
+          ],
+          "description": "Second Draft's full-Revision strike lands harder and no longer spends Revision, but each one costs Rheia Energy."
         }
       }
     },
@@ -3354,7 +3406,8 @@
             "status": "Mark",
             "usesPerRound": 1
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Deflected."
       },
       "active": {
         "id": "rovan_pass_the_guard",
@@ -3379,7 +3432,8 @@
             "magnitude": 0.25,
             "status": "Covered"
           }
-        ]
+        ],
+        "description": "Strikes every enemy, moves Rovan's Ward to the lowest-HP ally and makes them Covered: a share of the damage they take goes to Rovan instead."
       },
       "passive": {
         "id": "rovan_adaptive_guard_stats",
@@ -3407,7 +3461,8 @@
             "magnitude": 0.08,
             "status": "BlockUp"
           }
-        ]
+        ],
+        "description": "Rovan fights the whole battle with Max HP Up, Guard Up and Block Up."
       },
       "passive1": {
         "id": "rovan_deflected_conversion",
@@ -3427,7 +3482,8 @@
             "power": 0.2,
             "scaleByLastDamage": true
           }
-        ]
+        ],
+        "description": "The first time each round a Deflected enemy damages one of Rovan's allies, Rovan gains a Ward worth a share of the damage dealt."
       },
       "passive2": {
         "id": "rovan_adaptive_guard",
@@ -3442,7 +3498,8 @@
             "hits": 1,
             "secondaryTarget": "Self"
           }
-        ]
+        ],
+        "description": "Once per round, when Rovan takes redirected damage for an ally, he moves a debuff from that ally onto himself."
       },
       "skills": {
         "passive1": {
@@ -3468,7 +3525,8 @@
               "conditionValue": 0.1,
               "power": 0.75
             }
-          ]
+          ],
+          "description": "When Covered expires on an ally, Rovan takes back their remaining Ward. If the Ward he takes back is large, he strikes every Deflected enemy."
         },
         "passive2": {
           "id": "rovan_return_the_guard_death",
@@ -3495,7 +3553,8 @@
               "conditionValue": 0.1,
               "power": 0.75
             }
-          ]
+          ],
+          "description": "When a Covered ally falls, Rovan takes their remaining Ward. If it is large, he strikes every Deflected enemy."
         }
       },
       "talents": {
@@ -3516,7 +3575,8 @@
                 "status": "EffectResistUp"
               }
             }
-          ]
+          ],
+          "description": "Pass the Guard also gives the lowest-HP ally Effect Resist Up."
         },
         "talentII": {
           "id": "rovan_no_wasted_guard",
@@ -3544,7 +3604,8 @@
                 "flat": 8
               }
             }
-          ]
+          ],
+          "description": "When Pass the Guard moves a large Ward, the ally who receives it gains Energy, and more Energy if the Ward was larger still."
         },
         "talentIII": {
           "id": "rovan_guard_in_motion",
@@ -3559,7 +3620,8 @@
               "duration": 2,
               "selfHpRatio": 0.08
             }
-          ]
+          ],
+          "description": "When Covered expires on an ally, Rovan also gives the second-lowest-HP ally a Ward worth a share of his Max HP."
         }
       }
     },
@@ -3634,7 +3696,8 @@
             "condition": "SubjectNotDamagedByMeThisRound",
             "power": 0.4
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack, then repeats part of that damage against the lowest-HP enemy if Talren has not hit it this round. Striking a new target gains him Route and Crit Damage Up, up to a limit."
       },
       "active": {
         "id": "talren_change_the_course",
@@ -3683,7 +3746,8 @@
             "magnitude": 1.0,
             "secondaryTarget": "LowestHpEnemy"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack and the enemy with the lowest HP, and records both."
       },
       "passive": {
         "id": "talren_adaptive_path_stats",
@@ -3711,7 +3775,8 @@
             "magnitude": 0.08,
             "status": "Focus"
           }
-        ]
+        ],
+        "description": "Talren fights the whole battle with Attack Up, Quickened and Focus."
       },
       "passive1": {
         "id": "talren_where_the_arrow_lands",
@@ -3736,7 +3801,8 @@
             "conditionValue": 0.3,
             "power": 0.5
           }
-        ]
+        ],
+        "description": "When Redirecting Shot's repeated damage lands, Talren gains Energy and heals himself. If the enemy it landed on is at low HP, he strikes it again."
       },
       "passive2": {
         "id": "talren_recorded_strike",
@@ -3774,7 +3840,8 @@
             "duration": 99,
             "maxStacks": 2
           }
-        ]
+        ],
+        "description": "When Talren hits a recorded target, the other recorded target is struck too, harder if it is at low HP, and Talren gains Energy and heals himself."
       },
       "talents": {
         "talentI": {
@@ -3810,7 +3877,8 @@
                 "status": "CritDamageUp"
               }
             }
-          ]
+          ],
+          "description": "When Redirecting Shot strikes a new target at full Route, it deals additional damage and spends all Route, which also clears the Crit Damage Up it built."
         },
         "talentII": {
           "id": "talren_dual_record",
@@ -3840,7 +3908,8 @@
                 "secondaryTarget": "HighestHpEnemy"
               }
             }
-          ]
+          ],
+          "description": "Change the Course also records the enemy with the highest HP."
         },
         "talentIII": {
           "id": "talren_final_path",
@@ -3906,7 +3975,8 @@
               "hits": 10,
               "status": "CritDamageUp"
             }
-          ]
+          ],
+          "description": "Every second time a recorded target is struck, Talren strikes every recorded enemy once for each Route he holds, then spends all Route and the Crit Damage Up it built."
         }
       }
     },
@@ -4009,7 +4079,8 @@
             "counterIndex": 4,
             "power": 0.35
           }
-        ]
+        ],
+        "description": "Strikes the lowest-HP enemy and applies Departure to the enemy Vaelis struck before it. His next attack on a new target spends any bonus an ally banked: a Bulwark or Vanguard gives Armor Break Up, a Mender or Warden heals him, and a Striker, Breaker, Stalker or Marksman adds damage."
       },
       "active": {
         "id": "vaelis_passed_position",
@@ -4044,7 +4115,8 @@
             "moveDuration": 1,
             "secondaryTarget": "HighestAttackEnemy"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack and the enemy with the lowest HP. If either carries Departure, its buffs move to the other."
       },
       "passive": {
         "id": "vaelis_never_still_stats",
@@ -4072,7 +4144,8 @@
             "magnitude": 0.08,
             "status": "CritDamageUp"
           }
-        ]
+        ],
+        "description": "Vaelis fights the whole battle with Quickened, Focus and Crit Damage Up."
       },
       "passive1": {
         "id": "vaelis_departure",
@@ -4166,7 +4239,8 @@
             "duration": 99,
             "maxStacks": 1
           }
-        ]
+        ],
+        "description": "When an ally hits an enemy carrying Departure, Vaelis strikes his last target and banks a bonus for his next basic attack based on that ally's role."
       },
       "passive2": {
         "id": "vaelis_opening_moves",
@@ -4196,7 +4270,8 @@
             "conditionStatus": "Linked",
             "magnitude": 0.15
           }
-        ]
+        ],
+        "description": "Once per round, when an enemy carrying Departure is defeated, Departure passes to the highest-HP enemy and Vaelis's next turn advances."
       },
       "talents": {
         "talentI": {
@@ -4228,7 +4303,8 @@
                 "status": "EffectResistDown"
               }
             }
-          ]
+          ],
+          "description": "Leaving Cut also lowers the Departure target's Effect Resist, until an ally's strike sets Departure off."
         },
         "talentII": {
           "id": "vaelis_stolen_position",
@@ -4248,7 +4324,8 @@
               "field": "hits",
               "delta": -8
             }
-          ]
+          ],
+          "description": "Passed Position moves buffs only up to a limit, rather than all of them."
         },
         "talentIII": {
           "id": "vaelis_no_place_to_hold",
@@ -4278,7 +4355,8 @@
                 "flat": 12
               }
             }
-          ]
+          ],
+          "description": "When a Mender or Warden sets off Departure, Vaelis also gains Energy."
         }
       }
     },
@@ -4322,7 +4400,7 @@
       "basic": {
         "id": "celen_offered_strike",
         "name": "Offered Strike",
-        "description": "Deals 150% Attack damage and gives the lowest-Energy ally 22 Energy.",
+        "description": "Strikes the front enemy and gives the lowest-Energy ally Energy.",
         "effects": [
           {
             "kind": "Damage",
@@ -4340,7 +4418,7 @@
         "id": "celen_distribution",
         "name": "Distribution",
         "energyCost": 100,
-        "description": "Deals 245% Attack damage to all enemies, then transfers the largest ally Shield to the lowest-HP ally and extends it 1 round.",
+        "description": "Strikes every enemy, then transfers the largest ally Ward to the lowest-HP ally and extends it.",
         "effects": [
           {
             "kind": "Damage",
@@ -4370,7 +4448,7 @@
       "passive1": {
         "id": "celen_nothing_hoarded",
         "name": "Nothing Hoarded",
-        "description": "At round start, Celen transfers 18 Energy from the highest-Energy ally to the lowest.",
+        "description": "At round start, Celen transfers Energy from the highest-Energy ally to the lowest.",
         "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
@@ -4428,7 +4506,7 @@
       "basic": {
         "id": "mika_reclaimed_round",
         "name": "Reclaimed Round",
-        "description": "Deals 165% Attack damage and applies Loose Parts for 2 rounds. The next ally to hit it gains 14 Energy.",
+        "description": "Strikes the front enemy and applies Loose Parts. The next ally to hit it gains Energy.",
         "effects": [
           {
             "kind": "Damage",
@@ -4453,7 +4531,7 @@
         "id": "mika_parts_exchange",
         "name": "Parts Exchange",
         "energyCost": 100,
-        "description": "Deals 295% Attack damage to enemies with Loose Parts, then moves Loose Parts to the highest-HP enemy for 2 rounds.",
+        "description": "Strikes every enemy with Loose Parts, then moves Loose Parts to the highest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -4479,7 +4557,7 @@
       "passive1": {
         "id": "mika_find_a_use",
         "name": "Find a Use",
-        "description": "When an ally gains Energy from Loose Parts, Mika gains a Shield equal to 45% Attack for 1 round.",
+        "description": "When an ally gains Energy from Loose Parts, Mika gains a Ward.",
         "trigger": "OnAllyEnergyGained",
         "oncePerBattle": false,
         "effects": [
@@ -4496,7 +4574,7 @@
         {
           "id": "mika_loose_parts_energy",
           "name": "Reclaimed Round",
-          "description": "The Loose Parts payout itself: the first ally each round to strike a marked enemy takes 14 Energy off it.",
+          "description": "The Loose Parts payout itself: the first ally each round to strike a marked enemy takes Energy off it.",
           "trigger": "OnLinkedUnitHit",
           "triggerSourceIsAlly": true,
           "oncePerBattle": false,
@@ -4552,7 +4630,7 @@
       "basic": {
         "id": "rhys_crossing_cut",
         "name": "Crossing Cut",
-        "description": "Deals 145% Attack damage and gives the lowest-HP ally 20% of the HP they are missing, out of Rhys's own, if they are below 50% HP.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally a share of the HP they are missing, out of Rhys’s own, if they are badly hurt.",
         "effects": [
           {
             "kind": "Damage",
@@ -4573,7 +4651,7 @@
         "id": "rhys_change_sides",
         "name": "Change Sides",
         "energyCost": 100,
-        "description": "Deals 270% Attack damage and swaps Rhys’s buffs with the target’s debuffs for 2 rounds.",
+        "description": "Strikes the front enemy and swaps Rhys’s buffs with the target’s debuffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -4599,7 +4677,7 @@
       "passive1": {
         "id": "rhys_shared_peril",
         "name": "Shared Peril",
-        "description": "When an ally takes a hit exceeding 25% Max HP, Rhys takes 30% of it instead, once per round.",
+        "description": "When an ally takes a heavy hit, Rhys takes a share of it instead, once per round.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -4657,7 +4735,7 @@
       "basic": {
         "id": "siofra_bad_omen",
         "name": "Bad Omen",
-        "description": "Deals 105% Attack damage and changes one buff on the target into its matching debuff for 2 rounds.",
+        "description": "Strikes the front enemy and changes a buff on it into its matching debuff.",
         "effects": [
           {
             "kind": "Damage",
@@ -4676,7 +4754,7 @@
         "id": "siofra_forecast_reversed",
         "name": "Forecast Reversed",
         "energyCost": 100,
-        "description": "Deals 190% Attack damage to all enemies and reverses one Attack, Defense or Speed modifier on each.",
+        "description": "Strikes every enemy and reverses an Attack, Defense or Speed modifier on each.",
         "effects": [
           {
             "kind": "Damage",
@@ -4693,7 +4771,7 @@
       "passive1": {
         "id": "siofra_prediction_cost",
         "name": "Prediction Cost",
-        "description": "Whenever Siofra changes a buff into a debuff, that target loses 10 Energy, once per round.",
+        "description": "Whenever Siofra changes a buff into a debuff, that target loses Energy, once per round.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -4709,7 +4787,7 @@
         {
           "id": "siofra_prediction_cost_active",
           "name": "Prediction Cost",
-          "description": "The same cost after Forecast Reversed: every enemy whose modifier was turned over loses 10 Energy.",
+          "description": "The same cost after Forecast Reversed: every enemy whose modifier was turned over loses Energy.",
           "trigger": "AfterActiveCast",
           "oncePerBattle": false,
           "effects": [
@@ -4763,7 +4841,7 @@
       "basic": {
         "id": "vanno_wrong_turn",
         "name": "Wrong Turn",
-        "description": "Deals 290% Attack damage and applies Misdirected for 2 rounds. The first buff a Misdirected enemy gains each round goes to one of Vanno’s allies instead.",
+        "description": "Strikes the front enemy and applies Misdirected. The first buff a Misdirected enemy gains each round goes to one of Vanno’s allies instead.",
         "effects": [
           {
             "kind": "Damage",
@@ -4782,7 +4860,7 @@
         "id": "vanno_road_not_taken",
         "name": "Road Not Taken",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to a Misdirected enemy and moves its debuffs to the highest-HP enemy for 2 rounds.",
+        "description": "Strikes a Misdirected enemy and moves its debuffs to the highest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -4879,7 +4957,7 @@
       "basic": {
         "id": "bren_shared_passage",
         "name": "Shared Passage",
-        "description": "Deals 232% Attack damage and gives the lowest-HP ally 8% Damage Reduction for 1 round.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Bulwark.",
         "effects": [
           {
             "kind": "Damage",
@@ -4912,7 +4990,7 @@
       "passive1": {
         "id": "bren_reserved_passage",
         "name": "Reserved Passage",
-        "description": "The first time an ally falls below 30% HP, Bren advances their turn by 15% turn progress.",
+        "description": "The first time an ally falls to low HP, Bren advances their turn.",
         "trigger": "OnAllyHpBelowThreshold",
         "threshold": 0.3,
         "oncePerBattle": true,
@@ -4991,7 +5069,7 @@
         "id": "cal_corner_shot",
         "name": "Corner Shot",
         "energyCost": 100,
-        "description": "Deals 457% Attack damage to an Offset enemy, and the same blow strikes both enemies beside it.",
+        "description": "Strikes an Offset enemy, and the same blow strikes both enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
@@ -5062,7 +5140,7 @@
       "basic": {
         "id": "linnet_wrong_number",
         "name": "Wrong Number",
-        "description": "Deals 215% Attack damage and applies Crossed Line for 2 rounds.",
+        "description": "Strikes the front enemy and applies Crossed Line.",
         "effects": [
           {
             "kind": "Damage",
@@ -5081,7 +5159,7 @@
         "id": "linnet_operator_error",
         "name": "Operator Error",
         "energyCost": 100,
-        "description": "Deals 349% Attack damage to all Crossed Line enemies and delays each by 15% turn progress.",
+        "description": "Strikes every enemy with Crossed Line and delays each of them.",
         "effects": [
           {
             "kind": "Damage",
@@ -5162,7 +5240,7 @@
       "basic": {
         "id": "oswin_corrective_cut",
         "name": "Corrective Cut",
-        "description": "Deals 195% Attack damage and heals the ally with the most debuffs for 98% Attack.",
+        "description": "Strikes the front enemy and heals the ally with the most debuffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -5180,7 +5258,7 @@
         "id": "oswin_reposition_the_hurt",
         "name": "Reposition the Hurt",
         "energyCost": 100,
-        "description": "Deals 293% Attack damage to all enemies, then moves one debuff from each ally onto the highest-HP enemy for 2 rounds.",
+        "description": "Strikes every enemy, then moves a debuff from each ally onto the highest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -5255,7 +5333,7 @@
       "basic": {
         "id": "dett_unmoored_swing",
         "name": "Unmoored Swing",
-        "description": "Deals 370% Attack damage to the front enemy and advances Dett's next turn by 8%.",
+        "description": "Strikes the front enemy and advances Dett's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -5272,7 +5350,7 @@
       "passive1": {
         "id": "dett_turn_with_it",
         "name": "Turn With It",
-        "description": "When an active skill is aimed at Dett, he gains 8% Damage Reduction for 1 round.",
+        "description": "When an active skill is aimed at Dett, he gains Bulwark.",
         "trigger": "OnTargeted",
         "oncePerBattle": false,
         "effects": [
@@ -5331,7 +5409,7 @@
       "basic": {
         "id": "hod_cargo_bolt",
         "name": "Cargo Bolt",
-        "description": "Deals 329% Attack damage to the front enemy, takes 5 Energy off it and gives 5 Energy to the ally with the emptiest bar.",
+        "description": "Strikes the front enemy, takes some Energy off it and gives Energy to the ally with the emptiest bar.",
         "effects": [
           {
             "kind": "Damage",
@@ -5353,7 +5431,7 @@
       "passive1": {
         "id": "hod_counterweight",
         "name": "Counterweight",
-        "description": "An ally Hod hands Energy to gains 5% Defense for 1 round.",
+        "description": "An ally Hod hands Energy to gains Guard Up.",
         "trigger": "OnAllyEnergyGained",
         "triggerSourceIsSelf": true,
         "oncePerBattle": false,
@@ -5411,7 +5489,7 @@
       "basic": {
         "id": "yara_deflection_shot",
         "name": "Deflection Shot",
-        "description": "Deals 385% Attack damage to the front enemy and gives the lowest-HP ally 5% Speed for 1 round.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Quickened.",
         "effects": [
           {
             "kind": "Damage",
@@ -5490,7 +5568,7 @@
       "basic": {
         "id": "moss_side_shot",
         "name": "Side Shot",
-        "description": "Deals 298% Attack damage to a random enemy.",
+        "description": "Strikes a random enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -5541,7 +5619,7 @@
       "basic": {
         "id": "orenna_wheelhouse_swing",
         "name": "Wheelhouse Swing",
-        "description": "Deals 348% Attack damage to the front enemy and gives 5 Energy to the ally with the emptiest bar. Pinoy pays the 5 to Orenna; a 1-star has no active skill to spend Energy on, so the wheel passes it on. See Docs/PINOY-LIST.md section 2c.",
+        "description": "Strikes the front enemy and gives Energy to the ally with the emptiest bar.",
         "effects": [
           {
             "kind": "Damage",
@@ -5620,7 +5698,8 @@
             "ledgerAutoRelease": true,
             "ledgerAutoReleaseAsHeal": true
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and gives Brenna Lasting Guard. Lasting Guard reduces the next hit she takes and records the damage it prevented as Memory, which heals her when it expires."
       },
       "active": {
         "id": "brenna_stand_again",
@@ -5652,7 +5731,8 @@
             "ledgerAutoRelease": true,
             "ledgerAutoReleaseAsHeal": true
           }
-        ]
+        ],
+        "description": "Strikes every enemy and gives all allies Lasting Guard. Each ally records the damage their Guard prevents as Memory, up to a limit, and heals for that Memory when it expires."
       },
       "passive": {
         "id": "brenna_deep_resolve_stats",
@@ -5680,7 +5760,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Brenna fights the whole battle with Max HP Up, Guard Up and Block Up."
       },
       "passive1": {
         "id": "brenna_deep_resolve",
@@ -5696,7 +5777,8 @@
             "scaleByLastBanked": true,
             "duration": 2
           }
-        ]
+        ],
+        "description": "The first time each round an ally's Memory records prevented damage, the lowest-HP ally gains a Ward worth a share of what was recorded."
       },
       "passive2": {
         "id": "brenna_survival_of_the_stubborn",
@@ -5736,7 +5818,8 @@
             "power": 1.0,
             "scaleByLastRedirect": true
           }
-        ]
+        ],
+        "description": "The first time an ally would be defeated, if they hold Lasting Guard, they are left barely standing and Brenna takes the overflow herself. Their Guard and Memory are consumed, and the damage she took is added to her own Memory."
       },
       "talents": {
         "talentI": {
@@ -5751,7 +5834,8 @@
               "field": "storedCap",
               "delta": 0.04
             }
-          ]
+          ],
+          "description": "Memory from Stand Again can record more before it reaches its limit."
         },
         "talentII": {
           "id": "brenna_shared_wall",
@@ -5770,7 +5854,8 @@
                 "charges": 1
               }
             }
-          ]
+          ],
+          "description": "When Deep Resolve grants its Ward, the lowest-HP ally also gains Guard against the next hit they take."
         },
         "talentIII": {
           "id": "brenna_what_held_once",
@@ -5799,7 +5884,8 @@
                 "consumesResolve": true
               }
             }
-          ]
+          ],
+          "description": "The first time an ally would be defeated, Brenna gains Resolve. Her next Stand Again spends it to add a share of her Max HP to her own Memory."
         }
       }
     },
@@ -5857,7 +5943,8 @@
             "stackOnReapply": true,
             "maxStacks": 3
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP and applies Observed Mark. Each further strike deepens the Mark, up to a limit."
       },
       "active": {
         "id": "edrin_the_old_watchtower",
@@ -5890,7 +5977,8 @@
             "status": "Mark",
             "hits": 3
           }
-        ]
+        ],
+        "description": "Strikes every enemy, then strikes the enemy with the deepest Observed Mark again and turns its Mark into a Watcher's Ledger. The Ledger records a share of the damage that enemy takes, up to a limit; when it expires, it deals the stored damage to it and heals Edrin for part of it."
       },
       "passive": {
         "id": "edrin_guardian_stats",
@@ -5918,7 +6006,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Edrin fights the whole battle with Attack Up, Quickened and Focus."
       },
       "passive1": {
         "id": "edrin_guardian_of_what_remains",
@@ -5938,7 +6027,8 @@
             "condition": "HasMyMark",
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "After Edrin's basic attack strikes an enemy with his Observed Mark, he gains Resolve, up to a limit. Each Resolve makes his damage against marked enemies stronger."
       },
       "passive2": {
         "id": "edrin_still_here",
@@ -5967,7 +6057,8 @@
             "conditionValue": 3,
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "Once per round, when an ally falls to low HP, Edrin strikes the enemy with the deepest Observed Mark and gives the lowest-HP ally a Ward worth a share of his Max HP. If that enemy's Mark is at full depth, Edrin gains Energy."
       },
       "talents": {
         "talentI": {
@@ -5996,7 +6087,8 @@
                 "conditionOn": "LastTarget"
               }
             }
-          ]
+          ],
+          "description": "Observed Mark lasts longer, and whenever Mark of Survival strikes an enemy whose Mark is at full depth, Edrin heals a share of his Max HP."
         },
         "talentII": {
           "id": "edrin_watchfires",
@@ -6013,7 +6105,8 @@
                 "duration": 2
               }
             }
-          ]
+          ],
+          "description": "The Old Watchtower also gives the lowest-HP ally a Ward worth a share of Edrin's Max HP."
         },
         "talentIII": {
           "id": "edrin_nothing_is_lost",
@@ -6035,7 +6128,8 @@
                 "consumesResolve": true
               }
             }
-          ]
+          ],
+          "description": "After Edrin's basic attack, if his Resolve is full, he spends it all to strike the enemy with the lowest HP for a share of what his Watcher's Ledger last paid out."
         }
       }
     },
@@ -6100,7 +6194,8 @@
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack and applies Mire. If it was already in Mire, Elyra heals the lowest-HP ally."
       },
       "active": {
         "id": "elyra_sanctuary_unbroken",
@@ -6125,7 +6220,8 @@
             "status": "Taunt",
             "duration": 1
           }
-        ]
+        ],
+        "description": "Strikes every enemy and applies Mire to all of them. The enemy with the highest Attack also gains Provoke."
       },
       "passive": {
         "id": "elyra_slow_growth_stats",
@@ -6156,7 +6252,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Elyra fights the whole battle with Attack Up, Effect Hit Up and Skill Damage Up, and each Resolve she holds makes her healing stronger."
       },
       "passive1": {
         "id": "elyra_slow_growth",
@@ -6173,7 +6270,8 @@
             "conditionStatus": "Slow",
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "After Elyra's basic attack, if its target is in Mire, she gains Resolve, up to a limit."
       },
       "passive2": {
         "id": "elyra_stillness_bears_fruit",
@@ -6262,7 +6360,8 @@
             "status": "Resolve",
             "hits": 10
           }
-        ]
+        ],
+        "description": "When a Provoke Elyra applied expires, she strikes that enemy and heals the lowest-HP ally. She then spends all her Resolve: each one adds another blow, the more she spends the more she heals, and full Resolve also gives her Energy."
       },
       "talents": {
         "talentI": {
@@ -6292,7 +6391,8 @@
               "field": "duration",
               "delta": 1
             }
-          ]
+          ],
+          "description": "Mire from Patient Measure and Sanctuary Unbroken lasts longer, and whenever a Mire Elyra applied expires, she gains Energy."
         },
         "talentII": {
           "id": "elyra_sanctuary_spreads",
@@ -6318,7 +6418,8 @@
                 "power": 0.8
               }
             }
-          ]
+          ],
+          "description": "Sanctuary Unbroken also applies Mire to the enemy with the lowest HP and strikes it again."
         },
         "talentIII": {
           "id": "elyra_harvest_of_patience",
@@ -6348,7 +6449,8 @@
                 "conditionOn": "Caster"
               }
             }
-          ]
+          ],
+          "description": "When Stillness Pays spends full Resolve, its last blow lands much harder and the lowest-HP ally gains a Ward worth a share of Elyra's Max HP."
         }
       }
     },
@@ -6430,7 +6532,8 @@
             "conditionValue": 3,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and heals the lowest-HP ally, more if they are at low HP. With full Resolve, Isara spends it all to heal that ally again."
       },
       "active": {
         "id": "isara_return_after_loss",
@@ -6453,7 +6556,8 @@
             "status": "Mark",
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes every enemy, heals all allies and gives the two lowest-HP allies a Seedling."
       },
       "passive": {
         "id": "isara_persistent_life_stats",
@@ -6481,7 +6585,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Isara fights the whole battle with Max HP Up, Effect Resist Up and Guard Up."
       },
       "passive1": {
         "id": "isara_persistent_life_growth",
@@ -6498,7 +6603,8 @@
             "conditionValue": 0.5,
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "Whenever Isara heals a badly hurt ally, she gains Resolve, up to a limit."
       },
       "passive2": {
         "id": "isara_what_survives",
@@ -6570,7 +6676,8 @@
             "conditionStatus": "MarkAlt",
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "When an ally carrying Isara's Seedling falls to very low HP, the Seedling is consumed: the ally recovers a share of their Max HP and gains a Ward worth a share of Isara's Max HP, Isara gains Energy, and the lowest-HP ally is healed."
       },
       "talents": {
         "talentI": {
@@ -6591,7 +6698,8 @@
               "field": "selfHpRatio",
               "delta": 0.04
             }
-          ]
+          ],
+          "description": "Seedlings last longer, and the Ward a Seedling grants is larger."
         },
         "talentII": {
           "id": "isara_shared_recovery",
@@ -6611,7 +6719,8 @@
                 "conditionOn": "Caster"
               }
             }
-          ]
+          ],
+          "description": "When a Seedling is consumed, the lowest-HP ally is healed once more."
         },
         "talentIII": {
           "id": "isara_second_chance",
@@ -6664,7 +6773,8 @@
               "condition": "HasMyMark",
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "The first time an ally would be defeated, if they carry a Seedling, they are left barely standing and Isara takes the overflow herself. The Seedling is then consumed with its full effect."
         }
       }
     },
@@ -6724,7 +6834,8 @@
             "magnitude": 0.35,
             "status": "Burn"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Cinder, which remembers the last buff that enemy gained."
       },
       "active": {
         "id": "sylven_collect_the_wound",
@@ -6763,7 +6874,8 @@
             "power": 1.0,
             "scaleByLastRemoval": true
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the most Cinder still to burn, removes its Cinder and stores what it would have dealt in a Scar Record that also remembers its last buff. When the Scar Record expires, it deals the stored damage to that enemy, up to a limit."
       },
       "passive": {
         "id": "sylven_persistent_edge_stats",
@@ -6791,7 +6903,8 @@
             "magnitude": 0.08,
             "status": "Focus"
           }
-        ]
+        ],
+        "description": "Sylven fights the whole battle with Attack Up, Quickened and Focus."
       },
       "passive1": {
         "id": "sylven_persistent_edge",
@@ -6815,7 +6928,8 @@
             "transferDuration": 2,
             "transferMagnitude": 1.2
           }
-        ]
+        ],
+        "description": "When an enemy is defeated, its Scar Record and Cinder move to the highest-HP enemy. Moved Cinder burns harder but cannot be extended."
       },
       "passive2": {
         "id": "sylven_wounds_remember",
@@ -6854,7 +6968,8 @@
             "record": "LastPositiveStatus",
             "status": "Ledger"
           }
-        ]
+        ],
+        "description": "When an enemy with a Scar Record gains the buff it remembers, Sylven strips that buff, removes the Scar Record and strikes it. Any other buff it gains becomes the one the Record remembers."
       },
       "talents": {
         "talentI": {
@@ -6875,7 +6990,8 @@
               "field": "storedCap",
               "delta": 1.2
             }
-          ]
+          ],
+          "description": "Scar Record lasts longer and can store more before it reaches its limit."
         },
         "talentII": {
           "id": "sylven_inherited_injury",
@@ -6891,7 +7007,8 @@
                 "flat": -10
               }
             }
-          ]
+          ],
+          "description": "Whenever an enemy is defeated, the highest-HP enemy also loses Energy."
         },
         "talentIII": {
           "id": "sylven_nothing_heals_cleanly",
@@ -6915,7 +7032,8 @@
                 "status": "HealingReduction"
               }
             }
-          ]
+          ],
+          "description": "When Wounds Remember strikes, it first applies Healing Reduction to that enemy."
         }
       }
     },
@@ -6960,7 +7078,7 @@
       "basic": {
         "id": "corin_measurement_strike",
         "name": "Measurement Strike",
-        "description": "Deals 210% Attack damage and applies Settling for 2 rounds. Settling reduces Speed by 8% each round, up to 24%.",
+        "description": "Strikes the front enemy and applies Settling. Settling reduces Speed further each round, up to a limit.",
         "effects": [
           {
             "kind": "Damage",
@@ -6984,7 +7102,7 @@
         "id": "corin_weight_of_time",
         "name": "Weight of Time",
         "energyCost": 100,
-        "description": "Deals 400% Attack damage to enemies with Settling. Targets at 24% Speed Down are Stunned for 1 round.",
+        "description": "Strikes every enemy with Settling. Targets whose Settling is at its limit are Stunned.",
         "effects": [
           {
             "kind": "Damage",
@@ -7012,7 +7130,7 @@
       "passive1": {
         "id": "corin_load_bearing",
         "name": "Load Bearing",
-        "description": "When Settling expires, apply 15% Defense Down for 2 rounds.",
+        "description": "When Settling expires, apply Guard Down.",
         "trigger": "OnAppliedStatusExpired",
         "triggerStatus": "Slow",
         "oncePerBattle": false,
@@ -7070,7 +7188,7 @@
       "basic": {
         "id": "halwen_reserve_swing",
         "name": "Reserve Swing",
-        "description": "Deals 60% Attack damage and grants Reserve for 2 rounds. Reserve reduces the next damage taken by 18%.",
+        "description": "Strikes the front enemy and grants Halwen Reserve. Reserve reduces the next damage taken.",
         "effects": [
           {
             "kind": "Damage",
@@ -7092,7 +7210,7 @@
         "id": "halwen_open_the_reserve",
         "name": "Open the Reserve",
         "energyCost": 100,
-        "description": "Deals 90% Attack damage to all enemies and grants Reserve to all allies for 2 rounds.",
+        "description": "Strikes every enemy and grants Reserve to all allies.",
         "effects": [
           {
             "kind": "Damage",
@@ -7113,7 +7231,7 @@
       "passive1": {
         "id": "halwen_rationed_strength",
         "name": "Rationed Strength",
-        "description": "When Reserve prevents damage, its holder recovers 4% Max HP, or gains 6 Energy if it is already whole.",
+        "description": "When Reserve prevents damage, its holder recovers a share of their Max HP, or gains Energy if already whole.",
         "trigger": "OnGuardPrevented",
         "oncePerBattle": false,
         "effects": [
@@ -7176,7 +7294,7 @@
       "basic": {
         "id": "jory_holdfast_thrust",
         "name": "Holdfast Thrust",
-        "description": "Deals 145% Attack damage. If Jory was attacked since his last turn, he heals 4% Max HP.",
+        "description": "Strikes the front enemy. If Jory was attacked since his last turn, he heals a share of his Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -7196,7 +7314,7 @@
         "id": "jory_bar_the_way",
         "name": "Bar the Way",
         "energyCost": 100,
-        "description": "Deals 230% Attack damage and Taunts the front enemy for 2 rounds; it deals 15% less damage to Jory.",
+        "description": "Strikes the front enemy and applies Provoke to it; it deals less damage to Jory.",
         "effects": [
           {
             "kind": "Damage",
@@ -7224,7 +7342,7 @@
       "passive1": {
         "id": "jory_worn_hinges",
         "name": "Worn Hinges",
-        "description": "The first time each round an enemy hits Jory, he counterattacks it for 110% Attack damage.",
+        "description": "The first time each round an enemy hits Jory, he counterattacks it.",
         "trigger": "OnDamaged",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -7278,7 +7396,7 @@
       "basic": {
         "id": "maera_returning_shot",
         "name": "Returning Shot",
-        "description": "Deals 280% Attack damage; if the target attacked an ally since Maera's last turn, deals 70% additional Attack damage.",
+        "description": "Strikes the front enemy; if it attacked an ally since Maera’s last turn, deals additional damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -7298,7 +7416,7 @@
         "id": "maera_keep_the_beacon",
         "name": "Keep the Beacon",
         "energyCost": 100,
-        "description": "Deals 540% Attack damage to the enemy that most recently damaged an ally. On defeat, allies recover 7% Max HP.",
+        "description": "Strikes the enemy that most recently damaged an ally. On defeat, allies recover a share of their Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -7310,7 +7428,7 @@
       "passive1": {
         "id": "maera_watch_the_water",
         "name": "Watch the Water",
-        "description": "The first time each ally falls below 45% HP, Maera’s next attack is a guaranteed Critical.",
+        "description": "The first time each ally falls to low HP, Maera’s next attack is a guaranteed Critical.",
         "trigger": "OnAllyHpBelowThreshold",
         "threshold": 0.45,
         "firesPerSubject": 1,
@@ -7329,7 +7447,7 @@
         {
           "id": "maera_keep_the_beacon_relief",
           "name": "Keep the Beacon",
-          "description": "The relief on Keep the Beacon only: an enemy defeated during that cast sends every ally 7% of their Max HP.",
+          "description": "The relief on Keep the Beacon only: an enemy defeated during that cast sends every ally a share of their Max HP.",
           "trigger": "OnEnemyDefeated",
           "triggerAbilityId": "maera_keep_the_beacon",
           "oncePerBattle": false,
@@ -7384,7 +7502,7 @@
       "basic": {
         "id": "maren_waking_touch",
         "name": "Waking Touch",
-        "description": "Deals 130% Attack damage and heals the lowest-HP ally for 60% Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -7402,7 +7520,7 @@
         "id": "maren_unfinished_rest",
         "name": "Unfinished Rest",
         "energyCost": 100,
-        "description": "Deals 210% Attack damage to all enemies and gives the two lowest-HP allies Recovery for 3 rounds. Recovery heals 3% Max HP each turn.",
+        "description": "Strikes every enemy and gives the two lowest-HP allies Recovery. Recovery heals a share of Max HP each turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -7423,7 +7541,7 @@
       "passive1": {
         "id": "maren_do_not_disturb",
         "name": "Do Not Disturb",
-        "description": "When an ally with Recovery would die, remove Recovery and leave them at 1 HP. Once per battle.",
+        "description": "When an ally with Recovery would die, remove Recovery and leave them barely standing. Once per battle.",
         "trigger": "OnAllyWouldDie",
         "oncePerBattle": true,
         "effects": [
@@ -7507,7 +7625,7 @@
         "id": "brio_evidence_kept",
         "name": "Evidence Kept",
         "energyCost": 100,
-        "description": "Deals 480% Attack damage to an Accounted enemy and heals the lowest-HP ally for 6% Max HP.",
+        "description": "Strikes an Accounted enemy and heals the lowest-HP ally for a share of their Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -7524,7 +7642,7 @@
       "passive1": {
         "id": "brio_nothing_forgotten",
         "name": "Nothing Forgotten",
-        "description": "When an Accounted enemy is defeated, Brio writes Accounted onto the highest-HP enemy for 2 rounds.",
+        "description": "When an Accounted enemy is defeated, Brio writes Accounted onto the highest-HP enemy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -7580,7 +7698,7 @@
       "basic": {
         "id": "elin_mending_prick",
         "name": "Mending Prick",
-        "description": "Deals 179% Attack damage and heals the lowest-HP ally for 89% Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -7598,7 +7716,7 @@
         "id": "elin_hold_the_seam",
         "name": "Hold the Seam",
         "energyCost": 100,
-        "description": "Deals 268% Attack damage to all enemies and gives the lowest-HP ally Stitching for 3 rounds. Stitching heals 3% of its holder's Max HP at turn end.",
+        "description": "Strikes every enemy and gives the lowest-HP ally Stitching. Stitching heals a share of its holder's Max HP at turn end.",
         "effects": [
           {
             "kind": "Damage",
@@ -7619,7 +7737,7 @@
       "passive1": {
         "id": "elin_tighten_the_thread",
         "name": "Tighten the Thread",
-        "description": "When Stitching runs its course, its holder gains 10 Energy.",
+        "description": "When Stitching runs its course, its holder gains Energy.",
         "trigger": "OnAppliedAllyStatusExpired",
         "triggerStatus": "Regen",
         "oncePerBattle": false,
@@ -7673,7 +7791,7 @@
       "basic": {
         "id": "marn_garrison_guard",
         "name": "Garrison Guard",
-        "description": "Deals 105% Attack damage and gives the lowest-HP ally Coverguard for 2 rounds. Coverguard reduces the next hit by 14%.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Coverguard. Coverguard reduces the next hit.",
         "effects": [
           {
             "kind": "Damage",
@@ -7695,7 +7813,7 @@
         "id": "marn_reserve_shelter",
         "name": "Reserve Shelter",
         "energyCost": 100,
-        "description": "Deals 165% Attack damage to all enemies and gives every ally Coverguard for 2 rounds.",
+        "description": "Strikes every enemy and gives every ally Coverguard.",
         "effects": [
           {
             "kind": "Damage",
@@ -7716,7 +7834,7 @@
       "passive1": {
         "id": "marn_relief_after_loss",
         "name": "Relief After Loss",
-        "description": "When Coverguard is consumed, its holder heals 3% Max HP.",
+        "description": "When Coverguard is consumed, its holder heals a share of their Max HP.",
         "trigger": "OnGuardPrevented",
         "oncePerBattle": false,
         "effects": [
@@ -7771,7 +7889,7 @@
       "basic": {
         "id": "rusk_patch_round",
         "name": "Patch Round",
-        "description": "Deals 141% Attack damage and gives a random ally Patchwork for 2 rounds. Patchwork grants 8% Defense.",
+        "description": "Strikes the front enemy and gives a random ally Patchwork. Patchwork raises their Defense.",
         "effects": [
           {
             "kind": "Damage",
@@ -7792,7 +7910,7 @@
         "id": "rusk_keep_it_running",
         "name": "Keep It Running",
         "energyCost": 100,
-        "description": "Deals 235% Attack damage to all enemies and puts every Patchwork back to its full 2 rounds.",
+        "description": "Strikes every enemy and puts every Patchwork back to its full length.",
         "effects": [
           {
             "kind": "Damage",
@@ -7811,7 +7929,7 @@
       "passive1": {
         "id": "rusk_borrowed_time",
         "name": "Borrowed Time",
-        "description": "When a blow would kill an ally carrying Patchwork, Patchwork goes instead and the ally is left at 1 HP. Once per battle.",
+        "description": "When a blow would kill an ally carrying Patchwork, Patchwork goes instead and the ally is left barely standing. Once per battle.",
         "trigger": "OnAllyWouldDie",
         "oncePerBattle": true,
         "effects": [
@@ -7878,7 +7996,7 @@
       "basic": {
         "id": "garron_frame_strike",
         "name": "Frame Strike",
-        "description": "Deals 356% Attack damage to the front enemy and gives Garron 6% Block for 2 rounds.",
+        "description": "Strikes the front enemy and gives Garron Block Up.",
         "effects": [
           {
             "kind": "Damage",
@@ -7899,7 +8017,7 @@
       "passive1": {
         "id": "garron_set_iron",
         "name": "Set Iron",
-        "description": "When Garron blocks an attack, he heals 3% of his Max HP.",
+        "description": "When Garron blocks an attack, he heals a share of his Max HP.",
         "trigger": "OnBlock",
         "oncePerBattle": false,
         "effects": [
@@ -7952,7 +8070,7 @@
       "basic": {
         "id": "nara_roadside_care",
         "name": "Roadside Care",
-        "description": "Deals 422% Attack damage to the front enemy and heals the lowest-HP ally for 190% of Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -8029,7 +8147,7 @@
       "basic": {
         "id": "wynn_mended_shot",
         "name": "Mended Shot",
-        "description": "Deals 331% Attack damage to the front enemy and gives a random ally 5% Defense for 2 rounds.",
+        "description": "Strikes the front enemy and gives a random ally Guard Up.",
         "effects": [
           {
             "kind": "Damage",
@@ -8050,7 +8168,7 @@
       "passive1": {
         "id": "wynn_useful_again",
         "name": "Useful Again",
-        "description": "When an ally carrying Wynn's Defense buff is hit, that ally gains 5 Energy. Pinoy pays the 5 to Wynn; a 2-star has no active skill to spend Energy on, so the hand-me-down keeps paying its holder. See Docs/PINOY-LIST.md section 2c.",
+        "description": "When an ally carrying Wynn's Guard Up is hit, that ally gains Energy.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "effects": [
@@ -8107,7 +8225,7 @@
       "basic": {
         "id": "hal_cache_shovel",
         "name": "Cache Shovel",
-        "description": "Deals 376% Attack damage to the front enemy and recovers 2% of Hal's Max HP.",
+        "description": "Strikes the front enemy and recovers a share of Hal's Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -8163,7 +8281,7 @@
       "basic": {
         "id": "iri_tokenkeepers_tap",
         "name": "Tokenkeeper's Tap",
-        "description": "Deals 437% Attack damage to the front enemy and heals the lowest-HP ally for 131% of Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -8243,7 +8361,8 @@
             "conditionValue": 1,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and delays it, banking the lost turn progress as Turn Debt, up to a limit. An enemy repays Turn Debt in Energy at the start of its turn. If Aeron holds Resolve, he spends all of it on an extra blow that grows with each stack."
       },
       "active": {
         "id": "aeron_break_the_rhythm",
@@ -8263,7 +8382,8 @@
             "storedCap": 0.25,
             "power": 50
           }
-        ]
+        ],
+        "description": "Strikes every enemy and delays the enemy with the highest Energy, banking the lost turn progress as Turn Debt, up to a limit."
       },
       "passive": {
         "id": "aeron_never_yield_stats",
@@ -8284,7 +8404,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Aeron fights the whole battle with Quickened and Block Up."
       },
       "passive1": {
         "id": "aeron_never_yield",
@@ -8298,7 +8419,8 @@
             "maxStacks": 4,
             "duration": 99
           }
-        ]
+        ],
+        "description": "When an enemy repays Turn Debt, Aeron gains Resolve, up to a limit. Press Forward spends it."
       },
       "passive2": {
         "id": "aeron_momentum_breaker",
@@ -8313,7 +8435,8 @@
             "magnitude": 0.1,
             "secondaryTarget": "LowestEnergyAlly"
           }
-        ]
+        ],
+        "description": "When an enemy carrying Turn Debt gains enough Energy to use its active skill, Aeron calls in the whole debt: the enemy is delayed and the lowest-Energy ally gains the Energy it owed. Once per enemy each battle."
       },
       "talents": {
         "talentI": {
@@ -8332,7 +8455,8 @@
               "conditionStatus": "TurnDebt",
               "conditionOn": "Target"
             }
-          ]
+          ],
+          "description": "When an enemy ends its turn still carrying Turn Debt, it gains Mire."
         },
         "talentII": {
           "id": "aeron_shared_tempo",
@@ -8349,7 +8473,8 @@
                 "magnitude": 0.1
               }
             }
-          ]
+          ],
+          "description": "When Momentum Breaker calls in a debt, the lowest-Energy ally also advances its turn."
         },
         "talentIII": {
           "id": "aeron_unpaid_action",
@@ -8364,7 +8489,8 @@
               "status": "Silence",
               "duration": 1
             }
-          ]
+          ],
+          "description": "The first enemy each round to repay Turn Debt is Silenced."
         }
       }
     },
@@ -8408,7 +8534,7 @@
       "basic": {
         "id": "dahlia_offbeat_chime",
         "name": "Offbeat Chime",
-        "description": "Deals 105% of Attack damage to the enemy with the highest Energy and reduces that enemy's Energy by 10. If the target has more Energy than Dahlia, the lowest-HP ally is healed for 45% of Attack.",
+        "description": "Strikes the enemy with the highest Energy and reduces that enemy's Energy. If the target has more Energy than Dahlia, the lowest-HP ally is healed.",
         "vfx": "bolt",
         "effects": [
           {
@@ -8435,7 +8561,7 @@
         "id": "dahlia_scattered_choir",
         "name": "Scattered Choir",
         "energyCost": 100,
-        "description": "Deals 165% of Attack damage to all enemies and creates a Displaced state on the enemy with the highest Energy for 2 rounds. Displaced enemies cannot target the same ally twice in a row. Whenever a Displaced enemy attacks an ally, that ally gains 10 Energy and Dahlia heals them for 70% of Attack. If the Displaced enemy uses an Active Skill while Displaced, cancel the skill and remove Displaced.",
+        "description": "Strikes every enemy and creates a Displaced state on the enemy with the highest Energy. Displaced enemies cannot target the same ally twice in a row. Whenever a Displaced enemy attacks an ally, that ally gains Energy and Dahlia heals them. If the Displaced enemy uses an Active Skill while Displaced, cancel the skill and remove Displaced.",
         "vfx": "burst",
         "effects": [
           {
@@ -8476,7 +8602,8 @@
             "duration": 99,
             "magnitude": 0.08
           }
-        ]
+        ],
+        "description": "Dahlia fights the whole battle with Quickened and Effect Hit Up."
       },
       "passive1": {
         "id": "dahlia_keep_them_moving_tempo",
@@ -8491,7 +8618,8 @@
             "hits": 1,
             "maxStacks": 3
           }
-        ]
+        ],
+        "description": "Whenever an enemy loses Energy because of Dahlia, she gains Tempo, up to a limit."
       },
       "passive2": {
         "id": "dahlia_keep_them_moving_cadence",
@@ -8510,7 +8638,8 @@
             "consumesResolve": true,
             "counterIndex": 5
           }
-        ]
+        ],
+        "description": "At full Tempo, Dahlia's next basic attack spends all of it and also heals the lowest-HP ally."
       },
       "skills": {
         "passive1": {
@@ -8537,7 +8666,8 @@
               "conditionStatus": "Restricted",
               "conditionOn": "BroadcastSource"
             }
-          ]
+          ],
+          "description": "The first time each round a Displaced enemy changes its attack target, Dahlia gains Energy and the targeted ally gains a Ward worth a share of Dahlia's Max HP."
         },
         "passive2": {
           "id": "dahlia_broken_rhythm_answer",
@@ -8561,7 +8691,8 @@
               "conditionStatus": "Restricted",
               "conditionOn": "BroadcastSource"
             }
-          ]
+          ],
+          "description": "When a Displaced enemy tries to use an active skill, Dahlia strikes it first and heals the lowest-HP ally."
         }
       },
       "passives": [
@@ -8587,7 +8718,8 @@
               "conditionStatus": "Restricted",
               "conditionOn": "LastAttacker"
             }
-          ]
+          ],
+          "description": "Whenever a Displaced enemy damages an ally, that ally gains Energy and Dahlia heals them."
         },
         {
           "id": "dahlia_scattered_choir_answer_self",
@@ -8611,7 +8743,8 @@
               "conditionStatus": "Restricted",
               "conditionOn": "LastAttacker"
             }
-          ]
+          ],
+          "description": "Whenever a Displaced enemy damages Dahlia, she gains Energy and heals herself."
         },
         {
           "id": "dahlia_scattered_choir_silence",
@@ -8635,14 +8768,15 @@
               "conditionStatus": "Restricted",
               "conditionOn": "BroadcastSource"
             }
-          ]
+          ],
+          "description": "When a Displaced enemy tries to use an active skill, the skill is cancelled and Displaced is removed."
         }
       ],
       "talents": {
         "talentI": {
           "id": "dahlia_restless_chorus",
           "name": "Restless Chorus",
-          "description": "Displaced lasts 1 additional round. The first time a Displaced enemy changes its attack target each round, that enemy also loses 10 Energy.",
+          "description": "Displaced lasts longer. The first time a Displaced enemy changes its attack target each round, that enemy also loses Energy.",
           "trigger": "None",
           "effects": [],
           "overrides": [
@@ -8670,7 +8804,7 @@
         "talentII": {
           "id": "dahlia_shared_rhythm",
           "name": "Shared Rhythm",
-          "description": "Whenever Dahlia heals an ally through Broken Rhythm, the ally with the second-lowest HP is also healed for 40% of Attack.",
+          "description": "Whenever Dahlia heals an ally through Broken Rhythm, the ally with the second-lowest HP is also healed.",
           "trigger": "None",
           "effects": [],
           "appends": [
@@ -8690,7 +8824,7 @@
         "talentIII": {
           "id": "dahlia_final_cadence",
           "name": "Final Cadence",
-          "description": "When Displaced ends without the enemy having its Active Skill canceled, Dahlia deals 120% of Attack damage to that enemy and immediately restores 20 Energy to the ally with the lowest Energy.",
+          "description": "When Displaced ends without the enemy having its Active Skill canceled, Dahlia strikes that enemy and immediately restores Energy to the ally with the lowest Energy.",
           "trigger": "OnAppliedStatusExpired",
           "triggerStatus": "Restricted",
           "oncePerBattle": false,
@@ -8775,7 +8909,8 @@
             "power": 0.35,
             "scaleByLastShift": true
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Energy and applies Anticipated. If Merek has a delay on record, the blow spends it for extra damage that grows with the turn progress he last took, up to a limit."
       },
       "active": {
         "id": "merek_stolen_interval",
@@ -8800,7 +8935,8 @@
             "magnitude": 0.15,
             "status": "SkillDamageDown"
           }
-        ]
+        ],
+        "description": "Strikes every enemy, then swaps the turn order of the enemy closest to acting and the enemy furthest from acting. The enemy moved back gains Skill Damage Down."
       },
       "passive": {
         "id": "merek_unsettled_timing_stats",
@@ -8828,7 +8964,8 @@
             "magnitude": 0.08,
             "status": "SkillDamageUp"
           }
-        ]
+        ],
+        "description": "Merek fights the whole battle with Attack Up, Effect Hit Up and Skill Damage Up."
       },
       "passive1": {
         "id": "merek_anticipated",
@@ -8843,7 +8980,8 @@
             "conditionOn": "BroadcastSubject",
             "magnitude": -0.1
           }
-        ]
+        ],
+        "description": "When an Anticipated enemy finishes using an active skill, it is delayed."
       },
       "passive2": {
         "id": "merek_first_claim",
@@ -8858,7 +8996,8 @@
             "duration": 1,
             "status": "MarkAlt"
           }
-        ]
+        ],
+        "description": "At the start of each round, Merek names the fastest enemy First Claim for that round."
       },
       "skills": {
         "passive1": {
@@ -8876,7 +9015,8 @@
               "conditionStatus": "MarkAlt",
               "magnitude": 0.2
             }
-          ]
+          ],
+          "description": "The first time each round First Claim uses an active skill, Merek advances the lowest-Energy ally's turn."
         },
         "passive2": {
           "id": "merek_unsettled_timing",
@@ -8892,7 +9032,8 @@
               "duration": 99,
               "maxStacks": 1
             }
-          ]
+          ],
+          "description": "The first time each round Merek delays an enemy, he puts it on record for his next basic attack."
         }
       },
       "talents": {
@@ -8922,7 +9063,8 @@
                 "magnitude": -0.08
               }
             }
-          ]
+          ],
+          "description": "When Anticipated delays an enemy, Merek gains Energy and that enemy is delayed further."
         },
         "talentII": {
           "id": "merek_reordered_agenda",
@@ -8942,7 +9084,8 @@
                 "status": "DefenseDown"
               }
             }
-          ]
+          ],
+          "description": "Stolen Interval also gives the enemy moved forward Guard Down."
         },
         "talentIII": {
           "id": "merek_no_first_move",
@@ -8982,7 +9125,8 @@
               "duration": 2,
               "status": "Mark"
             }
-          ]
+          ],
+          "description": "When First Claim is defeated before acting that round, every enemy loses Energy and Merek strikes the enemy with the highest Energy and applies Anticipated."
         }
       }
     },
@@ -9124,7 +9268,8 @@
             "conditionOn": "LastTarget",
             "flat": -10
           }
-        ]
+        ],
+        "description": "Strikes the fastest enemy, or the enemy with the lowest Energy if Oris has just delayed an enemy. If the target is faster than Oris, he strikes it again and takes Energy off it. After Improvise the Way, it also carries No Fixed Refrain."
       },
       "active": {
         "id": "oris_improvise_the_way",
@@ -9154,7 +9299,8 @@
             "duration": 3,
             "maxStacks": 1
           }
-        ]
+        ],
+        "description": "Strikes every enemy and applies Disrupted. The first time each round a Disrupted enemy would gain Energy, it loses Energy instead, its turn is delayed and Oris's next ally advances. Oris then begins No Fixed Refrain."
       },
       "passive": {
         "id": "oris_restless_hands_stats",
@@ -9182,7 +9328,8 @@
             "magnitude": 0.06,
             "status": "SkillDamageUp"
           }
-        ]
+        ],
+        "description": "Oris fights the whole battle with Quickened, Effect Hit Up and Skill Damage Up."
       },
       "passive1": {
         "id": "oris_restless_hands",
@@ -9197,14 +9344,16 @@
             "duration": 2,
             "status": "Mark"
           }
-        ]
+        ],
+        "description": "When Oris delays an enemy, his next basic attack turns on the enemy with the lowest Energy instead of the fastest."
       },
       "passive2": {
         "id": "oris_no_fixed_refrain",
         "name": "No Fixed Refrain",
         "trigger": "None",
         "oncePerBattle": false,
-        "effects": []
+        "effects": [],
+        "description": "After Improvise the Way, Oris's next basic attack also strikes the enemy with the highest Energy and takes Energy off it, and the one after also strikes the enemy with the lowest Energy and advances his turn. An unfinished sequence lapses."
       },
       "talents": {
         "talentI": {
@@ -9231,7 +9380,8 @@
               "field": "magnitude",
               "delta": 0.05
             }
-          ]
+          ],
+          "description": "The altered strikes of No Fixed Refrain hit harder, and the second one advances Oris's turn further."
         },
         "talentII": {
           "id": "oris_change_the_key",
@@ -9260,7 +9410,8 @@
                 "flat": 10
               }
             }
-          ]
+          ],
+          "description": "Improvise the Way also takes more Energy off every enemy close to a full bar, and Oris gains Energy if his own bar is low."
         },
         "talentIII": {
           "id": "oris_open_ending",
@@ -9296,7 +9447,8 @@
                 "maxStacks": 1
               }
             }
-          ]
+          ],
+          "description": "After the first altered strike of No Fixed Refrain, Oris strikes the last enemy he hit again. It cannot happen again for a while."
         }
       }
     },
@@ -9360,7 +9512,8 @@
             "status": "Mark",
             "duration": 3
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Residue, a Cinder that also records whether the enemy last used a basic attack or an active skill."
       },
       "active": {
         "id": "zella_counterargument",
@@ -9403,7 +9556,8 @@
             "condition": "SubjectRepeatedActionType",
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "Strikes an enemy with Residue. If it used the same kind of action on each of its last two turns, Zella consumes the Residue for additional damage and Silences it."
       },
       "passive": {
         "id": "zella_reaction_study_stats",
@@ -9424,7 +9578,8 @@
             "magnitude": 0.12,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Zella fights the whole battle with Attack Up and Effect Hit Up."
       },
       "passive1": {
         "id": "zella_reaction_study",
@@ -9455,7 +9610,8 @@
             "condition": "SubjectChangedActionType",
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "When Residue ticks on an enemy that has changed its kind of action, that enemy loses Energy and Residue is extended. Once per enemy each battle."
       },
       "passive2": {
         "id": "zella_nothing_stays_settled",
@@ -9478,7 +9634,8 @@
             "status": "Mark",
             "transferDuration": 2
           }
-        ]
+        ],
+        "description": "When an enemy carrying Residue is defeated, its Residue moves to the highest-HP enemy. Moved Residue cannot be extended."
       },
       "talents": {
         "talentI": {
@@ -9500,7 +9657,8 @@
                 "bypassResist": true
               }
             }
-          ]
+          ],
+          "description": "Quiet Dose also applies Effect Resist Down to an enemy that used the same kind of action on its last two turns."
         },
         "talentII": {
           "id": "zella_forced_conclusion",
@@ -9514,7 +9672,8 @@
               "field": "duration",
               "delta": 1
             }
-          ]
+          ],
+          "description": "The Silence from Counterargument lasts longer."
         },
         "talentIII": {
           "id": "zella_changing_testimony",
@@ -9530,7 +9689,8 @@
               "condition": "SubjectChangedActionType",
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "When Residue ticks on an enemy that has changed its kind of action, Zella gains Focus."
         }
       }
     },
@@ -9575,7 +9735,7 @@
       "basic": {
         "id": "eira_shove_aside",
         "name": "Shove Aside",
-        "description": "Deals 150% Attack damage and shoves the target out of position if another enemy is alive.",
+        "description": "Strikes the front enemy and shoves it out of position if another enemy is alive.",
         "effects": [
           {
             "kind": "Damage",
@@ -9592,7 +9752,7 @@
         "id": "eira_redeploy_cover",
         "name": "Redeploy Cover",
         "energyCost": 100,
-        "description": "Deals 250% Attack damage to all enemies and grants Mobile Cover for 2 rounds; it reduces the first area hit each round by 20%.",
+        "description": "Strikes every enemy and grants all allies Mobile Cover; it reduces the first area hit each round.",
         "effects": [
           {
             "kind": "Damage",
@@ -9614,7 +9774,7 @@
       "passive1": {
         "id": "eira_leave_no_corner",
         "name": "Leave No Corner",
-        "description": "When an ally with Mobile Cover is singled out, its turn progress advances by 12%.",
+        "description": "When an ally with Mobile Cover is singled out, its turn advances.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "effects": [
@@ -9672,7 +9832,7 @@
       "basic": {
         "id": "finn_ringing_slug",
         "name": "Ringing Slug",
-        "description": "Deals 230% Attack damage and applies Ringing for 2 rounds. A Ringing enemy loses 5 Energy whenever it casts an active skill.",
+        "description": "Strikes the front enemy and applies Ringing. A Ringing enemy loses Energy whenever it casts an active skill.",
         "effects": [
           {
             "kind": "Damage",
@@ -9691,7 +9851,7 @@
         "id": "finn_no_quiet_moment",
         "name": "No Quiet Moment",
         "energyCost": 100,
-        "description": "Deals 400% Attack damage to enemies with Ringing, cancels a cast in flight and takes 20 Energy off every Ringing enemy.",
+        "description": "Strikes every enemy with Ringing, cancels a cast in flight and takes Energy off every Ringing enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -9716,7 +9876,7 @@
       "passive1": {
         "id": "finn_aftershock_clock",
         "name": "Aftershock Clock",
-        "description": "At round end, Ringing enemies are delayed by 15% turn progress.",
+        "description": "At round end, Ringing enemies are delayed.",
         "trigger": "RoundEnd",
         "oncePerBattle": false,
         "effects": [
@@ -9733,7 +9893,7 @@
         {
           "id": "finn_ringing_toll",
           "name": "Ringing Slug",
-          "description": "The toll itself: a Ringing enemy loses 5 Energy as it casts.",
+          "description": "The toll itself: a Ringing enemy loses Energy as it casts.",
           "trigger": "OnEnemyActive",
           "oncePerBattle": false,
           "effects": [
@@ -9789,7 +9949,7 @@
       "basic": {
         "id": "niko_bad_entrance",
         "name": "Bad Entrance",
-        "description": "Deals 175% Attack damage and applies Flustered for 2 rounds, reducing Effect Hit by 15%.",
+        "description": "Strikes the front enemy and applies Flustered, reducing its Effect Hit.",
         "effects": [
           {
             "kind": "Damage",
@@ -9817,7 +9977,7 @@
         "id": "niko_take_the_floor",
         "name": "Take the Floor",
         "energyCost": 100,
-        "description": "Deals 320% Attack damage to a Flustered enemy and forces its next attack onto Niko.",
+        "description": "Strikes a Flustered enemy and forces its next attack onto Niko.",
         "effects": [
           {
             "kind": "Damage",
@@ -9837,7 +9997,7 @@
       "passive1": {
         "id": "niko_ruin_the_agenda",
         "name": "Ruin the Agenda",
-        "description": "When a Flustered enemy attempts a debuff, Flustered is replaced by Silence for 1 round. Silence prevents active skills.",
+        "description": "When a Flustered enemy attempts a debuff, Flustered is replaced by Silence. Silence prevents active skills.",
         "trigger": "OnEnemyAppliedStatus",
         "oncePerBattle": false,
         "effects": [
@@ -9911,7 +10071,7 @@
       "basic": {
         "id": "sable_cut_in",
         "name": "Cut In",
-        "description": "Deals 130% Attack damage and advances Sable’s next turn by 10%. If Never Waiting is banked, deals 30% additional Attack damage and spends it.",
+        "description": "Strikes the front enemy and advances Sable’s next turn. If Never Waiting is banked, deals additional damage and spends it.",
         "effects": [
           {
             "kind": "Damage",
@@ -9943,7 +10103,7 @@
         "id": "sable_wrong_order",
         "name": "Wrong Order",
         "energyCost": 100,
-        "description": "Deals 215% Attack damage to all enemies and delays the highest-Energy enemy by 25% turn progress.",
+        "description": "Strikes every enemy and delays the highest-Energy enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -9960,7 +10120,7 @@
       "passive1": {
         "id": "sable_never_waiting",
         "name": "Never Waiting",
-        "description": "Whenever Sable delays an enemy, she gains 12 Energy and banks 30% Attack damage onto her next Basic Attack.",
+        "description": "Whenever Sable delays an enemy, she gains Energy and banks extra damage onto her next Basic Attack.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "effects": [
@@ -10020,7 +10180,7 @@
       "basic": {
         "id": "tamsin_snag",
         "name": "Snag",
-        "description": "Deals 135% Attack damage and removes 6% turn progress for each target buff, up to 18%.",
+        "description": "Strikes the front enemy and takes turn progress off it for each buff it carries, up to a limit.",
         "effects": [
           {
             "kind": "Damage",
@@ -10043,7 +10203,7 @@
         "id": "tamsin_pull_the_seam",
         "name": "Pull the Seam",
         "energyCost": 100,
-        "description": "Deals 215% Attack damage to all enemies. Targets above 50% turn progress are delayed 20% and take 15% more Skill Damage for 2 rounds.",
+        "description": "Strikes every enemy. Targets close to their next turn are delayed and take more Skill Damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -10076,7 +10236,7 @@
       "passive1": {
         "id": "tamsin_unraveling_order",
         "name": "Unraveling Order",
-        "description": "The first enemy delayed each round gains 10% Defense Down for 2 rounds.",
+        "description": "The first enemy delayed each round gains Guard Down.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -10180,7 +10340,7 @@
       "passive1": {
         "id": "avera_encore_denied",
         "name": "Encore Denied",
-        "description": "The first enemy delayed each round takes 10% more damage until its next turn.",
+        "description": "The first enemy delayed each round takes more damage until its next turn.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -10238,7 +10398,7 @@
       "basic": {
         "id": "lydia_platform_change",
         "name": "Platform Change",
-        "description": "Deals 110% Attack damage and advances Lydia's next turn by 8% turn progress.",
+        "description": "Strikes the front enemy and advances Lydia's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -10256,7 +10416,7 @@
         "id": "lydia_miss_the_train",
         "name": "Miss the Train",
         "energyCost": 100,
-        "description": "Deals 180% Attack damage to all enemies and delays the slowest enemy by 30% turn progress.",
+        "description": "Strikes every enemy and delays the slowest enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -10329,7 +10489,7 @@
       "basic": {
         "id": "roan_unexpected_entry",
         "name": "Unexpected Entry",
-        "description": "Deals 256% Attack damage and applies Off Balance for 2 rounds. Off Balance lowers Effect Resist by 15%.",
+        "description": "Strikes the front enemy and applies Off Balance. Off Balance lowers its Effect Resist.",
         "effects": [
           {
             "kind": "Damage",
@@ -10357,7 +10517,7 @@
         "id": "roan_through_the_service_door",
         "name": "Through the Service Door",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to an Off Balance enemy and takes one buff off it.",
+        "description": "Strikes an Off Balance enemy and takes a buff off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -10432,7 +10592,7 @@
       "basic": {
         "id": "tomas_prybar",
         "name": "Prybar",
-        "description": "Deals 260% Attack damage and takes 10% turn progress off the target.",
+        "description": "Strikes the front enemy and takes turn progress off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -10450,7 +10610,7 @@
         "id": "tomas_force_the_exit",
         "name": "Force the Exit",
         "energyCost": 100,
-        "description": "Deals 409% Attack damage to the front enemy and Taunts it for 1 round; it loses 15% Speed for 2 rounds.",
+        "description": "Strikes the front enemy, applies Provoke to it and slows it with Mire.",
         "effects": [
           {
             "kind": "Damage",
@@ -10478,7 +10638,7 @@
       "passive1": {
         "id": "tomas_keep_moving",
         "name": "Keep Moving",
-        "description": "When a slowed enemy hits Tomas, he gains a Shield worth 10% of his Max HP for 1 round.",
+        "description": "When an enemy in Mire hits Tomas, he gains a Ward worth a share of his Max HP.",
         "trigger": "OnDamaged",
         "oncePerBattle": false,
         "effects": [
@@ -10535,7 +10695,7 @@
       "basic": {
         "id": "jax_rattle_shot",
         "name": "Rattle Shot",
-        "description": "Deals 322% Attack damage to the front enemy and puts its turn back by 8%.",
+        "description": "Strikes the front enemy and puts its turn back.",
         "effects": [
           {
             "kind": "Damage",
@@ -10552,7 +10712,7 @@
       "passive1": {
         "id": "jax_loose_spring",
         "name": "Loose Spring",
-        "description": "When Jax puts an enemy's turn back, he gains 5% Speed for 1 round.",
+        "description": "When Jax puts an enemy's turn back, he gains Quickened.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "effects": [
@@ -10609,7 +10769,7 @@
       "basic": {
         "id": "kora_skip_ahead",
         "name": "Skip Ahead",
-        "description": "Deals 384% Attack damage to the front enemy and advances Kora's next turn by 10%.",
+        "description": "Strikes the front enemy and advances Kora's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -10681,7 +10841,7 @@
       "basic": {
         "id": "sena_displaced_arrow",
         "name": "Displaced Arrow",
-        "description": "Deals 374% Attack damage to the front enemy and applies 8% Speed Down for 1 round.",
+        "description": "Strikes the front enemy and applies Mire.",
         "effects": [
           {
             "kind": "Damage",
@@ -10758,7 +10918,7 @@
       "basic": {
         "id": "bex_latchbreaker",
         "name": "Latchbreaker",
-        "description": "Deals 345% Attack damage to the front enemy and gives Bex 5% Speed for 1 round.",
+        "description": "Strikes the front enemy and gives Bex Quickened.",
         "effects": [
           {
             "kind": "Damage",
@@ -10818,7 +10978,7 @@
       "basic": {
         "id": "till_rolling_shot",
         "name": "Rolling Shot",
-        "description": "Deals 415% Attack damage to the front enemy and puts its turn back by 5%.",
+        "description": "Strikes the front enemy and puts its turn back.",
         "effects": [
           {
             "kind": "Damage",
@@ -10916,7 +11076,8 @@
             "conditionStatus": "Burn",
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy and applies Burden, Cyrra's Cinder, if it is not already burning. Then, while it burns, Cyrra heals the lowest-HP ally, gains Veiled Weight, up to a limit, and takes a round off its Cinder."
       },
       "active": {
         "id": "cyrra_bury_the_burden",
@@ -10974,7 +11135,8 @@
             "selfHpRatio": 0.06,
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes every enemy and applies Burden to each, then removes Burden from the enemy carrying the most. The two lowest-HP allies are healed from what was removed and gain a Ward. With her Veiled Weight full, those allies also store overflow healing and receive it when the store ends."
       },
       "passive1": {
         "id": "cyrra_silent_weight_stats",
@@ -10998,7 +11160,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Cyrra fights the whole battle with Effect Resist Up and Max HP Up. Each Veiled Weight she holds makes her healing stronger."
       },
       "passive2": {
         "id": "cyrra_carry_the_burden",
@@ -11057,7 +11220,8 @@
             "conditionValue2": 1,
             "conditionOn2": "Caster"
           }
-        ]
+        ],
+        "description": "The first time each round Cyrra heals an ally at low HP while holding Veiled Weight, she spends one to heal that ally again, gain Energy, and take a round off the Cinder on the highest-Attack enemy."
       },
       "talents": {
         "talentI": {
@@ -11084,7 +11248,8 @@
                 "hits": 1
               }
             }
-          ]
+          ],
+          "description": "Bury the Burden heals the two lowest-HP allies a second time from the Burden it removed, then removes Burden from a second enemy."
         },
         "talentII": {
           "id": "cyrra_hidden_reserve",
@@ -11102,7 +11267,8 @@
               "ledgerAutoRelease": true,
               "ledgerAutoReleaseAsHeal": true
             }
-          ]
+          ],
+          "description": "When Cyrra's own Ward breaks, she begins storing a share of the overflow healing she receives and is healed with it when the store ends."
         },
         "talentIII": {
           "id": "cyrra_final_weight",
@@ -11116,7 +11282,8 @@
               "field": "power",
               "delta": 0.4
             }
-          ]
+          ],
+          "description": "Bury the Burden turns more of the removed Burden into healing for the two lowest-HP allies."
         }
       }
     },
@@ -11195,7 +11362,8 @@
             "consumesResolve": true,
             "counterIndex": 3
           }
-        ]
+        ],
+        "description": "Strikes the front enemy. While Darian holds a Ward he stores a Veil Charge, up to a limit, and a full set is spent on his next basic for an extra blow. A blow primed by The Cost of Knowing is spent the same way."
       },
       "active": {
         "id": "darian_bastion_of_secrecy",
@@ -11232,7 +11400,8 @@
             "ledgerAutoReleaseTarget": "HighestAttackEnemy",
             "ledgerAutoReleaseSplitHeal": 0.5
           }
-        ]
+        ],
+        "description": "Strikes every enemy and gives Darian and the lowest-HP ally a Ward worth a share of his Max HP. A share of what Darian's Wards absorb is stored as Hidden Strength, up to a limit, and when it ends it strikes the highest-Attack enemy and heals Darian."
       },
       "passive": {
         "id": "darian_unseen_guard_stats",
@@ -11253,7 +11422,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Darian fights the whole battle with Max HP Up and Guard Up."
       },
       "passive1": {
         "id": "darian_unseen_guard",
@@ -11293,7 +11463,8 @@
             "conditionValue": 2,
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "When an ally at low HP gains a Ward, they gain a Veil Charge, up to a limit. With a full set, their Veil Charges are spent and they gain Guard, which reduces the next hit."
       },
       "passive2": {
         "id": "darian_the_cost_of_knowing",
@@ -11318,7 +11489,8 @@
             "maxStacks": 1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "When Hidden Strength reaches its limit, Darian gains Energy, strikes the highest-Attack enemy and primes his next Hidden Counter for an extra blow."
       },
       "skills": {
         "passive1": {
@@ -11335,7 +11507,8 @@
               "maxStacks": 2,
               "duration": 99
             }
-          ]
+          ],
+          "description": "When a Ward Darian gave runs out without breaking, he counts it, up to a limit."
         },
         "passive2": {
           "id": "darian_shield_discipline",
@@ -11351,7 +11524,8 @@
               "target": "Self",
               "flat": 20
             }
-          ]
+          ],
+          "description": "When Darian has counted enough Wards that ran out unbroken, he spends the count and gains Energy."
         }
       },
       "talents": {
@@ -11385,7 +11559,8 @@
               "field": "duration",
               "delta": 1
             }
-          ]
+          ],
+          "description": "Bastion of Secrecy's Wards and Hidden Strength last longer, and Hidden Strength can hold more."
         },
         "talentII": {
           "id": "darian_shared_burden",
@@ -11405,7 +11580,8 @@
               "scaleByLastRelease": true,
               "duration": 1
             }
-          ]
+          ],
+          "description": "When an ally's Ward breaks, Darian empties his Hidden Strength and gives that ally a brief Ward worth a share of what it held."
         },
         "talentIII": {
           "id": "darian_false_opening",
@@ -11440,7 +11616,8 @@
                 "conditionOn": "Caster"
               }
             }
-          ]
+          ],
+          "description": "When a Ward Darian gave runs out while he holds a Ward himself, he gains an Opening, up to a limit. With a full set, Hidden Counter spends them for an extra blow."
         }
       }
     },
@@ -11505,7 +11682,8 @@
             "condition": "HasAnyBeneficialStatus",
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack. If it carries a buff, Mireth marks it and gains Energy."
       },
       "active": {
         "id": "mireth_remove_from_record",
@@ -11523,7 +11701,8 @@
             "status": "Mark",
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes every enemy and marks the enemy with the highest Attack."
       },
       "passive": {
         "id": "mireth_absence_has_weight_stats",
@@ -11551,7 +11730,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Mireth fights the whole battle with Attack Up, Effect Hit Up and Skill Damage Up."
       },
       "passive1": {
         "id": "mireth_absence_has_weight",
@@ -11569,7 +11749,8 @@
             "maxStacks": 3,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Whenever Mireth removes a status, she gains Absence, up to a limit. Each Absence makes her hit marked enemies harder."
       },
       "passive2": {
         "id": "mireth_the_missing_page",
@@ -11628,7 +11809,8 @@
             "conditionValue": 3,
             "conditionOn": "Caster"
           }
-        ]
+        ],
+        "description": "The first time each round an enemy Mireth has marked gains a buff, she strikes it and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down."
       },
       "talents": {
         "talentI": {
@@ -11668,7 +11850,8 @@
                 "conditionOn2": "BroadcastSubject"
               }
             }
-          ]
+          ],
+          "description": "The Missing Page is no longer limited to once per round, but can fire only a limited number of times against each enemy. Its first strike on an enemy lands at full strength and later strikes land softer."
         },
         "talentII": {
           "id": "mireth_blank_space",
@@ -11704,7 +11887,8 @@
                 "conditionOn2": "Caster"
               }
             }
-          ]
+          ],
+          "description": "When The Missing Page spends a full set of Pages, Mireth also gains Energy and the marked enemy loses Energy."
         },
         "talentIII": {
           "id": "mireth_no_record_remains",
@@ -11755,7 +11939,8 @@
                 "counterIndex": 2
               }
             }
-          ]
+          ],
+          "description": "Once per battle, when The Missing Page fires on a marked enemy at low HP, Mireth strips her Mark from it and strikes it again."
         }
       }
     },
@@ -11838,7 +12023,8 @@
             "counterIndex": 2,
             "flat": 10
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack and marks it with Vanishing Mark. If Nysera has a Hidden Arrow ready while in Stealth, she fires it for an extra blow and gains Energy."
       },
       "active": {
         "id": "nysera_where_i_was_not",
@@ -11865,7 +12051,8 @@
             "magnitude": 0.8,
             "secondaryTarget": "LowestHpEnemy"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack and the enemy with the lowest HP, and Links the two. The next time either attacks Nysera, the blow lands on the other instead, for less damage."
       },
       "passive": {
         "id": "nysera_absence_stats",
@@ -11896,7 +12083,8 @@
             "magnitude": 0.08,
             "status": "EffectHitUp"
           }
-        ]
+        ],
+        "description": "Nysera fights the whole battle with Quickened, Focus and Effect Hit Up. Each Absence she holds makes her hit harder."
       },
       "passive1": {
         "id": "nysera_vanishing_mark",
@@ -11929,7 +12117,8 @@
             "hits": 1,
             "status": "Mark"
           }
-        ]
+        ],
+        "description": "When an enemy carrying Vanishing Mark attacks Nysera, the Mark is removed, Nysera gains Stealth, and she gains Absence, up to a limit."
       },
       "passive2": {
         "id": "nysera_unaccounted_for",
@@ -11946,7 +12135,8 @@
             "duration": 99,
             "maxStacks": 1
           }
-        ]
+        ],
+        "description": "The first time each round Nysera gains Stealth, she readies a Hidden Arrow for Unseen Shot."
       },
       "talents": {
         "talentI": {
@@ -11974,7 +12164,8 @@
                 "hits": 1
               }
             }
-          ]
+          ],
+          "description": "Vanishing Mark lasts longer, and when it fires Nysera also strips a buff from the attacker."
         },
         "talentII": {
           "id": "nysera_false_target",
@@ -12025,7 +12216,8 @@
                 "conditionOn": "BroadcastSource"
               }
             }
-          ]
+          ],
+          "description": "When Vanishing Mark fires, Nysera also gains Armor Break Up. If she defeats an enemy while it lasts, she gains Stealth again."
         }
       }
     },
@@ -12091,7 +12283,8 @@
             "conditionValue": 0.4,
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP. If it is at low HP, Velis gains Energy and strikes the lowest-HP enemy again."
       },
       "active": {
         "id": "velis_hollow_the_wound",
@@ -12116,7 +12309,8 @@
             "conditionValue": 0.5,
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP. If it is badly hurt, it becomes Hollowed: once each round, a share of the healing it receives is turned into damage against it instead."
       },
       "passive": {
         "id": "velis_no_second_breath_stats",
@@ -12144,7 +12338,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Velis fights the whole battle with Attack Up, Quickened and Effect Hit Up."
       },
       "passive1": {
         "id": "velis_no_second_breath",
@@ -12174,7 +12369,8 @@
             "conditionStatus": "Ledger",
             "conditionOn": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "Whenever an enemy is healed, Velis gains Energy. If that enemy is Hollowed, she gains more Energy and a Remnant."
       },
       "passive2": {
         "id": "velis_what_was_taken",
@@ -12197,7 +12393,8 @@
             "conditionValue": 0.3,
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "When Velis holds enough Remnants, she spends them to strike the enemy with the lowest HP, and strikes it again if it is at low HP."
       },
       "talents": {
         "talentI": {
@@ -12218,7 +12415,8 @@
               "field": "magnitude",
               "delta": 0.15
             }
-          ]
+          ],
+          "description": "Hollowed lasts longer and turns more of the healing into damage."
         },
         "talentII": {
           "id": "velis_starve_the_light",
@@ -12242,7 +12440,8 @@
               "conditionStatus": "Ledger",
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "When a Hollowed enemy is healed, it loses Energy and Velis gains Energy."
         },
         "talentIII": {
           "id": "velis_final_denial",
@@ -12263,7 +12462,8 @@
                 "conditionOn": "Target"
               }
             }
-          ]
+          ],
+          "description": "When What Was Taken strikes, the enemy with the lowest HP also gains Heal Suppression if it is at low HP."
         }
       }
     },
@@ -12308,7 +12508,7 @@
       "basic": {
         "id": "iolan_strike_the_line",
         "name": "Strike the Line",
-        "description": "Deals 160% Attack damage, removes one buff from the target and applies 10% Effect Hit Down for 2 rounds.",
+        "description": "Strikes the front enemy, removes a buff from it and applies Effect Hit Down.",
         "effects": [
           {
             "kind": "Damage",
@@ -12335,7 +12535,7 @@
         "id": "iolan_record_withheld",
         "name": "Record Withheld",
         "energyCost": 100,
-        "description": "Deals 260% Attack damage to all enemies and applies Unlisted for 1 round. An Unlisted enemy loses 8 Energy instead of gaining it, once that round.",
+        "description": "Strikes every enemy and applies Unlisted. An Unlisted enemy loses Energy instead of gaining it, once that round.",
         "effects": [
           {
             "kind": "Damage",
@@ -12418,7 +12618,7 @@
       "basic": {
         "id": "ruma_decoy_round",
         "name": "Decoy Round",
-        "description": "Deals 120% Attack damage and applies False Lead for 2 rounds. The next single target skill aimed at Ruma lands on one of that enemy’s own allies instead, for 20% less damage.",
+        "description": "Strikes the front enemy and applies False Lead. The next single target skill aimed at Ruma lands on one of that enemy’s own allies instead, for less damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -12440,7 +12640,7 @@
         "id": "ruma_everyone_looks_here",
         "name": "Everyone Looks Here",
         "energyCost": 100,
-        "description": "Deals 170% Attack damage to all enemies and grants Ruma Concealed for 1 round. A Concealed unit cannot be targeted directly.",
+        "description": "Strikes every enemy and grants Ruma Concealed. A Concealed unit cannot be targeted directly.",
         "effects": [
           {
             "kind": "Damage",
@@ -12459,7 +12659,7 @@
       "passive1": {
         "id": "ruma_spare_route",
         "name": "Spare Route",
-        "description": "Whenever False Lead sends a blow somewhere else, Ruma gains 15 Energy.",
+        "description": "Whenever False Lead sends a blow somewhere else, Ruma gains Energy.",
         "trigger": "OnRedirectSent",
         "oncePerBattle": false,
         "effects": [
@@ -12512,7 +12712,7 @@
       "basic": {
         "id": "toren_lockstep",
         "name": "Lockstep",
-        "description": "Deals 240% Attack damage and applies Sealed for 2 rounds. A Sealed target cannot receive new buffs.",
+        "description": "Strikes the front enemy and applies Sealed. A Sealed target cannot receive new buffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -12539,7 +12739,7 @@
         "id": "toren_no_entry",
         "name": "No Entry",
         "energyCost": 100,
-        "description": "Deals 410% Attack damage and Taunts the front enemy for 2 rounds. While Taunted it is Sealed.",
+        "description": "Strikes the front enemy and applies Provoke to it. While Provoke lasts it is Sealed.",
         "effects": [
           {
             "kind": "Damage",
@@ -12572,7 +12772,7 @@
       "passive1": {
         "id": "toren_unasked_question",
         "name": "Unasked Question",
-        "description": "The first time each round a Sealed enemy strikes another ally, Toren gains a 15% Max HP Shield and redirects 25% of that hit.",
+        "description": "The first time each round a Sealed enemy strikes another ally, Toren gains a Ward worth a share of his Max HP and redirects a share of that hit.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -12637,7 +12837,7 @@
       "basic": {
         "id": "petra_returned_mail",
         "name": "Returned Mail",
-        "description": "Deals 251% Attack damage and applies Withheld for 2 rounds. A Withheld body cannot gain new buffs.",
+        "description": "Strikes the front enemy and applies Withheld. A Withheld body cannot gain new buffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -12664,7 +12864,7 @@
         "id": "petra_keep_the_secret",
         "name": "Keep the Secret",
         "energyCost": 100,
-        "description": "Deals 406% Attack damage to the front enemy and Taunts it for 1 round; it is also Withheld for 2 rounds.",
+        "description": "Strikes the front enemy and applies Provoke to it; it is also Withheld.",
         "effects": [
           {
             "kind": "Damage",
@@ -12840,7 +13040,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Altheon fights the whole battle with Attack Up, Quickened and Skill Damage Up."
       },
       "passive1": {
         "id": "altheon_preserved_moment",
@@ -12858,7 +13059,8 @@
             "maxStacks": 3,
             "duration": 99
           }
-        ]
+        ],
+        "description": "After each of his basic attacks, Altheon gains a Record, up to a limit, for the rest of the battle. Each Record he holds makes his damage against enemies he has marked hit harder."
       },
       "passive2": {
         "id": "altheon_fixed_in_place",
@@ -12880,7 +13082,8 @@
             "kind": "SnapshotHp",
             "target": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "When the Subject's record reaches its cap, Altheon strikes it, gains Energy and notes its current HP."
       },
       "talents": {
         "talentI": {
@@ -12895,7 +13098,8 @@
               "field": "magnitude",
               "delta": 0.1
             }
-          ]
+          ],
+          "description": "Immaculate Record records a larger share of each blow the Subject takes from Altheon."
         },
         "talentII": {
           "id": "altheon_secondary_record",
@@ -12910,7 +13114,8 @@
               "power": 0.5,
               "scaleByLastRelease": true
             }
-          ]
+          ],
+          "description": "When the Subject's record expires, Altheon also strikes the enemy with the lowest HP for a share of what the record paid out."
         },
         "talentIII": {
           "id": "altheon_final_record",
@@ -12951,7 +13156,8 @@
               "status": "Resolve",
               "hits": 10
             }
-          ]
+          ],
+          "description": "Once per battle, when the Subject's record reaches its cap, Altheon strikes it again, harder for each Record he holds, then spends every Record."
         }
       }
     },
@@ -13020,7 +13226,8 @@
             "target": "LowestHpAlly",
             "power": 0.55
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest Attack, marks it and heals the lowest-HP ally. If the marked enemy is at low HP, that ally is healed a second time."
       },
       "active": {
         "id": "aminah_restore_the_balance",
@@ -13043,7 +13250,8 @@
             "ledgerAutoRelease": true,
             "ledgerAutoReleaseAsHeal": true
           }
-        ]
+        ],
+        "description": "Strikes every enemy and gives the lowest-HP ally Priority. Once each round, a share of the healing that ally receives is stored instead. When Priority ends, the stored healing is released to them at once."
       },
       "passive": {
         "id": "aminah_emergency_release",
@@ -13070,7 +13278,8 @@
             "power": 0.5,
             "scaleByLastRelease": true
           }
-        ]
+        ],
+        "description": "Once per battle, when an ally falls to low HP, any healing Priority has stored on them is released at once and Priority is removed. Aminah then strikes the enemy with the highest Attack for a share of what was released."
       },
       "passive1": {
         "id": "aminah_release_damage",
@@ -13085,7 +13294,8 @@
             "power": 0.5,
             "scaleByLastRelease": true
           }
-        ]
+        ],
+        "description": "When a Priority Aminah gave an ally ends, she strikes the enemy with the highest Attack for a share of the healing it released."
       },
       "passive2": {
         "id": "aminah_precise_care_stats",
@@ -13109,7 +13319,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Aminah fights the whole battle with Max HP Up and Quickened, and each Measure she holds makes her healing stronger."
       },
       "skills": {
         "passive1": {
@@ -13128,7 +13339,8 @@
               "conditionValue": 0.4,
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "When Aminah heals an ally who is at low HP, she gains a Measure, up to a limit, for the rest of the battle."
         }
       },
       "talents": {
@@ -13150,7 +13362,8 @@
               "field": "magnitude",
               "delta": 0.1
             }
-          ]
+          ],
+          "description": "Priority from Restore the Balance lasts longer and stores a larger share of the healing."
         },
         "talentII": {
           "id": "aminah_shared_measure",
@@ -13176,7 +13389,8 @@
                 "scaleByLastRelease": true
               }
             }
-          ]
+          ],
+          "description": "Whenever No Wasted Recovery releases stored healing, the ally with the second-lowest HP is also healed for a share of the amount released."
         },
         "talentIII": {
           "id": "aminah_perfect_timing",
@@ -13203,7 +13417,8 @@
                 "consumesResolve": true
               }
             }
-          ]
+          ],
+          "description": "When No Wasted Recovery releases Priority early because its holder fell to low HP, that ally is healed again, more for each Measure Aminah holds, and cleansed of debuffs. Every Measure is spent."
         }
       }
     },
@@ -13271,7 +13486,8 @@
             "status": "Mark",
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the highest HP and applies Measured. If it was already Measured, the blow adds damage drawn from its Max HP, up to a limit."
       },
       "active": {
         "id": "arden_define_the_weak_point",
@@ -13311,7 +13527,8 @@
             "conditionOn": "Target",
             "attackCap": 2.0
           }
-        ]
+        ],
+        "description": "Applies True Measure to the enemy with the highest HP and strikes it, adding damage drawn from its Max HP, up to a limit. If it is also Measured, it takes a second helping of the same."
       },
       "passive": {
         "id": "arden_exact_calculation_stats",
@@ -13338,7 +13555,8 @@
             "maxStacks": 1,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Arden fights the whole battle with Quickened, Armor Break Up and a standing Resolve that powers Exact Calculation."
       },
       "passive1": {
         "id": "arden_exact_calculation",
@@ -13372,7 +13590,8 @@
             "conditionOn": "Target",
             "attackCap": 2.4
           }
-        ]
+        ],
+        "description": "While Arden holds Resolve, he deals more damage to enemies he has Measured or put under True Measure. After his basic attack, a Measured target at high HP takes extra damage drawn from its Max HP, and a True Measure target takes more, each up to a limit."
       },
       "passive2": {
         "id": "arden_everything_has_a_limit",
@@ -13390,7 +13609,8 @@
             "conditionStatus": "MarkAlt",
             "conditionOn": "Target"
           }
-        ]
+        ],
+        "description": "After Arden's basic attack on an enemy under True Measure, he records a share of its current HP."
       },
       "talents": {
         "talentI": {
@@ -13417,7 +13637,8 @@
               "field": "attackCap",
               "delta": 0.1
             }
-          ]
+          ],
+          "description": "Measured lasts longer, and Find the Measure's bonus damage draws a larger share of the target's Max HP, up to a higher limit."
         },
         "talentII": {
           "id": "arden_perfect_line",
@@ -13453,7 +13674,8 @@
                 "conditionOn2": "LastTarget"
               }
             }
-          ]
+          ],
+          "description": "Once each round, Arden's main blow from Find the Measure or Define the Weak Point ignores part of a True Measure target's Defense. After his basic attack, if the target is under True Measure and at high HP, he gains Energy."
         },
         "talentIII": {
           "id": "arden_final_calculation",
@@ -13471,7 +13693,8 @@
           ],
           "overrides": [],
           "triggerStatus": "MarkAlt",
-          "oncePerBattle": true
+          "oncePerBattle": true,
+          "description": "Once per battle, when a True Measure Arden applied expires, the target takes additional damage drawn from the highest value he recorded on it, up to a limit."
         }
       },
       "passives": [
@@ -13488,7 +13711,8 @@
               "record": "HpFractionBand",
               "magnitude": 0.2
             }
-          ]
+          ],
+          "description": "After Define the Weak Point, Arden records a share of the current HP of the enemy under his True Measure."
         },
         {
           "id": "arden_everything_has_a_limit_payout",
@@ -13504,7 +13728,8 @@
               "scaleByBandGap": true,
               "attackCap": 1.5
             }
-          ]
+          ],
+          "description": "When a True Measure Arden applied expires, if the target stands above the lowest value he recorded, it takes damage equal to the difference, up to a limit."
         }
       ]
     },
@@ -13561,7 +13786,8 @@
             "condition": "HasMyMark",
             "conditionOn": "LastTarget"
           }
-        ]
+        ],
+        "description": "Strikes the front enemy. If it is Caldus's Declared Target, he gains Energy."
       },
       "active": {
         "id": "caldus_declare_the_threat",
@@ -13579,7 +13805,8 @@
             "status": "Mark",
             "duration": 2
           }
-        ]
+        ],
+        "description": "Strikes every enemy and names the enemy with the highest Attack as Caldus's Declared Target."
       },
       "passive": {
         "id": "caldus_defined_duty_stats",
@@ -13600,7 +13827,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Caldus fights the whole battle with Max HP Up and Guard Up."
       },
       "passive1": {
         "id": "caldus_defined_duty",
@@ -13622,7 +13850,8 @@
             "consumesResolve": true,
             "consumeStacks": 1
           }
-        ]
+        ],
+        "description": "When his Declared Target damages Caldus, he counterattacks it, once per round. Each Resolve he holds makes the counterattack hit harder, and each counterattack spends one."
       },
       "passive2": {
         "id": "caldus_no_uncertain_ground",
@@ -13652,7 +13881,8 @@
             "condition": "HasMyMark",
             "conditionOn": "LastAttacker"
           }
-        ]
+        ],
+        "description": "When his Declared Target damages another ally, Caldus strikes it and gains Energy, and the ally it hit gains a Ward worth a share of Caldus's Max HP."
       },
       "talents": {
         "talentI": {
@@ -13673,7 +13903,8 @@
               "field": "power",
               "delta": 0.2
             }
-          ]
+          ],
+          "description": "Declare the Threat names its Declared Target for longer, and Defined Duty's counterattack hits harder."
         },
         "talentII": {
           "id": "caldus_guardian_oath",
@@ -13687,7 +13918,8 @@
               "field": "selfHpRatio",
               "delta": 0.03
             }
-          ]
+          ],
+          "description": "The Ward No Uncertain Ground gives an ally is larger."
         },
         "talentIII": {
           "id": "caldus_final_verdict",
@@ -13705,7 +13937,8 @@
               "condition": "HasMyMark",
               "conditionOn": "BroadcastSubject"
             }
-          ]
+          ],
+          "description": "Once per battle, when Caldus's Declared Target falls to low HP, he gains Resolve for his counterattacks."
         }
       }
     },
@@ -13763,7 +13996,8 @@
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP and applies Cinder."
       },
       "active": {
         "id": "isolde_inevitable_decay",
@@ -13790,7 +14024,8 @@
             "ledgerAutoRelease": true,
             "ledgerBankOnlyFrom": "Burn"
           }
-        ]
+        ],
+        "description": "Strikes the enemy with the lowest HP and applies Revelation. While Revelation lasts, its record banks a share of the Cinder damage that enemy takes, and when it expires the enemy takes the whole record as damage."
       },
       "passive": {
         "id": "isolde_proof_leaves_stats",
@@ -13818,7 +14053,8 @@
             "magnitude": 0.08,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Isolde fights the whole battle with Quickened, Effect Hit Up and Holy Damage Up."
       },
       "passive1": {
         "id": "isolde_proof_leaves",
@@ -13832,7 +14068,8 @@
             "maxStacks": 4,
             "duration": 99
           }
-        ]
+        ],
+        "description": "Whenever damage over time Isolde applied deals damage, she gains a Trace, up to a limit, for the rest of the battle."
       },
       "passive2": {
         "id": "isolde_unfinished_sentence",
@@ -13870,7 +14107,8 @@
             "conditionValue2": 3,
             "conditionOn2": "BroadcastSubject"
           }
-        ]
+        ],
+        "description": "The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several stacks of Cinder, she strikes harder and gains Energy."
       },
       "talents": {
         "talentI": {
@@ -13893,7 +14131,8 @@
               "field": "magnitude",
               "delta": 0.15
             }
-          ]
+          ],
+          "description": "Exposed Vein's Cinder burns harder. When a Cinder Isolde applied expires, she gains Energy."
         },
         "talentII": {
           "id": "isolde_revealed_consequence",
@@ -13926,7 +14165,8 @@
               "condition": "HasMyMark",
               "conditionOn": "Defeated"
             }
-          ]
+          ],
+          "description": "When a Revealed enemy is defeated, Revelation and its record move to the enemy with the lowest HP, which also gains Cinder."
         },
         "talentIII": {
           "id": "isolde_final_revelation",
@@ -13968,7 +14208,8 @@
               "conditionValue": 4,
               "conditionOn": "Caster"
             }
-          ]
+          ],
+          "description": "When Revelation expires while Isolde holds a full set of Traces, she spends them all to strike the target for a share of what its record paid out, and harder if it is at very low HP."
         }
       }
     },
@@ -14013,7 +14254,7 @@
       "basic": {
         "id": "leon_catalogue_shot",
         "name": "Catalogue Shot",
-        "description": "Deals 270% Attack damage and assigns Case Number for 2 rounds, listing the target for the whole line.",
+        "description": "Strikes the front enemy and assigns Case Number, listing the target for the whole line.",
         "effects": [
           {
             "kind": "Damage",
@@ -14032,7 +14273,7 @@
         "id": "leon_close_the_case",
         "name": "Close the Case",
         "energyCost": 100,
-        "description": "Deals 490% Attack damage to an enemy with Case Number. Damage increases 10% per displayed buff, up to 40%.",
+        "description": "Strikes an enemy with Case Number. The more buffs it displays, the harder it lands, up to a limit.",
         "effects": [
           {
             "kind": "Damage",
@@ -14048,7 +14289,7 @@
       "passive1": {
         "id": "leon_no_unfiled_death",
         "name": "No Unfiled Death",
-        "description": "When an enemy with Case Number falls, every ally gains 8 Energy and the highest-Attack enemy is listed in its place.",
+        "description": "When an enemy with Case Number falls, every ally gains Energy and the highest-Attack enemy is listed in its place.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -14111,7 +14352,7 @@
       "basic": {
         "id": "lio_tested_touch",
         "name": "Tested Touch",
-        "description": "Deals 130% Attack damage and removes one debuff from the lowest-HP ally.",
+        "description": "Strikes the front enemy and removes a debuff from the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -14129,7 +14370,7 @@
         "id": "lio_name_the_wound",
         "name": "Name the Wound",
         "energyCost": 100,
-        "description": "Deals 230% Attack damage to all enemies and grants Diagnosed for 2 rounds. Diagnosed allies receive 18% more healing.",
+        "description": "Strikes every enemy and grants all allies Diagnosed. Diagnosed allies receive more healing.",
         "effects": [
           {
             "kind": "Damage",
@@ -14155,7 +14396,7 @@
       "passive1": {
         "id": "lio_exact_treatment",
         "name": "Exact Treatment",
-        "description": "When Lio removes a debuff, that ally recovers 5% of the HP it is missing and gains 10 Energy.",
+        "description": "When Lio removes a debuff, that ally recovers a share of the HP it is missing and gains Energy.",
         "trigger": "OnStatusRemoved",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -14214,7 +14455,7 @@
       "basic": {
         "id": "nadine_stamp_of_entry",
         "name": "Stamp of Entry",
-        "description": "Deals 310% Attack damage and applies Registered for 2 rounds.",
+        "description": "Strikes the front enemy and applies Registered.",
         "effects": [
           {
             "kind": "Damage",
@@ -14233,7 +14474,7 @@
         "id": "nadine_hold_the_line",
         "name": "Hold the Line",
         "energyCost": 100,
-        "description": "Deals 520% Attack damage and holds the target in place for 2 rounds, during which it takes 12% more damage from Nadine.",
+        "description": "Strikes the front enemy and holds it in place, during which it takes more damage from Nadine.",
         "effects": [
           {
             "kind": "Damage",
@@ -14260,7 +14501,7 @@
       "passive1": {
         "id": "nadine_proper_place",
         "name": "Proper Place",
-        "description": "The first time each round a Registered enemy hides itself, Nadine strikes it for 110% Attack damage and strips the concealment.",
+        "description": "The first time each round a Registered enemy hides itself, Nadine strikes it and strips the concealment.",
         "trigger": "OnEnemyBuffGained",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -14329,7 +14570,7 @@
       "basic": {
         "id": "clara_case_note",
         "name": "Case Note",
-        "description": "Deals 243% Attack damage and removes one debuff from the lowest-HP ally.",
+        "description": "Strikes the front enemy and removes a debuff from the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -14347,7 +14588,7 @@
         "id": "clara_prescribe_exactly",
         "name": "Prescribe Exactly",
         "energyCost": 100,
-        "description": "Deals 364% Attack damage to all enemies and gives all allies Clarified for 2 rounds. Clarified allies gain 12% Effect Resist.",
+        "description": "Strikes every enemy and gives all allies Clarified. Clarified allies gain Effect Resist.",
         "effects": [
           {
             "kind": "Damage",

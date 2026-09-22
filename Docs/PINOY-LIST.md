@@ -25,8 +25,9 @@ batch appends to it rather than rebuilding it again.
 **Sections 2b and 2c are closed lists**: every hero has a shipped kit, so no further batch can add
 a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
 **Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
-an authoring batch, and the instruments keep running. 2e is the newest: two talents that cost the
-hero who picks them.
+an authoring batch, and the instruments keep running. 2e holds two talents that cost the hero who
+picks them. **2f is the newest**: the ability text that still carries a drafting note, one yes or
+no question per note, and it shrinks as answers arrive.
 
 ---
 
@@ -289,6 +290,57 @@ change to the kit rather than to a number.
 |---|---|---|---|
 | **Kael** | Lasting Materials: "Rubble no longer expires after 3 rounds. Kael can hold up to 5 Rubble, but Take Down the Wall deals 10% less base damage." | 1,710 of his 22,361 output a battle, t -35.6: the 10% cut, exactly | What Breaks Forward consumes all Rubble on his very next Basic Attack, so Rubble never lives long enough to expire and never stacks past what one cast gave. The retention and the cap of 5 have nothing to act on. It loses in every arena it was tried in, including one where his Dispel has four long buffs to take. The question: should What Breaks Forward stop consuming all of it, or should the talent buy something What Breaks Forward cannot spend first? |
 | **Velis** | Final Denial: "When What Was Taken consumes 3 Remnants against an enemy below 30% HP, the attack also prevents that enemy from receiving healing until the end of its next turn." | 4,427 of her 81,592 a battle in the arena built to raise it, t -8.5, with fewer casts, more damage taken and fewer wins | What Was Taken only fires after Hollowed has converted healing on that body, so the body it hits is Hollowed by construction, and blocking its healing cancels the very heal that Hollowed converts into damage and that No Second Breath turns into Energy. Her kit profits from that enemy being healed and the talent forbids it. Gating the block off Hollowed bodies was tried, and the talent then never fires. The question: was Final Denial meant to deny the enemy's healer rather than the healing Velis herself feeds on? |
+
+### 2f. Ability text waiting on an answer
+
+Every basic, active, passive and talent now carries a player-facing sentence with no numbers in
+it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 31**. Each still carries a drafting
+note because the sentence Pinoy wrote and the kit that ships disagree. Most repeat a row of 2a,
+2b, 2c or 2d, asked here as the one question the text needs answered.
+
+**Yes** means the text is rewritten to say what the kit does and the note comes off. **No** means
+the kit changes, which is balance or engine work rather than a text edit. **The recommendation is
+yes throughout**, because the built kit is what players fight. The harness pins each of these ids
+in `AbilityTextPinnedDraftingNotes` and fails if one is answered and not unpinned.
+
+1. **Arno, Rubble Resolve**: Attack Up when Arno strikes an enemy whose Ward is still standing, not when a Ward breaks? Recommend yes.
+2. **Yara, Second Bearing**: Yara can never aim at the same enemy twice running and gains Attack Up on every shot, rather than Energy for choosing to switch? Recommend yes.
+3. **Nara, Carry On**: every heal that leaves an ally at low HP pays Bulwark, not only the first? Recommend yes.
+4. **Kora, First Opening**: an extra blow against an enemy that has not acted yet, rather than a damage bonus? Recommend yes.
+5. **Sena, Unfixed Aim**: an extra blow against an enemy in Mire, rather than Critical Chance? Recommend yes.
+6. **Adric, No Return Mark**: Energy only when a Lost Route enemy misses Adric himself, not any ally? Recommend yes.
+7. **Aster, Scoring Point**: Fracture raises every blow's damage for its whole duration, not only the next critical hit? Recommend yes.
+8. **Quin, Stamped Parcel**: Delivered raises active-skill damage for its whole duration, not only the next skill? Recommend yes.
+9. **Quin, Return to Sender**: one Energy payment per cast, not one per target? Recommend yes.
+10. **Quin, Urgent Matter**: Energy banked at battle start, rather than a cheaper first active skill? Recommend yes.
+11. **Selka, No Extension**: Overdue rewritten at every round start so it cannot be shaken off at all, rather than uncleansable for one round? Recommend yes.
+12. **Bren, Take Another Route**: the blow lands on the highest-HP enemy and nothing swaps HP? Recommend yes.
+13. **Cal, Ricochet Mark**: Cal's own shot carries the ricochet, not the next ally attack? Recommend yes.
+14. **Cal, New Sightline**: any kill Cal lands on an Offset enemy pays, not only a kill by the splash? Recommend yes.
+15. **Linnet, Open Circuit**: at round start one debuff already on the Crossed Line enemy moves, and the Energy pays whether or not anything moved? Recommend yes.
+16. **Oswin, Useful Scar**: every ally gains Guard Up after the cast, whether or not a debuff left them? Recommend yes.
+17. **Brio, Recorded Shot**: drop "attacks against Accounted cannot miss" from the text, since nothing in the kit does it? Recommend yes.
+18. **Avera, Offbeat Note**: Disrupted takes Energy off the first gain each round, not after an active skill? Recommend yes.
+19. **Avera, Break the Measure**: the delay is certain, not a chance? Recommend yes.
+20. **Lydia, No Fixed Departure**: Bulwark at the start of every one of her turns, with no gate on the slowest enemy? Recommend yes.
+21. **Petra, Private Address**: it answers a Withheld enemy's blow landing on an ally, not the enemy targeting one? Recommend yes.
+22. **Clara, Known Condition**: Energy for any debuff Clara strips, not only a control debuff? Recommend yes.
+23. **Demos, Notice of Loss and its Arrears tick**: keep the cap on the Arrears tick that the sentence does not mention? Recommend yes.
+24. **Hale, Field Sign**: 250% and a Quarry that makes Hale hit harder, rather than 120% and Defense ignore (2d)? Recommend yes.
+25. **Hale, Closing Radius**: 570% rather than 220% (2d)? Recommend yes.
+26. **Hale, Tracking Habit**: Quarry moves at the start of each of Hale's turns, not at the end of a round it survived? Recommend yes.
+27. **Kiva, Unclaimed Victory**: the ungated first Ward of 2a, with the text saying what it pays rather than what was measured? Recommend yes.
+28. **Seraphine, Volume Closed**: everything lands in one firing, and the record is paid out as damage (2d)? Recommend yes. The draft also says the target loses turn progress, which only the No Revision talent adds, so the player text will leave that out.
+29. **Altheon, Witness Script**: the rider at 35%, resolving before the blow it rides (2d)? Recommend yes.
+30. **Altheon, Immaculate Record**: a 3-round Subject, a 50% ceiling, and only Altheon's own blows recorded (2d)? Recommend yes.
+
+**One talent has no text at all, and it is a kit defect rather than a question.** Nysera's False
+Target answers her Link redirecting a blow, and aims its damage at the body the share came off.
+When the blow was aimed at Nysera, that body is Nysera, so the talent hits its own hero. Only its
+Energy half, taken off the attacker, does what the sentence describes. Describing it honestly
+would print a defect on the card, so it is pinned in `AbilityTextPinnedUnwritten` until the kit
+is repaired. Pinoy's sentence adds the damage to the redirected blow, which is the obvious
+repair.
 
 ---
 

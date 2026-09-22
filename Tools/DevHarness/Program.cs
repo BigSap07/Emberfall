@@ -108,6 +108,7 @@ namespace Emberfall.DevHarness
             CheckPerTargetBudgetLandsWholeFirings(content);
             CheckTalentCompletionPrimitives();
             CheckNoTalentIsEmpty(content);
+            CheckAbilityTextIsPlayerFacing(content);
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
             CheckKitDefects(content);
@@ -21696,7 +21697,139 @@ namespace Emberfall.DevHarness
         /// alike. Named so a check about the arena's own shape can read it.</summary>
         private const int HeroSweepLevel = 40;
 
-          /// <summary>
+        /// <summary>
+        /// Ability ids whose description is still a drafting note addressed to Pinoy, because the
+        /// sentence he wrote and the kit that ships disagree and only he can say which one is the
+        /// intent. Each one is a question in Docs/PINOY-LIST.md section 2f. When he answers, the
+        /// note is replaced by player text and its id comes out of this list in the same commit;
+        /// CheckAbilityTextIsPlayerFacing fails if either half is done without the other.
+        /// </summary>
+        private static readonly string[] AbilityTextPinnedDraftingNotes =
+        {
+            "arno_rubble_resolve", "yara_second_bearing", "nara_carry_on", "kora_first_opening",
+            "sena_unfixed_aim",
+            "adric_no_return_mark", "aster_scoring_point", "quin_stamped_parcel",
+            "quin_return_to_sender", "quin_urgent_matter", "selka_no_extension",
+            "bren_take_another_route", "cal_ricochet_mark", "cal_new_sightline",
+            "linnet_open_circuit", "oswin_useful_scar", "brio_recorded_shot", "avera_offbeat_note",
+            "avera_break_the_measure", "lydia_no_fixed_departure", "petra_private_address",
+            "clara_known_condition",
+            "demos_notice_of_loss", "demos_arrears_tick",
+            "hale_field_sign", "hale_closing_radius", "hale_tracking_habit",
+            "kiva_unclaimed_victory", "seraphine_volume_closed", "altheon_witness_script",
+            "altheon_immaculate_record"
+        };
+
+        /// <summary>Ability ids deliberately left with no description, because their effect data
+        /// is ambiguous enough that any sentence would be a guess. Listed in Docs/PINOY-LIST.md
+        /// section 2f beside the drafting notes. Empty is the goal.</summary>
+        private static readonly string[] AbilityTextPinnedUnwritten = { "nysera_false_target" };
+
+        /// <summary>What marks a description as a note to a designer rather than text for a
+        /// player: a person, a document, the build tools or a measurement. Matched without case.
+        /// "Draft" is deliberately NOT a marker even though most notes say it: Rheia has a passive
+        /// called Second Draft, and two of her talents name it.</summary>
+        private static readonly string[] DraftingNoteMarkers =
+        {
+            "pinoy", "docs/", ".md", "the engine", "harness", "star band", "measured:"
+        };
+
+        private static bool IsDraftingNote(string text)
+        {
+            string lower = text.ToLowerInvariant();
+            for (int i = 0; i < DraftingNoteMarkers.Length; i++)
+                if (lower.Contains(DraftingNoteMarkers[i])) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// EVERY ABILITY SAYS WHAT IT DOES, AND NONE OF IT QUOTES A NUMBER.
+        ///
+        /// The hero card prints the real value from the effect data (AbilityText, AbilityMath), so
+        /// a number in the prose is a second copy that goes stale the next time balance moves.
+        /// Docs/ABILITY-TEXT-STYLE.md is the house style this enforces the mechanical half of:
+        /// every basic, active, passive and talent on every hero has a description, no description
+        /// carries a digit or a percent sign, and none is a drafting note.
+        ///
+        /// The exceptions are pinned by id, and the pin is checked in both directions: a pinned
+        /// note that stops reading as one, or a pinned id that is gone, is a failure too, so an
+        /// answered question cannot leave a stale exception behind.
+        /// </summary>
+        private static void CheckAbilityTextIsPlayerFacing(ContentDatabase live)
+        {
+            Line("ABILITY TEXT");
+            HashSet<string> pinnedNotes = new HashSet<string>(AbilityTextPinnedDraftingNotes);
+            HashSet<string> pinnedEmpty = new HashSet<string>(AbilityTextPinnedUnwritten);
+            HashSet<string> seen = new HashSet<string>();
+            List<string> empty = new List<string>(), numbers = new List<string>(),
+                         notes = new List<string>(), resolved = new List<string>();
+            int total = 0;
+
+            for (int h = 0; h < live.Heroes.Count; h++)
+            {
+                HeroDef def = live.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+
+                List<string> ids = new List<string>(), texts = new List<string>();
+                if (def.BasicAttack != null) { ids.Add(def.BasicAttack.Id); texts.Add(def.BasicAttack.Description); }
+                if (def.Active != null) { ids.Add(def.Active.Id); texts.Add(def.Active.Description); }
+                for (int i = 0; i < def.Passives.Count; i++) { ids.Add(def.Passives[i].Id); texts.Add(def.Passives[i].Description); }
+                for (int i = 0; i < def.Talents.Count; i++) { ids.Add(def.Talents[i].Id); texts.Add(def.Talents[i].Description); }
+
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    total++;
+                    string id = ids[i];
+                    string text = (texts[i] ?? "").Trim();
+                    seen.Add(id);
+
+                    if (pinnedNotes.Contains(id))
+                    {
+                        if (!IsDraftingNote(text)) resolved.Add(id);
+                        continue;
+                    }
+                    if (text.Length == 0)
+                    {
+                        if (!pinnedEmpty.Contains(id)) empty.Add(def.Id + "/" + id);
+                        continue;
+                    }
+                    if (pinnedEmpty.Contains(id)) resolved.Add(id);
+                    if (IsDraftingNote(text)) { notes.Add(def.Id + "/" + id); continue; }
+                    for (int c = 0; c < text.Length; c++)
+                        if (char.IsDigit(text[c]) || text[c] == '%') { numbers.Add(def.Id + "/" + id); break; }
+                }
+            }
+
+            List<string> gone = new List<string>();
+            foreach (string id in pinnedNotes) if (!seen.Contains(id)) gone.Add(id);
+            foreach (string id in pinnedEmpty) if (!seen.Contains(id)) gone.Add(id);
+
+            Check(empty.Count == 0,
+                  empty.Count == 0
+                    ? "every basic, active, passive and talent on all " + live.Heroes.Count + " heroes has a description ("
+                      + total + " abilities, " + pinnedEmpty.Count + " pinned as deliberately unwritten)"
+                    : empty.Count + " ability description(s) are empty: " + string.Join(", ", empty.ToArray()));
+            Check(numbers.Count == 0,
+                  numbers.Count == 0
+                    ? "no description quotes a number - no digit and no percent sign, because the card prints the real value"
+                    : numbers.Count + " description(s) quote a number the card already prints from the effect data: "
+                      + string.Join(", ", numbers.ToArray()));
+            Check(notes.Count == 0,
+                  notes.Count == 0
+                    ? "no description is a drafting note outside the " + pinnedNotes.Count
+                      + " pinned as open questions in Docs/PINOY-LIST.md section 2f"
+                    : notes.Count + " description(s) are drafting notes that are not pinned - a new question belongs "
+                      + "in Docs/PINOY-LIST.md and in AbilityTextPinnedDraftingNotes: " + string.Join(", ", notes.ToArray()));
+            Check(resolved.Count == 0 && gone.Count == 0,
+                  resolved.Count == 0 && gone.Count == 0
+                    ? "every pinned exception is still open - each pinned note still reads as one and every pinned id exists"
+                    : "pinned exception(s) no longer apply - unpin them from the harness and from Docs/PINOY-LIST.md "
+                      + "section 2f: " + string.Join(", ", resolved.ToArray())
+                      + (gone.Count > 0 ? "; ids no longer in content: " + string.Join(", ", gone.ToArray()) : ""));
+            Line("");
+        }
+
+        /// <summary>
         /// A TALENT THAT IS AUTHORED AS NOTHING. No trigger with effects, no overrides, no
         /// appends: the slot has an id and a name and does not contain a rule.
         ///
