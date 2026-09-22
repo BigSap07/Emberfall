@@ -8,11 +8,16 @@ it exists so the same gap is not rediscovered once per batch.
 **It is a record, not a work order.** Nothing here is scheduled. A row is a fact about the engine on
 the date the row was written, and the authoring batches are explicitly forbidden from closing these
 by adding engine features: a batch that meets one of these approximates it, marks the clause draft
-and adds a row here.
+and adds a row here. An ENGINE pass may close them, and one has - eleven groups and twenty-five
+clauses went that way, each as its own capability with its own harness arena, and then each affected
+kit was put back to the sentence Pinoy wrote for it. A row leaves this file only when the kit that
+carried it has been restored, never when the capability alone is built.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
-arrangement in which a repeat is visible. Eleven of the twenty-two groups below have more than one
-occupant, and the largest has five.
+arrangement in which a repeat is visible. That arrangement did its job: eleven of the original
+twenty-two groups had more than one occupant, and the engine pass that closed the cheap repeated
+ones took every group with two or more, leaving thirteen groups and fourteen clauses. Exactly one
+of those groups still has a repeat, and it is the movement one, which is out of scope by design.
 
 **What is deliberately not here.** Numbers. Every authored 4-star's damage and healing values differ
 from Pinoy's originals because `CheckStarBandByRole` moved them, and that is balance rather than
@@ -201,26 +206,40 @@ its own side. There is no placement, no ordering and nothing that forbids either
 
 ## Where the counts stand
 
-Twenty-two capabilities, thirty-nine clauses, across twenty heroes and four authoring batches, which
-is the whole of the 4-star tier plus the four 5-stars whose text met the same walls. Eleven groups
-have more than one occupant:
+Thirteen capabilities, fourteen clauses, across thirteen heroes. It began at twenty-two and
+thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
+eighteen kits that carried them.
+
+Exactly one group still has more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
 | 22 | position, and anything that would hold a unit in one | 2 |
 
-**Group 9 is closed.** Two of its five rows were the same exclusion in `OnEnemyDamagedAlly`, met
-twice by Branik and Halwen and answered twice by pasting the passive onto `OnDamaged` as well;
-`PassiveDef.IncludeSelf` deleted both overflow passives from the shipped roster. The other three
-were moments nothing raised at all, and are now `OnAllyEnergyGained`, `OnGuardPrevented` and
-`OnEnemyAppliedStatus`. Group 4 was the next best value: four clauses across four heroes all asking
-for a per-source stat modifier, which is one status kind beside `Vulnerable` pointing the other
-way - and it turned out to need the entry on the OTHER body, because no effect can stamp a
-`SourceId` that is not its own caster.
+**What the pass built**, in the order the groups were taken:
+
+| group | what closed it |
+|---|---|
+| 9 | `PassiveDef.IncludeSelf`, and the `OnAllyEnergyGained`, `OnGuardPrevented` and `OnEnemyAppliedStatus` triggers |
+| 4 | `StatusKind.Blunted`, `DamageTakenUp` with a skill scope, and `HealingReceivedUp` |
+| 5 | `shieldTransferDuration`, `invertDuration` and `extendCap` |
+| 12 | `holderHpTick`, which pays a Burn or Regen in its carrier's own bar |
+| 14 | the `RoundEnd` trigger |
+| 18 | a broadcast subject on `OnStatusRemoved` and `OnTurnDelayed` |
+| 17 | `perStackClass`, `perStackMaxCount` and `perStackFromZero` on the existing scaler |
+| 2 | `UsesPerRound` honoured by the Covered redirect and by a Guard |
+| 3 | `areaHitsOnly` on a ward, and the two `IncomingHitIs...` conditions |
+| 8 | `EnemyThatLastDamagedAlly` and `SubjectDamagedMySideSinceMyTurn` |
+| 1 | `SubjectTookHitAboveMaxHpFraction`, and `HpTransfer` reading the `ScaleBy` family |
+
+**Two rows survived their group's closure and are still here**, because each turned out to be about
+something else. Demos's is a balance finding rather than a capability - group 12 records the
+measurement. Lio's narrowed to its second clause, which is a different absence - group 18 was
+retitled around it.
 
 **Groups 20 and 22 are different in kind and should not be read as debt.** An information layer and
-a movement system are games this one is not; the clauses that ask for them are two sentences out of
-thirty-nine, and both heroes work without them.
+a movement system are games this one is not; the clauses that ask for them are three sentences out
+of the fourteen left, and all three heroes work without them.
 
 One caution, from the pass that produced several of these rows. `MaxHpCap` reads like the ceiling a
 percent-of-HP clause wants and is not: it ceilings against the TARGET's Max HP, so `0.02` of Max HP
