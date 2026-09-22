@@ -49,6 +49,7 @@ namespace Emberfall.DevHarness
 
             CheckContent(content);
             CheckSpriteDelivery(content, contentDir);
+            CheckPortraitDelivery(content, contentDir);
             CheckHeroRoleOrdinals(content);
             CheckEnumParity(content);
             CheckTierFiveMechanics(content);
@@ -3912,6 +3913,152 @@ namespace Emberfall.DevHarness
 
             Check(pending.Count == 1 && broken.Count == 0,
                   "the SAME missing file, declared pending, is silent - the two cases are told apart"
+                  + " by the declaration, not by the failed load");
+        }
+
+        // ---------------------------------------------------------------- portrait delivery
+
+        /// <summary>
+        /// WHICH UNITS HAVE A PROFILE BADGE, AND WHICH CLAIM ONE THEY DO NOT HAVE.
+        ///
+        /// The same question CheckSpriteDelivery asks about battle art, asked about the menu-side
+        /// badge, and deliberately the same shape of answer - because the failure it guards
+        /// against is the same one. A hero with no badge draws its initial, which is correct and
+        /// silent. A hero that DECLARES a badge and has no file also draws its initial, which
+        /// looks identical and is a bug. Nothing in a screenshot can tell those apart, so this is
+        /// what tells them apart.
+        ///
+        /// The rule mirrors Widgets.DeclaredBadge:
+        ///
+        ///   visual.portrait empty   no badge claimed. The hero draws its initial, the enemy its
+        ///                           sigil. No file is expected.
+        ///   otherwise               Sprites/Portraits/{portrait}.png must exist, or this fails
+        ///                           with the unit's name and the path it looked in.
+        ///
+        /// There is no "pending" state here and there should not be, which is the one place this
+        /// differs from the sprite check. Battle art needs one because an empty visual.sprite
+        /// already means "build the procedural body", so "not drawn yet" had to be said in a
+        /// second key. An empty portrait has no such occupant, so absence IS "not delivered" and
+        /// a third state would be a distinction with no difference behind it.
+        ///
+        /// Runs outside Unity and reads the FOLDER rather than Resources, for the same reason:
+        /// it fails on a build machine with no editor, before anyone opens a screen.
+        /// </summary>
+        private static void CheckPortraitDelivery(ContentDatabase db, string contentDir)
+        {
+            Line("");
+            Line("PORTRAIT DELIVERY");
+
+            string parent = Path.GetDirectoryName(contentDir.TrimEnd(Path.DirectorySeparatorChar));
+            string portraits = Path.Combine(parent, Path.Combine("Sprites", "Portraits"));
+            if (!Directory.Exists(portraits))
+            {
+                Check(false, "the portrait folder exists at " + portraits);
+                return;
+            }
+
+            List<string> withBadge = new List<string>();
+            List<string> withoutBadge = new List<string>();
+            List<string> broken = new List<string>();
+
+            for (int i = 0; i < db.Heroes.Count; i++)
+                ClassifyPortrait(db.Heroes[i], portraits, withBadge, withoutBadge, broken);
+
+            List<string> enemyBadge = new List<string>();
+            List<string> enemyNone = new List<string>();
+            for (int i = 0; i < db.Enemies.Count; i++)
+                ClassifyPortrait(db.Enemies[i], portraits, enemyBadge, enemyNone, broken);
+
+            Line("  heroes:  " + db.Heroes.Count + " total, " + withBadge.Count + " with a badge, "
+                 + withoutBadge.Count + " on the initial placeholder");
+            Line("  enemies: " + db.Enemies.Count + " total, " + enemyBadge.Count + " with a badge, "
+                 + enemyNone.Count + " on the sigil");
+
+            if (withoutBadge.Count > 0)
+            {
+                Line("");
+                Line("  HEROES ON THE INITIAL (" + withoutBadge.Count + "):");
+                PrintIdColumns(withoutBadge);
+            }
+
+            Line("");
+            for (int i = 0; i < broken.Count; i++) Line("  BROKEN: " + broken[i]);
+
+            Check(broken.Count == 0,
+                  "every unit that declares a portrait has it - a unit listed BROKEN above is missing"
+                  + " a file it says it owns");
+            Check(withBadge.Count + withoutBadge.Count == db.Heroes.Count,
+                  "every hero is exactly one of: has a badge, or has none declared");
+
+            // Every loose file is accounted for, in both directions. The check above catches a
+            // declaration with no file; this catches a file no hero declares, which is the same
+            // delivery going wrong the other way round - an icon landed under a name nothing in
+            // content asks for, so it ships in the APK and is never drawn.
+            List<string> orphans = new List<string>();
+            string[] files = Directory.GetFiles(portraits, "*.png");
+            for (int i = 0; i < files.Length; i++)
+            {
+                string stem = Path.GetFileNameWithoutExtension(files[i]);
+                bool claimed = false;
+                for (int h = 0; h < db.Heroes.Count && !claimed; h++)
+                    claimed = db.Heroes[h].Visual.Portrait == stem;
+                for (int e = 0; e < db.Enemies.Count && !claimed; e++)
+                    claimed = db.Enemies[e].Visual.Portrait == stem;
+                if (!claimed) orphans.Add(stem);
+            }
+            for (int i = 0; i < orphans.Count; i++)
+                Line("  ORPHAN: Sprites/Portraits/" + orphans[i] + ".png is declared by no unit");
+            Check(orphans.Count == 0,
+                  "no portrait file sits in the folder unclaimed by any unit");
+
+            CheckThePortraitDetectorActuallyFires(portraits);
+        }
+
+        private static void ClassifyPortrait(UnitDef def, string portraits, List<string> withBadge,
+                                             List<string> withoutBadge, List<string> broken)
+        {
+            string portrait = def.Visual.Portrait;
+            if (string.IsNullOrEmpty(portrait)) { withoutBadge.Add(def.Id); return; }
+            if (File.Exists(Path.Combine(portraits, portrait + ".png"))) { withBadge.Add(def.Id); return; }
+
+            broken.Add(def.Name + " (" + def.Id + ") declares portrait \"" + portrait
+                       + "\" but Sprites/Portraits/" + portrait + ".png does not exist");
+        }
+
+        /// <summary>
+        /// A DELIBERATE BROKEN UNIT, so the check above is known to be capable of failing - the
+        /// same argument CheckTheBrokenDetectorActuallyFires makes for the sprite check, and worth
+        /// making twice, because a portrait check that reports clean on a fully delivered roster
+        /// is exactly the one nobody would notice had stopped working.
+        ///
+        /// Both directions are asserted: a declared-and-absent badge is reported, and an
+        /// undeclared unit with the same absent file is silent. That pair is what proves the two
+        /// are told apart by the DECLARATION rather than by the failed load they share.
+        /// </summary>
+        private static void CheckThePortraitDetectorActuallyFires(string portraits)
+        {
+            HeroDef ghost = new HeroDef();
+            ghost.Id = "harness_missing_portrait_probe";
+            ghost.Name = "Harness Probe";
+            ghost.Visual.Portrait = "a_badge_that_does_not_exist_on_purpose";
+
+            List<string> withBadge = new List<string>();
+            List<string> withoutBadge = new List<string>();
+            List<string> broken = new List<string>();
+            ClassifyPortrait(ghost, portraits, withBadge, withoutBadge, broken);
+
+            Check(broken.Count == 1 && withBadge.Count == 0 && withoutBadge.Count == 0,
+                  "a hero pointed at a nonexistent portrait IS reported broken (the detector fires)");
+            Check(broken.Count == 1 && broken[0].Contains("a_badge_that_does_not_exist_on_purpose")
+                  && broken[0].Contains("Harness Probe"),
+                  "and the report names the hero and the path it looked in");
+
+            ghost.Visual.Portrait = "";
+            withBadge.Clear(); withoutBadge.Clear(); broken.Clear();
+            ClassifyPortrait(ghost, portraits, withBadge, withoutBadge, broken);
+
+            Check(withoutBadge.Count == 1 && broken.Count == 0,
+                  "the SAME hero with no portrait declared is silent - the two cases are told apart"
                   + " by the declaration, not by the failed load");
         }
 

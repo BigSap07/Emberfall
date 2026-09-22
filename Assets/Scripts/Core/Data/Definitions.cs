@@ -97,6 +97,35 @@ namespace Emberfall.Core.Data
         public const string StatusPending = "pending";
 
         /// <summary>
+        /// THE UNIT'S PROFILE BADGE, the menu-side counterpart to Sprite. Names a file under
+        /// Resources/Sprites/Portraits/{Portrait}.png. Empty (the default) means no badge has
+        /// been delivered for this unit, which is a normal, silent state.
+        ///
+        /// The honest rule is the same one Sprite and SpriteStatus enforce for battle art, with
+        /// one difference in how it is spelled. Battle art needs a third state because an empty
+        /// Sprite ALREADY means something in use - "build the procedural primitive body" - so
+        /// "not drawn yet" had to be said in a separate key. A portrait has no such occupant: no
+        /// unit is meant to render a procedural badge that is not simply the placeholder, so
+        /// absence of this key IS "not delivered", and no portraitStatus key is needed.
+        ///
+        /// What the two share is the part that matters:
+        ///
+        ///   empty       no badge claimed. The hero draws its initial, the enemy its sigil.
+        ///               Silent, correct, and what every unit did before this delivery.
+        ///   set + file  the badge is drawn.
+        ///   set, no file  A BUG, and it is reported as one. Widgets.FramedPortrait logs an error
+        ///               naming the unit and the path it looked in, exactly as BattleAssets does
+        ///               for a missing sheet, and Tools/DevHarness fails the run. It is never
+        ///               quietly swapped for the initial, because a hero who silently reverts to
+        ///               a letter is indistinguishable from one who was never drawn.
+        ///
+        /// It is a file NAME rather than a bool because the badge and the battle sheet are
+        /// separate deliveries that need not share a stem, and because a name is what an error
+        /// message can quote back.
+        /// </summary>
+        public string Portrait = "";
+
+        /// <summary>
         /// True when this unit should render the shared placeholder mannequin instead of its own
         /// art. Asked rather than compared at each site so the spelling lives in one place.
         /// </summary>
@@ -121,6 +150,7 @@ namespace Emberfall.Core.Data
             v.SpriteFootFraction = j.GetFloat("spriteFootFraction", v.SpriteFootFraction);
             v.SpriteMirror = j.GetBool("spriteMirror", v.SpriteMirror);
             v.SpriteStatus = j.GetString("spriteStatus", v.SpriteStatus);
+            v.Portrait = j.GetString("portrait", v.Portrait);
             return v;
         }
     }
