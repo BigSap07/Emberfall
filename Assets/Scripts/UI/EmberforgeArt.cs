@@ -149,6 +149,11 @@ namespace Emberfall.UI
             public const string Ribbon = "forge_ribbon";
             public const string RibbonTail = "forge_ribbon_tail";
 
+            /// <summary>The Hub map's building nametag, and the one translucent surface in the
+            /// kit. See the marker section in Emberforge for why it is the lightest thing here.</summary>
+            public const string Marker = "forge_marker";
+            public const string MarkerTail = "forge_marker_tail";
+
             public const string Pill = "forge_pill";
             public const string TabOn = "forge_tab_on";
             public const string TabOff = "forge_tab_off";
@@ -187,6 +192,7 @@ namespace Emberfall.UI
                 Slot.ButtonSecondary, Slot.ButtonSecondaryDown,
                 Slot.ButtonDisabled, Slot.Gloss,
                 Slot.Ribbon, Slot.RibbonTail,
+                Slot.Marker, Slot.MarkerTail,
                 Slot.Pill, Slot.TabOn, Slot.TabOff,
                 Slot.BarTrough, Slot.BarFill,
                 Slot.Disc, Slot.DiscDown, Slot.Plus, Slot.Ornament,
@@ -331,6 +337,36 @@ namespace Emberfall.UI
                 Face(ref s, Emberforge.RibbonMid, Emberforge.RibbonLow, Emberforge.RibbonLow);
                 s.InnerShadow = 0.5f;
                 s.InnerShadowDepth = 8;
+                return s;
+            }
+
+            if (slot == Slot.Marker)
+            {
+                s.Width = 96; s.Height = 56; s.Radius = Emberforge.MarkerRadius;
+                Face(ref s, UITheme.WithAlpha(Emberforge.PanelTop, Emberforge.MarkerFillAlpha),
+                     UITheme.WithAlpha(Emberforge.PanelMid, Emberforge.MarkerFillAlpha),
+                     UITheme.WithAlpha(Emberforge.PanelLow, Emberforge.MarkerFillAlpha));
+                Gold(ref s, Emberforge.MarkerFrameWeight);
+                s.Highlight = 0.16f;
+                s.HighlightDepth = 5;
+                s.InnerShadow = 0.3f;
+                s.InnerShadowDepth = 7;
+                Border(ref s, 22, 22, 22, 22);
+                return s;
+            }
+
+            if (slot == Slot.MarkerTail)
+            {
+                // The pointer that ties a marker back to the structure it names, as a DIAMOND with
+                // the same outline and the same translucent fill. It is drawn before the plate and
+                // half buried by it, so what is left is a triangle aiming at the building - the
+                // same trick HubStyle.Tail used, now carrying the kit's outline instead of being a
+                // bare rotated square.
+                s.Width = 28; s.Height = 28; s.Shape = ForgeShape.Diamond;
+                s.EdgeWeight = Emberforge.OutlineWeight;
+                Face(ref s, UITheme.WithAlpha(Emberforge.PanelMid, Emberforge.MarkerFillAlpha),
+                     UITheme.WithAlpha(Emberforge.PanelLow, Emberforge.MarkerFillAlpha),
+                     UITheme.WithAlpha(Emberforge.PanelLow, Emberforge.MarkerFillAlpha));
                 return s;
             }
 

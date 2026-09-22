@@ -220,6 +220,67 @@ namespace Emberfall.UI
             tail.raycastTarget = false;
         }
 
+        // ------------------------------------------------------------------ the map marker
+
+        /// <summary>
+        /// A BUILDING NAMETAG: the lightest surface in the kit, and the only translucent one.
+        ///
+        /// A small banner in the palette - warm fill, a thin gold edge, the kit's dark outline -
+        /// and then it stops. No heavy frame, no corner ornaments, no gloss. The Hub's layer 0
+        /// rule is that the buildings are the primary way into this game and nothing above may
+        /// cover one, so a marker has to say a building's name without becoming an object in front
+        /// of it. That is what the light treatment and the translucent fill are for; see the
+        /// marker section in Emberforge.
+        ///
+        /// Built ONTO an existing rect rather than into a new child, because the caller owns the
+        /// geometry: the marker's width comes from its own word and its lift off the anchor is the
+        /// Hub's to decide.
+        /// </summary>
+        public static Image MarkerPlateOn(RectTransform rect)
+        {
+            Image plate = rect.gameObject.AddComponent<Image>();
+            plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Marker);
+            plate.type = Image.Type.Sliced;
+            plate.color = Color.white;
+            return plate;
+        }
+
+        /// <summary>
+        /// The same plate as a CHILD that fills its parent.
+        ///
+        /// Not a stylistic preference: Unity draws a parent's own Graphic before all of its
+        /// children, so a tail added as a child of a plate-bearing node draws ON TOP of that plate
+        /// instead of behind it, and the half that was supposed to be buried shows as a diamond of
+        /// doubled alpha. Moving the plate into a child created AFTER the tail puts the two in the
+        /// right order. HubStyle.SurfaceChild records the same trap for the same reason.
+        /// </summary>
+        public static Image MarkerPlateChild(string name, RectTransform parent)
+        {
+            RectTransform rt = UIBuilder.Node(name, parent);
+            UIBuilder.FillParent(rt, 0f);
+            return MarkerPlateOn(rt);
+        }
+
+        /// <summary>
+        /// The pointer that ties a marker back to the structure it names.
+        ///
+        /// A diamond carrying the same outline and the same translucent fill, centred on the
+        /// plate's bottom edge so the plate buries its top half and what is left is a triangle
+        /// aiming at the building. It was a bare rotated white square before, which had no outline
+        /// and so was the one piece of Hub chrome not wearing the kit.
+        ///
+        /// MUST be created BEFORE the plate that buries it - see MarkerPlateChild.
+        /// </summary>
+        public static Image MarkerTail(RectTransform parent, float size)
+        {
+            Image tail = UIBuilder.Img("Tail", parent,
+                                       EmberforgeSkin.Get(EmberforgeArt.Slot.MarkerTail),
+                                       Color.white);
+            UIBuilder.Box(tail.rectTransform, 0f, 0f, size, size, new Vector2(0.5f, 0f));
+            tail.raycastTarget = false;
+            return tail;
+        }
+
         // ------------------------------------------------------------------ buttons
 
         /// <summary>

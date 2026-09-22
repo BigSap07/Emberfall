@@ -148,7 +148,24 @@ namespace Emberfall.UI
         /// <summary>How far a ribbon's tailed ends reach past the panel it labels, per side.</summary>
         public const float RibbonOverhang = 26f;
 
-        // ------------------------------------------------------------------ the currency pill
+        // ------------------------------------------------------------------ the map marker
+        //
+        // The LIGHTEST thing in the kit, and deliberately so. A building marker sits on a painting
+        // whose buildings are the primary way into this game, so it has to say the building's name
+        // without covering the building. It gets the outline, because everything does, and a thin
+        // gold edge so it belongs to the same set as the frame - and then it stops. No heavy
+        // frame, no corner ornaments, no gloss.
+        //
+        // It is also the one surface in the kit that is TRANSLUCENT. The outline and the gold edge
+        // are opaque so the shape stays crisp against whatever it lands on; the fill lets a little
+        // of the painting through, which is the difference between a banner on a building and a
+        // sticker over one.
+
+        public const float MarkerFillAlpha = 0.86f;
+        public const int MarkerFrameWeight = 2;
+        public const int MarkerRadius = 12;
+
+                // ------------------------------------------------------------------ the currency pill
 
         public static readonly Color PillFill = UITheme.Hex("120D0A");
 

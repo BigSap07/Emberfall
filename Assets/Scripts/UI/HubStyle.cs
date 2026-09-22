@@ -123,11 +123,19 @@ namespace Emberfall.UI
         public const float PillCurrencyWidth = 200f;
         public const float PillRankWidth = 430f;
 
-        /// <summary>Building labels. Uniform height for every marker on the map.</summary>
+        /// <summary>
+        /// Building labels. Uniform height for every marker on the map.
+        ///
+        /// LabelCharWidth is 15 rather than the 12 it was, because the lettering is CINZEL now and
+        /// Cinzel is a wide Roman display face where the previous font was condensed. The width of
+        /// a marker is computed from its own word, so a per-character figure that is too small
+        /// does not clip the text - the label overflows its plate and the longest names on the
+        /// map, DEEP RECITAL and CAMPAIGN, hang out of both ends of their banner.
+        /// </summary>
         public const float LabelHeight = 48f;
         public const float LabelPadX = 44f;
-        public const float LabelMinWidth = 150f;
-        public const float LabelCharWidth = 12f;
+        public const float LabelMinWidth = 170f;
+        public const float LabelCharWidth = 15f;
 
         /// <summary>
         /// How far above its building a label floats, and the tail that reaches back down to it.

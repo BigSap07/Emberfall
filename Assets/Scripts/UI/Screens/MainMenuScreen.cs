@@ -292,8 +292,7 @@ namespace Emberfall.UI.Screens
         /// the anchor still points at the building, the building stays visible, and the label reads
         /// as a caption for it rather than a sticker over it.
         /// </summary>
-        private UIButton BuildNodePlate(string label, float mx, float my,
-                                        float fillAlpha, float edgeAlpha, Color textColor)
+        private UIButton BuildNodePlate(string label, float mx, float my)
         {
             UIButton handle = new UIButton();
             handle.Root = UIBuilder.Node("Node" + label, _map);
@@ -305,9 +304,8 @@ namespace Emberfall.UI.Screens
             // Tail first, plate second. Unity draws a parent's own graphic before its children, so
             // the plate has to be a CHILD created after the tail for it to bury the tail's top half
             // and leave a triangle pointing down at the building.
-            Image tail = HubStyle.Tail(handle.Root, fillAlpha);
-            handle.Background = HubStyle.SurfaceChild("Plate", handle.Root, HubStyle.RadiusLabel,
-                                                      fillAlpha, edgeAlpha, HubStyle.BorderWeight);
+            Image tail = EmberforgeUI.MarkerTail(handle.Root, HubStyle.TailSize);
+            handle.Background = EmberforgeUI.MarkerPlateChild("Plate", handle.Root);
 
             handle.Button = handle.Root.gameObject.AddComponent<Button>();
             handle.Button.targetGraphic = handle.Background;
@@ -322,11 +320,15 @@ namespace Emberfall.UI.Screens
             handle.Button.colors = colors;
             handle.Root.gameObject.AddComponent<ButtonPress>();
 
-            handle.Label = UIBuilder.Label("Text", handle.Root, label, HubStyle.FontLabel, textColor,
-                                           TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(handle.Label.rectTransform, 6f);
-            // The shadow, not a heavier plate, is what holds the word off the painting behind it.
-            UIBuilder.Shadowed(handle.Label, UITheme.InkArt, 1.6f);
+            // Cinzel, because a place on the map is a NAME and the kit's title face is what names
+            // things. Warm white rather than pure white, so it belongs to the same text set as the
+            // panels, and a dark stroke all the way round rather than a drop shadow: this word
+            // lands on a sunlit plaza as often as on a shadowed wall, and a shadow on one side
+            // only holds a label off a background that happens to be darker than it.
+            handle.Label = EmberforgeUI.Title("Text", handle.Root, label, HubStyle.FontLabel,
+                                              Emberforge.TextBody, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(handle.Label.rectTransform, Emberforge.Space8);
+            UIBuilder.Outlined(handle.Label, Emberforge.Outline, Emberforge.StrokeThin);
 
             // The map is WIDER than the window at most aspects this game targets, because its
             // AspectRatioFitter envelopes rather than fits, so a marker anchored near the right of
@@ -349,8 +351,7 @@ namespace Emberfall.UI.Screens
 
         private UIButton AddMapNode(string label, float mx, float my, System.Action action)
         {
-            UIButton node = BuildNodePlate(label, mx, my, HubStyle.PlateAlphaSoft,
-                                           HubStyle.BorderAlpha, HubStyle.LabelText);
+            UIButton node = BuildNodePlate(label, mx, my);
             node.OnClick(action);
             return node;
         }
