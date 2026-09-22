@@ -71,6 +71,12 @@ namespace Emberfall.Core.Data
         LowestHpAlly,
         AllAllies,
         RandomAlly,
+
+        /// <summary>
+        /// The enemy that last damaged the caster - or, inside a broadcast about another body, the
+        /// enemy that last damaged THAT body, which is the unit ConditionSubject.LastAttacker names
+        /// in the same window. Falls through to FrontEnemy when nobody qualifies.
+        /// </summary>
         LastAttacker,
         LastTarget,
 
