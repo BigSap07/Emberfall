@@ -2012,7 +2012,7 @@
       "basic": {
         "id": "adric_mapcase_bash",
         "name": "Mapcase Bash",
-        "description": "Deals 255% Attack damage and applies Lost Route for 2 rounds. Lost Route reduces Accuracy by 12%.",
+        "description": "Strikes the front enemy and applies Lost Route. Lost Route reduces its Accuracy.",
         "effects": [
           {
             "kind": "Damage",
@@ -2040,7 +2040,7 @@
         "id": "adric_erase_the_road",
         "name": "Erase the Road",
         "energyCost": 100,
-        "description": "Deals 400% Attack damage to all enemies with Lost Route and grants Adric a Shield equal to 12% Max HP for 2 rounds.",
+        "description": "Strikes every enemy with Lost Route and grants Adric a Ward worth a share of his Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -2143,7 +2143,7 @@
         "id": "aster_shatterproof",
         "name": "Shatterproof",
         "energyCost": 100,
-        "description": "Deals 540% Attack damage to an enemy with Fracture and spreads Fracture to the enemies beside it for 1 round.",
+        "description": "Strikes an enemy with Fracture and spreads Fracture to the enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
@@ -2172,7 +2172,7 @@
       "passive1": {
         "id": "aster_stress_line",
         "name": "Stress Line",
-        "description": "When an enemy with Fracture is defeated, all remaining enemies lose 6 Energy.",
+        "description": "When an enemy with Fracture is defeated, all remaining enemies lose Energy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -2344,7 +2344,7 @@
       "basic": {
         "id": "selka_filed_objection",
         "name": "Filed Objection",
-        "description": "Deals 190% Attack damage and applies Overdue for 2 rounds. Overdue reduces received healing by 15%.",
+        "description": "Strikes the front enemy and applies Overdue. Overdue reduces the healing it receives.",
         "effects": [
           {
             "kind": "Damage",
@@ -2372,7 +2372,7 @@
         "id": "selka_deadline",
         "name": "Deadline",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to an Overdue enemy. If it is below 35% HP, deals 103% additional Attack damage.",
+        "description": "Strikes an Overdue enemy. If it is at low HP, deals additional damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -4879,7 +4879,7 @@
       "basic": {
         "id": "bren_shared_passage",
         "name": "Shared Passage",
-        "description": "Deals 232% Attack damage and gives the lowest-HP ally 8% Damage Reduction for 1 round.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Bulwark.",
         "effects": [
           {
             "kind": "Damage",
@@ -4912,7 +4912,7 @@
       "passive1": {
         "id": "bren_reserved_passage",
         "name": "Reserved Passage",
-        "description": "The first time an ally falls below 30% HP, Bren advances their turn by 15% turn progress.",
+        "description": "The first time an ally falls to low HP, Bren advances their turn.",
         "trigger": "OnAllyHpBelowThreshold",
         "threshold": 0.3,
         "oncePerBattle": true,
@@ -4991,7 +4991,7 @@
         "id": "cal_corner_shot",
         "name": "Corner Shot",
         "energyCost": 100,
-        "description": "Deals 457% Attack damage to an Offset enemy, and the same blow strikes both enemies beside it.",
+        "description": "Strikes an Offset enemy, and the same blow strikes both enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
@@ -5062,7 +5062,7 @@
       "basic": {
         "id": "linnet_wrong_number",
         "name": "Wrong Number",
-        "description": "Deals 215% Attack damage and applies Crossed Line for 2 rounds.",
+        "description": "Strikes the front enemy and applies Crossed Line.",
         "effects": [
           {
             "kind": "Damage",
@@ -5081,7 +5081,7 @@
         "id": "linnet_operator_error",
         "name": "Operator Error",
         "energyCost": 100,
-        "description": "Deals 349% Attack damage to all Crossed Line enemies and delays each by 15% turn progress.",
+        "description": "Strikes every enemy with Crossed Line and delays each of them.",
         "effects": [
           {
             "kind": "Damage",
@@ -5162,7 +5162,7 @@
       "basic": {
         "id": "oswin_corrective_cut",
         "name": "Corrective Cut",
-        "description": "Deals 195% Attack damage and heals the ally with the most debuffs for 98% Attack.",
+        "description": "Strikes the front enemy and heals the ally with the most debuffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -5180,7 +5180,7 @@
         "id": "oswin_reposition_the_hurt",
         "name": "Reposition the Hurt",
         "energyCost": 100,
-        "description": "Deals 293% Attack damage to all enemies, then moves one debuff from each ally onto the highest-HP enemy for 2 rounds.",
+        "description": "Strikes every enemy, then moves a debuff from each ally onto the highest-HP enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -7507,7 +7507,7 @@
         "id": "brio_evidence_kept",
         "name": "Evidence Kept",
         "energyCost": 100,
-        "description": "Deals 480% Attack damage to an Accounted enemy and heals the lowest-HP ally for 6% Max HP.",
+        "description": "Strikes an Accounted enemy and heals the lowest-HP ally for a share of their Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -7524,7 +7524,7 @@
       "passive1": {
         "id": "brio_nothing_forgotten",
         "name": "Nothing Forgotten",
-        "description": "When an Accounted enemy is defeated, Brio writes Accounted onto the highest-HP enemy for 2 rounds.",
+        "description": "When an Accounted enemy is defeated, Brio writes Accounted onto the highest-HP enemy.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "effects": [
@@ -7580,7 +7580,7 @@
       "basic": {
         "id": "elin_mending_prick",
         "name": "Mending Prick",
-        "description": "Deals 179% Attack damage and heals the lowest-HP ally for 89% Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -7598,7 +7598,7 @@
         "id": "elin_hold_the_seam",
         "name": "Hold the Seam",
         "energyCost": 100,
-        "description": "Deals 268% Attack damage to all enemies and gives the lowest-HP ally Stitching for 3 rounds. Stitching heals 3% of its holder's Max HP at turn end.",
+        "description": "Strikes every enemy and gives the lowest-HP ally Stitching. Stitching heals a share of its holder's Max HP at turn end.",
         "effects": [
           {
             "kind": "Damage",
@@ -7619,7 +7619,7 @@
       "passive1": {
         "id": "elin_tighten_the_thread",
         "name": "Tighten the Thread",
-        "description": "When Stitching runs its course, its holder gains 10 Energy.",
+        "description": "When Stitching runs its course, its holder gains Energy.",
         "trigger": "OnAppliedAllyStatusExpired",
         "triggerStatus": "Regen",
         "oncePerBattle": false,
@@ -7673,7 +7673,7 @@
       "basic": {
         "id": "marn_garrison_guard",
         "name": "Garrison Guard",
-        "description": "Deals 105% Attack damage and gives the lowest-HP ally Coverguard for 2 rounds. Coverguard reduces the next hit by 14%.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Coverguard. Coverguard reduces the next hit.",
         "effects": [
           {
             "kind": "Damage",
@@ -7695,7 +7695,7 @@
         "id": "marn_reserve_shelter",
         "name": "Reserve Shelter",
         "energyCost": 100,
-        "description": "Deals 165% Attack damage to all enemies and gives every ally Coverguard for 2 rounds.",
+        "description": "Strikes every enemy and gives every ally Coverguard.",
         "effects": [
           {
             "kind": "Damage",
@@ -7716,7 +7716,7 @@
       "passive1": {
         "id": "marn_relief_after_loss",
         "name": "Relief After Loss",
-        "description": "When Coverguard is consumed, its holder heals 3% Max HP.",
+        "description": "When Coverguard is consumed, its holder heals a share of their Max HP.",
         "trigger": "OnGuardPrevented",
         "oncePerBattle": false,
         "effects": [
@@ -7771,7 +7771,7 @@
       "basic": {
         "id": "rusk_patch_round",
         "name": "Patch Round",
-        "description": "Deals 141% Attack damage and gives a random ally Patchwork for 2 rounds. Patchwork grants 8% Defense.",
+        "description": "Strikes the front enemy and gives a random ally Patchwork. Patchwork raises their Defense.",
         "effects": [
           {
             "kind": "Damage",
@@ -7792,7 +7792,7 @@
         "id": "rusk_keep_it_running",
         "name": "Keep It Running",
         "energyCost": 100,
-        "description": "Deals 235% Attack damage to all enemies and puts every Patchwork back to its full 2 rounds.",
+        "description": "Strikes every enemy and puts every Patchwork back to its full length.",
         "effects": [
           {
             "kind": "Damage",
@@ -7811,7 +7811,7 @@
       "passive1": {
         "id": "rusk_borrowed_time",
         "name": "Borrowed Time",
-        "description": "When a blow would kill an ally carrying Patchwork, Patchwork goes instead and the ally is left at 1 HP. Once per battle.",
+        "description": "When a blow would kill an ally carrying Patchwork, Patchwork goes instead and the ally is left barely standing. Once per battle.",
         "trigger": "OnAllyWouldDie",
         "oncePerBattle": true,
         "effects": [
@@ -10180,7 +10180,7 @@
       "passive1": {
         "id": "avera_encore_denied",
         "name": "Encore Denied",
-        "description": "The first enemy delayed each round takes 10% more damage until its next turn.",
+        "description": "The first enemy delayed each round takes more damage until its next turn.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "limit": "OncePerRound",
@@ -10238,7 +10238,7 @@
       "basic": {
         "id": "lydia_platform_change",
         "name": "Platform Change",
-        "description": "Deals 110% Attack damage and advances Lydia's next turn by 8% turn progress.",
+        "description": "Strikes the front enemy and advances Lydia's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -10256,7 +10256,7 @@
         "id": "lydia_miss_the_train",
         "name": "Miss the Train",
         "energyCost": 100,
-        "description": "Deals 180% Attack damage to all enemies and delays the slowest enemy by 30% turn progress.",
+        "description": "Strikes every enemy and delays the slowest enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -10329,7 +10329,7 @@
       "basic": {
         "id": "roan_unexpected_entry",
         "name": "Unexpected Entry",
-        "description": "Deals 256% Attack damage and applies Off Balance for 2 rounds. Off Balance lowers Effect Resist by 15%.",
+        "description": "Strikes the front enemy and applies Off Balance. Off Balance lowers its Effect Resist.",
         "effects": [
           {
             "kind": "Damage",
@@ -10357,7 +10357,7 @@
         "id": "roan_through_the_service_door",
         "name": "Through the Service Door",
         "energyCost": 100,
-        "description": "Deals 360% Attack damage to an Off Balance enemy and takes one buff off it.",
+        "description": "Strikes an Off Balance enemy and takes a buff off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -10432,7 +10432,7 @@
       "basic": {
         "id": "tomas_prybar",
         "name": "Prybar",
-        "description": "Deals 260% Attack damage and takes 10% turn progress off the target.",
+        "description": "Strikes the front enemy and takes turn progress off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -10450,7 +10450,7 @@
         "id": "tomas_force_the_exit",
         "name": "Force the Exit",
         "energyCost": 100,
-        "description": "Deals 409% Attack damage to the front enemy and Taunts it for 1 round; it loses 15% Speed for 2 rounds.",
+        "description": "Strikes the front enemy, applies Provoke to it and slows it with Mire.",
         "effects": [
           {
             "kind": "Damage",
@@ -10478,7 +10478,7 @@
       "passive1": {
         "id": "tomas_keep_moving",
         "name": "Keep Moving",
-        "description": "When a slowed enemy hits Tomas, he gains a Shield worth 10% of his Max HP for 1 round.",
+        "description": "When an enemy in Mire hits Tomas, he gains a Ward worth a share of his Max HP.",
         "trigger": "OnDamaged",
         "oncePerBattle": false,
         "effects": [
@@ -12637,7 +12637,7 @@
       "basic": {
         "id": "petra_returned_mail",
         "name": "Returned Mail",
-        "description": "Deals 251% Attack damage and applies Withheld for 2 rounds. A Withheld body cannot gain new buffs.",
+        "description": "Strikes the front enemy and applies Withheld. A Withheld body cannot gain new buffs.",
         "effects": [
           {
             "kind": "Damage",
@@ -12664,7 +12664,7 @@
         "id": "petra_keep_the_secret",
         "name": "Keep the Secret",
         "energyCost": 100,
-        "description": "Deals 406% Attack damage to the front enemy and Taunts it for 1 round; it is also Withheld for 2 rounds.",
+        "description": "Strikes the front enemy and applies Provoke to it; it is also Withheld.",
         "effects": [
           {
             "kind": "Damage",
@@ -14329,7 +14329,7 @@
       "basic": {
         "id": "clara_case_note",
         "name": "Case Note",
-        "description": "Deals 243% Attack damage and removes one debuff from the lowest-HP ally.",
+        "description": "Strikes the front enemy and removes a debuff from the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -14347,7 +14347,7 @@
         "id": "clara_prescribe_exactly",
         "name": "Prescribe Exactly",
         "energyCost": 100,
-        "description": "Deals 364% Attack damage to all enemies and gives all allies Clarified for 2 rounds. Clarified allies gain 12% Effect Resist.",
+        "description": "Strikes every enemy and gives all allies Clarified. Clarified allies gain Effect Resist.",
         "effects": [
           {
             "kind": "Damage",
