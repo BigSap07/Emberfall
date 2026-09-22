@@ -40,6 +40,53 @@ namespace Emberfall.EditorTools
         public const string WindowsFolderName = "Emberfall-0.1.0-dev-win";
         public const string WindowsExeName = "Emberfall.exe";
 
+        /// <summary>
+        /// THE HAND-OFF BUILD, for a headless run that puts the player somewhere other than the
+        /// working tree.
+        ///
+        /// BuildWindows has taken an outputRoot since it was written and its own summary already
+        /// describes this caller - "the hand-off build passes a path OUTSIDE the repository so a
+        /// multi-hundred-megabyte player never lands in a working tree" - but nothing in the
+        /// project actually passed one. BuildWindowsMenu passes null, which means the project's
+        /// own Builds folder, and -executeMethod cannot call a method that takes an argument. So
+        /// a hand-off build could only ever be done by hand.
+        ///
+        /// The destination is read from the command line rather than written here, because it is
+        /// a property of the machine running the build and not of the game:
+        ///
+        ///   Unity.exe -quit -batchmode -projectPath "..." -buildTarget Win64
+        ///             -executeMethod Emberfall.EditorTools.EmberfallBuild.BuildWindowsHandoff
+        ///             -emberfallOutput "<a folder outside every working tree>"
+        ///
+        /// Missing or empty, it throws rather than falling back to the in-tree Builds folder.
+        /// A silent fallback is how a 200 MB player ends up inside a checkout, and the whole
+        /// reason this entry point exists is to keep it out of one.
+        /// </summary>
+        public static void BuildWindowsHandoff()
+        {
+            string outputRoot = CommandLineValue("-emberfallOutput");
+            if (string.IsNullOrEmpty(outputRoot))
+            {
+                throw new Exception("Emberfall: BuildWindowsHandoff needs -emberfallOutput <folder>; " +
+                                    "refusing to fall back to the in-tree Builds folder.");
+            }
+
+            string path = BuildWindows(outputRoot);
+            if (path == null) throw new Exception("Emberfall: Windows hand-off build failed.");
+        }
+
+        /// <summary>The value following <paramref name="flag"/> on Unity's own command line, or
+        /// null if the flag is absent or is the last argument.</summary>
+        private static string CommandLineValue(string flag)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase)) return args[i + 1];
+            }
+            return null;
+        }
+
         [MenuItem("Emberfall/Build Windows (Development)", false, 62)]
         public static void BuildWindowsMenu()
         {
