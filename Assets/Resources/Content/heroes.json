@@ -34,7 +34,8 @@
         "sprite": "hale_the_relentless_hunter",
         "spriteBodyFraction": 0.554,
         "spriteFootFraction": 0.219,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "hale_the_relentless_hunter"
       },
       "basic": {
         "id": "hale_field_sign",
@@ -258,7 +259,8 @@
         "sprite": "kael_the_unyielding",
         "spriteBodyFraction": 0.55,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "kael_the_unyielding"
       },
       "basic": {
         "id": "kael_breach_inspection",
@@ -554,7 +556,8 @@
         "sprite": "kiva_the_forsaken_oath",
         "spriteBodyFraction": 0.508,
         "spriteFootFraction": 0.238,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "kiva_the_forsaken_oath"
       },
       "basic": {
         "id": "kiva_cut_the_escort",
@@ -844,7 +847,8 @@
         "sprite": "marrow_the_irrevocable_vow",
         "spriteBodyFraction": 0.535,
         "spriteFootFraction": 0.231,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "marrow_the_irrevocable_vow"
       },
       "basic": {
         "id": "marrow_witnessed_strike",
@@ -1133,7 +1137,8 @@
         "sprite": "seraphine_the_closed_volume",
         "spriteBodyFraction": 0.527,
         "spriteFootFraction": 0.235,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "seraphine_the_closed_volume"
       },
       "basic": {
         "id": "seraphine_marginal_note",
@@ -1433,7 +1438,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "branik_the_siege_mason"
       },
       "basic": {
         "id": "branik_faultline_tap",
@@ -1575,7 +1581,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "demos_the_debt_collector"
       },
       "basic": {
         "id": "demos_notice_of_loss",
@@ -1716,7 +1723,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "kest_the_bridgebreaker"
       },
       "basic": {
         "id": "kest_commitment_cut",
@@ -1834,7 +1842,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "orelle_the_fever_warden"
       },
       "basic": {
         "id": "orelle_measured_tap",
@@ -1930,7 +1939,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "tavia_the_signal_huntress"
       },
       "basic": {
         "id": "tavia_rangefinder_bolt",
@@ -2032,7 +2042,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "adric_the_blank_map"
       },
       "basic": {
         "id": "adric_the_blank_map_placeholder_basic",
@@ -2093,7 +2104,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "aster_the_glassblower"
       },
       "basic": {
         "id": "aster_the_glassblower_placeholder_basic",
@@ -2154,7 +2166,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "quin_the_sealed_dispatch"
       },
       "basic": {
         "id": "quin_the_sealed_dispatch_placeholder_basic",
@@ -2215,7 +2228,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "selka_the_unheard_appeal"
       },
       "basic": {
         "id": "selka_the_unheard_appeal_placeholder_basic",
@@ -2276,7 +2290,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "arno_the_unfinished_mason"
       },
       "basic": {
         "id": "arno_the_unfinished_mason_placeholder_basic",
@@ -2325,7 +2340,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "barr_the_splintered_door"
       },
       "basic": {
         "id": "barr_the_splintered_door_placeholder_basic",
@@ -2374,7 +2390,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "piri_the_match_seller"
       },
       "basic": {
         "id": "piri_the_match_seller_placeholder_basic",
@@ -2423,7 +2440,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "fenn_the_parcel_runner"
       },
       "basic": {
         "id": "fenn_the_parcel_runner_placeholder_basic",
@@ -2472,7 +2490,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "ulric_the_fallen_sign"
       },
       "basic": {
         "id": "ulric_the_fallen_sign_placeholder_basic",
@@ -2520,7 +2539,8 @@
         "sprite": "nereia_the_field_medic",
         "spriteBodyFraction": 0.669,
         "spriteFootFraction": 0.165,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "nereia_the_field_medic"
       },
       "basic": {
         "id": "nereia_shared_pain",
@@ -2763,7 +2783,8 @@
         "sprite": "rheia_the_revision_scribe",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.219,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "rheia_the_revision_scribe"
       },
       "basic": {
         "id": "rheia_shifting_script",
@@ -3078,7 +3099,8 @@
         "sprite": "rovan_the_adaptive_commander",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "rovan_the_adaptive_commander"
       },
       "basic": {
         "id": "rovan_deflection_strike",
@@ -3340,7 +3362,8 @@
         "sprite": "talren_the_wayfinder",
         "spriteBodyFraction": 0.562,
         "spriteFootFraction": 0.219,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "talren_the_wayfinder"
       },
       "basic": {
         "id": "talren_redirecting_shot",
@@ -3686,7 +3709,8 @@
         "sprite": "vaelis_the_unfixed_blade",
         "spriteBodyFraction": 0.569,
         "spriteFootFraction": 0.215,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "vaelis_the_unfixed_blade"
       },
       "basic": {
         "id": "vaelis_leaving_cut",
@@ -4057,7 +4081,8 @@
         "sprite": "celen_the_open_hand",
         "spriteBodyFraction": 0.665,
         "spriteFootFraction": 0.173,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "celen_the_open_hand"
       },
       "basic": {
         "id": "celen_offered_strike",
@@ -4161,7 +4186,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "mika_the_salvage_pilot"
       },
       "basic": {
         "id": "mika_reclaimed_round",
@@ -4272,7 +4298,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "rhys_the_fence_walker"
       },
       "basic": {
         "id": "rhys_crossing_cut",
@@ -4376,7 +4403,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "siofra_the_turncoat_oracle"
       },
       "basic": {
         "id": "siofra_bad_omen",
@@ -4480,7 +4508,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "vanno_the_detour_king"
       },
       "basic": {
         "id": "vanno_wrong_turn",
@@ -4595,7 +4624,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "bren_the_extra_measure"
       },
       "basic": {
         "id": "bren_the_extra_measure_placeholder_basic",
@@ -4656,7 +4686,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "cal_the_alternate_angle"
       },
       "basic": {
         "id": "cal_the_alternate_angle_placeholder_basic",
@@ -4717,7 +4748,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "linnet_the_misdialed"
       },
       "basic": {
         "id": "linnet_the_misdialed_placeholder_basic",
@@ -4778,7 +4810,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "oswin_the_refit_surgeon"
       },
       "basic": {
         "id": "oswin_the_refit_surgeon_placeholder_basic",
@@ -4839,7 +4872,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "dett_the_untied_knot"
       },
       "basic": {
         "id": "dett_the_untied_knot_placeholder_basic",
@@ -4888,7 +4922,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "hod_the_redirected_load"
       },
       "basic": {
         "id": "hod_the_redirected_load_placeholder_basic",
@@ -4937,7 +4972,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "yara_the_spare_compass"
       },
       "basic": {
         "id": "yara_the_spare_compass_placeholder_basic",
@@ -4986,7 +5022,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "moss_the_side_route"
       },
       "basic": {
         "id": "moss_the_side_route_placeholder_basic",
@@ -5035,7 +5072,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "orenna_the_turning_wheel"
       },
       "basic": {
         "id": "orenna_the_turning_wheel_placeholder_basic",
@@ -5083,7 +5121,8 @@
         "sprite": "brenna_the_remaining_wall",
         "spriteBodyFraction": 0.699,
         "spriteFootFraction": 0.157,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "brenna_the_remaining_wall"
       },
       "basic": {
         "id": "brenna_stubborn_blow",
@@ -5329,7 +5368,8 @@
         "sprite": "edrin_the_distant_bell",
         "spriteBodyFraction": 0.55,
         "spriteFootFraction": 0.22,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "edrin_the_distant_bell"
       },
       "basic": {
         "id": "edrin_mark_of_survival",
@@ -5564,7 +5604,8 @@
         "sprite": "elyra_the_patient_warden",
         "spriteBodyFraction": 0.581,
         "spriteFootFraction": 0.2,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "elyra_the_patient_warden"
       },
       "basic": {
         "id": "elyra_patient_bloom",
@@ -5876,7 +5917,8 @@
         "sprite": "isara_the_second_chance",
         "spriteBodyFraction": 0.762,
         "spriteFootFraction": 0.138,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "isara_the_second_chance"
       },
       "basic": {
         "id": "isara_restoring_touch",
@@ -6191,7 +6233,8 @@
         "sprite": "sylven_the_unfading_blade",
         "spriteBodyFraction": 0.542,
         "spriteFootFraction": 0.227,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "sylven_the_unfading_blade"
       },
       "basic": {
         "id": "sylven_open_wound",
@@ -6442,7 +6485,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "corin_the_patience_engineer"
       },
       "basic": {
         "id": "corin_measurement_strike",
@@ -6551,7 +6595,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "halwen_the_reserve_keeper"
       },
       "basic": {
         "id": "halwen_reserve_swing",
@@ -6680,7 +6725,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "jory_the_old_gate"
       },
       "basic": {
         "id": "jory_holdfast_thrust",
@@ -6779,7 +6825,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "maera_the_harbor_eye"
       },
       "basic": {
         "id": "maera_returning_shot",
@@ -6884,7 +6931,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "maren_the_long_sleeper"
       },
       "basic": {
         "id": "maren_waking_touch",
@@ -6986,7 +7034,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "brio_the_patient_record"
       },
       "basic": {
         "id": "brio_the_patient_record_placeholder_basic",
@@ -7047,7 +7096,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "elin_the_second_stitch"
       },
       "basic": {
         "id": "elin_the_second_stitch_placeholder_basic",
@@ -7108,7 +7158,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "marn_the_holding_wall"
       },
       "basic": {
         "id": "marn_the_holding_wall_placeholder_basic",
@@ -7169,7 +7220,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "rusk_the_patchmaker"
       },
       "basic": {
         "id": "rusk_the_patchmaker_placeholder_basic",
@@ -7230,7 +7282,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "garron_the_stout_frame"
       },
       "basic": {
         "id": "garron_the_stout_frame_placeholder_basic",
@@ -7279,7 +7332,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "nara_the_road_nurse"
       },
       "basic": {
         "id": "nara_the_road_nurse_placeholder_basic",
@@ -7328,7 +7382,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "wynn_the_hand_me_down"
       },
       "basic": {
         "id": "wynn_the_hand_me_down_placeholder_basic",
@@ -7377,7 +7432,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "hal_the_stone_cache"
       },
       "basic": {
         "id": "hal_the_stone_cache_placeholder_basic",
@@ -7426,7 +7482,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "iri_the_kept_token"
       },
       "basic": {
         "id": "iri_the_kept_token_placeholder_basic",
@@ -7474,7 +7531,8 @@
         "sprite": "aeron_the_unbroken_stride",
         "spriteBodyFraction": 0.827,
         "spriteFootFraction": 0.096,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "aeron_the_unbroken_stride"
       },
       "basic": {
         "id": "aeron_press_forward",
@@ -7663,7 +7721,8 @@
         "sprite": "dahlia_the_wayward_hymn",
         "spriteBodyFraction": 0.554,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "dahlia_the_wayward_hymn"
       },
       "basic": {
         "id": "dahlia_offbeat_chime",
@@ -8003,7 +8062,8 @@
         "sprite": "merek_the_sequence_thief",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.219,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "merek_the_sequence_thief"
       },
       "basic": {
         "id": "merek_interjecting_clause",
@@ -8279,7 +8339,8 @@
         "sprite": "oris_the_unwritten_path",
         "spriteBodyFraction": 0.554,
         "spriteFootFraction": 0.223,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "oris_the_unwritten_path"
       },
       "basic": {
         "id": "oris_unfinished_note",
@@ -8592,7 +8653,8 @@
         "sprite": "zella_the_slow_argument",
         "spriteBodyFraction": 0.55,
         "spriteFootFraction": 0.22,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "zella_the_slow_argument"
       },
       "basic": {
         "id": "zella_quiet_dose",
@@ -8826,7 +8888,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "eira_the_rolling_barricade"
       },
       "basic": {
         "id": "eira_shove_aside",
@@ -8920,7 +8983,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "finn_the_bellmaker"
       },
       "basic": {
         "id": "finn_ringing_slug",
@@ -9037,7 +9101,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "niko_the_uninvited_guest"
       },
       "basic": {
         "id": "niko_bad_entrance",
@@ -9159,7 +9224,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "sable_the_queue_cutter"
       },
       "basic": {
         "id": "sable_cut_in",
@@ -9267,7 +9333,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "tamsin_the_loose_thread"
       },
       "basic": {
         "id": "tamsin_snag",
@@ -9381,7 +9448,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "avera_the_interrupter"
       },
       "basic": {
         "id": "avera_the_interrupter_placeholder_basic",
@@ -9442,7 +9510,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "lydia_the_unscheduled"
       },
       "basic": {
         "id": "lydia_the_unscheduled_placeholder_basic",
@@ -9503,7 +9572,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "roan_the_side_door"
       },
       "basic": {
         "id": "roan_the_side_door_placeholder_basic",
@@ -9564,7 +9634,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "tomas_the_door_jammer"
       },
       "basic": {
         "id": "tomas_the_door_jammer_placeholder_basic",
@@ -9625,7 +9696,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "jax_the_clockwork_rat"
       },
       "basic": {
         "id": "jax_the_clockwork_rat_placeholder_basic",
@@ -9674,7 +9746,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "kora_the_interrupted_queue"
       },
       "basic": {
         "id": "kora_the_interrupted_queue_placeholder_basic",
@@ -9723,7 +9796,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "sena_the_empty_chair"
       },
       "basic": {
         "id": "sena_the_empty_chair_placeholder_basic",
@@ -9772,7 +9846,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "bex_the_unlatched"
       },
       "basic": {
         "id": "bex_the_unlatched_placeholder_basic",
@@ -9821,7 +9896,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "till_the_shifting_target"
       },
       "basic": {
         "id": "till_the_shifting_target_placeholder_basic",
@@ -9869,7 +9945,8 @@
         "sprite": "cyrra_the_burden_bearer",
         "spriteBodyFraction": 0.565,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "cyrra_the_burden_bearer"
       },
       "basic": {
         "id": "cyrra_hidden_burden",
@@ -10155,7 +10232,8 @@
         "sprite": "darian_the_hidden_bulwark",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "darian_the_hidden_bulwark"
       },
       "basic": {
         "id": "darian_hidden_counter",
@@ -10478,7 +10556,8 @@
         "sprite": "mireth_the_erased_name",
         "spriteBodyFraction": 0.731,
         "spriteFootFraction": 0.146,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "mireth_the_erased_name"
       },
       "basic": {
         "id": "mireth_unwritten_line",
@@ -10792,7 +10871,8 @@
         "sprite": "nysera_the_missing_arrow",
         "spriteBodyFraction": 0.546,
         "spriteFootFraction": 0.227,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "nysera_the_missing_arrow"
       },
       "basic": {
         "id": "nysera_unseen_shot",
@@ -11061,7 +11141,8 @@
         "sprite": "velis_the_hollow_vow",
         "spriteBodyFraction": 0.612,
         "spriteFootFraction": 0.196,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "velis_the_hollow_vow"
       },
       "basic": {
         "id": "velis_denied_return",
@@ -11299,7 +11380,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "iolan_the_redacted_judge"
       },
       "basic": {
         "id": "iolan_strike_the_line",
@@ -11408,7 +11490,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "ruma_the_false_trail"
       },
       "basic": {
         "id": "ruma_decoy_round",
@@ -11501,7 +11584,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "toren_the_closed_door"
       },
       "basic": {
         "id": "toren_lockstep",
@@ -11628,7 +11712,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "petra_the_unsent_letter"
       },
       "basic": {
         "id": "petra_the_unsent_letter_placeholder_basic",
@@ -11688,7 +11773,8 @@
         "sprite": "altheon_the_first_witness",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.219,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "altheon_the_first_witness"
       },
       "basic": {
         "id": "altheon_witness_script",
@@ -11924,7 +12010,8 @@
         "sprite": "aminah_the_true_measure",
         "spriteBodyFraction": 0.565,
         "spriteFootFraction": 0.219,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "aminah_the_true_measure"
       },
       "basic": {
         "id": "aminah_marked_diagnosis",
@@ -12175,7 +12262,8 @@
         "sprite": "arden_the_precise_measure",
         "spriteBodyFraction": 0.554,
         "spriteFootFraction": 0.223,
-        "spriteMirror": false
+        "spriteMirror": false,
+        "portrait": "arden_the_precise_measure"
       },
       "basic": {
         "id": "arden_find_the_measure",
@@ -12475,7 +12563,8 @@
         "sprite": "caldus_the_appointed_guard",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "caldus_the_appointed_guard"
       },
       "basic": {
         "id": "caldus_answer_the_blade",
@@ -12675,7 +12764,8 @@
         "sprite": "isolde_the_slow_fading",
         "spriteBodyFraction": 0.558,
         "spriteFootFraction": 0.223,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "isolde_the_slow_fading"
       },
       "basic": {
         "id": "isolde_exposed_vein",
@@ -12938,7 +13028,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "leon_the_numbered_arrow"
       },
       "basic": {
         "id": "leon_catalogue_shot",
@@ -13038,7 +13129,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "lio_the_clear_diagnosis"
       },
       "basic": {
         "id": "lio_tested_touch",
@@ -13141,7 +13233,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "nadine_the_border_clerk"
       },
       "basic": {
         "id": "nadine_stamp_of_entry",
@@ -13255,7 +13348,8 @@
         "spriteStatus": "pending",
         "spriteBodyFraction": 0.53,
         "spriteFootFraction": 0.23,
-        "spriteMirror": true
+        "spriteMirror": true,
+        "portrait": "clara_the_named_remedy"
       },
       "basic": {
         "id": "clara_the_named_remedy_placeholder_basic",

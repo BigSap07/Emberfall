@@ -17,10 +17,15 @@ described here or in the art bible:
 
 | What | Where it goes |
 |------|---------------|
-| **Portrait**, framed badge (draws edge to edge, no ring) | `Resources/Sprites/Portraits/{heroId}.png` |
+| **Portrait**, framed badge (draws edge to edge over an aspect glow, no ring) | `Resources/Sprites/Portraits/{portrait}.png`, and the hero must name it in `visual.portrait` |
 | **Portrait**, frameless crop (game adds disc and aspect ring) | `Resources/Sprites/Units/portrait_{heroId}.png` |
 | **Background**, full-screen painted backdrop | `Resources/Backgrounds/{environmentId}.png` |
 | **UI panel / button / disc** surfaces | `Resources/Art/UI/{surface}.png` |
+
+The framed badge is the one of the four that is **declared rather than discovered**: dropping the
+file in is not enough, the hero has to name it, and a hero that names a file it does not have is
+reported as broken rather than quietly drawn as its initial. That is the same contract a battle
+sprite is held to and for the same reason. The other three are still discovery by filename.
 
 **Icons have no convention at all.** Aspect emblems are generated in code, item icons are
 procedural discs, and six painted currency and navigation icons exist in `Resources/Art/UI/` that

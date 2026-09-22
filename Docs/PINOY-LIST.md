@@ -6,7 +6,8 @@ It is one file so it can be sent as one message, and it is maintained here rathe
 
 **Four kinds of thing are in here**, and they want different kinds of answer:
 
-1. **A delivery to identify** - two heroes currently ship the same body.
+1. **Deliveries to identify** - two heroes ship the same battle body, and three profile icons
+   arrived under a name no hero has.
 2. **Kit text to confirm** - clauses where the shipped kit does not do exactly what the sentence in
    `import/Heroes.json` says, either because the engine cannot say it or because the number had to
    change. None of these was quietly reworded.
@@ -18,7 +19,9 @@ Checked against the tree on 2026-09-22.
 
 ---
 
-## 1. Whose art is in `Celen.zip`
+## 1. Deliveries to identify
+
+### 1a. Whose art is in `Celen.zip`
 
 **Celen and Nereia ship the same body.** Of the seven clips they each carry, **four are
 byte-identical** - `basic`, `controlled`, `hit_reaction` and `idle` - and the other three differ by
@@ -31,13 +34,42 @@ so little that they are plainly the same drawing:
 | `skill` | 416 | 4,118,400 | 0.0101% |
 
 All seven sheets are 1980x2080 in both deliveries. One of the two is the other one's art under a
-different name, and **which way round it goes is Pinoy's answer, not a guess to make here.**
+different name, and which way round it goes was not a guess to make from the sheets alone.
+
+**The profile icon delivery answers it.** `Celen_icon.png` and `Nereia_icon.png` are two plainly
+different characters and are not byte-identical to each other, unlike the battle sheets - so the
+icons are the reference the sheets were missing. Celen's badge is an avian character in blue and
+white carrying a war fan. Nereia's is a hooded figure with a lantern staff wreathed in blue flame.
+**The body both heroes currently ship is Nereia's**: the sheet filed as
+`celen_the_open_hand_idle.png` is the hooded lantern-bearer, frame for frame, and nothing avian
+appears in either delivery.
 
 **Why it matters where it shows.** Nereia is in the prologue squad and is one of the five bodies the
 harness's pinned yardstick fields, so the prologue's first battle is the most visible place a wrong
-body would appear. Celen is the only 4-star in the roster with drawn art at all.
+body would appear. It is now known to be the right one there. Celen is the only 4-star in the
+roster with drawn battle art at all, and it is not hers.
 
-**What is needed:** which hero the delivery was drawn for, and a sheet set for the other one.
+**What is left to need:** a sheet set drawn for the character on `Celen_icon.png`. Nereia's sheets
+are correct and need nothing.
+
+### 1b. Three profile icons arrived under a name no hero has
+
+The profile icon delivery is 94 files for 94 heroes and 91 of them carry the hero's display name
+exactly. Three do not. Each was matched anyway, because the aspect folder and the star folder it
+was delivered in leave exactly one hero unclaimed in that cell, and each match was then checked
+against the character rather than taken on the folder alone. **They are wired in on that basis,
+so a "no" to any of these is a file to re-point, not a file to go and find.**
+
+| delivered as | wired to | how it was resolved |
+|---|---|---|
+| `Lyda_icon.png`, Gale 3-star | Lydia, `lydia_the_unscheduled` | Spelling. The only free Gale 3-star. |
+| `Dalia_icon.png`, Gale 5-star | Dahlia, `dahlia_the_wayward_hymn` | Spelling. The badge is the pale-blue-haired figure with the bell staff, which is Dahlia's shipped battle sheet. |
+| `Vespera_icon.png`, Umbra 5-star | Cyrra, `cyrra_the_burden_bearer` | **Not a spelling.** The only free Umbra 5-star, and the badge is a white-winged angel with a staff and a tome, which is Cyrra's race, role and shipped battle sheet. |
+
+**What is needed:** confirmation on Vespera. The first two are near-certain and are flagged only so
+nobody is surprised by the rename. Vespera is a different name from Cyrra, so the question worth
+asking is whether the hero was renamed on one side and not the other, or whether Vespera is a
+character of her own who has landed in Cyrra's slot.
 
 ---
 

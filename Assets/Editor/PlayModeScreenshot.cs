@@ -1,13 +1,16 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using Emberfall.Game;
 using Emberfall.UI;
+using Emberfall.UI.Screens;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 
 namespace Emberfall.EditorTools
@@ -47,6 +50,8 @@ namespace Emberfall.EditorTools
         private const string TargetKey = "PlayModeScreenshot.Target";
         private const string FrameKey = "PlayModeScreenshot.Frame";
         private const string StageKey = "PlayModeScreenshot.Stage";
+        private const string LastShotKey = "PlayModeScreenshot.LastShot";
+        private const string BattleArmKey = "PlayModeScreenshot.BattleArm";
 
         /// <summary>
         /// Poll target for an external, file-based trigger: an already-open Editor session cannot
@@ -69,7 +74,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV8-account-screens";
+        private const string BuildMarker = "FIXV12-battle-skips-the-fixed-shot";
 
         static PlayModeScreenshot()
         {
@@ -107,10 +112,10 @@ namespace Emberfall.EditorTools
             Begin("Proving");
         }
         // ------------------------------------------------------------------ generic screen targets
-        // Seven screens, one code path. Each of these is a plain "show this screen and photograph
-        // it" capture, which is all six of them need - unlike Events and Recital above, which have
-        // to seed state first, and unlike Battle, which has to be handed a stage before it will
-        // build a world.
+        // Thirteen screens, one code path. Most of these are a plain "show this screen and
+        // photograph it" capture, which is all they need - unlike Events and Recital above, which
+        // have to seed state first, and unlike Battle and Hero detail, which have to be handed a
+        // stage and a hero respectively before either will build anything.
         //
         // Added as menu items rather than only as trigger-file targets because the trigger route
         // depends on this process winning OS focus for Unity, which it has repeatedly failed to do
@@ -140,6 +145,19 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Battle (live combat)", false, 67)]
         public static void CaptureBattleScreen() { Begin("Screen:Battle"); }
 
+        // Formation and Hero detail are the two portrait-dense screens that had no target here,
+        // which is how a portrait delivery could have been called verified without either being
+        // photographed. Both need a little more than Show(): the formation screen is the roster
+        // laid out against the deployed line and reads correctly from a fresh profile, while the
+        // detail screen is ABOUT one hero and renders nothing until it is handed one, so the
+        // driver picks the first owned hero rather than leaving it on whatever the last caller
+        // set. Neither fakes state - both show what a real profile at this point actually holds.
+        [MenuItem("Emberfall/Capture/Formation", false, 71)]
+        public static void CaptureFormationScreen() { Begin("Screen:Formation"); }
+
+        [MenuItem("Emberfall/Capture/Hero detail", false, 72)]
+        public static void CaptureHeroDetailScreen() { Begin("Screen:HeroDetail"); }
+
         // The three account screens, through the same generic path. What this captures is each
         // one's OFFLINE state - the router builds them whether or not a cloud exists, and with no
         // network they render "no account service" or "offline" rather than a blank. That state is
@@ -162,13 +180,34 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/ALL of the above, in sequence", false, 80)]
         public static void CaptureAllScreens() { Begin("Screen:ALL"); }
 
+        /// <summary>
+        /// What every capture from this tool is framed at. Pinned rather than inherited, because
+        /// the logical canvas is a function of ASPECT (see GameViewSize) - an unpinned capture only
+        /// proves the layout works at whatever size the Game view was last dragged to, which is the
+        /// caveat Tools/capture-hub.sh already states for the Hub and which applied silently to
+        /// every screen this tool photographed. 1920x1080 is ProjectSettings' own Android
+        /// resolution and the reference UITheme lays out against.
+        /// </summary>
+        private const int CaptureWidth = 1920;
+        private const int CaptureHeight = 1080;
+
         private static void Begin(string target)
         {
+            if (!GameViewSize.Apply(CaptureWidth, CaptureHeight))
+            {
+                Debug.LogWarning("PlayModeScreenshot: could not pin the Game view to "
+                                 + CaptureWidth + "x" + CaptureHeight + "; the capture will use"
+                                 + " whatever size it is currently at and its layout is unproven.");
+            }
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
+            // Both of these survive a domain reload, so a second run in the same editor session
+            // would inherit the first run's arming frame and shoot immediately if they were left.
+            SessionState.SetInt(LastShotKey, 0);
+            SessionState.SetInt(BattleArmKey, 0);
             EditorApplication.isPlaying = true;
         }
 
@@ -407,19 +446,48 @@ namespace Emberfall.EditorTools
                 return;
             }
 
-            string[] all = { "MainMenu", "Heroes", "Summon", "Inventory", "RelicShop", "Events", "Recital",
-                             "Account", "Friends", "FriendTeam", "Battle" };
+            string[] all = { "MainMenu", "Heroes", "HeroDetail", "Formation", "Summon", "Inventory",
+                             "RelicShop", "Events", "Recital", "Account", "Friends", "FriendTeam",
+                             "Battle" };
             string[] list = which == "ALL" ? all : new string[] { which };
 
-            // Per screen: show at (index * Step), capture at (index * Step + Settle). Battle gets a
-            // longer settle for the reason above, so the schedule is walked rather than computed.
+            // Per screen: show at (index * Step), capture at (index * Step + its settle).
             const int Step = 130;
             const int Settle = 90;
+
+            // BATTLE IS THE ONE SCREEN A FRAME COUNT CANNOT TIME, and the comment above this
+            // method has claimed for a while that it gets a longer settle than the rest. It did
+            // not - every screen shared one constant - and the capture that caught it is why this
+            // is a condition now rather than a number. At 90 frames the battle screen has painted,
+            // the battle-start passives are mid-banner and the round label still reads PREPARING,
+            // so THE TURN STRIP HAS NOT BEEN BUILT YET: the strip is rebuilt on RoundStart, and a
+            // capture taken before the first round photographs a battlefield with no strip on it
+            // and files that as the battle HUD.
+            //
+            // Raising the number did not fix it and could not. How long the opening runs is a
+            // property of WHICH FIVE HEROES ARE DEPLOYED, because every BattleStart passive they
+            // carry banners before the first round; 330 frames, five and a half seconds, was still
+            // inside the preamble for the starting five. So Battle waits on
+            // BattleScreen.RoundUnderway instead, which is the screen answering for itself.
+            //
+            // A floor and a ceiling are both still needed. The floor is Settle, because a freshly
+            // built 3D scene does not paint in the frame Show is called on and an early shot
+            // catches solid black. The ceiling stops a hang waiting forever: if no round ever
+            // starts it shoots anyway, and that screenshot is itself the evidence.
+            const int BattleWaitCeiling = 2400;
+            const int BattlePaintDelay = 20;
 
             int slot = SessionState.GetInt(StageKey, 0);
             if (slot >= list.Length)
             {
-                if (frame > slot * Step + Settle + 40) { Debug.Log("PlayModeScreenshot: screen captures done."); Stop(); }
+                // Gated on the frame the LAST capture was requested on rather than on a frame
+                // computed from the schedule - the schedule no longer has a fixed end, and
+                // computing it is what stopped the previous run ten frames before its final write.
+                if (frame > SessionState.GetInt(LastShotKey, 0) + 60)
+                {
+                    Debug.Log("PlayModeScreenshot: screen captures done.");
+                    Stop();
+                }
                 return;
             }
 
@@ -433,6 +501,8 @@ namespace Emberfall.EditorTools
                 switch (name)
                 {
                     case "Heroes": id = ScreenId.Heroes; break;
+                    case "HeroDetail": id = ScreenId.HeroDetail; break;
+                    case "Formation": id = ScreenId.Formation; break;
                     case "Summon": id = ScreenId.Summon; break;
                     case "Inventory": id = ScreenId.Inventory; break;
                     case "RelicShop": id = ScreenId.RelicShop; break;
@@ -443,6 +513,23 @@ namespace Emberfall.EditorTools
                     case "FriendTeam": id = ScreenId.FriendTeam; break;
                     case "Battle": id = ScreenId.Battle; break;
                 }
+                // HeroDetail is the one generic target that is about a SUBJECT rather than a
+                // screen, so it is handed one the way HeroesScreen hands it one - the first hero
+                // the profile actually owns, through the same SetHero the game calls. Skipped
+                // rather than faked if the profile owns nobody: a detail page for a hero the
+                // player does not have is a screenshot of something no player can reach.
+                if (name == "HeroDetail")
+                {
+                    List<HeroInstance> owned = app.Session.Profile.Heroes;
+                    if (owned == null || owned.Count == 0)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: profile owns no heroes, skipping HeroDetail.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.HeroDetail.SetHero(owned[0]);
+                }
+
                 if (name == "Battle")
                 {
                     StageDef next = app.Session.NextStage;
@@ -458,14 +545,53 @@ namespace Emberfall.EditorTools
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
 
-            if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
-
-            if (frame == shotAt)
+            // Battle takes over the schedule from here: it arms when the round starts, or when
+            // the ceiling runs out, and shoots BattlePaintDelay frames later so the strip has a
+            // frame to lay out and paint before it is photographed.
+            if (name == "Battle")
             {
-                ScreenCapture.CaptureScreenshot(OutputPath("screen_" + name + ".png"), 1);
-                Debug.Log("PlayModeScreenshot: requested screen_" + name + ".png");
-                SessionState.SetInt(StageKey, slot + 1);
+                // Everything below this block is the fixed-frame path and Battle must not reach
+                // it. `frame > shotAt` on this line alone was not enough: the generic shot fires
+                // on `frame == shotAt`, which is one frame BEFORE that became true, so the first
+                // run of this rewrite still shot on the old schedule and still caught PREPARING.
+                if (frame <= shotAt) return;
+
+                int armed = SessionState.GetInt(BattleArmKey, 0);
+                if (armed == 0)
+                {
+                    BattleScreen battle = app.Router.Battle;
+                    if (battle != null && battle.RoundUnderway)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.Log("PlayModeScreenshot: the first round is underway at frame " + frame
+                                  + "; shooting the battle HUD in " + BattlePaintDelay + " frames.");
+                    }
+                    else if (frame > showAt + BattleWaitCeiling)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: no round started within "
+                                         + BattleWaitCeiling + " frames. Shooting anyway - the"
+                                         + " capture then shows whatever the screen is stuck on.");
+                    }
+                    return;
+                }
+
+                if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
+                if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
             }
+
+            if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
+            if (frame == shotAt) Shoot(name, frame, slot);
+        }
+
+        /// <summary>Requests one screen's PNG and advances the schedule to the next screen.</summary>
+        private static void Shoot(string name, int frame, int slot)
+        {
+            ScreenCapture.CaptureScreenshot(OutputPath("screen_" + name + ".png"), 1);
+            Debug.Log("PlayModeScreenshot: requested screen_" + name + ".png");
+            SessionState.SetInt(LastShotKey, frame);
+            SessionState.SetInt(StageKey, slot + 1);
         }
 
         private static void PumpRecital(int frame)

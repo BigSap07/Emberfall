@@ -54,13 +54,25 @@ their own. They look finished only where a hero portrait happens to land.
 
 None of these appear in the art documents. All four are real, live, and load by filename.
 
-### 2.1 Portraits, framed - `Resources/Sprites/Portraits/{heroId}.png`
+### 2.1 Portraits, framed - `Resources/Sprites/Portraits/{portrait}.png`
 
-A finished badge carrying its own frame. Drawn edge to edge: **no disc, no glows, no aspect ring,
-no inset.** Resolved first in `Widgets.cs` (`FramedPortrait`), so it wins wherever it exists.
+A finished badge carrying its own frame. Drawn edge to edge over its aspect glow: **no disc, no
+inner glow, no aspect ring, no inset.** Resolved first in `Widgets.cs` (`DeclaredBadge`), so it
+wins wherever it exists.
 
-Delivered at 512 px, Sprite/Single, `alphaIsTransparency` on, coverage-preserving mipmaps. Present
-for the five Ember heroes: Kael, Seraphine, Marrow, Veska, Orren.
+**Superseded on two counts since this audit was taken, both observable in the tree.**
+
+**It is declared, not discovered.** The path is keyed on `visual.portrait` in `heroes.json`, not on
+the hero id, and a hero with no `portrait` key claims no badge and draws its initial. A hero that
+declares one and has no file is an error naming the hero and the path, in `Widgets.DeclaredBadge`
+at runtime and in `Tools/DevHarness`'s PORTRAIT DELIVERY block offline. The file rule was right
+while the folder was empty and nothing claimed a badge; it stopped being right once 94 heroes did,
+because then silence covered "never delivered" and "delivered and then lost" equally.
+
+**The tier is full.** All 94 heroes have a badge, one per hero, delivered at 1254 px and resized to
+512 on import. Sprite/Single, `alphaIsTransparency` on, no mipmaps, max size 512, Normal Quality
+compression. The five Ember badges this audit found are gone along with the five heroes they were
+drawn for.
 
 ### 2.2 Portraits, frameless - `Resources/Sprites/Units/portrait_{heroId}.png`
 
@@ -71,10 +83,12 @@ disc.
 **This tier currently holds zero files.** The five that lived here were deleted once the same five
 shipped framed. The loader stays because a frameless delivery is still valid, but note that
 `Tools/make_portraits.py` still writes into this path, and anything it produces is silently
-shadowed by framed art for the same hero.
+shadowed by framed art for the same hero - which is now true of every hero, since all 94 declare a
+framed badge.
 
-**The folder is what selects between 2.1 and 2.2.** There is no flag in `heroes.json`; dropping a
-file into one folder or the other is the whole decision.
+**The folder still selects between 2.1 and 2.2 for a file that is merely dropped in.** What changed
+is that 2.1 is no longer reached by dropping a file in: it needs the hero to declare the name as
+well. 2.2 is unchanged and remains discovery-only.
 
 ### 2.3 Backgrounds - `Resources/Backgrounds/{environmentId}.png`
 
@@ -125,16 +139,20 @@ Not a fourth convention so much as the absence of one:
   backdrop.
 - **The bible's three signatures have never been checked against the framed portraits.** The Cinder
   Seam, Memory Error and Cinder Notch are called out as *"portrait and detail art"* scale,
-  explicitly not combat scale. Nobody has audited the five delivered badges against them.
+  explicitly not combat scale. Nobody has audited the badges against them, and there are 94 of them
+  now rather than five, so the audit is both larger and more worth doing than when this was written.
 
 ## 4. Inconsistencies, same element handled differently
 
-- **Portraits: two conventions.** See 2.1 and 2.2. One live with five files, one live with none.
-- **Aspect ring: present on 6 heroes, absent on 5.** Sigil heroes get an aspect-coloured ring;
-  framed badges deliberately skip it, because the art carries its own frame and four cardinal
-  spikes that a ring would sit outside of and clip. Harmless while all five framed heroes are
-  Ember. **It becomes a real inconsistency the moment a non-Ember hero is delivered framed** - which
-  is the next six.
+- **Portraits: two conventions.** See 2.1 and 2.2. One live with 94 files, one live with none.
+- **Aspect ring: RESOLVED, and not by adding the ring.** This entry predicted the inconsistency
+  would become real the moment a non-Ember hero was delivered framed. All 94 arrived framed across
+  all six aspects, in one gold frame identical for every one of them, so aspect would have stopped
+  being visible on a badge anywhere. The ring is still refused for the reason given - it would sit
+  outside the frame's own gold border and clip the four cardinal spikes. What a framed badge gets
+  instead is an **aspect glow behind it**, which colours the space around the spikes rather than
+  crossing them, and which is gated on the same `showRing` flag the ring is. Sigil heroes are
+  unchanged.
 - **Backgrounds: 2 screens painted, 12 flat.**
 - **Icons: three unrelated systems**, above.
 - **Backdrop coverage splits down the middle.** `ashen`/`ember`/`hollow` painted;
@@ -148,10 +166,10 @@ Not a fourth convention so much as the absence of one:
 1. **Three battlefield backdrops: `coast`, `deep`, `tidal`.** Biggest visible surface in the game.
    Unlocks twelve campaign stages and half the Recital. Convention exists, matches the three already
    delivered, **zero code needed** - drop into `Resources/Backgrounds/{id}.png`.
-2. **Six framed hero portraits: Orrin Kaal, Kalyx Emberwright, Wren Ilyra, Ryn Solvarr, Maeve
-   Corrin, Nyx Serrow.** Same framed template as the five delivered.
-   **Blocked on a decision:** these are non-Ember, and framed art currently drops the aspect ring.
-   Five Ember badges hid that question; these six ask it.
+2. ~~**Six framed hero portraits.**~~ **Done, and at a different scale than this item imagined.**
+   All 94 heroes are delivered framed, across all six aspects. The six heroes named here were
+   deleted in the roster swap before the delivery arrived. The aspect-ring decision this item was
+   blocked on is made; see section 4.
 3. **Resize and wire the six existing UI icons.** The art is done. It needs downscaling from 1008 px
    and roughly two lines in `UISkin.Surface`. Cheapest real-art win available.
 4. **Nine enemy battle sprites:** `cinder_imp`, `blight_hound`, `stone_warden`, `ashen_revenant`,
@@ -165,5 +183,5 @@ Not a fourth convention so much as the absence of one:
 7. **Bespoke treatment for the five zero-art screens.** Lowest priority - they are functional, and
    items 1-6 buy more visible ground per hour.
 
-**Two decisions gate the list:** the aspect-ring rule for non-Ember framed portraits (blocks 2), and
-whether an icon convention exists at all (blocks 3 and 6).
+**One decision still gates the list:** whether an icon convention exists at all (blocks 3 and 6).
+The aspect-ring rule that used to gate item 2 is settled, and item 2 is delivered.

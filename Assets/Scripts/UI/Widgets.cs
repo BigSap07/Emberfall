@@ -14,10 +14,10 @@ namespace Emberfall.UI
         /// Portrait() is called per cell in list-heavy screens (the Hub badge dock, the campaign
         /// team strip) and a Resources.Load on every rebuild would be a load per cell per rebuild.
         ///
-        /// A miss is cached as a null ENTRY, not as an absent key: most units have no portrait -
-        /// every enemy, and every hero outside the Ember six - so without recording the miss the
-        /// common path would retry the same failed load forever. ContainsKey, not the value, is
-        /// what says whether the lookup has been done.
+        /// A miss is cached as a null ENTRY, not as an absent key: a unit with no portrait is a
+        /// normal case rather than an error - every one of the twelve enemies is one - so without
+        /// recording the miss that path would retry the same failed load forever. ContainsKey, not
+        /// the value, is what says whether the lookup has been done.
         /// </summary>
         private static readonly System.Collections.Generic.Dictionary<string, Sprite> PortraitCache =
             new System.Collections.Generic.Dictionary<string, Sprite>();
@@ -27,51 +27,107 @@ namespace Emberfall.UI
             new System.Collections.Generic.Dictionary<string, Sprite>();
 
         /// <summary>
+        /// Whether this unit has painted portrait art of EITHER kind, framed or frameless.
+        ///
+        /// Takes the def rather than the id because the framed tier is now DECLARED in content
+        /// (VisualDef.Portrait) rather than discovered on disk, and an id alone cannot answer a
+        /// question whose source of truth is the hero's own entry. The frameless tier is still
+        /// answered by the file, which is why the id is pulled back out below rather than the
+        /// whole check moving into content.
+        /// </summary>
+        public static bool HasPortraitArt(UnitDef def)
+        {
+            return FramedPortrait(def) != null || PortraitArt(def != null ? def.Id : null) != null;
+        }
+
+        /// <summary>
         /// A SELF-FRAMED portrait badge, or null if the unit has none.
         ///
-        /// TWO PORTRAIT CONVENTIONS EXIST, AND THE FOLDER IS WHAT DISTINGUISHES THEM:
+        /// TWO PORTRAIT CONVENTIONS EXIST, AND THE FOLDER IS STILL WHAT SEPARATES THEM - but only
+        /// one of them is reached by dropping a file in; see WHAT CHANGED below:
         ///
         ///   Sprites/Units/portrait_{id}.png   frameless head-and-shoulders crop. The widget
         ///                                     supplies the ground: disc, glows, aspect ring, and
         ///                                     a 14.65% inset so the SQUARE art is inscribed in
         ///                                     the ROUND disc.
-        ///   Sprites/Portraits/{id}.png        a finished badge that already carries its own gold
+        ///   Sprites/Portraits/{portrait}.png  a finished badge that already carries its own gold
         ///                                     frame and its own interior. The widget supplies
-        ///                                     nothing and draws it edge to edge.
+        ///                                     the aspect glow behind it and nothing else.
         ///
-        /// They are separate folders rather than one folder plus a flag in heroes.json because the
-        /// difference is a property of the FILE, not of the hero - the same character could be
-        /// delivered either way - and a path that answers the question needs no second source of
-        /// truth to be kept in sync with it. Dropping a file in decides how it renders.
+        /// WHAT CHANGED WHEN PINOY DELIVERED THE FULL SET: the framed tier used to be discovered,
+        /// by asking Resources for Sprites/Portraits/{id} and taking silence for "not drawn". That
+        /// was right while the tier was empty and nothing in content claimed a badge. It stops
+        /// being right the moment 94 heroes DO claim one, because then the same silence covers two
+        /// different facts - "never delivered" and "delivered, then misnamed, deleted, or left out
+        /// of Resources" - and the second is a bug that would have gone unreported at exactly the
+        /// point it became possible. So the badge is now declared in heroes.json and this method
+        /// reads the declaration:
+        ///
+        ///   Visual.Portrait empty       no badge claimed. Return null, say nothing. The caller
+        ///                               falls through to the initial (heroes) or the sigil
+        ///                               (enemies), which is what every unit did before.
+        ///   Visual.Portrait set, loads  draw it.
+        ///   Visual.Portrait set, missing  LOG AN ERROR naming the unit and the path, and return
+        ///                               null. The badge still degrades to the initial so the
+        ///                               screen renders, but it does so LOUDLY. This is the same
+        ///                               contract BattleAssets applies to a declared battle sheet,
+        ///                               and the reason is the same: a hero who silently reverts
+        ///                               to a letter is indistinguishable from one never drawn.
+        ///
+        /// The frameless tier below is deliberately left on the file rule. Nothing declares it,
+        /// nothing ships in it, and it remains a valid way to hand a portrait over - so a file
+        /// dropped there still displays with no content edit, exactly as before.
         ///
         /// Loaded as a Sprite rather than as a Texture2D + Sprite.Create, unlike the frameless
-        /// path above. That path predates these and is left alone; the importer settings on this
-        /// folder set alphaIsTransparency and coverage-preserving mipmaps, which are what stop a
-        /// masked badge growing a dark rim as it mips down from 512 to the 76px roster size.
-        /// </summary>
-        /// <summary>
-        /// Whether this unit has painted portrait art of EITHER kind, framed or frameless.
+        /// path. That path predates this one and is left alone; the importer settings written
+        /// alongside these PNGs set alphaIsTransparency, which is what keeps the badge's masked
+        /// gold rim from picking up the white the delivered files carry under their transparency.
         ///
-        /// Presence of the file is the rule everywhere else in this class, so it is the rule here
-        /// too - a caller that wants to prefer a hero with art asks this rather than hard-coding a
-        /// list of which heroes have been drawn, which would be a second source of truth that goes
-        /// stale the moment an artist delivers one more file.
+        /// Cached on the unit id, with a miss cached as a null ENTRY rather than an absent key, so
+        /// a unit with no badge is not re-asked once per cell per rebuild - and so a broken
+        /// declaration logs once rather than once per list row.
         /// </summary>
-        public static bool HasPortraitArt(string unitId)
+        private static Sprite FramedPortrait(UnitDef def)
         {
-            return FramedPortrait(unitId) != null || PortraitArt(unitId) != null;
+            return def == null ? null : DeclaredBadge(def.Id, def.Name, def.Visual);
         }
 
-        private static Sprite FramedPortrait(string unitId)
+        /// <summary>
+        /// The same lookup, for a caller that holds a unit's VISUAL rather than its definition.
+        ///
+        /// The battle screen is that caller: it plays a recorded event list and works from
+        /// UnitSnapshot, which carries the VisualDef the simulation captured and deliberately not
+        /// a live UnitDef. Rather than have the battle HUD re-resolve a def out of content - a
+        /// second source for something the record already holds, and the exact mistake
+        /// DESIGN-BATTLE-READABILITY.md warns the screen away from - it hands the three things
+        /// this lookup needs straight in. Same cache, same error, one code path.
+        /// </summary>
+        public static Sprite DeclaredBadge(string unitId, string unitName, VisualDef visual)
         {
             if (string.IsNullOrEmpty(unitId)) return null;
             Sprite cached;
             if (FramedCache.TryGetValue(unitId, out cached)) return cached;
 
-            Sprite sprite = Resources.Load<Sprite>("Sprites/Portraits/" + unitId);
+            string declared = visual != null ? visual.Portrait : null;
+            Sprite sprite = null;
+            if (!string.IsNullOrEmpty(declared))
+            {
+                sprite = Resources.Load<Sprite>(PortraitFolder + declared);
+                if (sprite == null)
+                {
+                    Debug.LogError("Widgets: " + unitName + " (" + unitId + ") declares portrait \""
+                                   + declared + "\" but Resources/" + PortraitFolder + declared
+                                   + ".png did not load. Fix the file or drop the \"portrait\" key"
+                                   + " from its content entry.");
+                }
+            }
+
             FramedCache[unitId] = sprite;
             return sprite;
         }
+
+        /// <summary>Where a declared badge is looked up. One spelling, shared with the harness.</summary>
+        public const string PortraitFolder = "Sprites/Portraits/";
 
         /// <summary>
         /// The painted portrait for a unit, or null if it has none.
@@ -81,16 +137,16 @@ namespace Emberfall.UI
         /// someone has to remember, and means adding or removing a portrait is a matter of adding
         /// or removing a file.
         ///
-        /// BOTH PORTRAIT TIERS ARE CURRENTLY EMPTY, and Sprites/Portraits is an empty folder. The
-        /// five heroes who had frameless files here lost them when the same five shipped as framed
-        /// badges, and then the badges went too, along with the five heroes themselves. No unit in
-        /// shipped content has portrait art of either kind today, which is why every hero takes
-        /// the initial branch in Portrait() and every enemy takes the sigil.
+        /// THIS TIER IS EMPTY AND THE FRAMED ONE IS NOT. Every one of the 94 heroes now declares a
+        /// framed badge, so every hero resolves in FramedPortrait above and never reaches here;
+        /// the twelve enemies declare neither and take the sigil. Nothing in shipped content is
+        /// frameless.
         ///
-        /// The code stays because both are still valid ways to hand a portrait over, and the day
-        /// one lands the hero picks it up with no edit here. Tools/make_portraits.py still writes
-        /// to this tier; anything it regenerates would display, since FramedPortrait now finds
-        /// nothing to shadow it with.
+        /// The code stays because it is still a valid way to hand a portrait over, and the day a
+        /// file lands here the unit picks it up with no edit in content or in this file.
+        /// Tools/make_portraits.py still writes to this tier. Note the ORDER, which now matters
+        /// in a way it did not when both tiers were empty: a declared framed badge SHADOWS a
+        /// frameless file for the same unit, because the declaration is the stronger statement.
         /// </summary>
         private static Sprite PortraitArt(string unitId)
         {
@@ -152,25 +208,41 @@ namespace Emberfall.UI
             // A unit with a painted portrait shows it in place of its sigil; everyone else is
             // untouched. The ring stays either way, so the badge keeps its aspect read whichever
             // branch it takes, and a mixed roster still looks like one set of badges.
-            // A FINISHED BADGE IS DRAWN AS ITSELF AND NOTHING ELSE.
+            // A FINISHED BADGE IS DRAWN AS ITSELF, OVER ITS ASPECT AND NOTHING ELSE.
             //
-            // No disc, no glows, no inset, and no aspect ring: the art already has a frame, and
-            // wrapping a second ring around it would put a gold border immediately inside a
-            // coloured one and clip the four cardinal spikes that reach the edge of the image.
-            // This is why it returns early rather than joining the branch below - every ground
-            // this widget can draw is wrong for it.
+            // No disc, no inner glow, no inset and NO RING: the art already has a gold frame, and
+            // wrapping a coloured ring around it would sit immediately outside a gold border and
+            // clip the four cardinal spikes that reach the edge of the image. This is why it
+            // returns early rather than joining the branch below - every ground that branch draws
+            // is wrong for it.
             //
-            // The cost, stated plainly: these badges lose the aspect-colour read the ring gives
-            // everyone else. That is a real loss and it is accepted rather than overlooked - the
-            // five heroes who have this art are all Ember, so the ring was telling the player
-            // nothing they could not get from the art, and the badge's own frame is a stronger
-            // identity cue than a hue. If a non-Ember hero is ever delivered framed, revisit it.
+            // THE ASPECT GLOW IS NEW AND IT IS THIS BRANCH ANSWERING ITS OWN OLD NOTE. What stood
+            // here said the badges lose the aspect-colour read the ring gives everyone else, that
+            // this was accepted because the five heroes who then had framed art were all Ember so
+            // the ring said nothing the art did not, and that it should be revisited if a
+            // non-Ember hero was ever delivered framed. All 94 heroes across all six aspects are
+            // now delivered framed, in ONE gold frame that is identical for every one of them, so
+            // the condition that note named is met at full scale: without this, aspect would have
+            // stopped being visible anywhere on a badge, in every screen at once.
             //
-            // allowArt still gates it, so a LOCKED hero cannot outshine an owned one - see the
-            // overload note above for why that rule is structural.
-            Sprite framed = allowArt ? FramedPortrait(def.Id) : null;
+            // A GLOW rather than the ring, because the ring is what the frame's silhouette
+            // forbids. It sits BEHIND the badge and reaches outside it, so it colours the space
+            // around the spikes instead of crossing them, and it needs no inset and no mask. Gated
+            // on showRing for the same reason the ring is: a caller that asked for no ring asked
+            // for no aspect furniture, and the Hub's unbacked dock is that caller.
+            //
+            // allowArt still gates the badge itself, so a LOCKED hero cannot outshine an owned one
+            // - see the overload note above for why that rule is structural.
+            Sprite framed = allowArt ? FramedPortrait(def) : null;
             if (framed != null)
             {
+                if (showRing)
+                {
+                    Image aspectGlow = UIBuilder.Img("AspectGlow", root, TextureLab.Glow(128, 1.9f),
+                                                     UITheme.WithAlpha(UITheme.AspectColor(def.Aspect), 0.5f));
+                    UIBuilder.FillParent(aspectGlow.rectTransform, -size * 0.12f);
+                }
+
                 Image badge = UIBuilder.Img("Badge", root, framed, Color.white);
                 UIBuilder.FillParent(badge.rectTransform, 0f);
                 return root;
@@ -204,7 +276,7 @@ namespace Emberfall.UI
                 Image face = UIBuilder.Img("Portrait", root, art, Color.white);
                 UIBuilder.FillParent(face.rectTransform, size * 0.1465f);
             }
-            else if (def is HeroDef && !HasPortraitArt(def.Id))
+            else if (def is HeroDef && !HasPortraitArt(def))
             {
                 PlaceholderFace(root, def, size);
             }
@@ -245,7 +317,9 @@ namespace Emberfall.UI
         /// job a portrait does in a grid. It also matches what the player sees in battle, where an
         /// undrawn hero stands as a mannequin with its name at its feet.
         ///
-        /// THE RULE IS THE PORTRAIT FILE, NOT `spriteStatus`. This branch first read
+        /// THE RULE IS THE PORTRAIT, NOT `spriteStatus` - the hero's own `portrait` declaration
+        /// where there is one, the frameless file otherwise, which is what HasPortraitArt asks and
+        /// what this branch is the complement of. This branch first read
         /// Visual.SpritePending, which is a claim about BATTLE art, and the two deliveries are
         /// independent: the thirty-one heroes who have battle sprites are not marked pending, have
         /// no portrait either, and so kept falling through to the shared sigil - the exact repeat

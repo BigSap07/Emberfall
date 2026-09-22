@@ -56,6 +56,13 @@ namespace Emberfall.UI.Screens
         {
             public RectTransform Root;
             public Image Fill;
+
+            /// <summary>The unit's profile badge over the chip, or null for a unit with none.
+            /// Held separately because AdvanceTurnStrip dims the whole icon and a child Image
+            /// does not inherit its parent's tint - dimming only the chip under a badge would
+            /// have left every drawn unit looking permanently active.</summary>
+            public Image Face;
+
             public int UnitId;
         }
 
@@ -164,6 +171,22 @@ namespace Emberfall.UI.Screens
 
         private RectTransform _turnStrip;
         private readonly List<TurnStripIcon> _turnStripIcons = new List<TurnStripIcon>();
+
+        /// <summary>
+        /// Whether a round has begun and the turn strip is populated - which is to say, whether
+        /// this screen is showing the battle HUD or still showing its opening.
+        ///
+        /// Read-only and for the capture tool, which needs to photograph a HUD rather than a
+        /// preamble. It is exposed rather than guessed at with a frame count because a frame count
+        /// is not a fact about this screen: the number of BattleStart passives that banner before
+        /// the first round is a property of the five heroes deployed, so the "safe" delay changes
+        /// with the team, and a capture taken on the old guess photographed a battlefield with no
+        /// turn strip on it and reported that as the HUD.
+        ///
+        /// It asserts nothing and changes nothing - it reads the count of a list the playback
+        /// already maintains, so it cannot affect what the screen does or when.
+        /// </summary>
+        public bool RoundUnderway { get { return _turnStripIcons.Count > 0; } }
 
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
         private int _turnStripCursor;
@@ -1330,6 +1353,35 @@ namespace Emberfall.UI.Screens
                 icon.Fill = UIBuilder.Panel("Turn_" + e.SourceId, _turnStrip, UITheme.WithAlpha(tint, 0.4f), 8);
                 UIBuilder.Sized(icon.Fill.rectTransform, 30f, 30f);
                 icon.Root = icon.Fill.rectTransform;
+
+                // WHO IS ACTING, not just which side is. The strip was ten tinted chips in two
+                // colours, which says the order and the sides and nothing else - across a
+                // five-a-side line where three allies may share a colour, "mine, mine, theirs"
+                // is as much as it could tell you. The profile badge is the one thing the roster
+                // already uses to tell heroes apart, so the chip wears it and the tint stays
+                // underneath as the ally/enemy read for the units that have no badge: every
+                // enemy today, and any hero whose portrait is not declared.
+                //
+                // It reads the SNAPSHOT's visual, not a def looked up from content, so the strip
+                // is still a player for the record and computes nothing of its own.
+                //
+                // Inset by 2 so the tint survives as a rim rather than being covered edge to
+                // edge, which is what keeps a badged ally and a badged enemy distinguishable at
+                // 30px without reading the art.
+                Sprite badge = snap != null
+                    ? Widgets.DeclaredBadge(snap.DefId, snap.Name, snap.Visual)
+                    : null;
+                if (badge != null)
+                {
+                    // Built dimmed to match the chip under it: AdvanceTurnStrip lights the acting icon, and
+                    // it does not run until the round's first TurnStart, so a face built at full
+                    // white would have every unit in the strip look like it was acting until then.
+                    icon.Face = UIBuilder.Img("Face", icon.Fill.rectTransform, badge,
+                                              UITheme.WithAlpha(Color.white, 0.45f));
+                    UIBuilder.FillParent(icon.Face.rectTransform, 2f);
+                    icon.Face.raycastTarget = false;
+                }
+
                 _turnStripIcons.Add(icon);
             }
         }
@@ -1359,6 +1411,8 @@ namespace Emberfall.UI.Screens
                 bool active = i == _turnStripCursor && icon.UnitId == unitId;
                 Color c = icon.Fill.color;
                 icon.Fill.color = UITheme.WithAlpha(c, active ? 1f : 0.4f);
+                if (icon.Face != null)
+                    icon.Face.color = UITheme.WithAlpha(Color.white, active ? 1f : 0.45f);
             }
         }
 
