@@ -2767,6 +2767,32 @@ namespace Emberfall.Core.Data
         /// <summary>Extra Coda per floor number on a Guardian clear.</summary>
         public int RecitalCodaGuardianPerFloor = 3;
 
+        // ---- Guild dungeon (GuildDungeonGenerator, GuildDungeonAttempt). A prototype: no rewards
+        // price against any of these, so they tune difficulty and nothing else.
+
+        /// <summary>Floors in one guild dungeon cycle. The last is always the Champion floor.
+        /// Repeated in the server as guild_dungeon_floor_count(), and the harness checks the two
+        /// agree - the server's copy is what refuses a floor that does not exist.</summary>
+        public int GuildDungeonFloors = 5;
+
+        /// <summary>Attempts each member gets at each floor, per cycle. A DESIGN RULE, not a
+        /// placeholder: bounded attempts are what make a seeded, deterministic fight a puzzle to
+        /// think about rather than a slot machine to pull. Repeated in the server as
+        /// guild_dungeon_attempt_cap(), which is what makes it true; the harness checks the two
+        /// agree.</summary>
+        public int GuildDungeonAttemptsPerFloor = 3;
+
+        /// <summary>Total enemy power on floor 1. Each floor's level is SOLVED for its power target
+        /// (GuildDungeonGenerator.TargetPowerForFloor), because level alone measured as a poor
+        /// difficulty unit across floor themes.</summary>
+        public int GuildDungeonFloorOnePower = 21000;
+
+        /// <summary>Fraction of floor one's power added per floor climbed.</summary>
+        public float GuildDungeonPowerPerFloor = 0.05f;
+
+        /// <summary>Extra levels the Champion floor's lead enemy gets over its escorts.</summary>
+        public int GuildDungeonChampionLevelBonus = 3;
+
         public static BalanceConfig FromJson(JsonValue j)
         {
             BalanceConfig b = new BalanceConfig();
@@ -2838,6 +2864,11 @@ namespace Emberfall.Core.Data
             b.RecitalCodaPerFloor = j.GetInt("recitalCodaPerFloor", b.RecitalCodaPerFloor);
             b.RecitalCodaGuardianBase = j.GetInt("recitalCodaGuardianBase", b.RecitalCodaGuardianBase);
             b.RecitalCodaGuardianPerFloor = j.GetInt("recitalCodaGuardianPerFloor", b.RecitalCodaGuardianPerFloor);
+            b.GuildDungeonFloors = j.GetInt("guildDungeonFloors", b.GuildDungeonFloors);
+            b.GuildDungeonAttemptsPerFloor = j.GetInt("guildDungeonAttemptsPerFloor", b.GuildDungeonAttemptsPerFloor);
+            b.GuildDungeonFloorOnePower = j.GetInt("guildDungeonFloorOnePower", b.GuildDungeonFloorOnePower);
+            b.GuildDungeonPowerPerFloor = j.GetFloat("guildDungeonPowerPerFloor", b.GuildDungeonPowerPerFloor);
+            b.GuildDungeonChampionLevelBonus = j.GetInt("guildDungeonChampionLevelBonus", b.GuildDungeonChampionLevelBonus);
             return b;
         }
     }
