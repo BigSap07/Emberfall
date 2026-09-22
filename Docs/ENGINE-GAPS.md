@@ -165,17 +165,6 @@ whose bars do not outrun a 4-star's Attack, and choosing between those is Pinoy'
 
 ---
 
-## 14. Round-end triggers
-
-`PassiveTrigger` gained `RoundStart` and has no mirror. `OnAllyTurnEnd` and `OnEnemyTurnEnd` are
-per-unit, so "at round end" has to become "as each of them finishes".
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Finn | "**At round end**, Ringing enemies have a 35% chance to be delayed" | a `RoundEnd` trigger beside `RoundStart` | `OnEnemyTurnEnd`, once a round, so it answers a Ringing enemy's own turn ending | small |
-
----
-
 ## 15. Chance on anything but a status landing
 
 `EffectDef.Chance` is read in exactly one place, the `ApplyStatus` landing roll, and nowhere else.
@@ -183,7 +172,7 @@ Damage, healing, energy and turn-shift effects either happen or do not.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain and the passive is limited to once a round instead | small |
+| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round | small |
 
 ---
 
