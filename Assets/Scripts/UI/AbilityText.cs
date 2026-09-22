@@ -38,6 +38,10 @@ namespace Emberfall.UI
         public const string CaveatLocked = "At level 1 with no gear, before the target's Defence,"
                                          + " and before crit and variance.";
 
+        /// <summary>What an ability with no damage, healing or ward of its own says instead of a
+        /// number. A third of the roster's passives are control or utility and have none.</summary>
+        public const string NoNumbers = "This one deals no damage, healing or ward of its own.";
+
         /// <summary>"2,231". Grouped, because these run to five digits at the level cap and an
         /// ungrouped five-digit number is the one a player misreads.</summary>
         public static string Amount(int value)
@@ -125,58 +129,10 @@ namespace Emberfall.UI
             return "";
         }
 
-        /// <summary>
-        /// Every number one ability puts on the board, as one block of rich text for a dialog.
-        ///
-        /// One line per effect, in authoring order, because that is the order they resolve in.
-        /// The figure carries its own colour and the authored terms follow it smaller and quiet -
-        /// the kit's secondary text - so a column of five reads as five numbers with their
-        /// workings rather than as ten lines of equal weight.
-        /// </summary>
-        public static string Breakdown(AbilityDef ability, List<AbilityValue> values, bool owned)
-        {
-            StringBuilder sb = new StringBuilder();
-            if (values != null)
-            {
-                for (int i = 0; i < values.Count; i++)
-                {
-                    AbilityValue v = values[i];
-                    EffectDef effect = ability.Effects[v.EffectIndex];
-                    string secondary = Secondary(v, effect);
-                    string riders = Riders(v);
-                    if (riders.Length > 0)
-                        secondary = secondary.Length > 0 ? secondary + ", " + riders : riders;
-
-                    sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(Tint(v.Kind))).Append('>');
-                    // An effect with no caster-side term of its own has no figure to lead with -
-                    // its whole payout is a share of somebody else's health - so the workings ARE
-                    // the line rather than a footnote under one.
-                    if (v.HasFlat) sb.Append(Headline(v));
-                    else sb.Append(Word(v.Kind));
-                    sb.Append("</color>");
-
-                    if (secondary.Length > 0)
-                        sb.Append("   <size=").Append(UITheme.FontTiny).Append("><color=#")
-                          .Append(ColorUtility.ToHtmlStringRGB(Emberforge.TextQuiet)).Append('>')
-                          .Append(secondary).Append("</color></size>");
-                    sb.Append('\n');
-                }
-            }
-
-            if (sb.Length == 0)
-                sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(Emberforge.TextQuiet))
-                  .Append(">This one deals no damage, healing or ward of its own.</color>\n");
-
-            sb.Append("\n<size=").Append(UITheme.FontTiny).Append("><color=#")
-              .Append(ColorUtility.ToHtmlStringRGB(Emberforge.TextQuiet)).Append('>')
-              .Append(owned ? Caveat : CaveatLocked).Append("</color></size>");
-            return sb.ToString();
-        }
-
-        /// <summary>Where a ScaleBy effect takes its amount from, in the player's words. Two
-        /// effects in the roster reach this - Merek's and Cyrra's - and both are counted and
-        /// named by the harness, so a third arriving without a phrase here is a failing check
-        /// rather than an empty line.</summary>
+        /// <summary>Where a ScaleBy effect takes its amount from, in the player's words. Six
+        /// effects in the roster reach this, and all six are counted and named by
+        /// CheckAbilityNumbersMatchTheSimulation - so a seventh arriving without a phrase here is
+        /// a failing check rather than an empty line.</summary>
         private static string DerivedSource(EffectDef effect)
         {
             if (effect.ScaleByLastRelease) return "what its ledger last paid out";

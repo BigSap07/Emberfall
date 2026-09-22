@@ -592,6 +592,10 @@ namespace Emberfall.EditorTools
                     case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
                     case "Result": id = ScreenId.Battle; break;
+                    // The ability breakdown is a DIALOG over the hero page rather than a screen,
+                    // so it routes to the page and opens the dialog a frame later, exactly as the
+                    // Hub's layers do below.
+                    case "AbilityNumbers": id = ScreenId.HeroDetail; break;
                 }
 
                 // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of
@@ -612,16 +616,24 @@ namespace Emberfall.EditorTools
                 // the profile actually owns, through the same SetHero the game calls. Skipped
                 // rather than faked if the profile owns nobody: a detail page for a hero the
                 // player does not have is a screenshot of something no player can reach.
-                if (name == "HeroDetail")
+                if (name == "HeroDetail" || name == "AbilityNumbers")
                 {
                     List<HeroInstance> owned = app.Session.Profile.Heroes;
                     if (owned == null || owned.Count == 0)
                     {
-                        Debug.LogWarning("PlayModeScreenshot: profile owns no heroes, skipping HeroDetail.");
+                        Debug.LogWarning("PlayModeScreenshot: profile owns no heroes, skipping " + name + ".");
                         SessionState.SetInt(StageKey, slot + 1);
                         return;
                     }
-                    app.Router.HeroDetail.SetHero(owned[0]);
+                    // The ability dialog gets the BUSIEST hero the player owns rather than the
+                    // first, because the only thing that capture can disprove is that the block
+                    // runs out of the panel, and it only can when an ability carries several
+                    // numbers. The hero page itself is photographed on owned[0] as before.
+                    app.Router.HeroDetail.SetHero(name == "AbilityNumbers" ? BusiestHero(owned) : owned[0]);
+                    // A frame apart from the Show for the same reason the Hub's layers are:
+                    // ScreenRouter.Show closes every open layer before it changes screens, so a
+                    // dialog opened in this call would be opened and closed again.
+                    if (name == "AbilityNumbers") SessionState.SetString(AbilityKey, "1");
                 }
 
                 // THE ITEM SCREENS NEED ITEMS. A fresh profile owns no armour and no relics, so
@@ -730,6 +742,14 @@ namespace Emberfall.EditorTools
             // The Hub's layers open one frame after the Show that put the Hub up, because
             // ScreenRouter.Show closes every open layer before it changes screens - opening one
             // in the same call opens it and closes it again.
+            if (SessionState.GetString(AbilityKey, "").Length > 0 && frame == showAt + 6)
+            {
+                SessionState.SetString(AbilityKey, "");
+                HeroDetailScreen page = app.Router.HeroDetail;
+                if (page == null) Debug.LogWarning("PlayModeScreenshot: no hero page to open an ability on.");
+                else page.OpenAbilityForCapture();
+            }
+
             string pendingLayer = SessionState.GetString(HubLayerKey, "");
             if (pendingLayer.Length > 0 && frame == showAt + 6)
             {
@@ -809,6 +829,41 @@ namespace Emberfall.EditorTools
         }
 
         private const string HubLayerKey = "PlayModeScreenshot.HubLayer";
+        private const string AbilityKey = "PlayModeScreenshot.AbilityBreakdown";
+
+        /// <summary>
+        /// The owned hero whose busiest single ability carries the most printable numbers.
+        ///
+        /// Counted from the effect data rather than guessed, and counted the way the card counts:
+        /// AbilityMath.Carries is the same predicate the hero page reads. Falls back to the first
+        /// hero when nobody owns anything with a number on it.
+        /// </summary>
+        private static HeroInstance BusiestHero(List<HeroInstance> owned)
+        {
+            HeroInstance best = owned[0];
+            int bestCount = -1;
+            for (int i = 0; i < owned.Count; i++)
+            {
+                HeroDef def = owned[i].Def;
+                if (def == null) continue;
+                int most = 0;
+                most = Math.Max(most, CountValues(def.BasicAttack));
+                most = Math.Max(most, CountValues(def.Active));
+                for (int p = 0; p < def.Passives.Count; p++)
+                    most = Math.Max(most, CountValues(AbilityMath.AsAbility(def.Passives[p])));
+                if (most > bestCount) { bestCount = most; best = owned[i]; }
+            }
+            return best;
+        }
+
+        private static int CountValues(AbilityDef ability)
+        {
+            if (ability == null) return 0;
+            int n = 0;
+            for (int i = 0; i < ability.Effects.Count; i++)
+                if (AbilityMath.Carries(ability.Effects[i])) n++;
+            return n;
+        }
 
         /// <summary>Requests one screen's PNG and advances the schedule to the next screen.
         ///
