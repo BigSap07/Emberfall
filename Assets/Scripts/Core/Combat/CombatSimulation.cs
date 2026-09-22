@@ -901,6 +901,44 @@ namespace Emberfall.Core.Combat
             private bool _inStatusAttemptTrigger;
 
             /// <summary>
+            /// Whether the Damage effect now resolving was aimed at more than one body.
+            ///
+            /// ENGINE-GAPS group 3. Nothing on a resolving hit recorded how many bodies it was
+            /// aimed at, so no mitigation and no condition could ask - and both halves of "the
+            /// first AREA hit each round" and "when an ally is SINGLED OUT" had to be written as
+            /// though every blow were the same shape.
+            ///
+            /// Set and restored around the per-target loop in ApplyEffect, so it names the effect
+            /// in flight and nothing else. Outside one - a Burn tick, a Ledger release on expiry,
+            /// a redirect delivered from the funnel - it reads false, which is correct: none of
+            /// those was aimed at a line.
+            ///
+            /// SPLASH COUNTS. An effect that names one body and strikes its neighbours has hit
+            /// more than one, which is what every sentence asking about this means.
+            /// </summary>
+            private bool _hitIsArea;
+
+            /// <summary>
+            /// The shape of the blow THE FUNNEL IS CARRYING, latched from _hitIsArea for the whole
+            /// of one DealRawDamage and everything it wakes.
+            ///
+            /// The second field is not redundancy. _hitIsArea names the effect currently
+            /// resolving, which is what the ward gates want - and a passive woken BY the funnel
+            /// resolves effects of its own, so by the time its condition is asked _hitIsArea has
+            /// been rewritten to describe the passive's own single-target effect rather than the
+            /// blow the passive is answering. Every condition in this group is written from inside
+            /// such a window, so they read the latch.
+            ///
+            /// Set and restored around the DealRawDamage call in ApplyDamageEffect, which is the
+            /// one place a damage effect becomes a blow. A redirected share re-enters the funnel
+            /// from inside that window and correctly inherits it: a share of a sweep is part of a
+            /// sweep. A Burn tick, a Ledger release on expiry and a Mirrored Wound reach the funnel
+            /// from outside any damage effect and read false, which is correct - none of them was
+            /// aimed at a line.
+            /// </summary>
+            private bool _funnelHitIsArea;
+
+            /// <summary>
             /// What the most recent hit actually took off a bar, or 0 at an ability boundary.
             /// EffectKind.EchoDamage's whole input - see that member for why it reads a realised
             /// number rather than recomputing one.
@@ -2169,6 +2207,16 @@ namespace Emberfall.Core.Combat
                         first = LastMovedAboveFraction(caster, subject, effect.ConditionValue);
                         break;
 
+                    // GAP GROUP 3, both directions. Sim state for the same reason: the shape of
+                    // the effect in flight belongs to the ability resolving, not to two units.
+                    case EffectCondition.IncomingHitIsArea:
+                        first = _funnelHitIsArea;
+                        break;
+
+                    case EffectCondition.IncomingHitIsSingleTarget:
+                        first = !_funnelHitIsArea;
+                        break;
+
                     default:
                     {
                         // Everything else, including a Defeated or BroadcastSubject asking an ordinary
@@ -2547,6 +2595,18 @@ namespace Emberfall.Core.Combat
                         targets.AddRange(extras);
                     }
 
+                    // GAP 3: how many bodies this effect was aimed at, published for the length
+                    // of its own resolution. Saved and restored rather than set and cleared,
+                    // because a passive firing inside one effect resolves effects of its own and
+                    // must not leave the outer one's answer rewritten.
+                    //
+                    // Counted BEFORE the condition filter, on purpose: "an area hit" is a fact
+                    // about what the ability aimed at, and an AoE that only one enemy qualified
+                    // for was still a sweep. The alternative would make the same cast area or
+                    // single-target depending on the board it met.
+                    bool prevArea = _hitIsArea;
+                    _hitIsArea = targets.Count > 1;
+
                     // Per target, not per effect. A conditional AoE asks about each enemy on its
                     // own, so "deal damage to all enemies below 40% HP" is one effect rather than a
                     // targeting mode nobody has to invent.
@@ -2652,10 +2712,12 @@ namespace Emberfall.Core.Combat
                         _lastTarget = target;
                         if (IsBattleOver())
                         {
+                            _hitIsArea = prevArea;
                             if (depth > 0) { _lastTarget = prevLastTarget; _lastDamageDealt = prevLastDamage; }
                             return;
                         }
                     }
+                    _hitIsArea = prevArea;
 
                     // An effect whose condition held for nobody did not happen, so it does not pay
                     // its Resolve either - spending the counter emits a StatusExpired, and a
@@ -2951,6 +3013,16 @@ namespace Emberfall.Core.Combat
                                     us.UsesPerRound = effect.UsesPerRound;
                                     us.UsesThisRound = 0;
                                 }
+                            }
+
+                        // The area-only flag on a ward, stamped the way Charges and the
+                        // per-round budget above are. False on every Guard and Covered entry in
+                        // shipped content, so no existing ward gains a shape test nobody authored.
+                        if (effect.AreaHitsOnly)
+                            for (int ao = 0; ao < target.Statuses.Count; ao++)
+                            {
+                                StatusInstance aw = target.Statuses[ao];
+                                if (aw.Kind == effect.Status && aw.SourceId == source.Id) aw.AreaHitsOnly = true;
                             }
 
                         // The holder-HP tick, stamped the way Charges and the per-round budget
@@ -4225,7 +4297,12 @@ namespace Emberfall.Core.Combat
                 }
                 string vfx = ability != null ? ability.Vfx : "impact";
                 string abilityName = ability != null ? ability.Name : "";
+                // GAP GROUP 3: the blow's shape, latched for the whole of the funnel and everything
+                // it wakes. See _funnelHitIsArea for why the effect-level field cannot serve.
+                bool prevFunnelArea = _funnelHitIsArea;
+                _funnelHitIsArea = _hitIsArea;
                 DealRawDamage(source.Id, target, damage, critical, vfx, StatusKind.None, aspectFactor, abilityName);
+                _funnelHitIsArea = prevFunnelArea;
 
                 if (critical && source.Alive)
                 {
@@ -4727,6 +4804,9 @@ namespace Emberfall.Core.Combat
                 {
                     StatusInstance guard = target.Statuses[gi];
                     if (guard.Kind != StatusKind.Guard || guard.Magnitude <= 0f) continue;
+                    // GAP GROUP 3: a ward raised against sweeps declines a single-target blow.
+                    // False on every Guard in shipped content, which declines nothing.
+                    if (guard.AreaHitsOnly && !_funnelHitIsArea) continue;
                     // ENGINE-GAPS group 2: a per-round budget, honoured here for the first time.
                     //
                     // Charges count DOWN to removal and never refill, which is the wrong shape for
@@ -4865,7 +4945,7 @@ namespace Emberfall.Core.Combat
                 {
                     int protectorId;
                     StatusInstance ward;
-                    float share = target.CoverFraction(out protectorId, out ward);
+                    float share = target.CoverFraction(out protectorId, out ward, _funnelHitIsArea);
                     CombatUnit protector = share > 0f ? FindUnit(protectorId) : null;
                     // ENGINE-GAPS group 2: the ward's per-round budget, charged BEFORE the share
                     // is delivered - the same discipline SpendLinkCharge keeps one block down, and
@@ -7728,6 +7808,7 @@ namespace Emberfall.Core.Combat
                     landed.SkillOnly = status.SkillOnly;
                     landed.HolderHpTick = status.HolderHpTick;
                     landed.HolderHpTickCurrent = status.HolderHpTickCurrent;
+                    landed.AreaHitsOnly = status.AreaHitsOnly;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
                     landed.BanKind = status.BanKind;

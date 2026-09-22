@@ -111,6 +111,13 @@ namespace Emberfall.Core.Combat
         public float HolderHpTick;
         public bool HolderHpTickCurrent;
 
+        /// <summary>
+        /// On a Guard or Covered entry: answer only a blow that came from a multi-target effect.
+        /// False on every entry in shipped content, where a ward answers whichever hit lands
+        /// first.
+        /// </summary>
+        public bool AreaHitsOnly;
+
         // ---------------------------------------------------------------- tier eight: ledger extensions
         //
         // Carried on the Ledger entry alongside Stored and StoredCap, because they are properties
@@ -590,6 +597,19 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public float CoverFraction(out int protectorId, out StatusInstance entry)
         {
+            return CoverFraction(out protectorId, out entry, false);
+        }
+
+        /// <summary>
+        /// The same question again, told whether the blow in flight was aimed at more than one
+        /// body, so a ward stamped AreaHitsOnly can decline a single-target one.
+        ///
+        /// ENGINE-GAPS group 3. The shape of the hit is the simulation's to know, so it is passed
+        /// in rather than read here - CombatUnit has no view of the effect resolving, and giving
+        /// it one would be the second place that decides what an area hit is.
+        /// </summary>
+        public float CoverFraction(out int protectorId, out StatusInstance entry, bool hitIsArea)
+        {
             protectorId = -1;
             entry = null;
             float best = 0f;
@@ -598,6 +618,7 @@ namespace Emberfall.Core.Combat
                 StatusInstance c = Statuses[i];
                 if (c.Kind != StatusKind.Covered || c.Magnitude <= 0f) continue;
                 if (c.UsesPerRound > 0 && c.UsesThisRound >= c.UsesPerRound) continue;
+                if (c.AreaHitsOnly && !hitIsArea) continue;
                 // The deepest cover wins rather than the shares summing, so two protectors cannot
                 // between them take more than the whole hit and leave the holder untouched.
                 if (c.Magnitude > best) { best = c.Magnitude; protectorId = c.SourceId; entry = c; }

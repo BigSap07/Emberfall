@@ -923,7 +923,26 @@ namespace Emberfall.Core.Data
         /// The window is the ability a unit CHOSE - cleared at depth 0 in ResolveAbility and
         /// inherited by the passives that ability triggers, the same boundary LastTarget uses.
         /// </summary>
-        SubjectLostStatusThisFiring
+        SubjectLostStatusThisFiring,
+
+        // ---------- the gaps pass, group 3: what SHAPE the blow in flight had ----------
+        //
+        // Both read the same fact from the two directions two clauses need it. Sim state, like the
+        // turn-progress members, because the shape of the effect in flight is a property of the
+        // ability resolving rather than of two units.
+        //
+        // Meaningful only inside a window raised from the damage funnel - OnDamaged,
+        // OnEnemyDamagedAlly and their siblings - which is where every clause asking about it is
+        // written. Outside one they read the effect currently resolving, and false at an ability
+        // boundary.
+
+        /// <summary>The Damage effect now resolving was aimed at more than one body. Splash
+        /// counts: an effect that names one target and strikes its neighbours hit a line.</summary>
+        IncomingHitIsArea,
+
+        /// <summary>The negation, which is what "singled out" means - one body named and struck
+        /// on its own.</summary>
+        IncomingHitIsSingleTarget
     }
 
     /// <summary>

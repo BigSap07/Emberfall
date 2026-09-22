@@ -762,6 +762,21 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool PerStackFromZero;
 
+        // ---------- the gaps pass, group 3: telling an area hit from a single-target one ----------
+
+        /// <summary>
+        /// Stamps a Guard or Covered entry so it answers ONLY a blow that came from a multi-target
+        /// effect. False (the default) answers whichever hit lands first, which is every ward in
+        /// shipped content.
+        ///
+        /// Nothing on a resolving Damage effect recorded how many bodies it was aimed at, so no
+        /// mitigation could ask - and "it reduces the first AREA hit each round by 20%" had to
+        /// become "the first hit". Against a line that opens with single-target blows those are
+        /// different abilities: the ward is spent on a poke before the sweep it was raised for
+        /// arrives.
+        /// </summary>
+        public bool AreaHitsOnly;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -865,6 +880,7 @@ namespace Emberfall.Core.Data
             e.PerStackClass = EnumUtil.Parse(j.GetString("perStackClass", "NamedKind"), StatusCount.NamedKind);
             e.PerStackMaxCount = Math.Max(0, j.GetInt("perStackMaxCount", 0));
             e.PerStackFromZero = j.GetBool("perStackFromZero", false);
+            e.AreaHitsOnly = j.GetBool("areaHitsOnly", false);
             return e;
         }
 
@@ -988,6 +1004,7 @@ namespace Emberfall.Core.Data
             c.PerStackClass = PerStackClass;
             c.PerStackMaxCount = PerStackMaxCount;
             c.PerStackFromZero = PerStackFromZero;
+            c.AreaHitsOnly = AreaHitsOnly;
             return c;
         }
     }

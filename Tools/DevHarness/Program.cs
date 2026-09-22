@@ -17882,6 +17882,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupEighteen();
             CheckGapGroupSeventeen();
             CheckGapGroupTwo();
+            CheckGapGroupThree();
             Line("");
         }
 
@@ -19040,6 +19041,126 @@ namespace Emberfall.DevHarness
             return RunWith(db, db.GetStage("g2_arena"), 2002, team);
         }
 
+
+        // ------------------------------------------------------------------ group 3
+
+        /// <summary>
+        /// GROUP 3 - telling an area hit from a single-target one, two clauses on one hero.
+        ///
+        /// Nothing on a resolving Damage effect recorded how many bodies it was aimed at, so no
+        /// mitigation and no condition could ask. Eira's ward answers "the first hit" where her
+        /// text says "the first AREA hit", and her passive answers "when an ally is hit" where her
+        /// text says "singled out" - the two halves of the same missing fact, met from opposite
+        /// sides.
+        ///
+        /// The arena throws BOTH shapes at the same body in the same battle: a single-target poke
+        /// and a line-wide sweep. A flag that did nothing would leave the two arms identical.
+        /// </summary>
+        private static void CheckGapGroupThree()
+        {
+            Line("  group 3 - an area hit, and a single-target one");
+
+            // --- the ward that answers only a sweep --------------------------------------
+            List<int> plain = HitsTakenBy(RunGapThreeArena(false), "g3_frail");
+            List<int> areaOnly = HitsTakenBy(RunGapThreeArena(true), "g3_frail");
+            int softenedPlain = CountSoftened(plain);
+            int softenedArea = CountSoftened(areaOnly);
+            Check(softenedPlain > 0,
+                  "control: an ordinary Guard answers whichever hit lands first (" + Join(plain)
+                  + ")");
+            Check(softenedArea > 0 && !SameList(plain, areaOnly),
+                  "areaHitsOnly makes the SAME ward decline the single-target blow and answer the "
+                  + "sweep instead (" + Join(areaOnly) + " against the control's " + Join(plain)
+                  + ") - the ward is no longer spent on a poke before the sweep it was raised for");
+
+            // --- the condition, from the other side --------------------------------------
+            // The watcher answers only when the blow that woke it was single-target. It must fire
+            // for the poke and not for the sweep, in a battle that carries both.
+            // Counted as the status each watcher APPLIES, not as the passive firing: the trigger
+            // fires for every blow whatever its shape, and it is the condition inside it that is
+            // under test. CountPassiveFires would have read the trigger and reported the same
+            // number for both.
+            BattleResult shapes = RunGapThreeArena(false);
+            int single = StatusLandedOn(shapes, StatusKind.AttackUp, "g3_ward");
+            int sweeps = StatusLandedOn(shapes, StatusKind.DefenseUp, "g3_ward");
+            Check(single > 0 && sweeps > 0,
+                  "both conditions land somewhere in a battle that carries both shapes (singled "
+                  + single + ", swept " + sweeps + ")");
+            Check(single == sweeps * 2,
+                  "and each answers only its own shape - the poker strikes the warded body TWICE a "
+                  + "round and the sweeper once, and the two readings come back in that ratio ("
+                  + single + " and " + sweeps + ") rather than both counting every blow");
+
+            Check(FingerprintOf(RunGapThreeArena(true)) == FingerprintOf(RunGapThreeArena(true)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        private static bool SameList(List<int> a, List<int> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Two enemies: one pokes the front body TWICE, one sweeps the whole line once. The poke
+        /// lands first every round, which is what makes an area-only ward measurable - an ordinary
+        /// one is spent on the poke and never meets the sweep. Two pokes to one sweep is what lets
+        /// the two conditions be told apart by their counts rather than by their both being
+        /// non-zero.
+        /// </summary>
+        private static BattleResult RunGapThreeArena(bool areaOnly)
+        {
+            string flag = areaOnly ? ", \"areaHitsOnly\": true" : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g3_frail"", ""name"": ""Frail"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3f_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g3_ward"", ""name"": ""Warder"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 1000000, ""attack"": 10, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3w_basic"", ""name"": ""Raise"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 },
+                       { ""kind"": ""ApplyStatus"", ""target"": ""LowestHpAlly"", ""status"": ""Guard"",
+                         ""chance"": 1, ""duration"": 9, ""magnitude"": 0.5, ""usesPerRound"": 1" + flag + @" } ] },
+      ""passive"": { ""id"": ""g3_singled"", ""name"": ""Singled Out"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""chance"": 1,
+                         ""duration"": 1, ""magnitude"": 0.0, ""condition"": ""IncomingHitIsSingleTarget"" } ] },
+      ""passives"": [
+        { ""id"": ""g3_swept"", ""name"": ""Swept"", ""trigger"": ""OnEnemyDamagedAlly"",
+          ""oncePerBattle"": false,
+          ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseUp"", ""chance"": 1,
+                           ""duration"": 1, ""magnitude"": 0.0, ""condition"": ""IncomingHitIsArea"" } ] } ] }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""g3_poker"", ""name"": ""Poker"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 400, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3pb"", ""name"": ""Poke"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0, ""hits"": 2 } ] } },
+    { ""id"": ""g3_sweeper"", ""name"": ""Sweeper"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
+      ""defense"": 0, ""speed"": 300, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g3sb"", ""name"": ""Sweep"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g3_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g3_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g3_poker"", ""level"": 1 },
+                                                        { ""id"": ""g3_sweeper"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap3");
+            if (db == null) return null;
+            string[] ids = { "g3_frail", "g3_ward" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g3_arena"), 3003, team);
+        }
+
         private static void CheckNineGaps(ContentDatabase live)
         {
             Line("THE NINE GAPS (charges, flat echo, attacker filter, the other end, attacker-keyed");
@@ -19301,10 +19422,13 @@ namespace Emberfall.DevHarness
                     "PassiveFiredOnSubjectAtLeast", "PassiveFiredOnSubjectBelow",
                     // the kit-defect pass: the two clauses two shipped talents needed and no
                     // condition could say. Appended, so every ordinal above is untouched.
-                    "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring"
+                    "SubjectDamagedByOtherSinceMyTurn", "SubjectLostStatusThisFiring",
+                    // the engine-gaps pass, group 3: the shape of the blow in flight.
+                    "IncomingHitIsArea", "IncomingHitIsSingleTarget"
                 },
                 Enum.GetNames(typeof(EffectCondition)));
-            Check(ok, "EffectCondition enum parity (50 members)");
+            Check(ok, "EffectCondition enum parity ("
+                  + Enum.GetNames(typeof(EffectCondition)).Length + " members)");
         }
 
         // ---- gap 1: a link's charges are spent, and the link ends -----------------------------
