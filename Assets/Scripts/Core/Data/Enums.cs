@@ -1921,7 +1921,71 @@ namespace Emberfall.Core.Data
         /// so a passive answering it sees a finished turn rather than a cast still in flight.
         /// Not raised for a cancelled cast: nothing resolved, so nothing followed it.
         /// </summary>
-        AfterActiveCast
+        AfterActiveCast,
+
+        // ---------- the gaps pass: three ally-side moments nothing could hear ----------
+        //
+        // ENGINE-GAPS group 9. The trigger enum is rich on what happens TO a unit and thin on what
+        // an ALLY causes or receives, and three of that group's five rows are three different
+        // shapes of the same absence. The fourth and fifth are the "and me" exclusion, which is
+        // PassiveDef.IncludeSelf rather than a trigger, because the moment already exists and only
+        // its audience was wrong.
+
+        /// <summary>
+        /// An ally of the owner GAINED Energy. Broadcast to the recipient's own side after the bar
+        /// has actually moved, with _broadcastSubject and _broadcastVictim set to the recipient and
+        /// _broadcastSourceId to whoever granted it. The recipient is excluded, since a unit
+        /// answering its own gain is a different ability.
+        ///
+        /// The mirror of OnEnemyEnergyDrained, which fires on the unit that TOOK Energy across the
+        /// line. Nothing fired for Energy arriving: "when an ally gains Energy from Loose Parts"
+        /// had to be folded into the passive that hands the Energy out, so the grant and the
+        /// reaction were one firing and could not be limited, conditioned or read apart.
+        ///
+        /// Only a gain, only when the bar moved, and only when a granter is named. A unit's own
+        /// turn refill carries a granter of -1 and is not somebody handing it anything, so it does
+        /// not raise this. Re-entrancy is held to one level by a flag rather than by a depth, the
+        /// same way OnEnemyEnergyDrained holds itself: a passive that answers a gain by granting
+        /// Energy is a loop, not a wrong number.
+        /// </summary>
+        OnAllyEnergyGained,
+
+        /// <summary>
+        /// A StatusKind.Guard charge PREVENTED damage. Broadcast to the side of the unit that
+        /// APPLIED the Guard, with _broadcastSubject and _broadcastVictim set to the holder whose
+        /// charge was spent and _broadcastSourceId to the Guard's applier - so TriggerSourceIsSelf
+        /// reads "a Guard I placed", which is what every clause asking for this says.
+        ///
+        /// Raised once per prevention, from inside the funnel where the charge is spent, and only
+        /// when the charge actually removed damage: a Guard meeting a zero-damage hit prevented
+        /// nothing. `_lastMoved` for the applier holds the amount prevented, so an answer can
+        /// scale off it.
+        ///
+        /// A Ledger with FunnelSource.GuardMitigation was the nearest standing answer and asks a
+        /// different question - it banks the amount and pays out when the bank fills, which is per
+        /// CAP rather than per prevention.
+        /// </summary>
+        OnGuardPrevented,
+
+        /// <summary>
+        /// A unit on the other side ATTEMPTED to apply a harmful status. Broadcast to the side
+        /// opposite the applier, with _broadcastSubject set to the APPLIER and _broadcastVictim to
+        /// the body it was aiming at.
+        ///
+        /// Raised BEFORE the landing roll, which is what makes it "attempts" rather than "lands":
+        /// a debuff that was resisted was still attempted, and the clauses asking for this - "when
+        /// a Flustered enemy attempts a debuff" - are about the attempt. OnEnemyActive was the
+        /// nearest standing answer and is a claim about a cast rather than about a debuff, so it
+        /// also fired for an active that applied nothing.
+        ///
+        /// Harmful statuses only. A buff, a Mark, a Ledger and a Link are not debuffs, and
+        /// StatusInfo.IsHarmful is the same predicate Cleanse and Dispel read, so the trigger and
+        /// the removal rules cannot disagree about what a debuff is.
+        ///
+        /// Held to one level by a flag: a passive answering an attempt by applying a debuff of its
+        /// own would otherwise raise this again from inside itself.
+        /// </summary>
+        OnEnemyAppliedStatus
     }
 
     /// <summary>

@@ -72,6 +72,7 @@ namespace Emberfall.DevHarness
             CheckLinkedTargeting(content);
             CheckNineGaps(content);
             CheckAllyDonorModes(content);
+            CheckEngineGapsPass(content);
             CheckAuthoredHeroSweep(content);
             CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
@@ -16594,10 +16595,13 @@ namespace Emberfall.DevHarness
                     // and the drain heard on the unit that caused it
                     "OnEnemyEnergyDrained",
                     // the far side of a unit's own Active
-                    "AfterActiveCast"
+                    "AfterActiveCast",
+                    // the engine-gaps pass, group 9: an ally receiving Energy, a Guard charge
+                    // doing its job, and a unit attempting a debuff.
+                    "OnAllyEnergyGained", "OnGuardPrevented", "OnEnemyAppliedStatus"
                 },
                 Enum.GetNames(typeof(PassiveTrigger)));
-            Check(ok, "PassiveTrigger enum parity (52 members)");
+            Check(ok, "PassiveTrigger enum parity (" + Enum.GetNames(typeof(PassiveTrigger)).Length + " members)");
         }
 
         // ---- synthetic arena: OnAllyShieldBreak ----
@@ -17847,6 +17851,195 @@ namespace Emberfall.DevHarness
         // of the same fight with the mechanic removed - rather than an assertion that something
         // fired. Ordinal pins and the standing guards come first, because a gap closed by a
         // renumbered enum would rewrite the record of every battle ever resolved.
+
+
+        // ==================================================================================
+        // THE ENGINE-GAPS PASS
+        //
+        // Docs/ENGINE-GAPS.md is a record of sentences Pinoy wrote that this engine could not
+        // say. Each section below closes one of its GROUPS - the arrangement the document itself
+        // uses, because a group is one capability met several times rather than several problems
+        // that look alike.
+        //
+        // Every one of them is DEFAULT-OFF by construction: a new field reads zero or false on
+        // every effect and passive in shipped content, and a new trigger is raised at a point the
+        // simulation already reached. Each arena below therefore runs the SAME content twice and
+        // differs only by the opt-in, so "it works" and "it changes nothing unless content asks"
+        // are the same measurement rather than two claims.
+        // ==================================================================================
+
+        private static void CheckEngineGapsPass(ContentDatabase live)
+        {
+            Line("ENGINE GAPS - closing the repeated ones (Docs/ENGINE-GAPS.md)");
+            CheckGapGroupNine();
+            Line("");
+        }
+
+        /// <summary>Zero-variance balance with NO energy refill, so a bar only ever moves because
+        /// something in the arena moved it. The ordinary ZeroVarianceBalance fills every bar off
+        /// the first basic attack, which would make an energy-gain trigger untestable.</summary>
+        private static string GapBalance(int maxRounds)
+        {
+            return "{ \"defenseConstant\": 300, \"defensePerLevel\": 0, \"damageVariance\": 0, \"speedVariance\": 0,"
+                 + " \"minDamage\": 1, \"maxRounds\": " + maxRounds + ", \"energyMax\": 100,"
+                 + " \"energyPerBasicAttack\": 0, \"energyOnDamaged\": 0, \"maxTeamSize\": 5 }";
+        }
+
+        // ------------------------------------------------------------------ group 9
+
+        /// <summary>
+        /// GROUP 9 - triggers for something an ALLY did or received, five clauses across four
+        /// heroes and four different shapes.
+        ///
+        /// Three of the five are answered by one flag. OnEnemyDamagedAlly excludes the body being
+        /// hit, so Branik, Halwen and Toren each shipped a SECOND passive on OnDamaged carrying a
+        /// duplicate of the first - two independent once-a-round budgets standing in for one
+        /// clause. PassiveDef.IncludeSelf lets the one passive hear it about itself.
+        ///
+        /// The other two are moments nothing raised at all: an ally receiving Energy, and a Guard
+        /// charge actually preventing damage. Plus the applier-side one Niko needs - a unit
+        /// ATTEMPTING a debuff, which is a different event from casting an active.
+        /// </summary>
+        private static void CheckGapGroupNine()
+        {
+            Line("  group 9 - what an ally did or received");
+
+            // --- the "and me" exclusion -------------------------------------------------
+            // The victim carries the passive. Without the flag it is the excluded body and never
+            // hears its own news; with it, the same passive on the same trigger fires.
+            int victimOff = CountPassiveFires(RunGapNineArena("self", false), "g9_victim_passive");
+            int victimOn = CountPassiveFires(RunGapNineArena("self", true), "g9_victim_passive");
+            Check(victimOff == 0,
+                  "OnEnemyDamagedAlly still excludes the body being hit (" + victimOff
+                  + " firings) - the exclusion every shipped ally broadcast relies on is untouched");
+            Check(victimOn > 0,
+                  "and includeSelf lets the SAME passive hear it about itself (" + victimOn
+                  + " firings) - which is the one clause Branik, Halwen and Toren each answered "
+                  + "by pasting a duplicate onto OnDamaged");
+
+            // The ally that was not hit hears it either way, so the flag widens the audience
+            // rather than replacing it.
+            int bystanderOff = CountPassiveFires(RunGapNineArena("self", false), "g9_bystander_passive");
+            int bystanderOn = CountPassiveFires(RunGapNineArena("self", true), "g9_bystander_passive");
+            Check(bystanderOff > 0 && bystanderOff == bystanderOn,
+                  "and an ALLY of the victim hears it identically with the flag set and unset ("
+                  + bystanderOff + " = " + bystanderOn + ") - the flag adds one listener, it does "
+                  + "not move the others");
+
+            // --- an ally gains Energy ---------------------------------------------------
+            int energyOn = CountPassiveFires(RunGapNineArena("energy", true), "g9_watch_passive");
+            int energyOff = CountPassiveFires(RunGapNineArena("energy", false), "g9_watch_passive");
+            Check(energyOn > 0,
+                  "OnAllyEnergyGained fires when somebody hands an ally Energy (" + energyOn + ")");
+            Check(energyOff == 0,
+                  "and does not fire when the same battle hands out none (" + energyOff
+                  + ") - a unit's own refill carries no granter and is not somebody giving it "
+                  + "anything");
+
+            // --- a Guard charge prevents damage ----------------------------------------
+            int guardOn = CountPassiveFires(RunGapNineArena("guard", true), "g9_watch_passive");
+            int guardOff = CountPassiveFires(RunGapNineArena("guard", false), "g9_watch_passive");
+            Check(guardOn > 0,
+                  "OnGuardPrevented fires when a Guard charge actually removes damage (" + guardOn + ")");
+            Check(guardOff == 0,
+                  "and does not fire in the same battle with no Guard in it (" + guardOff
+                  + ") - so it answers the prevention rather than the blow");
+
+            // --- an enemy attempts a debuff --------------------------------------------
+            int debuffOn = CountPassiveFires(RunGapNineArena("attempt", true), "g9_watch_passive");
+            int debuffOff = CountPassiveFires(RunGapNineArena("attempt", false), "g9_watch_passive");
+            Check(debuffOn > 0,
+                  "OnEnemyAppliedStatus fires when an enemy attempts a harmful status (" + debuffOn + ")");
+            Check(debuffOff == 0,
+                  "and does not fire when the enemy's only application is a BUFF on itself ("
+                  + debuffOff + ") - StatusInfo.IsHarmful is what the trigger means by debuff, "
+                  + "the same predicate Cleanse and Dispel read");
+
+            Check(FingerprintOf(RunGapNineArena("guard", true)) == FingerprintOf(RunGapNineArena("guard", true)),
+                  "and every arm of this arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>
+        /// One arena, four arms. The armed flag is always the opt-in and never the content: both
+        /// runs of an arm build the same bodies, the same abilities and the same enemy, so
+        /// anything that differs between them is the capability under test and nothing else.
+        /// </summary>
+        private static BattleResult RunGapNineArena(string mode, bool armed)
+        {
+            // What the watcher listens on. An unarmed run listens on a trigger this arena never
+            // raises, so the passive exists, is walked, and answers nothing.
+            string watched = "OnBlock";
+            if (armed)
+            {
+                if (mode == "energy") watched = "OnAllyEnergyGained";
+                else if (mode == "guard") watched = "OnGuardPrevented";
+                else if (mode == "attempt") watched = "OnEnemyAppliedStatus";
+            }
+            // The self arm is the one where the flag rather than the trigger is the variable.
+            string includeSelf = mode == "self" && armed ? "true" : "false";
+
+            // The giver's extra effect, present only in the arm that needs it.
+            string give = "";
+            if (mode == "energy" && armed)
+                give = ", { \"kind\": \"EnergyGain\", \"target\": \"LowestEnergyAlly\", \"flat\": 9 }";
+            else if (mode == "guard" && armed)
+                give = ", { \"kind\": \"ApplyStatus\", \"target\": \"LowestHpAlly\", \"status\": \"Guard\","
+                     + " \"chance\": 1, \"charges\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
+
+            // The foe's extra effect. The attempt arm needs a debuff to attempt; its control needs
+            // an application that is NOT a debuff, so the difference measured is harmfulness.
+            string foeExtra = mode == "attempt"
+                ? (armed
+                    ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"AttackDown\","
+                      + " \"bypassResist\": true, \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }"
+                    : ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"AttackUp\","
+                      + " \"chance\": 1, \"duration\": 2, \"magnitude\": 0.1 }")
+                : "";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g9_victim"", ""name"": ""Victim"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9v_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g9_victim_passive"", ""name"": ""And Me"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false, ""includeSelf"": " + includeSelf + @",
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""g9_bystander"", ""name"": ""Bystander"", ""aspect"": ""Ember"", ""role"": ""Mender"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9b_basic"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g9_bystander_passive"", ""name"": ""Ordinary"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 1 } ] } },
+    { ""id"": ""g9_watch"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9w_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + give + @" ] },
+      ""passive"": { ""id"": ""g9_watch_passive"", ""name"": ""Answer"", ""trigger"": """ + watched + @""",
+        ""oncePerBattle"": false, ""triggerSourceIsSelf"": " + (mode == "guard" ? "true" : "false") + @",
+        ""effects"": [ { ""kind"": ""GainResolve"", ""target"": ""Self"", ""maxStacks"": 99 } ] } }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g9_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 300,
+      ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g9foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }" + foeExtra + @" ] } } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g9_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g9_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g9_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap9");
+            if (db == null) return null;
+            string[] ids = { "g9_victim", "g9_bystander", "g9_watch" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g9_arena"), 9009, team);
+        }
 
         private static void CheckNineGaps(ContentDatabase live)
         {
@@ -19955,6 +20148,9 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.AfterBasicAttack, true, false),
                 C(PassiveTrigger.BattleStart, false, false),
                 C(PassiveTrigger.OnAllyDefeated, true, true),
+                // The engine-gaps pass, group 9. All three fill in both fields, because all three
+                // exist to let a passive act ON the body the news was about.
+                C(PassiveTrigger.OnAllyEnergyGained, true, true),
                 C(PassiveTrigger.OnAllyHealed, true, true),
                 C(PassiveTrigger.OnAllyHpBelowThreshold, true, true),
                 C(PassiveTrigger.OnAllyLedgerBanked, true, true),
@@ -19972,6 +20168,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnDodge, true, false),
                 C(PassiveTrigger.OnEchoFired, true, true),
                 C(PassiveTrigger.OnEnemyActive, true, true),
+                C(PassiveTrigger.OnEnemyAppliedStatus, true, true),
                 C(PassiveTrigger.OnEnemyActiveResolved, true, true),
                 C(PassiveTrigger.OnEnemyBuffGained, true, true),
                 C(PassiveTrigger.OnEnemyChangedTarget, true, true),
@@ -19983,6 +20180,7 @@ namespace Emberfall.DevHarness
                 C(PassiveTrigger.OnEnemyHpBelowThreshold, true, true),
                 C(PassiveTrigger.OnEnemyTurnEnd, true, true),
                 C(PassiveTrigger.OnFunnelConvertFired, true, true),
+                C(PassiveTrigger.OnGuardPrevented, true, true),
                 C(PassiveTrigger.OnHealApplied, true, true),
                 C(PassiveTrigger.OnHpBelowThreshold, true, false),
                 C(PassiveTrigger.OnKill, true, true),

@@ -1151,6 +1151,29 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool TriggerSourceIsAlly;
 
+        /// <summary>
+        /// ON AN ALLY-FACING BROADCAST, "AND ME". False on every passive in shipped content, and a
+        /// false one is excluded exactly as it always was.
+        ///
+        /// Every ally broadcast in this engine skips the unit the news is ABOUT, on the stated
+        /// ground that it has an owner-centric trigger of its own for the same event. That is true
+        /// of the event and false of the sentence: "the first time each round a Cracked enemy
+        /// attacks" and "when Reserve prevents damage, its holder recovers" are one clause each,
+        /// and the holder can be the hero. Both shipped kits answer it by carrying a SECOND passive
+        /// on OnDamaged with the identical body - two passives, two independent once-a-round
+        /// budgets, and a description that has to be written twice and kept in step by hand.
+        ///
+        /// A flag rather than a per-trigger decision, because which triggers exclude the subject is
+        /// a fact about the dispatch and whether one PARTICULAR clause means to include it is a
+        /// fact about the clause. Read in TriggerPassive against the unit the dispatch excluded, so
+        /// a passive that does not set it is skipped there and never fires - which is what keeps
+        /// the walk identical for every existing battle.
+        ///
+        /// Costs nothing when nobody sets it: the simulation computes one bool at battle build and
+        /// the excluded unit is not even added to the walk unless that bool is true.
+        /// </summary>
+        public bool IncludeSelf;
+
         // ---------- batch three: resolve-to-stat scaling ----------
 
         /// <summary>Which stacking status on the owner adds to a base stat. None means no scaling
@@ -1205,6 +1228,7 @@ namespace Emberfall.Core.Data
             p.OutputModMarkedOnly = j.GetBool("outputModMarkedOnly", false);
             p.TriggerSourceIsSelf = j.GetBool("triggerSourceIsSelf", false);
             p.TriggerSourceIsAlly = j.GetBool("triggerSourceIsAlly", false);
+            p.IncludeSelf = j.GetBool("includeSelf", false);
             p.StatModStatus = EnumUtil.Parse(j.GetString("statModStatus", "None"), StatusKind.None);
             p.StatModPerStack = j.GetFloat("statModPerStack", 0f);
             p.StatModKind = EnumUtil.Parse(j.GetString("statModKind", "Speed"), ComparedStat.Speed);

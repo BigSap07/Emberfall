@@ -864,6 +864,34 @@ namespace Emberfall.Core.Combat
             private bool _anyLinks;
 
             /// <summary>
+            /// Whether any unit in this battle carries a passive with PassiveDef.IncludeSelf.
+            /// Computed once at build, the same shape and for the same reason as _anyLinks: a
+            /// battle nobody authored it into pays one already-loaded bool comparison per
+            /// broadcast and the excluded unit never enters the walk.
+            /// </summary>
+            private bool _anyIncludeSelf;
+
+            /// <summary>
+            /// The unit an ally-facing broadcast would ordinarily skip - the victim, the recipient,
+            /// the carrier - or null outside such a dispatch. Read in TriggerPassive, which lets
+            /// only an IncludeSelf passive through on that one body.
+            ///
+            /// Saved and restored around every broadcast, like every other window field here, so a
+            /// dispatch nested inside another cannot inherit or destroy the outer one's exclusion.
+            /// </summary>
+            private CombatUnit _broadcastExcept;
+
+            /// <summary>Holds OnAllyEnergyGained to one level: a passive that answers a gain by
+            /// granting Energy would otherwise raise it again from inside itself. The same
+            /// discipline _inDrainTrigger keeps for the other direction.</summary>
+            private bool _inEnergyGainTrigger;
+
+            /// <summary>Holds OnEnemyAppliedStatus to one level, for the same reason: a passive
+            /// that answers a debuff attempt by attempting one is a loop, not a wrong number.
+            /// </summary>
+            private bool _inStatusAttemptTrigger;
+
+            /// <summary>
             /// What the most recent hit actually took off a bar, or 0 at an ability boundary.
             /// EffectKind.EchoDamage's whole input - see that member for why it reads a realised
             /// number rather than recomputing one.
@@ -1209,6 +1237,16 @@ namespace Emberfall.Core.Combat
                         _units.Add(CombatUnit.FromDef(def, stats, spawns[i].Level, false, i, id++, _cfg.EnergyMax));
                     }
                 }
+
+                // One walk, once, over a roster that is at most ten bodies and two passives each.
+                // Everything downstream reads the bool - see _anyIncludeSelf - so a battle nobody
+                // authored IncludeSelf into never pays for the flag again.
+                for (int i = 0; i < _units.Count && !_anyIncludeSelf; i++)
+                {
+                    CombatUnit u = _units[i];
+                    for (int pi = 0; pi < u.Passives.Count; pi++)
+                        if (u.Passives[pi] != null && u.Passives[pi].IncludeSelf) { _anyIncludeSelf = true; break; }
+                }
             }
 
             // ------------------------------------------------------------------ talent overrides
@@ -1403,6 +1441,7 @@ namespace Emberfall.Core.Combat
                 p.TriggerStatus = src.TriggerStatus;
                 p.TriggerSourceIsSelf = src.TriggerSourceIsSelf;
                 p.TriggerSourceIsAlly = src.TriggerSourceIsAlly;
+                p.IncludeSelf = src.IncludeSelf;
                 // THE SAME DEFECT EffectDef.Clone() HAD, found by running the same audit against
                 // this method while adding the two lines below it. ClonePassive rebuilds a passive
                 // a talent has appended to or overridden, and it was dropping the three fields an
@@ -2704,6 +2743,44 @@ namespace Emberfall.Core.Combat
                     case EffectKind.ApplyStatus:
                     {
                         if (!target.Alive || effect.Status == StatusKind.None) break;
+
+                        // ENGINE-GAPS group 9: the other side hears a debuff being ATTEMPTED.
+                        //
+                        // BEFORE THE LANDING ROLL, deliberately. A debuff that was resisted was
+                        // still attempted, and "when a Flustered enemy attempts a debuff" is a
+                        // sentence about the attempt; raising it after the roll would make the
+                        // clause silently depend on the victim's Effect Resist. It also means the
+                        // trigger draws no RNG of its own and cannot shift the stream.
+                        //
+                        // Harmful only, read through the same StatusInfo.IsHarmful that Cleanse and
+                        // Dispel read, so "debuff" means one thing across the engine - a Mark, a
+                        // Ledger, a Link and every buff are not attempts at one.
+                        //
+                        // The APPLIER is the subject, because every clause asking for this then
+                        // wants to do something to it; the body being aimed at is the victim. Held
+                        // to one level by a flag, since the natural answer to a debuff attempt is a
+                        // debuff.
+                        if (StatusInfo.IsHarmful(effect.Status) && !_inStatusAttemptTrigger)
+                        {
+                            _inStatusAttemptTrigger = true;
+                            CombatUnit prevAsSubject = _broadcastSubject;
+                            CombatUnit prevAsVictim = _broadcastVictim;
+                            int prevAsSource = _broadcastSourceId;
+                            _broadcastSubject = source;
+                            _broadcastVictim = target;
+                            _broadcastSourceId = source.Id;
+                            BroadcastPassive(!source.IsPlayer, PassiveTrigger.OnEnemyAppliedStatus, depth, null);
+                            _broadcastSourceId = prevAsSource;
+                            _broadcastVictim = prevAsVictim;
+                            _broadcastSubject = prevAsSubject;
+                            _inStatusAttemptTrigger = false;
+                            // A passive answering the attempt can kill the applier, the target, or
+                            // end the fight. Each makes the application meaningless, so it does not
+                            // happen - the same three re-checks every other pre-resolution hook in
+                            // this engine applies.
+                            if (!target.Alive || !source.Alive || IsBattleOver()) break;
+                        }
+
                         float landing = effect.BypassResist
                             ? effect.Chance
                             : ResolveLandingChance(effect.Chance, effect.Status,
@@ -4490,12 +4567,17 @@ namespace Emberfall.Core.Combat
                 // the shield pool, so a guarded ward meets a smaller hit. Walked backwards because
                 // a spent charge removes its entry.
                 int damageBeforeGuard = damage;
+                // Who placed the charge that answered this blow, or -1 when none did. Read one
+                // block down by OnGuardPrevented, and captured here because the entry is removed
+                // inline the moment its last charge is spent.
+                int guardPreventerId = -1;
                 for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
                 {
                     StatusInstance guard = target.Statuses[gi];
                     if (guard.Kind != StatusKind.Guard || guard.Charges <= 0 || guard.Magnitude <= 0f) continue;
                     float cut = guard.Magnitude > 1f ? 1f : guard.Magnitude;
                     damage -= (int)Math.Round(damage * cut, MidpointRounding.AwayFromZero);
+                    guardPreventerId = guard.SourceId;
                     guard.Charges--;
                     if (guard.Charges <= 0)
                     {
@@ -4505,6 +4587,42 @@ namespace Emberfall.Core.Combat
                     }
                     if (damage <= 0) { damage = 0; break; }
                     break;   // one guard a hit, so two cannot stack into immunity
+                }
+
+                // ENGINE-GAPS group 9: somebody can hear a Guard charge do its job.
+                //
+                // The charge is spent inline above and the entry is gone by the time anything else
+                // runs, so the only thing that could observe a prevention was a Ledger with
+                // FunnelSource.GuardMitigation - which banks the amount and pays out when the bank
+                // FILLS, once per cap rather than once per prevention. "When Reserve prevents
+                // damage, its holder recovers 4% Max HP" is a sentence about each prevention.
+                //
+                // Broadcast to the APPLIER'S side with the applier as the source, so
+                // TriggerSourceIsSelf reads "a Guard I placed" and a hero cannot answer for
+                // somebody else's ward. The holder is the subject and is excluded the way every
+                // ally broadcast excludes the body the news is about; when the holder IS the
+                // applier, PassiveDef.IncludeSelf is what lets the clause reach it.
+                //
+                // Raised only when the charge actually removed damage, and only when the applier is
+                // still on the field. `_lastMoved` for the applier carries the amount prevented.
+                if (guardPreventerId >= 0 && damageBeforeGuard - damage > 0)
+                {
+                    CombatUnit warder = FindUnit(guardPreventerId);
+                    if (warder != null && warder.Alive)
+                    {
+                        NoteMoved(warder.Id, damageBeforeGuard - damage);
+                        CombatUnit prevGpSubject = _broadcastSubject;
+                        CombatUnit prevGpVictim = _broadcastVictim;
+                        int prevGpSource = _broadcastSourceId;
+                        _broadcastSubject = target;
+                        _broadcastVictim = target;
+                        _broadcastSourceId = warder.Id;
+                        BroadcastPassive(warder.IsPlayer, PassiveTrigger.OnGuardPrevented, 0, target);
+                        _broadcastSourceId = prevGpSource;
+                        _broadcastVictim = prevGpVictim;
+                        _broadcastSubject = prevGpSubject;
+                        if (!target.Alive || IsBattleOver()) return;
+                    }
                 }
 
                 // Funnel banking: GuardMitigation entries bank the amount Guard prevented.
@@ -5456,6 +5574,35 @@ namespace Emberfall.Core.Combat
                 if (amount > 0 && energyBefore >= 0)
                     CheckEnergyThreshold(unit, energyBefore);
 
+                // --- and the recipient's own side hears that the bar moved ---
+                // ENGINE-GAPS group 9. The mirror of OnEnemyEnergyDrained below, which fires on
+                // whoever TOOK Energy across the line; nothing fired for Energy arriving, so "when
+                // an ally gains Energy" had to be folded into the passive that hands it out.
+                //
+                // Four things have to hold, and each drops a case the clause does not mean: a
+                // gain rather than a drain, a bar that actually moved rather than one already
+                // full, a named granter rather than a unit's own turn refill (which passes -1),
+                // and one level of re-entrancy rather than a passive that answers a gain by
+                // granting. The recipient is excluded the way every ally broadcast excludes the
+                // body the news is about, and PassiveDef.IncludeSelf is how a clause says
+                // otherwise.
+                if (amount > 0 && energyBefore >= 0 && unit.Energy != energyBefore
+                    && sourceId >= 0 && !_inEnergyGainTrigger)
+                {
+                    _inEnergyGainTrigger = true;
+                    CombatUnit prevEgSubject = _broadcastSubject;
+                    CombatUnit prevEgVictim = _broadcastVictim;
+                    int prevEgSource = _broadcastSourceId;
+                    _broadcastSubject = unit;
+                    _broadcastVictim = unit;
+                    _broadcastSourceId = sourceId;
+                    BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAllyEnergyGained, 0, unit);
+                    _broadcastSourceId = prevEgSource;
+                    _broadcastVictim = prevEgVictim;
+                    _broadcastSubject = prevEgSubject;
+                    _inEnergyGainTrigger = false;
+                }
+
                 // --- and the mirror of it: somebody took Energy off an enemy ---
                 // After the clamp, so "lost Energy" means the bar actually moved rather than a
                 // drain that hit an empty one. Across the line only - a unit paying its own cast
@@ -5785,6 +5932,11 @@ namespace Emberfall.Core.Combat
 
                     PassiveDef passive = owner.Passives[i];
                     if (passive == null || passive.Trigger != trigger) continue;
+                    // The other half of PassiveDef.IncludeSelf. This owner is in the walk only
+                    // because SOME passive on it opted in; the ones that did not are still the
+                    // excluded body and are skipped here. Null outside a broadcast, so the test is
+                    // one reference comparison on every other dispatch in the engine.
+                    if (owner == _broadcastExcept && !passive.IncludeSelf) continue;
                     if (passive.OncePerBattle && owner.PassiveHasFired(i)) continue;
                     if (!LimitAllows(owner, i, passive)) continue;
                     if (trigger == PassiveTrigger.OnHpBelowThreshold && owner.HpRatio > passive.Threshold) continue;
@@ -6003,14 +6155,37 @@ namespace Emberfall.Core.Combat
                 for (int i = 0; i < _units.Count; i++)
                 {
                     CombatUnit u = _units[i];
-                    if (!u.Alive || u.IsPlayer != playerSide || u == except) continue;
+                    if (!u.Alive || u.IsPlayer != playerSide) continue;
+                    // THE EXCLUSION, AND THE ONE WAY PAST IT. The excluded unit enters the walk
+                    // only when it carries a passive that both answers this trigger and says "and
+                    // me" - see PassiveDef.IncludeSelf. Gated on _anyIncludeSelf first, so a
+                    // battle nobody authored it into builds the identical list it always did and
+                    // the unit keeps its natural position when somebody does.
+                    if (u == except && !(_anyIncludeSelf && HearsAsSubject(u, trigger))) continue;
                     side.Add(u);
                 }
+                CombatUnit prevExcept = _broadcastExcept;
+                _broadcastExcept = except;
                 for (int i = 0; i < side.Count; i++)
                 {
-                    if (IsBattleOver()) return;
+                    if (IsBattleOver()) break;
                     TriggerPassive(side[i], trigger, depth);
                 }
+                _broadcastExcept = prevExcept;
+            }
+
+            /// <summary>Whether this unit carries a passive that answers `trigger` AND opts in to
+            /// hearing it about itself. Walks a list that is one or two entries long on a hero and
+            /// usually empty on an enemy, and is reached only when _anyIncludeSelf is true.
+            /// </summary>
+            private static bool HearsAsSubject(CombatUnit u, PassiveTrigger trigger)
+            {
+                for (int i = 0; i < u.Passives.Count; i++)
+                {
+                    PassiveDef p = u.Passives[i];
+                    if (p != null && p.IncludeSelf && p.Trigger == trigger) return true;
+                }
+                return false;
             }
 
             /// <summary>
