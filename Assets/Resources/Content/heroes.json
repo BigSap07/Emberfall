@@ -2455,7 +2455,7 @@
       "basic": {
         "id": "arno_chisel_strike",
         "name": "Chisel Strike",
-        "description": "Deals 402% Attack damage to the front enemy, and 70% more if that enemy's Shield is still standing.",
+        "description": "Strikes the front enemy, and hits it again if its Ward is still standing.",
         "effects": [
           {
             "kind": "Damage",
@@ -2533,7 +2533,7 @@
       "basic": {
         "id": "barr_splintering_blow",
         "name": "Splintering Blow",
-        "description": "Deals 323% Attack damage to the front enemy and gives Barr 8% Damage Reduction for 1 round.",
+        "description": "Strikes the front enemy and gives Barr Bulwark.",
         "effects": [
           {
             "kind": "Damage",
@@ -2554,7 +2554,7 @@
       "passive1": {
         "id": "barr_give_way",
         "name": "Give Way",
-        "description": "The first time Barr falls below 40% HP, he gains a Shield equal to 10% of his Max HP for 2 rounds.",
+        "description": "The first time Barr falls to low HP, he gains a Ward worth a share of his Max HP.",
         "trigger": "OnHpBelowThreshold",
         "threshold": 0.4,
         "oncePerBattle": true,
@@ -2609,7 +2609,7 @@
       "basic": {
         "id": "piri_price_breaker",
         "name": "Price Breaker",
-        "description": "Deals 335% Attack damage to the front enemy and takes 5 Energy off it.",
+        "description": "Strikes the front enemy and takes some Energy off it.",
         "effects": [
           {
             "kind": "Damage",
@@ -2626,7 +2626,7 @@
       "passive1": {
         "id": "piri_cheap_kindling",
         "name": "Cheap Kindling",
-        "description": "When Piri defeats an enemy, the ally with the emptiest bar gains 15 Energy. Pinoy pays the 15 to Piri; a 2-star has no active skill to spend Energy on, so the spark is passed to somebody who does. See Docs/PINOY-LIST.md section 2c.",
+        "description": "When Piri defeats an enemy, the ally with the emptiest bar gains Energy.",
         "trigger": "OnKill",
         "oncePerBattle": false,
         "effects": [
@@ -2679,7 +2679,7 @@
       "basic": {
         "id": "fenn_cargo_spark",
         "name": "Cargo Spark",
-        "description": "Deals 286% Attack damage to the enemy with the lowest HP.",
+        "description": "Strikes the enemy with the lowest HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -2730,7 +2730,7 @@
       "basic": {
         "id": "ulric_signpost_strike",
         "name": "Signpost Strike",
-        "description": "Deals 377% Attack damage to the front enemy.",
+        "description": "Strikes the front enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -5255,7 +5255,7 @@
       "basic": {
         "id": "dett_unmoored_swing",
         "name": "Unmoored Swing",
-        "description": "Deals 370% Attack damage to the front enemy and advances Dett's next turn by 8%.",
+        "description": "Strikes the front enemy and advances Dett's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -5272,7 +5272,7 @@
       "passive1": {
         "id": "dett_turn_with_it",
         "name": "Turn With It",
-        "description": "When an active skill is aimed at Dett, he gains 8% Damage Reduction for 1 round.",
+        "description": "When an active skill is aimed at Dett, he gains Bulwark.",
         "trigger": "OnTargeted",
         "oncePerBattle": false,
         "effects": [
@@ -5331,7 +5331,7 @@
       "basic": {
         "id": "hod_cargo_bolt",
         "name": "Cargo Bolt",
-        "description": "Deals 329% Attack damage to the front enemy, takes 5 Energy off it and gives 5 Energy to the ally with the emptiest bar.",
+        "description": "Strikes the front enemy, takes some Energy off it and gives Energy to the ally with the emptiest bar.",
         "effects": [
           {
             "kind": "Damage",
@@ -5353,7 +5353,7 @@
       "passive1": {
         "id": "hod_counterweight",
         "name": "Counterweight",
-        "description": "An ally Hod hands Energy to gains 5% Defense for 1 round.",
+        "description": "An ally Hod hands Energy to gains Guard Up.",
         "trigger": "OnAllyEnergyGained",
         "triggerSourceIsSelf": true,
         "oncePerBattle": false,
@@ -5411,7 +5411,7 @@
       "basic": {
         "id": "yara_deflection_shot",
         "name": "Deflection Shot",
-        "description": "Deals 385% Attack damage to the front enemy and gives the lowest-HP ally 5% Speed for 1 round.",
+        "description": "Strikes the front enemy and gives the lowest-HP ally Quickened.",
         "effects": [
           {
             "kind": "Damage",
@@ -5490,7 +5490,7 @@
       "basic": {
         "id": "moss_side_shot",
         "name": "Side Shot",
-        "description": "Deals 298% Attack damage to a random enemy.",
+        "description": "Strikes a random enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -5541,7 +5541,7 @@
       "basic": {
         "id": "orenna_wheelhouse_swing",
         "name": "Wheelhouse Swing",
-        "description": "Deals 348% Attack damage to the front enemy and gives 5 Energy to the ally with the emptiest bar. Pinoy pays the 5 to Orenna; a 1-star has no active skill to spend Energy on, so the wheel passes it on. See Docs/PINOY-LIST.md section 2c.",
+        "description": "Strikes the front enemy and gives Energy to the ally with the emptiest bar.",
         "effects": [
           {
             "kind": "Damage",
@@ -7878,7 +7878,7 @@
       "basic": {
         "id": "garron_frame_strike",
         "name": "Frame Strike",
-        "description": "Deals 356% Attack damage to the front enemy and gives Garron 6% Block for 2 rounds.",
+        "description": "Strikes the front enemy and gives Garron Block Up.",
         "effects": [
           {
             "kind": "Damage",
@@ -7899,7 +7899,7 @@
       "passive1": {
         "id": "garron_set_iron",
         "name": "Set Iron",
-        "description": "When Garron blocks an attack, he heals 3% of his Max HP.",
+        "description": "When Garron blocks an attack, he heals a share of his Max HP.",
         "trigger": "OnBlock",
         "oncePerBattle": false,
         "effects": [
@@ -7952,7 +7952,7 @@
       "basic": {
         "id": "nara_roadside_care",
         "name": "Roadside Care",
-        "description": "Deals 422% Attack damage to the front enemy and heals the lowest-HP ally for 190% of Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -8029,7 +8029,7 @@
       "basic": {
         "id": "wynn_mended_shot",
         "name": "Mended Shot",
-        "description": "Deals 331% Attack damage to the front enemy and gives a random ally 5% Defense for 2 rounds.",
+        "description": "Strikes the front enemy and gives a random ally Guard Up.",
         "effects": [
           {
             "kind": "Damage",
@@ -8050,7 +8050,7 @@
       "passive1": {
         "id": "wynn_useful_again",
         "name": "Useful Again",
-        "description": "When an ally carrying Wynn's Defense buff is hit, that ally gains 5 Energy. Pinoy pays the 5 to Wynn; a 2-star has no active skill to spend Energy on, so the hand-me-down keeps paying its holder. See Docs/PINOY-LIST.md section 2c.",
+        "description": "When an ally carrying Wynn's Guard Up is hit, that ally gains Energy.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "effects": [
@@ -8107,7 +8107,7 @@
       "basic": {
         "id": "hal_cache_shovel",
         "name": "Cache Shovel",
-        "description": "Deals 376% Attack damage to the front enemy and recovers 2% of Hal's Max HP.",
+        "description": "Strikes the front enemy and recovers a share of Hal's Max HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -8163,7 +8163,7 @@
       "basic": {
         "id": "iri_tokenkeepers_tap",
         "name": "Tokenkeeper's Tap",
-        "description": "Deals 437% Attack damage to the front enemy and heals the lowest-HP ally for 131% of Attack.",
+        "description": "Strikes the front enemy and heals the lowest-HP ally.",
         "effects": [
           {
             "kind": "Damage",
@@ -10535,7 +10535,7 @@
       "basic": {
         "id": "jax_rattle_shot",
         "name": "Rattle Shot",
-        "description": "Deals 322% Attack damage to the front enemy and puts its turn back by 8%.",
+        "description": "Strikes the front enemy and puts its turn back.",
         "effects": [
           {
             "kind": "Damage",
@@ -10552,7 +10552,7 @@
       "passive1": {
         "id": "jax_loose_spring",
         "name": "Loose Spring",
-        "description": "When Jax puts an enemy's turn back, he gains 5% Speed for 1 round.",
+        "description": "When Jax puts an enemy's turn back, he gains Quickened.",
         "trigger": "OnTurnDelayed",
         "oncePerBattle": false,
         "effects": [
@@ -10609,7 +10609,7 @@
       "basic": {
         "id": "kora_skip_ahead",
         "name": "Skip Ahead",
-        "description": "Deals 384% Attack damage to the front enemy and advances Kora's next turn by 10%.",
+        "description": "Strikes the front enemy and advances Kora's next turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -10681,7 +10681,7 @@
       "basic": {
         "id": "sena_displaced_arrow",
         "name": "Displaced Arrow",
-        "description": "Deals 374% Attack damage to the front enemy and applies 8% Speed Down for 1 round.",
+        "description": "Strikes the front enemy and applies Mire.",
         "effects": [
           {
             "kind": "Damage",
@@ -10758,7 +10758,7 @@
       "basic": {
         "id": "bex_latchbreaker",
         "name": "Latchbreaker",
-        "description": "Deals 345% Attack damage to the front enemy and gives Bex 5% Speed for 1 round.",
+        "description": "Strikes the front enemy and gives Bex Quickened.",
         "effects": [
           {
             "kind": "Damage",
@@ -10818,7 +10818,7 @@
       "basic": {
         "id": "till_rolling_shot",
         "name": "Rolling Shot",
-        "description": "Deals 415% Attack damage to the front enemy and puts its turn back by 5%.",
+        "description": "Strikes the front enemy and puts its turn back.",
         "effects": [
           {
             "kind": "Damage",
