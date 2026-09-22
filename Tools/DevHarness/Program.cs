@@ -24226,13 +24226,6 @@ namespace Emberfall.DevHarness
             int n; into.TryGetValue(key, out n); into[key] = n + 1;
         }
 
-
-
-
-
-
-
-
         private static bool DarkPair(string hero, int talent, string stage, string allies, int seed,
                                      bool slow, out DarkProbe without, out DarkProbe with)
         {
@@ -33309,7 +33302,7 @@ namespace Emberfall.DevHarness
                   "SubjectRepaidDebtAtLeast: a debtor whose debt is capped at 12% of a turn is Silenced " + small[0]
                   + " time(s); capped at 25% it is Silenced " + big[0] + " time(s), all "
                   + big[1] + " after its own action and " + big[2] + " still on it when its next turn opened (the other was laid in the last round) - the "
-                  + "Silence lands as its turn ends and costs it the next one");
+                  + "Silence lands as its turn ends and covers the next one");
         }
 
         /// <summary>Aeron III as pass 2 left it: any repayment, Silenced at the repayment.</summary>
