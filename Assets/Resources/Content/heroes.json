@@ -5004,25 +5004,63 @@
         "portrait": "linnet_the_misdialed"
       },
       "basic": {
-        "id": "linnet_the_misdialed_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "linnet_wrong_number",
+        "name": "Wrong Number",
+        "description": "Deals 215% Attack damage and applies Crossed Line for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 2.15
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       },
       "active": {
-        "id": "linnet_the_misdialed_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "linnet_operator_error",
+        "name": "Operator Error",
         "energyCost": 100,
+        "description": "Deals 349% Attack damage to all Crossed Line enemies and delays each by 15% turn progress.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "power": 3.49
+          },
+          {
+            "kind": "TurnShift",
+            "target": "AllEnemies",
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
+            "magnitude": -0.15
+          }
+        ]
+      },
+      "passive1": {
+        "id": "linnet_open_circuit",
+        "name": "Open Circuit",
+        "description": "At round start, one debuff on the Crossed Line enemy is reconnected to a random enemy for 2 rounds and Linnet gains 10 Energy. Pinoy has Crossed Line reroute the first debuff to LAND on that body each round; the engine has no window for a debuff arriving on an enemy, so the reroute is done at round start on whatever is already there, and the 10 Energy pays whether or not anything moved. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md groups 29 and 30.",
+        "trigger": "RoundStart",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "MoveDebuffs",
+            "target": "EnemyWithMyMark",
+            "hits": 1,
+            "moveDuration": 2,
+            "secondaryTarget": "RandomEnemy"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "Self",
+            "flat": 10
           }
         ]
       }
@@ -5066,25 +5104,56 @@
         "portrait": "oswin_the_refit_surgeon"
       },
       "basic": {
-        "id": "oswin_the_refit_surgeon_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "oswin_corrective_cut",
+        "name": "Corrective Cut",
+        "description": "Deals 195% Attack damage and heals the ally with the most debuffs for 98% Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.95
+          },
+          {
+            "kind": "Heal",
+            "target": "AllyWithMostDebuffs",
+            "power": 0.98
           }
         ]
       },
       "active": {
-        "id": "oswin_the_refit_surgeon_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "oswin_reposition_the_hurt",
+        "name": "Reposition the Hurt",
         "energyCost": 100,
+        "description": "Deals 293% Attack damage to all enemies, then moves one debuff from each ally onto the highest-HP enemy for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.93
+          },
+          {
+            "kind": "MoveDebuffs",
+            "target": "AllAllies",
+            "hits": 1,
+            "moveDuration": 2,
+            "secondaryTarget": "HighestHpEnemy"
+          }
+        ]
+      },
+      "passive1": {
+        "id": "oswin_useful_scar",
+        "name": "Useful Scar",
+        "description": "After Reposition the Hurt, every ally gains 8% Defense for 2 rounds. Pinoy pays only the allies who actually lost a debuff to Oswin; the engine records a removal for a cleanse, a dispel and a named strip but not for a move, so the condition that would ask has nothing to read. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 30.",
+        "trigger": "AfterActiveCast",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "AllAllies",
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.08,
+            "status": "DefenseUp"
           }
         ]
       }
@@ -7269,25 +7338,55 @@
         "portrait": "brio_the_patient_record"
       },
       "basic": {
-        "id": "brio_the_patient_record_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "brio_recorded_shot",
+        "name": "Recorded Shot",
+        "description": "Deals 330% Attack damage and applies Accounted for 2 rounds. Pinoy also has attacks against an Accounted body unable to miss; nothing in the engine negates a miss chance, so that half is carried in the text only. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 31.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 3.3
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LastTarget",
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       },
       "active": {
-        "id": "brio_the_patient_record_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "brio_evidence_kept",
+        "name": "Evidence Kept",
         "energyCost": 100,
+        "description": "Deals 480% Attack damage to an Accounted enemy and heals the lowest-HP ally for 6% Max HP.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "AllEnemies",
-            "power": 1.5
+            "target": "EnemyWithMyMark",
+            "power": 4.8
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "targetMaxHpRatio": 0.06
+          }
+        ]
+      },
+      "passive1": {
+        "id": "brio_nothing_forgotten",
+        "name": "Nothing Forgotten",
+        "description": "When an Accounted enemy is defeated, Brio writes Accounted onto the highest-HP enemy for 2 rounds.",
+        "trigger": "OnEnemyDefeated",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "HighestHpEnemy",
+            "condition": "HasMyMark",
+            "conditionOn": "Defeated",
+            "duration": 2,
+            "status": "Mark"
           }
         ]
       }
@@ -7331,25 +7430,56 @@
         "portrait": "elin_the_second_stitch"
       },
       "basic": {
-        "id": "elin_the_second_stitch_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "elin_mending_prick",
+        "name": "Mending Prick",
+        "description": "Deals 179% Attack damage and heals the lowest-HP ally for 89% Attack.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.79
+          },
+          {
+            "kind": "Heal",
+            "target": "LowestHpAlly",
+            "power": 0.89
           }
         ]
       },
       "active": {
-        "id": "elin_the_second_stitch_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "elin_hold_the_seam",
+        "name": "Hold the Seam",
         "energyCost": 100,
+        "description": "Deals 268% Attack damage to all enemies and gives the lowest-HP ally Stitching for 3 rounds. Stitching heals 3% of its holder's Max HP at turn end.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.68
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "chance": 1,
+            "duration": 3,
+            "magnitude": 0.0,
+            "status": "Regen",
+            "holderHpTick": 0.03
+          }
+        ]
+      },
+      "passive1": {
+        "id": "elin_tighten_the_thread",
+        "name": "Tighten the Thread",
+        "description": "When Stitching runs its course, its holder gains 10 Energy.",
+        "trigger": "OnAppliedAllyStatusExpired",
+        "triggerStatus": "Regen",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "EnergyGain",
+            "target": "BroadcastSubject",
+            "flat": 10
           }
         ]
       }
@@ -7393,27 +7523,63 @@
         "portrait": "marn_the_holding_wall"
       },
       "basic": {
-        "id": "marn_the_holding_wall_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "marn_garrison_guard",
+        "name": "Garrison Guard",
+        "description": "Deals 105% Attack damage and gives the lowest-HP ally Coverguard for 2 rounds. Coverguard reduces the next hit by 14%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.05
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "LowestHpAlly",
+            "chance": 1,
+            "charges": 1,
+            "duration": 2,
+            "magnitude": 0.14,
+            "status": "Guard"
           }
         ]
       },
       "active": {
-        "id": "marn_the_holding_wall_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "marn_reserve_shelter",
+        "name": "Reserve Shelter",
         "energyCost": 100,
+        "description": "Deals 165% Attack damage to all enemies and gives every ally Coverguard for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 1.65
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "AllAllies",
+            "chance": 1,
+            "charges": 1,
+            "duration": 2,
+            "magnitude": 0.14,
+            "status": "Guard"
           }
         ]
+      },
+      "passive1": {
+        "id": "marn_relief_after_loss",
+        "name": "Relief After Loss",
+        "description": "When Coverguard is consumed, its holder heals 3% Max HP.",
+        "trigger": "OnGuardPrevented",
+        "oncePerBattle": false,
+        "effects": [
+          {
+            "kind": "Heal",
+            "target": "BroadcastVictim",
+            "targetMaxHpRatio": 0.03
+          }
+        ],
+        "triggerSourceIsSelf": true,
+        "includeSelf": true
       }
     },
     {
@@ -7455,25 +7621,70 @@
         "portrait": "rusk_the_patchmaker"
       },
       "basic": {
-        "id": "rusk_the_patchmaker_placeholder_basic",
-        "name": "Strike (placeholder)",
+        "id": "rusk_patch_round",
+        "name": "Patch Round",
+        "description": "Deals 141% Attack damage and gives a random ally Patchwork for 2 rounds. Patchwork grants 8% Defense.",
         "effects": [
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.0
+            "power": 1.41
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "RandomAlly",
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.08,
+            "status": "DefenseUp"
           }
         ]
       },
       "active": {
-        "id": "rusk_the_patchmaker_placeholder_active",
-        "name": "Sweep (placeholder)",
+        "id": "rusk_keep_it_running",
+        "name": "Keep It Running",
         "energyCost": 100,
+        "description": "Deals 235% Attack damage to all enemies and puts every Patchwork back to its full 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.5
+            "power": 2.35
+          },
+          {
+            "kind": "ExtendStatus",
+            "target": "AllAllies",
+            "duration": 2,
+            "status": "DefenseUp",
+            "extendCap": 2
+          }
+        ]
+      },
+      "passive1": {
+        "id": "rusk_borrowed_time",
+        "name": "Borrowed Time",
+        "description": "When a blow would kill an ally carrying Patchwork, Patchwork goes instead and the ally is left at 1 HP. Once per battle.",
+        "trigger": "OnAllyWouldDie",
+        "oncePerBattle": true,
+        "effects": [
+          {
+            "kind": "RedirectLethal",
+            "target": "BroadcastSubject",
+            "condition": "MyStatusStacksAtLeast",
+            "conditionOn": "Target",
+            "conditionStatus": "DefenseUp",
+            "conditionValue": 1,
+            "power": 0.0
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "condition": "MyStatusStacksAtLeast",
+            "conditionOn": "Target",
+            "conditionStatus": "DefenseUp",
+            "conditionValue": 1,
+            "hits": 1,
+            "status": "DefenseUp"
           }
         ]
       }

@@ -25330,7 +25330,11 @@ namespace Emberfall.DevHarness
                                   // window this arena had never opened.
                                   "adric_the_blank_map", "aster_the_glassblower",
                                   "quin_the_sealed_dispatch", "selka_the_unheard_appeal",
-                                  "bren_the_extra_measure", "cal_the_alternate_angle" };
+                                  "bren_the_extra_measure", "cal_the_alternate_angle",
+                                  // The second 3-star batch, same reason.
+                                  "linnet_the_misdialed", "oswin_the_refit_surgeon",
+                                  "brio_the_patient_record", "elin_the_second_stitch",
+                                  "marn_the_holding_wall", "rusk_the_patchmaker" };
 
             ContentDatabase arena = BuildHeroSweepArena(live);
             List<HeroDef> fillers = BuildHeroSweepFillers();

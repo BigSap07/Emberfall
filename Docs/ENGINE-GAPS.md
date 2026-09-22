@@ -286,21 +286,62 @@ which is as fine as the record gets.
 
 ---
 
+## 29. A debuff landing on an enemy
+
+`OnEnemyBuffGained` is the window for a BENEFICIAL status arriving on the other side, and Vanno
+and Tavia both build on it. There is no harmful mirror of it. `OnStatusGained` fires on the
+CARRIER, so a hero watching the enemy line for an incoming debuff has nothing to listen to, and
+`OnEnemyAppliedStatus` answers an enemy CASTING one rather than one arriving.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Linnet | "Crossed Line: the target's **first debuff each round** goes to a random enemy" | a window for a harmful status arriving on an enemy, the mirror of `OnEnemyBuffGained` | Open Circuit reroutes one debuff already on the Crossed Line body at round start instead of catching one as it lands | small |
+
+---
+
+## 30. A moved status is not recorded as a removal
+
+`NoteRemovedFrom` is what `SubjectLostStatusThisFiring` reads and what `FireRemoval` raises
+`OnStatusRemoved` on, and exactly three effects call it: `Cleanse`, `Dispel` and `RemoveStatus`.
+`MoveDebuffs`, `MoveBuffs` and `TransferStatus` take an entry off a body without either, so a
+clause that pays the bodies a move took something from cannot tell which ones they were.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Oswin | "**Allies who lose a debuff to Oswin** gain 8% Defense for 2 rounds" | a move recorded as a removal, so the gate has something to read | every ally gains the 8% after Reposition the Hurt, whether or not a debuff left them | small |
+| Linnet | "**When Crossed Line redirects a debuff**, Linnet gains 10 Energy" | the same record, read as a gate on the payout rather than on a rider | the 10 Energy pays at round start whether or not the reroute found anything to move | small |
+
+---
+
+## 31. Negating a miss chance
+
+The miss check subtracts `EvasionUp` on the defender and `AccuracyDown` on the attacker from a hit
+chance of 1. Nothing sets it back to 1, and nothing exempts one attacker or one target from the
+roll, so "cannot miss" has no term to write. Adric's Lost Route made this reachable for the first
+time in the same batch that found it unanswerable.
+
+| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
+|---|---|---|---|---|
+| Brio | "Attacks against Accounted **cannot miss**" | an exemption from the miss roll | carried in the text only; the Mark does the rest of Accounted's work | small |
+
+---
+
 ## Where the counts stand
 
-Nineteen capabilities, twenty-two clauses, across nineteen heroes. It began at twenty-two and
+Twenty-two capabilities, twenty-six clauses, across twenty-two heroes. It began at twenty-two and
 thirty-nine; the engine pass closed groups 1, 2, 3, 4, 5, 8, 9, 12, 14, 17 and 18 and restored the
-eighteen kits that carried them, leaving thirteen and fourteen. The first 3-star batch then added
-six groups and eight clauses, which is the count going the other way for the first time since the
-pass.
+eighteen kits that carried them, leaving thirteen and fourteen. The 3-star batches have added nine
+groups and twelve clauses since, which is the count going the other way for the first time since
+the pass.
 
-Three groups have more than one occupant:
+Four groups have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
 | 11 | swapping a value, rather than moving it one way | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 | 23 | a damage modifier scoped to one kind of hit, or spent by one hit | 2 |
+| 30 | a moved status is not recorded as a removal | 2 |
 
 **Group 23 is the one with a repeat that arrived in a single batch**, which is what this file's
 grouping exists to make visible: Aster's Fracture and Quin's Delivered are the same sentence
