@@ -204,6 +204,13 @@ namespace Emberfall.UI.Screens
         /// and never does the thing itself.
         /// </summary>
         public void SkipToEndForCapture() { SkipToEnd(); }
+
+#if UNITY_EDITOR
+        /// <summary>EDITOR ONLY. When non-zero, the seed every fight on this screen resolves at,
+        /// so a capture can be shot again and get the same fight. The engine is a pure function
+        /// of its request; this pins the one input that is otherwise taken from the clock.</summary>
+        public static int CaptureSeed;
+#endif
 #endif
 
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
@@ -771,6 +778,11 @@ namespace Emberfall.UI.Screens
                                  + App.Session.Profile.TotalBattlesWon * 7919
                                  + Mathf.RoundToInt(Time.unscaledTime * 997f));
             if (seed == 0) seed = 1;
+#if UNITY_EDITOR
+            // A capture that has to be shot twice needs the same fight twice. Zero, the default,
+            // leaves the live seed alone. Set only by TeaserCapture.
+            if (CaptureSeed != 0) seed = CaptureSeed;
+#endif
 
             // Three request shapes, one per mode that does not use the player's own line as-is.
             // Checked most-specific first: a prologue fight has no profile at all, so it must not
