@@ -3256,10 +3256,14 @@ namespace Emberfall.Core.Combat
                             BattleEvent gone = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             gone.Status = entry.Kind;
 
-                            target.AddOrRefresh(opposite, entry.RoundsLeft, entry.Magnitude, source.Id);
+                            // The flipped entry's clock. Zero - every inversion before this pass -
+                            // copies the buff's own RoundsLeft, which makes the same ability last
+                            // six rounds against a fresh buff and one against a spent one.
+                            int flipRounds = effect.InvertDuration > 0 ? effect.InvertDuration : entry.RoundsLeft;
+                            target.AddOrRefresh(opposite, flipRounds, entry.Magnitude, source.Id);
                             BattleEvent e = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
                             e.Status = opposite;
-                            e.Duration = entry.RoundsLeft;
+                            e.Duration = flipRounds;
                             e.Value = target.CountOf(opposite);
                             flipped++;
                         }
@@ -3392,7 +3396,18 @@ namespace Emberfall.Core.Combat
                             // it is not counted as extended, so the event reports what actually
                             // moved. False on every entry in every battle before this pass.
                             if (entry.NoExtend) continue;
-                            entry.RoundsLeft += added;
+                            // The ceiling "up to 3 rounds" names. Zero - every extension before
+                            // this pass - is uncapped. An entry already at or above the ceiling is
+                            // left exactly where it is rather than shortened, and is not counted
+                            // as extended, so the event reports what actually moved. That is the
+                            // same silence NoExtend one line up keeps, for the same reason.
+                            if (effect.ExtendCap > 0)
+                            {
+                                if (entry.RoundsLeft >= effect.ExtendCap) continue;
+                                int room = effect.ExtendCap - entry.RoundsLeft;
+                                entry.RoundsLeft += added > room ? room : added;
+                            }
+                            else entry.RoundsLeft += added;
                             extended++;
                         }
                         if (extended > 0)
@@ -3507,6 +3522,16 @@ namespace Emberfall.Core.Combat
                         recipient.Shield += moved;
                         if (!recipient.Has(StatusKind.Shield))
                             recipient.AddOrRefresh(StatusKind.Shield, 99, 0f, source.Id);
+                        // The authored clock on the pool that just arrived. A RE-CLOCK rather than
+                        // an AddOrRefresh, because AddOrRefresh keeps the longer of the two and the
+                        // entry created one line up is 99 rounds - so an authored 2 would be
+                        // silently discarded and an ExtendStatus written beside it would be
+                        // nominal. Zero, which is every transfer before this pass, leaves whatever
+                        // clock the recipient had.
+                        if (effect.ShieldTransferDuration > 0)
+                            for (int shi = 0; shi < recipient.Statuses.Count; shi++)
+                                if (recipient.Statuses[shi].Kind == StatusKind.Shield)
+                                    recipient.Statuses[shi].RoundsLeft = effect.ShieldTransferDuration;
                         BattleEvent se = Emit(BattleEventType.ShieldGain, source.Id, recipient.Id);
                         se.Value = (int)Math.Round(moved, MidpointRounding.AwayFromZero);
                         // GAP 7: keyed to the CASTER - the unit whose effect moved the pool - and

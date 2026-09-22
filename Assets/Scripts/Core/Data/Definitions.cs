@@ -652,6 +652,52 @@ namespace Emberfall.Core.Data
         /// </summary>
         public bool DamageTakenSkillOnly;
 
+        // ---------- the gaps pass, group 5: three effects that each decided a clock by a rule
+        // of their own, and none of which took the authored one ----------
+        //
+        // MoveDuration and TransferDuration already exist and already do this for MoveDebuffs,
+        // MoveBuffs and TransferStatus. Three more effect kinds create or re-clock an entry and
+        // none of them could be told what clock to use, so three clauses that name a duration in
+        // as many words shipped with it dropped or nominal. These are named for the effect they
+        // belong to rather than folded into one field, because a reader asking "which duration
+        // does this effect read" must not have to know which of five fields the engine happens to
+        // consult here - that is precisely the trap MaxHpCap and AttackCap set once already.
+
+        /// <summary>
+        /// Rounds to put on the recipient's Shield entry after an EffectKind.ShieldTransfer. Zero
+        /// (the default) leaves whatever clock the recipient had, which for a body with no Shield
+        /// is the hardcoded 99 rounds the transfer creates.
+        ///
+        /// A RE-CLOCK RATHER THAN AN AddOrRefresh, which is the only reading that can say what the
+        /// clause says: AddOrRefresh keeps the longer of the two, so against a 99-round entry an
+        /// authored 2 would be silently discarded. "Transfers the largest ally Shield to the
+        /// lowest-HP ally and extends it 1 round" is a sentence about a ward with a real clock,
+        /// and against a 99-round entry the extension it names is nominal.
+        /// </summary>
+        public int ShieldTransferDuration;
+
+        /// <summary>
+        /// Rounds to put on the entry EffectKind.InvertStatus produces. Zero (the default) copies
+        /// the flipped buff's own RoundsLeft, which is what every inversion did before this.
+        ///
+        /// "Changes one target buff into its matching debuff FOR 2 ROUNDS" is a fixed sentence and
+        /// the copied clock is a variable one: the same ability lasts six rounds against a fresh
+        /// buff and one against a spent one, which is a different ability depending on when it is
+        /// cast.
+        /// </summary>
+        public int InvertDuration;
+
+        /// <summary>
+        /// Ceiling on RoundsLeft after an EffectKind.ExtendStatus. Zero (the default) is no
+        /// ceiling, which is what every extension did before this.
+        ///
+        /// ExtendStatus does RoundsLeft += added with no clamp, so "extends Arrears by 1 round, UP
+        /// TO 3 ROUNDS" could only be authored as the half before the comma. An entry already at
+        /// or above the ceiling is left exactly where it is rather than being shortened - a cap is
+        /// a limit on what this effect may add, not a rule about what the entry may be.
+        /// </summary>
+        public int ExtendCap;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -747,6 +793,9 @@ namespace Emberfall.Core.Data
             e.TargetBanStatus = EnumUtil.Parse(j.GetString("targetBanStatus", "None"), StatusKind.None);
             e.PreventExtend = j.GetBool("preventExtend", false);
             e.DamageTakenSkillOnly = j.GetBool("damageTakenSkillOnly", false);
+            e.ShieldTransferDuration = Math.Max(0, j.GetInt("shieldTransferDuration", 0));
+            e.InvertDuration = Math.Max(0, j.GetInt("invertDuration", 0));
+            e.ExtendCap = Math.Max(0, j.GetInt("extendCap", 0));
             return e;
         }
 
@@ -862,6 +911,9 @@ namespace Emberfall.Core.Data
             c.TargetBanStatus = TargetBanStatus;
             c.PreventExtend = PreventExtend;
             c.DamageTakenSkillOnly = DamageTakenSkillOnly;
+            c.ShieldTransferDuration = ShieldTransferDuration;
+            c.InvertDuration = InvertDuration;
+            c.ExtendCap = ExtendCap;
             return c;
         }
     }

@@ -17874,6 +17874,7 @@ namespace Emberfall.DevHarness
             Line("ENGINE GAPS - closing the repeated ones (Docs/ENGINE-GAPS.md)");
             CheckGapGroupNine();
             CheckGapGroupFour();
+            CheckGapGroupFive();
             Line("");
         }
 
@@ -18219,6 +18220,195 @@ namespace Emberfall.DevHarness
                 if (def != null) team.Add(MakeInstance(def, 1));
             }
             return RunWith(db, db.GetStage("g4_arena"), 4004, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 5
+
+        /// <summary>
+        /// GROUP 5 - duration control when a status is moved, inverted or extended. Three clauses,
+        /// three effect kinds, each of which decided a clock by a rule of its own and none of which
+        /// took the authored one.
+        ///
+        /// Measured as the clock the entry actually carries, read off the StatusApplied event that
+        /// reports it, rather than as "the effect ran": every one of these three DID run before
+        /// this pass and produced the wrong number.
+        /// </summary>
+        private static void CheckGapGroupFive()
+        {
+            Line("  group 5 - the clock on a moved, inverted or extended entry");
+
+            // --- InvertStatus ----------------------------------------------------------
+            // The buff being flipped is applied with six rounds on it, so the copied clock and an
+            // authored one cannot be confused for each other.
+            int copied = FirstStatusDuration(RunGapFiveArena("invert", 0), StatusKind.AttackDown);
+            int authored = FirstStatusDuration(RunGapFiveArena("invert", 2), StatusKind.AttackDown);
+            Check(copied == 6,
+                  "control: InvertStatus still copies the flipped buff's own clock (" + copied
+                  + " rounds off a 6-round buff) when no duration is authored");
+            Check(authored == 2,
+                  "and invertDuration re-clocks it as it lands (" + authored
+                  + " rounds) - so 'changes one target buff into its matching debuff FOR 2 ROUNDS' "
+                  + "stops meaning 'for however long the buff had left'");
+
+            // --- ExtendStatus ----------------------------------------------------------
+            // The actor extends the SAME entry twice in one turn, by 3 rounds each time, against
+            // a debuff that starts at 2. Uncapped both extensions land; capped at 3 the first
+            // takes the entry to the ceiling and the second is refused - silently, so it emits
+            // nothing at all rather than an event reporting that nothing moved.
+            int extendsUncapped = CountExtensions(RunGapFiveArena("extend", 0));
+            int extendsCapped = CountExtensions(RunGapFiveArena("extend", 3));
+            Check(extendsUncapped > 0 && extendsUncapped % 2 == 0,
+                  "control: ExtendStatus with no ceiling lands both extensions every turn ("
+                  + extendsUncapped + " across the battle)");
+            Check(extendsCapped == extendsUncapped / 2,
+                  "and extendCap refuses the one that would pass the ceiling (" + extendsCapped
+                  + " of " + extendsUncapped + ") - silently, so the event reports what actually "
+                  + "moved, which is the reading preventExtend already takes");
+
+            // --- ShieldTransfer --------------------------------------------------------
+            // Measured by whether the moved pool ever RUNS OUT. The transfer creates a 99-round
+            // entry on a recipient that had none, so an unauthored clock never expires inside a
+            // battle; an authored one does, and the pool goes with it.
+            int neverExpires = CountStatusExpiredOn(RunGapFiveArena("shield", 0), StatusKind.Shield, "g5_taker");
+            int expires = CountStatusExpiredOn(RunGapFiveArena("shield", 2), StatusKind.Shield, "g5_taker");
+            Check(neverExpires == 0,
+                  "control: a transferred pool still lands on the hardcoded 99-round entry and "
+                  + "outlives the battle (" + neverExpires + " expiries)");
+            Check(expires > 0,
+                  "and shieldTransferDuration re-clocks it so it genuinely runs out (" + expires
+                  + " expiry) - against 99 rounds the 'and extends it 1 round' beside it was "
+                  + "nominal, which is exactly what Celen's Distribution shipped with");
+
+            Check(FingerprintOf(RunGapFiveArena("extend", 3)) == FingerprintOf(RunGapFiveArena("extend", 3)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Rounds on the FIRST StatusApplied event naming this kind, or -1.</summary>
+        private static int FirstStatusDuration(BattleResult r, StatusKind kind)
+        {
+            if (r == null) return -1;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusApplied && r.Events[i].Status == kind)
+                    return r.Events[i].Duration;
+            return -1;
+        }
+
+        /// <summary>
+        /// How many EXTENSIONS landed on the arena's debuff. ExtendStatus emits a StatusApplied
+        /// whose Duration is the number of rounds ADDED and whose Value is how many entries moved;
+        /// the application that created the entry carries the entry's own duration instead. The
+        /// two are told apart by that number, which is 3 for an extension here and 2 for the
+        /// application.
+        /// </summary>
+        private static int CountExtensions(BattleResult r)
+        {
+            if (r == null) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.DefenseDown
+                    && e.Duration == 3) n++;
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// How many times a status of this kind left ONE NAMED BODY across the battle.
+        ///
+        /// Scoped to a body rather than counted over the record, because the donor of a
+        /// ShieldTransfer also sheds its Shield entry the moment the transfer empties its pool -
+        /// which is a correct expiry of a different ward, and counting it would make the control
+        /// arm read as though the recipient's clock had run out.
+        /// </summary>
+        private static int CountStatusExpiredOn(BattleResult r, StatusKind kind, string defId)
+        {
+            if (r == null) return -1;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return -1;
+            int n = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+                if (r.Events[i].Type == BattleEventType.StatusExpired && r.Events[i].Status == kind
+                    && r.Events[i].TargetId == id) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Three arms, one arena. `value` is the authored clock or ceiling under test and zero is
+        /// always the control, so each pair differs by one number in one field.
+        /// </summary>
+        private static BattleResult RunGapFiveArena(string mode, int value)
+        {
+            string invertDur = value > 0 ? ", \"invertDuration\": " + value : "";
+            string extendCap = value > 0 ? ", \"extendCap\": " + value : "";
+            string shieldDur = value > 0 ? ", \"shieldTransferDuration\": " + value : "";
+
+            // What the actor does on every basic. One arm per effect kind under test.
+            string act = "";
+            if (mode == "invert")
+                act = ", { \"kind\": \"InvertStatus\", \"target\": \"FrontEnemy\", \"hits\": 1" + invertDur + " }";
+            else if (mode == "extend")
+                act = ", { \"kind\": \"ExtendStatus\", \"target\": \"FrontEnemy\", \"status\": \"DefenseDown\","
+                    + " \"duration\": 3" + extendCap + " }"
+                    + ", { \"kind\": \"ExtendStatus\", \"target\": \"FrontEnemy\", \"status\": \"DefenseDown\","
+                    + " \"duration\": 3" + extendCap + " }";
+            // The shield arm acts ONCE, at battle start, so the recipient's clock is not topped
+            // up again every turn - a re-clock that repeats can never be seen to run out.
+            string actorPassive = "";
+            if (mode == "shield")
+                actorPassive = ", \"passive\": { \"id\": \"g5_give\", \"name\": \"Hand It Over\","
+                    + " \"trigger\": \"BattleStart\", \"oncePerBattle\": true, \"effects\": ["
+                    + " { \"kind\": \"Shield\", \"target\": \"Self\", \"power\": 5.0, \"duration\": 9 },"
+                    + " { \"kind\": \"ShieldTransfer\", \"target\": \"LowestHpAlly\", \"magnitude\": 1.0"
+                    + shieldDur + " } ] }";
+
+            // What the foe carries into the fight. The invert arm needs a buff with a LONG clock,
+            // so a copied one and an authored one cannot read alike; the extend arm needs a debuff
+            // short enough that a ceiling of 3 is reachable and meaningful.
+            string foePassive = "";
+            if (mode == "invert")
+                foePassive = @", ""passive"": { ""id"": ""g5_foe_buff"", ""name"": ""Brace"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""AttackUp"", ""chance"": 1, ""duration"": 6, ""magnitude"": 0.1 } ] }";
+            else if (mode == "extend")
+                foePassive = @", ""passive"": { ""id"": ""g5_foe_debuff"", ""name"": ""Crack"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""ApplyStatus"", ""target"": ""Self"", ""status"": ""DefenseDown"", ""bypassResist"": true, ""chance"": 1, ""duration"": 2, ""magnitude"": 0.1 } ] }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g5_taker"", ""name"": ""Taker"", ""aspect"": ""Ember"", ""role"": ""Warden"", ""startingHero"": true,
+      ""hp"": 1000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5t_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g5_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Tinkerer"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5a_basic"", ""name"": ""Act"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 }" + act + @" ] }" + actorPassive + @" }
+  ]
+}";
+            string enemies = @"{
+  ""enemies"": [ { ""id"": ""g5_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g5foe"", ""name"": ""Swing"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + foePassive + @" } ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g5_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g5_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""g5_foe"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(5), "Gap5");
+            if (db == null) return null;
+            string[] ids = { "g5_taker", "g5_actor" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g5_arena"), 5005, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)
