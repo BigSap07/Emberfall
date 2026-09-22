@@ -44,7 +44,7 @@
           {
             "kind": "Damage",
             "target": "LowestHpEnemy",
-            "power": 1.2
+            "power": 2.5
           },
           {
             "kind": "ApplyStatus",
@@ -60,7 +60,8 @@
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "Deals 250% Attack damage to the enemy with the lowest HP and applies Quarry for 2 rounds. Quarry makes Hale's attacks against that enemy hit 10% harder. Pinoy writes the damage as 120% and Quarry as ignoring 10% Defense; the percentage is the star band's and the engine has no per-attacker armour ignore, so Quarry is a source-keyed Vulnerable of the same size. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "active": {
         "id": "hale_closing_radius",
@@ -70,21 +71,22 @@
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 2.2
+            "power": 5.7
           },
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 1.0,
+            "power": 0.0,
             "targetMissingHpRatio": 0.12,
-            "missingHpCap": 0.15,
+            "attackCap": 1.2,
             "condition": "SubjectDamagedByOtherSinceMyTurn",
             "conditionOn": "Target",
             "condition3": "HpBelow",
             "conditionValue3": -1,
             "conditionOn3": "Caster"
           }
-        ]
+        ],
+        "description": "Deals 570% Attack damage to the enemy with Quarry. If any ally attacked it since Hale's last turn, deals additional damage equal to 12% of its missing HP, up to 120% of Attack. Pinoy writes the first number as 220%; the percentage is the star band's. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "passive": {
         "id": "hale_tracking_habit_stats",
@@ -123,12 +125,15 @@
           {
             "kind": "ApplyStatus",
             "target": "HighestDamageDealtEnemy",
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
             "status": "Vulnerable",
             "magnitude": 0.1,
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage, and that enemy takes 10% more damage from Hale for 2 rounds. Both halves answer the same body: when Quarry was defeated there is no Mark to move and the rider does not land either. Pinoy writes the move as happening at the end of a round in which Quarry was not defeated; the engine's nearest hook is the start of his own turn."
       },
       "passive2": {
         "id": "hale_no_safe_distance",
