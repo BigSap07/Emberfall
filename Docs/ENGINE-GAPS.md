@@ -138,21 +138,6 @@ act.
 
 ---
 
-## 9. Triggers that fire for something an ALLY did or received
-
-The trigger enum is rich on what happens TO a unit and thin on what an ally CAUSES. Three clauses hit
-this from three directions.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Halwen | "**When Reserve prevents damage**, its holder recovers 4% Max HP" | a trigger when a Guard charge is spent; the damage funnel removes the entry inline and only a Ledger with `FunnelSource.GuardMitigation` can observe it, paying out on cap rather than per prevention | `OnEnemyDamagedAlly`, once a round, healing the victim whether or not Reserve answered the blow | medium |
-| Mika | "When an ally **gains Energy** from Loose Parts, Mika gains a Shield" | a trigger for an ally receiving Energy | folded into the one `OnLinkedUnitHit` passive that hands the Energy out, so the grant and the ward are one firing | small |
-| Branik | "The first time each round a Cracked enemy attacks, Branik gains 8% Damage Reduction" | `OnEnemyDamagedAlly` deliberately excludes the body being hit, so it cannot answer for Branik himself | a second passive on `OnDamaged` carrying the identical clause | small |
-| Halwen | "its holder recovers 4% Max HP" - the holder can be Halwen | the same exclusion, hit a second time | a second passive on `OnDamaged` carrying the identical clause | small |
-| Niko | "When a Flustered enemy **attempts a debuff**" | a trigger for a unit APPLYING a status, and no ally-side broadcast for one being received | `OnEnemyActive`, which is when the debuffs come | medium |
-
----
-
 ## 10. Counting firings per subject on an owner-centric trigger
 
 `FiresPerSubject` and the `PassiveFiredOnSubjectAtLeast` condition are the engine's answer to "the
@@ -313,7 +298,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 9 | triggers for what an ALLY did or received | 5 |
 | 4 | per-source stat modification | 4 |
 | 5 | duration on a moved, inverted or extended status | 3 |
 | 1 | answering the blow that is landing | 2 |
@@ -325,12 +309,14 @@ have more than one occupant:
 | 18 | naming the unit an event happened TO | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 
-**Group 9 is the one to close first, and most of it is one line of code.** Three of its five rows
-are the same exclusion in `OnEnemyDamagedAlly`, met three times by Branik, Halwen and Toren and
-answered three times by pasting the passive onto `OnDamaged` as well. A flag on `PassiveDef` saying
-"and me" would delete three overflow passives from the shipped roster and stop the next batch
-writing a fourth. Group 4 is the next best value: four clauses across four heroes all asking for a
-per-source stat modifier, which is one status kind beside `Vulnerable` pointing the other way.
+**Group 9 is closed.** Two of its five rows were the same exclusion in `OnEnemyDamagedAlly`, met
+twice by Branik and Halwen and answered twice by pasting the passive onto `OnDamaged` as well;
+`PassiveDef.IncludeSelf` deleted both overflow passives from the shipped roster. The other three
+were moments nothing raised at all, and are now `OnAllyEnergyGained`, `OnGuardPrevented` and
+`OnEnemyAppliedStatus`. Group 4 was the next best value: four clauses across four heroes all asking
+for a per-source stat modifier, which is one status kind beside `Vulnerable` pointing the other
+way - and it turned out to need the entry on the OTHER body, because no effect can stamp a
+`SourceId` that is not its own caster.
 
 **Groups 20 and 22 are different in kind and should not be read as debt.** An information layer and
 a movement system are games this one is not; the clauses that ask for them are two sentences out of

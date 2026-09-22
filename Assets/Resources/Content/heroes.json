@@ -1516,29 +1516,9 @@
             "magnitude": 0.12,
             "status": "DamageReductionUp"
           }
-        ]
-      },
-      "passives": [
-        {
-          "id": "branik_salvaged_cover_self",
-          "name": "Salvaged Cover",
-          "description": "The same answer when the Cracked enemy attacks Branik himself - OnEnemyDamagedAlly excludes the body being hit, so the victim needs its own hook.",
-          "trigger": "OnDamaged",
-          "oncePerBattle": false,
-          "limit": "OncePerRound",
-          "effects": [
-            {
-              "kind": "ApplyStatus",
-              "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "LastAttacker",
-              "duration": 1,
-              "magnitude": 0.12,
-              "status": "DamageReductionUp"
-            }
-          ]
-        }
-      ]
+        ],
+        "includeSelf": true
+      }
     },
     {
       "id": "demos_the_debt_collector",
@@ -4217,25 +4197,37 @@
       "passive1": {
         "id": "mika_find_a_use",
         "name": "Find a Use",
-        "description": "The first time each round an ally hits an enemy carrying Loose Parts, that ally gains 14 Energy and Mika gains a Shield equal to 45% Attack for 1 round.",
-        "trigger": "OnLinkedUnitHit",
-        "triggerSourceIsAlly": true,
+        "description": "When an ally gains Energy from Loose Parts, Mika gains a Shield equal to 45% Attack for 1 round.",
+        "trigger": "OnAllyEnergyGained",
         "oncePerBattle": false,
-        "limit": "OncePerRound",
         "effects": [
-          {
-            "kind": "EnergyGain",
-            "target": "BroadcastSource",
-            "flat": 14
-          },
           {
             "kind": "Shield",
             "target": "Self",
             "duration": 1,
             "power": 0.45
           }
-        ]
-      }
+        ],
+        "triggerSourceIsSelf": true
+      },
+      "passives": [
+        {
+          "id": "mika_loose_parts_energy",
+          "name": "Reclaimed Round",
+          "description": "The Loose Parts payout itself: the first ally each round to strike a marked enemy takes 14 Energy off it.",
+          "trigger": "OnLinkedUnitHit",
+          "triggerSourceIsAlly": true,
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "effects": [
+            {
+              "kind": "EnergyGain",
+              "target": "BroadcastSource",
+              "flat": 14
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "rhys_the_fence_walker",
@@ -6599,10 +6591,9 @@
       "passive1": {
         "id": "halwen_rationed_strength",
         "name": "Rationed Strength",
-        "description": "The first time each round an enemy strikes an ally, that ally recovers 4% Max HP, or gains 6 Energy if it is already whole.",
-        "trigger": "OnEnemyDamagedAlly",
+        "description": "When Reserve prevents damage, its holder recovers 4% Max HP, or gains 6 Energy if it is already whole.",
+        "trigger": "OnGuardPrevented",
         "oncePerBattle": false,
-        "limit": "OncePerRound",
         "effects": [
           {
             "kind": "EnergyGain",
@@ -6617,33 +6608,10 @@
             "target": "BroadcastVictim",
             "targetMaxHpRatio": 0.04
           }
-        ]
-      },
-      "passives": [
-        {
-          "id": "halwen_rationed_strength_self",
-          "name": "Rationed Strength",
-          "description": "The same recovery when Halwen is the one struck - OnEnemyDamagedAlly excludes the body being hit, so the victim needs its own hook.",
-          "trigger": "OnDamaged",
-          "oncePerBattle": false,
-          "limit": "OncePerRound",
-          "effects": [
-            {
-              "kind": "EnergyGain",
-              "target": "Self",
-              "condition": "HpAbove",
-              "conditionOn": "Caster",
-              "conditionValue": 0.99,
-              "flat": 6
-            },
-            {
-              "kind": "Heal",
-              "target": "Self",
-              "targetMaxHpRatio": 0.04
-            }
-          ]
-        }
-      ]
+        ],
+        "triggerSourceIsSelf": true,
+        "includeSelf": true
+      }
     },
     {
       "id": "jory_the_old_gate",
@@ -9090,10 +9058,9 @@
       "passive1": {
         "id": "niko_ruin_the_agenda",
         "name": "Ruin the Agenda",
-        "description": "When a Flustered enemy casts an active skill, Flustered is replaced by Silence for 1 round. Silence prevents active skills.",
-        "trigger": "OnEnemyActive",
+        "description": "When a Flustered enemy attempts a debuff, Flustered is replaced by Silence for 1 round. Silence prevents active skills.",
+        "trigger": "OnEnemyAppliedStatus",
         "oncePerBattle": false,
-        "limit": "OncePerRound",
         "effects": [
           {
             "kind": "ApplyStatus",
