@@ -1,0 +1,884 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.UI;
+using Emberfall.Core.Cloud;
+using Emberfall.Core.Combat;
+using Emberfall.Core.Data;
+using Emberfall.Core.Json;
+using Emberfall.Core.Model;
+using Emberfall.Core.Session;
+using Emberfall.Game;
+using Emberfall.Game.Cloud;
+using Emberfall.UI;
+using Emberfall.UI.Screens;
+
+namespace Emberfall.EditorTools
+{
+    /// <summary>
+    /// A GUILD IN MEMORY: the second implementation of IGuildDungeonBackend, for the capture run.
+    ///
+    /// It holds what the server would hold - attempt rows and chat rows as JSON - and every record
+    /// it hands back has been through the same codecs the live backend uses (WriteRpcArgs into a
+    /// row, GuildDungeon.ReadRow out; a message row with the attempt embedded under "attempt",
+    /// GuildCodec.ReadMessage out). So the screens driven against it read exactly the shapes they
+    /// read in play.
+    ///
+    /// It also holds 0008's rules for guild_dungeon_submit - the cycle, the cap, the floor gate,
+    /// the normalised line - because a stand-in that accepted anything would let the screens pass
+    /// a flow the server refuses. It is not the proof of those rules; the live rules test is.
+    ///
+    /// Several members, one of them "you": Self is whoever the screens are acting as, and can be
+    /// switched, which is how the run reads the chat as a second member.
+    /// </summary>
+    public sealed class LocalGuildDungeonBackend : IGuildDungeonBackend
+    {
+        public const string Guild = "7c1de0a4-5b2f-4e39-9a61-2f0c8d4e1b77";
+        public string GuildTitle = "The Ember Wake";
+        public string Self = "";
+        public int Cycle = 38;
+        public long StartsUnix;
+        public long EndsUnix;
+        public readonly Dictionary<string, string> Names = new Dictionary<string, string>();
+
+        private readonly ContentDatabase _content;
+        private readonly List<JsonValue> _rows = new List<JsonValue>();
+        private readonly List<JsonValue> _messages = new List<JsonValue>();
+        private long _nextAttempt = 5001;
+        private long _nextMessage = 901;
+        private long _clock;
+
+        public LocalGuildDungeonBackend(ContentDatabase content, long now)
+        {
+            _content = content;
+            StartsUnix = now - (long)(3.7 * 86400);
+            EndsUnix = now + 3 * 86400 + 7 * 3600 + 20 * 60;
+            _clock = now - 6 * 3600;
+        }
+
+        public bool Ready { get { return true; } }
+        public string NotReadyReason { get { return ""; } }
+        public string SelfUserId { get { return Self; } }
+        public string GuildName { get { return GuildTitle; } }
+
+        public IEnumerator Status(Action<GuildDungeonStatus, string> done)
+        {
+            JsonValue row = JsonValue.NewObject();
+            row.Set("guild_id", Guild);
+            row.Set("cycle", Cycle);
+            row.Set("starts_at", Stamp(StartsUnix));
+            row.Set("ends_at", Stamp(EndsUnix));
+            row.Set("attempt_cap", _content.Balance.GuildDungeonAttemptsPerFloor);
+            row.Set("floor_count", _content.Balance.GuildDungeonFloors);
+            JsonValue array = JsonValue.NewArray();
+            array.Add(row);
+            done(GuildDungeonStatus.Read(JsonValue.Parse(array.ToJson(false))), "");
+            yield break;
+        }
+
+        public IEnumerator ListAttempts(int cycle, Action<List<GuildDungeonAttempt>, string> done)
+        {
+            done(Attempts(cycle), "");
+            yield break;
+        }
+
+        public List<GuildDungeonAttempt> Attempts(int cycle)
+        {
+            List<GuildDungeonAttempt> list = new List<GuildDungeonAttempt>();
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                GuildDungeonAttempt a = GuildDungeon.ReadRow(JsonValue.Parse(_rows[i].ToJson(false)));
+                if (a.Cycle == cycle) list.Add(a);
+            }
+            return list;
+        }
+
+        public IEnumerator Record(GuildDungeonAttempt attempt, Action<GuildDungeonAttempt, string> done)
+        {
+            GuildDungeonAttempt stored;
+            string error = SubmitAs(Self, attempt, out stored);
+            done(stored, error);
+            yield break;
+        }
+
+        /// <summary>guild_dungeon_submit, as 0008 writes it, for any member.</summary>
+        public string SubmitAs(string userId, GuildDungeonAttempt record, out GuildDungeonAttempt stored)
+        {
+            stored = null;
+            JsonValue args = JsonValue.Parse(GuildDungeon.WriteRpcArgs(record).ToJson(false));
+            int floor = args.GetInt("p_floor", 0);
+            if (args.GetInt("p_cycle", -1) != Cycle) return "that dungeon cycle is not the current one (" + Cycle + ")";
+            if (floor < 1 || floor > _content.Balance.GuildDungeonFloors) return "a floor is 1 to " + _content.Balance.GuildDungeonFloors;
+            List<JsonValue> team = args.GetList("p_team");
+            if (team.Count < 1 || team.Count > 5) return "a team is one to five units";
+            for (int i = 0; i < team.Count; i++)
+                if (team[i].GetInt("level", -1) != _content.Balance.GuildDungeonHeroLevel || team[i].Has("relicId") || team[i].Has("armor"))
+                    return "every hero fights the dungeon at level " + _content.Balance.GuildDungeonHeroLevel + " with no relic and no armor";
+            if (string.IsNullOrEmpty(args.GetString("p_content_version", ""))) return "an attempt names the content it was fought under";
+            List<GuildDungeonAttempt> all = Attempts(Cycle);
+            if (!GuildDungeon.FloorOpen(all, Cycle, floor))
+                return "floor " + floor + " opens when somebody in your guild clears floor " + (floor - 1);
+            int used = GuildDungeon.AttemptsUsed(all, userId, Cycle, floor);
+            if (used >= _content.Balance.GuildDungeonAttemptsPerFloor)
+                return "no attempts left on floor " + floor + " this cycle";
+
+            JsonValue row = JsonValue.NewObject();
+            row.Set("id", _nextAttempt++);
+            row.Set("guild_id", Guild);
+            row.Set("user_id", userId);
+            row.Set("cycle", Cycle);
+            row.Set("floor", floor);
+            row.Set("attempt", used + 1);
+            row.Set("seed", args.GetInt("p_seed", 0));
+            row.Set("team", args["p_team"]);
+            row.Set("victory", args.GetBool("p_victory", false));
+            row.Set("turns", args.GetInt("p_turns", 0));
+            row.Set("power", args.GetInt("p_power", 0));
+            row.Set("avg_stars", Math.Round(args.GetFloat("p_avg_stars", 0f), 2));
+            row.Set("fallen", args.GetInt("p_fallen", 0));
+            row.Set("content_version", args.GetString("p_content_version", ""));
+            row.Set("created_at", Stamp(Tick()));
+            JsonValue profile = JsonValue.NewObject();
+            profile.Set("display_name", NameOf(userId));
+            row.Set("profiles", profile);
+            _rows.Add(row);
+            stored = GuildDungeon.ReadRow(JsonValue.Parse(row.ToJson(false)));
+            return "";
+        }
+
+        public IEnumerator Share(GuildDungeonAttempt attempt, Action<bool, string> done)
+        {
+            string error = ShareAs(Self, attempt);
+            done(error.Length == 0, error);
+            yield break;
+        }
+
+        /// <summary>guild_share_attempt: only your own attempt, in the guild it was fought for.</summary>
+        public string ShareAs(string userId, GuildDungeonAttempt attempt)
+        {
+            JsonValue found = null;
+            for (int i = 0; i < _rows.Count; i++)
+                if (attempt != null && _rows[i].GetLong("id", 0) == attempt.Id && _rows[i].GetString("user_id", "") == userId)
+                    found = _rows[i];
+            if (found == null) return "you can only share your own attempts, in the guild they were fought for";
+
+            JsonValue args = GuildDungeon.WriteShareArgs(attempt);
+            JsonValue message = Message(userId, args.GetString("p_body", ""));
+            message.Set("attempt_id", attempt.Id);
+            // The embed, as the chat read's alias returns it: the row's own columns, no profile.
+            JsonValue embedded = JsonValue.NewObject();
+            foreach (string column in GuildDungeon.RowColumns.Split(','))
+                embedded.Set(column, found[column]);
+            message.Set("attempt", embedded);
+            _messages.Add(message);
+            return "";
+        }
+
+        public void SayAs(string userId, string text) { _messages.Add(Message(userId, text)); }
+
+        private JsonValue Message(string userId, string body)
+        {
+            JsonValue m = JsonValue.NewObject();
+            m.Set("id", _nextMessage++);
+            m.Set("user_id", userId);
+            m.Set("body", body);
+            m.Set("created_at", Stamp(Tick()));
+            JsonValue profile = JsonValue.NewObject();
+            profile.Set("display_name", NameOf(userId));
+            m.Set("profiles", profile);
+            return m;
+        }
+
+        public IEnumerator FetchChat(Action<List<GuildMessageEntry>, string> done)
+        {
+            done(Chat(), "");
+            yield break;
+        }
+
+        public List<GuildMessageEntry> Chat()
+        {
+            List<GuildMessageEntry> list = new List<GuildMessageEntry>();
+            for (int i = _messages.Count - 1; i >= 0; i--)
+            {
+                GuildMessageEntry e = GuildCodec.ReadMessage(JsonValue.Parse(_messages[i].ToJson(false)), Self);
+                if (e != null) list.Add(e);
+            }
+            return list;
+        }
+
+        public IEnumerator PostMessage(string typed, Action<bool, string> done)
+        {
+            string cleaned, problem;
+            if (!GuildRules.ValidateMessage(typed, out cleaned, out problem)) { done(false, problem); yield break; }
+            SayAs(Self, cleaned);
+            done(true, "");
+        }
+
+        public string NameOf(string userId)
+        {
+            string name;
+            return Names.TryGetValue(userId, out name) ? name : "Wayfarer";
+        }
+
+        private long Tick() { _clock += 17 * 60; return _clock; }
+
+        private static string Stamp(long unix)
+        {
+            return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(unix)
+                   .ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture) + "+00:00";
+        }
+    }
+
+    /// <summary>
+    /// PHOTOGRAPHS THE GUILD DUNGEON, AND DRIVES IT END TO END, on a scratch copy of the real save.
+    ///
+    /// Two members of one guild (you, from the copied save, and Mira; Oren is a third so the
+    /// boards have something to rank). Mira and Oren's attempts are made through the same Core
+    /// calls a client makes and stored through the in-memory guild's copy of 0008's rules. Then
+    /// the run presses the real buttons: open the chat, WATCH Mira's lost fight, RUN IT YOURSELF,
+    /// ATTEMPT with your own line, see the result, POST it, read the boards - and finally reads the
+    /// chat AS MIRA and replays your fight from the card, which is the handover in the other
+    /// direction. What it checked is written to Tools/Screenshots/guild-dungeon-e2e.txt.
+    ///
+    /// The whole flow runs once per aspect (1920x1080, then 2400x1080) on a fresh guild, so both
+    /// sets of shots are of the same moments.
+    ///
+    /// THE CLOUD IS HELD OFF (GameApp.NoCloudKey). A scratch identity has no session, and a
+    /// configured build would sign a new anonymous account up on the live project for it.
+    ///
+    ///   Unity.exe -projectPath . -executeMethod Emberfall.EditorTools.GuildDungeonShots.Run
+    ///
+    /// NOT -batchMode: ScreenCapture photographs the Game view, and batch mode has none.
+    /// </summary>
+    [InitializeOnLoad]
+    public static class GuildDungeonShots
+    {
+        private const string ActiveKey = "GuildDungeonShots.Active";
+        private const string RestoreKey = "GuildDungeonShots.Restore";
+        private const string ExitKey = "GuildDungeonShots.ExitWhenDone";
+        private const string OrigCompanyKey = "GuildDungeonShots.OrigCompany";
+        private const string OrigProductKey = "GuildDungeonShots.OrigProduct";
+        private const string OrigSuppressKey = "GuildDungeonShots.OrigSuppress";
+        private const string LiveSaveKey = "GuildDungeonShots.LiveSave";
+        private const string LiveHashKey = "GuildDungeonShots.LiveHash";
+
+        private const string ScratchCompany = "Emberfall Scratch";
+        private const string ScratchProduct = "Emberfall Guild Dungeon Shots";
+
+        private const string Mira = "11111111-aaaa-4aaa-8aaa-111111111111";
+        private const string Oren = "33333333-cccc-4ccc-8ccc-333333333333";
+        private const string You = "22222222-bbbb-4bbb-8bbb-222222222222";
+
+        private static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2400, 1080 } };
+
+        private sealed class Step
+        {
+            public string Name;
+            public Action Do;
+            public Func<bool> Ready;
+            public int Settle = 20;
+            public string Shot;
+        }
+
+        private static List<Step> _steps;
+        private static int _stepIndex;
+        private static int _sizeIndex;
+        private static int _stage;
+        private static int _wait;
+        private static int _waited;
+        private static string _pending;
+        private static LocalGuildDungeonBackend _guild;
+        private static GuildDungeonAttempt _miraLoss;
+        private static BattleResult _miraLossFight;
+        private static readonly List<string> _report = new List<string>();
+        private static int _failures;
+
+        static GuildDungeonShots()
+        {
+            EditorApplication.update += Pump;
+            EditorApplication.update += PumpRestore;
+        }
+
+        public static void Run()
+        {
+            SessionState.SetBool(ExitKey, true);
+            Begin();
+        }
+
+        [MenuItem("Emberfall/Capture/Guild dungeon", false, 83)]
+        public static void RunFromMenu()
+        {
+            SessionState.SetBool(ExitKey, false);
+            Begin();
+        }
+
+        private static void Begin()
+        {
+            string liveSave = Path.Combine(Application.persistentDataPath, SaveService.FileName);
+            SessionState.SetString(LiveSaveKey, liveSave);
+            SessionState.SetString(LiveHashKey, HashOf(liveSave));
+
+            SessionState.SetString(OrigCompanyKey, PlayerSettings.companyName);
+            SessionState.SetString(OrigProductKey, PlayerSettings.productName);
+            SessionState.SetBool(OrigSuppressKey, EditorPrefs.GetBool(GameApp.SuppressFirstRunKey, false));
+
+            PlayerSettings.companyName = ScratchCompany;
+            PlayerSettings.productName = ScratchProduct;
+            EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
+            EditorPrefs.SetBool(GameApp.NoCloudKey, true);
+
+            string dataPath = Application.persistentDataPath;
+            if (dataPath.IndexOf(ScratchProduct, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Debug.LogError("GuildDungeonShots: persistentDataPath is '" + dataPath
+                               + "', not the scratch identity. Refusing to enter Play Mode.");
+                SessionState.SetBool(RestoreKey, true);
+                return;
+            }
+            Directory.CreateDirectory(dataPath);
+            string save = Path.Combine(dataPath, SaveService.FileName);
+            if (File.Exists(save)) File.Delete(save);
+            PlayerPrefs.DeleteAll();
+            if (File.Exists(liveSave)) File.Copy(liveSave, save);
+            else Debug.LogWarning("GuildDungeonShots: no live save at '" + liveSave + "', so this runs on a fresh profile.");
+
+            Directory.CreateDirectory(OutDir());
+            if (!GameViewSize.Apply(Sizes[0][0], Sizes[0][1]))
+                Debug.LogWarning("GuildDungeonShots: could not pin the Game view size.");
+
+            EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
+            SessionState.SetBool(ActiveKey, true);
+            _stage = 0;
+            EditorApplication.isPlaying = true;
+        }
+
+        private static string OutDir()
+        {
+            return Path.GetFullPath(Path.Combine(Application.dataPath, "../Docs/ui-shots"));
+        }
+
+        private static string ReportPath()
+        {
+            return Path.GetFullPath(Path.Combine(Application.dataPath, "../Tools/Screenshots/guild-dungeon-e2e.txt"));
+        }
+
+        // ================================================================== the guild
+
+        /// <summary>
+        /// A fresh guild: three members, floor 1 cleared by Mira and Oren, and on floor 2 Mira's
+        /// LOSS (shared to chat, the fight the handover is about) then her clear, and Oren's clear.
+        /// Oren also shares a floor 1 fight stamped with an earlier content version, which the
+        /// chat must show as unplayable rather than play.
+        /// </summary>
+        private static void SeedGuild(GameApp app)
+        {
+            ContentDatabase content = app.Content;
+            _guild = new LocalGuildDungeonBackend(content, TimeUtil.NowUnix());
+            _guild.Names[Mira] = "Mira";
+            _guild.Names[Oren] = "Oren";
+            _guild.Names[You] = string.IsNullOrEmpty(app.Session.Profile.PlayerName) ? "You" : app.Session.Profile.PlayerName;
+            _guild.Self = You;
+            GuildDungeonBackends.Override = _guild;
+
+            int seed = GuildDungeon.SeedFor(LocalGuildDungeonBackend.Guild, _guild.Cycle);
+            DeterministicRng rng = new DeterministicRng(0x6D17A);
+            List<HeroDef> all = new List<HeroDef>(content.Heroes);
+            List<HeroDef> humble = all.FindAll(h => h.Stars <= 3 && h.Role != HeroRole.Mender);
+
+            TeamSnapshot miraOne = Find(content, all, 5, rng, seed, 1, true);
+            TeamSnapshot orenOne = Find(content, humble, 4, rng, seed, 1, true);
+            Submit(content, Mira, miraOne, seed, 1);
+            Submit(content, Oren, orenOne, seed, 1);
+
+            TeamSnapshot miraLossLine = Find(content, all, 5, rng, seed, 2, false);
+            _miraLoss = Submit(content, Mira, miraLossLine, seed, 2);
+            _miraLossFight = GuildDungeon.Fight(content, miraLossLine, seed, 2);
+            TeamSnapshot miraWin = Find(content, all, 5, rng, seed, 2, true);
+            Submit(content, Mira, miraWin, seed, 2);
+            TeamSnapshot orenWin = Find(content, humble, 4, rng, seed, 2, true);
+            Submit(content, Oren, orenWin, seed, 2);
+
+            // An old fight: the same record shape, stamped as if fought before a balance patch.
+            BattleResult ignored;
+            GuildDungeonAttempt old = GuildDungeon.Attempt(content, Find(content, all, 5, rng, seed, 1, true), seed, _guild.Cycle, 1, out ignored);
+            old.ContentVersion = "c1-00000000000000aa";
+            GuildDungeonAttempt oldStored;
+            _guild.SubmitAs(Oren, old, out oldStored);
+
+            _guild.SayAs(Oren, "Floor 1 is open for everyone. The warden up front soaks everything, go around it.");
+            _guild.ShareAs(Oren, oldStored);
+            _guild.SayAs(Mira, "Floor 2 beat me on my first try. Posting it, watch what the hunters do to my back line.");
+            _guild.ShareAs(Mira, _miraLoss);
+
+            Note("guild seeded: cycle " + _guild.Cycle + ", seed " + seed + ", content " + content.ContentVersion);
+            Note("  Mira floor 2 attempt " + _miraLoss.Attempt + ": " + GuildDungeonFlow.OutcomeLine(_miraLoss)
+                 + " with " + _miraLoss.Team.Units.Count + " heroes (shared)");
+        }
+
+        private static GuildDungeonAttempt Submit(ContentDatabase content, string user, TeamSnapshot line, int seed, int floor)
+        {
+            BattleResult fought;
+            GuildDungeonAttempt record = GuildDungeon.Attempt(content, line, seed, _guild.Cycle, floor, out fought);
+            GuildDungeonAttempt stored;
+            string error = _guild.SubmitAs(user, record, out stored);
+            Check(error.Length == 0, "seeding: " + _guild.NameOf(user) + " floor " + floor + " stored" + (error.Length > 0 ? " - " + error : ""));
+            return stored;
+        }
+
+        /// <summary>A line of `size` drawn from `from` that clears (or loses) the floor. Drawn
+        /// deterministically, so every run seeds the same guild.</summary>
+        private static TeamSnapshot Find(ContentDatabase content, List<HeroDef> from, int size, DeterministicRng rng,
+                                         int seed, int floor, bool wantClear)
+        {
+            TeamSnapshot line = null;
+            for (int tries = 0; tries < 400; tries++)
+            {
+                List<HeroDef> pool = new List<HeroDef>(from);
+                line = new TeamSnapshot();
+                for (int i = 0; i < size && pool.Count > 0; i++)
+                {
+                    int pick = rng.Range(0, pool.Count);
+                    line.Units.Add(new SnapshotUnit { DefId = pool[pick].Id, Level = 40, Stars = pool[pick].Stars });
+                    pool.RemoveAt(pick);
+                }
+                if (GuildDungeon.Fight(content, line, seed, floor).Victory == wantClear) return line;
+            }
+            Check(false, "seeding: found a line that " + (wantClear ? "clears" : "loses") + " floor " + floor);
+            return line;
+        }
+
+        // ================================================================== the run
+
+        private static List<Step> BuildSteps(GameApp app)
+        {
+            ScreenRouter router = app.Router;
+            List<Step> steps = new List<Step>();
+
+            steps.Add(new Step
+            {
+                Name = "entry",
+                Do = delegate { router.Show(ScreenId.GuildDungeon); },
+                Ready = delegate { return router.GuildDungeon.State.Loaded && !router.GuildDungeon.Loading; },
+                Shot = "guild-dungeon"
+            });
+            steps.Add(new Step
+            {
+                Name = "chat",
+                Do = delegate { router.Show(ScreenId.GuildChat); },
+                Ready = delegate { return Find(router.GuildChat.Root, "Watch") != null; },
+                Settle = 30,
+                Shot = "guild-chat-card"
+            });
+            steps.Add(new Step
+            {
+                Name = "watch Mira's loss",
+                Do = delegate { Check(Press(router.GuildChat.Root, "Watch"), "chat: the WATCH button on Mira's card is pressable"); },
+                Ready = delegate { return router.Current == router.Battle && router.Battle.RoundUnderway; },
+                Settle = 150,
+                Shot = "guild-dungeon-replay"
+            });
+            steps.Add(new Step
+            {
+                Name = "replay to the end",
+                Do = delegate { router.Battle.SkipToEndForCapture(); },
+                Ready = delegate { return router.Battle.Finished && Find(router.Battle.Root, "GuildPrimary") != null; },
+                Settle = 40,
+                Shot = "guild-dungeon-replay-end"
+            });
+            steps.Add(new Step
+            {
+                Name = "run it yourself",
+                Do = delegate
+                {
+                    CheckReplayWasTheFight(app);
+                    Check(Press(router.Battle.Root, "GuildPrimary"), "replay: RUN IT YOURSELF is pressable");
+                },
+                Ready = delegate { return router.Current == router.GuildFloor && router.GuildDungeon.State.Loaded; },
+                Settle = 30,
+                Shot = "guild-dungeon-handover"
+            });
+            steps.Add(new Step
+            {
+                Name = "attempt",
+                Do = delegate
+                {
+                    GuildDungeonState state = router.GuildDungeon.State;
+                    Check(state.Watched != null && state.Watched.Id == _miraLoss.Id && state.Floor == _miraLoss.Floor,
+                          "handover: the floor view opened on Mira's floor, carrying the fight that was watched");
+                    Check(Press(router.GuildFloor.Root, "Attempt"), "floor: ATTEMPT is pressable");
+                },
+                Ready = delegate { return Find(app.OverlayLayer, "Confirm") != null; },
+                Settle = 10
+            });
+            steps.Add(new Step
+            {
+                Name = "confirm",
+                Do = delegate { Check(Press(app.OverlayLayer, "Confirm"), "floor: the confirm dialog's ATTEMPT is pressable"); },
+                Ready = delegate { return router.Current == router.Battle && router.Battle.RoundUnderway; },
+                Settle = 150,
+                Shot = "guild-dungeon-fight"
+            });
+            steps.Add(new Step
+            {
+                Name = "fight to the end",
+                Do = delegate { router.Battle.SkipToEndForCapture(); },
+                Ready = delegate { return router.Battle.Finished && Find(router.Battle.Root, "GuildPrimary") != null; },
+                Settle = 40,
+                Shot = "guild-dungeon-fight-end"
+            });
+            steps.Add(new Step
+            {
+                Name = "result",
+                Do = delegate { Check(Press(router.Battle.Root, "GuildPrimary"), "fight: SEE WHERE IT PLACES YOU is pressable"); },
+                Ready = delegate { return router.Current == router.GuildDungeonResult; },
+                Settle = 40,
+                Shot = "guild-dungeon-result"
+            });
+            steps.Add(new Step
+            {
+                Name = "post to chat",
+                Do = delegate
+                {
+                    CheckScored(app);
+                    Check(Press(router.GuildDungeonResult.Root, "Share"), "result: POST TO GUILD CHAT is pressable");
+                },
+                Ready = delegate { return router.GuildDungeonResult.Shared; },
+                Settle = 10
+            });
+            steps.Add(new Step
+            {
+                Name = "chat with your card",
+                Do = delegate { router.Show(ScreenId.GuildChat); },
+                Ready = delegate { return Count(router.GuildChat.Root, "Attempt") >= 3; },
+                // Long enough for the "Posted" toast to fade: it covered the next two shots.
+                Settle = 420,
+                Shot = "guild-chat-posted"
+            });
+            steps.Add(new Step
+            {
+                Name = "boards",
+                Do = delegate
+                {
+                    router.GuildDungeonBoards.SetFloor(_miraLoss.Floor);
+                    router.Show(ScreenId.GuildDungeonBoards);
+                },
+                Ready = delegate { return router.GuildDungeon.State.Loaded && Find(router.GuildDungeonBoards.Root, "Entry0") != null; },
+                Settle = 600,
+                Shot = "guild-dungeon-boards"
+            });
+            steps.Add(new Step
+            {
+                Name = "a floor, opened from the entry",
+                Do = delegate { router.GuildDungeon.OpenFloor(1); },
+                Ready = delegate { return router.Current == router.GuildFloor; },
+                Settle = 30,
+                Shot = "guild-dungeon-floor"
+            });
+            steps.Add(new Step
+            {
+                Name = "as Mira",
+                Do = delegate { CheckMiraWatchesYou(app); },
+                Ready = delegate { return true; },
+                Settle = 2
+            });
+            return steps;
+        }
+
+        // ================================================================== what the run checks
+
+        /// <summary>The fight on screen came from Mira's stored record, and it is her fight.</summary>
+        private static void CheckReplayWasTheFight(GameApp app)
+        {
+            GuildMessageEntry card = _guild.Chat().Find(e => e.AttemptId == _miraLoss.Id);
+            Check(card != null && card.Attempt != null && !card.IsMine,
+                  "you read Mira's shared attempt as a card carrying her whole record");
+            if (card == null || card.Attempt == null) return;
+            GuildDungeonReplay replay = GuildDungeon.Replay(app.Content, card.Attempt);
+            Check(replay.Playable, "and the record replays (" + replay.Verdict + ")");
+            if (!replay.Playable) return;
+            Check(SameFight(replay.Result, _miraLossFight),
+                  "THE REPLAY IS HER FIGHT, event for event: " + replay.Result.Events.Count + " events, "
+                  + (replay.Result.Victory ? "a clear" : "a loss") + " in " + replay.Result.Rounds + " turns");
+        }
+
+        /// <summary>Both attempts on floor 2 - Mira's and yours, different rosters - scored and on
+        /// exactly the boards their lines satisfy.</summary>
+        private static void CheckScored(GameApp app)
+        {
+            GuildDungeonState state = app.Router.GuildDungeon.State;
+            GuildDungeonAttempt mine = state.LastAttempt;
+            Check(mine != null && mine.UserId == You && mine.Floor == _miraLoss.Floor && mine.Attempt == 1,
+                  "your attempt was stored as your attempt 1 on floor " + _miraLoss.Floor);
+            if (mine == null) return;
+            Note("  your floor " + mine.Floor + " attempt: " + GuildDungeonFlow.OutcomeLine(mine) + " with "
+                 + mine.Team.Units.Count + " heroes, boards [" + string.Join(", ", GuildDungeon.BoardsMet(app.Content, mine).ConvertAll(b => b.ToString()).ToArray()) + "]");
+
+            HashSet<string> distinct = new HashSet<string>();
+            for (int i = 0; i < mine.Team.Units.Count; i++) distinct.Add(mine.Team.Units[i].DefId);
+            bool differentRoster = false;
+            for (int i = 0; i < _miraLoss.Team.Units.Count; i++) if (!distinct.Contains(_miraLoss.Team.Units[i].DefId)) differentRoster = true;
+            Check(differentRoster, "and it was a different roster from Mira's");
+
+            List<GuildDungeonAttempt> attempts = _guild.Attempts(_guild.Cycle);
+            bool right = true;
+            foreach (GuildDungeonBoard board in GuildDungeon.Boards)
+            {
+                List<GuildDungeonAttempt> ranked = GuildDungeon.Rank(app.Content, attempts, _guild.Cycle, mine.Floor, board);
+                foreach (string user in new[] { You, Mira, Oren })
+                {
+                    bool on = ranked.Exists(a => a.UserId == user);
+                    bool should = attempts.Exists(a => a.UserId == user && a.Floor == mine.Floor && GuildDungeon.Satisfies(app.Content, a, board));
+                    if (on != should) { right = false; Note("  ! " + _guild.NameOf(user) + " on " + board + ": " + on + ", should be " + should); }
+                }
+                Note("  floor " + mine.Floor + " " + GuildDungeon.BoardTitle(board) + ": "
+                     + string.Join(", ", ranked.ConvertAll(a => _guild.NameOf(a.UserId) + " " + a.Turns + "t (try " + a.Attempt + ")").ToArray()));
+            }
+            Check(right, "every member on floor " + mine.Floor + " is on exactly the boards their attempts satisfy");
+            Check(!GuildDungeon.Rank(app.Content, attempts, _guild.Cycle, mine.Floor, GuildDungeonBoard.FirstAttempt).Exists(a => a.Id == _miraLoss.Id),
+                  "Mira's shared loss is on no board");
+            Check(state.AttemptsLeft(You, mine.Floor) == state.Cap - 1, "you have " + (state.Cap - 1) + " attempts left on that floor");
+        }
+
+        /// <summary>THE OTHER DIRECTION: read the chat as Mira, and watch the fight you posted.</summary>
+        private static void CheckMiraWatchesYou(GameApp app)
+        {
+            GuildDungeonState state = app.Router.GuildDungeon.State;
+            GuildDungeonAttempt mine = state.LastAttempt;
+            _guild.Self = Mira;
+            List<GuildMessageEntry> seen = _guild.Chat();
+            _guild.Self = You;
+            GuildMessageEntry card = mine == null ? null : seen.Find(e => e.AttemptId == mine.Id);
+            Check(card != null && card.Attempt != null && !card.IsMine && card.DisplayName == _guild.NameOf(You),
+                  "Mira reads your posted attempt as a card from you");
+            if (card == null || card.Attempt == null || state.LastResult == null) return;
+            GuildDungeonReplay replay = GuildDungeon.Replay(app.Content, card.Attempt);
+            Check(replay.Playable && SameFight(replay.Result, state.LastResult),
+                  "AND WATCHES YOUR FIGHT EXACTLY: " + (replay.Playable ? replay.Result.Events.Count + " events" : replay.Explanation));
+
+            GuildMessageEntry old = seen.Find(e => e.Attempt != null && e.Attempt.ContentVersion != app.Content.ContentVersion);
+            GuildDungeonReplay refused = old == null ? null : GuildDungeon.Replay(app.Content, old.Attempt);
+            Check(refused != null && refused.Verdict == GuildDungeonReplayVerdict.ContentMoved && refused.Result == null,
+                  "and Oren's pre-patch card is refused, not played: \"" + (refused != null ? refused.Explanation : "") + "\"");
+        }
+
+        private static bool SameFight(BattleResult a, BattleResult b)
+        {
+            if (a == null || b == null || a.Victory != b.Victory || a.Rounds != b.Rounds || a.Events.Count != b.Events.Count)
+                return false;
+            for (int i = 0; i < a.Events.Count; i++)
+            {
+                BattleEvent x = a.Events[i], y = b.Events[i];
+                if (x.Type != y.Type || x.SourceId != y.SourceId || x.TargetId != y.TargetId || x.Value != y.Value
+                    || x.Critical != y.Critical || x.Status != y.Status) return false;
+            }
+            return true;
+        }
+
+        // ================================================================== driving
+
+        private static Button Find(Transform root, string name)
+        {
+            if (root == null) return null;
+            Button[] buttons = root.GetComponentsInChildren<Button>(false);
+            for (int i = 0; i < buttons.Length; i++)
+                if (buttons[i].gameObject.name == name && buttons[i].interactable && buttons[i].gameObject.activeInHierarchy)
+                    return buttons[i];
+            return null;
+        }
+
+        private static int Count(Transform root, string name)
+        {
+            int n = 0;
+            RectTransform[] all = root.GetComponentsInChildren<RectTransform>(false);
+            for (int i = 0; i < all.Length; i++) if (all[i].gameObject.name == name) n++;
+            return n;
+        }
+
+        /// <summary>Presses a button the way a tap does: through its own onClick.</summary>
+        private static bool Press(Transform root, string name)
+        {
+            Button b = Find(root, name);
+            if (b == null) return false;
+            b.onClick.Invoke();
+            return true;
+        }
+
+        private static void Check(bool ok, string label)
+        {
+            if (!ok) _failures++;
+            Note((ok ? "[ok]   " : "[FAIL] ") + label);
+        }
+
+        private static void Note(string line)
+        {
+            _report.Add(line);
+            Debug.Log("GuildDungeonShots: " + line);
+        }
+
+        private static void Pump()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            if (!EditorApplication.isPlaying) return;
+
+            GameApp app = GameApp.Instance;
+            ForceGameViewRepaint();
+
+            if (_stage == 0)
+            {
+                if (app == null || !GameApp.BootCompleted) return;
+                Application.runInBackground = true;
+                _report.Clear();
+                _failures = 0;
+                Note("scratch identity: " + Application.persistentDataPath);
+                Check(app.Cloud == null, "the cloud is held off for this run - nothing reaches the live project");
+                _sizeIndex = 0;
+                StartPass(app);
+                return;
+            }
+
+            if (_wait > 0) { _wait--; return; }
+
+            if (_stage == 1)
+            {
+                if (_pending != null)
+                {
+                    if (!File.Exists(_pending)) return;
+                    _pending = null;
+                }
+                if (_stepIndex >= _steps.Count)
+                {
+                    _sizeIndex++;
+                    if (_sizeIndex >= Sizes.Length) { _stage = 9; return; }
+                    GameViewSize.Apply(Sizes[_sizeIndex][0], Sizes[_sizeIndex][1]);
+                    StartPass(app);
+                    _wait = 30;
+                    return;
+                }
+                Step step = _steps[_stepIndex];
+                Note("step: " + step.Name + " @" + Sizes[_sizeIndex][0]);
+                try { step.Do(); }
+                catch (Exception ex) { Check(false, step.Name + " threw: " + ex); }
+                _stage = 2;
+                _waited = 0;
+                _wait = 3;
+                return;
+            }
+
+            if (_stage == 2)
+            {
+                Step step = _steps[_stepIndex];
+                bool ready = false;
+                try { ready = step.Ready(); } catch (Exception) { ready = false; }
+                if (!ready && _waited < 1800) { _waited++; return; }
+                if (!ready) Check(false, step.Name + " never became ready");
+                Canvas.ForceUpdateCanvases();
+                _stage = 3;
+                _wait = step.Settle;
+                return;
+            }
+
+            if (_stage == 3)
+            {
+                Step step = _steps[_stepIndex];
+                _stepIndex++;
+                _stage = 1;
+                if (string.IsNullOrEmpty(step.Shot)) return;
+                string file = step.Shot + (_sizeIndex == 0 ? "" : "-2400") + ".png";
+                _pending = Path.Combine(OutDir(), file);
+                if (File.Exists(_pending)) File.Delete(_pending);
+                ScreenCapture.CaptureScreenshot(_pending, 1);
+                Note("shot: " + file);
+                _wait = 2;
+                return;
+            }
+
+            if (_stage == 9)
+            {
+                Note(_failures == 0 ? "ALL CHECKS PASSED" : _failures + " CHECK(S) FAILED");
+                Directory.CreateDirectory(Path.GetDirectoryName(ReportPath()));
+                File.WriteAllLines(ReportPath(), _report.ToArray());
+                GuildDungeonBackends.Override = null;
+                SessionState.SetBool(ActiveKey, false);
+                SessionState.SetBool(RestoreKey, true);
+                Debug.Log("GuildDungeonShots: done");
+                EditorApplication.isPlaying = false;
+            }
+        }
+
+        /// <summary>A fresh guild and a fresh dungeon state, so each aspect photographs the same
+        /// moments rather than the second pass spending the first pass's attempts.</summary>
+        private static void StartPass(GameApp app)
+        {
+            Note("---- pass at " + Sizes[_sizeIndex][0] + "x" + Sizes[_sizeIndex][1]);
+            SeedGuild(app);
+            GuildDungeonState state = app.Router.GuildDungeon.State;
+            state.Loaded = false;
+            state.Status = null;
+            state.Attempts.Clear();
+            state.LastAttempt = null;
+            state.LastResult = null;
+            state.Watched = null;
+            _steps = BuildSteps(app);
+            _stepIndex = 0;
+            _pending = null;
+            _stage = 1;
+            _wait = 20;
+        }
+
+        private static void ForceGameViewRepaint()
+        {
+            Type gameViewType = Type.GetType("UnityEditor.GameView,UnityEditor");
+            if (gameViewType == null) return;
+            EditorWindow window = EditorWindow.GetWindow(gameViewType, false, null, false);
+            if (window == null) return;
+            window.Repaint();
+        }
+
+        private static string HashOf(string path)
+        {
+            if (!File.Exists(path)) return "absent";
+            using (SHA256 sha = SHA256.Create())
+            using (FileStream stream = File.OpenRead(path))
+                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
+        }
+
+        private static void PumpRestore()
+        {
+            if (!SessionState.GetBool(RestoreKey, false)) return;
+            if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            SessionState.SetBool(RestoreKey, false);
+
+            string company = SessionState.GetString(OrigCompanyKey, "");
+            string product = SessionState.GetString(OrigProductKey, "");
+            if (!string.IsNullOrEmpty(product))
+            {
+                PlayerSettings.companyName = company;
+                PlayerSettings.productName = product;
+                AssetDatabase.SaveAssets();
+            }
+            EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, SessionState.GetBool(OrigSuppressKey, false));
+            EditorPrefs.SetBool(GameApp.NoCloudKey, false);
+
+            // The real save, read again under the real identity: untouched, or this run is a failure.
+            string live = SessionState.GetString(LiveSaveKey, "");
+            string before = SessionState.GetString(LiveHashKey, "");
+            string after = HashOf(live);
+            string verdict = before == after ? "[ok]   the real save is byte for byte what it was before the run"
+                                             : "[FAIL] the real save CHANGED during the run";
+            Debug.Log("GuildDungeonShots: " + verdict);
+            try { File.AppendAllText(ReportPath(), verdict + Environment.NewLine); } catch (Exception) { }
+
+            Debug.Log("GuildDungeonShots: identity restored to '" + company + "/" + product + "'");
+            if (SessionState.GetBool(ExitKey, false)) EditorApplication.Exit(0);
+        }
+    }
+}
+#endif

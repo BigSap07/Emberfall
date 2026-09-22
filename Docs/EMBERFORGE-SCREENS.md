@@ -65,13 +65,31 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Relic shop | converted | A relic on the shelf is a framed panel and one already owned is a plain one, so depth carries "you have this". The grade's colour left the card's border: every frame in this kit is gold. |
 | Friends | converted | Photographed in its OFFLINE state, which is what every build with no `supabase.json` shows. The signed-in list needs a live account and a second live account that has sent a request; that is `AccountsVerification`'s job and no synthetic seeding could stand in for it. |
 | Friend's team | converted | Photographed OFFLINE, which is what every build with no `supabase.json` shows. |
-| Guild | converted | Your own row on the roster stands proud of the sheet and everyone else is set into it, so depth sorts a roster of thirty without a second frame colour. Photographed OFFLINE. |
+| Guild | converted | Your own row on the roster stands proud of the sheet and everyone else is set into it, so depth sorts a roster of thirty without a second frame colour. Photographed OFFLINE. The identity card gained DUNGEON (ember, under CHAT), and the guild blurb was cut to 600 wide because it ran under the button column; that change is NOT photographed, since the in-guild face needs a live account. |
 | Guild requests | converted | Every row here is waiting on an answer, so every row is framed: the page exists only when there is something to decide. Photographed OFFLINE. |
 | Guild chat | converted | Your own line stands proud and everyone else's is set in, which is depth carrying authorship. Still not right-aligned: at 1180 wide a right-aligned bubble leaves a metre of empty panel. Photographed OFFLINE. |
 | Events | converted | A running event is framed and an ended one is plain; a claimable milestone stands proud of its track and the rest are set into it. Its progress bar grew from 14 units to 36 for the reason the Rift's did. |
 | Deep Recital | converted | The banner takes what the cycle strip leaves, measured against the short canvas. At a fixed 560 the strip's cells sat below y 1010 and were off a 20:9 screen entirely. |
 | The Proving | converted | The card's height is measured from the blocks inside it rather than guessed, and the Valor purse and the honesty line are anchored to the bottom of the screen rather than to a hand-copied 520. |
+| Guild chat, shared attempt card | built on the kit | A dungeon attempt posted to chat is a framed panel, not a line: author and time where a line's would be, the floor and result in Cinzel, the line that fought as portraits, the boards it entered, and two buttons. WATCH (ember) replays the stored fight; RUN IT YOURSELF (teal) opens the same floor with your own roster. A card fought under other content says CAN'T REPLAY and why, instead of offering a WATCH that would refuse. `guild-chat-card.png`, `guild-chat-posted.png`. |
+| Guild dungeon (`GuildDungeonScreen`) | built on the kit | New. The cycle, time left, how far the guild has pushed (five short bars, one per floor), your own progress and attempts, then one row per floor with its five enemies shown before anything is opened. A locked row says which floor has to fall to open it. Scrolls: five rows and the status card are taller than a 20:9 canvas. `guild-dungeon.png`. |
+| Guild floor (`GuildFloorScreen`) | built on the kit | New. Enemy line on the left, each enemy with level, Aspect, what it does (read off its abilities, the same reading that built the floor), its stats at that level and its active. Your line on the right: five slots, the boards it would enter if it clears, attempts left, ATTEMPT. Your heroes in a strip under it. Opened from a replay, the subtitle and a row of portraits carry the fight you watched. Both panels measured against the 966 short canvas. `guild-dungeon-floor.png`, `guild-dungeon-handover.png`. |
+| Guild dungeon result (`GuildDungeonResultScreen`) | built on the kit | New. Outcome, losses, attempts left and the line on the left, with POST TO GUILD CHAT as the gold button, win or lose. All six boards on the right: a board entered shows your place on it ("2ND OF 5"), a board missed says what kept you off it ("fielded Kael, a 5-star"). After a handover, the fight you watched is set beside yours. `guild-dungeon-result.png`. |
+| Guild dungeon boards (`GuildDungeonBoardsScreen`) | built on the kit | New. A tab per floor and six board cards, one per constraint, three by two. Your row stands proud; every row can be tapped to watch that attempt. `guild-dungeon-boards.png`. |
+| Battle, guild dungeon mode | converted | The existing HUD and result panel, playing a result handed in from Core (`BattleScreen.SetGuildRun`); nothing is computed on the screen. The result panel's three buttons are the flow's: forward (SEE WHERE IT PLACES YOU, or RUN IT YOURSELF after a replay), back, and WATCH AGAIN. `guild-dungeon-replay.png`, `guild-dungeon-replay-end.png`, `guild-dungeon-fight.png`, `guild-dungeon-fight-end.png`. |
 | First run | converted by construction | The prologue draws nothing of its own: eight steps, three of which open `ModalPopup` and five of which run a battle. Both of those wear the kit, so this does. |
+
+## The guild dungeon's shots are a test run too
+
+`GuildDungeonShots` (`Emberfall/Capture/Guild dungeon`, or
+`Unity.exe -projectPath . -executeMethod Emberfall.EditorTools.GuildDungeonShots.Run`) copies the
+real save into a scratch identity, holds the cloud off (`GameApp.NoCloudKey`, so no anonymous
+account is signed up on the live project), and puts an in-memory guild of three members behind
+`IGuildDungeonBackend`. It then presses the real buttons: chat, WATCH a guildmate's lost fight,
+RUN IT YOURSELF, ATTEMPT, the result, POST TO GUILD CHAT, the boards. Last, it reads the chat as
+the guildmate and replays the posted fight. It photographs each step at both aspects and writes
+what it checked to `Tools/Screenshots/guild-dungeon-e2e.txt`, including a hash comparison showing
+the real save is untouched.
 
 ## Components this branch added to the kit
 

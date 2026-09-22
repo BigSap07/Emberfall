@@ -498,6 +498,56 @@ namespace Emberfall.Core.Cloud
             return met;
         }
 
+        /// <summary>
+        /// Why an attempt did NOT enter a board, as a short phrase naming the thing that kept it
+        /// out: "fielded Kael, a 5-star", "2 heroes fell". Empty when it did enter. The result
+        /// screen prints it under each board it missed, because "not met" tells a player nothing
+        /// about what to change and the name of the hero does.
+        /// </summary>
+        public static string Unmet(ContentDatabase content, GuildDungeonAttempt a, GuildDungeonBoard board)
+        {
+            if (Satisfies(content, a, board)) return "";
+            if (a == null || !a.Victory) return "the floor was not cleared";
+            List<SnapshotUnit> units = a.Team.Units;
+            switch (board)
+            {
+                case GuildDungeonBoard.FourOrFewer:
+                    return units.Count + " heroes fought";
+                case GuildDungeonBoard.NoFiveStar:
+                    for (int i = 0; i < units.Count; i++)
+                        if (units[i].Stars >= 5) return "fielded " + NameOf(content, units[i].DefId) + ", a 5-star";
+                    break;
+                case GuildDungeonBoard.OneAspect:
+                {
+                    HashSet<Aspect> aspects = new HashSet<Aspect>();
+                    for (int i = 0; i < units.Count; i++)
+                    {
+                        HeroDef d = content != null ? content.GetHero(units[i].DefId) : null;
+                        if (d != null) aspects.Add(d.Aspect);
+                    }
+                    return aspects.Count + " aspects in the line";
+                }
+                case GuildDungeonBoard.NoHealer:
+                    for (int i = 0; i < units.Count; i++)
+                    {
+                        HeroDef d = content != null ? content.GetHero(units[i].DefId) : null;
+                        if (d != null && d.Role == HeroRole.Mender) return "fielded " + d.Name + ", a Mender";
+                    }
+                    break;
+                case GuildDungeonBoard.FirstAttempt:
+                    return "this was attempt " + a.Attempt;
+                case GuildDungeonBoard.Flawless:
+                    return a.Fallen < 0 ? "losses were not recorded" : a.Fallen + (a.Fallen == 1 ? " hero fell" : " heroes fell");
+            }
+            return "not met";
+        }
+
+        private static string NameOf(ContentDatabase content, string defId)
+        {
+            HeroDef d = content != null ? content.GetHero(defId) : null;
+            return d != null ? d.Name : defId;
+        }
+
         public static string BoardTitle(GuildDungeonBoard board)
         {
             switch (board)

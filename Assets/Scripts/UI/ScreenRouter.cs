@@ -29,7 +29,11 @@ namespace Emberfall.UI
         GuildRequests,
         GuildChat,
         Settings,
-        Talents
+        Talents,
+        GuildDungeon,
+        GuildFloor,
+        GuildDungeonResult,
+        GuildDungeonBoards
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -115,6 +119,10 @@ namespace Emberfall.UI
         public Screens.GuildChatScreen GuildChat;
         public Screens.SettingsScreen Settings;
         public Screens.TalentsScreen Talents;
+        public Screens.GuildDungeonScreen GuildDungeon;
+        public Screens.GuildFloorScreen GuildFloor;
+        public Screens.GuildDungeonResultScreen GuildDungeonResult;
+        public Screens.GuildDungeonBoardsScreen GuildDungeonBoards;
 
         public UIScreen Current { get; private set; }
 
@@ -157,6 +165,14 @@ namespace Emberfall.UI
 
             // Reached from the hero page's TALENTS button, for one hero at a time.
             Talents = Create<Screens.TalentsScreen>();
+
+            // The guild dungeon: entry, floor view, result and boards. Reached from the guild
+            // screen and from a card in guild chat. Built unconditionally like the other cloud
+            // screens, and each says honestly what it cannot show without a guild.
+            GuildDungeon = Create<Screens.GuildDungeonScreen>();
+            GuildFloor = Create<Screens.GuildFloorScreen>();
+            GuildDungeonResult = Create<Screens.GuildDungeonResultScreen>();
+            GuildDungeonBoards = Create<Screens.GuildDungeonBoardsScreen>();
         }
 
         /// <summary>

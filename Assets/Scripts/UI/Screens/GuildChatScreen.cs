@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Cloud;
+using Emberfall.Core.Data;
 using Emberfall.Core.Session;
 using Emberfall.Game.Cloud;
 
@@ -28,6 +29,17 @@ namespace Emberfall.UI.Screens
     /// The rate limit is the database's, and this screen is honest about it rather than hiding
     /// it: a refusal comes back as a 429, the service turns it into one sentence, and the typed
     /// line stays in the box so the player can send it a second later.
+    ///
+    /// A SHARED DUNGEON ATTEMPT IS A CARD, NOT A LINE. The message carries the whole attempt
+    /// (GuildMessageEntry.Attempt, embedded by the chat read), so the card shows the floor, the
+    /// result, the line that fought and the boards it entered, and it has two buttons: WATCH, which
+    /// replays that exact fight from the record, and RUN IT YOURSELF, which opens the same floor
+    /// with your own roster. That is the guild dungeon's handover, and it lives here because this
+    /// is where a guild talks.
+    ///
+    /// The chat talks to the server through IGuildDungeonBackend rather than GuildService
+    /// directly, for the one reason the backend exists: the capture tool can put an in-memory
+    /// guild behind it and drive the handover through this screen with two members.
     /// </summary>
     public sealed class GuildChatScreen : UIScreen
     {
@@ -100,8 +112,8 @@ namespace Emberfall.UI.Screens
             _drawnFingerprint = "";
             Render();
 
-            if (App.Cloud == null || !App.Cloud.SignedIn) return;
-            if (App.Cloud.Guild.Current == null) return;
+            IGuildDungeonBackend backend = Backend;
+            if (backend == null || !backend.Ready) return;
             if (_poll == null) _poll = StartCoroutine(PollRoutine());
         }
 
@@ -115,6 +127,8 @@ namespace Emberfall.UI.Screens
             _fetching = false;
         }
 
+        private IGuildDungeonBackend Backend { get { return GuildDungeonBackends.For(App); } }
+
         private IEnumerator PollRoutine()
         {
             while (true)
@@ -122,7 +136,7 @@ namespace Emberfall.UI.Screens
                 yield return FetchRoutine();
                 // Presence, at most once a minute whatever this asks for - the service throttles
                 // it, so a four-second poll does not become a write every four seconds.
-                yield return App.Cloud.Guild.Touch();
+                if (App.Cloud != null && GuildDungeonBackends.Override == null) yield return App.Cloud.Guild.Touch();
                 yield return new WaitForSecondsRealtime(PollSeconds);
             }
         }
@@ -134,7 +148,9 @@ namespace Emberfall.UI.Screens
 
             List<GuildMessageEntry> fetched = null;
             string error = "";
-            yield return App.Cloud.Guild.FetchChat(
+            IGuildDungeonBackend backend = Backend;
+            if (backend == null) { _fetching = false; yield break; }
+            yield return backend.FetchChat(
                 delegate (List<GuildMessageEntry> list, string message)
                 {
                     fetched = list;
@@ -158,11 +174,12 @@ namespace Emberfall.UI.Screens
 
         private void Render()
         {
+            IGuildDungeonBackend backend = Backend;
             CloudCoordinator cloud = App.Cloud;
-            if (cloud == null || !cloud.SignedIn)
+            if (backend == null || (GuildDungeonBackends.Override == null && !cloud.SignedIn))
             {
-                _headerSubtitle.text = cloud == null ? "LOCAL ONLY" : "OFFLINE";
-                _emptyNote.text = cloud == null
+                _headerSubtitle.text = backend == null ? "LOCAL ONLY" : "OFFLINE";
+                _emptyNote.text = backend == null
                     ? "This build has no cloud configured, so there is no guild chat."
                     : "You are offline, so the chat cannot be loaded. It will be here when you are "
                       + "back online.";
@@ -170,7 +187,7 @@ namespace Emberfall.UI.Screens
                 ClearRows();
                 return;
             }
-            if (cloud.Guild.Current == null)
+            if (!backend.Ready)
             {
                 _headerSubtitle.text = "NO GUILD";
                 _emptyNote.text = "You are not in a guild yet.";
@@ -179,7 +196,7 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            _headerSubtitle.text = cloud.Guild.Current.Name.ToUpperInvariant();
+            _headerSubtitle.text = backend.GuildName.ToUpperInvariant();
             SetComposerEnabled(true);
             _sendNote.text = "Up to " + GuildRules.MessageMax + " characters, one message every "
                            + GuildRules.ChatCooldownSeconds + " seconds.";
@@ -240,6 +257,8 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void AddRow(GuildMessageEntry entry, long now)
         {
+            if (entry.AttemptId != 0) { AddAttemptCard(entry, now); return; }
+
             RectTransform row = UIBuilder.Node("Line", _listHost);
 
             // YOUR OWN LINE stands proud of the sheet and everyone else's is set into it -
@@ -274,6 +293,103 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(body.rectTransform, 22f, -36f, CardWidth - 60f, text, new Vector2(0f, 1f));
         }
 
+        /// <summary>
+        /// A SHARED ATTEMPT, drawn as something to play. Framed, because it is the one thing in
+        /// the chat that has an action on it; the author's name and the time sit where a line's
+        /// would, so it still reads as said BY somebody.
+        ///
+        /// The card checks the one thing it can check without running a fight - whether the record
+        /// was fought under this build's content - and says so on the card rather than offering a
+        /// WATCH that would only refuse. Everything else Replay decides when WATCH is pressed.
+        /// </summary>
+        private void AddAttemptCard(GuildMessageEntry entry, long now)
+        {
+            const float height = 206f;
+            GuildDungeonAttempt a = entry.Attempt;
+            RectTransform card = UIBuilder.Node("Attempt", _listHost);
+            UIBuilder.Sized(card, CardWidth, height);
+            EmberforgeUI.PanelOn(card, false);
+
+            string author = string.IsNullOrEmpty(entry.DisplayName) ? "Wayfarer" : entry.DisplayName;
+            Text who = EmberforgeUI.Label("Who", card, author.ToUpperInvariant() + " SHARED A DUNGEON ATTEMPT   "
+                                          + WhenLabel(entry.CreatedUnix, now), UITheme.FontTiny - 4,
+                                          entry.IsMine ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(who.rectTransform, 30f, -16f, 700f, 24f, new Vector2(0f, 1f));
+
+            if (a == null)
+            {
+                Text gone = EmberforgeUI.Body("Gone", card, entry.Body + "\nThis attempt can no longer be played.",
+                                              UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+                UIBuilder.Box(gone.rectTransform, 30f, -48f, CardWidth - 60f, 120f, new Vector2(0f, 1f));
+                return;
+            }
+
+            Text title = EmberforgeUI.Title("Title", card, "FLOOR " + a.Floor + "   "
+                                            + (a.Victory ? "CLEARED IN " + a.Turns + " TURNS" : "FELL AFTER " + a.Turns + " TURNS"),
+                                            UITheme.FontHeading, a.Victory ? Emberforge.TextGold : UITheme.Danger,
+                                            TextAnchor.UpperLeft);
+            UIBuilder.Box(title.rectTransform, 30f, -44f, 640f, 44f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
+
+            RectTransform line = UIBuilder.Node("Line", card);
+            UIBuilder.Box(line, 30f, -96f, 5 * 70f, 64f, new Vector2(0f, 1f));
+            GuildDungeonFlow.DrawLine(line, App.Content, a.Team, 0f, 0f, 64f, 6f);
+
+            // What the attempt entered, or how it went.
+            List<GuildDungeonBoard> met = GuildDungeon.BoardsMet(App.Content, a);
+            string detail = a.Victory
+                ? (met.Count == 0 ? "No board entered." : "Entered " + BoardList(met) + ".")
+                : Mathf.Max(0, a.Fallen) + " of " + a.Team.Units.Count + " heroes fell. Attempt " + a.Attempt + ".";
+            Text sub = EmberforgeUI.Body("Detail", card, detail, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperLeft);
+            UIBuilder.Box(sub.rectTransform, 400f, -100f, 360f, 60f, new Vector2(0f, 1f));
+
+            bool sameContent = !string.IsNullOrEmpty(a.ContentVersion) && a.ContentVersion == App.Content.ContentVersion;
+            GuildDungeonState state = Router.GuildDungeon.State;
+            IGuildDungeonBackend backend = Backend;
+            bool mine = backend != null && a.UserId == backend.SelfUserId;
+            bool current = !state.Loaded || state.Cycle == a.Cycle;
+
+            UIButton watch = EmberforgeUI.Button("Watch", card, sameContent ? "WATCH" : "CAN'T REPLAY",
+                                                 UITheme.FontSmall, ForgeButtonKind.Primary);
+            UIBuilder.Box(watch.Root, -30f, -36f, 330f, 70f, new Vector2(1f, 1f));
+            watch.Interactable = sameContent;
+            GuildDungeonAttempt captured = a;
+            watch.OnClick(delegate
+            {
+                App.Audio.Tap();
+                GuildDungeonFlow.Watch(App, Router, captured, ScreenId.GuildChat, "BACK TO CHAT");
+            });
+
+            if (!mine)
+            {
+                UIButton run = EmberforgeUI.Button("RunIt", card, current ? "RUN IT YOURSELF" : "CYCLE ENDED",
+                                                   UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(run.Root, -30f, -116f, 330f, 64f, new Vector2(1f, 1f));
+                run.Interactable = current;
+                run.OnClick(delegate
+                {
+                    App.Audio.Tap();
+                    GuildDungeonFlow.TryItYourself(App, Router, captured);
+                });
+            }
+
+            if (!sameContent)
+            {
+                Text why = EmberforgeUI.Label("Why", card,
+                    string.IsNullOrEmpty(a.ContentVersion) ? "Recorded before replays were versioned."
+                                                           : "Fought under earlier game numbers.",
+                    UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperRight);
+                UIBuilder.Box(why.rectTransform, -380f, -128f, 380f, 22f, new Vector2(1f, 1f));
+            }
+        }
+
+        private static string BoardList(List<GuildDungeonBoard> boards)
+        {
+            List<string> names = new List<string>();
+            for (int i = 0; i < boards.Count; i++) names.Add(GuildDungeon.BoardTitle(boards[i]));
+            return string.Join(", ", names.ToArray());
+        }
+
         private static string WhenLabel(long unix, long now)
         {
             if (unix <= 0) return "";
@@ -296,7 +412,8 @@ namespace Emberfall.UI.Screens
 
         private void OnSend()
         {
-            if (App.Cloud == null || !App.Cloud.SignedIn) { App.Notify("You are offline."); return; }
+            IGuildDungeonBackend backend = Backend;
+            if (backend == null || !backend.Ready) { App.Notify("You are offline."); return; }
             if (_sending) return;
             App.Audio.Tap();
             StartCoroutine(SendRoutine(_entry.text));
@@ -321,7 +438,7 @@ namespace Emberfall.UI.Screens
 
             bool ok = false;
             string error = "";
-            yield return App.Cloud.Guild.PostMessage(typed,
+            yield return Backend.PostMessage(typed,
                 delegate (bool success, string message) { ok = success; error = message; });
 
             _sending = false;
