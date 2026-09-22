@@ -104,6 +104,7 @@ namespace Emberfall.DevHarness
             CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
             CheckAuthoredKitExercise(content);
+            CheckEveryAuthoredActiveIsCast(content);
             ReportTalentExercise();
 
             CheckDebrief();
@@ -23573,6 +23574,11 @@ namespace Emberfall.DevHarness
             public bool Victory;
             public int SubjectId = -1;
             public int SubjectDamage, SubjectHeal, SubjectShield;
+            /// <summary>How many damage EVENTS the subject produced, which is the
+            /// only way to see a talent that appends a blow whose size is bounded.
+            /// Hale II adds one capped rider per cast: two extra events against a
+            /// battle-long total that the shifted RNG stream swamps.</summary>
+            public int SubjectHits;
             public int HealToOthers, BiggestHealToOther;
             public int SubjectEnergyGain, AllyEnergyGain, EnemyEnergyLoss;
             public int BuffsStripped, ResolveSpent;
@@ -23661,7 +23667,7 @@ namespace Emberfall.DevHarness
                         if (e.SourceId == p.SubjectId) p.SubjectCasts++;
                         break;
                     case BattleEventType.Damage:
-                        if (e.SourceId == p.SubjectId) p.SubjectDamage += e.Value;
+                        if (e.SourceId == p.SubjectId) { p.SubjectDamage += e.Value; p.SubjectHits++; }
                         break;
                     case BattleEventType.Heal:
                         if (e.SourceId == p.SubjectId)
@@ -24179,10 +24185,14 @@ namespace Emberfall.DevHarness
             if (!DarkPair("hale_the_relentless_hunter", 2, "s_buffer", "", 1, false, out a, out b))
                 Check(false, "hale II arena built");
             else
-                Check(b.SubjectDamage > a.SubjectDamage,
+                Check(b.SubjectHits > a.SubjectHits,
                       "Hale II lands Closing Radius's missing-HP damage with no ally to have hit the"
-                      + " Quarry, once he is under half health (" + b.SubjectDamage + " against "
-                      + a.SubjectDamage + ")");
+                      + " Quarry, once he is under half health (" + b.SubjectHits + " blow(s) against "
+                      + a.SubjectHits + ", one extra per cast) - COUNTED rather than summed, because"
+                      + " the rider is bounded at 120% of his Attack now and a battle-long total"
+                      + " cannot see it: an extra blow draws its own crit and variance, so the"
+                      + " stream it shifts moves more damage than the blow itself carries ("
+                      + b.SubjectDamage + " against " + a.SubjectDamage + ")");
 
             // ---- Kael II: Fault Line applied where Take Down the Wall took something away.
             if (!DarkPair("kael_the_unyielding", 2, "s_buffer", "", 1, false, out a, out b))
@@ -25614,6 +25624,118 @@ namespace Emberfall.DevHarness
                     sb.Append(" | ").Append(kv.Key).Append(' ').Append(kv.Value);
                 Line(sb.ToString());
             }
+            Line("");
+        }
+
+        /// <summary>
+        /// EVERY AUTHORED ACTIVE IS SEEN BEING SPENT, and the sweep arena cannot show one of them.
+        ///
+        /// The exercise above reports what a kit's own rules did, and Roan's line read "10 basic(s)
+        /// cast, 0 active(s) cast" - the only hero in the roster with an authored active whose
+        /// active the sweep never raises. It is not his kit. Through the Service Door costs the
+        /// same 100 Energy every 3-star active costs, and Selka, who is the same role at the same
+        /// stars with the same stat line, casts hers. Roan dies in round 3 of all five seeds, a
+        /// turn before the bar he has already filled would be spent: he reaches 100 Energy in every
+        /// run and never gets the turn to use it. A sweep line that says "this ability was never
+        /// measured" is a hole, not a reading, so this check names the hole and then closes it
+        /// somewhere the ability can be seen.
+        ///
+        /// TWO HALVES. The first walks every authored active over the sweep's own arena and seeds
+        /// and asserts that the set of never-cast ones is EXACTLY Roan - so a second hero going
+        /// quiet is a failure rather than a silence, and Roan going quiet somewhere else is too.
+        /// The second runs Roan alone against s_triple, one of the dark arenas, chosen for the two
+        /// things his active needs and the sweep will not give him: a body that cannot kill him
+        /// before round 4, so he lives to spend the bar, and a body that holds long buffs, so the
+        /// Dispel half has something to take. Nothing in the sweep arena moves, so no other check
+        /// loses anything.
+        /// </summary>
+        private static void CheckEveryAuthoredActiveIsCast(ContentDatabase live)
+        {
+            Line("AUTHORED ACTIVES (every hero that has one has to be seen spending it)");
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "authored-active sweep arena built"); Line(""); return; }
+
+            List<string> silent = new List<string>();
+            int withActive = 0;
+            for (int h = 0; h < arena.Heroes.Count; h++)
+            {
+                HeroDef def = arena.Heroes[h];
+                if (def.Active == null) continue;
+                withActive++;
+                int casts = 0;
+                for (int seed = 1; seed <= HeroSweepSeeds; seed++)
+                {
+                    List<HeroInstance> team = new List<HeroInstance>();
+                    team.Add(MakeInstance(def, HeroSweepLevel));
+                    for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], HeroSweepLevel));
+                    BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+                    if (r == null) continue;
+                    for (int i = 0; i < r.Events.Count; i++)
+                        if (r.Events[i].Type == BattleEventType.AbilityCast
+                            && r.Events[i].AbilityId == def.Active.Id) casts++;
+                }
+                if (casts == 0) silent.Add(def.Id);
+            }
+
+            Check(silent.Count == 1 && silent[0] == "roan_the_side_door",
+                  "of the " + withActive + " authored active(s), exactly one is never cast in the sweep"
+                  + " arena and it is Roan's (never cast: "
+                  + (silent.Count == 0 ? "none" : string.Join(", ", silent.ToArray()))
+                  + ") - he reaches 100 Energy in all five seeds and dies in round 3, a turn before"
+                  + " the bar would be spent");
+
+            ContentDatabase dark = DarkArena(false);
+            StageDef triple = dark == null ? null : dark.GetStage("s_triple");
+            HeroDef roan = dark == null ? null : dark.GetHero("roan_the_side_door");
+            if (dark == null || triple == null || roan == null || roan.Active == null)
+            { Check(false, "Roan's own arena built"); Line(""); return; }
+
+            List<HeroInstance> line = new List<HeroInstance>();
+            line.Add(MakeInstance(roan, HeroSweepLevel));
+            BattleResult run = RunWith(dark, triple, 1, line);
+            if (run == null) { Check(false, "Roan's own arena resolved"); Line(""); return; }
+
+            int roanId = -1;
+            for (int u = 0; u < run.Units.Count; u++)
+                if (run.Units[u].DefId == roan.Id) roanId = run.Units[u].Id;
+
+            int casts2 = 0, activeBlow = 0, basicBlow = 0, buffsTaken = 0;
+            bool inActive = false, inBasic = false;
+            for (int i = 0; i < run.Events.Count; i++)
+            {
+                BattleEvent e = run.Events[i];
+                if (e.Type == BattleEventType.AbilityCast || e.Type == BattleEventType.BasicAttack)
+                {
+                    inActive = e.SourceId == roanId && e.Type == BattleEventType.AbilityCast
+                               && e.AbilityId == roan.Active.Id;
+                    inBasic = e.SourceId == roanId && e.Type == BattleEventType.BasicAttack;
+                    if (inActive) casts2++;
+                    continue;
+                }
+                if (e.SourceId != roanId) continue;
+                if (e.Type == BattleEventType.Damage)
+                {
+                    if (inActive && e.Value > activeBlow) activeBlow = e.Value;
+                    if (inBasic && e.Value > basicBlow) basicBlow = e.Value;
+                }
+                if (inActive && e.Type == BattleEventType.StatusExpired
+                    && e.Status != StatusKind.Mark && e.Status != StatusKind.MarkAlt
+                    && !StatusInfo.IsHarmful(e.Status)) buffsTaken++;
+            }
+
+            Check(casts2 > 0, "Roan casts Through the Service Door in an arena that lets him live to"
+                  + " round 4 (" + casts2 + " cast(s) against 0 across all five sweep seeds)");
+            Check(activeBlow > basicBlow && basicBlow > 0,
+                  "and its blow lands on the Off Balance body: " + activeBlow + " against Unexpected"
+                  + " Entry's " + basicBlow + ", which is the 360% against the 256% - so"
+                  + " EnemyWithMyMark resolved rather than the cast fizzling");
+            Check(buffsTaken > 0,
+                  "and it takes a buff off that body (" + buffsTaken + " stripped) - the Dispel half"
+                  + " of the ability, which needs an enemy holding a buff longer than its own turn");
             Line("");
         }
 
