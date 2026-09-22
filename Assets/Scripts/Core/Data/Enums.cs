@@ -1445,23 +1445,31 @@ namespace Emberfall.Core.Data
         // the text names one body, or read only their own healer where the text names every source.
 
         /// <summary>
-        /// LESS DAMAGE FROM ONE NAMED ATTACKER. The mirror of Vulnerable, and the only other
-        /// per-source entry in the game.
+        /// A UNIT WHOSE BLOWS AGAINST THE BODY THAT APPLIED THIS LAND SOFTER. The mirror of
+        /// Vulnerable, and the only other per-source entry in the game.
         ///
         /// "Takes 10% less from it" and "it deals 15% less damage to Jory" are both sentences about
         /// one attacker, and DamageReductionUp - what both currently use - softens the holder
         /// against the entire enemy line. The difference is not cosmetic in a five-a-side fight:
         /// one of those is a duel clause and the other is a team aura.
         ///
-        /// Read through CombatUnit.ResistantTo, which sums only the entries THAT attacker applied,
-        /// exactly as VulnerableTo does from the other direction. Zero from anybody else, and
-        /// `raw * (1f - 0f)` is exact, so it cannot move a battle nobody authored it into. Clamped
-        /// at 0.9 so a deep enough stack cannot make an attacker harmless.
+        /// HELD BY THE ATTACKER, KEYED TO THE PROTECTED BODY, which is the only direction a hero
+        /// can author. Vulnerable works because the caster IS the attacker - Kest marks an enemy
+        /// and his own blows read it back. The reduction runs the other way: Jory is the one being
+        /// protected, so an entry keyed the same way would have to be applied to Jory BY the
+        /// enemy, and no effect can stamp a SourceId that is not its own caster. So the entry goes
+        /// on the enemy and names Jory, and the funnel asks the ATTACKER what it is blunted
+        /// against - CombatUnit.BluntedAgainst.
         ///
-        /// Beneficial: it is a protection, so it is Dispel's business and not Cleanse's - the same
-        /// side of that line as Covered and Guard.
+        /// Zero against anybody who has not applied one, and `raw * (1f - 0f)` is exact, so it
+        /// cannot move a battle nobody authored it into. Clamped at 0.9 so a deep enough stack
+        /// cannot make an attacker harmless.
+        ///
+        /// Harmful: it is done TO the body that carries it, so a Cleanse takes it and a Dispel
+        /// does not - the same side of that line as Vulnerable, which it mirrors in every other
+        /// respect too.
         /// </summary>
-        Resistant,
+        Blunted,
 
         /// <summary>
         /// MORE DAMAGE FROM EVERY SOURCE. What Vulnerable is usually mistaken for.
@@ -2720,10 +2728,12 @@ namespace Emberfall.Core.Data
                 || kind == StatusKind.HealingReduction
                 // A restriction is done TO a unit, so it sits with Provoked and Vulnerable.
                 || kind == StatusKind.Restricted
-                // The universal half of Vulnerable, and on the same side of the line as it.
-                // Resistant and HealingReceivedUp are deliberately absent: both are protections,
-                // which makes them Dispel's business the way Covered and Guard are.
+                // The universal half of Vulnerable, and on the same side of the line as it. So is
+                // Blunted, which is applied to an ENEMY and weakens it. HealingReceivedUp is
+                // deliberately absent: it is a benefit to the body that carries it, which makes it
+                // Dispel's business the way Covered and Guard are.
                 || kind == StatusKind.DamageTakenUp
+                || kind == StatusKind.Blunted
                 // Disrupted reverses energy gains. A debuff — cleansable, same as TurnDebt.
                 || kind == StatusKind.Disrupted
                 // HealSuppression blocks healing; StatusGainSuppression blocks Resolve gain.
@@ -2839,7 +2849,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "Linked";
                 case StatusKind.HealingReduction: return "Healing Reduction";
                 case StatusKind.Restricted: return "Displaced";
-                case StatusKind.Resistant: return "Resistant";
+                case StatusKind.Blunted: return "Blunted";
                 case StatusKind.DamageTakenUp: return "Exposed II";
                 case StatusKind.HealingReceivedUp: return "Receptive";
             }
@@ -2904,7 +2914,7 @@ namespace Emberfall.Core.Data
                 case StatusKind.Linked: return "LNK";
                 case StatusKind.HealingReduction: return "H-RED";
                 case StatusKind.Restricted: return "DSP";
-                case StatusKind.Resistant: return "RES";
+                case StatusKind.Blunted: return "BLNT";
                 case StatusKind.DamageTakenUp: return "DMG+";
                 case StatusKind.HealingReceivedUp: return "H-UP";
             }

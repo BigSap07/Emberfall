@@ -51,7 +51,7 @@ STATUS_KINDS = {
     "Restricted",
     # the gaps pass, group 4: the per-source mirror of Vulnerable, the universal half it
     # never had, and the upward direction of the healing pipeline.
-    "Resistant", "DamageTakenUp", "HealingReceivedUp",
+    "Blunted", "DamageTakenUp", "HealingReceivedUp",
 }
 # A standing rule forbidding a unit one class of target. Declared on a passive as
 # "targetBan"; the harness reads this set out of this file and compares it to Enums.cs,

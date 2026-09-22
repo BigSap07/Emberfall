@@ -685,17 +685,21 @@ namespace Emberfall.Core.Combat
         }
 
         /// <summary>
-        /// LESS damage this unit takes from that attacker specifically - the mirror of
-        /// VulnerableTo, summed the same way over the Resistant entries that attacker applied.
-        /// Zero from anybody else, which is what makes "takes 10% less FROM IT" a duel clause
-        /// rather than a team aura.
+        /// How much softer THIS UNIT'S blows land against that one specifically, summed over the
+        /// Blunted entries that body applied to it. Zero against anybody else, which is what makes
+        /// "takes 10% less FROM IT" a duel clause rather than a team aura.
+        ///
+        /// ASKED OF THE ATTACKER, keyed to the protected body - the opposite bookkeeping from
+        /// VulnerableTo, which is asked of the victim and keyed to the attacker. Both are the same
+        /// pair of units; which one carries the entry is decided by which one can author it, and
+        /// an effect can only stamp its own caster's id. See StatusKind.Blunted.
         /// </summary>
-        public float ResistantTo(int sourceId)
+        public float BluntedAgainst(int protectedId)
         {
-            if (sourceId < 0) return 0f;
+            if (protectedId < 0) return 0f;
             float total = 0f;
             for (int i = 0; i < Statuses.Count; i++)
-                if (Statuses[i].Kind == StatusKind.Resistant && Statuses[i].SourceId == sourceId)
+                if (Statuses[i].Kind == StatusKind.Blunted && Statuses[i].SourceId == protectedId)
                     total += Statuses[i].Magnitude;
             return total;
         }

@@ -4291,15 +4291,19 @@ namespace Emberfall.Core.Combat
                 float vulnerable = target.VulnerableTo(source.Id);
                 if (vulnerable != 0f) raw *= 1f + vulnerable;
 
-                // 7.6. Resistant - THE MIRROR OF THE LINE ABOVE, and the only other per-source
+                // 7.6. Blunted - THE MIRROR OF THE LINE ABOVE, and the only other per-source
                 // entry in the game. "Takes 10% less from it" and "it deals 15% less damage to
                 // Jory" are sentences about ONE attacker; DamageReductionUp, which both currently
-                // use, softens the holder against the whole enemy line. Zero from anybody who has
-                // applied none, and `raw * (1f - 0f)` is exact.
+                // use, softens the holder against the whole enemy line.
+                //
+                // Asked of the ATTACKER and keyed to the body being protected, which is the
+                // opposite bookkeeping from Vulnerable one line up and the only direction a hero
+                // can author - see StatusKind.Blunted. Zero when the attacker carries none, and
+                // `raw * (1f - 0f)` is exact.
                 //
                 // Clamped at 0.9 rather than 1.0 so no depth of stacking makes an attacker
                 // harmless - the same discipline the damageReduction step keeps one block up.
-                float resistant = target.ResistantTo(source.Id);
+                float resistant = source.BluntedAgainst(target.Id);
                 if (resistant != 0f)
                 {
                     if (resistant > 0.9f) resistant = 0.9f;

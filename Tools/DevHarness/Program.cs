@@ -5861,7 +5861,7 @@ namespace Emberfall.DevHarness
                                "Disrupted", "MaxHpUp", "HolyDamageUp",
                                "HealSuppression", "StatusGainSuppression",
                                "Resolve2", "Linked", "HealingReduction", "Restricted",
-                               "Resistant", "DamageTakenUp", "HealingReceivedUp" },
+                               "Blunted", "DamageTakenUp", "HealingReceivedUp" },
                 Enum.GetNames(typeof(StatusKind)));
             Check(ok, "all enum sets in validate_heroes.py match the C# enums in Enums.cs");
 
@@ -18075,9 +18075,9 @@ namespace Emberfall.DevHarness
         {
             Line("  group 4 - per-source and upward modifiers");
 
-            // --- Resistant: one attacker softened, the other untouched ------------------
+            // --- Blunted: one attacker softened, the other untouched --------------------
             BattleResult plain = RunGapFourArena("none");
-            BattleResult warded = RunGapFourArena("resistant");
+            BattleResult warded = RunGapFourArena("blunted");
             int namedPlain = DamageDealtBy(plain, "g4_named");
             int otherPlain = DamageDealtBy(plain, "g4_other");
             int namedWard = DamageDealtBy(warded, "g4_named");
@@ -18086,7 +18086,7 @@ namespace Emberfall.DevHarness
                   "control: both foes connect with nothing applied (named " + namedPlain
                   + ", other " + otherPlain + ")");
             Check(namedWard < namedPlain,
-                  "Resistant softens the attacker it names (" + namedPlain + " -> " + namedWard + ")");
+                  "Blunted softens the attacker it names (" + namedPlain + " -> " + namedWard + ")");
             Check(otherWard == otherPlain,
                   "and leaves every other attacker at full strength (" + otherPlain + " -> " + otherWard
                   + ") - which is the whole difference between it and DamageReductionUp, the aura "
@@ -18129,7 +18129,7 @@ namespace Emberfall.DevHarness
                   + healUp + ") - a property of the body being healed rather than of the healer, "
                   + "which is what Lio's text says and what his Mark cannot say");
 
-            Check(FingerprintOf(RunGapFourArena("resistant")) == FingerprintOf(RunGapFourArena("resistant")),
+            Check(FingerprintOf(RunGapFourArena("blunted")) == FingerprintOf(RunGapFourArena("blunted")),
                   "and the arena resolves the same way twice on the same seed");
         }
 
@@ -18176,12 +18176,12 @@ namespace Emberfall.DevHarness
                 apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"HealingReceivedUp\","
                       + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }";
 
-            // Resistant is source-keyed, so it has to be applied BY the attacker it softens. The
-            // named foe applies it to the hurt body as part of its own swing, which is the only
-            // way a synthetic arena can produce an entry whose SourceId is that attacker.
-            string foeApply = mode == "resistant"
-                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Resistant\","
-                  + " \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }"
+            // Blunted goes ON the attacker and NAMES the body it must not hurt, so the protected
+            // hero applies it to one of the two foes - which is exactly how a hero authors it, and
+            // the whole reason the entry is keyed that way round.
+            string blunt = mode == "blunted"
+                ? ", { \"kind\": \"ApplyStatus\", \"target\": \"FrontEnemy\", \"status\": \"Blunted\","
+                  + " \"bypassResist\": true, \"chance\": 1, \"duration\": 9, \"magnitude\": 0.5 }"
                 : "";
 
             string heroes = @"{
@@ -18192,7 +18192,7 @@ namespace Emberfall.DevHarness
         ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
       ""passive"": { ""id"": ""g4_hurt_passive"", ""name"": ""Mark Self"", ""trigger"": ""BattleStart"",
         ""oncePerBattle"": true,
-        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } },
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + blunt + @" ] } },
     { ""id"": ""g4_mender"", ""name"": ""Mender"", ""aspect"": ""Ember"", ""role"": ""Mender"",
       ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
       ""basic"": { ""id"": ""g4m_basic"", ""name"": ""Mend"",
@@ -18205,7 +18205,7 @@ namespace Emberfall.DevHarness
     { ""id"": ""g4_named"", ""name"": ""Named"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 200,
       ""defense"": 0, ""speed"": 800, ""critChance"": 0, ""critDamage"": 1.5,
       ""basic"": { ""id"": ""g4nb"", ""name"": ""Swing"",
-        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 }" + foeApply + @" ] },
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] },
       ""passive"": { ""id"": ""g4n_skill"", ""name"": ""Follow Through"", ""trigger"": ""AfterBasicAttack"",
         ""oncePerBattle"": false,
         ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1.0 } ] } },
