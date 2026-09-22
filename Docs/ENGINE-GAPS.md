@@ -55,20 +55,6 @@ carries no condition.
 
 ---
 
-## 8. Remembering who hit MY SIDE, rather than who hit ME
-
-`LastAttackerId` is per-unit and means "the body that last hit me". Nothing keeps the same memory for
-a side, so "the enemy that hurt one of us" has neither a target mode nor a condition.
-`HighestDamageDealtEnemy` is the nearest standing answer and is a career total rather than a recent
-act.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Maera | "if the target **attacked an ally** since Maera's last turn, deals 25% additional" | a condition asking whether the subject dealt damage to the caster's side | `SubjectActedThisRound`, which in this engine's turn shape means it has attacked | medium |
-| Maera | "the enemy that **most recently damaged an ally**" | a target mode for the side's last attacker | `HighestDamageDealtEnemy`, the enemy that has dealt the most damage so far | medium |
-
----
-
 ## 10. Counting firings per subject on an owner-centric trigger
 
 `FiresPerSubject` and the `PassiveFiredOnSubjectAtLeast` condition are the engine's answer to "the
@@ -221,7 +207,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 
 **Group 9 is closed.** Two of its five rows were the same exclusion in `OnEnemyDamagedAlly`, met

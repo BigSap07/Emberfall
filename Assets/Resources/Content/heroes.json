@@ -6760,7 +6760,7 @@
       "basic": {
         "id": "maera_returning_shot",
         "name": "Returning Shot",
-        "description": "Deals 280% Attack damage; if the target has already acted this round, deals 70% additional Attack damage.",
+        "description": "Deals 280% Attack damage; if the target attacked an ally since Maera's last turn, deals 70% additional Attack damage.",
         "effects": [
           {
             "kind": "Damage",
@@ -6770,7 +6770,7 @@
           {
             "kind": "Damage",
             "target": "LastTarget",
-            "condition": "SubjectActedThisRound",
+            "condition": "SubjectDamagedMySideSinceMyTurn",
             "conditionOn": "Target",
             "power": 0.7
           }
@@ -6780,11 +6780,11 @@
         "id": "maera_keep_the_beacon",
         "name": "Keep the Beacon",
         "energyCost": 100,
-        "description": "Deals 540% Attack damage to the enemy that has dealt the most damage. On defeat, allies recover 7% Max HP.",
+        "description": "Deals 540% Attack damage to the enemy that most recently damaged an ally. On defeat, allies recover 7% Max HP.",
         "effects": [
           {
             "kind": "Damage",
-            "target": "HighestDamageDealtEnemy",
+            "target": "EnemyThatLastDamagedAlly",
             "power": 5.4
           }
         ]
