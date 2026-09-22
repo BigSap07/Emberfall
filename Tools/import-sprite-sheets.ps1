@@ -134,9 +134,17 @@ $wanted = [ordered]@{
     'basic'        = $Basic
 }
 
-# See note 5. Kael's metas are the template; his settings (maxTextureSize 8192, no mipmaps) are
-# what these sheets need, and sourcing them from his file rather than hardcoding a copy means a
-# future change to his import settings carries to every hero imported after it.
+# See note 5. ANY existing sheet meta in the folder is the template, and sourcing the settings
+# from a real file rather than hardcoding a copy is what makes this the propagation mechanism for
+# the whole group: a change to the sheets' import settings carries to every hero imported after
+# it, with nobody having to remember.
+#
+# What those settings now are, and why, is Tools/texture-import-policy.py - which is also what
+# wrote them into all 214 existing sheets. The short version: maxTextureSize 4096 and nPOTScale
+# None so no clamp or power-of-two resize can ever shear the frame grid (notes 3 and 5), no
+# mipmaps because a battle sprite is magnified about 1.6x on screen and never minified, DXT5
+# Crunched at quality 100 on Windows, and ASTC 5x5 on Android because 220, 260, 1980 and 2080 all
+# divide by 5, so no compression block straddles two animation frames.
 function Write-TextureMeta([string] $pngPath) {
     $metaPath = "$pngPath.meta"
     if (Test-Path $metaPath) { return 'kept' }   # never clobber an existing guid

@@ -1,0 +1,325 @@
+#!/usr/bin/env python3
+"""THE TEXTURE IMPORT POLICY, applied to the .meta files it describes.
+
+Why a script and not an AssetPostprocessor
+------------------------------------------
+An AssetPostprocessor would be the obvious home for this, and it is deliberately not used.
+Tools/build-check.ps1 compiles every file under Assets/Editor against the API shim in
+Tools/UnityShim, and that shim carries no texture-importer types at all - no AssetPostprocessor,
+no TextureImporter, no TextureImporterPlatformSettings. A postprocessor dropped into Assets/Editor
+therefore fails the "unity-code" compile step and shows up as a THIRD harness failure, which
+DESIGN-BUILD-ORDER.md defines as a regression rather than a reading.
+
+The propagation the postprocessor would have bought already exists for the one group that grows.
+Tools/import-sprite-sheets.ps1 writes every new sheet's .meta by copying ANY existing sheet .meta
+out of Sprites/Units and stamping a fresh guid (its note 5). So the 214 metas this script writes
+ARE the template for every sheet Pinoy delivers from here on, by construction rather than by
+anyone remembering. The other three groups are closed sets.
+
+What the policy is, and what measured it
+----------------------------------------
+Run with --report to print the model of what each group costs in the built Windows player without
+changing anything; run with --apply to write it. Every number below came off a measurement that is
+recorded in the group's own comment in GROUPS.
+"""
+
+import argparse
+import os
+import re
+import struct
+import sys
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# UnityEditor.TextureImporterFormat members, by their serialised value.
+RGBA32 = 4
+DXT5 = 12
+BC7 = 25
+DXT5_CRUNCHED = 29
+ASTC_4x4 = 48
+ASTC_5x5 = 49
+ASTC_6x6 = 50
+
+# Bytes per pixel each format costs in the player, used by --report.
+BPP = {RGBA32: 4.0, DXT5: 1.0, BC7: 1.0, DXT5_CRUNCHED: 1.0,
+       ASTC_4x4: 1.0, ASTC_5x5: 0.64, ASTC_6x6: 16.0 / 36.0}
+
+FORMAT_NAMES = {RGBA32: "RGBA32", DXT5: "DXT5", BC7: "BC7", DXT5_CRUNCHED: "DXT5 Crunched",
+                ASTC_4x4: "ASTC 4x4", ASTC_5x5: "ASTC 5x5", ASTC_6x6: "ASTC 6x6"}
+
+
+class Group(object):
+    def __init__(self, name, folder, max_size, npot, mipmap, filter_mode,
+                 win_format, android_format, crunch_quality, note):
+        self.name = name
+        self.folder = folder
+        self.max_size = max_size
+        self.npot = npot
+        self.mipmap = mipmap
+        self.filter_mode = filter_mode
+        self.win_format = win_format
+        self.android_format = android_format
+        self.crunch_quality = crunch_quality
+        self.note = note
+
+
+GROUPS = [
+    Group(
+        name="Units (battle sprite sheets)",
+        folder="Assets/Resources/Sprites/Units",
+        # 4096, which is what these already import at, stated per platform instead of inherited
+        # from DefaultTexturePlatform. maxTextureSize is the one setting that MUST NOT bite here:
+        # a sheet is a cols x rows grid of frames, and any clamp rescales the whole sheet and
+        # shears that grid, which is the failure import-sprite-sheets.ps1 notes 3 and 5 exist to
+        # prevent. There is also nothing to gain. A frame is 220x260 and its body occupies
+        # bodyFraction (median 0.53) of that, so 138 source pixels; on screen at 1920x1080 the
+        # body spans UnitRig.HumanoidTop (1.71 world units) against BattleStage's
+        # orthographicSize 3.65, which is 1.71 / 7.3 * 1080 = 253 px, times cos(28) for the
+        # camera's pitch = 219 px. The art is MAGNIFIED about 1.6x before anything is cut.
+        # 2400x1080 asks for no more: an orthographic camera fixes the vertical, so a wider
+        # screen shows more width at the same pixels-per-unit.
+        max_size=4096,
+        npot=0,            # None. A sheet must never be resized to a power of two.
+        mipmap=0,          # Never minified, so a mip chain is 33% of nothing.
+        filter_mode=1,     # Bilinear. Point would alias at a non-integer 1.6x magnification.
+        # DXT5 Crunched. BC7 and DXT5 are both 8 bits per pixel on Windows, so neither moves the
+        # build by a byte; crunch is the only lever that keeps every pixel and every frame.
+        # It stores the same DXT5 blocks entropy-coded on disk and transcodes them at load, so
+        # VRAM is unchanged and only the download shrinks.
+        win_format=DXT5_CRUNCHED,
+        # ASTC 5x5 rather than 6x6, and the block size is chosen by the frame grid rather than by
+        # taste. 220, 260, 1980 and 2080 all divide by 5, so every frame boundary in the sheet is
+        # also a block boundary and no block can straddle two animation frames. 6x6 would:
+        # 220/6 is not an integer, so a block on the seam mixes the end of one frame with the
+        # start of the next, which is bleed across frame boundaries - the same artifact
+        # import-sprite-sheets.ps1 note 3 refuses to let the resampler introduce.
+        android_format=ASTC_5x5,
+        crunch_quality=100,
+        note="214 sheets, 93% of the texture budget",
+    ),
+    Group(
+        name="Portraits",
+        folder="Assets/Resources/Sprites/Portraits",
+        # 512 unchanged, which is what the icons branch chose, and the measurement agrees with it
+        # rather than overriding it: the largest a portrait is ever drawn is the hero-detail badge
+        # at about 320 px across, and the hero list draws it at about 130. 512 is still a
+        # downscale at the biggest use; 256 would be a 1.25x UPSCALE there.
+        max_size=512,
+        npot=0,
+        mipmap=0,          # The icons branch's choice, kept. See the report for the trade.
+        filter_mode=1,
+        # BC7 instead of DXT5. Same 8 bits per pixel, so the build does not move; DXT5's three
+        # interpolated colours per 4x4 block is exactly what bruises a gold filigree frame and a
+        # dark outline, and BC7 does not have that limit.
+        win_format=BC7,
+        android_format=ASTC_4x4,   # also 8 bpp, so Android does not grow either
+        crunch_quality=50,
+        note="94 badges",
+    ),
+    Group(
+        name="UI art",
+        folder="Assets/Resources/Art/UI",
+        # 256. Six of these ten files are 1008x1008 and land in the player as UNCOMPRESSED RGBA32,
+        # because DefaultTexturePlatform carries textureCompression 0 and no platform entry
+        # overrides it - 23.3 MB of the build, from 0.3 MB of source, for art that nothing in the
+        # project currently loads (UISkin.Surface asks for panel, button, disc and panel_frame and
+        # for nothing else; everything under Resources ships regardless). No icon slot in this UI
+        # draws above about 72 px, so 256 is still three and a half times the largest drawn size.
+        max_size=256,
+        npot=0,
+        mipmap=0,
+        filter_mode=1,
+        win_format=BC7,        # hard edges and alpha: the one place DXT5 is visibly wrong
+        android_format=ASTC_4x4,
+        crunch_quality=50,
+        note="10 files, 6 of them oversized and uncompressed",
+    ),
+    Group(
+        name="Backdrops and the hub painting",
+        folder="Assets/Resources/Backgrounds",
+        max_size=2048,
+        # nPOTScale None, and this is a correction rather than a saving. All five of these carried
+        # ToNearest, which force-scales every one of them to 2048x1024: ashen, ember and hollow
+        # from 1672x941 (aspect 1.7768 -> 2.0), hub from 1536x828 (1.8551 -> 2.0) and campaign
+        # from 960x420 (2.2857 -> 2.0). That is a 12.5% horizontal stretch on four paintings and
+        # a squeeze on the fifth, and it is already known to the code that has to live with it:
+        # MainMenuScreen feeds its AspectRatioFitter from hard-coded authored dimensions with a
+        # comment saying the importer "has already stretched by a different factor per axis", and
+        # BattleStage's backdrop comment does its arithmetic with ashen at 1.7768 while the code
+        # beside it reads the imported 2.0. Turning the resize off makes both of those true.
+        npot=0,
+        # Off. The backdrop quad is sized to cover the camera frame and the hub map envelopes its
+        # parent, so a painting narrower than the screen is always magnified and a mip below the
+        # top level is never sampled. 33% of the group for nothing.
+        mipmap=0,
+        filter_mode=1,
+        # BC7: these are sunset skies, and banding in a smooth gradient is DXT5's signature.
+        win_format=BC7,
+        # ASTC 6x6 is affordable here and nowhere else in this project. A backdrop carries no cel
+        # outline to smear - it sits behind a scrim and under the whole HUD - so it is the one
+        # group where a bigger block costs nothing anyone can see.
+        android_format=ASTC_6x6,
+        crunch_quality=50,
+        note="5 paintings, all five currently stretched to a power of two",
+    ),
+]
+
+PLATFORM_ENTRY = """  - serializedVersion: 4
+    buildTarget: {target}
+    maxTextureSize: {max_size}
+    resizeAlgorithm: 0
+    textureFormat: {fmt}
+    textureCompression: {compression}
+    compressionQuality: {quality}
+    crunchedCompression: {crunched}
+    allowsAlphaSplitting: 0
+    overridden: {overridden}
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: {force_hq}
+"""
+
+
+def platform_block(group):
+    out = []
+    # DefaultTexturePlatform is the fallback for any target not named below (WebGL, iOS, the
+    # editor's own preview). Left on Automatic so an unnamed target still gets something sane,
+    # but carrying this group's max size so the resolution decision holds everywhere.
+    out.append(PLATFORM_ENTRY.format(
+        target="DefaultTexturePlatform", max_size=group.max_size, fmt=-1,
+        compression=1, quality=50, crunched=0, overridden=0, force_hq=0))
+    for target, fmt in (("Standalone", group.win_format), ("Android", group.android_format)):
+        crunched = 1 if fmt == DXT5_CRUNCHED else 0
+        quality = group.crunch_quality if crunched else 50
+        # forceMaximumCompressionQuality_BC6H_BC7 is BC7's own quality switch and is free at
+        # import time in every sense that matters here: it costs encoder seconds, not bytes.
+        force_hq = 1 if fmt == BC7 else 0
+        out.append(PLATFORM_ENTRY.format(
+            target=target, max_size=group.max_size, fmt=fmt,
+            compression=1, quality=quality, crunched=crunched, overridden=1, force_hq=force_hq))
+    return "".join(out)
+
+
+def clamp(w, h, max_size):
+    """Unity halves a texture until both dimensions fit maxTextureSize."""
+    while w > max_size or h > max_size:
+        w, h = max(1, w // 2), max(1, h // 2)
+    return w, h
+
+
+def png_size(path):
+    with open(path, "rb") as f:
+        head = f.read(26)
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return struct.unpack(">II", head[16:24])
+
+
+def rewrite(meta_text, group):
+    """Return the .meta with this group's policy applied. The guid is never touched."""
+    text = meta_text
+
+    def set_scalar(pattern, value, text):
+        return re.sub(pattern, value, text, count=1)
+
+    text = set_scalar(r"(?m)^(    enableMipMap: )\d+$", r"\g<1>%d" % group.mipmap, text)
+    text = set_scalar(r"(?m)^(  nPOTScale: )\d+$", r"\g<1>%d" % group.npot, text)
+    text = set_scalar(r"(?m)^(    filterMode: )-?\d+$", r"\g<1>%d" % group.filter_mode, text)
+    # The legacy top-level maxTextureSize, kept in step with the platform entries so a reader of
+    # the file is not told two different numbers.
+    text = set_scalar(r"(?m)^(  maxTextureSize: )\d+$", r"\g<1>%d" % group.max_size, text)
+
+    start = text.index("  platformSettings:\n")
+    end = text.index("  spriteSheet:\n", start)
+    return text[:start] + "  platformSettings:\n" + platform_block(group) + text[end:]
+
+
+def walk(group, limit=None):
+    d = os.path.join(ROOT, group.folder)
+    names = sorted(n for n in os.listdir(d)
+                   if n.lower().endswith((".png", ".jpg", ".jpeg", ".tga")))
+    if limit:
+        names = [n for n in names if any(n.startswith(p) for p in limit)]
+    for n in names:
+        yield os.path.join(d, n)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--apply", action="store_true", help="write the .meta files")
+    ap.add_argument("--only", help="comma-separated filename prefixes, for a pilot run")
+    ap.add_argument("--group", help="restrict to one group by folder substring")
+    args = ap.parse_args()
+
+    limit = args.only.split(",") if args.only else None
+    mb = 1024 * 1024
+    total_before = total_after = 0
+
+    for group in GROUPS:
+        if args.group and args.group not in group.folder:
+            continue
+        n = changed = 0
+        before = after = 0
+        for png in walk(group, limit):
+            meta = png + ".meta"
+            if not os.path.exists(meta):
+                print("  no .meta for %s - skipped" % os.path.basename(png))
+                continue
+            n += 1
+            w, h = png_size(png) or (0, 0)
+
+            old = open(meta, "r", encoding="utf-8").read()
+            before += predict(old, w, h)
+            new = rewrite(old, group)
+            aw, ah = clamp(w, h, group.max_size)
+            after += aw * ah * BPP[group.win_format] * (4.0 / 3.0 if group.mipmap else 1.0)
+            if new != old:
+                changed += 1
+                if args.apply:
+                    with open(meta, "w", encoding="utf-8", newline="\n") as f:
+                        f.write(new)
+        total_before += before
+        total_after += after
+        print("%-34s %3d files  %8.1f -> %8.1f MB (Windows, uncrunched)  %d to write"
+              % (group.name, n, before / mb, after / mb, changed))
+        print("    max %-5d npot=%d mip=%d  Windows %-14s  Android %s"
+              % (group.max_size, group.npot, group.mipmap,
+                 FORMAT_NAMES[group.win_format], FORMAT_NAMES[group.android_format]))
+    print("%-34s            %8.1f -> %8.1f MB" % ("TOTAL", total_before / mb, total_after / mb))
+    if not args.apply:
+        print("\n(nothing written - pass --apply)")
+
+
+def predict(meta_text, w, h):
+    """What this .meta costs in the Windows player today, for the before column."""
+    mip = int(re.search(r"enableMipMap: (\d+)", meta_text).group(1))
+    npot = int(re.search(r"nPOTScale: (\d+)", meta_text).group(1))
+    blocks = re.split(r"\n  - serializedVersion: 4\n", meta_text)[1:]
+    plats = {}
+    for b in blocks:
+        m = re.search(r"buildTarget: (\S+)", b)
+        if not m:
+            continue
+        plats[m.group(1)] = {
+            "max": int(re.search(r"maxTextureSize: (\d+)", b).group(1)),
+            "comp": int(re.search(r"textureCompression: (\d+)", b).group(1)),
+            "over": int(re.search(r"overridden: (\d+)", b).group(1)),
+        }
+    p = plats.get("Standalone")
+    if not p or not p["over"]:
+        p = plats["DefaultTexturePlatform"]
+    if npot == 1:
+        def near(v):
+            lo = 1 << (v.bit_length() - 1)
+            hi = lo << 1
+            return lo if (v - lo) < (hi - v) else hi
+        w, h = near(w), near(h)
+    w, h = clamp(w, h, p["max"])
+    b = w * h * (4.0 if p["comp"] == 0 else 1.0)
+    if mip:
+        b *= 4.0 / 3.0
+    return b
+
+
+if __name__ == "__main__":
+    sys.exit(main())
