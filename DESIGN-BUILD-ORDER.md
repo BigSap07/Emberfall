@@ -38,7 +38,7 @@ Two runs decide whether the tree is healthy, and they measure different things.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 42 tracked markdown files and reports 122
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 43 tracked markdown files and reports 122
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
@@ -483,7 +483,8 @@ differs between them.
 **`content/ability-text`** carries the ability text above: every basic, active, passive and talent
 rewritten or written so it says what happens without quoting a number, the house style in
 `Docs/ABILITY-TEXT-STYLE.md`, `CheckAbilityTextIsPlayerFacing`, and `Docs/PINOY-LIST.md` section
-2f. It changes descriptions only, so no fingerprint and no baseline moved.
+2f. It changes descriptions only, so no fingerprint and no baseline moved. Every sentence that
+had text before the pass is listed before and after in `Docs/archive/ABILITY-TEXT-REWRITES.md`.
 
 **`balance/talent-traps`** carries `CheckTalentsAreWorthPicking` and its pinned list of the five
 talents that cost their hero output, described under **Talents** above, with the two traps sent to
