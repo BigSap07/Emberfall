@@ -68,22 +68,6 @@ mitigation can ask.
 
 ---
 
-## 4. Per-source stat modification
-
-Every stat status in `StatusKind` applies to its holder against everybody. `Vulnerable` is the one
-per-source entry in the game - `VulnerableTo(sourceId)` sums only the entries that attacker applied -
-and it exists in the damage-taken direction only. There is no mirror that reduces damage from one
-named body.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Kest | "takes 10% less **from it**" | a per-source damage reduction, the inverse of `Vulnerable` | `DamageReductionUp` at 10%, which reduces damage from everybody | small |
-| Jory | "Taunts the front enemy for 2 rounds; **it** deals 15% less damage to Jory" | the same | `DamageReductionUp` at 15% on Jory for the Taunt's duration, which reduces damage from everybody | small |
-| Tamsin | "Targets above 50% turn progress ... **take 15% more Skill Damage**" | a universal damage-taken modifier; `Vulnerable` is the one per-source entry and reads only its applier's damage | `Vulnerable` at 15%, so only Tamsin's own blows land harder | small |
-| Lio | "Diagnosed allies **receive 18% more healing**" | a healing-received modifier in the upward direction; `HealSuppression` and `HealingReduction` both only cut | Diagnosed is a Mark and Lio's own healing reads it, so the extra comes from him rather than from every source | small |
-
----
-
 ## 5. Duration control when a status is moved, inverted or extended
 
 Three separate effect kinds each decide a duration by a rule of their own, and none takes the
@@ -298,7 +282,6 @@ have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
-| 4 | per-source stat modification | 4 |
 | 5 | duration on a moved, inverted or extended status | 3 |
 | 1 | answering the blow that is landing | 2 |
 | 2 | per-round budgets on a standing status | 2 |

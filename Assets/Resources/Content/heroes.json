@@ -1733,7 +1733,7 @@
       "passive1": {
         "id": "kest_commit_to_the_return",
         "name": "Commit to the Return",
-        "description": "Kest cannot change targets while his target lives, but deals 12% more damage to it and takes 10% less damage while committed.",
+        "description": "Kest cannot change targets while his target lives, but deals 12% more damage to it and takes 10% less from it.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "effects": [
@@ -1754,10 +1754,12 @@
           },
           {
             "kind": "ApplyStatus",
-            "target": "Self",
+            "target": "LastTarget",
             "duration": 2,
             "magnitude": 0.1,
-            "status": "DamageReductionUp"
+            "status": "Blunted",
+            "bypassResist": true,
+            "chance": 1
           }
         ]
       },
@@ -6673,7 +6675,7 @@
         "id": "jory_bar_the_way",
         "name": "Bar the Way",
         "energyCost": 100,
-        "description": "Deals 230% Attack damage and Taunts the front enemy for 2 rounds, while Jory takes 15% less damage.",
+        "description": "Deals 230% Attack damage and Taunts the front enemy for 2 rounds; it deals 15% less damage to Jory.",
         "effects": [
           {
             "kind": "Damage",
@@ -6689,10 +6691,12 @@
           },
           {
             "kind": "ApplyStatus",
-            "target": "Self",
+            "target": "LastTarget",
             "duration": 2,
             "magnitude": 0.15,
-            "status": "DamageReductionUp"
+            "status": "Blunted",
+            "bypassResist": true,
+            "chance": 1
           }
         ]
       },
@@ -9264,7 +9268,7 @@
         "id": "tamsin_pull_the_seam",
         "name": "Pull the Seam",
         "energyCost": 100,
-        "description": "Deals 215% Attack damage to all enemies. Targets above 50% turn progress are delayed 20% and take 15% more damage from Tamsin for 2 rounds.",
+        "description": "Deals 215% Attack damage to all enemies. Targets above 50% turn progress are delayed 20% and take 15% more Skill Damage for 2 rounds.",
         "effects": [
           {
             "kind": "Damage",
@@ -9289,7 +9293,8 @@
             "conditionValue": 0.5,
             "duration": 2,
             "magnitude": 0.15,
-            "status": "Vulnerable"
+            "status": "DamageTakenUp",
+            "damageTakenSkillOnly": true
           }
         ]
       },
@@ -13035,7 +13040,7 @@
         "id": "lio_name_the_wound",
         "name": "Name the Wound",
         "energyCost": 100,
-        "description": "Deals 230% Attack damage to all enemies and grants Diagnosed for 2 rounds. Lio heals a Diagnosed ally for 55% Attack on top of whatever else he pays them.",
+        "description": "Deals 230% Attack damage to all enemies and grants Diagnosed for 2 rounds. Diagnosed allies receive 18% more healing.",
         "effects": [
           {
             "kind": "Damage",
@@ -13049,11 +13054,12 @@
             "status": "Mark"
           },
           {
-            "kind": "Heal",
+            "kind": "ApplyStatus",
             "target": "AllAllies",
-            "condition": "HasMyMark",
-            "conditionOn": "Target",
-            "power": 0.55
+            "chance": 1,
+            "duration": 2,
+            "magnitude": 0.18,
+            "status": "HealingReceivedUp"
           }
         ]
       },
