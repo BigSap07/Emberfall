@@ -59,8 +59,9 @@ namespace Emberfall.UI.Screens
         // budget below is measured against.
         //
         //   966 short canvas - 252 header - 140 action bar - 8 gap = 566 of panel.
-        //   24 pad + 72 badge band + 10 divider + 6*44 stats + 8 + 66 aspects + 8 + 96 abilities
-        //   = 548, inside 566 with 18 to spare.
+        //   16 pad + 68 badge band + 8 divider + 6*44 stats + 6 + 56 aspects + 6 + 120 abilities
+        //   = 544, inside 566 with 22 to spare. See the ability-row block below for where the
+        //   abilities section found the 24 it grew by.
         private const float PanelTop = 252f;
         private const float ActionBarHeight = 140f;
         private const float PanelBottomGap = 8f;
@@ -96,6 +97,51 @@ namespace Emberfall.UI.Screens
         private const float RowPitch = 44f;
         private const float StatBarHeight = 26f;
 
+        // ---- the ability row, and where its extra height came from ----
+        //
+        // An ability card used to be a kind chip and a name in 96 units. It now carries the
+        // ability's own NUMBER as well - a flat value at this hero's stats with the authored
+        // percentage under it, which is what Docs/DESIGN-DAMAGE-DISPLAY.md settled - and two more
+        // lines of text need more than 96.
+        //
+        // The budget on this panel was 548 of 566 with 18 to spare, so the 24 the block grew by had
+        // to be found rather than assumed, and the FIRST attempt at finding it did not find
+        // enough: at 562 the note printed across the panel's own bottom frame at 20:9 while
+        // looking fine at 16:9, which is the exact failure mode the guard below and the two-aspect
+        // capture rule exist for. A budget that fits is not the same as a page that reads.
+        //
+        // What it came from: the matchup row, 66 units around 52 of content; two 8-unit section
+        // gaps that are 6; the top pad and the badge band, both of which had slack; and the
+        // divider gap. Nothing else moved - the stat block keeps its 44-unit pitch, because at 42
+        // its rows touch.
+        //
+        //   16 pad + 68 badge + 8 divider + 6*44 stats + 6 + 56 matchups + 6 + 120 abilities = 544,
+        //   inside 566 with 22 to spare, which is more air than the page had before this pass.
+        private const float PanelTopPad = 16f;
+        private const float BadgeBandHeight = 68f;
+        private const float DividerGap = 8f;
+        private const float AspectRowHeight = 56f;
+        private const float SectionGap = 6f;
+        private const float AbilityCardHeight = 102f;
+        private const float AbilityNoteGap = 4f;
+        private const float AbilityNoteHeight = 14f;
+        private const float AbilityBlockHeight = AbilityCardHeight + AbilityNoteGap + AbilityNoteHeight;
+
+        /// <summary>
+        /// The ability breakdown layer. Sized so the roster's busiest ability - Kael's WHAT BREAKS
+        /// FORWARD, at eight numbers - needs no scrolling, and scrolling anyway so a ninth would
+        /// not be the first thing nobody could read. At 700 tall with 52-unit rows it held seven
+        /// and the eighth was below the fold, which is the same failure as the fixed dialog this
+        /// replaced, only quieter.
+        ///
+        /// 760 fits the shortest canvas this game targets with room over and under it: the layer
+        /// covers the page rather than sitting inside a panel, so the only ceiling is the 966 of
+        /// a 20:9 phone.
+        /// </summary>
+        private const float SheetWidth = 900f;
+        private const float SheetHeight = 760f;
+        private const float SheetRowHeight = 48f;
+
         private HeroInstance _hero;
         private HeroDef _lockedDef;
 
@@ -119,6 +165,14 @@ namespace Emberfall.UI.Screens
         private RectTransform _statHost;
         private RectTransform _aspectRow;
         private RectTransform _abilityHost;
+        private Text _abilityNote;
+
+        private RectTransform _abilitySheet;
+        private CanvasGroup _abilitySheetGroup;
+        private Text _abilitySheetTitle;
+        private RectTransform _abilitySheetList;
+        private Text _abilitySheetNote;
+        private UiLayerStack.Layer _abilitySheetLayer;
 
         private UIButton _openFormation;
         private UIButton _levelUpButton;
@@ -182,6 +236,7 @@ namespace Emberfall.UI.Screens
             BuildLeftPanel();
             BuildRightPanel();
             BuildActionBar();
+            BuildAbilitySheet();
         }
 
         private void BuildLeftPanel()
@@ -252,7 +307,7 @@ namespace Emberfall.UI.Screens
         {
             _right = Panel("Sheet", RightX);
 
-            float top = UITheme.Space24;
+            float top = PanelTopPad;
 
             // The hero's own badge: their aspect, on a diamond, exactly as the mockup draws it.
             RectTransform badgeHost = UIBuilder.Node("Badge", _right);
@@ -277,31 +332,45 @@ namespace Emberfall.UI.Screens
             _starHost = UIBuilder.Node("Stars", _right);
             UIBuilder.Box(_starHost, UITheme.Space24 + 88f, -(top + 20f), 300f, 30f, new Vector2(0f, 1f));
 
-            top += 72f;
+            top += BadgeBandHeight;
             Divider(top);
-            top += 10f;
+            top += DividerGap;
 
             _statHost = UIBuilder.Node("Stats", _right);
             UIBuilder.Box(_statHost, 0f, -top, PanelWidth - UITheme.Space48, 6f * RowPitch, new Vector2(0.5f, 1f));
 
-            top += 6f * RowPitch + UITheme.Space8;
+            top += 6f * RowPitch + SectionGap;
 
             _aspectRow = UIBuilder.Node("Aspects", _right);
-            UIBuilder.Box(_aspectRow, 0f, -top, PanelWidth - UITheme.Space48, 66f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_aspectRow, 0f, -top, PanelWidth - UITheme.Space48, AspectRowHeight,
+                          new Vector2(0.5f, 1f));
 
             Image aspectBg = EmberforgeUI.SunkenOn(_aspectRow);
             aspectBg.raycastTarget = false;
 
-            top += 66f + UITheme.Space8;
+            top += AspectRowHeight + SectionGap;
 
             _abilityHost = UIBuilder.Node("Abilities", _right);
-            UIBuilder.Box(_abilityHost, 0f, -top, PanelWidth - UITheme.Space48, 96f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_abilityHost, 0f, -top, PanelWidth - UITheme.Space48, AbilityCardHeight,
+                          new Vector2(0.5f, 1f));
+
+            // THE ONE CAVEAT, SAID ONCE. Every number on the cards above is the ability's own
+            // output: it ignores the target's Defence, the crit roll and the damage variance,
+            // because two of those three belong to whoever is being hit and none of them is a
+            // property of the ability. Repeating that on five cards would be five times the words
+            // and no more truth, so it lives here, under the row, in the kit's quiet voice.
+            _abilityNote = EmberforgeUI.Label("AbilityNote", _right, AbilityText.Caveat,
+                                              UITheme.FontTiny - 6, Emberforge.TextQuiet,
+                                              TextAnchor.UpperCenter);
+            UIBuilder.Box(_abilityNote.rectTransform, 0f, -(top + AbilityCardHeight + AbilityNoteGap),
+                          PanelWidth - UITheme.Space48, AbilityNoteHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_abilityNote, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Says out loud when this page has outgrown the shortest canvas, for the reason
             // DesignGallery.CheckFits exists: the failure is SILENT on the machine it is authored
             // on. At 16:9 everything fits and the section that runs under the action bar only
             // appears on the 20:9 capture.
-            float used = top + 96f;
+            float used = top + AbilityBlockHeight;
             if (used > PanelHeight)
                 Debug.LogError("HeroDetailScreen: the right panel needs " + used + " units and the"
                     + " shortest canvas this game targets leaves only " + PanelHeight
@@ -365,6 +434,14 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ refresh
 
+        /// <summary>The ability sheet lives on the app's overlay layer rather than on this
+        /// screen's Root, so it does not go away when the screen does. Leaving it standing over
+        /// the next screen would be a readout about a hero that page has never heard of.</summary>
+        public override void OnHide()
+        {
+            CloseAbilitySheet();
+        }
+
         public override void OnShow()
         {
             if (_hero == null && _lockedDef == null && App.Session.Profile.Heroes.Count > 0)
@@ -405,7 +482,10 @@ namespace Emberfall.UI.Screens
 
             RebuildSlots(locked);
             RebuildAspectRow(def);
-            RebuildAbilities(def);
+            // The ability row is NOT rebuilt here any more. Its cards carry numbers now, and a
+            // number that is only rebuilt when the hero changes is a number that stops being true
+            // the moment the player taps LEVEL UP. Refresh and RefreshLocked own it instead,
+            // because those are the two methods that know what stat line it should be read at.
 
             _nameLabel.text = def.Name;
             _titleLabel.text = def.Title.ToUpperInvariant() + "   -   " + UITheme.RoleName(def.Role)
@@ -525,61 +605,312 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        private void RebuildAbilities(HeroDef def)
+        /// <summary>
+        /// The ability row, and the one place in the game an ability's numbers are printed.
+        ///
+        /// EVERY CARD LEADS WITH A FLAT VALUE and keeps the authored percentage under it, which is
+        /// what Docs/DESIGN-DAMAGE-DISPLAY.md settled and why this row changed at all. A
+        /// percentage is priced against its own owner's Attack and the star tier has already
+        /// scaled that Attack down, so the percentages invert the roster: Iri, a 1-star, is
+        /// authored at 437% and Kael, a 5-star, at 110%, and a player reading those two cards side
+        /// by side is being told the rarest hero in the game hits for a quarter of what the
+        /// commonest one does. At their own stats the same two abilities read 2,231 and 1,334,
+        /// which is a pair of numbers a player can check in a fight. The percentage stays because
+        /// it is the only form in which anyone can reason about a relic or an Attack buff.
+        ///
+        /// THE NUMBERS COME FROM THE EFFECT DATA. AbilityMath in Core computes them and the
+        /// harness proves every one of them equal to what CombatSimulation deals - see
+        /// CheckAbilityNumbersMatchTheSimulation. Nothing here reads an ability's description, and
+        /// the description is not shown: a good half of the roster's are drafting notes addressed
+        /// to a designer, naming repository documents and open questions.
+        ///
+        /// THE HERO'S SIGIL LEFT THE CARD to make room. It was drawn on all five cells from
+        /// def.Visual.Sigil, which is a property of the HERO - so a row of five abilities carried
+        /// five copies of one emblem and told a reader nothing about which ability was which. The
+        /// kind chip already carries the only per-card identity the row has.
+        ///
+        /// TAPPING A CARD OPENS THE REST. A card at this width prints one number, and an ability
+        /// can carry five; the dialog is where the other four live, along with what each is
+        /// conditional on and what it lands on.
+        /// </summary>
+        private void RebuildAbilities(HeroDef def, UnitStats stats, bool owned)
         {
             for (int i = _abilityHost.childCount - 1; i >= 0; i--) Destroy(_abilityHost.GetChild(i).gameObject);
+            _abilityNote.text = owned ? AbilityText.Caveat : AbilityText.CaveatLocked;
 
-            // Names and kinds rather than the ability objects: BasicAttack and Active are
-            // AbilityDef but Passive is a PassiveDef, and the two share no base type. The card only
-            // ever draws a label and a tint, so collecting those is both sufficient and honest
-            // about the fact that these are three different kinds of thing.
-            List<string> names = new List<string>();
+            // Abilities rather than names now, and a passive reads as one through
+            // AbilityMath.AsAbility - the two types still share no base type, but the card needs
+            // the EFFECTS as well as the label, and that wrapper is where the game already says
+            // how a passive answers an ability-shaped question.
+            List<AbilityDef> abilities = new List<AbilityDef>();
             List<string> kinds = new List<string>();
             List<Color> tints = new List<Color>();
 
-            if (def.BasicAttack != null) { names.Add(def.BasicAttack.Name); kinds.Add("BASIC"); tints.Add(UITheme.TextMuted); }
-            if (def.Active != null) { names.Add(def.Active.Name); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
-            // One card per passive rather than one card for "the passive": a hero can now carry
-            // more than one, and the row already sizes itself from names.Count. No talent card -
-            // talents are selected, not innate, and the screen that picks them does not exist yet.
+            if (def.BasicAttack != null) { abilities.Add(def.BasicAttack); kinds.Add("BASIC"); tints.Add(UITheme.TextMuted); }
+            if (def.Active != null) { abilities.Add(def.Active); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
+            // One card per passive rather than one card for "the passive": a hero can carry more
+            // than one, and the row already sizes itself from the count. No talent card - talents
+            // are selected, not innate, and the screen that picks them does not exist yet.
             for (int i = 0; i < def.Passives.Count; i++)
-            { names.Add(def.Passives[i].Name); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
-            if (names.Count == 0) return;
+            { abilities.Add(AbilityMath.AsAbility(def.Passives[i])); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
+            _abilityNote.gameObject.SetActive(abilities.Count > 0);
+            if (abilities.Count == 0) return;
 
+            BalanceConfig balance = App.Session.Balance;
             float width = PanelWidth - UITheme.Space48;
-            float step = width / names.Count;
+            float step = width / abilities.Count;
             float cardWidth = Mathf.Min(step - UITheme.Space16, 260f);
 
-            for (int i = 0; i < names.Count; i++)
+            for (int i = 0; i < abilities.Count; i++)
             {
+                AbilityDef ability = abilities[i];
+                List<AbilityValue> values = AbilityMath.Values(ability, stats, balance);
+
                 float x = -width * 0.5f + step * (i + 0.5f);
                 RectTransform cell = UIBuilder.Node("Ability" + i, _abilityHost);
-                UIBuilder.Box(cell, x, 0f, cardWidth, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(cell, x, 0f, cardWidth, AbilityCardHeight, new Vector2(0.5f, 0.5f));
 
                 Image bg = EmberforgeUI.SunkenOn(cell);
                 bg.raycastTarget = false;
 
-                // Glyph, kind, name - stacked with real gaps between them. The first pass anchored
-                // the kind at the card's centre and the name off its bottom edge, and the two
-                // overlapped by 11px: "BASIC" was printed across "Ashen Cleave".
-                Image glyph = UIBuilder.Img("Glyph", cell, TextureLab.Sigil(def.Visual.Sigil, 128), tints[i]);
-                UIBuilder.Box(glyph.rectTransform, 0f, 27f, 34f, 34f, new Vector2(0.5f, 0.5f));
-
-                // The KIND is a chip now rather than a bare word, which is what the ability's
-                // tint is left carrying on this card - the fill and the border it used to tint as
-                // well are the kit's recess and the kit's outline, the same on all five cells.
+                // The KIND is a chip, which is what the ability's tint is left carrying on this
+                // card - the fill and the border are the kit's recess and the kit's outline, the
+                // same on all five cells.
                 RectTransform kindChip = EmberforgeUI.Chip("Kind", cell, kinds[i], tints[i],
                                                            UITheme.FontTiny - 8);
-                UIBuilder.Box(kindChip, 0f, 2f, Mathf.Min(cardWidth - 12f, 150f), 22f,
+                UIBuilder.Box(kindChip, 0f, 36f, Mathf.Min(cardWidth - 12f, 150f), 20f,
                               new Vector2(0.5f, 0.5f));
 
-                Text nameLabel = EmberforgeUI.Body("Name", cell, names[i],
+                Text nameLabel = EmberforgeUI.Body("Name", cell, ability.Name,
                                                    UITheme.FontTiny - 6, Emberforge.TextBody,
                                                    TextAnchor.UpperCenter);
-                UIBuilder.Box(nameLabel.rectTransform, 0f, 4f, cardWidth - 16f, 32f,
-                              new Vector2(0.5f, 0f));
+                UIBuilder.Box(nameLabel.rectTransform, 0f, 10f, cardWidth - 16f, 32f,
+                              new Vector2(0.5f, 0.5f));
                 UIBuilder.Outlined(nameLabel, Emberforge.Outline, Emberforge.StrokeThin);
+
+                BuildAbilityValue(cell, ability, values, cardWidth);
+
+                // The whole card is the button: an almost-transparent Image over it, taking the
+                // tap. A pressable plate from the kit would be a third button voice on a row whose
+                // cards are not controls - they are a readout you can ask a question of.
+                //
+                // ON A CHILD, not on the cell. The armour slots above put their tap target on the
+                // host itself, and they can because a slot host is a bare node - its card is a
+                // child. This cell already carries the kit's recess, which IS an Image, and a
+                // second Graphic on one GameObject is refused: AddComponent returns null, the
+                // next line throws, and the loop dies after the FIRST card. Kael's page came back
+                // from the capture with one ability on it and three missing.
+                RectTransform tapHost = UIBuilder.Node("Tap", cell);
+                UIBuilder.FillParent(tapHost, 0f);
+                Image target = tapHost.gameObject.AddComponent<Image>();
+                target.color = new Color(1f, 1f, 1f, 0.003f);
+                Button press = tapHost.gameObject.AddComponent<Button>();
+                press.transition = Selectable.Transition.None;
+                press.targetGraphic = target;
+                AbilityDef captured = ability;
+                List<AbilityValue> capturedValues = values;
+                bool capturedOwned = owned;
+                press.onClick.AddListener(delegate { ShowAbilityBreakdown(captured, capturedValues, capturedOwned); });
             }
+        }
+
+        /// <summary>
+        /// The two lines under the ability's name: the flat figure, and the authored terms it was
+        /// built from, smaller and quiet.
+        ///
+        /// A card has room for ONE value, so it prints the headline - the largest number the
+        /// ability puts on the board, damage before healing before ward - and says how many more
+        /// there are. An ability with no caster-side figure at all (nine of them are priced
+        /// entirely off the target's health) prints its clause where the figure would be, because
+        /// a card leading with the minimum-damage floor of 1 would be worse than one leading with
+        /// nothing.
+        /// </summary>
+        private void BuildAbilityValue(RectTransform cell, AbilityDef ability,
+                                       List<AbilityValue> values, float cardWidth)
+        {
+            AbilityValue headline = AbilityMath.Headline(values);
+            string main, secondary;
+            Color tint;
+
+            if (headline != null)
+            {
+                EffectDef effect = ability.Effects[headline.EffectIndex];
+                main = AbilityText.Headline(headline);
+                secondary = AbilityText.Secondary(headline, effect);
+                tint = AbilityText.Tint(headline.Kind);
+            }
+            else if (values.Count > 0)
+            {
+                EffectDef effect = ability.Effects[values[0].EffectIndex];
+                main = AbilityText.Word(values[0].Kind);
+                secondary = AbilityText.Secondary(values[0], effect);
+                tint = AbilityText.Tint(values[0].Kind);
+            }
+            else
+            {
+                // No damage, no healing, no ward - a control or utility ability, which is a third
+                // of the roster's passives. It gets no number rather than a zero.
+                main = "";
+                secondary = "no damage of its own";
+                tint = Emberforge.TextQuiet;
+            }
+
+            if (values.Count > 1) secondary += "   +" + (values.Count - 1) + " more";
+
+            if (main.Length > 0)
+            {
+                Text value = EmberforgeUI.Label("Value", cell, main, UITheme.FontTiny, tint,
+                                                TextAnchor.MiddleCenter);
+                UIBuilder.Box(value.rectTransform, 0f, -22f, cardWidth - 12f, 24f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
+            }
+
+            Text under = EmberforgeUI.Label("Secondary", cell, secondary, UITheme.FontTiny - 8,
+                                            Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+            UIBuilder.Box(under.rectTransform, 0f, main.Length > 0 ? -42f : -30f,
+                          cardWidth - 8f, 16f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(under, Emberforge.Outline, Emberforge.StrokeThin);
+        }
+
+        /// <summary>
+        /// Every number one ability carries, on a layer over the hero page.
+        ///
+        /// A LAYER OF ITS OWN RATHER THAN THE SHARED DIALOG, and the reason is a measurement
+        /// rather than a preference. The first build of this put the breakdown through
+        /// Overlays.ModalPopup, which is the right instinct - a question asked about something
+        /// already on screen, answered in a few lines, is exactly what that dialog is for - and
+        /// the capture showed why it does not hold: the dialog's body is a fixed 700x230 of static
+        /// text, and Kael's WHAT BREAKS FORWARD carries eight numbers. Six of them fitted. The
+        /// other two and the caveat line under them were simply not on screen, which is the one
+        /// failure a readout must not have.
+        ///
+        /// So the list SCROLLS. An ability with one number and an ability with eight are the same
+        /// card on the row above, and they have to be the same answer when it is tapped.
+        ///
+        /// It is still the kit's furniture throughout - a framed panel, a title ribbon, the kit's
+        /// rule, its primary button - so it reads as the same software as the dialog it is not.
+        /// </summary>
+        private void BuildAbilitySheet()
+        {
+            // ON THE APP'S OVERLAY LAYER, not on this screen's Root, which is where every other
+            // dialog in the game lives and where this one has to live for the same reason: the
+            // top bar is a sibling of the screen and is drawn over it, so a sheet parented to the
+            // screen slides UNDER it. At 16:9 that was invisible - a 700-tall panel centred on a
+            // 1080 canvas puts its ribbon at 134, four units clear of the bar. At 20:9 the canvas
+            // is 966, the same panel centres 87 units higher, and the title went behind the bar.
+            // Caught by photographing both aspects, which is the whole reason the rule exists.
+            _abilitySheet = UIBuilder.Node("AbilitySheet", Router.OverlayLayer);
+            UIBuilder.FillParent(_abilitySheet, 0f);
+            _abilitySheetGroup = _abilitySheet.gameObject.AddComponent<CanvasGroup>();
+
+            Image dim = _abilitySheet.gameObject.AddComponent<Image>();
+            dim.sprite = TextureLab.White;
+            dim.color = UITheme.ScrimModal;
+
+            RectTransform panel = UIBuilder.Node("Panel", _abilitySheet);
+            UIBuilder.Box(panel, 0f, 0f, SheetWidth, SheetHeight, new Vector2(0.5f, 0.5f));
+            EmberforgeUI.PanelOn(panel, true);
+
+            _abilitySheetTitle = EmberforgeUI.TitleRibbon("Title", panel, "",
+                                                          SheetWidth - Emberforge.RibbonOverhang * 2f);
+
+            ScrollRect scroll;
+            _abilitySheetList = UIBuilder.ScrollList("List", panel, out scroll, 6f,
+                                                     new RectOffset(0, 0, 4, 4));
+            // Clear of the ribbon at the top and of the note and button at the bottom, and inset
+            // past the corner ornaments - four screens have hung a full-width control off a framed
+            // panel and printed it over the two lower diamonds.
+            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
+                                 Emberforge.OrnamentClearance, 96f, Emberforge.OrnamentClearance, 190f);
+
+            Image rule = EmberforgeUI.Rule("Rule", panel);
+            UIBuilder.Box(rule.rectTransform, 0f, 172f, SheetWidth - Emberforge.OrnamentClearance * 2f,
+                          Emberforge.RuleHeight, new Vector2(0.5f, 0f));
+
+            _abilitySheetNote = EmberforgeUI.Body("Note", panel, AbilityText.Caveat, UITheme.FontTiny,
+                                                  Emberforge.TextQuiet, TextAnchor.UpperCenter);
+            UIBuilder.Box(_abilitySheetNote.rectTransform, 0f, 128f,
+                          SheetWidth - Emberforge.OrnamentClearance * 2f, 40f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(_abilitySheetNote, Emberforge.Outline, Emberforge.StrokeThin);
+
+            UIButton close = EmberforgeUI.Button("Close", panel, "CLOSE", UITheme.FontBody,
+                                                 ForgeButtonKind.Primary);
+            UIBuilder.Box(close.Root, 0f, Emberforge.OrnamentClearance, 400f, 88f, new Vector2(0.5f, 0f));
+            close.OnClick(CloseAbilitySheet);
+
+            _abilitySheet.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Fills the sheet for one ability and opens it.
+        ///
+        /// One row per number, in the order the effects resolve. The figure carries the kind's
+        /// colour and the authored terms follow it in the kit's quiet voice - which is the same
+        /// two-part reading the card gives, laid out along a row rather than stacked, because at
+        /// this width there is room for both and a column of eight stacked pairs is sixteen lines.
+        /// </summary>
+        private void ShowAbilityBreakdown(AbilityDef ability, List<AbilityValue> values, bool owned)
+        {
+            App.Audio.Tap();
+            for (int i = _abilitySheetList.childCount - 1; i >= 0; i--)
+                Destroy(_abilitySheetList.GetChild(i).gameObject);
+
+            _abilitySheetTitle.text = ability.Name.ToUpperInvariant();
+            _abilitySheetNote.text = owned ? AbilityText.Caveat : AbilityText.CaveatLocked;
+
+            if (values.Count == 0) AddAbilitySheetRow(Emberforge.TextQuiet, "", AbilityText.NoNumbers);
+            for (int i = 0; i < values.Count; i++)
+            {
+                AbilityValue v = values[i];
+                EffectDef effect = ability.Effects[v.EffectIndex];
+                string secondary = AbilityText.Secondary(v, effect);
+                string riders = AbilityText.Riders(v);
+                if (riders.Length > 0)
+                    secondary = secondary.Length > 0 ? secondary + ", " + riders : riders;
+                // An effect with no caster-side term of its own has no figure to lead with - its
+                // whole payout is a share of somebody else's health - so the workings ARE its line
+                // rather than a footnote under one.
+                AddAbilitySheetRow(AbilityText.Tint(v.Kind),
+                                   v.HasFlat ? AbilityText.Headline(v) : AbilityText.Word(v.Kind),
+                                   secondary);
+            }
+
+            _abilitySheet.gameObject.SetActive(true);
+            _abilitySheet.SetAsLastSibling();
+            _abilitySheetGroup.alpha = 1f;
+            if (_abilitySheetLayer == null && App.Layers != null)
+                _abilitySheetLayer = App.Layers.Push("popup:ability", CloseAbilitySheet);
+        }
+
+        private void AddAbilitySheetRow(Color tint, string figure, string terms)
+        {
+            RectTransform row = UIBuilder.Node("Row", _abilitySheetList);
+            UIBuilder.Sized(row, 0f, SheetRowHeight);
+            EmberforgeUI.SunkenOn(row);
+
+            Text value = EmberforgeUI.Label("Value", row, figure, UITheme.FontBody, tint,
+                                            TextAnchor.MiddleLeft);
+            value.rectTransform.anchorMin = new Vector2(0f, 0f);
+            value.rectTransform.anchorMax = new Vector2(0.4f, 1f);
+            value.rectTransform.offsetMin = new Vector2(Emberforge.Space24, 0f);
+            value.rectTransform.offsetMax = new Vector2(-Emberforge.Space8, 0f);
+            UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
+
+            Text label = EmberforgeUI.Body("Terms", row, terms, UITheme.FontSmall,
+                                           Emberforge.TextQuiet, TextAnchor.MiddleRight);
+            label.rectTransform.anchorMin = new Vector2(0.4f, 0f);
+            label.rectTransform.anchorMax = new Vector2(1f, 1f);
+            label.rectTransform.offsetMin = new Vector2(Emberforge.Space8, 0f);
+            label.rectTransform.offsetMax = new Vector2(-Emberforge.Space24, 0f);
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
+        }
+
+        private void CloseAbilitySheet()
+        {
+            UiLayerStack.Layer layer = _abilitySheetLayer;
+            _abilitySheetLayer = null;
+            if (layer != null && App.Layers != null) App.Layers.Dismiss(layer);
+            _abilitySheet.gameObject.SetActive(false);
         }
 
         private void Refresh()
@@ -623,6 +954,13 @@ namespace Emberfall.UI.Screens
             // same way hitting the level cap suppresses them.
             bool hideDeltas = atCap || _prologueView;
             RebuildStats(now, next, hideDeltas);
+
+            // The SAME stat line the block above prints, and that is the whole contract of this
+            // call: an ability number that came from a different UnitStats than the Attack row
+            // over it would be two answers to one question. `now` already has the relic and the
+            // armour folded in, so the number moves when a piece is equipped, exactly as a player
+            // expects a damage number to.
+            RebuildAbilities(def, now, true);
 
             int cost = StatMath.LevelUpCost(session.Balance, _hero.Level);
             bool affordable = !atCap && session.Profile.Gold >= cost;
@@ -762,6 +1100,14 @@ namespace Emberfall.UI.Screens
             _powerLabel.text = "LOCKED";
             _attunementLabel.text = "";
             _capNote.text = "Not yet summoned. Open the Rift and try for " + _lockedDef.Name + ".";
+
+            // The abilities still read, and they still carry numbers - a locked page is how a
+            // player decides whether to chase a hero, and "437% of Attack" is not a figure anybody
+            // can compare. There is no HeroInstance to read a level or a relic or a piece of
+            // armour off, so the numbers are what this hero would hit for at level 1 with nothing
+            // equipped, and the note under the row says exactly that rather than leaving a reader
+            // to assume the page is quoting a built hero.
+            RebuildAbilities(_lockedDef, StatMath.ForHero(_lockedDef, 1), false);
         }
 
         /// <summary>
@@ -830,5 +1176,49 @@ namespace Emberfall.UI.Screens
             App.Audio.Tap();
             Router.Show(ScreenId.Summon);
         }
+
+        // ------------------------------------------------------------------ capture hooks
+
+        /// <summary>
+        /// Opens the ability breakdown for the BUSIEST ability this hero has, for the capture
+        /// tool. Editor only, for the reason MainMenuScreen.OpenLayerForCapture is: a screen that
+        /// can be driven by a string from a shipped build is a screen with a second, untested set
+        /// of entry points.
+        ///
+        /// The busiest one rather than the first, because the thing a capture of this dialog has
+        /// to prove is that the block does not run out of the panel - and it only can when an
+        /// ability carries several numbers. One of the roster's abilities carries five.
+        /// </summary>
+#if UNITY_EDITOR
+        public void OpenAbilityForCapture()
+        {
+            HeroDef def = CurrentDef;
+            if (def == null) return;
+            bool owned = _hero != null;
+            UnitStats stats = owned
+                ? StatMath.ForHero(def, _hero.Level,
+                                   string.IsNullOrEmpty(_hero.EquippedRelicId)
+                                     ? null : App.Session.Content.GetRelic(_hero.EquippedRelicId),
+                                   App.Session.Profile.EquippedArmorOf(_hero), App.Session.Content.Armor)
+                : StatMath.ForHero(def, 1);
+
+            List<AbilityDef> abilities = new List<AbilityDef>();
+            if (def.BasicAttack != null) abilities.Add(def.BasicAttack);
+            if (def.Active != null) abilities.Add(def.Active);
+            for (int i = 0; i < def.Passives.Count; i++) abilities.Add(AbilityMath.AsAbility(def.Passives[i]));
+
+            AbilityDef best = null;
+            List<AbilityValue> bestValues = null;
+            for (int i = 0; i < abilities.Count; i++)
+            {
+                List<AbilityValue> values = AbilityMath.Values(abilities[i], stats, App.Session.Balance);
+                if (bestValues != null && values.Count <= bestValues.Count) continue;
+                best = abilities[i];
+                bestValues = values;
+            }
+            if (best == null) return;
+            ShowAbilityBreakdown(best, bestValues, owned);
+        }
+#endif
     }
 }

@@ -116,6 +116,7 @@ namespace Emberfall.DevHarness
             CheckTalentsAreWorthPicking(content);
             CheckAuthoredKitExercise(content);
             CheckEveryAuthoredActiveIsCast(content);
+            CheckAbilityNumbersMatchTheSimulation(content);
             ReportTalentExercise();
 
             CheckDebrief();
@@ -26146,6 +26147,474 @@ namespace Emberfall.DevHarness
                   "and it takes a buff off that body (" + buffsTaken + " stripped) - the Dispel half"
                   + " of the ability, which needs an enemy holding a buff longer than its own turn");
             Line("");
+        }
+
+        // ---------------------------------------------------------------- ability numbers
+
+        /// <summary>The level every ability-number proof is taken at. The same 40 the hero sweep
+        /// and the star-band grader use, so a number quoted here can be read beside one of
+        /// theirs.</summary>
+        private const int AbilityNumberLevel = 40;
+
+        /// <summary>
+        /// THE CARD'S NUMBER IS THE FIGHT'S NUMBER, proved for every authored basic, active and
+        /// passive in the roster rather than asserted.
+        ///
+        /// Docs/DESIGN-DAMAGE-DISPLAY.md settled that a hero page should lead with a FLAT value at
+        /// the hero's own stats and keep the authored percentage beneath it, because a percentage
+        /// is priced against its owner's Attack and the star tier has already scaled that Attack
+        /// down - which is why a 1-star basic reads 437% against a 5-star's 110%. AbilityMath is
+        /// the arithmetic that undoes it. The one thing that can go wrong with a second
+        /// implementation of a damage formula is that it drifts away from the first, silently, the
+        /// next time somebody adds a term to ApplyDamageEffect. This check is what makes that
+        /// noisy.
+        ///
+        /// HOW IT PROVES IT. For every DAMAGE, HEAL and SHIELD effect on every authored basic,
+        /// active and passive - the three kinds the hero page's ability row shows - it builds a
+        /// one-effect probe ability, hangs it off the hero's own stat line in the basic slot, and
+        /// fires it into an arena chosen so that every term AbilityMath deliberately does not
+        /// model is an exact identity:
+        ///
+        ///   - the dummy's Defence is zero, so the mitigation ratio is exactly 0;
+        ///   - the dummy wears the caster's own aspect, so AspectChart.Multiplier is exactly 1
+        ///     (an aspect never beats itself);
+        ///   - damageVariance is 0, and DeterministicRng.Spread(0) returns exactly 0;
+        ///   - the hero's Crit Chance is 0, and DeterministicRng.Chance(0) returns false without
+        ///     drawing, so no blow can crit;
+        ///   - the hero's passives are cleared, so nothing buffs the Attack the card quoted.
+        ///
+        /// WHAT THE PROBE STRIPS, AND WHY THAT IS NOT CHEATING. Exactly two things, and both are
+        /// things the card explicitly does not claim: the clauses that decide WHETHER an effect
+        /// resolves (a conditional blow is worth its number when it lands, and the card says so),
+        /// and the target-health terms, which no card outside a fight can know. Power, Flat, Hits,
+        /// SelfHpRatio, the Attack cap and the per-stack scaler are left exactly as authored,
+        /// because those are what the number is made OF. An effect whose amount is a runtime
+        /// quantity outright - the ScaleBy family - has no flat number on the card either, so it
+        /// is counted and named here instead of being measured.
+        ///
+        /// The probe carries the real ability's KIND even though it fires from the basic slot,
+        /// because Skill Damage is gated on it: a card that prints an active is proved against an
+        /// active.
+        /// </summary>
+        private static void CheckAbilityNumbersMatchTheSimulation(ContentDatabase live)
+        {
+            Line("ABILITY NUMBERS (what a hero page prints against what the simulation deals)");
+
+            ContentDatabase arena = BuildAbilityNumberArena();
+            List<HeroDef> patients = BuildAbilityNumberPatient();
+            StageDef stage = arena == null ? null : arena.GetStage("number_arena");
+            EnemyDef dummy = arena == null ? null : arena.GetEnemy("number_dummy");
+            if (arena == null || patients == null || patients.Count != 1 || stage == null || dummy == null)
+            { Check(false, "ability-number arena built"); Line(""); return; }
+
+            // Variance off. It is read straight off the config at the one place it is applied, so
+            // zeroing it here is the whole of turning it off.
+            arena.Balance.DamageVariance = 0f;
+            arena.Balance.SpeedVariance = 0f;
+            HeroDef patient = patients[0];
+
+            int proved = 0, abilities = 0, statLinesChecked = 0;
+            List<string> wrong = new List<string>();
+            List<string> derived = new List<string>();
+            List<string> partial = new List<string>();
+            List<string> flatless = new List<string>();
+            int conditional = 0, area = 0;
+
+            for (int h = 0; h < arena.Heroes.Count; h++)
+            {
+                HeroDef def = arena.Heroes[h];
+
+                // The probe hero is this hero's STAT LINE and nothing else of its kit: no
+                // passives to buff the Attack the card quoted, no crit, no Energy to spend. The
+                // passives are kept in hand first, because their own effects are measured below.
+                List<PassiveDef> passives = new List<PassiveDef>(def.Passives);
+                def.Passives.Clear();
+                def.CritChance = 0f;
+                def.StartEnergy = 0;
+                AbilityDef realBasic = def.BasicAttack;
+                AbilityDef realActive = def.Active;
+                def.Active = null;
+
+                // The row on the hero page carries the passives too, and they print through the
+                // same formula, so they are proved through the same probe. A passive reads as an
+                // ability with a trigger taken off it - AbilityMath.AsAbility is the wrapper both
+                // this and the screen use - and its KIND answers the one question the damage
+                // pipeline asks: Skill Damage reaches a passive-sourced blow, never a basic.
+                List<AbilityDef> slots = new List<AbilityDef>();
+                slots.Add(realBasic);
+                slots.Add(realActive);
+                for (int p = 0; p < passives.Count; p++) slots.Add(AbilityMath.AsAbility(passives[p]));
+
+                // An aspect never beats itself, so a dummy wearing the caster's own aspect makes
+                // AspectChart.Multiplier exactly 1. There is no universally neutral aspect to
+                // stand in for it - each of the six beats one and is beaten by one.
+                dummy.Aspect = def.Aspect;
+
+                UnitStats stats = StatMath.ForHero(def, AbilityNumberLevel);
+
+                for (int slot = 0; slot < slots.Count; slot++)
+                {
+                    AbilityDef ability = slots[slot];
+                    if (ability == null) continue;
+                    abilities++;
+
+                    List<AbilityValue> values = AbilityMath.Values(ability, stats, arena.Balance);
+                    for (int vi = 0; vi < values.Count; vi++)
+                    {
+                        AbilityValue v = values[vi];
+                        // Keyed by the ability's ID rather than its NAME, because the two are not
+                        // the same kind of thing: Maera's active and one of her passives are both
+                        // called Keep the Beacon, and a pinned list keyed on names would have one
+                        // line standing for two different effects.
+                        string who = ability.Id + " effect " + v.EffectIndex;
+                        if (v.Conditional) conditional++;
+                        if (v.Area) area++;
+                        if (v.Partial) partial.Add(who);
+                        if (v.Derived) { derived.Add(who); continue; }
+                        if (!v.HasFlat) flatless.Add(who);
+
+                        def.BasicAttack = ProbeAbility(ability, ability.Effects[v.EffectIndex], v);
+                        float sawAttack;
+                        int dealt = FireAbilityNumberProbe(arena, stage, def, patient, v.Kind, out sawAttack);
+                        if (dealt == int.MinValue)
+                        { wrong.Add(who + ": the probe battle did not resolve"); continue; }
+
+                        // The stat line the simulation built has to be the one the card quoted,
+                        // or the comparison below is two different heroes agreeing by accident.
+                        if (sawAttack != stats.Attack)
+                        { wrong.Add(who + ": card Attack " + stats.Attack + ", simulation " + sawAttack); continue; }
+                        statLinesChecked++;
+
+                        if (dealt != v.Amount)
+                            wrong.Add(who + ": card " + v.Amount + ", simulation " + dealt);
+                        else proved++;
+                    }
+                }
+
+                def.BasicAttack = realBasic;
+                def.Active = realActive;
+                for (int p = 0; p < passives.Count; p++) def.Passives.Add(passives[p]);
+            }
+
+            Line("  [note] " + arena.Heroes.Count + " heroes, " + abilities + " authored basic(s),"
+                 + " active(s) and passive(s), " + (proved + wrong.Count + derived.Count)
+                 + " damage/heal/shield effect(s) between them");
+            Line("  [note] of those, " + conditional + " carry a clause that gates them and " + area
+                 + " land on more than one body - both are stated on the card and neither changes"
+                 + " what one application is worth");
+
+            Check(wrong.Count == 0,
+                  wrong.Count == 0
+                    ? "every one of the " + proved + " printable effect(s) on all " + arena.Heroes.Count
+                      + " heroes matches what CombatSimulation deals to a zero-Defence body with crit"
+                      + " and variance off (" + statLinesChecked + " stat lines agreed too)"
+                    : wrong.Count + " printed number(s) do NOT match the simulation: "
+                      + string.Join("; ", wrong.ToArray()));
+
+            // THE THREE ESCAPE HATCHES ARE PINNED BY NAME rather than merely counted. Each is an
+            // effect whose card cannot quote the whole truth, and each is a card a player would
+            // otherwise trust the same way they trust the other three hundred. A new one has to
+            // arrive as a failing check and a deliberate edit here rather than as a silence.
+            //
+            // The first: the ScaleBy family, whose Power multiplies a runtime amount instead of
+            // Attack. There is no flat figure outside a fight, so the card prints the workings.
+            string[] expectedDerived =
+            {
+                "rovan_deflected_conversion effect 0",
+                "brenna_deep_resolve effect 0",
+                "merek_interjecting_clause effect 2",
+                "cyrra_bury_the_burden effect 5",
+                "aminah_emergency_release effect 2",
+                "aminah_release_damage effect 0"
+            };
+            Check(SameSet(derived, expectedDerived),
+                  "exactly " + expectedDerived.Length + " effect(s) scale off a runtime amount rather"
+                  + " than Attack and so print no flat number, and they are the expected ones (found: "
+                  + (derived.Count == 0 ? "none" : string.Join(", ", derived.ToArray())) + ")");
+
+            // The second: terms that ADD to the Attack-scaled amount from somewhere the card
+            // cannot see. The figure is real and is a floor, and the card says which way it
+            // moves rather than pretending the floor is the ceiling.
+            string[] expectedPartial =
+            {
+                "hale_closing_radius effect 1",
+                "kiva_sever_the_return effect 2",
+                "marrow_promise_heal effect 0",
+                "demos_arrears_tick effect 0",
+                "orelle_hard_remedy effect 2",
+                "orelle_triage_after_loss effect 0",
+                "nereia_change_of_course effect 1",
+                "isara_what_survives effect 1",
+                "halwen_rationed_strength effect 1",
+                "jory_holdfast_thrust effect 1",
+                "maera_keep_the_beacon_relief effect 0",
+                "brio_evidence_kept effect 1",
+                "marn_relief_after_loss effect 0",
+                "garron_set_iron effect 0",
+                "hal_cache_shovel effect 1",
+                "aeron_press_forward effect 2",
+                "tomas_keep_moving effect 0",
+                "toren_unasked_question effect 0",
+                "arden_find_the_measure effect 0",
+                "arden_define_the_weak_point effect 2",
+                "arden_define_the_weak_point effect 3",
+                "arden_exact_calculation effect 0",
+                "arden_exact_calculation effect 1",
+                "arden_everything_has_a_limit_payout effect 0",
+                "caldus_defined_duty effect 0",
+                "leon_close_the_case effect 0",
+                "lio_exact_treatment effect 0"
+            };
+            Check(SameSet(partial, expectedPartial),
+                  "exactly " + expectedPartial.Length + " effect(s) add a term the card cannot see -"
+                  + " a share of the target's health, or a counter the fight has not built yet - and"
+                  + " print their caster-only part as a floor rather than as the whole (found "
+                  + partial.Count + ": "
+                  + (partial.Count == 0 ? "none" : string.Join(", ", partial.ToArray())) + ")");
+
+            // The third, and a SUBSET of the second - which is why the two are counted apart.
+            // Most of the list above still prints a figure, because its caster-side term is real
+            // and the target share is extra on top of it. These carry no caster-side term at all -
+            // no Power, no Flat, no Max HP share - so their whole payout is a fraction of somebody
+            // else's health and there is no number for a card to lead with. It prints the clause
+            // instead.
+            string[] expectedFlatless =
+            {
+                "hale_closing_radius effect 1",
+                "kiva_sever_the_return effect 2",
+                "demos_arrears_tick effect 0",
+                "orelle_hard_remedy effect 2",
+                "orelle_triage_after_loss effect 0",
+                "halwen_rationed_strength effect 1",
+                "jory_holdfast_thrust effect 1",
+                "maera_keep_the_beacon_relief effect 0",
+                "brio_evidence_kept effect 1",
+                "marn_relief_after_loss effect 0",
+                "garron_set_iron effect 0",
+                "hal_cache_shovel effect 1",
+                "tomas_keep_moving effect 0",
+                "toren_unasked_question effect 0",
+                "arden_find_the_measure effect 0",
+                "arden_define_the_weak_point effect 2",
+                "arden_define_the_weak_point effect 3",
+                "arden_exact_calculation effect 0",
+                "arden_exact_calculation effect 1",
+                "arden_everything_has_a_limit_payout effect 0",
+                "lio_exact_treatment effect 0"
+            };
+            Check(SameSet(flatless, expectedFlatless),
+                  "exactly " + expectedFlatless.Length + " effect(s) carry no caster-side term at all"
+                  + " and are priced entirely off the target's health, so the card prints their clause"
+                  + " rather than a number, and they are the expected ones (found " + flatless.Count
+                  + ": " + (flatless.Count == 0 ? "none" : string.Join(", ", flatless.ToArray())) + ")");
+
+            // THE WORKED EXAMPLE THIS WHOLE PASS EXISTS FOR, printed rather than described. The two
+            // heroes are the pair Docs/DESIGN-DAMAGE-DISPLAY.md opens with: the cheapest 1-star in
+            // the roster and a 5-star, whose authored percentages put them in the wrong order and
+            // whose flat values put them in the right one.
+            ReportAbilityNumbers(arena, "iri_the_kept_token");
+            ReportAbilityNumbers(arena, "kael_the_unyielding");
+
+            Line("");
+        }
+
+        /// <summary>One hero's ability numbers as the hero page would print them, at the level the
+        /// proof above is taken at. A report line, not a check.</summary>
+        private static void ReportAbilityNumbers(ContentDatabase arena, string heroId)
+        {
+            HeroDef def = arena.GetHero(heroId);
+            if (def == null) { Line("  [note] " + heroId + " is not in content"); return; }
+            UnitStats stats = StatMath.ForHero(def, AbilityNumberLevel);
+            Line("  [note] " + def.Name + ", " + def.Stars + "-star, level " + AbilityNumberLevel
+                 + ", Attack " + stats.Attack + ":");
+            for (int slot = 0; slot < 2; slot++)
+            {
+                AbilityDef ability = slot == 0 ? def.BasicAttack : def.Active;
+                if (ability == null) continue;
+                List<AbilityValue> values = AbilityMath.Values(ability, stats, arena.Balance);
+                for (int i = 0; i < values.Count; i++)
+                {
+                    AbilityValue v = values[i];
+                    Line("           " + (slot == 0 ? "basic  " : "active ") + ability.Name
+                         + " - " + (v.Derived || !v.HasFlat ? "no flat value" : v.Amount + " " + v.Kind)
+                         + " (" + v.Percent.ToString("0.##") + "% of Attack)");
+                }
+            }
+        }
+
+        private static bool SameSet(List<string> found, string[] expected)
+        {
+            if (found.Count != expected.Length) return false;
+            for (int i = 0; i < expected.Length; i++)
+            {
+                bool hit = false;
+                for (int j = 0; j < found.Count; j++) if (found[j] == expected[i]) { hit = true; break; }
+                if (!hit) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// One authored effect, alone in an ability, with the two things the card does not claim
+        /// taken off it and everything the number is made of left alone.
+        /// </summary>
+        private static AbilityDef ProbeAbility(AbilityDef source, EffectDef authored, AbilityValue value)
+        {
+            EffectDef probe = authored.Clone();
+
+            // The clauses that decide WHETHER it resolves. The card prints what the effect is
+            // worth when it lands and marks it as conditional; proving the amount is a separate
+            // question from proving the gate, and the gate has its own checks.
+            probe.Condition = EffectCondition.None;
+            probe.Condition2 = EffectCondition.None;
+            probe.Condition3 = EffectCondition.None;
+
+            // The target-health terms, which are the only part of the sum that belongs to
+            // somebody the card has never met.
+            probe.TargetMaxHpRatio = 0f;
+            probe.TargetCurrentHpRatio = 0f;
+            probe.TargetMissingHpRatio = 0f;
+
+            // A target this arena can always answer. Half the roster's damage aims at a mark, a
+            // last attacker or an enemy holding a status, none of which exists on turn one - an
+            // effect that resolved to nobody would prove nothing at all.
+            probe.Target = value.Kind == AbilityValueKind.Damage
+                         ? TargetMode.FrontEnemy : TargetMode.LowestHpAlly;
+
+            AbilityDef ability = new AbilityDef();
+            ability.Id = "probe_" + source.Id;
+            ability.Name = source.Name;
+            // The KIND travels with it even though the probe fires from the basic slot: Skill
+            // Damage is gated on it, so a card that prints an active is proved against an active.
+            ability.Kind = source.Kind;
+            ability.EnergyCost = 0;
+            ability.Vfx = source.Vfx;
+            ability.Effects.Add(probe);
+            return ability;
+        }
+
+        /// <summary>
+        /// Fires the probe once and returns what the hero's FIRST action was worth, summed over
+        /// its hits. int.MinValue when the battle did not resolve or the hero was not in it.
+        /// </summary>
+        private static int FireAbilityNumberProbe(ContentDatabase arena, StageDef stage, HeroDef def,
+                                                  HeroDef patient, AbilityValueKind kind, out float attack)
+        {
+            attack = 0f;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(def, AbilityNumberLevel));
+            team.Add(MakeInstance(patient, 1));
+            BattleResult r = RunWith(arena, stage, 1, team);
+            if (r == null) return int.MinValue;
+
+            int heroId = -1;
+            for (int u = 0; u < r.Units.Count; u++)
+                if (r.Units[u].DefId == def.Id) { heroId = r.Units[u].Id; attack = r.Units[u].Attack; }
+            if (heroId < 0) return int.MinValue;
+
+            BattleEventType want = kind == AbilityValueKind.Damage ? BattleEventType.Damage
+                                 : kind == AbilityValueKind.Heal ? BattleEventType.Heal
+                                 : BattleEventType.ShieldGain;
+
+            // Everything between the hero's first action and the next action by anybody. The
+            // patient wounds itself at BattleStart, which is before any action event, so that blow
+            // cannot be counted; the dummy's own turn closes the window.
+            int total = 0;
+            bool inside = false;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.BasicAttack || e.Type == BattleEventType.AbilityCast)
+                {
+                    if (inside) break;
+                    inside = e.SourceId == heroId;
+                    continue;
+                }
+                if (!inside) continue;
+                if (e.Type == want && e.SourceId == heroId) total += e.Value;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The live roster against one body that reduces nothing.
+        ///
+        /// Defence zero is the point: the mitigation ratio is defense / (defense + constant + per
+        /// level * level), which is exactly 0 when Defence is, so the Defence step of
+        /// ApplyDamageEffect becomes a multiply by one and the card's caster-only number is the
+        /// whole of what lands. Block, Damage Reduction and Armor Break are zero for the same
+        /// reason. Its HP is large enough that nothing in the roster can kill it, so a multi-hit
+        /// effect is never cut short by its own first blow.
+        /// </summary>
+        private static ContentDatabase BuildAbilityNumberArena()
+        {
+            string dir = FindContentDirForSweep();
+            if (dir == null) return null;
+            string heroes, balance;
+            try
+            {
+                heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
+                balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
+            }
+            catch (Exception) { return null; }
+
+            string enemies = @"{
+  ""enemies"": [
+    { ""id"": ""number_dummy"", ""name"": ""Measuring Post"", ""aspect"": ""Ember"",
+      ""hp"": 900000000, ""attack"": 1, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.0,
+      ""basic"": { ""id"": ""number_dummy_poke"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""number_ch"", ""name"": ""Measure"", ""stages"": [
+    { ""id"": ""number_arena"", ""index"": 1, ""enemies"": [
+      { ""id"": ""number_dummy"", ""level"": 1 } ] } ] } ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance);
+            if (db.Warnings.Count == 0) return db;
+            for (int i = 0; i < db.Warnings.Count; i++)
+                Line("  [FAIL] ability-number arena warning: " + db.Warnings[i]);
+            return null;
+        }
+
+        /// <summary>
+        /// The body a heal or a ward is measured on, and the reason it has to exist.
+        ///
+        /// A Heal event carries what was actually restored, not what was offered - the simulation
+        /// caps it at the recipient's missing HP - so a heal measured on a hero standing at full
+        /// health reads zero and proves nothing. This ally opens the fight by taking 99% of its
+        /// own current HP off itself, out of a very large pool, so every heal in the roster lands
+        /// whole and the number in the event is the number the ability was worth.
+        ///
+        /// It is also the lowest-HP ally by RATIO, which is what LowestHpAlly reads, so every
+        /// probe aims at it and never at the hero being measured.
+        ///
+        /// Loaded from its own database and handed over on the HeroInstance, exactly as the sweep
+        /// fillers are, so it never enters heroes.json and cannot be summoned or counted.
+        /// </summary>
+        private static List<HeroDef> BuildAbilityNumberPatient()
+        {
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""number_patient"", ""name"": ""Patient"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""stars"": 3, ""startingHero"": true,
+      ""hp"": 400000000, ""attack"": 1, ""defense"": 0, ""speed"": 2, ""critChance"": 0, ""critDamage"": 1.0,
+      ""growth"": 0, ""startEnergy"": 0,
+      ""passive"": { ""id"": ""number_patient_open"", ""name"": ""Opened Wound"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""Self"", ""power"": 0,
+                       ""targetCurrentHpRatio"": 0.99 } ] },
+      ""basic"": { ""id"": ""number_patient_basic"", ""name"": ""Wait"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.01 } ] } }
+  ]
+}";
+            ContentDatabase db = ContentDatabase.Load(heroes, "{\"enemies\":[]}", "{\"chapters\":[]}", "{}");
+            HeroDef patient = db.GetHero("number_patient");
+            if (patient == null) return null;
+            List<HeroDef> list = new List<HeroDef>();
+            list.Add(patient);
+            return list;
         }
 
         private static void WriteHeroSweepBaseline(string path, List<string> lines)
