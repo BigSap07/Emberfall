@@ -12,130 +12,75 @@
 #
 # The whole event stream behind a hash:  EMBERFALL_DUMP_STAGE_FP=1
 # Regenerate deliberately:               EMBERFALL_REGEN_STAGE_FP=1
-#
-# WHY 36 OF THESE 72 LINES MOVED, AND WHICH 36.
-#
-# Tools/solve-recommended-power.ps1 re-derived recommendedPower for all 24 stages and
-# the levels underneath it, because the 3-star authoring pass changed what a player can
-# field. Adric is one of the five bodies PlayerProfile.NormaliseTeam has deployed on the
-# simulated player's line and he was the last placeholder kit among them, so giving him a
-# real one moved the whole economy walk: entry power rose, recommendedPower stood still,
-# and 2-12 drifted to x1.08 against a x1.02 ceiling. The solver is that derivation as a
-# command - entry power over the middle of each stage's band, then floorLevel,
-# ceilingLevel and the authored enemy levels re-solved under the answer. It converged in
-# sixteen iterations and moved 22 of 24 stages.
-#
-# A fingerprint here is the stage's OPENING battle, which is the authored roster at
-# floorLevel, so it moves exactly when that roster moves and not when a recommendedPower
-# or a ceiling does. Twelve of the 22 moved a roster; those twelve are the 36 lines, at
-# three sampled seeds each. One line per stage, and the twelve that did not move say so
-# rather than being omitted:
-#
-#   1-1    unmoved  roster 2/2/2 untouched; recommendedPower held at 2,977
-#   1-2    unmoved  roster 6/6/6 untouched; recommendedPower held at 3,797
-#   1-3    unmoved  roster 10/10/11 untouched; recommendedPower 4,806 -> 4,733 needed no level
-#   1-4    unmoved  roster 13/12/13 untouched; recommendedPower 4,959 -> 4,887 needed no level
-#   1-5    unmoved  roster 15/15/16/14 untouched; recommendedPower 5,031 -> 4,958 needed no level
-#   1-6    unmoved  roster 18/18/18/18 untouched; ceiling 23 -> 22 alone, which no opening battle reads
-#   1-7    MOVED    roster 22/22/21/22 -> 21/21/20/21, floorLevel 22 -> 21, ceiling 28 -> 27
-#   1-8    unmoved  roster 16/20/20/20 untouched; recommendedPower 5,986 -> 5,948 needed no level
-#   1-9    MOVED    roster 16/13/23/23/23 -> 15/13/22/22/22, floorLevel 23 -> 22, ceiling 26 -> 25
-#   1-10   unmoved  roster 17/11/17/17/17 untouched; recommendedPower 6,671 -> 6,636 needed no level
-#   1-11   unmoved  roster 12/11/17/17/16 untouched; recommendedPower 7,068 -> 7,018 needed no level
-#   1-12   unmoved  roster 15/11/11/12/12 untouched; the finale's 8,767 -> 8,753 needed no level
-#   2-1    unmoved  roster 35/34/35 untouched; recommendedPower 8,177 -> 8,167 needed no level
-#   2-2    MOVED    roster 37/38/36 -> 37/39/36, floorLevel 38 -> 39, ceiling 42 -> 43; one unit alone
-#   2-3    unmoved  roster 35/40/34 untouched; recommendedPower 9,990 -> 9,956 needed no level
-#   2-4    MOVED    roster 46/40/39 -> 47/41/40, floorLevel 46 -> 47, ceiling 56 -> 58
-#   2-5    MOVED    roster 47/36/43/42 -> 49/38/45/44, floorLevel 47 -> 49, ceiling 54 -> 56
-#   2-6    MOVED    roster 42/40/43/43 -> 44/43/45/45, floorLevel 43 -> 45, ceiling 59 -> 61
-#   2-7    MOVED    roster 50/42/42/41 -> 53/46/45/44, floorLevel 50 -> 53, ceiling 55 -> 59
-#   2-8    MOVED    roster 49/44/41/48 -> 54/48/45/52, floorLevel 49 -> 54, ceiling 53 -> 58
-#   2-9    MOVED    roster 54/49/44/48/46 -> 57/52/48/51/49, floorLevel 54 -> 57, ceiling 57 -> 61
-#   2-10   MOVED    roster 61/56/51/53/50 -> 66/61/55/57/54, floorLevel 61 -> 66, ceiling 64 -> 69
-#   2-11   MOVED    roster 66/61/56/53/51 -> 72/67/62/58/56, floorLevel 66 -> 72, ceiling 71 -> 77
-#   2-12   MOVED    roster 48/36/31/50/50 -> 52/41/36/54/54, floorLevel 50 -> 54, ceiling 57 -> 61
-#
-# THE DIRECTION SPLITS BY CHAPTER, and that is the reading rather than a surprise. Chapter 1
-# came DOWN - 1-7 and 1-9 each lost a level off every body - because a chapter-1 player has
-# not yet levelled the new kit and the derivation found entry power slightly under where the
-# hand table had assumed it. Chapter 2 went UP, by three to six levels a body at the deep end,
-# because by 2-7 the simulated player has had Adric's kit working for a whole chapter and the
-# economy compounds it. 2-12 is the largest single move in the table, at +1,878
-# recommendedPower.
-#
-# The twelve unmoved lines are the proof that nothing else rode along: no engine change and no
-# starter kit change is in this regenerate. None of the eighteen 3-stars is a starting hero, so
-# none of them appears in an opening battle; they reach this file only through the economy.
 1-1|3000001|6df296e0ef038b36
 1-1|3000002|42a0b673cbede093
 1-1|3000003|2614cabab262c1ad
 1-2|3000014|1c7700b5a0626ba9
 1-2|3000015|7e36d2fd23105cf8
 1-2|3000016|f16dbb80719b843d
-1-3|3000027|09895595d8017f77
-1-3|3000028|b7fab33b67250869
-1-3|3000029|204aceae49f6e075
-1-4|3000040|0007c56c61641189
+1-3|3000027|655b462f332f7663
+1-3|3000028|7bc39758309c6ad9
+1-3|3000029|5ecd6bcac4baaba0
+1-4|3000040|8ddd0d70ee795762
 1-4|3000041|a9d5fff6de034a47
 1-4|3000042|f42fb00f9c4de164
-1-5|3000053|c75974f4979bcb2d
-1-5|3000054|62c48d20ec446592
-1-5|3000055|7fc109a52d23a862
+1-5|3000053|d15131131f4a5e40
+1-5|3000054|87c014c667d72343
+1-5|3000055|eff198ffbb226e15
 1-6|3000066|7f1cdfe442f942e9
 1-6|3000067|879b9acef1228e05
-1-6|3000068|8dd7952dd50d0753
-1-7|3000079|e67b8298bc962c96
-1-7|3000080|27f7c7e76fcd7756
-1-7|3000081|abf814576373b08d
-1-8|3000092|36f94eb4db0907ef
-1-8|3000093|d51b698a7ccde6b8
+1-6|3000068|fe28948a966ee50d
+1-7|3000079|02f121ac28e750da
+1-7|3000080|14612e2d42094e3a
+1-7|3000081|e44b3163b9d4781b
+1-8|3000092|3ed411e31ca004b4
+1-8|3000093|34c603e0bc690dbf
 1-8|3000094|b2775147571872cd
-1-9|3000105|243e8eb28e92d566
-1-9|3000106|2e7712dcbe6fb06e
+1-9|3000105|aaf1eff18b6b9eff
+1-9|3000106|c453821cb8794028
 1-9|3000107|85d66537d089807e
 1-10|3000118|bd65d739a8d29204
 1-10|3000119|f9fd593a46558fca
 1-10|3000120|a5c57e3bf03d43d4
-1-11|3000131|5c9e9ed6fc86df3e
-1-11|3000132|6a0cd672adc4c5ff
-1-11|3000133|c6a1ef49212a5609
-1-12|3000144|9c9909c27c0b3af1
-1-12|3000145|29199a6326977435
-1-12|3000146|d51c47ae3b5091c8
-2-1|3000157|d49b42700c375286
-2-1|3000158|d0f747ae45891969
-2-1|3000159|c6a07e20402a7e55
-2-2|3000170|8bc1a762d0973480
-2-2|3000171|9b7586161147006f
-2-2|3000172|ea7751bed1068c12
-2-3|3000183|316ee64ee6048b25
-2-3|3000184|c7adec650cb981df
-2-3|3000185|6da971bc8d973bc2
-2-4|3000196|4315774dcc6103a2
-2-4|3000197|73ddc1417ac94c68
-2-4|3000198|d8ddc51d3d1f4411
-2-5|3000209|e3ff865b12cb6b2b
-2-5|3000210|93f143844cc35ce8
-2-5|3000211|691de903d6735813
-2-6|3000222|86a5db9e9c2da499
-2-6|3000223|2a8f3b5091f4261b
-2-6|3000224|41483b799a2f8129
-2-7|3000235|cea154be52b4688d
-2-7|3000236|3af60c5efe562631
-2-7|3000237|509b5eec9e4513b1
-2-8|3000248|430e9e7c6b425184
-2-8|3000249|b0d3241a2baaac0a
-2-8|3000250|fa3b68cb81d9748d
-2-9|3000261|3111860e92241e83
-2-9|3000262|ab3d909c6df14101
-2-9|3000263|029149ef880058be
-2-10|3000274|4541bf25f88a62a0
-2-10|3000275|c78976dd304a4d43
-2-10|3000276|c08bb68e61326aba
-2-11|3000287|ea7fa89afba76672
-2-11|3000288|963db09c2f88a4f4
-2-11|3000289|f31ed9807b22d886
-2-12|3000300|a7a58a31b7988f44
-2-12|3000301|6aea3c58347b2f3d
-2-12|3000302|29e07b839f095036
+1-11|3000131|899d5d36ecb513d2
+1-11|3000132|9adb3212268327ea
+1-11|3000133|17ad7f8e619b3f5b
+1-12|3000144|b5091ac6e6666326
+1-12|3000145|cd569a39cd6e2241
+1-12|3000146|517346a7cd17e725
+2-1|3000157|c19c70aade4ecbce
+2-1|3000158|2987507c5ad31d74
+2-1|3000159|58f7fb043df1026f
+2-2|3000170|d9020217e7701f58
+2-2|3000171|55c689cee1c4e9fa
+2-2|3000172|afe45c1d718df780
+2-3|3000183|d502381041b26646
+2-3|3000184|b22cd4219b2f40e6
+2-3|3000185|c3a848c586e7c455
+2-4|3000196|7eed3baea6490fe9
+2-4|3000197|0c0aa9f7c8b9726f
+2-4|3000198|a79cf7340a9db7ed
+2-5|3000209|d0a64ca495e17020
+2-5|3000210|15d6056baff6a095
+2-5|3000211|c7dddcda9761af4e
+2-6|3000222|8c16272a8ce3e4fa
+2-6|3000223|3088b3794159d0a5
+2-6|3000224|b0d2772c0c48b35f
+2-7|3000235|af07fa0bcf7702ef
+2-7|3000236|9f3078b8fefe8efa
+2-7|3000237|19ee04dc6a45fda5
+2-8|3000248|eb110e714ffcab56
+2-8|3000249|6ac7db28571506c7
+2-8|3000250|8a789555281977f5
+2-9|3000261|44965e55fe7c47a3
+2-9|3000262|d0d53070eefff60b
+2-9|3000263|da8980461bac2d42
+2-10|3000274|bc26d67512932086
+2-10|3000275|8f8b96aa32a08e05
+2-10|3000276|03b088820a948506
+2-11|3000287|6d5de6d7a7845cba
+2-11|3000288|efa25e0fa69e8fbe
+2-11|3000289|e84577b52c2d6b86
+2-12|3000300|c8c0045cbd9ef195
+2-12|3000301|2ed8ac0f750810e4
+2-12|3000302|d928e3264f2f8063
