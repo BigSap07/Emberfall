@@ -60,10 +60,10 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Formation | converted | The banner slots and the roster rows are `SelectableCard`, a third pressable thing the kit needed: built as buttons they came out as a page of solid teal, and a tab's unlit plate is far too heavy at card size. |
 | Relic shop | converted | A relic on the shelf is a framed panel and one already owned is a plain one, so depth carries "you have this". The grade's colour left the card's border: every frame in this kit is gold. |
 | Friends | converted | Photographed in its OFFLINE state, which is what every build with no `supabase.json` shows. The signed-in list needs a live account and a second live account that has sent a request; that is `AccountsVerification`'s job and no synthetic seeding could stand in for it. |
-| Friend's team | pending | |
-| Guild | pending | |
-| Guild requests | pending | |
-| Guild chat | pending | |
+| Friend's team | converted | Photographed OFFLINE, which is what every build with no `supabase.json` shows. |
+| Guild | converted | Your own row on the roster stands proud of the sheet and everyone else is set into it, so depth sorts a roster of thirty without a second frame colour. Photographed OFFLINE. |
+| Guild requests | converted | Every row here is waiting on an answer, so every row is framed: the page exists only when there is something to decide. Photographed OFFLINE. |
+| Guild chat | converted | Your own line stands proud and everyone else's is set in, which is depth carrying authorship. Still not right-aligned: at 1180 wide a right-aligned bubble leaves a metre of empty panel. Photographed OFFLINE. |
 | Events | pending | |
 | Deep Recital | pending | |
 | The Proving | pending | |

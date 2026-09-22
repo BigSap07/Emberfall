@@ -40,7 +40,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "REQUESTS", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "REQUESTS", Router, out _headerSubtitle);
 
             RectTransform content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                                          new RectOffset(0, 0, 8, 48));
@@ -54,8 +55,8 @@ namespace Emberfall.UI.Screens
             ContentSizeFitter fitter = _listHost.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            _note = UIBuilder.WrappedLabel("Note", content, "", UITheme.FontTiny,
-                                           UITheme.TextMuted, TextAnchor.UpperCenter);
+            _note = EmberforgeUI.Body("Note", content, "", UITheme.FontTiny,
+                                           Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Sized(_note.rectTransform, CardWidth - 160f, 90f);
         }
 
@@ -156,36 +157,34 @@ namespace Emberfall.UI.Screens
         {
             RectTransform row = UIBuilder.Node("Request", _listHost);
             UIBuilder.Sized(row, CardWidth, RowHeight);
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(16);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelRaised, 0.98f);
-            UIBuilder.Frame("Edge", row, UITheme.WithAlpha(UITheme.Gold, 0.55f), 16, 2);
+            // Every row on this page is waiting on an answer, so every row is framed: the page
+            // exists only when there is something to decide.
+            EmberforgeUI.PanelOn(row, false);
 
             string shown = string.IsNullOrEmpty(entry.DisplayName) ? "Wayfarer" : entry.DisplayName;
-            Text name = UIBuilder.Label("Name", row, shown, UITheme.FontBody, UITheme.TextPrimary,
+            Text name = EmberforgeUI.Label("Name", row, shown, UITheme.FontBody, Emberforge.TextBody,
                                         TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 28f, -22f, 460f, 38f, new Vector2(0f, 1f));
 
-            Text code = UIBuilder.Label("Code", row,
+            Text code = EmberforgeUI.Label("Code", row,
                                         string.IsNullOrEmpty(entry.FriendCode)
                                             ? "" : FriendCode.Format(entry.FriendCode),
-                                        UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+                                        UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(code.rectTransform, 28f, -62f, 460f, 28f, new Vector2(0f, 1f));
 
-            Text asked = UIBuilder.Label("Asked", row, AskedLabel(entry.CreatedUnix, now),
-                                         UITheme.FontTiny, UITheme.TextMuted, TextAnchor.MiddleLeft);
+            Text asked = EmberforgeUI.Label("Asked", row, AskedLabel(entry.CreatedUnix, now),
+                                         UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleLeft);
             UIBuilder.Box(asked.rectTransform, 520f, 0f, 300f, 34f, new Vector2(0f, 0.5f));
 
             string capturedId = entry.Id;
             string capturedName = shown;
 
-            UIButton accept = UIBuilder.GoldButton("Accept", row, "ACCEPT", UITheme.FontSmall);
+            UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall, ForgeButtonKind.Primary);
             UIBuilder.Box(accept.Root, -230f, 0f, 200f, 72f, new Vector2(1f, 0.5f));
             accept.Interactable = !full;
             accept.OnClick(delegate { OnAccept(capturedId, capturedName); });
 
-            UIButton decline = UIBuilder.SecondaryButton("Decline", row, "DECLINE", UITheme.FontSmall);
+            UIButton decline = EmberforgeUI.Button("Decline", row, "DECLINE", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(decline.Root, -24f, 0f, 190f, 72f, new Vector2(1f, 0.5f));
             decline.OnClick(delegate { OnDecline(capturedId, capturedName); });
         }

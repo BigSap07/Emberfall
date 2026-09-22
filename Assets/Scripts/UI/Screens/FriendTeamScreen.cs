@@ -54,46 +54,46 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "THEIR LINE", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "THEIR LINE", Router, out _headerSubtitle);
 
             float top = ScreenChrome.HeaderTop + 108f + 16f;
             RectTransform card = UIBuilder.Node("Line", Root);
             UIBuilder.Box(card, 0f, -top, CardWidth, 560f, new Vector2(0.5f, 1f));
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(24);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.ChromeBrass, 0.5f), 24, 2);
+            EmberforgeUI.PanelOn(card, true);
 
-            _name = UIBuilder.Label("Name", card, "", UITheme.FontTitle, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            _name = EmberforgeUI.Title("Name", card, "", UITheme.FontTitle, Emberforge.TextGold,
+                                       TextAnchor.UpperLeft);
             UIBuilder.Box(_name.rectTransform, 34f, -26f, 700f, 56f, new Vector2(0f, 1f));
 
-            _power = UIBuilder.Label("Power", card, "", UITheme.FontSmall, UITheme.Gold, TextAnchor.UpperLeft);
+            _power = EmberforgeUI.Label("Power", card, "", UITheme.FontSmall, Emberforge.TextGold,
+                                        TextAnchor.UpperLeft);
             UIBuilder.Box(_power.rectTransform, 34f, -86f, 700f, 32f, new Vector2(0f, 1f));
 
-            _freshness = UIBuilder.Label("Freshness", card, "", UITheme.FontTiny, UITheme.TextMuted,
+            _freshness = EmberforgeUI.Label("Freshness", card, "", UITheme.FontTiny, Emberforge.TextQuiet,
                                          TextAnchor.UpperRight);
             UIBuilder.Box(_freshness.rectTransform, -34f, -32f, 440f, 30f, new Vector2(1f, 1f));
 
-            Image divider = UIBuilder.Divider("Divider", card, UITheme.BorderSoft);
-            UIBuilder.Box(divider.rectTransform, 0f, -134f, CardWidth - 68f, 2f, new Vector2(0.5f, 1f));
+            Image divider = EmberforgeUI.Rule("Divider", card);
+            UIBuilder.Box(divider.rectTransform, 0f, -134f, CardWidth - 68f, Emberforge.RuleHeight,
+                          new Vector2(0.5f, 1f));
 
             _lineRow = UIBuilder.Node("Units", card);
             UIBuilder.Box(_lineRow, 0f, -156f, CardWidth - 68f, 230f, new Vector2(0.5f, 1f));
             UIBuilder.HStack(_lineRow, 20f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            _note = UIBuilder.WrappedLabel("Note", card, "", UITheme.FontTiny, UITheme.TextDim,
+            _note = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextQuiet,
                                            TextAnchor.UpperCenter);
             UIBuilder.Box(_note.rectTransform, 0f, -392f, CardWidth - 120f, 46f, new Vector2(0.5f, 1f));
 
-            _duelButton = UIBuilder.GoldButton("Duel", card, "DUEL", UITheme.FontHeading);
+            _duelButton = EmberforgeUI.Button("Duel", card, "DUEL", UITheme.FontHeading, ForgeButtonKind.Primary);
             UIBuilder.Box(_duelButton.Root, 0f, 26f, CardWidth - 68f, 92f, new Vector2(0.5f, 0f));
             _duelButton.OnClick(OnDuel);
 
-            Text stakes = UIBuilder.Label("Stakes", Root,
+            Text stakes = EmberforgeUI.Label("Stakes", Root,
                 "A friendly duel. Nothing is at stake - no rewards, no standing, nothing saved.",
-                UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(stakes.rectTransform, 0f, -(top + 560f + UITheme.Space16), CardWidth, 30f,
                           new Vector2(0.5f, 1f));
         }
@@ -184,30 +184,31 @@ namespace Emberfall.UI.Screens
                     // the fight, so the cell says so rather than leaving a hole the player has to
                     // interpret - they are one body up, and they should know it before they press
                     // Duel rather than after.
-                    Text missing = UIBuilder.Label("Missing", cell, "UNKNOWN\nHERO", UITheme.FontTiny,
-                                                   UITheme.TextDim, TextAnchor.MiddleCenter);
+                    Text missing = EmberforgeUI.Label("Missing", cell, "UNKNOWN\nHERO", UITheme.FontTiny,
+                                                   Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                     UIBuilder.FillParent(missing.rectTransform, 0f);
                     continue;
                 }
 
-                RectTransform portrait = Widgets.Portrait("Portrait", cell, def, unit.Stars, 130f, true);
+                RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", cell, def,
+                                                                    unit.Stars, 130f);
                 UIBuilder.Box(portrait, 0f, 0f, 130f, 130f, new Vector2(0.5f, 1f));
 
-                Text name = UIBuilder.Label("Name", cell, def.Name, UITheme.FontTiny - 4,
-                                            UITheme.TextMuted, TextAnchor.UpperCenter);
+                Text name = EmberforgeUI.Label("Name", cell, def.Name, UITheme.FontTiny - 4,
+                                            Emberforge.TextQuiet, TextAnchor.UpperCenter);
                 UIBuilder.Box(name.rectTransform, 0f, -136f, 180f, 26f, new Vector2(0.5f, 1f));
 
                 // Level and gear, because the two together are the whole of what a snapshot says
                 // about a hero's strength and a player judging a fight needs both.
-                Text level = UIBuilder.Label("Level", cell, "LV " + unit.Level, UITheme.FontTiny - 2,
-                                             UITheme.TextPrimary, TextAnchor.UpperCenter);
+                Text level = EmberforgeUI.Label("Level", cell, "LV " + unit.Level, UITheme.FontTiny - 2,
+                                             Emberforge.TextBody, TextAnchor.UpperCenter);
                 UIBuilder.Box(level.rectTransform, 0f, -164f, 180f, 26f, new Vector2(0.5f, 1f));
 
                 string extras = unit.Armor.Count + (unit.Armor.Count == 1 ? " PIECE" : " PIECES");
                 if (!string.IsNullOrEmpty(unit.RelicId)) extras += "  +RELIC";
                 if (unit.SelectedTalent > 0) extras += "  +TALENT";
-                Text gear = UIBuilder.Label("Gear", cell, extras, UITheme.FontTiny - 6,
-                                            UITheme.TextDim, TextAnchor.UpperCenter);
+                Text gear = EmberforgeUI.Label("Gear", cell, extras, UITheme.FontTiny - 6,
+                                            Emberforge.TextQuiet, TextAnchor.UpperCenter);
                 UIBuilder.Box(gear.rectTransform, 0f, -190f, 180f, 24f, new Vector2(0.5f, 1f));
             }
         }

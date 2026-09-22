@@ -41,6 +41,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private RectTransform _header;
+        private Image _ground;
         private ScrollRect _scroll;
         private RectTransform _content;
 
@@ -101,6 +102,9 @@ namespace Emberfall.UI.Screens
         {
             base.SetEmbedded(embedded);
             if (_header != null) _header.gameObject.SetActive(!embedded);
+            // The ground goes with the header: inside a panel sheet this page already sits on the
+            // sheet's framed surface - see EmberforgeUI.Ground.
+            if (_ground != null) _ground.enabled = !embedded;
             ApplyContentInset();
         }
 
@@ -117,7 +121,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            _header = ScreenChrome.Header(Root, "GUILD", Router, out _headerSubtitle);
+            _ground = EmberforgeUI.Ground(Root);
+            _header = ScreenChrome.ForgedHeader(Root, "GUILD", Router, out _headerSubtitle);
 
             _content = UIBuilder.ScrollList("Content", Root, out _scroll, 16f,
                                             new RectOffset(0, 0, 8, 48));
@@ -146,44 +151,44 @@ namespace Emberfall.UI.Screens
             RectTransform create = Card(_noGuildHost, 320f);
             Heading(create, "START A GUILD");
 
-            _nameField = UIBuilder.TextField("Name", create, "A name", UITheme.FontSmall,
+            _nameField = EmberforgeUI.TextField("Name", create, "A name", UITheme.FontSmall,
                                              GuildRules.NameMax, false);
             UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 30f, -56f, 520f, 76f, new Vector2(0f, 1f));
 
-            _createButton = UIBuilder.GoldButton("Create", create, "CREATE", UITheme.FontBody);
+            _createButton = EmberforgeUI.Button("Create", create, "CREATE", UITheme.FontBody, ForgeButtonKind.Primary);
             UIBuilder.Box(_createButton.Root, 570f, -56f, 300f, 76f, new Vector2(0f, 1f));
             _createButton.OnClick(OnCreate);
 
-            _blurbField = UIBuilder.TextField("Blurb", create, "What it is for (optional)",
+            _blurbField = EmberforgeUI.TextField("Blurb", create, "What it is for (optional)",
                                               UITheme.FontSmall, GuildRules.DescriptionMax, false);
             UIBuilder.Box(_blurbField.GetComponent<RectTransform>(), 30f, -144f, CardWidth - 120f, 76f,
                           new Vector2(0f, 1f));
 
-            Text createNote = UIBuilder.WrappedLabel("Note", create,
+            Text createNote = EmberforgeUI.Body("Note", create,
                 "You lead the guild you make. It gets a six-character code to give people, and you "
                 + "choose whether anybody with the code walks straight in or waits to be let in.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(createNote.rectTransform, 30f, -232f, CardWidth - 120f, 62f, new Vector2(0f, 1f));
 
             // ---- join
             RectTransform join = Card(_noGuildHost, 300f);
             Heading(join, "JOIN BY CODE");
 
-            _codeField = UIBuilder.TextField("Code", join, "ABC-234", UITheme.FontHeading, 7, false);
+            _codeField = EmberforgeUI.TextField("Code", join, "ABC-234", UITheme.FontHeading, 7, false);
             UIBuilder.Box(_codeField.GetComponent<RectTransform>(), 30f, -56f, 440f, 84f, new Vector2(0f, 1f));
 
-            _findButton = UIBuilder.SecondaryButton("Find", join, "FIND", UITheme.FontBody);
+            _findButton = EmberforgeUI.Button("Find", join, "FIND", UITheme.FontBody, ForgeButtonKind.Secondary);
             UIBuilder.Box(_findButton.Root, 490f, -56f, 260f, 84f, new Vector2(0f, 1f));
             _findButton.OnClick(OnFind);
 
-            _joinButton = UIBuilder.GoldButton("Join", join, "ASK TO JOIN", UITheme.FontBody);
+            _joinButton = EmberforgeUI.Button("Join", join, "ASK TO JOIN", UITheme.FontBody, ForgeButtonKind.Primary);
             UIBuilder.Box(_joinButton.Root, 770f, -56f, 380f, 84f, new Vector2(0f, 1f));
             _joinButton.OnClick(OnJoin);
 
-            _findNote = UIBuilder.WrappedLabel("FindNote", join,
+            _findNote = EmberforgeUI.Body("FindNote", join,
                 "Six characters, from the guild's own screen. The same alphabet as a friend code - "
                 + "no O, I, L, U, 0 or 1.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(_findNote.rectTransform, 30f, -154f, CardWidth - 120f, 84f, new Vector2(0f, 1f));
 
             // ---- what you have asked for
@@ -207,41 +212,41 @@ namespace Emberfall.UI.Screens
             // ---- identity
             RectTransform card = Card(_guildHost, 268f);
 
-            _guildName = UIBuilder.Label("Name", card, "", UITheme.FontTitle, UITheme.TextPrimary,
+            _guildName = EmberforgeUI.Label("Name", card, "", UITheme.FontTitle, Emberforge.TextBody,
                                          TextAnchor.UpperLeft);
             UIBuilder.Box(_guildName.rectTransform, 30f, -24f, 720f, 54f, new Vector2(0f, 1f));
 
-            Text codeLabel = UIBuilder.Label("CodeLabel", card, "GUILD CODE", UITheme.FontTiny,
-                                             UITheme.TextDim, TextAnchor.UpperLeft);
+            Text codeLabel = EmberforgeUI.Label("CodeLabel", card, "GUILD CODE", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(codeLabel.rectTransform, 30f, -86f, 300f, 24f, new Vector2(0f, 1f));
 
             // Title size with the alphabet's own dash, for the same reason the friend code is:
             // this is a string one player reads out loud to another.
-            _guildCode = UIBuilder.Label("Code", card, "------", UITheme.FontTitle, UITheme.Gold,
+            _guildCode = EmberforgeUI.Label("Code", card, "------", UITheme.FontTitle, UITheme.Gold,
                                          TextAnchor.UpperLeft);
             UIBuilder.Box(_guildCode.rectTransform, 30f, -114f, 400f, 54f, new Vector2(0f, 1f));
 
-            _copyButton = UIBuilder.SecondaryButton("Copy", card, "COPY", UITheme.FontSmall);
+            _copyButton = EmberforgeUI.Button("Copy", card, "COPY", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_copyButton.Root, 440f, -110f, 200f, 62f, new Vector2(0f, 1f));
             _copyButton.OnClick(OnCopyCode);
 
-            _guildBlurb = UIBuilder.WrappedLabel("Blurb", card, "", UITheme.FontTiny,
-                                                 UITheme.TextMuted, TextAnchor.UpperLeft);
+            _guildBlurb = EmberforgeUI.Body("Blurb", card, "", UITheme.FontTiny,
+                                                 Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(_guildBlurb.rectTransform, 30f, -182f, CardWidth - 120f, 60f, new Vector2(0f, 1f));
 
-            _guildCounts = UIBuilder.Label("Counts", card, "", UITheme.FontSmall, UITheme.TextDim,
+            _guildCounts = EmberforgeUI.Label("Counts", card, "", UITheme.FontSmall, Emberforge.TextQuiet,
                                            TextAnchor.UpperRight);
             UIBuilder.Box(_guildCounts.rectTransform, -30f, -30f, 420f, 34f, new Vector2(1f, 1f));
 
-            _requestsButton = UIBuilder.SecondaryButton("Requests", card, "REQUESTS", UITheme.FontSmall);
+            _requestsButton = EmberforgeUI.Button("Requests", card, "REQUESTS", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_requestsButton.Root, -30f, -78f, 260f, 72f, new Vector2(1f, 1f));
             _requestsButton.OnClick(OnOpenRequests);
 
-            _chatButton = UIBuilder.GoldButton("Chat", card, "CHAT", UITheme.FontSmall);
+            _chatButton = EmberforgeUI.Button("Chat", card, "CHAT", UITheme.FontSmall, ForgeButtonKind.Primary);
             UIBuilder.Box(_chatButton.Root, -300f, -78f, 240f, 72f, new Vector2(1f, 1f));
             _chatButton.OnClick(OnOpenChat);
 
-            _leaveButton = UIBuilder.SecondaryButton("Leave", card, "LEAVE", UITheme.FontSmall);
+            _leaveButton = EmberforgeUI.Button("Leave", card, "LEAVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_leaveButton.Root, -30f, -162f, 260f, 66f, new Vector2(1f, 1f));
             _leaveButton.OnClick(OnLeave);
 
@@ -253,7 +258,7 @@ namespace Emberfall.UI.Screens
             // a leader did not, which is backwards - the roster is what everybody opens this for,
             // and the settings are three buttons a leader touches twice in the guild's life. So
             // the rare card goes last, where scrolling to it is the right price.
-            _transferBanner = UIBuilder.Label("TransferBanner", _guildHost, "", UITheme.FontSmall,
+            _transferBanner = EmberforgeUI.Label("TransferBanner", _guildHost, "", UITheme.FontSmall,
                                               UITheme.Warning, TextAnchor.MiddleLeft);
             UIBuilder.Sized(_transferBanner.rectTransform, CardWidth, 0f);
 
@@ -263,8 +268,8 @@ namespace Emberfall.UI.Screens
             ContentSizeFitter rosterFit = _rosterHost.gameObject.AddComponent<ContentSizeFitter>();
             rosterFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            _rosterNote = UIBuilder.WrappedLabel("RosterNote", _guildHost, "", UITheme.FontTiny,
-                                                 UITheme.TextMuted, TextAnchor.UpperCenter);
+            _rosterNote = EmberforgeUI.Body("RosterNote", _guildHost, "", UITheme.FontTiny,
+                                                 Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Sized(_rosterNote.rectTransform, CardWidth - 160f, 60f);
 
             BuildSettingsCard(_guildHost);
@@ -275,33 +280,33 @@ namespace Emberfall.UI.Screens
             _settingsCard = Card(parent, 292f);
             Heading(_settingsCard, "SETTINGS");
 
-            _settingsBlurb = UIBuilder.TextField("SettingsBlurb", _settingsCard, "What it is for",
+            _settingsBlurb = EmberforgeUI.TextField("SettingsBlurb", _settingsCard, "What it is for",
                                                  UITheme.FontSmall, GuildRules.DescriptionMax, false);
             UIBuilder.Box(_settingsBlurb.GetComponent<RectTransform>(), 30f, -56f, 700f, 76f,
                           new Vector2(0f, 1f));
 
-            _openToggle = UIBuilder.SecondaryButton("Open", _settingsCard, "", UITheme.FontSmall);
+            _openToggle = EmberforgeUI.Button("Open", _settingsCard, "", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_openToggle.Root, 750f, -56f, 400f, 76f, new Vector2(0f, 1f));
             _openToggle.OnClick(OnToggleOpen);
 
-            _saveSettings = UIBuilder.GoldButton("Save", _settingsCard, "SAVE", UITheme.FontSmall);
+            _saveSettings = EmberforgeUI.Button("Save", _settingsCard, "SAVE", UITheme.FontSmall, ForgeButtonKind.Primary);
             UIBuilder.Box(_saveSettings.Root, 30f, -144f, 300f, 72f, new Vector2(0f, 1f));
             _saveSettings.OnClick(OnSaveSettings);
 
-            _handOverButton = UIBuilder.SecondaryButton("HandOver", _settingsCard, "HAND OVER",
-                                                        UITheme.FontSmall);
+            _handOverButton = EmberforgeUI.Button("HandOver", _settingsCard, "HAND OVER",
+                                                        UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_handOverButton.Root, 350f, -144f, 340f, 72f, new Vector2(0f, 1f));
             _handOverButton.OnClick(OnArmTransfer);
 
-            _disbandButton = UIBuilder.SecondaryButton("Disband", _settingsCard, "DISBAND",
-                                                       UITheme.FontSmall);
+            _disbandButton = EmberforgeUI.Button("Disband", _settingsCard, "DISBAND",
+                                                       UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_disbandButton.Root, 710f, -144f, 300f, 72f, new Vector2(0f, 1f));
             _disbandButton.OnClick(OnDisband);
 
-            Text note = UIBuilder.WrappedLabel("Note", _settingsCard,
+            Text note = EmberforgeUI.Body("Note", _settingsCard,
                 "Open lets anybody with the code walk straight in. Handing over makes somebody else "
                 + "the leader and leaves you an officer. Disbanding ends the guild for everybody.",
-                UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(note.rectTransform, 30f, -228f, CardWidth - 120f, 56f, new Vector2(0f, 1f));
         }
 
@@ -461,14 +466,10 @@ namespace Emberfall.UI.Screens
             {
                 _offlineHost = UIBuilder.Node("Offline", _content);
                 UIBuilder.Sized(_offlineHost, CardWidth, 200f);
-                Image bg = _offlineHost.gameObject.AddComponent<Image>();
-                bg.sprite = UISkin.Panel(18);
-                bg.type = Image.Type.Sliced;
-                bg.color = UITheme.Panel;
-                UIBuilder.Frame("Edge", _offlineHost, UITheme.BorderSoft, 18, 2);
+                EmberforgeUI.PanelOn(_offlineHost, false);
 
-                _offlineNote = UIBuilder.WrappedLabel("Text", _offlineHost, "", UITheme.FontSmall,
-                                                      UITheme.TextMuted, TextAnchor.MiddleCenter);
+                _offlineNote = EmberforgeUI.Body("Text", _offlineHost, "", UITheme.FontSmall,
+                                                      Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(_offlineNote.rectTransform, 40f);
             }
             _offlineHost.gameObject.SetActive(true);
@@ -489,8 +490,8 @@ namespace Emberfall.UI.Screens
 
             if (_myRequests.Count == 0) return;
 
-            Text label = UIBuilder.Label("Section", _pendingHost, "WAITING ON THEM", UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.LowerLeft);
+            Text label = EmberforgeUI.Label("Section", _pendingHost, "WAITING ON THEM", UITheme.FontTiny,
+                                         Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.Sized(label.rectTransform, CardWidth, 40f);
 
             for (int i = 0; i < _myRequests.Count; i++)
@@ -498,28 +499,24 @@ namespace Emberfall.UI.Screens
                 GuildSummary pending = _myRequests[i];
                 RectTransform row = UIBuilder.Node("Pending" + i, _pendingHost);
                 UIBuilder.Sized(row, CardWidth, RowHeight);
-                Image bg = row.gameObject.AddComponent<Image>();
-                bg.sprite = UISkin.Panel(16);
-                bg.type = Image.Type.Sliced;
-                bg.color = UITheme.PanelSunken;
-                UIBuilder.Frame("Edge", row, UITheme.BorderSoft, 16, 2);
+                EmberforgeUI.SunkenOn(row);
 
-                Text name = UIBuilder.Label("Name", row, pending.Name, UITheme.FontBody,
-                                            UITheme.TextPrimary, TextAnchor.UpperLeft);
+                Text name = EmberforgeUI.Label("Name", row, pending.Name, UITheme.FontBody,
+                                            Emberforge.TextBody, TextAnchor.UpperLeft);
                 UIBuilder.Box(name.rectTransform, 28f, -22f, 560f, 38f, new Vector2(0f, 1f));
 
-                Text code = UIBuilder.Label("Code", row, GuildRules.FormatCode(pending.Code),
-                                            UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
+                Text code = EmberforgeUI.Label("Code", row, GuildRules.FormatCode(pending.Code),
+                                            UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
                 UIBuilder.Box(code.rectTransform, 28f, -62f, 560f, 28f, new Vector2(0f, 1f));
 
-                Text state = UIBuilder.Label("State", row, "ASKED TO JOIN", UITheme.FontTiny,
-                                             UITheme.TextMuted, TextAnchor.MiddleLeft);
+                Text state = EmberforgeUI.Label("State", row, "ASKED TO JOIN", UITheme.FontTiny,
+                                             Emberforge.TextQuiet, TextAnchor.MiddleLeft);
                 UIBuilder.Box(state.rectTransform, 620f, 0f, 320f, 34f, new Vector2(0f, 0.5f));
 
                 string requestId = pending.PendingRequestId;
                 string guildName = pending.Name;
-                UIButton withdraw = UIBuilder.SecondaryButton("Withdraw", row, "WITHDRAW",
-                                                              UITheme.FontSmall);
+                UIButton withdraw = EmberforgeUI.Button("Withdraw", row, "WITHDRAW",
+                                                              UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(withdraw.Root, -24f, 0f, 240f, 72f, new Vector2(1f, 0.5f));
                 withdraw.OnClick(delegate { OnWithdraw(requestId, guildName); });
             }
@@ -564,8 +561,8 @@ namespace Emberfall.UI.Screens
 
             if (_transferCancel == null)
             {
-                _transferCancel = UIBuilder.SecondaryButton("TransferCancel", _transferBanner.rectTransform,
-                                                            "CANCEL", UITheme.FontSmall);
+                _transferCancel = EmberforgeUI.Button("TransferCancel", _transferBanner.rectTransform,
+                                                            "CANCEL", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(_transferCancel.Root, 0f, 0f, 200f, 40f, new Vector2(1f, 0.5f));
                 _transferCancel.OnClick(OnCancelTransfer);
             }
@@ -600,34 +597,32 @@ namespace Emberfall.UI.Screens
         {
             RectTransform row = UIBuilder.Node("Member", _rosterHost);
             UIBuilder.Sized(row, CardWidth, RowHeight);
-            Image bg = row.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(16);
-            bg.type = Image.Type.Sliced;
-            bg.color = entry.IsSelf ? UITheme.WithAlpha(UITheme.PanelRaised, 0.98f) : UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", row,
-                            entry.IsSelf ? UITheme.WithAlpha(UITheme.Gold, 0.45f) : UITheme.BorderSoft,
-                            16, 2);
+            // YOUR OWN ROW stands proud of the sheet and everyone else is set into it. Depth
+            // rather than a gold border does the sorting, so a roster of thirty reads at a glance
+            // without a second frame colour entering the kit.
+            if (entry.IsSelf) EmberforgeUI.PanelOn(row, false);
+            else EmberforgeUI.SunkenOn(row);
 
             string shown = string.IsNullOrEmpty(entry.DisplayName) ? "Wayfarer" : entry.DisplayName;
-            Text name = UIBuilder.Label("Name", row, shown + (entry.IsSelf ? "   (YOU)" : ""),
-                                        UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            Text name = EmberforgeUI.Label("Name", row, shown + (entry.IsSelf ? "   (YOU)" : ""),
+                                        UITheme.FontBody, Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 28f, -20f, 420f, 38f, new Vector2(0f, 1f));
 
-            RectTransform chip = UIBuilder.Chip("Role", row, GuildRules.RoleLabel(entry.Role),
+            RectTransform chip = EmberforgeUI.Chip("Role", row, GuildRules.RoleLabel(entry.Role),
                                                 RoleTint(entry.Role), UITheme.FontTiny - 4);
             UIBuilder.Box(chip, 28f, -64f, 150f, 32f, new Vector2(0f, 1f));
 
-            Text seen = UIBuilder.Label("Seen", row, GuildRules.LastSeenLabel(entry.LastSeenUnix, now),
+            Text seen = EmberforgeUI.Label("Seen", row, GuildRules.LastSeenLabel(entry.LastSeenUnix, now),
                                         UITheme.FontTiny - 2,
-                                        now - entry.LastSeenUnix < 300 ? UITheme.Success : UITheme.TextDim,
+                                        now - entry.LastSeenUnix < 300 ? UITheme.Success : Emberforge.TextQuiet,
                                         TextAnchor.UpperLeft);
             UIBuilder.Box(seen.rectTransform, 190f, -64f, 200f, 30f, new Vector2(0f, 1f));
 
             // -1 is "no line published", which is a different sentence from a line worth nothing.
-            Text power = UIBuilder.Label("Power", row,
+            Text power = EmberforgeUI.Label("Power", row,
                                          entry.PowerScore < 0 ? "NO LINE" : "POWER  " + entry.PowerScore,
                                          UITheme.FontSmall,
-                                         entry.PowerScore < 0 ? UITheme.TextDim : UITheme.Gold,
+                                         entry.PowerScore < 0 ? Emberforge.TextQuiet : Emberforge.TextGold,
                                          TextAnchor.MiddleLeft);
             UIBuilder.Box(power.rectTransform, 470f, 0f, 300f, 34f, new Vector2(0f, 0.5f));
 
@@ -639,8 +634,8 @@ namespace Emberfall.UI.Screens
             {
                 if (GuildRules.CanMakeLeader(mine, entry.Role, entry.IsSelf))
                 {
-                    UIButton make = UIBuilder.GoldButton("MakeLeader", row, "MAKE LEADER",
-                                                         UITheme.FontSmall);
+                    UIButton make = EmberforgeUI.Button("MakeLeader", row, "MAKE LEADER",
+                                                         UITheme.FontSmall, ForgeButtonKind.Primary);
                     UIBuilder.Box(make.Root, -24f, 0f, 320f, 72f, new Vector2(1f, 0.5f));
                     make.OnClick(delegate { OnMakeLeader(capturedId, capturedName); });
                 }
@@ -650,24 +645,35 @@ namespace Emberfall.UI.Screens
             float right = -24f;
             if (GuildRules.CanRemove(mine, entry.Role, entry.IsSelf))
             {
-                UIButton remove = UIBuilder.IconButton("Remove", row, "x", 62f,
-                                                       UITheme.WithAlpha(UITheme.Danger, 0.28f),
-                                                       UITheme.TextPrimary);
-                UIBuilder.Box(remove.Root, right, 0f, 62f, 62f, new Vector2(1f, 0.5f));
+                // The kit's disc with a cross on it, at full touch size. Removing a member is
+                // the one destructive control on this page and it is deliberately the SMALLEST:
+                // a full-width ember button beside PROMOTE would make the two read as a pair of
+                // equal choices.
+                ForgeDisc removeDisc = EmberforgeUI.IconButton("Remove", row, "", TextureLab.Sigil(0, 64),
+                                                               Emberforge.TextGold, 62f, null);
+                UIBuilder.Box(removeDisc.Root, right, 0f, HubStyle.TouchMin, HubStyle.TouchMin,
+                              new Vector2(1f, 0.5f));
+                removeDisc.Glyph.enabled = false;
+                Text cross = EmberforgeUI.Title("Cross", removeDisc.Face, "X", UITheme.FontBody,
+                                                UITheme.Danger, TextAnchor.MiddleCenter);
+                UIBuilder.FillParent(cross.rectTransform, 0f);
+                UIBuilder.Outlined(cross, Emberforge.Outline, Emberforge.StrokeThin);
+                cross.raycastTarget = false;
+                UIButton remove = removeDisc.Button;
                 remove.OnClick(delegate { OnRemove(capturedId, capturedName, capturedRole); });
                 right -= 78f;
             }
 
             if (GuildRules.CanPromote(mine, entry.Role, entry.IsSelf))
             {
-                UIButton promote = UIBuilder.SecondaryButton("Promote", row, "PROMOTE", UITheme.FontSmall);
+                UIButton promote = EmberforgeUI.Button("Promote", row, "PROMOTE", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(promote.Root, right, 0f, 220f, 72f, new Vector2(1f, 0.5f));
                 promote.OnClick(delegate { OnSetRole(capturedId, capturedName, GuildRole.Officer); });
                 right -= 236f;
             }
             else if (GuildRules.CanDemote(mine, entry.Role, entry.IsSelf))
             {
-                UIButton demote = UIBuilder.SecondaryButton("Demote", row, "DEMOTE", UITheme.FontSmall);
+                UIButton demote = EmberforgeUI.Button("Demote", row, "DEMOTE", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(demote.Root, right, 0f, 220f, 72f, new Vector2(1f, 0.5f));
                 demote.OnClick(delegate { OnSetRole(capturedId, capturedName, GuildRole.Member); });
                 right -= 236f;
@@ -675,7 +681,7 @@ namespace Emberfall.UI.Screens
 
             if (!entry.IsSelf)
             {
-                UIButton team = UIBuilder.GoldButton("Team", row, "THEIR TEAM", UITheme.FontSmall);
+                UIButton team = EmberforgeUI.Button("Team", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Primary);
                 UIBuilder.Box(team.Root, right, 0f, 250f, 72f, new Vector2(1f, 0.5f));
                 team.OnClick(delegate { OnOpenTeam(capturedId, capturedName); });
             }
@@ -685,7 +691,7 @@ namespace Emberfall.UI.Screens
         {
             if (role == GuildRole.Leader) return UITheme.Gold;
             if (role == GuildRole.Officer) return UITheme.Shard;
-            return UITheme.TextMuted;
+            return Emberforge.TextQuiet;
         }
 
         // ================================================================== actions
@@ -973,20 +979,15 @@ namespace Emberfall.UI.Screens
             RectTransform card = UIBuilder.Node("Card", parent);
             UIBuilder.Sized(card, CardWidth, height);
 
-            Image bg = card.gameObject.AddComponent<Image>();
-            bg.sprite = UISkin.Panel(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.BorderSoft, 18, 2);
+            EmberforgeUI.PanelOn(card, false);
             return card;
         }
 
+        /// <summary>A section heading, and deliberately not a ribbon: this page is a column of
+        /// cards and a ribbon across each would be a stack of banners. See EmberforgeUI.Heading.</summary>
         private Text Heading(RectTransform card, string text)
         {
-            Text label = UIBuilder.Label("Heading", card, text, UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 30f, -22f, 700f, 26f, new Vector2(0f, 1f));
-            return label;
+            return EmberforgeUI.Heading("Heading", card, text, 30f, -22f);
         }
     }
 }
