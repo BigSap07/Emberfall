@@ -6,8 +6,9 @@ unedited. The archive is the reasoning: why a mechanic is shaped the way it is, 
 measured, what it refused to build and why. This file is the state: what exists, where it lives,
 what is moving, and what is owed.
 
-Checked against the repository on 2026-09-22, against a live `Tools/build-check.ps1` run, a live
-`validate_heroes.py` run and the files themselves, not against this document's own prior claims.
+Checked against the repository on 2026-09-22, after the 2-star and 1-star kits landed and the
+roster reached 94 of 94, against a live `Tools/build-check.ps1` run, a live `validate_heroes.py`
+run and the files themselves, not against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
 
@@ -24,23 +25,23 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 2 failures.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The two
-  reds are the talent coverage note and the campaign power-band guard, both under **Known bugs**,
-  and both are standing instruments reporting a real reading rather than a break. **A 3rd failure
-  is a regression.** Diagnose it; do not add it to the list. Two caveats that are not regressions:
-  the still-dormant guards listed under **Next** will fire as the lower-star kits adopt those
-  features, and a turned-around tripwire goes red if the content it names stops using what it
+- **`Tools/build-check.ps1`: 1 failure.** It lints the docs, compiles the core and the
+  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
+  is the talent coverage note under **Known bugs**, and it is a standing instrument reporting a
+  real reading rather than a break. The campaign power-band guard was the second and is green: the
+  curve was re-solved under the eighteen 3-star kits and the low-star batch moved nothing it reads.
+  **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
+  a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
 - **Doc lint is clean.** `Tools/doc-lint.ps1` scans 37 tracked markdown files and reports 122
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
-- **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 30 failures.**
-  Every one is a star-shape finding on a hero still carrying a placeholder kit, and the 30 are
-  exactly the twelve 2-stars and the eighteen 3-stars. The eight 1-stars pass, because a basic and
-  nothing else is their whole contract. This is the scoreboard for the authoring work under
-  **Next** and it closes as kits land. It was 86 before any kit was written, 70 before the 5-star
-  pass, 56 when the 4-star pass opened, and 30 now that all 26 of them are authored.
+- **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
+  It was the scoreboard for the authoring work and the authoring work is finished. It read 86
+  before any kit was written, 70 before the 5-star pass, 56 when the 4-star pass opened, 30 when
+  all 26 of those were authored, 12 once the 3-star tier landed, and 0 now that the 2-stars and
+  1-stars have real kits. **Every one of the 94 heroes carries an authored kit**, and no hero in
+  `heroes.json` has a `placeholder` in an ability id any more.
 - Two further instruments exist and are not run by `build-check.ps1`, because both need the live
   Supabase project: `Tools/supabase-rules-test.py` (accounts, saves, friends) and
   `Tools/supabase-guild-rules-test.py` (guilds). Both last reported clean.
@@ -57,10 +58,11 @@ of them needs a stated reason in the commit that moves it.
   stage's opening battle fought by a fresh profile's starting three. This used to be a recollection
   carried in prose; the campaign-curve pass pinned it to a file, with one line per stage
   attributing that pass's move.
-- **`hero-sweep-baseline.txt`: 280 lines.** Five seeds for each of the 56 authored heroes, which is
-  all thirty 5-stars and all twenty-six 4-stars. The 38 placeholder heroes are not swept.
+- **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
+  the whole roster. Nothing is excluded from it any more.
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
-  against the same hero at the same seed with nothing picked.
+  against the same hero at the same seed with nothing picked. Talents are a 5-star's alone, so the
+  lower tiers add none and this file stays at 450.
 
 ## Systems
 
@@ -79,16 +81,18 @@ account of each, including what was deliberately not built: no ATB gauge, no acc
 apply-a-status-by-hand entry point.
 
 The 4-star pass added exactly two engine members, `HighestEnergyAlly` and `LargestShieldAlly` on
-`TargetMode`, appended at the end of the enum so no existing ordinal moved. Everything else the
-tier needed already had a shipped occupant. Where Pinoy's text could not be said at all, the batch
-approximated it, marked the clause draft and recorded a row rather than growing the engine; see
-`Docs/ENGINE-GAPS.md`.
+`TargetMode`, appended at the end of the enum so no existing ordinal moved. **The 3-star and
+low-star passes added none at all.** Everything else those tiers needed already had a shipped
+occupant. Where Pinoy's text could not be said, each batch approximated it, marked the clause draft
+and recorded a row rather than growing the engine; `Docs/ENGINE-GAPS.md` is the whole record and is
+now a closed list, because no hero is left to author.
 
 ### Content
 
 Seven JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
 
-- `heroes.json`: 94 heroes. 8 one-star, 12 two-star, 18 three-star, 26 four-star, 30 five-star.
+- `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
+  26 four-star, 30 five-star.
 - `enemies.json`: 12 enemy templates.
 - `campaign.json`: 2 chapters, 12 stages each. `waveCount` is authored per stage now rather than 12
   everywhere, so a stage's ladder is `waveCount` times 12 battles: 36 on `1-1` to `1-4`, 72 on
@@ -102,9 +106,8 @@ Seven JSON files in `Assets/Resources/Content`. Balance and content changes go t
 
 ### Heroes and kits
 
-**All thirty 5-stars and all twenty-six 4-stars have real kits.** That is 56 of 94 authored and 38
-placeholders left, all of them at three stars and below, and their designs are written and waiting
-in `import/Heroes.json`.
+**Every hero has a real kit. The roster is authored at 94 of 94**, and `import/Heroes.json` has no
+design left waiting in it.
 
 - A **5-star** is a basic, an active, the described passives (often authored as more than two, one
   per trigger a described passive answers), a stat-block passive and three talents. 90 talents in
@@ -112,7 +115,12 @@ in `import/Heroes.json`.
 - A **4-star** is a basic, an active and `passive1`, plus the same overflow `passives` list where
   one described clause answers a trigger of its own. **No talents and no stat-block passive**,
   because those are what a 5-star has and a 4-star does not.
-- The other 38 carry a one-effect basic and a one-effect active.
+- A **3-star** is a basic, an active and `passive1`, and nothing else.
+- A **2-star** is a basic and `passive1`. It has no active skill, which also means it has nothing
+  to spend Energy on; four of Pinoy's low-star designs pay the hero Energy, and each shipped kit
+  keeps the amount and hands it somewhere it can be used. That is an open question for Pinoy rather
+  than a rewording, and `Docs/PINOY-LIST.md` section 2c carries it.
+- A **1-star** is a basic and nothing else.
 
 The **star contract** is the authoritative kit rule and `validate_heroes.py` enforces it at import
 time: 1 star is basicAttack only; 2 adds passive1; 3 adds activeSkill; 4 requires activeSkill and
@@ -125,22 +133,65 @@ enforces its **size**, and without it a 4-star with a 300% active satisfies ever
 the project while being a better hero than the 5-star beside it.
 
 The band measures each authored hero's own output - damage dealt plus healing paid plus shielding
-granted, credited by source - over the hero sweep's five seeds in the hero sweep's arena, and
-asserts that **every graded 4-star reads between x0.45 and x0.85 of its own role's authored 5-star
-median.** Talents are excluded because the sweep arena fields none, which is also why the ceiling
-is 0.85 rather than 1.00: a 4-star reading nine tenths of a 5-star without that 5-star's three
-talents is not a smaller hero.
+granted, credited by source - over the hero sweep's five seeds in the hero sweep's arena, and gives
+each tier below five its own pair of edges against that role's authored 5-star median. Talents are
+excluded because the sweep arena fields none, which is also why the 4-star ceiling is 0.85 rather
+than 1.00: a 4-star reading nine tenths of a 5-star without that 5-star's three talents is not a
+smaller hero.
+
+**One rule sets every rung, and it was read off the tiers already authored rather than invented for
+the ones below them: a tier's ceiling is the measured median of the tier above it, and its floor is
+half that ceiling.**
+
+| tier | band | where the ceiling came from | where the tier actually reads |
+|---|---|---|---|
+| 4-star | x0.45 to x0.85 | the talent argument above, not this rule | x0.49 to x0.78, median x0.61 |
+| 3-star | x0.30 to x0.60 | the sixteen graded 4-stars read a median of x0.61 | x0.30 to x0.45, median x0.365 |
+| 2-star | x0.18 to x0.36 | the thirteen graded 3-stars read a median of x0.365 | x0.20 to x0.30, median x0.225 |
+| 1-star | x0.10 to x0.20 | the twelve 2-stars read a median of x0.205 | x0.11 to x0.13 |
+
+The floor is half the ceiling on the three lower rungs and 0.53 of it on the 4-star one, which is
+where the halving was read from. The ladder of ceilings is 0.85, 0.60, 0.36, 0.20, a step of x0.71,
+x0.60 and x0.56: **the step widens as the tier falls, and that is the shape of the roster rather
+than a choice.** Three stars to two is the rung where the active skill disappears and two stars to
+one is where the passive does, and a tier that loses a whole ability loses more than a tier that
+loses a clause.
+
+**A second reading asks the ordering question the band cannot**, because adjacent bands overlap -
+x0.45 to x0.60 for four against three, x0.30 to x0.36 for three against two, x0.18 to x0.20 for two
+against one. Every hero must also sit under its own role's median one tier up. That reading needs
+no minimum sample, because it is a claim about order rather than about a middle, so it runs in the
+ungraded roles too and it is the only thing holding the six Tinkerers below five stars that the
+band does not grade.
+
+**Why the low tiers' ability numbers are so much larger than Pinoy's.** The shipped 2-star and
+1-star basics run to about 350% of Attack where the sentence in `import/Heroes.json` says 105% to
+110%. Two things push the same way: a hero with no active skill spends every turn on one ability,
+and it carries 0.64 of its role's 5-star stat total at two stars and 0.52 at one, so it takes fewer
+turns before it dies. The tier ladder the roster already had says the same - a 3-star Bulwark's
+basic is 251% against a 5-star's 110% - and this is its last two rungs rather than a new rule.
 
 **The floor is enforced only where the median is one.** A role with fewer than three authored
 5-stars prints its ratio and is named ungraded, because a floor is a claim about where the middle
-of a role sits and one or two readings have no middle. Today that is Warden (1), Stalker (2),
-Binder (1) and Tinkerer (2). The ceiling keeps running for them. Four stars only: the tiers below
-are unauthored and their floors are numbers nobody has decided.
+of a role sits and one or two readings have no middle. That is Warden (1), Stalker (2), Binder (1)
+and Tinkerer (2), and it will not change now that the roster is complete. The ceiling keeps running
+for them, and so does the ordering reading.
 
-Every graded 4-star is inside the band. The ungraded ones are printed and three of them sit under
-where the floor would be if their role had one - Corin at x0.21, Demos at x0.28 and Iolan at x0.37,
-all three against a single-hero Binder or Warden median. Each wants re-grading the day a second and
-third 5-star is authored in that role, and none of them is a statement about the 4-star.
+**Every graded hero on every rung is inside its band**: 16 four-stars, 13 three-stars, 8 two-stars
+and 6 one-stars. The ungraded ones are printed and four of them sit under where the floor would be
+if their role had one - Corin at x0.20, Demos at x0.28 and Iolan at x0.37 against a single-hero
+Binder median, and Fenn and Till at x0.09 against a two-hero Tinkerer one. Each wants re-grading
+the day a second and third 5-star is authored in that role, and none of them is a statement about
+the hero.
+
+**The sweep's flimsiest filler has to be flimsier than the flimsiest hero**, and `CheckSweepFillerIsFlimsiest`
+now says so. The arena's hitter aims at `LowestHpEnemy`, so the smallest body on the player line is
+the one it works on, and the four fillers exist to stand beside the subject and contribute nothing.
+FillerD's declared 600 built to 804 through `StatMath.StarMultiplier`, and Moss, Fenn and Till
+build to 785, 790 and 790 - so for exactly those three the stat-stick was handing the hitter to the
+hero being measured. All three died in round one of every seed and read 0 output at any ability
+number: the subject was not small, it was absent. FillerD is 580 now, which builds to 777 and puts
+the whole roster above it.
 
 ### Rarity reaches the file, not just the engine
 
@@ -344,10 +395,12 @@ Damage event to the strike; per-clip `footFraction` stops a clip floating or sin
 `BattleAssets` loads unit sprites and backdrops by id, and logs an error naming the hero and the
 path it looked in when a unit declares art it does not have.
 
-**31 of 94 heroes have drawn art**, and they are the thirty 5-stars plus Celen. The other 63 carry
-`visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with their
-name under its feet, which makes "not drawn yet" a thing the game can say separately from "this
-hero's art is broken".
+**31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63
+carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
+their name under its feet, which makes "not drawn yet" a thing the game can say separately from
+"this hero's art is broken". All 94 profile badges are drawn and wired, so the battle sheets are
+the only art the roster is still missing, and with every kit authored they are **the last thing
+between the roster and being finished**. `Docs/PINOY-LIST.md` section 5 is the list.
 
 ### Dev Arena
 
@@ -379,51 +432,51 @@ differs between them.
 
 ## In progress
 
-**Nothing.** Every branch that was in flight has landed on `main`, and what it contains is now
-observable in the files: the 4-star tier across four authoring batches, the rarity stat pass, the
-star band's floor, the economy retune, the campaign curve re-derivation, the Hub's four layers,
-Arden's caps and `Docs/ENGINE-GAPS.md`.
+**`content/low-star-kits`** carries the twelve 2-star and eight 1-star kits, the star band's last
+two rungs and the sweep filler fix. Everything else that was in flight has landed on `main` and is
+observable in the files: the 4-star and 3-star tiers, the rarity stat pass, the star band's floor,
+the economy retune, the campaign curve re-derivation, the Hub's four layers, the Emberforge design
+system, Arden's caps and `Docs/ENGINE-GAPS.md`.
 
 ## Next
 
 In order.
 
-1. **The engine gaps pass.** `Docs/ENGINE-GAPS.md` is the input: 22 capabilities, 39 clauses, 20
-   heroes, grouped by what is missing rather than by hero so a repeat is visible. It is a record
-   rather than a work order, so the first job is deciding which groups are debt and which are
-   games this one is not. Two are already named. **Group 9 is the one to close first and most of
-   it is one line of code**: three of its five rows are the same exclusion in `OnEnemyDamagedAlly`,
-   met by Branik, Halwen and Toren and answered three times by pasting the passive onto `OnDamaged`
-   as well, so a flag on `PassiveDef` saying "and me" would delete three overflow passives from the
-   shipped roster and stop the next batch writing a fourth. **Group 4 is the next best value**:
-   four clauses across four heroes all asking for a per-source stat modifier, which is one status
-   kind beside `Vulnerable` pointing the other way. **Groups 20 and 22 are marked as different in
-   kind rather than as debt**, because an information layer and a movement system are games this
-   one is not.
-2. **Then the 3-star kits (18), the 2-star kits (12) and the 1-star kits (8).**
-   `validate_heroes.py` at **30 failures** is the scoreboard, and the 3-star tier is 18 of those
-   30.
-3. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
+1. **The second engine gaps pass, and it is now a closed list.** `Docs/ENGINE-GAPS.md` is the
+   input: 26 capabilities, 34 clauses, 30 heroes, grouped by what is missing rather than by hero so
+   a repeat is visible. The roster is authored end to end, so no further batch can add a row and
+   the file will not grow again. It is still a record rather than a work order, so the first job is
+   deciding which groups are debt and which are games this one is not. Three are already named.
+   **The eight groups with more than one occupant are where the value is**, and three of them pair
+   a low-star hero with a 4-star or 5-star that asked for the same thing first, so each closes two
+   kits at once. **Groups 23 and 35 are the pair to weigh together**: one wants an existing damage
+   modifier narrowed to a single hit, the other wants one widened to take a condition, and a single
+   conditioned chargeable modifier answers three clauses across three heroes. **Groups 20 and 22
+   are marked as different in kind rather than as debt**, because an information layer and a
+   movement system are games this one is not.
+2. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
    not: they read `UITheme` for colour and reference resolution and then write their own metrics at
    the call site. `HubStyle`'s own scope note says it is the Hub's chrome language rather than the
    game's, which is the honest description of a dialect that has not been generalised yet.
-4. **Light the tripwires the new kits need.** Fifteen dormancy tripwires are still guarded as
-   dormant because nothing reaches them: `LinkedUnit`, `AllLinkedUnits`, `OnLinkedUnitTargeted`,
-   `OnFunnelConvertFired`, `linkAmountPower`, `linkFromCaster`, `ScaleByLastMoved`,
-   `ShieldBrokenByCaster`, `EvasionUp`, `AccuracyDown`, `Interrupt`, `Splash`, `OnDodge`,
-   `PerTarget` and `LedgerMitigates`. `HpTransfer` and `GuaranteedCrit` came off that list during
-   the 4-star pass, lit by Rhys's Crossing Cut and Maera's Watch the Water, and `maxHpCap` went
-   back onto it when Arden's caps were moved to `attackCap`. A tripwire fires the moment a kit
-   adopts its feature; it is then **flipped, never deleted**, so it asserts the feature IS used and
-   names the content using it, and goes red again the day that content stops.
-5. **Re-run the campaign retune once the lower tiers carry real kits.** The curve is measured
-   against a partly-stubbed bench and will shift when that bench fills; the detail is under **Open
-   decisions**, because the shift is already visible and is one of the two harness reds.
+3. **The dormancy tripwires that will now stay dormant.** Twelve are still guarded as dormant
+   because nothing reaches them: `LinkedUnit`, `AllLinkedUnits`, `OnLinkedUnitTargeted`,
+   `linkAmountPower`, `linkFromCaster`, `ScaleByLastMoved`, `ShieldBrokenByCaster`, `EvasionUp`,
+   `Interrupt`, `PerTarget`, `LedgerMitigates` and `maxHpCap`. `HpTransfer` and `GuaranteedCrit`
+   came off the list during the 4-star pass, lit by Rhys's Crossing Cut and Maera's Watch the
+   Water; `AccuracyDown`, `Splash` and `OnDodge` came off during the 3-star pass, lit by Adric,
+   Aster and Cal; and the standing `TargetBan` came off with Yara's Second Bearing. **The roster is
+   authored, so no future kit will light the remainder** - each is now a feature the engine has and
+   the content does not use, which is a decision to make rather than a wait, and
+   `ShieldBrokenByCaster` in particular is the near-miss: `Docs/ENGINE-GAPS.md` group 32 is Arno
+   asking for exactly it, from a side of the event where the condition cannot be read. A tripwire
+   is **flipped, never deleted**, so a lit one asserts the feature IS used and names the content
+   using it, and goes red again the day that content stops.
 
 ## Blocked
 
-- **The talent selection UI.** Not blocked technically, but not worth building against a roster
-  whose lower-star kits are still placeholders.
+- **The talent selection UI.** No longer blocked on content: it was held back because the roster's
+  lower-star kits were placeholders, and they are not any more. It is the next thing that can be
+  built without waiting on anybody.
 - **Chapters 3 to 6**, on art from Pinoy. `DESIGN-WORLD`'s contested-region proposal for chapter 3
   is moot until they exist.
 - **An APK**, on having an Android device to run it on.
@@ -431,27 +484,33 @@ In order.
 
 ## Open decisions
 
-Six. None of them is a number to nudge, and none of them is the economy question that used to head
-this list.
+Seven. None of them is a number to nudge, and neither the economy question nor the power-band one
+that used to head this list is still here.
 
 **The economy decision is resolved.** It read "a simulated player arrives at every stage between
 1.55 and 3.2 times its `recommendedPower`, and either progression is too fast or the targets are
 too low". It was both, and both halves were answered: the economy pass slowed income and the level
 cost, and the campaign-curve pass re-derived the whole `recommendedPower` table under the shortened
-chapter 1 ladder. The simulated player now arrives between x1.02 and x1.30. What is left is the six
-stages that sit marginally outside their band, which is the first decision below.
+chapter 1 ladder.
 
-1. **The power-band guard is red on six stages, all of them over and all of them marginal**, and
-   the cause is the roster rather than the tuning. The readings are `1-9` at x1.07 against a x1.05
-   ceiling, `1-12` at x1.06 against x1.05, `2-6` at x1.05 against x1.02, `2-7` and `2-8` a
-   thousandth over x1.30, and `2-12` at x1.02 against x1.02. The curve was derived on a tree
-   carrying five authored 4-stars; the tree now carries twenty-six. The line the balance pass
-   fields is **not pinned and is not re-picked**: `PlayerProfile.NormaliseTeam` fills an empty slot
-   with the strongest bench hero by Power and never displaces a hero already deployed, so the five
-   are sticky from whenever each slot was filled. They currently read Kael, Kiva, Isara, Adric and
-   Orelle, and **Adric is the only placeholder kit left among them**, with Orelle now authored.
-   Re-deriving the table is cheap and would go green; doing it before the 3-star tier lands means
-   doing it twice, because Adric is a 3-star. The decision is whether to re-derive now or wait.
+**And so is the power-band one.** It read "the guard is red on six stages, all of them over and all
+of them marginal", and the cause was the roster rather than the tuning: the curve had been derived
+on a tree carrying five authored 4-stars. `recommendedPower` was re-solved once the eighteen 3-star
+kits landed and the guard is green on all 24 stages. The low-star batch could not move it again:
+the line the balance pass fields is Kael, Kiva, Isara, Adric and Orelle, none of them below three
+stars, and `PlayerProfile.NormaliseTeam` only ever fills an empty slot and never displaces a hero
+already deployed, so a newly authored 1-star cannot walk into it. `Tools/solve-recommended-power.ps1`
+was therefore not re-run for this batch.
+
+1. **Four of the twelve low-star Energy clauses mean something other than what Pinoy wrote**, and
+   the choice is his. A 1-star is a basic and a 2-star is a basic and one passive, so **neither
+   tier has an active skill**, and Energy is spent on nothing else. Piri, Yara, Wynn and Orenna are
+   each written to gain Energy, which on those two tiers is a line a player reads on the card that
+   can never do anything. Each shipped kit keeps the amount and moves where it lands, to an ally
+   who can spend it - except Yara's, which is paid in Attack because two heroes handing Energy to
+   an ally was already one more than the tier needed. The alternative is to give the low tiers an
+   active skill, which is a change to the star contract rather than to four heroes.
+   `Docs/PINOY-LIST.md` section 2c carries all four.
 2. **All four walls resolve in zero extra sittings, in simulation.** A stage is
    `waveCount` times 12 wins even for a player who never loses, so every stage costs a floor of
    `ceil(ladder / 40)` sittings whatever its difficulty, and the wall is what it costs on top of
@@ -487,10 +546,11 @@ stages that sit marginally outside their band, which is the first decision below
    and the Ledger still capped zero times, so this is not a squad that needs picking better. The
    talent needs either a lower cap or a roster that can land the blow.
 6. **Hale reads x0.36 of the Marksman median.** He is a 5-star at 30,071 against a role median of
-   82,975, which puts him below every authored 4-star Marksman: Leon at 51,231, Maera at 50,276 and
-   Tavia at 41,993. The star band only grades heroes below five stars, so nothing currently fails on
-   this. Either his kit is under-tuned or the sweep arena cannot raise what he is built for, and the
-   two want telling apart before the 3-star pass makes the comparison worse.
+   82,975, which puts him below every authored 4-star Marksman - Leon at 51,231, Maera at 51,678
+   and Tavia at 41,993 - and now below both authored 3-star Marksmen as well, Cal at 29,004 being
+   the closest. The star band only grades heroes below five stars, so nothing fails on this. Either
+   his kit is under-tuned or the sweep arena cannot raise what he is built for, and the roster is
+   finished now, so the comparison is as bad as it is going to get and the two want telling apart.
 7. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
    gatehouse hard against the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's
    discs land on its right tower at every supported aspect. No marker and no label is covered -
@@ -505,16 +565,16 @@ stages that sit marginally outside their band, which is the first decision below
 
 ## Known bugs
 
-The two harness reds first, then the rest.
+The one harness red first, then the rest.
 
 1. **20 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
    particular matchup, an `OnLedgerCapped`. Every one is named in the report with what it waits on,
    and 23 of them are proved separately in the dark-talent arenas, each built to raise its own gate.
    The check is red because the sweep refuses to call "nothing happened" a pass. It read 29 when the
-   roster was authored, 27 after the dark-talent pass, and 20 after the kit-defect pass.
-2. **6 of 24 stages leave the campaign power band.** Open decision 1 above carries the readings and
-   the cause.
+   roster was authored, 27 after the dark-talent pass, and 20 after the kit-defect pass. **It is
+   still 20**: talents belong to a 5-star alone, so the 3-star, 2-star and 1-star tiers added none
+   and could not move this number.
 
 Beyond the harness:
 
