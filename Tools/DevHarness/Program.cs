@@ -17875,6 +17875,7 @@ namespace Emberfall.DevHarness
             CheckGapGroupNine();
             CheckGapGroupFour();
             CheckGapGroupFive();
+            CheckGapGroupTwelve();
             Line("");
         }
 
@@ -18409,6 +18410,175 @@ namespace Emberfall.DevHarness
                 if (def != null) team.Add(MakeInstance(def, 1));
             }
             return RunWith(db, db.GetStage("g5_arena"), 5005, team);
+        }
+
+
+        // ------------------------------------------------------------------ group 12
+
+        /// <summary>
+        /// GROUP 12 - amounts written as a percentage of the HOLDER's health, two clauses.
+        ///
+        /// ApplyStatus resolves a Burn or Regen magnitude as EffectiveAttack * magnitude, which is
+        /// a number about the body that APPLIED the entry. "Recovery heals 3% Max HP each turn"
+        /// and "at turn end, Arrears loses 4% current HP" are both numbers about the body carrying
+        /// it, and the difference is not small: a Mender's Attack and an ally's bar are unrelated
+        /// quantities that happen to coincide at one level.
+        ///
+        /// Measured against two carriers with DIFFERENT Max HP in the same battle. An
+        /// Attack-scaled tick pays them the same amount and a holder-scaled one does not, and
+        /// nothing else in the arena can produce that difference.
+        /// </summary>
+        private static void CheckGapGroupTwelve()
+        {
+            Line("  group 12 - a tick written in the holder's own health");
+
+            // --- Regen off Max HP -------------------------------------------------------
+            BattleResult attackScaled = RunGapTwelveArena("regen", false);
+            BattleResult holderScaled = RunGapTwelveArena("regen", true);
+            int bigAttack = HealingInto(attackScaled, "g12_big");
+            int smallAttack = HealingInto(attackScaled, "g12_small");
+            int bigHolder = HealingInto(holderScaled, "g12_big");
+            int smallHolder = HealingInto(holderScaled, "g12_small");
+
+            Check(bigAttack == smallAttack && bigAttack > 0,
+                  "control: an Attack-scaled Regen pays the same tick to both carriers ("
+                  + bigAttack + " and " + smallAttack + ") whatever their bars are");
+            Check(bigHolder > smallHolder && smallHolder > 0,
+                  "holderHpTick pays each carrier a share of its OWN Max HP (" + bigHolder
+                  + " to the larger body, " + smallHolder + " to the one a fifth its size) - which is "
+                  + "what 'heals 3% Max HP each turn' says and what an applier's Attack cannot say");
+            Check(bigHolder >= smallHolder * 4 && bigHolder <= smallHolder * 6,
+                  "and the ratio between them tracks the ratio of their bars, which are five to "
+                  + "one (" + bigHolder + " against " + smallHolder + ") - the same fraction, read "
+                  + "off two different bodies");
+
+            // --- Burn off CURRENT HP ----------------------------------------------------
+            // A percentage of a draining bar has to be re-read as it drains, so the ticks must
+            // DECREASE across the battle. An Attack-scaled Burn pays the same number every time.
+            List<int> flat = DotTicksOn(RunGapTwelveArena("burn", false), "g12_big");
+            List<int> proportional = DotTicksOn(RunGapTwelveArena("burn", true), "g12_big");
+            Check(flat.Count >= 3 && AllEqual(flat),
+                  "control: an Attack-scaled Burn pays an identical tick every round ("
+                  + Join(flat) + ")");
+            Check(proportional.Count >= 3 && StrictlyDecreasing(proportional),
+                  "and holderHpTickCurrent re-reads the bar every tick, so the ticks shrink as it "
+                  + "drains (" + Join(proportional) + ") - stamping the amount once would have "
+                  + "produced the control's flat line");
+
+            Check(FingerprintOf(RunGapTwelveArena("burn", true)) == FingerprintOf(RunGapTwelveArena("burn", true)),
+                  "and the arena resolves the same way twice on the same seed");
+        }
+
+        /// <summary>Every Burn tick one named body took, in order.</summary>
+        private static List<int> DotTicksOn(BattleResult r, string defId)
+        {
+            List<int> ticks = new List<int>();
+            if (r == null) return ticks;
+            int id = -1;
+            for (int i = 0; i < r.Units.Count; i++) if (r.Units[i].DefId == defId) id = r.Units[i].Id;
+            if (id < 0) return ticks;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                if (e.Type == BattleEventType.Damage && e.TargetId == id && e.Status == StatusKind.Burn)
+                    ticks.Add(e.Value);
+            }
+            return ticks;
+        }
+
+        private static bool AllEqual(List<int> values)
+        {
+            for (int i = 1; i < values.Count; i++) if (values[i] != values[0]) return false;
+            return values.Count > 0;
+        }
+
+        private static bool StrictlyDecreasing(List<int> values)
+        {
+            for (int i = 1; i < values.Count; i++) if (values[i] >= values[i - 1]) return false;
+            return values.Count > 1;
+        }
+
+        /// <summary>
+        /// Two carriers with a five-to-one difference in authored HP, and one actor whose Attack
+        /// is the same for both. That ratio is the measurement: an Attack-scaled tick cannot
+        /// produce it and a holder-scaled one cannot avoid it.
+        ///
+        /// Both carriers share a ROLE, because StatMath scales a hero's bar by it - two roles
+        /// would have made the ratio under test a product of the authored HP and a role table,
+        /// which is a different claim from the one the check makes.
+        /// </summary>
+        private static BattleResult RunGapTwelveArena(string mode, bool holderScaled)
+        {
+            // 0.03 of Max HP against an Attack term chosen to pay the SAME amount to the smaller
+            // body, so the control arm is not merely a different number - it is the number the
+            // holder-scaled arm produces for one of the two carriers.
+            string holder = holderScaled
+                ? (mode == "burn" ? ", \"holderHpTick\": 0.1, \"holderHpTickCurrent\": true"
+                                  : ", \"holderHpTick\": 0.03")
+                : "";
+            string status = mode == "burn" ? "Burn" : "Regen";
+            // Attack 100 x magnitude 0.6 = 60, which is 0.03 of the small body's 2000 Max HP.
+            string apply = ", { \"kind\": \"ApplyStatus\", \"target\": \"" + (mode == "burn" ? "AllEnemies" : "AllAllies")
+                         + "\", \"status\": \"" + status + "\", \"bypassResist\": true, \"chance\": 1,"
+                         + " \"duration\": 9, \"magnitude\": 0.6" + holder + " }";
+
+            // The Regen arm heals allies, so the two carriers are heroes and the enemy wounds
+            // both of them every turn - HARDER THAN THE BIGGEST TICK, because a heal is clamped to
+            // the HP actually missing and a wound smaller than the tick would measure the clamp
+            // rather than the tick. The Burn arm damages enemies, so the carriers are enemies
+            // there. Both arms keep the same two bars, five to one.
+            string bigHero = mode == "burn" ? "" : @",
+    { ""id"": ""g12_big"", ""name"": ""Big"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 60000, ""attack"": 1, ""defense"": 0, ""speed"": 8, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12bh"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } },
+    { ""id"": ""g12_small"", ""name"": ""Small"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
+      ""hp"": 12000, ""attack"": 1, ""defense"": 0, ""speed"": 7, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12sh"", ""name"": ""Tap"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }";
+
+            string heroes = @"{
+  ""heroes"": [
+    { ""id"": ""g12_actor"", ""name"": ""Actor"", ""aspect"": ""Ember"", ""role"": ""Mender"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 900, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12a_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] },
+      ""passive"": { ""id"": ""g12_apply"", ""name"": ""Lay It On"", ""trigger"": ""BattleStart"",
+        ""oncePerBattle"": true,
+        ""effects"": [ { ""kind"": ""EnergyGain"", ""target"": ""Self"", ""flat"": 0 }" + apply + @" ] } }" + bigHero + @"
+  ]
+}";
+            // The Burn arm's carriers. Harmless attackers: the arena measures ticks, not a fight.
+            string burnFoes = mode == "burn" ? @",
+    { ""id"": ""g12_small"", ""name"": ""Small"", ""aspect"": ""Ember"", ""hp"": 2000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 6, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12sf"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }" : "";
+            string bigFoe = mode == "burn"
+                ? @"{ ""id"": ""g12_big"", ""name"": ""Big"", ""aspect"": ""Ember"", ""hp"": 10000, ""attack"": 1,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12bf"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] } }"
+                : @"{ ""id"": ""g12_foe"", ""name"": ""Foe"", ""aspect"": ""Ember"", ""hp"": 1000000, ""attack"": 3000,
+      ""defense"": 0, ""speed"": 10, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""g12f"", ""name"": ""Swing"", ""effects"": [ { ""kind"": ""Damage"", ""target"": ""AllEnemies"", ""power"": 1.0 } ] } }";
+
+            string enemies = @"{ ""enemies"": [ " + bigFoe + burnFoes + @" ] }";
+            string spawns = mode == "burn"
+                ? @"{ ""id"": ""g12_big"", ""level"": 1 }, { ""id"": ""g12_small"", ""level"": 1 }"
+                : @"{ ""id"": ""g12_foe"", ""level"": 1 }";
+            string campaign = @"{
+  ""chapters"": [ { ""id"": ""g12_ch"", ""name"": ""Gaps"", ""stages"": [
+    { ""id"": ""g12_arena"", ""index"": 1, ""enemies"": [ " + spawns + @" ] } ] } ]
+}";
+            ContentDatabase db = LoadSyntheticContent(heroes, enemies, campaign, GapBalance(4), "Gap12");
+            if (db == null) return null;
+            string[] ids = mode == "burn"
+                ? new string[] { "g12_actor" }
+                : new string[] { "g12_actor", "g12_big", "g12_small" };
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = db.GetHero(ids[i]);
+                if (def != null) team.Add(MakeInstance(def, 1));
+            }
+            return RunWith(db, db.GetStage("g12_arena"), 1212, team);
         }
 
         private static void CheckNineGaps(ContentDatabase live)

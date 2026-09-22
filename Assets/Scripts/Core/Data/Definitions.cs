@@ -698,6 +698,31 @@ namespace Emberfall.Core.Data
         /// </summary>
         public int ExtendCap;
 
+        // ---------- the gaps pass, group 12: a tick written in the HOLDER's health ----------
+
+        /// <summary>
+        /// Makes a Burn or Regen entry tick as a FRACTION OF ITS HOLDER'S OWN HP rather than as a
+        /// multiple of the applier's Attack. Zero (the default) is the existing behaviour and the
+        /// one every DoT in shipped content uses.
+        ///
+        /// "Recovery heals 3% Max HP each turn" and "at turn end, Arrears loses 4% current HP" are
+        /// both numbers about the body carrying the entry, and ApplyStatus resolves a Burn or
+        /// Regen magnitude as EffectiveAttack * magnitude - a number about the body that applied
+        /// it. On a Mender's Regen that means the tick is right at exactly one level and one ally's
+        /// bar; on a percent-of-current-HP debuff it cannot be said at all, so the shipped
+        /// approximation is a second passive on a turn-end trigger carrying a Damage effect and an
+        /// attackCap the sentence never mentions.
+        ///
+        /// READ AT TICK TIME, not stamped at apply time, and that is the whole point of the
+        /// current-HP half: a percentage of a bar that is draining has to be re-read as it drains.
+        /// The Max HP half is re-read too, so a Max HP buff that lands mid-fight is answered.
+        /// </summary>
+        public float HolderHpTick;
+
+        /// <summary>Which pool HolderHpTick reads: false (the default) is Max HP, true is the
+        /// holder's CURRENT HP. Ignored when HolderHpTick is zero.</summary>
+        public bool HolderHpTickCurrent;
+
         public static EffectDef FromJson(JsonValue j)
         {
             EffectDef e = new EffectDef();
@@ -796,6 +821,8 @@ namespace Emberfall.Core.Data
             e.ShieldTransferDuration = Math.Max(0, j.GetInt("shieldTransferDuration", 0));
             e.InvertDuration = Math.Max(0, j.GetInt("invertDuration", 0));
             e.ExtendCap = Math.Max(0, j.GetInt("extendCap", 0));
+            e.HolderHpTick = j.GetFloat("holderHpTick", 0f);
+            e.HolderHpTickCurrent = j.GetBool("holderHpTickCurrent", false);
             return e;
         }
 
@@ -914,6 +941,8 @@ namespace Emberfall.Core.Data
             c.ShieldTransferDuration = ShieldTransferDuration;
             c.InvertDuration = InvertDuration;
             c.ExtendCap = ExtendCap;
+            c.HolderHpTick = HolderHpTick;
+            c.HolderHpTickCurrent = HolderHpTickCurrent;
             return c;
         }
     }

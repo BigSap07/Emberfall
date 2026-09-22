@@ -713,10 +713,19 @@ namespace Emberfall.Core.Combat
             /// scaling off the removal of a non-DoT therefore resolves to nothing, which is the
             /// honest answer - and is visible, since a heal of zero emits no event.
             /// </summary>
-            private static float RemainingDotDamage(StatusInstance entry)
+            private static float RemainingDotDamage(StatusInstance entry, CombatUnit carrier)
             {
                 if (entry == null || entry.Kind != StatusKind.Burn) return 0f;
                 int rounds = entry.RoundsLeft > 0 ? entry.RoundsLeft : 0;
+                // A holder-HP Burn carries no Magnitude, so the per-tick amount has to be asked of
+                // the body it is sitting on - which is also the only reading that makes "the
+                // damage the cleanse prevented" true of such an entry. Zero on every Burn in
+                // shipped content, which takes the Magnitude branch it always took.
+                if (entry.HolderHpTick > 0f && carrier != null)
+                {
+                    float pool = entry.HolderHpTickCurrent ? carrier.Hp : carrier.EffectiveMaxHp;
+                    return pool * entry.HolderHpTick * rounds;
+                }
                 return entry.Magnitude * rounds;
             }
             private float _lastLedgerBankedStored;
@@ -1768,7 +1777,17 @@ namespace Emberfall.Core.Combat
 
                     if (s.Kind == StatusKind.Burn)
                     {
-                        float burnDmg = s.Magnitude;
+                        // ENGINE-GAPS group 12: a tick written in the HOLDER'S health.
+                        //
+                        // Magnitude is a multiple of the applier's Attack resolved once at apply
+                        // time, which is the right unit for "deals 40% of Attack each turn" and
+                        // the wrong one for "loses 4% current HP". Read fresh every tick rather
+                        // than stamped, because a percentage of a bar that is draining has to be
+                        // re-read as it drains. Zero on every Burn in shipped content, and a zero
+                        // takes the branch the engine always took.
+                        float burnDmg = s.HolderHpTick > 0f
+                            ? (s.HolderHpTickCurrent ? unit.Hp : unit.EffectiveMaxHp) * s.HolderHpTick
+                            : s.Magnitude;
                         CombatUnit dotSource = s.SourceId >= 0 ? FindUnit(s.SourceId) : null;
                         burnDmg *= OutputModMultiplier(dotSource, unit, OutputModScope.DoTOnly);
                         int damage = (int)Math.Round(burnDmg, MidpointRounding.AwayFromZero);
@@ -1848,7 +1867,14 @@ namespace Emberfall.Core.Combat
                     }
                     else if (s.Kind == StatusKind.Regen)
                     {
-                        int heal = (int)Math.Round(s.Magnitude, MidpointRounding.AwayFromZero);
+                        // The same reading from the other direction. "Recovery heals 3% Max HP
+                        // each turn" is a number about the ally carrying it, and resolving it as
+                        // the Mender's Attack makes it right at exactly one level against exactly
+                        // one bar.
+                        float regen = s.HolderHpTick > 0f
+                            ? (s.HolderHpTickCurrent ? unit.Hp : unit.EffectiveMaxHp) * s.HolderHpTick
+                            : s.Magnitude;
+                        int heal = (int)Math.Round(regen, MidpointRounding.AwayFromZero);
                         if (heal < 1) heal = 1;
                         ApplyHealValue(s.SourceId, unit, heal, "heal", false);
                     }
@@ -2907,6 +2933,19 @@ namespace Emberfall.Core.Combat
                                 }
                             }
 
+                        // The holder-HP tick, stamped the way Charges and the per-round budget
+                        // above are. Zero on every Burn and Regen in shipped content, so no
+                        // existing tick changes what it reads.
+                        if (effect.HolderHpTick > 0f
+                            && (effect.Status == StatusKind.Burn || effect.Status == StatusKind.Regen))
+                            for (int hh = 0; hh < target.Statuses.Count; hh++)
+                            {
+                                StatusInstance hs = target.Statuses[hh];
+                                if (hs.Kind != effect.Status || hs.SourceId != source.Id) continue;
+                                hs.HolderHpTick = effect.HolderHpTick;
+                                hs.HolderHpTickCurrent = effect.HolderHpTickCurrent;
+                            }
+
                         // The skill scope of a DamageTakenUp entry, stamped the way Charges and
                         // the per-round budget above are. False on every entry in shipped content,
                         // so no existing modifier gains a scope nobody authored.
@@ -3067,7 +3106,7 @@ namespace Emberfall.Core.Combat
                             if (!StatusInfo.IsHarmful(target.Statuses[i].Kind)) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
-                            cleansedValue += RemainingDotDamage(target.Statuses[i]);
+                            cleansedValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -3094,7 +3133,7 @@ namespace Emberfall.Core.Combat
                             // Dispel that stripped the tag and left the pool would be the same
                             // disagreement, reached by a different door.
                             if (target.Statuses[i].Kind == StatusKind.Shield) target.Shield = 0f;
-                            dispelledValue += RemainingDotDamage(target.Statuses[i]);
+                            dispelledValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -3189,7 +3228,7 @@ namespace Emberfall.Core.Combat
                             // opposite direction and a different question.
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
-                            strippedValue += RemainingDotDamage(target.Statuses[i]);
+                            strippedValue += RemainingDotDamage(target.Statuses[i], target);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -7197,7 +7236,7 @@ namespace Emberfall.Core.Combat
                             CombatUnit u = _units[i];
                             if (!u.Alive || u.IsPlayer == caster.IsPlayer || u == excluded || Rejected(caster, u)) continue;
                             float pending = 0f;
-                            for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s]);
+                            for (int s = 0; s < u.Statuses.Count; s++) pending += RemainingDotDamage(u.Statuses[s], u);
                             if (pending <= 0f) continue;
                             if (picked == null || pending > best || (pending == best && u.Slot < picked.Slot))
                             {
@@ -7559,6 +7598,8 @@ namespace Emberfall.Core.Combat
                     landed.UsesPerRound = status.UsesPerRound;
                     landed.UsesThisRound = status.UsesThisRound;
                     landed.SkillOnly = status.SkillOnly;
+                    landed.HolderHpTick = status.HolderHpTick;
+                    landed.HolderHpTickCurrent = status.HolderHpTickCurrent;
                     landed.TickRecord = status.TickRecord;
                     landed.NoExtend = status.NoExtend;
                     landed.BanKind = status.BanKind;

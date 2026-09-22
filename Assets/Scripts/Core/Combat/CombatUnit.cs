@@ -100,6 +100,17 @@ namespace Emberfall.Core.Combat
         /// </summary>
         public bool SkillOnly;
 
+        /// <summary>
+        /// On a Burn or Regen entry: the fraction of the HOLDER'S OWN HP this ticks for, read
+        /// fresh every tick. Zero on every entry in shipped content, where the tick is
+        /// Magnitude - a multiple of the applier's Attack resolved once, at apply time.
+        ///
+        /// HolderHpTickCurrent picks the pool: false is Max HP, true is current HP. On the entry
+        /// rather than on the unit because two DoTs from two casters are two rules.
+        /// </summary>
+        public float HolderHpTick;
+        public bool HolderHpTickCurrent;
+
         // ---------------------------------------------------------------- tier eight: ledger extensions
         //
         // Carried on the Ledger entry alongside Stored and StoredCap, because they are properties
