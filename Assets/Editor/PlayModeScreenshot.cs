@@ -12,6 +12,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.EditorTools
 {
@@ -608,6 +609,17 @@ namespace Emberfall.EditorTools
                     app.Router.HeroDetail.SetHero(owned[0]);
                 }
 
+                // THE ITEM SCREENS NEED ITEMS. A fresh profile owns no armour and no relics, so
+                // the inventory and the forge photograph as two empty boxes - which proves the
+                // empty state and nothing at all about the grid, the detail panel or the item
+                // cards, and those are the whole of both pages.
+                //
+                // Granted through the same ArmorRoller.Roll and GameSession.GrantRelic the drop
+                // and the shop call, exactly as PopulateEvents drives real Summon and BuyRelic
+                // calls rather than poking the profile: a screenshot of state no code path
+                // produces is evidence of nothing.
+                if (name == "Inventory" || name == "Forge") PopulateItems(app);
+
                 if (name == "Battle" || name == "Result")
                 {
                     StageDef next = app.Session.NextStage;
@@ -702,6 +714,55 @@ namespace Emberfall.EditorTools
 
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
+        }
+
+        /// <summary>
+        /// Gives the profile a handful of real armour pieces and every relic, so the item screens
+        /// have something to draw.
+        ///
+        /// One piece per slot per owned hero at one temper would be a wall of identical cards, so
+        /// the tempers cycle: what a capture of these pages has to show is four different rarity
+        /// borders and four different pip counts side by side, which is the whole of the item
+        /// card's rarity read.
+        /// </summary>
+        private static void PopulateItems(GameApp app)
+        {
+            GameSession session = app.Session;
+            ArmorConfig config = session.Content != null ? session.Content.Armor : null;
+            if (config == null || !config.IsUsable)
+            {
+                Debug.LogWarning("PlayModeScreenshot: the armor config is not usable, so the item"
+                                 + " screens will photograph empty.");
+                return;
+            }
+
+            PlayerProfile profile = session.Profile;
+            if (profile.OwnedArmor.Count == 0)
+            {
+                int seed = 770000;
+                for (int h = 0; h < profile.Heroes.Count && h < 4; h++)
+                {
+                    HeroInstance hero = profile.Heroes[h];
+                    if (hero.Def == null) continue;
+                    for (int sIdx = 0; sIdx < ArmorInfo.AllSlots.Length; sIdx++)
+                    {
+                        ArmorTemper temper = (ArmorTemper)((h + sIdx) % 4);
+                        ArmorPiece piece = ArmorRoller.Roll(config, ArmorInfo.AllSlots[sIdx], temper,
+                                                            hero.Def.Aspect, seed++);
+                        if (piece == null) continue;
+                        piece.Uid = profile.AllocateArmorUid();
+                        profile.OwnedArmor.Add(piece);
+                        if (h == 0) session.EquipArmor(hero, piece.Uid);
+                    }
+                }
+            }
+
+            for (int i = 0; i < session.Content.Relics.Count; i++)
+                session.GrantRelic(session.Content.Relics[i].Id);
+
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: the profile now holds " + profile.OwnedArmor.Count
+                      + " armor pieces and " + profile.OwnedRelics.Count + " relics.");
         }
 
         /// <summary>Requests one screen's PNG and advances the schedule to the next screen.

@@ -47,11 +47,11 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Save conflict chooser | converted | Both answers are primary, deliberately: there is no way out of this card, so teal would be lying. |
 | Overflow menu | converted | Already on the kit. |
 | Component gallery (`DesignGallery`) | converted | Gained the chip, the rule and the stat row. |
-| Battle result | pending | |
-| Battle HUD | pending | |
-| Hero detail | pending | |
-| Summon | pending | |
-| Inventory | pending | |
+| Battle result | converted | The card grew to 700 and both its lists scroll: the spoils are four rows after a battle and eight after a stage clear, and the damage table is one row per unit that fought, so both used to run out of the bottom of the card. |
+| Battle HUD | converted | The unit tags keep their plain 7-unit bars on purpose - a nine-sliced trough has no middle left to stretch at that height and renders as two squashed corners. The kit reaches the text on them. |
+| Hero detail | converted | The two panels stretch between the header and the action bar now. Fixed at 636 they needed 1056 units of height, so at 20:9 the action bar was drawn up through both of them. No ring round the portrait any more. |
+| Summon | converted | The banner stage stretches the same way: the action block was off the bottom of a 20:9 screen entirely. The guarantee bar is the kit's progress bar, at the sprite's own height - at 18 units it rendered as a lens. |
+| Inventory | converted | The category rail is a tab bar rather than eight buttons. The capture seeds real armour and relics, because the empty state proves nothing about the grid or the detail panel. |
 | Campaign | pending | |
 | Settings | pending | |
 | Profile | pending | |

@@ -159,7 +159,7 @@ namespace Emberfall.UI.Screens
         private UIButton _resultPrimary;
         private UIButton _resultSecondary;
 
-        private UIButton[] _statTabs;
+        private ForgeTab[] _statTabs;
         private int _statTabActive;
         private RectTransform _statsPanel;
         private readonly Dictionary<int, int> _statsDealt = new Dictionary<int, int>();
@@ -437,31 +437,35 @@ namespace Emberfall.UI.Screens
             _topHud = bar;
             UIBuilder.TopStrip(bar, 64f, 16f, UITheme.ScreenPadding);
 
-            _stageLabel = UIBuilder.Label("Stage", bar, "", UITheme.FontTiny, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            _stageLabel = EmberforgeUI.Label("Stage", bar, "", UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
             // 760 rather than 520: the wave/battle suffix pushed the longest real label
             // ("2-4  THE DRIFTING CAUSEWAY  WAVE 12/12  BATTLE 12/12") to 652px, which drew
             // outside the old box. It LOOKED fine because the top-left is otherwise empty, which
             // is exactly the kind of defect that survives a screenshot and dies the moment
             // anything else is placed there. Measured, not eyeballed.
             UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 760f, 26f, new Vector2(0f, 1f));
-            UIBuilder.Outlined(_stageLabel, UITheme.InkArt, 1.8f);
+            UIBuilder.Outlined(_stageLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _roundLabel = UIBuilder.Label("Round", bar, "", UITheme.FontTiny - 4, UITheme.TextDim, TextAnchor.LowerLeft);
+            _roundLabel = EmberforgeUI.Label("Round", bar, "", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.Box(_roundLabel.rectTransform, 4f, 4f, 520f, 22f, new Vector2(0f, 0f));
-            UIBuilder.Outlined(_roundLabel, UITheme.InkArt, 1.5f);
+            UIBuilder.Outlined(_roundLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _speedButton = UIBuilder.SecondaryButton("Speed", bar, "1x", UITheme.FontTiny);
+            // TEAL, all three. These are the controls that change how the fight in front of you
+            // plays out, and none of them is the thing the screen wants pressed - the battle is
+            // what the screen wants watched. The one ember button in this whole screen is the
+            // primary on the result panel, which is the only place there IS a next tap.
+            _speedButton = EmberforgeUI.Button("Speed", bar, "1x", UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(_speedButton.Root, -4f, 0f, 84f, 44f, new Vector2(1f, 0.5f));
             _speedButton.OnClick(CycleSpeed);
 
             // Same row as SPEED and SKIP, to the left of both: the three controls that change how
             // the fight in front of you plays out belong together, and AUTO is the one you set once
             // per stage rather than per battle, so it sits furthest from the thumb's resting edge.
-            _autoButton = UIBuilder.SecondaryButton("Auto", bar, "AUTO", UITheme.FontTiny);
+            _autoButton = EmberforgeUI.Button("Auto", bar, "AUTO", UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(_autoButton.Root, -204f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
             _autoButton.OnClick(ToggleAuto);
 
-            _skipButton = UIBuilder.SecondaryButton("Skip", bar, "SKIP", UITheme.FontTiny);
+            _skipButton = EmberforgeUI.Button("Skip", bar, "SKIP", UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(_skipButton.Root, -96f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
             _skipButton.OnClick(SkipToEnd);
         }
@@ -482,19 +486,20 @@ namespace Emberfall.UI.Screens
             _bannerGroup = _banner.gameObject.AddComponent<CanvasGroup>();
             _bannerGroup.alpha = 0f;
 
-            Image backing = _banner.gameObject.AddComponent<Image>();
-            backing.sprite = TextureLab.RoundedRect(14);
-            backing.type = Image.Type.Sliced;
-            backing.color = UITheme.ScrimBacking;
+            // The kit's recess rather than a plain dark rectangle. It stays the LIGHTEST thing
+            // the kit can put over a battlefield, for the reason the Hub's map markers are light:
+            // the fight underneath is the thing being watched, and a gold-framed panel across the
+            // enemy line every time anything casts would be chrome standing in front of the game.
+            Image backing = EmberforgeUI.SunkenOn(_banner);
             backing.raycastTarget = false;
 
-            _bannerTitle = UIBuilder.Label("Title", _banner, "", UITheme.FontBody, UITheme.Gold, TextAnchor.UpperCenter);
+            _bannerTitle = EmberforgeUI.Title("Title", _banner, "", UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperCenter);
             UIBuilder.Box(_bannerTitle.rectTransform, 0f, -8f, 500f, 34f, new Vector2(0.5f, 1f));
-            UIBuilder.Outlined(_bannerTitle, UITheme.InkArt, 1.8f);
+            UIBuilder.Outlined(_bannerTitle, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _bannerSub = UIBuilder.Label("Sub", _banner, "", UITheme.FontTiny - 2, UITheme.TextMuted, TextAnchor.LowerCenter);
+            _bannerSub = EmberforgeUI.Label("Sub", _banner, "", UITheme.FontTiny - 2, Emberforge.TextBody, TextAnchor.LowerCenter);
             UIBuilder.Box(_bannerSub.rectTransform, 0f, 8f, 500f, 24f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_bannerSub, UITheme.InkArt, 1.5f);
+            UIBuilder.Outlined(_bannerSub, Emberforge.Outline, Emberforge.StrokeThin);
 
             _banner.gameObject.SetActive(false);
         }
@@ -512,75 +517,99 @@ namespace Emberfall.UI.Screens
             // Landscape splits the panel into two panes: outcome, cause and actions on the left,
             // the spoils card on the right. The portrait layout stacked these down the middle and
             // mixed centre-anchored and bottom-anchored elements, which collide at 1080 of height.
-            _resultTitle = UIBuilder.Label("Title", _resultPanel, "", UITheme.FontDisplay + 16, UITheme.Gold, TextAnchor.MiddleCenter);
+            // VICTORY or DEFEAT in Cinzel, at display size, with the kit's thick stroke. The one
+            // word on this panel that is read from across a room.
+            _resultTitle = EmberforgeUI.Title("Title", _resultPanel, "", UITheme.FontDisplay + 16, Emberforge.TextGold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_resultTitle.rectTransform, -460f, 310f, 900f, 110f, new Vector2(0.5f, 0.5f));
-            UIBuilder.Outlined(_resultTitle, UITheme.InkTitle, 4f);
+            UIBuilder.Outlined(_resultTitle, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _resultSub = UIBuilder.Label("Sub", _resultPanel, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
+            _resultSub = EmberforgeUI.Label("Sub", _resultPanel, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(_resultSub.rectTransform, -460f, 232f, 860f, 40f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_resultSub, Emberforge.Outline, Emberforge.StrokeThin);
 
+            // 700 tall, not 560, and BOTH LISTS SCROLL. Neither is styling.
+            //
+            // The spoils list is four rows after an ordinary battle and up to eight after a stage
+            // clear - first-clear bonus, gold, shards, Wayfarer XP, a rank up, the next stage
+            // unlocking, an armour drop - and the stat list is one row per unit that fought, which
+            // on a wave is five heroes and as many enemies as the wave carried. Both were laid out
+            // in a fixed box with a VerticalLayoutGroup, which gives every child its preferred
+            // height and lets the total run straight out of the bottom of the card. The capture
+            // that found it shows the damage table printed through the card's own lower edge.
+            //
+            // A ScrollRect is the honest answer to a list whose length is a property of the fight:
+            // one that fits shows no scrollbar and behaves exactly as before, and one that does
+            // not can be reached instead of being drawn through the frame.
+            //
+            // 700 rather than taller because this card shares the screen with the battle HUD: at
+            // 20:9 the canvas is 966, so a 700-tall card centred on it starts at y 133 and clears
+            // the HUD's own strip, which ends at 80. An 880-tall card would have run into SKIP.
             RectTransform card = UIBuilder.Node("Rewards", _resultPanel);
-            UIBuilder.Box(card, 460f, 0f, 820f, 560f, new Vector2(0.5f, 0.5f));
-            Image cardImage = card.gameObject.AddComponent<Image>();
-            cardImage.sprite = TextureLab.RoundedRect(24);
-            cardImage.type = Image.Type.Sliced;
-            cardImage.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.Border, 24, 2);
+            UIBuilder.Box(card, 460f, 0f, 820f, 700f, new Vector2(0.5f, 0.5f));
+            EmberforgeUI.PanelOn(card, true);
 
-            // Rewards — always visible, top section of card.
-            Text spoilsHeading = UIBuilder.Label("Heading", card, "SPOILS", UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperCenter);
-            UIBuilder.Box(spoilsHeading.rectTransform, 0f, -6f, 400f, 26f, new Vector2(0.5f, 1f));
+            // Rewards - always visible, top section of card. A ribbon, because the card has one
+            // subject and the tab strip further down is what divides the rest of it.
+            EmberforgeUI.TitleRibbon("Heading", card, "SPOILS", 820f - Emberforge.RibbonOverhang * 2f);
 
-            _rewardList = UIBuilder.Node("List", card);
-            UIBuilder.Box(_rewardList, 0f, -38f, 764f, 208f, new Vector2(0.5f, 1f));
-            UIBuilder.VStack(_rewardList, 6f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+            ScrollRect rewardScroll;
+            _rewardList = UIBuilder.ScrollList("List", card, out rewardScroll, 4f,
+                                               new RectOffset(0, 0, 0, 0));
+            UIBuilder.Box(rewardScroll.GetComponent<RectTransform>(), 0f, -44f, 764f, 250f,
+                          new Vector2(0.5f, 1f));
 
             // Divider between rewards and stat breakdown.
-            RectTransform divider = UIBuilder.Node("Divider", card);
-            UIBuilder.Box(divider, 0f, -252f, 760f, 1f, new Vector2(0.5f, 1f));
-            Image dividerImage = divider.gameObject.AddComponent<Image>();
-            dividerImage.sprite = TextureLab.White;
-            dividerImage.color = UITheme.Border;
+            Image dividerImage = EmberforgeUI.Rule("Divider", card);
+            UIBuilder.Box(dividerImage.rectTransform, 0f, -302f, 760f, Emberforge.RuleHeight,
+                          new Vector2(0.5f, 1f));
 
             // Stat tab strip — 3 tabs: DEALT / HEALED / TAKEN. Rewards are never behind a tab.
             RectTransform tabStrip = UIBuilder.Node("Tabs", card);
-            UIBuilder.Box(tabStrip, 0f, -261f, 780f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(tabStrip, 0f, -314f, 780f, 34f, new Vector2(0.5f, 1f));
             UIBuilder.HStack(tabStrip, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
+            // REAL TABS, not three teal buttons. Three buttons in a row is three things to press
+            // and no statement about which one you are looking at; a tab bar says both, and the
+            // selected state is a different plate rather than a tint - see EmberforgeUI.Tab.
             string[] tabNames = { "DEALT", "HEALED", "TAKEN" };
-            _statTabs = new UIButton[tabNames.Length];
+            _statTabs = new ForgeTab[tabNames.Length];
             for (int ti = 0; ti < tabNames.Length; ti++)
             {
                 int idx = ti;
-                UIButton tab = UIBuilder.SecondaryButton("Tab_" + tabNames[ti], tabStrip, tabNames[ti], UITheme.FontTiny - 2);
-                UIBuilder.Sized(tab.Root, 256f, 30f);
-                tab.OnClick(() => SelectStatTab(idx));
+                ForgeTab tab = EmberforgeUI.Tab(tabNames[ti], tabStrip, 256f, 34f,
+                                                delegate { SelectStatTab(idx); });
                 _statTabs[ti] = tab;
             }
 
-            _statsPanel = UIBuilder.Node("Stats", card);
-            UIBuilder.Box(_statsPanel, 0f, -303f, 764f, 229f, new Vector2(0.5f, 1f));
-            UIBuilder.VStack(_statsPanel, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
+            ScrollRect statScroll;
+            _statsPanel = UIBuilder.ScrollList("Stats", card, out statScroll, 2f,
+                                               new RectOffset(0, 0, 0, 0));
+            UIBuilder.Box(statScroll.GetComponent<RectTransform>(), 0f, -356f, 764f, 328f,
+                          new Vector2(0.5f, 1f));
 
             // the Debrief line - one sentence, the single biggest reason the fight went this way -
             // sits directly under the outcome it explains, in the left pane's reading order:
             // verdict, cause, then what to do about it (the two buttons below)
-            _debriefText = UIBuilder.WrappedLabel("Debrief", _resultPanel, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.UpperCenter);
+            _debriefText = EmberforgeUI.Body("Debrief", _resultPanel, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(_debriefText.rectTransform, -460f, 40f, 820f, 220f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Outlined(_debriefText, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Three actions, one of which is gold. Positions and the primary's label are set per
             // result in ShowResult rather than here, because what a player should do next after a
             // win is not what they should do after a loss, and this panel is built once.
-            _resultSecondary = UIBuilder.SecondaryButton("AdjustLine", _resultPanel, "ADJUST LINE", UITheme.FontBody);
+            _resultSecondary = EmberforgeUI.Button("AdjustLine", _resultPanel, "ADJUST LINE",
+                                                   UITheme.FontBody, ForgeButtonKind.Secondary);
             _resultSecondary.OnClick(AdjustLine);
 
-            _resultTertiary = UIBuilder.SecondaryButton("Rematch", _resultPanel, "REMATCH", UITheme.FontBody);
+            _resultTertiary = EmberforgeUI.Button("Rematch", _resultPanel, "REMATCH",
+                                                  UITheme.FontBody, ForgeButtonKind.Secondary);
             _resultTertiary.OnClick(Replay);
 
             // Wired to OnPrimary, not to Replay or Continue directly: UIButton.OnClick APPENDS a
             // listener, so rebinding this per result would stack a handler every fight and one tap
             // would eventually start several. The dispatch flag changes; the wiring never does.
-            _resultPrimary = UIBuilder.GoldButton("Rematch", _resultPanel, "REMATCH", UITheme.FontHeading);
+            _resultPrimary = EmberforgeUI.Button("Rematch", _resultPanel, "REMATCH",
+                                                 UITheme.FontHeading, ForgeButtonKind.Primary);
             _resultPrimary.OnClick(OnPrimary);
 
             _resultPanel.gameObject.SetActive(false);
@@ -841,18 +870,24 @@ namespace Emberfall.UI.Screens
             // that was failing - light text on the bright horizon band of the ashen and proving
             // fields had almost no separation. The outline does the work a plate would do without
             // reinstating the slab this tag was deliberately rebuilt away from.
-            bar.Name = UIBuilder.Label("Name", bar.Root, snapshot.Name,
-                                       UITheme.FontTiny - 2, UITheme.TextPrimary, TextAnchor.LowerCenter);
+            //
+            // THE BARS THEMSELVES STAY PLAIN RECTANGLES and that is deliberate rather than
+            // unconverted: a nine-sliced Emberforge trough is a rounded section with an outline,
+            // an inner shadow and two corner regions, and at 7 units tall over a unit's head
+            // there is no middle left to stretch - it would render as two squashed corners. The
+            // kit reaches the text on this tag, which is where it can do its job.
+            bar.Name = EmberforgeUI.Label("Name", bar.Root, snapshot.Name,
+                                          UITheme.FontTiny - 2, Emberforge.TextOnColor, TextAnchor.LowerCenter);
             UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + EnergyHeight + 3f, 240f, 22f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Name, UITheme.InkArt, 2.4f);
+            UIBuilder.Outlined(bar.Name, Emberforge.Outline, 2.4f);
 
             // Status sits above the name and is empty unless the unit actually carries one, so it
             // costs nothing visually at rest. Kept against a literal reading of "nothing else"
             // because DESIGN-BATTLE-READABILITY.md names it as load-bearing: without it there is
             // no way to see that a unit is burning, taunting or warded down.
-            bar.Status = UIBuilder.Label("Status", bar.Root, "", UITheme.FontTiny - 5, UITheme.Warning, TextAnchor.LowerCenter);
+            bar.Status = EmberforgeUI.Label("Status", bar.Root, "", UITheme.FontTiny - 5, UITheme.Warning, TextAnchor.LowerCenter);
             UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + EnergyHeight + 26f, 240f, 18f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Status, UITheme.InkArt, 1.9f);
+            UIBuilder.Outlined(bar.Status, Emberforge.Outline, 1.9f);
 
             // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
             // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
@@ -1673,9 +1708,9 @@ namespace Emberfall.UI.Screens
             item.Root.pivot = new Vector2(0.5f, 0.5f);
             UIBuilder.Size(item.Root, 320f, 60f);
             item.Group = item.Root.gameObject.AddComponent<CanvasGroup>();
-            item.Label = UIBuilder.Label("Text", item.Root, "", UITheme.FontHeading, Color.white, TextAnchor.MiddleCenter);
+            item.Label = EmberforgeUI.Label("Text", item.Root, "", UITheme.FontHeading, Color.white, TextAnchor.MiddleCenter);
             UIBuilder.FillParent(item.Label.rectTransform, 0f);
-            UIBuilder.Outlined(item.Label, UITheme.InkArt, 2.4f);
+            UIBuilder.Outlined(item.Label, Emberforge.Outline, 2.4f);
             _floatPool.Add(item);
             return item;
         }
@@ -2206,7 +2241,7 @@ namespace Emberfall.UI.Screens
 
         private void AddRewardRow(string label, string value, Color tint)
         {
-            Widgets.StatRow(label, _rewardList, label, value, tint, 56f);
+            Widgets.StatRow(label, _rewardList, label, value, tint, 44f);
         }
 
         private void ComputeStats()
@@ -2243,11 +2278,7 @@ namespace Emberfall.UI.Screens
             ShowStats(map);
 
             for (int i = 0; i < _statTabs.Length; i++)
-            {
-                if (_statTabs[i] == null) continue;
-                Text lbl = _statTabs[i].Root.GetComponentInChildren<Text>();
-                if (lbl != null) lbl.color = i == index ? UITheme.Gold : UITheme.TextDim;
-            }
+                EmberforgeUI.SetTabSelected(_statTabs[i], i == index);
         }
 
         private void ShowStats(Dictionary<int, int> statMap)
@@ -2278,15 +2309,17 @@ namespace Emberfall.UI.Screens
 
             RectTransform hdrNode = UIBuilder.Node("Hdr_" + header, _statsPanel);
             UIBuilder.Sized(hdrNode, 0f, 22f);
-            Text hdrText = UIBuilder.Label("Text", hdrNode, header, UITheme.FontTiny - 2, UITheme.TextDim, TextAnchor.MiddleLeft);
+            Text hdrText = EmberforgeUI.Label("Text", hdrNode, header, UITheme.FontTiny - 2,
+                                              Emberforge.TextGold, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(hdrText.rectTransform, 12f, 0f, 0f, 0f);
+            UIBuilder.Outlined(hdrText, Emberforge.Outline, Emberforge.StrokeThin);
 
             for (int i = 0; i < units.Count; i++)
             {
                 int val;
                 statMap.TryGetValue(units[i].Id, out val);
                 Color tint = i == 0 ? UITheme.Gold : UITheme.TextPrimary;
-                Widgets.StatRow(units[i].Name, _statsPanel, units[i].Name, val.ToString(), tint, 44f);
+                Widgets.StatRow(units[i].Name, _statsPanel, units[i].Name, val.ToString(), tint, 36f);
             }
         }
 
