@@ -32,9 +32,13 @@ Two runs decide whether the tree is healthy, and they measure different things.
   is the talent coverage note under **Known bugs**, and it is a standing instrument reporting a
   real reading rather than a break. The campaign power-band guard was the second and is green, and
   so is the geared curve's CEIL band. The balance line is Kael, Kiva, Isara, Adric and Orelle, and
-  the Dispel repair changed Kael, so `Tools/solve-recommended-power.ps1` was re-run: 13 of 24
-  stages moved, chapter 2 came down everywhere but `2-1`, and the stage fingerprint baseline was
-  regenerated under the levels it wrote.
+  the pinned line the CEIL is read with is Kael, Aeron, Nereia, Seraphine and Isolde. The
+  ENGINE-GAPS content pass changed Kael and Nereia, and Nereia's Change of Course alone took the
+  CEIL out of band, so `Tools/solve-recommended-power.ps1` was re-run: 19 of 24 stages moved, 15 of
+  them in the authored roster, chapter 2's `recommendedPower` came down by 3% to 5%, and the stage
+  fingerprint baseline was regenerated under the levels it wrote. The solver needed
+  `BattleClips.cs` added to its own compile to run at all, the same file `build-check.ps1` gives the
+  harness.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
@@ -63,17 +67,21 @@ of them needs a stated reason in the commit that moves it.
   stage's opening battle fought by a fresh profile's starting three. This used to be a recollection
   carried in prose; the campaign-curve pass pinned it to a file, with one line per stage
   attributing that pass's move. The Dispel repair moved 22 of them on its own, and the re-solve it
-  forced moved 57 in total.
+  forced moved 57 in total. The ENGINE-GAPS content pass moved all 72: Kael's Unusable Cover and
+  Kiva's Broken Links are in every opening battle, and with those two kits put back and the committed
+  campaign, all 72 held. Its re-solve re-levels 15 of those openings on top.
 - **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
   the whole roster. Nothing is excluded from it any more. The Dispel repair and the Altheon retune
   moved 15 of them: all five of Altheon's, all five of Kael's and all five of Seraphine's. Kael and
   Seraphine both author a Dispel that had been taking their own bookkeeping; Altheon's basic was
-  retuned.
+  retuned. The ENGINE-GAPS content pass moved 127: every line of each kit it changed and none of
+  any other, `Docs/ENGINE-GAPS.md` pass 2 names them by group.
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. Talents are a 5-star's alone, so the
   lower tiers add none and this file stays at 450. The Dispel repair and the Altheon retune moved
   50 of them: all three talents of Altheon, Kael and Seraphine, plus all five seeds of Nysera I,
-  which appends a Dispel of its own.
+  which appends a Dispel of its own. The ENGINE-GAPS content pass moved 238: all three talents of
+  every 5-star whose base kit it changed, plus Isara III, Mireth II and III, and one seed of Kiva's.
 
 ## Systems
 
@@ -98,13 +106,17 @@ occupant. Where Pinoy's text could not be said, each batch approximated it, mark
 and recorded a row rather than growing the engine; `Docs/ENGINE-GAPS.md` is the whole record and is
 now a closed list, because no hero is left to author.
 
-**The fidelity pass (ENGINE-GAPS pass 2) added three fields no shipped content sets yet**:
-`PassiveDef.ChargeOnLanding`, which gives a limited passive its allowance back when a firing lands
-nothing, and `PassiveDef.BuffsOnly` and `EffectDef.BuffsOnly`, which stop a listener or a buff move
-treating a Mark, Ledger or Link as a buff. Both are opt-in because each, made the rule, moves the
-balance line. It also repaired `TargetMode.LastAttacker` inside a broadcast about another body, which
-moved Caldus and nothing else. The harness section ENGINE GAPS PASS 2 - FIDELITY proves all three and
-measures every shipped clause they reach.
+**The fidelity pass (ENGINE-GAPS pass 2) added three opt-in fields**: `PassiveDef.ChargeOnLanding`,
+which gives a limited passive its allowance back when a firing lands nothing, and
+`PassiveDef.BuffsOnly` and `EffectDef.BuffsOnly`, which stop a listener or a buff move treating a
+Mark, Ledger or Link as a buff. It also repaired `TargetMode.LastAttacker` inside a broadcast about
+another body, which moved Caldus and nothing else. **The content pass after it set
+`chargeOnLanding` on 27 shipped passives; `buffsOnly` is still set on none**, because made the rule
+it needs a campaign retune. That pass added three enum members and no fields:
+`EffectCondition.StatusStacksBelow` and `EffectCondition.SubjectHadStatusWhenStruck`, which let
+Oris's sequence replace his basic and Elyra's Patience ask about the body her blow found, and
+`PassiveTrigger.OnEnemyShielded`, the enemy-side mirror of `OnAllyShielded`, for Hale. The harness
+section ENGINE GAPS PASS 2 - FIDELITY proves all six and measures every shipped clause they reach.
 
 ### Content
 
@@ -146,8 +158,8 @@ time: 1 star is basicAttack only; 2 adds passive1; 3 adds activeSkill; 4 require
 passive1 with passive2 optional; 5 is the full kit including all three talents.
 
 **Every ability carries player-facing text with no number in it**, written to
-`Docs/ABILITY-TEXT-STYLE.md`: all 425 basics, actives, passives and talents on the 94 heroes, with
-32 exceptions. 31 are drafting notes whose sentence and kit still disagree, each a yes or no
+`Docs/ABILITY-TEXT-STYLE.md`: all 427 basics, actives, passives and talents on the 94 heroes, with
+31 exceptions. 30 are drafting notes whose sentence and kit still disagree, each a yes or no
 question in `Docs/PINOY-LIST.md` section 2f. One, Nysera's False Target, has no text because its
 damage half hits Nysera herself, which is a kit defect. `CheckAbilityTextIsPlayerFacing` enforces
 it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
@@ -259,17 +271,21 @@ room wherever it has one (`DarkTalentRooms`, the same 29 pairs the coverage note
 quantity is the star band's: damage, healing and shielding, credited by source. A talent loses when
 its mean sits more than two standard errors below zero. Five seeds could not answer this: the sweep
 rolls damage variance, and a talent that shifts the dice stream moves a five-seed total by more than
-most talents are worth. The reading is **38 gain, 47 sit within the noise or change nothing the
-output total can see, and 5 lose**, and all 5 are pinned in `KnownCostlyTalents` with a reason. The
+most talents are worth. The reading is **36 gain, 46 sit within the noise or change nothing the
+output total can see, and 8 lose**, and all 8 are pinned in `KnownCostlyTalents` with a reason. The
 check fails both when a talent starts losing without being listed and when a listed one stops.
 
 - **Two are traps**, both a conflict between the talent and its own kit, so neither could be mended
   by a number and both are in `Docs/PINOY-LIST.md` section 2e. Kael III pays 10% of his active for
   Rubble that What Breaks Forward consumes on the next basic, so its retention and cap never act.
-  Velis III blocks healing on a body her kit is converting that healing on.
-- **Three are trades.** Kiva III keeps her alive to the end of every fight in its room, where she
+  Mireth I trades a Missing Page that now lands every round for two landings per enemy per battle.
+  Velis III was the second trap until the content pass gated No Second Breath, and now reads inside
+  the noise.
+- **Six are trades.** Kiva III keeps her alive to the end of every fight in its room, where she
   otherwise dies in every one. Nysera I strips a buff off the body targeting her, which in the sweep
   is a taunting tank's Provoke. Rheia I is fewer casts that each hit harder, as its sentence says.
+  Rheia III, Mireth III and Marrow I each pay a price their own sentence names: Energy per strike,
+  her own Focus, a smaller Promise spread over a third ally.
 - **Altheon III is not on the list.** The dark-talent note had printed it as a loss, 103,377 against
   107,349, and that was one seed's crit draw. It fires in every seed and is worth +865 a battle over
   the check's 40 seeds and +1,025 over 150.
@@ -494,6 +510,14 @@ rewritten or written so it says what happens without quoting a number, the house
 2f. It changes descriptions only, so no fingerprint and no baseline moved. Every sentence that
 had text before the pass is listed before and after in `Docs/archive/ABILITY-TEXT-REWRITES.md`.
 
+**`balance/engine-gaps-content`** carries the content pass ENGINE-GAPS pass 2 wrote up: C1 to C12
+landed or corrected, C9's Dispel measured and not written, `chargeOnLanding` on 27 passives with
+Aster raised 3.3% to hold the 3-star band, G4 and G5 built so Elyra's Slow Growth and Oris's No
+Fixed Refrain say their sentences, `OnEnemyShielded` for Hale, fixes for Mireth's Absence, Rheia's
+Revision and Marrow's own Promise, verdicts on all nine suspected entries, the campaign re-solved,
+and all three baselines regenerated with each move attributed. `Docs/ENGINE-GAPS.md` pass 2 is the
+record, and every number above that changed describes the tree with this branch in it.
+
 **`balance/talent-traps`** carries `CheckTalentsAreWorthPicking` and its pinned list of the five
 talents that cost their hero output, described under **Talents** above, with the two traps sent to
 `Docs/PINOY-LIST.md` section 2e. It changes no content: neither trap could be mended by a number,
@@ -505,16 +529,17 @@ review included.
 
 In order.
 
-1. **The content pass the fidelity pass wrote up.** ENGINE-GAPS pass 2 read every shipped clause
-   against what the engine does with it and ranked seventeen findings by how much they change a
-   fight. Its section of `Docs/ENGINE-GAPS.md` ends in thirteen one-line content instructions,
-   C1 to C13, each proved by a harness pair whose status note flips when the line is made. Two of
-   them are balance decisions rather than wiring: C11 turns `chargeOnLanding` on across 24 passives
-   and drops Aster under the 3-star band unless she is raised about 3%, and C13 turns `buffsOnly` on
-   and takes the finale's CEIL from 63% to 22% unless the campaign is retuned with it. The file now
-   holds 28 capabilities and 39 clauses; five proposed primitives (G1 to G5), four of them small,
-   would close groups 25, 30, 23, 36 and 37. **Groups 20 and 22 stay marked as different in kind rather than as debt**,
-   because an information layer and a movement system are games this one is not.
+1. **What the fidelity pass left.** Its content pass is on the branch named under **In progress**,
+   and three things remain after it, none of them wiring. **C13**: `buffsOnly` on the eight
+   listeners and four buff moves whose text names a buff, which needs a campaign retune with it and
+   a fresh reading, because the 63%-to-22% CEIL figure predates the re-solve. **G1, G2 and G3**, the
+   three proposed primitives not built, which would close groups 25, 30 and 23. And the findings
+   the content pass left in `Docs/ENGINE-GAPS.md`: Hollowed's convert path never charging
+   `ledgerBankLimit`, a Dispel that takes the buff that raised it (what Mireth's Missing Page needs),
+   an empty auto-release recorded as zero (Nereia's two Reserve talents), and a counter refused by
+   the per-target budget still spending the Resolve its effect carries. The file holds 25
+   capabilities and 36 clauses. **Groups 20 and 22 stay marked as different in kind rather than as
+   debt**, because an information layer and a movement system are games this one is not.
 2. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
    not: they read `UITheme` for colour and reference resolution and then write their own metrics at
    the call site. `HubStyle`'s own scope note says it is the Hub's chrome language rather than the
@@ -661,16 +686,22 @@ instead and is named in the coverage note under **Known bugs**.
 
 The one harness red first, then the rest.
 
-1. **19 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
+1. **21 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
    particular matchup, a buff worth dispelling. Every one is named in the report with what it waits
-   on. **All 19 are proved separately in the dark-talent arenas**, each built to raise its own gate,
+   on. **18 of them are proved separately in the dark-talent arenas**, each built to raise its own gate,
    and the note that says so counts its own overlap now rather than carrying a number: it had read
    "23 of the 27" for two passes after the list stopped being 27 long. The check is red because the
    sweep refuses to call "nothing happened" a pass. It read 29 when the roster was authored, 27
    after the dark-talent pass, 20 after the kit-defect pass, and 20 again after the five-star
    review with different membership.
-   **The Dispel repair took it to 19, and two talents left as one joined.** Seraphine I and
+   **The ENGINE-GAPS content pass took it to 21, three joining and one leaving, and each move is the
+   content saying its sentence.** Brenna III now rides a Survival save and Aminah III a Priority
+   ally, and the sweep raises neither; Caldus III had only ever been seen through the empty firing
+   that `chargeOnLanding` now takes back out of the record; and Mireth II left, because her Pages
+   fill now. The three new ones are the three the dark-talent arenas do not reach, and the note
+   under the check names them.
+   **The Dispel repair had taken it to 19, and two talents left as one joined.** Seraphine I and
    Seraphine III both left: her Contrary Evidence had been dispelling the bookmark her own Volume
    Closed writes, so the book could not close on the bodies those two talents are about, and with
    the bookmark surviving both are observable in the sweep again. **Kael II joined**, and it is the
@@ -712,8 +743,9 @@ that section and changes nothing: Altheon's Final Record pays for Records that P
 already spending, and it had been reported as losing on that trade; over 150 seeds it is a gain of
 about 1%.
 
-**Section 2e is the two talents that cost the hero who picks them**, Kael III and Velis III, each a
-conflict with its own kit that a number cannot mend. `CheckTalentsAreWorthPicking` pins both, so
+**Section 2e is the two talents that cost the hero who picks them**, Kael III and Mireth I, each a
+conflict with its own kit that a number cannot mend. Velis III was the second until the content pass
+gated No Second Breath; it reads inside the noise now, and its design question stays in 2e as a note. `CheckTalentsAreWorthPicking` pins both, so
 the day either kit changes the harness says whether the talent became worth picking.
 
 ## Later

@@ -38,8 +38,11 @@ if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1
 
 # Compiled here rather than leaning on a build-check that ran at some point earlier, because the
 # whole value of this thing is that its answer describes the tree as it stands right now.
+# BattleClips.cs rides with the harness exactly as it does in build-check.ps1: the harness reads the
+# clip vocabulary the battle requests, and without it this compile fails on its first using.
 $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse |
-             Select-Object -Expand FullName) + (Join-Path $root "Tools\DevHarness\Program.cs")
+             Select-Object -Expand FullName) + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") +
+           (Join-Path $root "Tools\DevHarness\Program.cs")
 $rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))

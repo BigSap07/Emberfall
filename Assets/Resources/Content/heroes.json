@@ -134,12 +134,13 @@
             "bypassResist": true
           }
         ],
-        "description": "At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage, and that enemy takes 10% more damage from Hale for 2 rounds. Both halves answer the same body: when Quarry was defeated there is no Mark to move and the rider does not land either. Pinoy writes the move as happening at the end of a round in which Quarry was not defeated; the engine's nearest hook is the start of his own turn."
+        "description": "At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage, and that enemy takes 10% more damage from Hale for 2 rounds. Both halves answer the same body: when Quarry was defeated there is no Mark to move and the rider does not land either. Pinoy writes the move as happening at the end of a round in which Quarry was not defeated; the engine's nearest hook is the start of his own turn.",
+        "chargeOnLanding": true
       },
       "passive2": {
         "id": "hale_no_safe_distance",
         "name": "No Safe Distance",
-        "trigger": "OnEnemyBuffGained",
+        "trigger": "OnEnemyShielded",
         "oncePerBattle": false,
         "perTargetLimit": 1,
         "effects": [
@@ -148,9 +149,7 @@
             "target": "BroadcastSubject",
             "power": 0.7,
             "condition": "HasMyMark",
-            "conditionOn": "BroadcastSubject",
-            "condition2": "HasShield",
-            "conditionOn2": "BroadcastSubject"
+            "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "RemoveStatus",
@@ -158,9 +157,7 @@
             "status": "Vulnerable",
             "hits": 1,
             "condition": "HasMyMark",
-            "conditionOn": "BroadcastSubject",
-            "condition2": "HasShield",
-            "conditionOn2": "BroadcastSubject"
+            "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "RemoveStatus",
@@ -168,12 +165,54 @@
             "status": "Mark",
             "hits": 1,
             "condition": "HasMyMark",
-            "conditionOn": "BroadcastSubject",
-            "condition2": "HasShield",
-            "conditionOn2": "BroadcastSubject"
+            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "When an enemy marked as Quarry gains a buff while it holds a Ward, Hale strikes it and Quarry comes off. Once per enemy."
+        "description": "When an enemy marked as Quarry gains a Ward, Hale strikes it and Quarry comes off. Once per enemy."
+      },
+      "skills": {
+        "passive2": {
+          "id": "hale_no_safe_distance_unseen",
+          "name": "No Safe Distance (unseen)",
+          "trigger": "OnEnemyBuffGained",
+          "oncePerBattle": false,
+          "perTargetLimit": 1,
+          "effects": [
+            {
+              "kind": "Damage",
+              "target": "BroadcastSubject",
+              "power": 0.7,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject",
+              "condition2": "HasStatus",
+              "conditionStatus2": "Stealth",
+              "conditionOn2": "BroadcastSubject"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject",
+              "condition2": "HasStatus",
+              "conditionStatus2": "Stealth",
+              "conditionOn2": "BroadcastSubject"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "BroadcastSubject",
+              "status": "Mark",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "BroadcastSubject",
+              "condition2": "HasStatus",
+              "conditionStatus2": "Stealth",
+              "conditionOn2": "BroadcastSubject"
+            }
+          ],
+          "description": "When an enemy marked as Quarry becomes Untargetable, Hale strikes it and Quarry comes off. Once per enemy."
+        }
       },
       "talents": {
         "talentI": {
@@ -362,7 +401,7 @@
             "target": "LowestHpAlly",
             "magnitude": 1.0,
             "condition": "HasShield",
-            "conditionOn": "Caster",
+            "conditionOn": "BroadcastSubject",
             "condition2": "StatusStacksAtLeast",
             "conditionStatus2": "Resolve",
             "conditionValue2": 1,
@@ -376,10 +415,13 @@
             "condition": "StatusStacksAtLeast",
             "conditionStatus": "Resolve",
             "conditionValue": 1,
-            "conditionOn": "Caster"
+            "conditionOn": "Caster",
+            "condition2": "HasShield",
+            "conditionOn2": "BroadcastSubject"
           }
         ],
-        "description": "Once per round, when an ally ends their turn while Kael holds Rubble, Kael spends a Rubble. If that ally holds a Ward, Kael takes a share of it, then passes all of Kael’s Ward to the lowest-HP ally."
+        "description": "Once per round, when an ally holding a Ward ends their turn while Kael holds Rubble, Kael spends a Rubble to take a share of that Ward, then passes all of Kael’s Ward to the lowest-HP ally.",
+        "chargeOnLanding": true
       },
       "passive2": {
         "id": "kael_what_breaks_forward",
@@ -706,7 +748,8 @@
             "maxStacks": 2
           }
         ],
-        "description": "The first time each round a Forsaken enemy gains a buff, Kiva gains a Broken Link, holding up to a limit."
+        "description": "The first time each round a Forsaken enemy gains a buff, Kiva gains a Broken Link, holding up to a limit.",
+        "chargeOnLanding": true
       },
       "passive2": {
         "id": "kiva_severance_paid",
@@ -1044,7 +1087,50 @@
             "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "The first time an ally holding Promise would be defeated, Promise is spent, the ally is left barely standing and Marrow takes the rest of the blow. Marrow then briefly cannot be healed. Once per battle."
+        "description": "The first time an ally holding Promise would be defeated, Promise is spent, the ally is left barely standing and Marrow takes the rest of the blow. Marrow then briefly cannot be healed. Once per battle.",
+        "chargeOnLanding": true
+      },
+      "skills": {
+        "passive1": {
+          "id": "marrow_promise_heal_self",
+          "name": "The Cost Is Named (self)",
+          "trigger": "TurnStart",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "Heal",
+              "target": "Self",
+              "power": 0.01,
+              "targetMaxHpRatio": 0.08,
+              "condition": "HasMyMark",
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "Cleanse",
+              "target": "Self",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "Self",
+              "status": "Covered",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "Caster"
+            },
+            {
+              "kind": "RemoveStatus",
+              "target": "Self",
+              "status": "Mark",
+              "hits": 1,
+              "condition": "HasMyMark",
+              "conditionOn": "Caster"
+            }
+          ],
+          "description": "When Marrow himself holds Promise, it is spent at the start of his next turn: it heals him for a share of his Max HP and removes a debuff."
+        }
       },
       "talents": {
         "talentI": {
@@ -1055,6 +1141,12 @@
           "overrides": [
             {
               "ability": "passive1",
+              "effectIndex": 0,
+              "field": "targetMaxHpRatio",
+              "delta": -0.02
+            },
+            {
+              "ability": "skills.passive1",
               "effectIndex": 0,
               "field": "targetMaxHpRatio",
               "delta": -0.02
@@ -1538,7 +1630,8 @@
             "status": "DamageReductionUp"
           }
         ],
-        "includeSelf": true
+        "includeSelf": true,
+        "chargeOnLanding": true
       }
     },
     {
@@ -2003,7 +2096,8 @@
             "conditionOn": "BroadcastSubject",
             "power": 0.85
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -2117,7 +2211,7 @@
       "stars": 3,
       "startingHero": false,
       "hp": 1358,
-      "attack": 182,
+      "attack": 188,
       "defense": 58,
       "speed": 103,
       "critChance": 0.07,
@@ -2940,16 +3034,25 @@
           {
             "kind": "RedirectLethal",
             "target": "BroadcastSubject",
-            "power": 1.0
+            "power": 1.0,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "Covered",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "Heal",
             "target": "BroadcastSubject",
             "power": 0.01,
-            "targetMaxHpRatio": 0.12
+            "targetMaxHpRatio": 0.12,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "Covered",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "The first time each round an ally would fall, Nereia takes the killing blow's excess herself, leaves them standing and heals them for a share of their Max HP."
+        "description": "The first time each round an ally Covered by Relief Circuit would fall, Nereia takes the killing blow's excess herself, leaves them standing and heals them for a share of their Max HP.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -2994,17 +3097,25 @@
         "talentIII": {
           "id": "nereia_reversed_flow",
           "name": "Reversed Flow",
-          "trigger": "OnAllyWouldDie",
+          "trigger": "None",
           "oncePerBattle": false,
-          "effects": [
+          "effects": [],
+          "description": "When Change of Course saves an ally, Nereia also strikes the enemy with the highest Attack for part of the damage she took in their place.",
+          "appends": [
             {
-              "kind": "Damage",
-              "target": "HighestAttackEnemy",
-              "power": 0.8,
-              "scaleByLastRedirect": true
+              "ability": "passive2",
+              "effect": {
+                "kind": "Damage",
+                "target": "HighestAttackEnemy",
+                "power": 0.8,
+                "scaleByLastRedirect": true,
+                "condition": "MyStatusStacksAtLeast",
+                "conditionStatus": "Covered",
+                "conditionValue": 1,
+                "conditionOn": "BroadcastSubject"
+              }
             }
-          ],
-          "description": "When an ally would fall, Nereia strikes the enemy with the highest Attack for part of the damage she last took in their place."
+          ]
         }
       },
       "skills": {
@@ -3089,6 +3200,15 @@
             "target": "HighestAttackEnemy",
             "status": "AttackUp",
             "hits": 1
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 4,
+            "duration": 99,
+            "hits": 2,
+            "condition": "SubjectLostStatusThisFiring",
+            "conditionOn": "LastTarget"
           }
         ],
         "description": "Strikes the enemy with the highest Attack. If it has Attack Up, Rheia applies Guard Down and strips the Attack Up."
@@ -3132,6 +3252,13 @@
             "target": "AllEnemies",
             "status": "AttackDown",
             "hits": 1
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 4,
+            "duration": 99,
+            "hits": 4
           }
         ],
         "description": "Strikes every enemy and applies Guard Down. Any enemy with Attack Down has it rewritten: it gains Attack Up, takes an extra hit and loses the Attack Down."
@@ -4271,7 +4398,8 @@
             "magnitude": 0.15
           }
         ],
-        "description": "Once per round, when an enemy carrying Departure is defeated, Departure passes to the highest-HP enemy and Vaelis's next turn advances."
+        "description": "Once per round, when an enemy carrying Departure is defeated, Departure passes to the highest-HP enemy and Vaelis's next turn advances.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -4691,7 +4819,8 @@
             "scaleByLastDamage": true,
             "power": 0.3
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -4912,7 +5041,8 @@
               "moveDuration": 2,
               "secondaryTarget": "RandomAlly"
             }
-          ]
+          ],
+          "chargeOnLanding": true
         }
       ]
     },
@@ -5816,10 +5946,13 @@
             "kind": "LedgerDeposit",
             "target": "Self",
             "power": 1.0,
-            "scaleByLastRedirect": true
+            "scaleByLastRedirect": true,
+            "condition": "SubjectLostStatusThisFiring",
+            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "The first time an ally would be defeated, if they hold Lasting Guard, they are left barely standing and Brenna takes the overflow herself. Their Guard and Memory are consumed, and the damage she took is added to her own Memory."
+        "description": "The first time an ally holding Lasting Guard would be defeated, they are left barely standing and Brenna takes the overflow herself. Their Guard and Memory are consumed, and the damage she took is added to her own Memory.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -5860,17 +5993,20 @@
         "talentIII": {
           "id": "brenna_what_held_once",
           "name": "What Held Once",
-          "trigger": "OnAllyWouldDie",
-          "oncePerBattle": true,
-          "effects": [
-            {
-              "kind": "GainResolve",
-              "target": "Self",
-              "maxStacks": 1,
-              "duration": 99
-            }
-          ],
+          "trigger": "None",
+          "effects": [],
           "appends": [
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "GainResolve",
+                "target": "Self",
+                "maxStacks": 1,
+                "duration": 99,
+                "condition": "SubjectLostStatusThisFiring",
+                "conditionOn": "BroadcastSubject"
+              }
+            },
             {
               "ability": "active",
               "effect": {
@@ -5885,7 +6021,7 @@
               }
             }
           ],
-          "description": "The first time an ally would be defeated, Brenna gains Resolve. Her next Stand Again spends it to add a share of her Max HP to her own Memory."
+          "description": "When Survival of the Stubborn saves an ally, Brenna gains Resolve. Her next Stand Again spends it to add a share of her Max HP to her own Memory."
         }
       }
     },
@@ -6058,7 +6194,8 @@
             "conditionOn": "LastTarget"
           }
         ],
-        "description": "Once per round, when an ally falls to low HP, Edrin strikes the enemy with the deepest Observed Mark and gives the lowest-HP ally a Ward worth a share of his Max HP. If that enemy's Mark is at full depth, Edrin gains Energy."
+        "description": "Once per round, when an ally falls to low HP, Edrin strikes the enemy with the deepest Observed Mark and gives the lowest-HP ally a Ward worth a share of his Max HP. If that enemy's Mark is at full depth, Edrin gains Energy.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -6266,12 +6403,12 @@
             "target": "Self",
             "maxStacks": 4,
             "duration": 99,
-            "condition": "HasStatus",
+            "condition": "SubjectHadStatusWhenStruck",
             "conditionStatus": "Slow",
             "conditionOn": "LastTarget"
           }
         ],
-        "description": "After Elyra's basic attack, if its target is in Mire, she gains Resolve, up to a limit."
+        "description": "After Elyra's basic attack, if its target was already in Mire when she struck it, she gains Resolve, up to a limit."
       },
       "passive2": {
         "id": "elyra_stillness_bears_fruit",
@@ -6774,7 +6911,8 @@
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "The first time an ally would be defeated, if they carry a Seedling, they are left barely standing and Isara takes the overflow herself. The Seedling is then consumed with its full effect."
+          "description": "The first time an ally would be defeated, if they carry a Seedling, they are left barely standing and Isara takes the overflow herself. The Seedling is then consumed with its full effect.",
+          "chargeOnLanding": true
         }
       }
     },
@@ -7562,7 +7700,8 @@
             "hits": 1,
             "status": "Regen"
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -7952,7 +8091,8 @@
             "hits": 1,
             "status": "DefenseUp"
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -8087,9 +8227,9 @@
       "passive1": {
         "id": "nara_carry_on",
         "name": "Carry On",
-        "description": "An ally who is still below 35% HP after being healed gains 6% Damage Reduction for 1 round. Pinoy writes it as the first time only; a once-per-battle limit is spent when the trigger arrives rather than when the clause lands, so it would be gone on the battle's first heal whatever that ally's health. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 34.",
+        "description": "The first time an ally is still at low HP after being healed, they gain Bulwark.",
         "trigger": "OnAllyHealed",
-        "oncePerBattle": false,
+        "oncePerBattle": true,
         "effects": [
           {
             "kind": "ApplyStatus",
@@ -8103,7 +8243,8 @@
             "conditionOn": "BroadcastSubject",
             "conditionValue": 0.35
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -8667,7 +8808,8 @@
               "conditionOn": "BroadcastSource"
             }
           ],
-          "description": "The first time each round a Displaced enemy changes its attack target, Dahlia gains Energy and the targeted ally gains a Ward worth a share of Dahlia's Max HP."
+          "description": "The first time each round a Displaced enemy changes its attack target, Dahlia gains Energy and the targeted ally gains a Ward worth a share of Dahlia's Max HP.",
+          "chargeOnLanding": true
         },
         "passive2": {
           "id": "dahlia_broken_rhythm_answer",
@@ -9016,7 +9158,8 @@
               "magnitude": 0.2
             }
           ],
-          "description": "The first time each round First Claim uses an active skill, Merek advances the lowest-Energy ally's turn."
+          "description": "The first time each round First Claim uses an active skill, Merek advances the lowest-Energy ally's turn.",
+          "chargeOnLanding": true
         },
         "passive2": {
           "id": "merek_unsettled_timing",
@@ -9176,64 +9319,11 @@
             "target": "LowestEnergyEnemy",
             "condition": "HasStatus",
             "conditionOn": "Caster",
-            "conditionStatus": "MarkAlt",
-            "power": 1.5
-          },
-          {
-            "kind": "TurnShift",
-            "target": "Self",
-            "condition": "HasStatus",
-            "conditionOn": "Caster",
-            "conditionStatus": "MarkAlt",
-            "magnitude": 0.1
-          },
-          {
-            "kind": "RemoveStatus",
-            "target": "Self",
-            "condition": "HasStatus",
-            "conditionOn": "Caster",
-            "conditionStatus": "MarkAlt",
-            "hits": 1,
-            "status": "MarkAlt"
-          },
-          {
-            "kind": "Damage",
-            "target": "HighestEnergyEnemy",
-            "condition": "StatusStacksAtLeast",
-            "conditionCounterIndex": 2,
-            "conditionOn": "Caster",
-            "conditionValue": 1,
-            "power": 1.5
-          },
-          {
-            "kind": "EnergyGain",
-            "target": "HighestEnergyEnemy",
-            "condition": "StatusStacksAtLeast",
-            "conditionCounterIndex": 2,
-            "conditionOn": "Caster",
-            "conditionValue": 1,
-            "flat": -20
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "Self",
-            "chance": 1,
-            "condition": "StatusStacksAtLeast",
-            "conditionCounterIndex": 2,
-            "conditionOn": "Caster",
-            "conditionValue": 1,
-            "consumesResolve": true,
-            "counterIndex": 2,
-            "duration": 3,
-            "status": "MarkAlt"
-          },
-          {
-            "kind": "Damage",
-            "target": "LowestEnergyEnemy",
-            "condition": "HasStatus",
-            "conditionOn": "Caster",
             "conditionStatus": "Mark",
-            "power": 1.25
+            "power": 1.25,
+            "condition2": "LacksStatus",
+            "conditionStatus2": "MarkAlt",
+            "conditionOn2": "Caster"
           },
           {
             "kind": "Damage",
@@ -9241,7 +9331,10 @@
             "condition": "LacksStatus",
             "conditionOn": "Caster",
             "conditionStatus": "Mark",
-            "power": 1.25
+            "power": 1.25,
+            "condition2": "LacksStatus",
+            "conditionStatus2": "MarkAlt",
+            "conditionOn2": "Caster"
           },
           {
             "kind": "RemoveStatus",
@@ -9258,7 +9351,10 @@
             "comparedStat": "Speed",
             "condition": "CasterStatBelowTarget",
             "conditionOn": "LastTarget",
-            "power": 0.45
+            "power": 0.45,
+            "condition2": "LacksStatus",
+            "conditionStatus2": "MarkAlt",
+            "conditionOn2": "Caster"
           },
           {
             "kind": "EnergyGain",
@@ -9266,10 +9362,80 @@
             "comparedStat": "Speed",
             "condition": "CasterStatBelowTarget",
             "conditionOn": "LastTarget",
-            "flat": -10
+            "flat": -10,
+            "condition2": "LacksStatus",
+            "conditionStatus2": "MarkAlt",
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "Damage",
+            "target": "LowestEnergyEnemy",
+            "power": 1.5,
+            "condition": "HasStatus",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster",
+            "condition2": "StatusStacksBelow",
+            "conditionCounterIndex2": 2,
+            "conditionValue2": 2,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "TurnShift",
+            "target": "Self",
+            "magnitude": 0.1,
+            "condition": "HasStatus",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster",
+            "condition2": "StatusStacksBelow",
+            "conditionCounterIndex2": 2,
+            "conditionValue2": 2,
+            "conditionOn2": "Caster",
+            "consumesResolve": true,
+            "counterIndex": 2,
+            "consumeStacks": 1
+          },
+          {
+            "kind": "Damage",
+            "target": "HighestEnergyEnemy",
+            "power": 1.5,
+            "condition": "HasStatus",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster",
+            "condition2": "StatusStacksAtLeast",
+            "conditionCounterIndex2": 2,
+            "conditionValue2": 2,
+            "conditionOn2": "Caster"
+          },
+          {
+            "kind": "EnergyGain",
+            "target": "HighestEnergyEnemy",
+            "flat": -20,
+            "condition": "HasStatus",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster",
+            "condition2": "StatusStacksAtLeast",
+            "conditionCounterIndex2": 2,
+            "conditionValue2": 2,
+            "conditionOn2": "Caster",
+            "consumesResolve": true,
+            "counterIndex": 2,
+            "consumeStacks": 1
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "Self",
+            "status": "MarkAlt",
+            "hits": 1,
+            "condition": "HasStatus",
+            "conditionStatus": "MarkAlt",
+            "conditionOn": "Caster",
+            "condition2": "StatusStacksBelow",
+            "conditionCounterIndex2": 2,
+            "conditionValue2": 1,
+            "conditionOn2": "Caster"
           }
         ],
-        "description": "Strikes the fastest enemy, or the enemy with the lowest Energy if Oris has just delayed an enemy. If the target is faster than Oris, he strikes it again and takes Energy off it. After Improvise the Way, it also carries No Fixed Refrain."
+        "description": "Strikes the fastest enemy, or the enemy with the lowest Energy if Oris has just delayed an enemy. If the target is faster than Oris, he strikes it again and takes Energy off it. After Improvise the Way, No Fixed Refrain takes the place of his next two basic attacks."
       },
       "active": {
         "id": "oris_improvise_the_way",
@@ -9297,7 +9463,15 @@
             "target": "Self",
             "counterIndex": 2,
             "duration": 3,
-            "maxStacks": 1
+            "maxStacks": 2,
+            "hits": 2
+          },
+          {
+            "kind": "ApplyStatus",
+            "target": "Self",
+            "status": "MarkAlt",
+            "duration": 3,
+            "chance": 1
           }
         ],
         "description": "Strikes every enemy and applies Disrupted. The first time each round a Disrupted enemy would gain Energy, it loses Energy instead, its turn is delayed and Oris's next ally advances. Oris then begins No Fixed Refrain."
@@ -9353,7 +9527,7 @@
         "trigger": "None",
         "oncePerBattle": false,
         "effects": [],
-        "description": "After Improvise the Way, Oris's next basic attack also strikes the enemy with the highest Energy and takes Energy off it, and the one after also strikes the enemy with the lowest Energy and advances his turn. An unfinished sequence lapses."
+        "description": "After Improvise the Way, Oris's next basic attack is replaced: it strikes the enemy with the highest Energy and takes Energy off it. The one after strikes the enemy with the lowest Energy and advances his turn. An unfinished sequence lapses."
       },
       "talents": {
         "talentI": {
@@ -9364,19 +9538,19 @@
           "overrides": [
             {
               "ability": "basic",
-              "effectIndex": 0,
+              "effectIndex": 5,
               "field": "power",
               "delta": 0.3
             },
             {
               "ability": "basic",
-              "effectIndex": 3,
+              "effectIndex": 7,
               "field": "power",
               "delta": 0.3
             },
             {
               "ability": "basic",
-              "effectIndex": 1,
+              "effectIndex": 6,
               "field": "magnitude",
               "delta": 0.05
             }
@@ -9439,16 +9613,22 @@
               "effect": {
                 "kind": "GainResolve",
                 "target": "Self",
-                "condition": "HasStatus",
-                "conditionOn": "Caster",
-                "conditionStatus": "MarkAlt",
                 "counterIndex": 3,
                 "duration": 2,
-                "maxStacks": 1
-              }
+                "maxStacks": 1,
+                "condition": "HasStatus",
+                "conditionStatus": "MarkAlt",
+                "conditionOn": "Caster",
+                "condition2": "StatusStacksAtLeast",
+                "conditionCounterIndex2": 2,
+                "conditionValue2": 2,
+                "conditionOn2": "Caster"
+              },
+              "atIndex": 8
             }
           ],
-          "description": "After the first altered strike of No Fixed Refrain, Oris strikes the last enemy he hit again. It cannot happen again for a while."
+          "description": "After the first altered strike of No Fixed Refrain, Oris strikes the last enemy he hit again. It cannot happen again for a while.",
+          "chargeOnLanding": true
         }
       }
     },
@@ -11221,7 +11401,8 @@
             "conditionOn2": "Caster"
           }
         ],
-        "description": "The first time each round Cyrra heals an ally at low HP while holding Veiled Weight, she spends one to heal that ally again, gain Energy, and take a round off the Cinder on the highest-Attack enemy."
+        "description": "The first time each round Cyrra heals an ally at low HP while holding Veiled Weight, she spends one to heal that ally again, gain Energy, and take a round off the Cinder on the highest-Attack enemy.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -11464,7 +11645,8 @@
             "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "When an ally at low HP gains a Ward, they gain a Veil Charge, up to a limit. With a full set, their Veil Charges are spent and they gain Guard, which reduces the next hit."
+        "description": "When an ally at low HP gains a Ward from Darian, they gain a Veil Charge, up to a limit. With a full set, their Veil Charges are spent and they gain Guard, which reduces the next hit.",
+        "triggerSourceIsSelf": true
       },
       "passive2": {
         "id": "darian_the_cost_of_knowing",
@@ -11747,10 +11929,12 @@
             "kind": "GainResolve",
             "target": "Self",
             "maxStacks": 3,
-            "duration": 99
+            "duration": 99,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "Whenever Mireth removes a status, she gains Absence, up to a limit. Each Absence makes her hit marked enemies harder."
+        "description": "Whenever Mireth removes a status from an enemy she has marked, she gains Absence, up to a limit. Each Absence makes her hit marked enemies harder."
       },
       "passive2": {
         "id": "mireth_the_missing_page",
@@ -11810,7 +11994,8 @@
             "conditionOn": "Caster"
           }
         ],
-        "description": "The first time each round an enemy Mireth has marked gains a buff, she strikes it and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down."
+        "description": "The first time each round an enemy Mireth has marked gains a buff, she strikes it and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -12350,7 +12535,10 @@
           {
             "kind": "EnergyGain",
             "target": "Self",
-            "flat": 10
+            "flat": 10,
+            "condition": "HpBelow",
+            "conditionValue": 0.5,
+            "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "EnergyGain",
@@ -12358,7 +12546,10 @@
             "flat": 5,
             "condition": "HasStatus",
             "conditionStatus": "Ledger",
-            "conditionOn": "BroadcastSubject"
+            "conditionOn": "BroadcastSubject",
+            "condition2": "HpBelow",
+            "conditionValue2": 0.5,
+            "conditionOn2": "BroadcastSubject"
           },
           {
             "kind": "GainResolve",
@@ -12370,7 +12561,7 @@
             "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "Whenever an enemy is healed, Velis gains Energy. If that enemy is Hollowed, she gains more Energy and a Remnant."
+        "description": "Whenever an enemy below half HP is healed, Velis gains Energy, more if it is Hollowed. Any heal on a Hollowed enemy also gives her a Remnant."
       },
       "passive2": {
         "id": "velis_what_was_taken",
@@ -12793,7 +12984,8 @@
             "scaleByLastDamage": true,
             "power": 0.25
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {
@@ -13157,7 +13349,8 @@
               "hits": 10
             }
           ],
-          "description": "Once per battle, when the Subject's record reaches its cap, Altheon strikes it again, harder for each Record he holds, then spends every Record."
+          "description": "Once per battle, when the Subject's record reaches its cap, Altheon strikes it again, harder for each Record he holds, then spends every Record.",
+          "chargeOnLanding": true
         }
       }
     },
@@ -13264,22 +13457,35 @@
             "kind": "LedgerRelease",
             "target": "BroadcastSubject",
             "power": 1.0,
-            "releaseAsHeal": true
-          },
-          {
-            "kind": "RemoveStatus",
-            "target": "BroadcastSubject",
-            "status": "Ledger",
-            "hits": 10
+            "releaseAsHeal": true,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "Ledger",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
           },
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
             "power": 0.5,
-            "scaleByLastRelease": true
+            "scaleByLastRelease": true,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "Ledger",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
+          },
+          {
+            "kind": "RemoveStatus",
+            "target": "BroadcastSubject",
+            "status": "Ledger",
+            "hits": 10,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionStatus": "Ledger",
+            "conditionValue": 1,
+            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "Once per battle, when an ally falls to low HP, any healing Priority has stored on them is released at once and Priority is removed. Aminah then strikes the enemy with the highest Attack for a share of what was released."
+        "description": "Once per battle, when an ally holding Priority falls to low HP, the healing Priority has stored on them is released at once and Priority is removed. Aminah then strikes the enemy with the highest Attack for a share of what was released.",
+        "chargeOnLanding": true
       },
       "passive1": {
         "id": "aminah_release_damage",
@@ -13377,8 +13583,13 @@
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
                 "power": 0.35,
-                "scaleByLastRelease": true
-              }
+                "scaleByLastRelease": true,
+                "condition": "MyStatusStacksAtLeast",
+                "conditionStatus": "Ledger",
+                "conditionValue": 1,
+                "conditionOn": "BroadcastSubject"
+              },
+              "atIndex": 2
             },
             {
               "ability": "passive1",
@@ -13405,8 +13616,13 @@
                 "target": "BroadcastSubject",
                 "power": 0.04,
                 "perStack": 1.0,
-                "perStackStatus": "Resolve"
-              }
+                "perStackStatus": "Resolve",
+                "condition": "MyStatusStacksAtLeast",
+                "conditionStatus": "Ledger",
+                "conditionValue": 1,
+                "conditionOn": "BroadcastSubject"
+              },
+              "atIndex": 2
             },
             {
               "ability": "passive",
@@ -13414,8 +13630,13 @@
                 "kind": "Cleanse",
                 "target": "BroadcastSubject",
                 "hits": 3,
-                "consumesResolve": true
-              }
+                "consumesResolve": true,
+                "condition": "MyStatusStacksAtLeast",
+                "conditionStatus": "Ledger",
+                "conditionValue": 1,
+                "conditionOn": "BroadcastSubject"
+              },
+              "atIndex": 3
             }
           ],
           "description": "When No Wasted Recovery releases Priority early because its holder fell to low HP, that ally is healed again, more for each Measure Aminah holds, and cleansed of debuffs. Every Measure is spent."
@@ -13849,9 +14070,17 @@
             "perStack": 0.1,
             "consumesResolve": true,
             "consumeStacks": 1
+          },
+          {
+            "kind": "GainResolve",
+            "target": "Self",
+            "maxStacks": 3,
+            "duration": 99,
+            "condition": "HasMyMark",
+            "conditionOn": "LastTarget"
           }
         ],
-        "description": "When his Declared Target damages Caldus, he counterattacks it, once per round. Each Resolve he holds makes the counterattack hit harder, and each counterattack spends one."
+        "description": "When his Declared Target damages Caldus, he counterattacks it, once per round. Each Resolve he holds makes the counterattack hit harder, and each counterattack spends one and banks another, up to a limit."
       },
       "passive2": {
         "id": "caldus_no_uncertain_ground",
@@ -13938,7 +14167,8 @@
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "Once per battle, when Caldus's Declared Target falls to low HP, he gains Resolve for his counterattacks."
+          "description": "Once per battle, when Caldus's Declared Target falls to low HP, he gains Resolve for his counterattacks.",
+          "chargeOnLanding": true
         }
       }
     },
@@ -14108,7 +14338,8 @@
             "conditionOn2": "BroadcastSubject"
           }
         ],
-        "description": "The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several stacks of Cinder, she strikes harder and gains Energy."
+        "description": "The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several stacks of Cinder, she strikes harder and gains Energy.",
+        "chargeOnLanding": true
       },
       "talents": {
         "talentI": {
@@ -14526,7 +14757,8 @@
             "conditionStatus2": "Stealth",
             "hits": 1
           }
-        ]
+        ],
+        "chargeOnLanding": true
       }
     },
     {

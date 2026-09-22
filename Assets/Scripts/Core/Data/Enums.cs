@@ -1002,7 +1002,42 @@ namespace Emberfall.Core.Data
         /// A subject that has taken nothing reads zero and fails, so the condition is false rather
         /// than vacuously true before the first blow lands.
         /// </summary>
-        SubjectTookHitAboveMaxHpFraction
+        SubjectTookHitAboveMaxHpFraction,
+
+        // ---------- ENGINE-GAPS pass 2: G5 and G4 ----------
+
+        /// <summary>
+        /// The subject carries FEWER than ConditionValue instances of ConditionStatus, or fewer
+        /// than ConditionValue on the generalized counter ConditionCounterIndex names. The exact
+        /// mirror of StatusStacksAtLeast, counted the same way and rounded the same way.
+        ///
+        /// ENGINE-GAPS group 37 (G5). "His next two attacks use a DIFFERENT firing sequence" is a
+        /// sequence that REPLACES the ordinary blow, and a replacement has to be able to switch
+        /// the ordinary blow off while the sequence is pending. Oris's first altered attack is
+        /// carried on a generalized counter, which LacksStatus cannot read, so the ordinary blow
+        /// had no way to ask "is no sequence pending" and was thrown beside every altered one.
+        ///
+        /// A mirror member rather than a negate flag, for the reason SubjectNotDamagedByMeThisRound
+        /// gives: it answers the clause that asked and re-points nothing else. A condition about
+        /// nothing - no status and no counter named - is false, as the positive form is.
+        /// </summary>
+        StatusStacksBelow,
+
+        /// <summary>
+        /// The subject is the body the current ability's FIRST Damage struck, and it carried
+        /// ConditionStatus at the moment that blow began - before the ability applied anything.
+        ///
+        /// ENGINE-GAPS group 36 (G4). "Whenever an enemy AFFECTED BY Slow takes damage from Elyra"
+        /// is a question about the body as the blow found it. Asked after her basic, it read the
+        /// Slow the basic had just applied itself, so a target that arrived without one still paid
+        /// Patience. The snapshot is taken once, at the first Damage of the ability a unit CHOSE,
+        /// and is inherited by the passives that ability wakes - the same window _lastTarget and
+        /// SubjectLostStatusThisFiring use. Sim state, answered beside them.
+        ///
+        /// False when the ability has struck nobody yet, and false for any body other than the
+        /// first one struck: the snapshot is of one body, and this does not guess about others.
+        /// </summary>
+        SubjectHadStatusWhenStruck
     }
 
     /// <summary>
@@ -2182,7 +2217,21 @@ namespace Emberfall.Core.Data
         /// has no end to answer, and raising it there would have a dead unit's side acting after
         /// the result is in the record.
         /// </summary>
-        RoundEnd
+        RoundEnd,
+
+        /// <summary>
+        /// A unit on the OTHER side gained a Ward from EffectKind.Shield. Broadcast to the side
+        /// opposite the shielded body, with _broadcastSubject set to that body and
+        /// _broadcastSourceId to the unit that shielded it. The enemy-side mirror of
+        /// OnAllyShielded, raised from the same line.
+        ///
+        /// ENGINE-GAPS pass 2, from its "suspected, not measured" list. "When a Quarry target
+        /// gains a Shield" had only OnEnemyBuffGained to stand on, and a Shield effect does not
+        /// raise that - only an ApplyStatus does - so Hale's No Safe Distance was answered when a
+        /// Quarry body already holding a Ward gained some OTHER status, its own Mark included.
+        /// No campaign enemy shields, so no PvE fight reaches this; a Proving opponent's heroes do.
+        /// </summary>
+        OnEnemyShielded
     }
 
     /// <summary>

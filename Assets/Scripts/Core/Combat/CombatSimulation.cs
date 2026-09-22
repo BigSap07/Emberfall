@@ -167,6 +167,18 @@ namespace Emberfall.Core.Combat
                     return subject.CountOf(effect.ConditionStatus) >= needed1;
                 }
 
+                // G5: the mirror, counted and rounded exactly as the positive form, and false for
+                // a condition that names nothing, as the positive form is.
+                case EffectCondition.StatusStacksBelow:
+                {
+                    int ci = ResolveCounterIndex(effect.ConditionCounterIndex, effect.ConditionStatus);
+                    int needed = (int)Math.Round(effect.ConditionValue, MidpointRounding.AwayFromZero);
+                    if (needed < 1) needed = 1;
+                    if (ci >= 2) return subject.CountOfCounter(ci) < needed;
+                    if (effect.ConditionStatus == StatusKind.None) return false;
+                    return subject.CountOf(effect.ConditionStatus) < needed;
+                }
+
                 // Source-filtered variant: counts only entries applied by the caster, so two
                 // heroes using the same status kind each see their own depth.
                 case EffectCondition.MyStatusStacksAtLeast:
@@ -379,6 +391,7 @@ namespace Emberfall.Core.Combat
                 // declared cast is Sim state, so the pure function cannot see one and says no.
                 case EffectCondition.SubjectIsCasting:
                 case EffectCondition.ShieldBrokenByCaster:
+                case EffectCondition.SubjectHadStatusWhenStruck:
                     return false;
 
                 case EffectCondition.LedgerAtCap:
@@ -702,6 +715,20 @@ namespace Emberfall.Core.Combat
             /// question about one firing, and nothing in the condition vocabulary could ask it.
             /// </summary>
             private readonly List<int> _removedFromThisFiring = new List<int>();
+
+            /// <summary>
+            /// The body the chosen ability's first Damage struck, and the status kinds it carried
+            /// as that blow began, read by EffectCondition.SubjectHadStatusWhenStruck (G4). -1 and
+            /// empty until the ability has struck somebody.
+            ///
+            /// Cleared on the same boundary as _removedFromThisFiring and inherited the same way:
+            /// "the target was already Slowed" is a question about the ability a unit chose, and a
+            /// passive it woke is part of that firing. Taken only at depth 0, so a passive that
+            /// strikes first inside somebody else's ability cannot overwrite the body the ability
+            /// itself found.
+            /// </summary>
+            private int _struckFirstId = -1;
+            private readonly List<StatusKind> _struckFirstKinds = new List<StatusKind>();
 
             /// <summary>
             /// The damage a status entry would still have dealt had it not been removed:
@@ -2207,6 +2234,13 @@ namespace Emberfall.Core.Combat
                         first = _removedFromThisFiring.Contains(subject.Id);
                         break;
 
+                    // G4. Whether this body is the one the chosen ability first struck, and
+                    // carried the named status as that blow began. Sim state for the same reason
+                    // as the line above: the snapshot belongs to the ability in flight.
+                    case EffectCondition.SubjectHadStatusWhenStruck:
+                        first = StruckFirstHad(subject, effect.ConditionStatus);
+                        break;
+
                     // Whether this body has a cast declared and not yet resolved. Sim state, so it
                     // is answered here rather than in the pure evaluator, the same way the
                     // turn-progress members are.
@@ -2297,6 +2331,15 @@ namespace Emberfall.Core.Combat
                 return Condition3MetHere(effect, caster, target);
             }
 
+            /// <summary>G4: the subject is the body the chosen ability first struck, and it carried
+            /// `kind` as that blow began. False before anything was struck and for every other
+            /// body.</summary>
+            private bool StruckFirstHad(CombatUnit subject, StatusKind kind)
+            {
+                return subject != null && kind != StatusKind.None && _struckFirstId >= 0
+                    && subject.Id == _struckFirstId && _struckFirstKinds.Contains(kind);
+            }
+
             /// <summary>
             /// The second gate of an AND-conditioned effect. When Condition2 is None (the default),
             /// returns true without reading anything, so every single-conditioned effect is unchanged.
@@ -2343,6 +2386,8 @@ namespace Emberfall.Core.Combat
                         return LastMovedAboveFraction(caster, subject2, gate2.ConditionValue);
                     case EffectCondition.SubjectLostStatusThisFiring:
                         return _removedFromThisFiring.Contains(subject2.Id);
+                    case EffectCondition.SubjectHadStatusWhenStruck:
+                        return StruckFirstHad(subject2, gate2.ConditionStatus);
                 }
 
                 if (gate2.ConditionOn == ConditionSubject.Defeated
@@ -2401,6 +2446,8 @@ namespace Emberfall.Core.Combat
                         return LastMovedAboveFraction(caster, subject3, gate3.ConditionValue);
                     case EffectCondition.SubjectLostStatusThisFiring:
                         return _removedFromThisFiring.Contains(subject3.Id);
+                    case EffectCondition.SubjectHadStatusWhenStruck:
+                        return StruckFirstHad(subject3, gate3.ConditionStatus);
                 }
 
                 if (gate3.ConditionOn == ConditionSubject.Defeated
@@ -2539,6 +2586,8 @@ namespace Emberfall.Core.Combat
                 // status from that body" is a question about the ability a unit chose, and a
                 // passive it woke is part of that firing rather than a firing of its own.
                 if (depth == 0) _removedFromThisFiring.Clear();
+                // G4's snapshot, on the same boundary for the same reason.
+                if (depth == 0) { _struckFirstId = -1; _struckFirstKinds.Clear(); }
                 // Cleared and restored on exactly the same boundary _lastTarget uses, and for the
                 // same reason: an EchoDamage authored with no damage ahead of it in its own ability
                 // must read zero rather than a number from a previous turn. An echo that could pick
@@ -2761,6 +2810,15 @@ namespace Emberfall.Core.Combat
                         }
 
                         _firingLanded = true;
+                        // G4: the first body this chosen ability strikes, as the blow found it.
+                        // Read before ApplyEffect, so nothing the blow or its passives do is in it.
+                        if (depth == 0 && _struckFirstId < 0 && landed.Kind == EffectKind.Damage)
+                        {
+                            _struckFirstId = target.Id;
+                            for (int sk = 0; sk < target.Statuses.Count; sk++)
+                                if (!_struckFirstKinds.Contains(target.Statuses[sk].Kind))
+                                    _struckFirstKinds.Add(target.Statuses[sk].Kind);
+                        }
                         ApplyEffect(caster, target, landed, ability, depth);
                         _lastTarget = target;
                         if (IsBattleOver())
@@ -2896,6 +2954,10 @@ namespace Emberfall.Core.Combat
                             _broadcastSubject = target;
                             _broadcastSourceId = source.Id;
                             BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyShielded, depth, target);
+                            // The other side hears it too - "when a Quarry target gains a Shield".
+                            // Same window, same subject and source; nobody is excluded, because
+                            // nobody on that side is the body the news is about.
+                            BroadcastPassive(!target.IsPlayer, PassiveTrigger.OnEnemyShielded, depth, null);
                             _broadcastSourceId = prevShieldSrc;
                             _broadcastSubject = prevSubject;
                         }
