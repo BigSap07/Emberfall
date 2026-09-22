@@ -1560,7 +1560,7 @@
       "basic": {
         "id": "demos_notice_of_loss",
         "name": "Notice of Loss",
-        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 7% current HP.",
+        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% current HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -1646,18 +1646,18 @@
         {
           "id": "demos_arrears_tick",
           "name": "Notice of Loss",
-          "description": "The Arrears tick: a body carrying it loses 7% of its current HP as its own turn ends.",
+          "description": "The Arrears tick: a body carrying it loses 4% of its current HP as its own turn ends, bounded at 105% of Demos's Attack. The bound is not in Pinoy's sentence and is the only thing holding the clause inside the band - see Docs/ENGINE-GAPS.md group 12.",
           "trigger": "OnEnemyTurnEnd",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "BroadcastSource",
-              "attackCap": 1.05,
               "condition": "HasMyMark",
               "conditionOn": "BroadcastSource",
               "power": 0,
-              "targetCurrentHpRatio": 0.07
+              "targetCurrentHpRatio": 0.04,
+              "attackCap": 1.05
             }
           ]
         }
@@ -6883,7 +6883,7 @@
         "id": "maren_unfinished_rest",
         "name": "Unfinished Rest",
         "energyCost": 100,
-        "description": "Deals 210% Attack damage to all enemies and gives the two lowest-HP allies Recovery for 3 rounds. Recovery heals about 3% Max HP each turn.",
+        "description": "Deals 210% Attack damage to all enemies and gives the two lowest-HP allies Recovery for 3 rounds. Recovery heals 3% Max HP each turn.",
         "effects": [
           {
             "kind": "Damage",
@@ -6895,8 +6895,9 @@
             "target": "TwoLowestHpAllies",
             "chance": 1,
             "duration": 3,
-            "magnitude": 0.35,
-            "status": "Regen"
+            "magnitude": 0.0,
+            "status": "Regen",
+            "holderHpTick": 0.03
           }
         ]
       },

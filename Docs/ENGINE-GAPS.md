@@ -135,14 +135,25 @@ pool from one body to another and there is no exchange.
 
 ## 12. Amounts written as a percentage of the HOLDER's health
 
-Several magnitudes in this roster are written as "N% Max HP" of a body that is not the caster. The
-engine pays a DoT in the applier's Attack and caps a percent-of-HP damage term against the target's
-own health, which is the wrong unit for a sentence of that shape.
+One row left, and it is no longer an expressibility gap. `holderHpTick` pays a Regen or Burn as a
+fraction of its CARRIER's bar, read fresh at every tick, which is what Maren's clause asked for and
+what closed her row.
+
+**Demos's row stays, and what it records has changed.** The clause is authorable: a Damage effect
+with `targetCurrentHpRatio` says "4% of its current HP" exactly, and the percentage is now Pinoy's
+4% where the shipped kit carried 7%. What cannot go is the `attackCap` Pinoy's sentence does not
+mention. Removing it was tried and measured: Demos reads **x3.40** of his role's 5-star median
+against **x0.28** with the bound in place, because a percentage of a current bar grows with the
+board while a hero's Attack does not. That is not a number a retune reaches - it is a different
+hero.
+
+So the departure is real and it is a BALANCE one rather than a missing capability, and no engine
+feature closes it. A clause of this shape needs either a bound the text does not name or a roster
+whose bars do not outrun a 4-star's Attack, and choosing between those is Pinoy's call.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Maren | "Recovery heals **3% Max HP** each turn" | a Regen tick scaled off the holder's Max HP; `ApplyStatus` resolves a Regen magnitude as `EffectiveAttack * magnitude` | the tick is written in Maren's Attack at the value that comes to about 3% of an ally's bar at the level the number was set against | small |
-| Demos | "At turn end, Arrears loses 4% current HP" | a percent-of-current-HP tick bounded in the caster's own currency; `MaxHpCap` ceilings against the TARGET's Max HP and so cannot bind one | an `attackCap` was added that Pinoy's sentence does not mention, holding the clause at the relationship it was written with | small |
+| Demos | "At turn end, Arrears loses 4% current HP" | nothing - the clause is authorable, and its unbounded form is what the band cannot carry | the percentage is Pinoy's, and an `attackCap` of 105% of Attack that his sentence does not mention bounds it | none |
 
 ---
 
@@ -273,7 +284,6 @@ have more than one occupant:
 | 2 | per-round budgets on a standing status | 2 |
 | 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
-| 12 | amounts written as a percentage of the HOLDER's health | 2 |
 | 17 | counting how many statuses of a class a body carries | 2 |
 | 18 | naming the unit an event happened TO | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
