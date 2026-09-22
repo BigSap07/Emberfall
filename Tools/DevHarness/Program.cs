@@ -25748,8 +25748,8 @@ namespace Emberfall.DevHarness
         private const int AbilityNumberLevel = 40;
 
         /// <summary>
-        /// THE CARD'S NUMBER IS THE FIGHT'S NUMBER, proved for every authored basic and active in
-        /// the roster rather than asserted.
+        /// THE CARD'S NUMBER IS THE FIGHT'S NUMBER, proved for every authored basic, active and
+        /// passive in the roster rather than asserted.
         ///
         /// Docs/DESIGN-DAMAGE-DISPLAY.md settled that a hero page should lead with a FLAT value at
         /// the hero's own stats and keep the authored percentage beneath it, because a percentage
@@ -25760,10 +25760,11 @@ namespace Emberfall.DevHarness
         /// next time somebody adds a term to ApplyDamageEffect. This check is what makes that
         /// noisy.
         ///
-        /// HOW IT PROVES IT. For every DAMAGE, HEAL and SHIELD effect on every authored basic and
-        /// active, it builds a one-effect probe ability, hangs it off the hero's own stat line in
-        /// the basic slot, and fires it into an arena chosen so that every term AbilityMath
-        /// deliberately does not model is an exact identity:
+        /// HOW IT PROVES IT. For every DAMAGE, HEAL and SHIELD effect on every authored basic,
+        /// active and passive - the three kinds the hero page's ability row shows - it builds a
+        /// one-effect probe ability, hangs it off the hero's own stat line in the basic slot, and
+        /// fires it into an arena chosen so that every term AbilityMath deliberately does not
+        /// model is an exact identity:
         ///
         ///   - the dummy's Defence is zero, so the mitigation ratio is exactly 0;
         ///   - the dummy wears the caster's own aspect, so AspectChart.Multiplier is exactly 1
@@ -25815,13 +25816,25 @@ namespace Emberfall.DevHarness
                 HeroDef def = arena.Heroes[h];
 
                 // The probe hero is this hero's STAT LINE and nothing else of its kit: no
-                // passives to buff the Attack the card quoted, no crit, no Energy to spend.
+                // passives to buff the Attack the card quoted, no crit, no Energy to spend. The
+                // passives are kept in hand first, because their own effects are measured below.
+                List<PassiveDef> passives = new List<PassiveDef>(def.Passives);
                 def.Passives.Clear();
                 def.CritChance = 0f;
                 def.StartEnergy = 0;
                 AbilityDef realBasic = def.BasicAttack;
                 AbilityDef realActive = def.Active;
                 def.Active = null;
+
+                // The row on the hero page carries the passives too, and they print through the
+                // same formula, so they are proved through the same probe. A passive reads as an
+                // ability with a trigger taken off it - AbilityMath.AsAbility is the wrapper both
+                // this and the screen use - and its KIND answers the one question the damage
+                // pipeline asks: Skill Damage reaches a passive-sourced blow, never a basic.
+                List<AbilityDef> slots = new List<AbilityDef>();
+                slots.Add(realBasic);
+                slots.Add(realActive);
+                for (int p = 0; p < passives.Count; p++) slots.Add(AbilityMath.AsAbility(passives[p]));
 
                 // An aspect never beats itself, so a dummy wearing the caster's own aspect makes
                 // AspectChart.Multiplier exactly 1. There is no universally neutral aspect to
@@ -25830,9 +25843,9 @@ namespace Emberfall.DevHarness
 
                 UnitStats stats = StatMath.ForHero(def, AbilityNumberLevel);
 
-                for (int slot = 0; slot < 2; slot++)
+                for (int slot = 0; slot < slots.Count; slot++)
                 {
-                    AbilityDef ability = slot == 0 ? realBasic : realActive;
+                    AbilityDef ability = slots[slot];
                     if (ability == null) continue;
                     abilities++;
 
@@ -25840,7 +25853,11 @@ namespace Emberfall.DevHarness
                     for (int vi = 0; vi < values.Count; vi++)
                     {
                         AbilityValue v = values[vi];
-                        string who = def.Name + "'s \"" + ability.Name + "\" effect " + v.EffectIndex;
+                        // Keyed by the ability's ID rather than its NAME, because the two are not
+                        // the same kind of thing: Maera's active and one of her passives are both
+                        // called Keep the Beacon, and a pinned list keyed on names would have one
+                        // line standing for two different effects.
+                        string who = ability.Id + " effect " + v.EffectIndex;
                         if (v.Conditional) conditional++;
                         if (v.Area) area++;
                         if (v.Partial) partial.Add(who);
@@ -25867,11 +25884,12 @@ namespace Emberfall.DevHarness
 
                 def.BasicAttack = realBasic;
                 def.Active = realActive;
+                for (int p = 0; p < passives.Count; p++) def.Passives.Add(passives[p]);
             }
 
-            Line("  [note] " + arena.Heroes.Count + " heroes, " + abilities + " authored basic(s) and"
-                 + " active(s), " + (proved + wrong.Count + derived.Count) + " damage/heal/shield"
-                 + " effect(s) between them");
+            Line("  [note] " + arena.Heroes.Count + " heroes, " + abilities + " authored basic(s),"
+                 + " active(s) and passive(s), " + (proved + wrong.Count + derived.Count)
+                 + " damage/heal/shield effect(s) between them");
             Line("  [note] of those, " + conditional + " carry a clause that gates them and " + area
                  + " land on more than one body - both are stated on the card and neither changes"
                  + " what one application is worth");
@@ -25884,43 +25902,96 @@ namespace Emberfall.DevHarness
                     : wrong.Count + " printed number(s) do NOT match the simulation: "
                       + string.Join("; ", wrong.ToArray()));
 
-            // The two escape hatches are PINNED rather than merely tolerated. A new effect that
-            // falls into either one is a new card the player cannot fully trust, so it has to
+            // THE THREE ESCAPE HATCHES ARE PINNED BY NAME rather than merely counted. Each is an
+            // effect whose card cannot quote the whole truth, and each is a card a player would
+            // otherwise trust the same way they trust the other three hundred. A new one has to
             // arrive as a failing check and a deliberate edit here rather than as a silence.
+            //
+            // The first: the ScaleBy family, whose Power multiplies a runtime amount instead of
+            // Attack. There is no flat figure outside a fight, so the card prints the workings.
             string[] expectedDerived =
             {
-                "Merek's \"Interjecting Clause\" effect 2",
-                "Cyrra's \"Bury the Burden\" effect 5"
+                "rovan_deflected_conversion effect 0",
+                "brenna_deep_resolve effect 0",
+                "merek_interjecting_clause effect 2",
+                "cyrra_bury_the_burden effect 5",
+                "aminah_emergency_release effect 2",
+                "aminah_release_damage effect 0"
             };
             Check(SameSet(derived, expectedDerived),
                   "exactly " + expectedDerived.Length + " effect(s) scale off a runtime amount rather"
                   + " than Attack and so print no flat number, and they are the expected ones (found: "
                   + (derived.Count == 0 ? "none" : string.Join(", ", derived.ToArray())) + ")");
 
-            Check(partial.Count == 11,
-                  "exactly 11 effect(s) add a term the card cannot see - a share of the target's"
-                  + " health, or a counter the fight has not built yet - and print their"
-                  + " caster-only part as a floor (found " + partial.Count + ": "
+            // The second: terms that ADD to the Attack-scaled amount from somewhere the card
+            // cannot see. The figure is real and is a floor, and the card says which way it
+            // moves rather than pretending the floor is the ceiling.
+            string[] expectedPartial =
+            {
+                "hale_closing_radius effect 1",
+                "kiva_sever_the_return effect 2",
+                "marrow_promise_heal effect 0",
+                "demos_arrears_tick effect 0",
+                "orelle_hard_remedy effect 2",
+                "orelle_triage_after_loss effect 0",
+                "nereia_change_of_course effect 1",
+                "isara_what_survives effect 1",
+                "halwen_rationed_strength effect 1",
+                "jory_holdfast_thrust effect 1",
+                "maera_keep_the_beacon_relief effect 0",
+                "brio_evidence_kept effect 1",
+                "marn_relief_after_loss effect 0",
+                "garron_set_iron effect 0",
+                "hal_cache_shovel effect 1",
+                "aeron_press_forward effect 2",
+                "tomas_keep_moving effect 0",
+                "toren_unasked_question effect 0",
+                "arden_find_the_measure effect 0",
+                "arden_define_the_weak_point effect 2",
+                "arden_define_the_weak_point effect 3",
+                "arden_exact_calculation effect 0",
+                "arden_exact_calculation effect 1",
+                "arden_everything_has_a_limit_payout effect 0",
+                "caldus_defined_duty effect 0",
+                "leon_close_the_case effect 0",
+                "lio_exact_treatment effect 0"
+            };
+            Check(SameSet(partial, expectedPartial),
+                  "exactly " + expectedPartial.Length + " effect(s) add a term the card cannot see -"
+                  + " a share of the target's health, or a counter the fight has not built yet - and"
+                  + " print their caster-only part as a floor rather than as the whole (found "
+                  + partial.Count + ": "
                   + (partial.Count == 0 ? "none" : string.Join(", ", partial.ToArray())) + ")");
 
-            // A subset of the eleven above, and the reason the two counts are separate: most of
-            // them still print SOMETHING, because their caster-side term is real and the target
-            // share is extra. These nine carry NO caster-side term at all - no Power, no Flat, no
-            // Max HP share - so their whole payout is a fraction of somebody else's health and
-            // there is no figure for a card to lead with. It prints the clause instead. Pinned for
-            // the same reason the list above is: a tenth arriving quietly is a tenth card that
-            // silently stopped quoting a number.
+            // The third, and a SUBSET of the second - which is why the two are counted apart.
+            // Most of the list above still prints a figure, because its caster-side term is real
+            // and the target share is extra on top of it. These carry no caster-side term at all -
+            // no Power, no Flat, no Max HP share - so their whole payout is a fraction of somebody
+            // else's health and there is no number for a card to lead with. It prints the clause
+            // instead.
             string[] expectedFlatless =
             {
-                "Hale's \"Closing Radius\" effect 1",
-                "Kiva's \"Sever the Return\" effect 2",
-                "Orelle's \"Hard Remedy\" effect 2",
-                "Jory's \"Holdfast Thrust\" effect 1",
-                "Brio's \"Evidence Kept\" effect 1",
-                "Hal's \"Cache Shovel\" effect 1",
-                "Arden's \"Find the Measure\" effect 0",
-                "Arden's \"Define the Weak Point\" effect 2",
-                "Arden's \"Define the Weak Point\" effect 3"
+                "hale_closing_radius effect 1",
+                "kiva_sever_the_return effect 2",
+                "demos_arrears_tick effect 0",
+                "orelle_hard_remedy effect 2",
+                "orelle_triage_after_loss effect 0",
+                "halwen_rationed_strength effect 1",
+                "jory_holdfast_thrust effect 1",
+                "maera_keep_the_beacon_relief effect 0",
+                "brio_evidence_kept effect 1",
+                "marn_relief_after_loss effect 0",
+                "garron_set_iron effect 0",
+                "hal_cache_shovel effect 1",
+                "tomas_keep_moving effect 0",
+                "toren_unasked_question effect 0",
+                "arden_find_the_measure effect 0",
+                "arden_define_the_weak_point effect 2",
+                "arden_define_the_weak_point effect 3",
+                "arden_exact_calculation effect 0",
+                "arden_exact_calculation effect 1",
+                "arden_everything_has_a_limit_payout effect 0",
+                "lio_exact_treatment effect 0"
             };
             Check(SameSet(flatless, expectedFlatless),
                   "exactly " + expectedFlatless.Length + " effect(s) carry no caster-side term at all"
@@ -25928,7 +25999,38 @@ namespace Emberfall.DevHarness
                   + " rather than a number, and they are the expected ones (found " + flatless.Count
                   + ": " + (flatless.Count == 0 ? "none" : string.Join(", ", flatless.ToArray())) + ")");
 
+            // THE WORKED EXAMPLE THIS WHOLE PASS EXISTS FOR, printed rather than described. The two
+            // heroes are the pair Docs/DESIGN-DAMAGE-DISPLAY.md opens with: the cheapest 1-star in
+            // the roster and a 5-star, whose authored percentages put them in the wrong order and
+            // whose flat values put them in the right one.
+            ReportAbilityNumbers(arena, "iri_the_kept_token");
+            ReportAbilityNumbers(arena, "kael_the_unyielding");
+
             Line("");
+        }
+
+        /// <summary>One hero's ability numbers as the hero page would print them, at the level the
+        /// proof above is taken at. A report line, not a check.</summary>
+        private static void ReportAbilityNumbers(ContentDatabase arena, string heroId)
+        {
+            HeroDef def = arena.GetHero(heroId);
+            if (def == null) { Line("  [note] " + heroId + " is not in content"); return; }
+            UnitStats stats = StatMath.ForHero(def, AbilityNumberLevel);
+            Line("  [note] " + def.Name + ", " + def.Stars + "-star, level " + AbilityNumberLevel
+                 + ", Attack " + stats.Attack + ":");
+            for (int slot = 0; slot < 2; slot++)
+            {
+                AbilityDef ability = slot == 0 ? def.BasicAttack : def.Active;
+                if (ability == null) continue;
+                List<AbilityValue> values = AbilityMath.Values(ability, stats, arena.Balance);
+                for (int i = 0; i < values.Count; i++)
+                {
+                    AbilityValue v = values[i];
+                    Line("           " + (slot == 0 ? "basic  " : "active ") + ability.Name
+                         + " - " + (v.Derived || !v.HasFlat ? "no flat value" : v.Amount + " " + v.Kind)
+                         + " (" + v.Percent.ToString("0.##") + "% of Attack)");
+                }
+            }
         }
 
         private static bool SameSet(List<string> found, string[] expected)

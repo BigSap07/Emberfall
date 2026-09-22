@@ -467,7 +467,16 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// Card describing one ability, used on the hero detail screen.
+        /// Card describing one ability. RETIRED, and left in place beside the other primitives the
+        /// way `UIBuilder.Chip` is: nothing calls it.
+        ///
+        /// The hero page builds its own cells, because an ability card now has to carry the
+        /// ability's NUMBERS - a flat value at the hero's own stats with the authored percentage
+        /// under it - and this one takes a `description` instead. Whatever replaces it must not
+        /// take one either: an ability's description is authored prose, several dozen of them
+        /// carry a number that disagrees with the effect beneath it, and some carry drafting notes
+        /// addressed to a designer. `AbilityMath` and `AbilityText` are where an ability's numbers
+        /// come from. See HeroDetailScreen.RebuildAbilities and Docs/DESIGN-DAMAGE-DISPLAY.md.
         ///
         /// A SUNKEN row rather than a flat tinted rectangle: an ability is content set INTO the
         /// hero's page, not another panel laid on it, and a column of five framed cards inside an

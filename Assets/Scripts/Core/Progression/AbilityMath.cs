@@ -112,6 +112,30 @@ namespace Emberfall.Core.Progression
                 || effect.Kind == EffectKind.Shield;
         }
 
+        /// <summary>
+        /// A passive read as an ability, so one formula covers all three kinds a hero card shows.
+        ///
+        /// PassiveDef and AbilityDef share no base type - the two differ by a trigger and a limit,
+        /// not by what their effects do - and every caller that wants to ask "what is this worth"
+        /// would otherwise need a second arm for passives. The simulation's own damage pipeline
+        /// only ever asks the ability for its KIND, and Passive answers that question the same way
+        /// Active does: Skill Damage reaches a passive-sourced blow and never a basic.
+        ///
+        /// The effect list is SHARED rather than copied, because every reader of it is a reader.
+        /// </summary>
+        public static AbilityDef AsAbility(PassiveDef passive)
+        {
+            if (passive == null) return null;
+            AbilityDef a = new AbilityDef();
+            a.Id = passive.Id;
+            a.Name = passive.Name;
+            a.Description = passive.Description;
+            a.Kind = AbilityKind.Passive;
+            a.EnergyCost = 0;
+            a.Effects = passive.Effects;
+            return a;
+        }
+
         /// <summary>Every number one ability prints, in authoring order. Empty for an ability that
         /// only applies statuses, moves turns or strips buffs.</summary>
         public static List<AbilityValue> Values(AbilityDef ability, UnitStats stats, BalanceConfig cfg)
