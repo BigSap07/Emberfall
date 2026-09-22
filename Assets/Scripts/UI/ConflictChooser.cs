@@ -93,19 +93,21 @@ namespace Emberfall.UI
 
             RectTransform card = UIBuilder.Node("Card", _root);
             UIBuilder.Box(card, 0f, 0f, CardWidth, CardHeight, new Vector2(0.5f, 0.5f));
-            Image cardBg = card.gameObject.AddComponent<Image>();
-            cardBg.sprite = TextureLab.RoundedRect(26);
-            cardBg.type = Image.Type.Sliced;
-            cardBg.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", card, UITheme.WithAlpha(UITheme.Warning, 0.6f), 26, 3);
+            // The kit's framed panel with its ornaments. The warning-coloured border is gone and
+            // is not replaced by a differently coloured frame: every panel in Emberforge is gold,
+            // and a card that framed itself in amber to say "be careful" was saying it with the
+            // one channel the kit uses for structure. The warning is still on the card, in words,
+            // above the two buttons - which is where a player reads it.
+            EmberforgeUI.PanelOn(card, true);
 
-            Text title = UIBuilder.Label("Title", card, "TWO SAVES", UITheme.FontTitle, UITheme.Gold,
-                                         TextAnchor.UpperCenter);
-            UIBuilder.Box(title.rectTransform, 0f, -30f, CardWidth - 80f, 52f, new Vector2(0.5f, 1f));
+            // A ribbon, because this card has exactly one subject.
+            Text title = EmberforgeUI.TitleRibbon("Title", card, "TWO SAVES",
+                                                  CardWidth - Emberforge.RibbonOverhang * 2f);
 
-            _reason = UIBuilder.WrappedLabel("Reason", card, "", UITheme.FontSmall, UITheme.TextMuted,
-                                             TextAnchor.UpperCenter);
+            _reason = EmberforgeUI.Body("Reason", card, "", UITheme.FontSmall, Emberforge.TextBody,
+                                        TextAnchor.UpperCenter);
             UIBuilder.Box(_reason.rectTransform, 0f, -88f, CardWidth - 120f, 68f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_reason, Emberforge.Outline, Emberforge.StrokeThin);
 
             float columnTop = 172f;
 
@@ -121,24 +123,29 @@ namespace Emberfall.UI
             // against its own name rather than against the number opposite it.
             for (int i = 0; i < RowLabels.Length; i++)
             {
-                Text label = UIBuilder.Label("Row" + i, card, RowLabels[i], UITheme.FontTiny - 2,
-                                             UITheme.TextDim, TextAnchor.MiddleCenter);
+                Text label = EmberforgeUI.Label("Row" + i, card, RowLabels[i], UITheme.FontTiny - 2,
+                                                Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Box(label.rectTransform, 0f, -(columnTop + 58f + i * RowHeight),
                               LabelWidth, RowHeight, new Vector2(0.5f, 1f));
             }
 
-            Text warning = UIBuilder.WrappedLabel("Warning", card,
+            Text warning = EmberforgeUI.Body("Warning", card,
                 "Whichever you keep replaces the other. There is no way back, and nothing is merged.",
                 UITheme.FontTiny, UITheme.Warning, TextAnchor.UpperCenter);
             UIBuilder.Box(warning.rectTransform, 0f, 148f, CardWidth - 140f, 32f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(warning, Emberforge.Outline, Emberforge.StrokeThin);
 
-            // Both Gold, both the same size. Neither is the recommended one because there is no
-            // recommendation to make - see the class note.
-            _keepLocal = UIBuilder.GoldButton("KeepLocal", card, "KEEP THIS DEVICE", UITheme.FontBody);
+            // BOTH PRIMARY, both the same size. Neither is the recommended one because there is no
+            // recommendation to make - see the class note. This is the one place in the game where
+            // two ember buttons sit side by side, and it is the exception the two-voice rule is
+            // worth making: teal means "the way back out", and on this card there is no way out.
+            _keepLocal = EmberforgeUI.Button("KeepLocal", card, "KEEP THIS DEVICE", UITheme.FontBody,
+                                             ForgeButtonKind.Primary);
             UIBuilder.Box(_keepLocal.Root, -ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
             _keepLocal.OnClick(delegate { Answer(ConflictChoice.KeepLocal); });
 
-            _keepCloud = UIBuilder.GoldButton("KeepCloud", card, "KEEP THE CLOUD", UITheme.FontBody);
+            _keepCloud = EmberforgeUI.Button("KeepCloud", card, "KEEP THE CLOUD", UITheme.FontBody,
+                                             ForgeButtonKind.Primary);
             UIBuilder.Box(_keepCloud.Root, ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
             _keepCloud.OnClick(delegate { Answer(ConflictChoice.KeepCloud); });
 
@@ -152,30 +159,33 @@ namespace Emberfall.UI
         {
             RectTransform column = UIBuilder.Node(name, card);
             UIBuilder.Box(column, x, -top, ColumnWidth, CardHeight - top - 200f, new Vector2(0.5f, 1f));
-            Image bg = column.gameObject.AddComponent<Image>();
-            bg.sprite = TextureLab.RoundedRect(18);
-            bg.type = Image.Type.Sliced;
-            bg.color = UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", column, UITheme.BorderSoft, 18, 2);
+            // A RECESS, because a column is one of two things set into the card rather than a
+            // second card on top of it - and because two sunken columns either side of the label
+            // strip is what makes the strip read as running BETWEEN them.
+            EmberforgeUI.SunkenOn(column);
 
-            Text title = UIBuilder.Label("Heading", column, heading, UITheme.FontHeading, UITheme.TextPrimary,
-                                         TextAnchor.UpperCenter);
+            Text title = EmberforgeUI.Title("Heading", column, heading, UITheme.FontHeading,
+                                            Emberforge.TextGold, TextAnchor.UpperCenter);
             UIBuilder.Box(title.rectTransform, 0f, -16f, ColumnWidth - 32f, 40f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             for (int i = 0; i < RowLabels.Length; i++)
             {
-                values[i] = UIBuilder.Label("Value" + i, column, "", UITheme.FontBody, UITheme.TextPrimary,
-                                            TextAnchor.MiddleCenter);
+                values[i] = EmberforgeUI.Label("Value" + i, column, "", UITheme.FontBody,
+                                               Emberforge.TextBody, TextAnchor.MiddleCenter);
                 UIBuilder.Box(values[i].rectTransform, 0f, -(58f + i * RowHeight), ColumnWidth - 32f,
                               RowHeight, new Vector2(0.5f, 1f));
+                UIBuilder.Outlined(values[i], Emberforge.Outline, Emberforge.StrokeThin);
             }
 
-            when = UIBuilder.Label("When", column, "", UITheme.FontTiny, UITheme.Gold, TextAnchor.UpperCenter);
+            when = EmberforgeUI.Label("When", column, "", UITheme.FontTiny, Emberforge.TextGold,
+                                      TextAnchor.UpperCenter);
             UIBuilder.Box(when.rectTransform, 0f, -(58f + RowLabels.Length * RowHeight + 10f),
                           ColumnWidth - 32f, 30f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(when, Emberforge.Outline, Emberforge.StrokeThin);
 
-            device = UIBuilder.Label("Device", column, "", UITheme.FontTiny - 2, UITheme.TextDim,
-                                     TextAnchor.UpperCenter);
+            device = EmberforgeUI.Label("Device", column, "", UITheme.FontTiny - 2,
+                                        Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(device.rectTransform, 0f, -(58f + RowLabels.Length * RowHeight + 42f),
                           ColumnWidth - 32f, 28f, new Vector2(0.5f, 1f));
 

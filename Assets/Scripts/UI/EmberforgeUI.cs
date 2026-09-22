@@ -131,6 +131,88 @@ namespace Emberfall.UI
             return plate;
         }
 
+        /// <summary>The same recess as a new child filling its parent, for a call site that owns
+        /// a node it cannot put an Image on because something else is already drawing there.</summary>
+        public static Image Sunken(string name, Transform parent)
+        {
+            RectTransform rect = UIBuilder.Node(name, parent);
+            UIBuilder.FillParent(rect, 0f);
+            return SunkenOn(rect);
+        }
+
+        /// <summary>
+        /// A SHEET: the large framed surface a hosted screen or a full-page card is drawn inside.
+        ///
+        /// It is a Panel with its ornaments, not a slot of its own. A sheet and a panel are the
+        /// same object at two sizes, and the one thing that would have differed - a slightly
+        /// larger corner radius - is invisible at the scale a sheet is actually drawn at, which
+        /// is not worth a twenty-eighth entry in the catalogue and a second thing to retune.
+        /// </summary>
+        public static RectTransform Sheet(string name, Transform parent)
+        {
+            RectTransform sheet = UIBuilder.Node(name, parent);
+            PanelOn(sheet, true);
+            return sheet;
+        }
+
+        /// <summary>
+        /// A GOLD RULE between two sections of one panel.
+        ///
+        /// Sized by the caller on the cross axis and 0 x RuleHeight inside a layout group, which
+        /// is the one thing a divider is ever asked for two different ways.
+        /// </summary>
+        public static Image Rule(string name, Transform parent)
+        {
+            Image rule = UIBuilder.Img(name, parent, EmberforgeSkin.Get(EmberforgeArt.Slot.Rule),
+                                       Color.white);
+            rule.type = Image.Type.Sliced;
+            rule.raycastTarget = false;
+            UIBuilder.Sized(rule.rectTransform, 0f, Emberforge.RuleHeight);
+            return rule;
+        }
+
+        /// <summary>
+        /// A CHIP: a small dark tag with a tinted hairline round it and its word in the same tint.
+        ///
+        /// Three images rather than one, and for the reason the currency jewel is two: Image.color
+        /// multiplies the whole sprite, so a single tinted chip would tint the kit's dark outline
+        /// along with the fill and every aspect in a grid would carry a differently coloured
+        /// outline. The body is never tinted, the wash and the line are the only things that are,
+        /// and the outline stays exactly where every other element in the kit has it.
+        ///
+        /// It replaces UIBuilder.Chip at every converted call site. That one draws a flat
+        /// translucent rectangle in the tint with a matching border, which is the placeholder
+        /// treatment this whole pass exists to remove.
+        /// </summary>
+        public static RectTransform Chip(string name, Transform parent, string text, Color tint,
+                                         int fontSize)
+        {
+            RectTransform root = UIBuilder.Node(name, parent);
+
+            Image body = root.gameObject.AddComponent<Image>();
+            body.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.ChipBody);
+            body.type = Image.Type.Sliced;
+            body.color = Color.white;
+            body.raycastTarget = false;
+
+            Image wash = UIBuilder.Img("Wash", root, EmberforgeSkin.Get(EmberforgeArt.Slot.ChipLine),
+                                       UITheme.WithAlpha(tint, Emberforge.ChipWashAlpha));
+            wash.type = Image.Type.Sliced;
+            UIBuilder.FillParent(wash.rectTransform, 0f);
+            wash.raycastTarget = false;
+
+            Image line = UIBuilder.Img("Line", root, EmberforgeSkin.Get(EmberforgeArt.Slot.ChipLine),
+                                       UITheme.WithAlpha(tint, Emberforge.ChipLineAlpha));
+            line.type = Image.Type.Sliced;
+            UIBuilder.FillParent(line.rectTransform, 0f);
+            line.raycastTarget = false;
+
+            Text label = Label("Text", root, text, fontSize, tint, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(label.rectTransform, Emberforge.Space8, 2f, Emberforge.Space8, 2f);
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
+            return root;
+        }
+
         /// <summary>The four corner diamonds. Non-interactive, so they never eat a tap aimed at
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
@@ -395,6 +477,120 @@ namespace Emberfall.UI
             skin.Bind(built.Disc, built.Face);
             handle.InteractableChanged = skin.SetInteractable;
             return built;
+        }
+
+        /// <summary>
+        /// THE CLOSE CROSS every layer carries in its top-right corner.
+        ///
+        /// A disc rather than a chunky button, for the reason ScreenChrome's back control is one:
+        /// a rectangular ember button in the corner of every sheet would be a second primary
+        /// action competing with whatever the sheet's own is, and closing is never the thing a
+        /// layer wants pressed.
+        ///
+        /// The cross is a Text glyph over the disc rather than a sprite, exactly as the header's
+        /// chevron is, and for the same reason - there is no cross in the generator and adding
+        /// one for two callers would put a shape in the shared kit that nothing else asks for.
+        /// </summary>
+        public static ForgeDisc CloseDisc(RectTransform parent, Action action)
+        {
+            ForgeDisc disc = IconButton("Close", parent, "", TextureLab.Sigil(0, 64),
+                                        Emberforge.TextGold, HubStyle.RailDisc, action);
+            UIBuilder.Box(disc.Root, -HubStyle.HudEdge * 0.5f, -HubStyle.HudEdge * 0.5f,
+                          HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 1f));
+            disc.Glyph.enabled = false;
+
+            Text cross = Title("Cross", disc.Face, "X", UITheme.FontBody, Emberforge.TextGold,
+                               TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(cross.rectTransform, 0f);
+            UIBuilder.Outlined(cross, Emberforge.Outline, Emberforge.StrokeThin);
+            cross.raycastTarget = false;
+            return disc;
+        }
+
+        /// <summary>
+        /// A SINGLE-LINE TEXT BOX: the kit's sunken surface with a field wired into it.
+        ///
+        /// Same parameters and same contract as UIBuilder.TextField, including the one that
+        /// matters - the caller owns the RectTransform and this sizes nothing, because a field
+        /// inside a VStack and a field at a fixed offset need different things.
+        /// </summary>
+        public static InputField TextField(string name, Transform parent, string placeholderText,
+                                           int fontSize, int characterLimit, bool password)
+        {
+            RectTransform box = UIBuilder.Node(name, parent);
+            SunkenOn(box);
+
+            Text placeholder = Label("Placeholder", box, placeholderText, fontSize,
+                                     Emberforge.TextQuiet, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(placeholder.rectTransform, Emberforge.Space16);
+
+            Text shown = Label("Text", box, "", fontSize, Emberforge.TextBody, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(shown.rectTransform, Emberforge.Space16);
+
+            InputField field = box.gameObject.AddComponent<InputField>();
+            field.textComponent = shown;
+            field.placeholder = placeholder;
+            field.characterLimit = characterLimit;
+            field.lineType = InputField.LineType.SingleLine;
+            if (password) field.contentType = InputField.ContentType.Password;
+            return field;
+        }
+
+        /// <summary>
+        /// ONE ROW OF A STAT TABLE: the name on the left, the figure on the right, a gold rule
+        /// under both.
+        ///
+        /// Returns the VALUE label, because that is the only part of a row a screen ever writes
+        /// to after building it - the same contract Widgets.StatRow has, so a screen converts by
+        /// changing which of the two it calls.
+        /// </summary>
+        public static Text StatRow(string name, Transform parent, string label, string value,
+                                   Color valueColor, float height)
+        {
+            RectTransform root = UIBuilder.Node(name, parent);
+            UIBuilder.Sized(root, 0f, height);
+
+            Text labelText = Label("Label", root, label, UITheme.FontSmall, Emberforge.TextQuiet,
+                                   TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(labelText.rectTransform, Emberforge.Space16, 0f, 0f, 0f);
+            UIBuilder.Outlined(labelText, Emberforge.Outline, Emberforge.StrokeThin);
+
+            Text valueText = Label("Value", root, value, UITheme.FontSmall, valueColor,
+                                   TextAnchor.MiddleRight);
+            UIBuilder.FillParent(valueText.rectTransform, 0f, 0f, Emberforge.Space16, 0f);
+            UIBuilder.Outlined(valueText, Emberforge.Outline, Emberforge.StrokeThin);
+
+            Image rule = UIBuilder.Img("Rule", root, EmberforgeSkin.Get(EmberforgeArt.Slot.Rule),
+                                       Color.white);
+            rule.type = Image.Type.Sliced;
+            rule.raycastTarget = false;
+            RectTransform rt = rule.rectTransform;
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.offsetMin = new Vector2(Emberforge.Space8, 0f);
+            rt.offsetMax = new Vector2(-Emberforge.Space8, 0f);
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, Emberforge.RuleHeight);
+
+            return valueText;
+        }
+
+        /// <summary>
+        /// A SECTION HEADING inside a panel: one short line of Cinzel in gold, anchored to the
+        /// panel's top left.
+        ///
+        /// Not a ribbon. A ribbon is laid ACROSS a panel and overhangs it, which is right for the
+        /// one thing a panel is called and wrong for the third heading down a scrolling card -
+        /// three ribbons in a column is three banners fighting each other. A screen with one
+        /// subject uses a ribbon; a screen that is a list of sections uses these.
+        /// </summary>
+        public static Text Heading(string name, Transform parent, string text, float x, float y)
+        {
+            Text label = Title(name, parent, text, UITheme.FontSmall, Emberforge.TextGold,
+                               TextAnchor.UpperLeft);
+            UIBuilder.Box(label.rectTransform, x, y, 700f, 30f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
+            return label;
         }
 
         // ------------------------------------------------------------------ tabs

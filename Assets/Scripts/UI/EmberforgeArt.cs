@@ -169,6 +169,15 @@ namespace Emberfall.UI
             public const string JewelBody = "forge_jewel_body";
             public const string JewelEdge = "forge_jewel_edge";
 
+            /// <summary>A chip is two sprites for the reason the jewel is: the body carries the
+            /// shared dark outline and is never tinted, the line is white and is the only thing
+            /// a caller's colour multiplies.</summary>
+            public const string ChipBody = "forge_chip_body";
+            public const string ChipLine = "forge_chip_line";
+
+            /// <summary>The gold hairline between two sections of one panel.</summary>
+            public const string Rule = "forge_rule";
+
             /// <summary>A rarity portrait frame. One per star tier, so the caller asks for a tier
             /// rather than assembling a filename.</summary>
             public static string Frame(int stars)
@@ -197,6 +206,7 @@ namespace Emberfall.UI
                 Slot.BarTrough, Slot.BarFill,
                 Slot.Disc, Slot.DiscDown, Slot.Plus, Slot.Ornament,
                 Slot.JewelBody, Slot.JewelEdge,
+                Slot.ChipBody, Slot.ChipLine, Slot.Rule,
                 Slot.Frame(1), Slot.Frame(2), Slot.Frame(3), Slot.Frame(4), Slot.Frame(5)
             };
         }
@@ -482,6 +492,49 @@ namespace Emberfall.UI
                 s.EdgeWeight = 2;
                 Gold(ref s, 3);
                 s.FaceTop = Color.clear; s.FaceMid = Color.clear; s.FaceLow = Color.clear;
+                return s;
+            }
+
+            if (slot == Slot.ChipBody)
+            {
+                // Dark, and never tinted. The caller's colour goes on ChipLine and on the wash
+                // the component lays between the two, so the outline round a chip is the same
+                // outline as the one round the panel the chip sits on.
+                s.Width = 64; s.Height = 44; s.Radius = Emberforge.ChipRadius;
+                Face(ref s, Emberforge.ChipFill, Emberforge.ChipFill, Emberforge.ChipFill);
+                s.InnerShadow = 0.34f;
+                s.InnerShadowDepth = 6;
+                Border(ref s, 18, 18, 18, 18);
+                return s;
+            }
+
+            if (slot == Slot.ChipLine)
+            {
+                // WHITE and hollow: a hairline just inside the body's silhouette with nothing
+                // behind it, so one authored shape serves every aspect, role and grade the game
+                // ever tints it with. No outline of its own - the body underneath has one, and a
+                // second dark line between the two reads as a gap.
+                s.Width = 64; s.Height = 44; s.Radius = Emberforge.ChipRadius;
+                s.EdgeWeight = 0;
+                s.FrameWeight = Emberforge.ChipLineWeight;
+                s.FrameLit = Color.white;
+                s.FrameMid = Color.white;
+                s.FrameLow = Color.white;
+                s.FrameDeep = Color.white;
+                s.FaceTop = Color.clear; s.FaceMid = Color.clear; s.FaceLow = Color.clear;
+                Border(ref s, 18, 18, 18, 18);
+                return s;
+            }
+
+            if (slot == Slot.Rule)
+            {
+                // Nine-sliced across only: the top and bottom borders take the whole height, so
+                // the gold band and both dark edges sit in fixed regions and a rule stretched to
+                // any width keeps the section it was drawn with.
+                s.Width = 32; s.Height = Emberforge.RuleHeight; s.Radius = 2;
+                s.EdgeWeight = 1;
+                Face(ref s, Emberforge.GoldLow, Emberforge.GoldMid, Emberforge.GoldDeep);
+                Border(ref s, 12, 2, 12, 2);
                 return s;
             }
 

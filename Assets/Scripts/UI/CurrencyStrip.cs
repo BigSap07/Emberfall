@@ -73,13 +73,12 @@ namespace Emberfall.UI
             Root = UIBuilder.Node("CurrencyStrip", parent);
             UIBuilder.Box(Root, 0f, -top, Width, Height, new Vector2(0.5f, 1f));
 
-            Image plate = Root.gameObject.AddComponent<Image>();
-            plate.sprite = TextureLab.NotchedRect(14);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.94f);
+            // A FRAMED PANEL, not a chamfered plate. The chamfer was the shop/Rift/Recital/Events
+            // dialect, which is the thing this pass is retiring: those four screens now draw the
+            // same panel every other screen does, and a strip that kept its own corner treatment
+            // would be the one element on four pages still speaking the old language.
+            Image plate = EmberforgeUI.PanelOn(Root, false);
             plate.raycastTarget = false;
-            UIBuilder.NotchedFrame("Edge", Root,
-                                   UITheme.WithAlpha(UITheme.ChromeBrass, HubStyle.BorderAlphaStrong), 14, 2);
 
             RectTransform row = UIBuilder.Node("Row", Root);
             UIBuilder.FillParent(row, UITheme.Space12, 0f, UITheme.Space12, 0f);
@@ -97,11 +96,13 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// One currency: a flat tinted icon, then the value on its own sunken plate.
+        /// One currency: a flat tinted icon, then the value in its own recess.
         ///
         /// The value sits on a plate rather than free on the strip because six numbers in a row at
         /// six different lengths need a common left edge to scan down, and because a four-digit
-        /// balance and a single digit otherwise read as different-sized UI.
+        /// balance and a single digit otherwise read as different-sized UI. A RECESS rather than a
+        /// raised plate now: the strip is already a panel, and a second raised surface on top of
+        /// one is two objects where the design has one object with six wells cut into it.
         /// </summary>
         private static Text Cell(RectTransform parent, string name, Sprite icon, Color tint)
         {
@@ -119,15 +120,13 @@ namespace Emberfall.UI
             plate.offsetMin = new Vector2(IconSize + UITheme.Space8, -17f);
             plate.offsetMax = new Vector2(0f, 17f);
 
-            Image plateBg = plate.gameObject.AddComponent<Image>();
-            plateBg.sprite = UISkin.Panel(8);
-            plateBg.type = Image.Type.Sliced;
-            plateBg.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
+            Image plateBg = EmberforgeUI.SunkenOn(plate);
             plateBg.raycastTarget = false;
 
-            Text value = UIBuilder.Label("Value", plate, "0", HubStyle.FontValue,
-                                         UITheme.TextPrimary, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(value.rectTransform, UITheme.Space8, 0f, UITheme.Space8, 0f);
+            Text value = EmberforgeUI.Label("Value", plate, "0", HubStyle.FontValue,
+                                            Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(value.rectTransform, Emberforge.Space8, 0f, Emberforge.Space8, 0f);
+            UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
             value.raycastTarget = false;
             return value;
         }

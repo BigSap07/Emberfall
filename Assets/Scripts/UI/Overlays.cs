@@ -21,15 +21,16 @@ namespace Emberfall.UI
             _group.blocksRaycasts = false;
             _group.interactable = false;
 
-            Image background = _root.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(20);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.WithAlpha(UITheme.PanelRaised, 0.97f);
+            // The kit's framed panel, not a flat tinted rectangle. A toast is chrome that
+            // lands ON TOP of whatever the player is looking at, which is the one place a flat
+            // plate is most obviously a different piece of software from the screen under it.
+            Image background = EmberforgeUI.PanelOn(_root, false);
             background.raycastTarget = false;
-            UIBuilder.Frame("Edge", _root, UITheme.Border, 20, 2);
 
-            _text = UIBuilder.Label("Text", _root, "", UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(_text.rectTransform, 20f);
+            _text = EmberforgeUI.Label("Text", _root, "", UITheme.FontSmall, Emberforge.TextBody,
+                                       TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(_text.rectTransform, Emberforge.Space24);
+            UIBuilder.Outlined(_text, Emberforge.Outline, Emberforge.StrokeThin);
             _root.gameObject.SetActive(false);
         }
 
@@ -91,23 +92,33 @@ namespace Emberfall.UI
 
             _panel = UIBuilder.Node("Panel", _root);
             UIBuilder.Box(_panel, 0f, 0f, 840f, 520f, new Vector2(0.5f, 0.5f));
-            Image panelImage = _panel.gameObject.AddComponent<Image>();
-            panelImage.sprite = TextureLab.RoundedRect(26);
-            panelImage.type = Image.Type.Sliced;
-            panelImage.color = UITheme.Panel;
-            UIBuilder.Frame("Edge", _panel, UITheme.Border, 26, 3);
+            // Ornaments ON, unlike the toast's. A dialog is the one surface in the game that
+            // STOPS the player and asks a question, so it is the surface that earns the kit's
+            // full treatment; a toast is a sentence that is already leaving.
+            EmberforgeUI.PanelOn(_panel, true);
 
-            _title = UIBuilder.Label("Title", _panel, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.UpperCenter);
-            UIBuilder.Box(_title.rectTransform, 0f, -40f, 720f, 50f, new Vector2(0.5f, 1f));
+            // A ribbon rather than a plain heading, because a dialog has exactly one subject and
+            // a ribbon is what the kit says that with. 840 is the panel's own width, which is the
+            // number TitleRibbon wants - it works its own overhang out from there.
+            _title = EmberforgeUI.TitleRibbon("Title", _panel, "", 840f - Emberforge.RibbonOverhang * 2f);
 
-            _body = UIBuilder.WrappedLabel("Body", _panel, "", UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperCenter);
+            _body = EmberforgeUI.Body("Body", _panel, "", UITheme.FontBody, Emberforge.TextBody,
+                                      TextAnchor.UpperCenter);
             UIBuilder.Box(_body.rectTransform, 0f, -110f, 700f, 230f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(_body, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _cancel = UIBuilder.SecondaryButton("Cancel", _panel, "CANCEL", UITheme.FontBody);
+            // TEAL cancels and EMBER confirms, which is the kit's whole button vocabulary: the
+            // thing to press is orange and the way back out is teal. It is also why a destructive
+            // confirm reads correctly without a third colour - the caller puts the destructive
+            // word on whichever of the two it wants pressed, and SettingsScreen's reset already
+            // puts it on the way-out one.
+            _cancel = EmberforgeUI.Button("Cancel", _panel, "CANCEL", UITheme.FontBody,
+                                          ForgeButtonKind.Secondary);
             UIBuilder.Box(_cancel.Root, -180f, 44f, 300f, 96f, new Vector2(0.5f, 0f));
             _cancel.OnClick(HandleCancel);
 
-            _confirm = UIBuilder.GoldButton("Confirm", _panel, "OK", UITheme.FontBody);
+            _confirm = EmberforgeUI.Button("Confirm", _panel, "OK", UITheme.FontBody,
+                                           ForgeButtonKind.Primary);
             UIBuilder.Box(_confirm.Root, 180f, 44f, 300f, 96f, new Vector2(0.5f, 0f));
             _confirm.OnClick(HandleConfirm);
 

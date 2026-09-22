@@ -188,6 +188,20 @@ namespace Emberfall.UI.Screens
         /// </summary>
         public bool RoundUnderway { get { return _turnStripIcons.Count > 0; } }
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// Presses SKIP from outside, so a capture can photograph the RESULT PANEL without
+        /// sitting through a fight at playback speed.
+        ///
+        /// Editor-only, and it drives the same private SkipToEnd the button drives rather than
+        /// reaching past it - a capture that assembled the result panel its own way would be a
+        /// photograph of something no tap can produce. It is the same reasoning as RoundUnderway
+        /// above: the tool asks the screen a question, or asks it to do a thing it already does,
+        /// and never does the thing itself.
+        /// </summary>
+        public void SkipToEndForCapture() { SkipToEnd(); }
+#endif
+
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
         private int _turnStripCursor;
         private UnitBar _activeTurnBar;

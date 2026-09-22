@@ -452,60 +452,63 @@ namespace Emberfall.UI
             return root;
         }
 
-        /// <summary>One row of a stat table: label on the left, value on the right.</summary>
+        /// <summary>
+        /// One row of a stat table: label on the left, value on the right, a gold rule under both.
+        ///
+        /// The kit's row, forwarded. Every screen in the game that shows a stat block calls this
+        /// name, so converting it here converts all of them at once rather than editing seven
+        /// call sites to say EmberforgeUI instead - and it keeps the one contract they all rely
+        /// on, which is that the VALUE label comes back, because that is the only part of a row a
+        /// screen ever writes to after building it.
+        /// </summary>
         public static Text StatRow(string name, Transform parent, string label, string value, Color valueColor, float height)
         {
-            RectTransform root = UIBuilder.Node(name, parent);
-            UIBuilder.Sized(root, 0f, height);
-
-            Text labelText = UIBuilder.Label("Label", root, label, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(labelText.rectTransform, 16f, 0f, 0f, 0f);
-
-            Text valueText = UIBuilder.Label("Value", root, value, UITheme.FontSmall, valueColor, TextAnchor.MiddleRight);
-            UIBuilder.FillParent(valueText.rectTransform, 0f, 0f, 16f, 0f);
-
-            Image rule = UIBuilder.Img("Rule", root, TextureLab.White, UITheme.WithAlpha(UITheme.BorderSoft, 0.6f));
-            rule.rectTransform.anchorMin = new Vector2(0f, 0f);
-            rule.rectTransform.anchorMax = new Vector2(1f, 0f);
-            rule.rectTransform.pivot = new Vector2(0.5f, 0f);
-            rule.rectTransform.offsetMin = new Vector2(8f, 0f);
-            rule.rectTransform.offsetMax = new Vector2(-8f, 0f);
-            rule.rectTransform.sizeDelta = new Vector2(0f, 1f);
-
-            return valueText;
+            return EmberforgeUI.StatRow(name, parent, label, value, valueColor, height);
         }
 
-        /// <summary>Card describing one ability, used on the hero detail screen.</summary>
+        /// <summary>
+        /// Card describing one ability, used on the hero detail screen.
+        ///
+        /// A SUNKEN row rather than a flat tinted rectangle: an ability is content set INTO the
+        /// hero's page, not another panel laid on it, and a column of five framed cards inside an
+        /// already-framed page is a page of frames.
+        ///
+        /// The tint - the ability's own aspect - is left carrying exactly two things, the sigil
+        /// and the kind line above the name. It used to tint the card's fill, its border, its
+        /// icon disc and its icon ring as well, which is five tinted elements saying one thing and
+        /// is why the old card read as a coloured card rather than as a described ability.
+        ///
+        /// The same geometry as before, down to the 124 the text column starts at. A conversion
+        /// that moved that would have moved the hero page's whole right-hand column with it.
+        /// </summary>
         public static RectTransform AbilityCard(string name, Transform parent, string kindLabel, string abilityName,
                                                 string description, Color tint, int sigilIndex)
         {
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Sized(root, 0f, 172f);
-
-            Image background = root.gameObject.AddComponent<Image>();
-            background.sprite = TextureLab.RoundedRect(18);
-            background.type = Image.Type.Sliced;
-            background.color = UITheme.PanelSunken;
-            UIBuilder.Frame("Edge", root, UITheme.WithAlpha(tint, 0.35f), 18, 2);
+            EmberforgeUI.SunkenOn(root);
 
             RectTransform icon = UIBuilder.Node("Icon", root);
-            UIBuilder.Box(icon, 20f, 0f, 86f, 86f, new Vector2(0f, 0.5f));
+            UIBuilder.Box(icon, Emberforge.Space24, 0f, 86f, 86f, new Vector2(0f, 0.5f));
             Image iconDisc = icon.gameObject.AddComponent<Image>();
-            iconDisc.sprite = TextureLab.Circle(96);
-            iconDisc.color = UITheme.WithAlpha(tint, 0.22f);
+            iconDisc.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Disc);
+            iconDisc.color = Color.white;
             iconDisc.raycastTarget = false;
-            Image iconRing = UIBuilder.Img("Ring", icon, TextureLab.Ring(96, 5), UITheme.WithAlpha(tint, 0.8f));
-            UIBuilder.FillParent(iconRing.rectTransform, 0f);
             Image glyph = UIBuilder.Img("Glyph", icon, TextureLab.Sigil(sigilIndex, 64), tint);
-            UIBuilder.FillParent(glyph.rectTransform, 20f);
+            UIBuilder.FillParent(glyph.rectTransform, 24f);
 
-            Text kind = UIBuilder.Label("Kind", root, kindLabel, UITheme.FontTiny, tint, TextAnchor.UpperLeft);
+            Text kind = EmberforgeUI.Label("Kind", root, kindLabel, UITheme.FontTiny, tint,
+                                           TextAnchor.UpperLeft);
             UIBuilder.Box(kind.rectTransform, 124f, -18f, 400f, 24f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(kind, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text title = UIBuilder.Label("Name", root, abilityName, UITheme.FontBody, UITheme.TextPrimary, TextAnchor.UpperLeft);
+            Text title = EmberforgeUI.Title("Name", root, abilityName, UITheme.FontBody,
+                                            Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(title.rectTransform, 124f, -44f, 500f, 34f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text body = UIBuilder.WrappedLabel("Body", root, description, UITheme.FontTiny, UITheme.TextMuted, TextAnchor.UpperLeft);
+            Text body = EmberforgeUI.Body("Body", root, description, UITheme.FontTiny,
+                                          Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(body.rectTransform, 124f, -84f, 0f, 72f, new Vector2(0f, 1f));
             body.rectTransform.anchorMin = new Vector2(0f, 1f);
             body.rectTransform.anchorMax = new Vector2(1f, 1f);

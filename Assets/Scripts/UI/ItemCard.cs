@@ -60,19 +60,36 @@ namespace Emberfall.UI
                 UIBuilder.FillParent(glow.rectTransform, -size * 0.16f);
             }
 
+            // THE CHAMFERED SILHOUETTE STAYS, and this is the one place in the game where it
+            // does. Emberforge rounds every corner it draws, which is right for chrome - a panel,
+            // a button, a pill - and wrong for the thing chrome CONTAINS: a card cut square is
+            // how this game has drawn an object since the mockups, and rounding it would have
+            // made a helm and the panel behind it the same shape.
+            //
+            // What the kit does bring is the outline. It is the one property every element in
+            // Emberforge shares without exception, and a rarity border with no dark line outside
+            // it was the one silhouette in the game floating free of the rest - see the outline
+            // note in Emberforge on why that single shared property is what makes a kit read as
+            // one kit.
             Image fill = card.gameObject.AddComponent<Image>();
             fill.sprite = TextureLab.NotchedRect(cut);
             fill.type = Image.Type.Sliced;
-            fill.color = UITheme.WithAlpha(UITheme.PanelSunken, 0.95f);
+            fill.color = Emberforge.SunkenMid;
+
+            UIBuilder.NotchedFrame("Outline", card, Emberforge.Outline, cut, Emberforge.OutlineWeight);
 
             // THIN and CRISP, per the mockups: a 3px edge at full strength, not a wide soft one.
             // Thickness does not scale with the card - a 96px slot and a 180px forge focus want the
             // same weight of line, or the big one reads as a heavier grade than the small one.
-            UIBuilder.NotchedFrame("Edge", card, rarity, cut, 3);
+            //
+            // Inset by the outline's own weight so the two lines sit side by side rather than on
+            // top of each other: the rarity read is the INNER line and the dark one wraps it.
+            Image edge = UIBuilder.NotchedFrame("Edge", card, rarity, cut, 3);
+            UIBuilder.FillParent(edge.rectTransform, Emberforge.OutlineWeight);
 
             if (icon != null)
             {
-                Image glyph = UIBuilder.Img("Icon", card, icon, UITheme.WithAlpha(UITheme.TextPrimary, 0.92f));
+                Image glyph = UIBuilder.Img("Icon", card, icon, Emberforge.TextBody);
                 float iconSize = size * IconFraction;
                 float lift = maxPips > 0 ? size * 0.06f : 0f;
                 UIBuilder.Box(glyph.rectTransform, 0f, lift, iconSize, iconSize, new Vector2(0.5f, 0.5f));
@@ -103,7 +120,7 @@ namespace Emberfall.UI
             for (int i = 0; i < maxPips; i++)
             {
                 Image dot = UIBuilder.Img("Pip" + i, row, TextureLab.Diamond(32),
-                                          i < pips ? rarity : UITheme.WithAlpha(UITheme.BorderSoft, 0.75f));
+                                          i < pips ? rarity : Emberforge.TextQuiet);
                 UIBuilder.Box(dot.rectTransform, left + i * (pip + gap), 0f, pip, pip, new Vector2(0.5f, 0.5f));
             }
         }
@@ -147,9 +164,9 @@ namespace Emberfall.UI
         public static RectTransform Vacant(string name, Transform parent, float size, ArmorSlot slot)
         {
             RectTransform card = Build(name, parent, size, SlotIcon(slot),
-                                       UITheme.WithAlpha(UITheme.BorderSoft, 0.9f), 0, 4, Color.clear);
+                                       Emberforge.TextQuiet, 0, 4, Color.clear);
             Image icon = card.Find("Icon") != null ? card.Find("Icon").GetComponent<Image>() : null;
-            if (icon != null) icon.color = UITheme.WithAlpha(UITheme.TextDim, 0.45f);
+            if (icon != null) icon.color = UITheme.WithAlpha(Emberforge.TextQuiet, 0.55f);
             return card;
         }
 
@@ -250,7 +267,7 @@ namespace Emberfall.UI
             for (int i = 0; i < segments; i++)
             {
                 Image seg = UIBuilder.Img("Seg" + i, track, UISkin.Panel(4),
-                                          i < lit ? tint : UITheme.WithAlpha(UITheme.PanelSunken, 0.9f));
+                                          i < lit ? tint : Emberforge.SunkenTop);
                 seg.type = Image.Type.Sliced;
                 RectTransform rt = seg.rectTransform;
                 rt.anchorMin = new Vector2(i * step, 0f);

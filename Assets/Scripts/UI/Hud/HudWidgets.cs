@@ -242,16 +242,20 @@ namespace Emberfall.UI
             return scrim;
         }
 
-        /// <summary>A panel sheet: the large surface a hosted screen is drawn inside.</summary>
+        /// <summary>
+        /// A PANEL SHEET: the large surface a hosted screen is drawn inside.
+        ///
+        /// An Emberforge panel with its corner ornaments now. It was deliberately left in the old
+        /// language while the five screens it frames were unconverted - DESIGN-EMBERFORGE records
+        /// that decision and its reason, which was that a gold frame around old chrome is worse
+        /// than either language on its own. Profile, Account, Friends, Settings and Guild have all
+        /// had their pass, so the condition that note set for converting this has been met by the
+        /// note's own terms.
+        /// </summary>
         public static RectTransform Sheet(string name, RectTransform parent)
         {
             RectTransform sheet = UIBuilder.Node(name, parent);
-            Image plate = sheet.gameObject.AddComponent<Image>();
-            plate.sprite = HudSkin.Plate(HudSkin.PlateSheet, HubStyle.RadiusSheet);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
-            UIBuilder.Frame("Edge", sheet, UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong),
-                            HubStyle.RadiusSheet, HubStyle.BorderWeightHeavy);
+            EmberforgeUI.PanelOn(sheet, true);
             return sheet;
         }
 
@@ -271,75 +275,52 @@ namespace Emberfall.UI
             return popup;
         }
 
-        /// <summary>The close cross every layer carries in its top-right corner, at full target
-        /// size whatever the glyph inside it is.</summary>
+        /// <summary>
+        /// The close cross every layer carries in its top-right corner, at full target size
+        /// whatever the glyph inside it is.
+        ///
+        /// The kit's disc now, and the geometry is unchanged: same corner, same TouchMin hit rect,
+        /// same RailDisc face inside it. EmberforgeUI.CloseDisc owns the drawing so the cross on a
+        /// panel sheet and the cross on a popup cannot drift into two designs; this stays as the
+        /// name every caller already uses, and it hands back the same UIButton it always did.
+        /// </summary>
         public static UIButton CloseButton(RectTransform parent, Action action)
         {
-            RectTransform root = UIBuilder.Node("Close", parent);
-            UIBuilder.Box(root, -HubStyle.HudEdge * 0.5f, -HubStyle.HudEdge * 0.5f,
-                          HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 1f));
-            Image hit = HitArea(root);
-
-            RectTransform face = UIBuilder.Node("Face", root);
-            UIBuilder.Box(face, 0f, 0f, HubStyle.RailDisc, HubStyle.RailDisc, new Vector2(0.5f, 0.5f));
-            Image disc = UIBuilder.Img("Disc", face, HudSkin.Circle(HudSkin.Disc, 128),
-                                       UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha));
-            UIBuilder.FillParent(disc.rectTransform, 0f);
-            Image rim = UIBuilder.Img("Ring", face,
-                                      HudSkin.Ring(HudSkin.DiscRing, 128, HubStyle.NavRingThickness),
-                                      UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlphaStrong));
-            UIBuilder.FillParent(rim.rectTransform, 0f);
-
-            Text glyph = UIBuilder.Label("Glyph", face, "X", HubStyle.FontLabel,
-                                         HubStyle.LabelText, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(glyph.rectTransform, 0f);
-
-            UIButton handle = new UIButton();
-            handle.Root = root;
-            handle.Background = hit;
-            handle.Label = glyph;
-            handle.Button = Pressable(root, hit, action);
-            return handle;
+            return EmberforgeUI.CloseDisc(parent, action).Button;
         }
 
-        /// <summary>One tab on a panel's tab bar. Selected state is a colour swap on the same
-        /// plate rather than a second shape, so the bar cannot drift into two designs.</summary>
+        /// <summary>
+        /// One tab on a panel's tab bar, in the kit.
+        ///
+        /// The selected state is a different PLATE rather than a colour swap on one, for the same
+        /// reason a pressed button is a different sprite: a colour multiplier on a baked bevel
+        /// darkens the highlight and the shadow by the same factor, which is what light does not
+        /// do. EmberforgeUI owns both plates; this keeps HudElement as the handle, because
+        /// PanelHost holds a list of them and repaints the row through SetTabSelected.
+        /// </summary>
         public static HudElement Tab(string caption, RectTransform parent, Action action)
         {
+            ForgeTab built = EmberforgeUI.Tab(caption, parent, HubStyle.TabMinWidth,
+                                              HubStyle.TabHeight, action);
             HudElement element = new HudElement();
-            element.Root = UIBuilder.Node("Tab" + caption, parent);
-            UIBuilder.Sized(element.Root, HubStyle.TabMinWidth, HubStyle.TabHeight);
-            UIBuilder.Size(element.Root, HubStyle.TabMinWidth, HubStyle.TabHeight);
-
-            element.Disc = element.Root.gameObject.AddComponent<Image>();
-            element.Disc.sprite = HudSkin.Plate(HudSkin.PlateTab, HubStyle.RadiusPill);
-            element.Disc.type = Image.Type.Sliced;
-            element.Disc.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlpha);
-            UIBuilder.Frame("Edge", element.Root, UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlpha),
-                            HubStyle.RadiusPill, HubStyle.BorderWeight);
-
-            element.Caption = UIBuilder.Label("Text", element.Root, caption, HubStyle.FontSecondary,
-                                              HubStyle.TextSecondary, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(element.Caption.rectTransform, 0f);
-
-            element.Button = new UIButton();
-            element.Button.Root = element.Root;
-            element.Button.Background = element.Disc;
-            element.Button.Label = element.Caption;
-            element.Button.Button = Pressable(element.Root, element.Disc, action);
+            element.Root = built.Root;
+            element.Disc = built.Plate;
+            element.Caption = built.Caption;
+            element.Button = built.Button;
+            EmberforgeUI.SetTabSelected(built, false);
             return element;
         }
 
-        /// <summary>Paints a tab as the open one. Gold text on a solid plate for the tab you are
-        /// looking at, muted text on a translucent one for the tabs you are not.</summary>
+        /// <summary>Paints a tab as the open one.</summary>
         public static void SetTabSelected(HudElement tab, bool selected)
         {
             if (tab == null) return;
-            if (tab.Disc != null)
-                tab.Disc.color = UITheme.WithAlpha(HubStyle.Plate,
-                                                   selected ? HubStyle.PlateAlphaSolid : HubStyle.PlateAlpha);
-            if (tab.Caption != null)
-                tab.Caption.color = selected ? HubStyle.ValueGold : HubStyle.TextSecondary;
+            ForgeTab built = new ForgeTab();
+            built.Root = tab.Root;
+            built.Plate = tab.Disc;
+            built.Caption = tab.Caption;
+            built.Button = tab.Button;
+            EmberforgeUI.SetTabSelected(built, selected);
         }
     }
 }

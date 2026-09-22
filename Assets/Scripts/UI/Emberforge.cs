@@ -181,6 +181,36 @@ namespace Emberfall.UI
         public static readonly Color PlusLow = UITheme.Hex("2F7A24");
         public const float PlusSize = 42f;
 
+        // ------------------------------------------------------------------ the chip
+        //
+        // A CHIP IS THE KIT'S ONE TINTABLE SURFACE, and it is two sprites for the reason the
+        // currency jewel is two: Image.color multiplies the WHOLE sprite, so a one-piece chip in
+        // an aspect colour would have its dark outline tinted along with its fill and every
+        // aspect would end up with a differently coloured outline. A dark body carrying the
+        // shared outline, with a hairline over it that is the only thing tinted, gives one
+        // authored shape that can say aspect, role, rarity grade or temper without the outline
+        // ever moving off Emberforge.Outline.
+
+        public static readonly Color ChipFill = UITheme.Hex("17100C");
+
+        /// <summary>How strongly a chip's tinted hairline reads, and how strongly the same tint
+        /// washes the fill behind it. The wash is deliberately faint: a chip is a label with a
+        /// colour attached, not a coloured button, and a grid of six of them at full strength is
+        /// six things shouting at a portrait.</summary>
+        public const float ChipLineAlpha = 0.9f;
+        public const float ChipWashAlpha = 0.20f;
+        public const int ChipRadius = 12;
+        public const int ChipLineWeight = 2;
+
+        // ------------------------------------------------------------------ the rule
+        //
+        // The hairline that separates two sections of one panel. It is gold rather than a grey
+        // border because everything structural in this kit is gold, and it carries the outline
+        // above and below it so it reads as a struck line inlaid into the panel rather than as a
+        // scratch across it.
+
+        public const int RuleHeight = 6;
+
         // ------------------------------------------------------------------ text
         //
         // Three voices. White for a label sitting ON a colour, which always carries the dark
