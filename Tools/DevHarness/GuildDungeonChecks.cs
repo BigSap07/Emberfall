@@ -27,16 +27,17 @@ namespace Emberfall.DevHarness
         private static int _failures;
 
         /// <summary>
-        /// The level every sample roster fights at. It stands in for "a guild member", which is a
-        /// guess until guilds have members: roughly a player a few chapters into the campaign, with
-        /// the hero level cap at heroLevelCapBase + 4 per player level. The floors are calibrated
-        /// against it, so moving it without re-reading the table this prints moves every threshold.
+        /// The level every sample roster fights at, which is now simply the level EVERY line fights
+        /// the dungeon at: balance.json's guildDungeonHeroLevel, read in Run. GuildDungeon.Fight
+        /// normalises every line to it, so a sample drawn at any other level would be fought at
+        /// this one anyway; the samples carry it so the table this prints says what was fought.
         ///
-        /// Sample rosters carry NO relics, armor or talents. A real line is stronger than these, so
-        /// a floor these rosters can clear is a floor a real guild can clear; the check errs toward
-        /// calling a floor too hard.
+        /// Sample rosters carry NO relics, armor or talents. Relics and armor are stripped in the
+        /// dungeon anyway (GuildDungeon.NormaliseTeam); talents are not, and a real line may run
+        /// one, so a floor these rosters can clear is a floor a real guild can clear and the check
+        /// still errs toward calling a floor too hard.
         /// </summary>
-        internal const int ReferenceLevel = 40;
+        internal static int ReferenceLevel = 40;
 
         /// <summary>Synthetic guilds the property is asserted over. The generator is what is under
         /// test, so it is asked for several dungeons, not one.</summary>
@@ -60,12 +61,16 @@ namespace Emberfall.DevHarness
         public static int Run(ContentDatabase content, string contentDir)
         {
             _failures = 0;
+            ReferenceLevel = content.Balance.GuildDungeonHeroLevel;
             Line("");
             Line("GUILD DUNGEON");
             CheckSeeds();
             CheckFloors(content);
+            CheckLevelNormalisation(content);
             CheckRecordReplays(content);
-            CheckBoards();
+            CheckContentVersion(content, contentDir);
+            CheckBoards(content);
+            CheckTwoMembers(content);
             CheckServerAgrees(content, contentDir);
             CheckNotAHeroCheck(content);
             return _failures;
@@ -166,6 +171,97 @@ namespace Emberfall.DevHarness
             return string.Join(", ", parts.ToArray());
         }
 
+        // ---------------------------------------------------------------- one level for everybody
+
+        /// <summary>
+        /// THE DUNGEON IS A PUZZLE, NOT A POWER CHECK. Every hero fights it at one level with no
+        /// relic and no armor, and keeps its talent. Asserted three ways: the same heroes at level
+        /// 5 and at level 120, geared and bare, fight the SAME battle; the normalised line carries
+        /// the talent pick; and a talent pick still changes the fight for some line, because a
+        /// normalisation that quietly dropped talents would pass the first two.
+        /// </summary>
+        private static void CheckLevelNormalisation(ContentDatabase content)
+        {
+            int seed = GuildDungeon.SeedFor("level-check", 3);
+            TeamSnapshot bare = SampleRosters(content, 0x1E7E)[0].Team;
+
+            TeamSnapshot low = CopyLine(bare, 5);
+            TeamSnapshot high = CopyLine(bare, 120);
+            // Gear on the high line: a relic on every unit and a rolled piece on the first.
+            string relic = content.Relics.Count > 0 ? content.Relics[0].Id : "";
+            for (int i = 0; i < high.Units.Count; i++) high.Units[i].RelicId = relic;
+            if (content.Armor.IsUsable && high.Units.Count > 0)
+            {
+                HeroDef first = content.GetHero(high.Units[0].DefId);
+                high.Units[0].Armor.Add(ArmorRoller.Roll(content.Armor, ArmorSlot.Weapon, ArmorTemper.Radiant,
+                                                         first != null ? first.Aspect : Aspect.Ember, 77));
+            }
+
+            string lowPrint = Fingerprint(GuildDungeon.Fight(content, low, seed, 2));
+            string highPrint = Fingerprint(GuildDungeon.Fight(content, high, seed, 2));
+            Check(lowPrint == highPrint,
+                  "a level-5 line and the same heroes at level 120 with relics and armor fight the same battle - one level for everybody");
+
+            TeamSnapshot normal = GuildDungeon.NormaliseTeam(content, high);
+            bool allAtLevel = true, noGear = true;
+            for (int i = 0; i < normal.Units.Count; i++)
+            {
+                if (normal.Units[i].Level != content.Balance.GuildDungeonHeroLevel) allAtLevel = false;
+                if (!string.IsNullOrEmpty(normal.Units[i].RelicId) || normal.Units[i].Armor.Count > 0) noGear = false;
+            }
+            Check(allAtLevel && noGear && normal.Units.Count == bare.Units.Count,
+                  "the recorded line is the line that fought: every unit at level " + content.Balance.GuildDungeonHeroLevel + ", no relic, no armor");
+            Check(Describe(GuildDungeon.NormaliseTeam(content, normal)) == Describe(normal),
+                  "normalising is idempotent, so a stored record can be normalised again on replay without changing");
+
+            TeamSnapshot dup = CopyLine(bare, 40);
+            dup.Units.Add(CopyLine(bare, 40).Units[0]);
+            dup.Units.Add(new SnapshotUnit { DefId = "no_such_hero", Level = 40, Stars = 5 });
+            Check(GuildDungeon.NormaliseTeam(content, dup).Units.Count == bare.Units.Count,
+                  "a repeated hero and a hero this build does not know are dropped, not fought");
+
+            // Talents stay. Five-star heroes with talents, every pick tried on one line.
+            List<HeroDef> talented = content.Heroes.FindAll(h => h.TalentAt(1) != null);
+            bool kept = true, changes = false;
+            int lines = 0;
+            for (int start = 0; start + 5 <= talented.Count && lines < 6 && !changes; start += 5, lines++)
+            {
+                TeamSnapshot none = new TeamSnapshot();
+                for (int i = 0; i < 5; i++) none.Units.Add(new SnapshotUnit { DefId = talented[start + i].Id, Level = 40 });
+                string basePrint = Fingerprint(GuildDungeon.Fight(content, none, seed, 1));
+                for (int pick = 1; pick <= HeroDef.MaxTalents && !changes; pick++)
+                {
+                    TeamSnapshot with = CopyLine(none, 40);
+                    for (int i = 0; i < with.Units.Count; i++)
+                        if (talented[start + i].TalentAt(pick) != null) with.Units[i].SelectedTalent = pick;
+                    TeamSnapshot n = GuildDungeon.NormaliseTeam(content, with);
+                    for (int i = 0; i < n.Units.Count; i++)
+                        if (n.Units[i].SelectedTalent != with.Units[i].SelectedTalent) kept = false;
+                    if (Fingerprint(GuildDungeon.Fight(content, with, seed, 1)) != basePrint) changes = true;
+                }
+            }
+            Check(talented.Count >= 5, "there are talented heroes to test with (" + talented.Count + ")");
+            Check(kept, "the talent pick survives normalisation - it is free to change, so it is a real choice");
+            Check(changes, "and a talent pick changes the fight for at least one line - normalisation did not quietly drop it");
+        }
+
+        private static TeamSnapshot CopyLine(TeamSnapshot line, int level)
+        {
+            TeamSnapshot copy = new TeamSnapshot();
+            copy.Label = line.Label;
+            for (int i = 0; i < line.Units.Count; i++)
+            {
+                SnapshotUnit u = line.Units[i];
+                copy.Units.Add(new SnapshotUnit { DefId = u.DefId, Level = level, Stars = u.Stars, SelectedTalent = u.SelectedTalent });
+            }
+            return copy;
+        }
+
+        private static string Describe(TeamSnapshot line)
+        {
+            return TeamSnapshotCodec.WriteUnits(line).ToJson(false);
+        }
+
         // ---------------------------------------------------------------- the record
 
         private static void CheckRecordReplays(ContentDatabase content)
@@ -181,35 +277,55 @@ namespace Emberfall.DevHarness
                   "the same line on the same floor fights the same battle every time - an attempt is a decision, not a reroll");
             Check(record.Turns == live.Rounds && record.Victory == live.Victory,
                   "the record carries the fight's own result and turn count");
-            Check(record.Power == ProvingGenerator.PowerOf(content, team.ToLoadout()) && record.Power > 0,
-                  "and the line's power as fought (" + record.Power + ")");
-            Check(Math.Abs(record.AverageStars - GuildDungeon.AverageStars(team)) < 0.001f && record.AverageStars >= 1f,
+            Check(record.Fallen == GuildDungeon.FallenIn(live) && record.Fallen >= 0,
+                  "and how many heroes fell (" + record.Fallen + "), read off the event list");
+            Check(record.ContentVersion == content.ContentVersion && record.ContentVersion.StartsWith("c1-"),
+                  "and the content it was fought under (" + record.ContentVersion + ")");
+            Check(Math.Abs(record.AverageStars - GuildDungeon.AverageStars(record.Team)) < 0.001f && record.AverageStars >= 1f,
                   "and its average star rating (" + record.AverageStars.ToString("0.00", CultureInfo.InvariantCulture) + ")");
 
-            // Through the wire and back: the RPC's arguments, reshaped into the row the server
-            // returns, read back, and replayed. What comes out must be the fight that went in.
+            GuildDungeonAttempt stored = ThroughTheWire(record, "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9", 1, 501);
+            Check(stored.Seed == record.Seed && stored.Floor == record.Floor && stored.Cycle == record.Cycle
+                  && stored.Team.Units.Count == record.Team.Units.Count && stored.Fallen == record.Fallen
+                  && stored.ContentVersion == record.ContentVersion,
+                  "a record survives the trip to the server's row shape and back, content version and losses included");
+            GuildDungeonReplay replay = GuildDungeon.Replay(content, stored);
+            Check(replay.Playable && Fingerprint(replay.Result) == Fingerprint(live),
+                  "AND REPLAYS EXACTLY - the stored record alone reproduces the fight, event for event ("
+                  + live.Events.Count + " events)");
+        }
+
+        /// <summary>
+        /// A record through the wire: guild_dungeon_submit's arguments, reshaped into the row the
+        /// server returns (with the id, attempt number and member it assigns), serialised, parsed
+        /// and read back. The same trip a real attempt makes.
+        /// </summary>
+        private static GuildDungeonAttempt ThroughTheWire(GuildDungeonAttempt record, string userId, int attempt, long id)
+        {
             JsonValue args = JsonValue.Parse(GuildDungeon.WriteRpcArgs(record).ToJson(false));
+            JsonValue row = RowFrom(args, "3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c", userId, attempt, id);
+            return GuildDungeon.ReadRow(JsonValue.Parse(row.ToJson(false)));
+        }
+
+        private static JsonValue RowFrom(JsonValue args, string guildId, string userId, int attempt, long id)
+        {
             JsonValue row = JsonValue.NewObject();
-            row.Set("guild_id", "3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c");
-            row.Set("user_id", "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9");
+            row.Set("id", id);
+            row.Set("guild_id", guildId);
+            row.Set("user_id", userId);
             row.Set("cycle", args.GetInt("p_cycle", -1));
             row.Set("floor", args.GetInt("p_floor", -1));
-            row.Set("attempt", 1);
+            row.Set("attempt", attempt);
             row.Set("seed", args.GetInt("p_seed", -1));
             row.Set("team", args["p_team"]);
-            row.Set("victory", args.GetBool("p_victory", !record.Victory));
+            row.Set("victory", args.GetBool("p_victory", false));
             row.Set("turns", args.GetInt("p_turns", -1));
             row.Set("power", args.GetInt("p_power", -1));
             row.Set("avg_stars", args.GetFloat("p_avg_stars", -1f));
-            GuildDungeonAttempt stored = GuildDungeon.ReadRow(JsonValue.Parse(row.ToJson(false)));
-
-            Check(stored.Seed == record.Seed && stored.Floor == record.Floor && stored.Cycle == record.Cycle
-                  && stored.Team.Units.Count == team.Units.Count,
-                  "a record survives the trip to the server's row shape and back");
-            BattleResult replay = GuildDungeon.Replay(content, stored);
-            Check(Fingerprint(replay) == Fingerprint(live),
-                  "AND REPLAYS EXACTLY - the stored record alone reproduces the fight, event for event ("
-                  + live.Events.Count + " events)");
+            row.Set("fallen", args.GetInt("p_fallen", -1));
+            row.Set("content_version", args.GetString("p_content_version", ""));
+            row.Set("created_at", "2026-09-22T21:00:" + (id % 60).ToString("00", CultureInfo.InvariantCulture) + "+00:00");
+            return row;
         }
 
         private static string Fingerprint(BattleResult r)
@@ -219,43 +335,206 @@ namespace Emberfall.DevHarness
                  + r.EnemyHpRatio.ToString("0.0000", CultureInfo.InvariantCulture);
         }
 
+        // ---------------------------------------------------------------- content version
+
+        /// <summary>
+        /// A REPLAY SAYS PLAINLY WHEN IT CANNOT BE REPRODUCED. The version is a function of the
+        /// content text and nothing else a checkout can vary (line endings, a byte-order mark);
+        /// any real edit moves it; and a record fought under other content, or under none, or
+        /// that this build fights differently, is refused with a reason and no fight.
+        /// </summary>
+        private static void CheckContentVersion(ContentDatabase content, string contentDir)
+        {
+            string lf = "{\n  \"a\": 1\n}\n";
+            string crlf = "{\r\n  \"a\": 1\r\n}\r\n";
+            Check(ContentDatabase.VersionOf(lf) == ContentDatabase.VersionOf(crlf),
+                  "the content version ignores line endings - the same file on two checkouts is the same content");
+            Check(ContentDatabase.VersionOf(lf) == ContentDatabase.VersionOf("﻿" + lf),
+                  "and a byte-order mark");
+            Check(ContentDatabase.VersionOf(lf) != ContentDatabase.VersionOf(lf.Replace("1", "2")),
+                  "and moves on any real edit");
+            Check(ContentDatabase.VersionOf("ab", "c") != ContentDatabase.VersionOf("a", "bc"),
+                  "and knows which file a character is in");
+            Check(!string.IsNullOrEmpty(content.ContentVersion), "the shipped content has a version (" + content.ContentVersion + ")");
+
+            // The shipped content, reloaded with one balance number moved: a balance patch.
+            ContentDatabase patched = null;
+            string balancePath = Path.Combine(contentDir ?? "", "balance.json");
+            if (File.Exists(balancePath))
+            {
+                string balance = ReadContent(contentDir, "balance").Replace("\"guildDungeonChampionLevelBonus\": 3", "\"guildDungeonChampionLevelBonus\": 4");
+                patched = LoadWith(contentDir, balance);
+                ContentDatabase same = LoadWith(contentDir, ReadContent(contentDir, "balance"));
+                Check(same.ContentVersion == content.ContentVersion,
+                      "loading the same files again gives the same version - it is a function of the content, not of the load");
+            }
+            Check(patched != null && patched.ContentVersion != content.ContentVersion,
+                  "a one-number balance patch is a new content version");
+
+            int seed = GuildDungeon.SeedFor("version-check", 9);
+            BattleResult live;
+            GuildDungeonAttempt record = GuildDungeon.Attempt(content, SampleRosters(content, 0xC0DE)[1].Team, seed, 9, 5, out live);
+
+            if (patched != null)
+            {
+                GuildDungeonReplay moved = GuildDungeon.Replay(patched, record);
+                Check(moved.Verdict == GuildDungeonReplayVerdict.ContentMoved && moved.Result == null
+                      && moved.Explanation.Length > 0,
+                      "a record replayed after that patch is REFUSED as content moved, with a reason and no fight: \"" + moved.Explanation + "\"");
+            }
+
+            GuildDungeonAttempt old = ThroughTheWire(record, "u-old", 1, 7);
+            old.ContentVersion = "";
+            GuildDungeonReplay unknown = GuildDungeon.Replay(content, old);
+            Check(unknown.Verdict == GuildDungeonReplayVerdict.ContentUnknown && unknown.Result == null,
+                  "a record from before the field is refused as unknown, not played on trust");
+
+            JsonValue legacyRow = JsonValue.Parse(GuildDungeon.WriteRpcArgs(record).ToJson(false));
+            JsonValue row0007 = RowFrom(legacyRow, "g", "u-legacy", 1, 8);
+            // A 0007-shaped row: neither column exists.
+            JsonValue stripped = JsonValue.NewObject();
+            foreach (string key in new[] { "id", "guild_id", "user_id", "cycle", "floor", "attempt", "seed", "team", "victory", "turns", "power", "avg_stars", "created_at" })
+                stripped.Set(key, row0007[key]);
+            GuildDungeonAttempt legacy = GuildDungeon.ReadRow(JsonValue.Parse(stripped.ToJson(false)));
+            Check(legacy.ContentVersion == "" && legacy.Fallen == -1
+                  && GuildDungeon.Replay(content, legacy).Verdict == GuildDungeonReplayVerdict.ContentUnknown,
+                  "a row stored by 0007, with neither new column, reads as unknown content and unknown losses");
+
+            GuildDungeonAttempt forged = ThroughTheWire(record, "u-forged", 1, 9);
+            forged.Turns += 1;
+            GuildDungeonReplay diverged = GuildDungeon.Replay(content, forged);
+            Check(diverged.Verdict == GuildDungeonReplayVerdict.Diverged && diverged.Result == null,
+                  "same content but a different fight from the record is refused too: \"" + diverged.Explanation + "\"");
+            Check(GuildDungeon.Replay(content, ThroughTheWire(record, "u-true", 1, 10)).Verdict == GuildDungeonReplayVerdict.Exact,
+                  "and the untouched record plays");
+        }
+
         // ---------------------------------------------------------------- boards
 
-        private static void CheckBoards()
+        /// <summary>
+        /// THE CONSTRAINT BOARDS. Lines are built to satisfy chosen rules, so every membership
+        /// below is known in advance: an attempt enters exactly the boards it satisfies, nobody
+        /// declares anything, a loss enters none, one entry per member, fewest turns first.
+        /// </summary>
+        private static void CheckBoards(ContentDatabase content)
         {
+            Check(GuildDungeon.Boards.Length == 6
+                  && string.Join(",", Array.ConvertAll(GuildDungeon.Boards, b => b.ToString()))
+                     == "FourOrFewer,NoFiveStar,OneAspect,NoHealer,FirstAttempt,Flawless",
+                  "six boards, in drawing order: four or fewer, no five stars, one aspect, no healer, first attempt, nobody fell");
+
+            HeroDef mender = content.Heroes.Find(h => h.Role == HeroRole.Mender && h.Stars < 5);
+            HeroDef five = content.Heroes.Find(h => h.Stars == 5 && h.Role != HeroRole.Mender);
+            List<HeroDef> oneAspect = null;
+            foreach (Aspect aspect in Enum.GetValues(typeof(Aspect)))
+            {
+                List<HeroDef> of = content.Heroes.FindAll(h => h.Aspect == aspect && h.Role != HeroRole.Mender && h.Stars < 5);
+                if (of.Count >= 4) { oneAspect = of.GetRange(0, 4); break; }
+            }
+            List<HeroDef> mixed = new List<HeroDef>();
+            foreach (HeroDef h in content.Heroes)
+                if (h.Role != HeroRole.Mender && h.Stars < 5 && !mixed.Exists(m => m.Aspect == h.Aspect)) mixed.Add(h);
+            if (mender == null || five == null || oneAspect == null || mixed.Count < 5)
+            {
+                Check(false, "the shipped roster has the heroes the board checks are built from");
+                return;
+            }
+
+            // ana: five mixed, first attempt, nobody fell, 12 turns   -> NoFiveStar, NoHealer, FirstAttempt, Flawless
+            // ana: four of one aspect, attempt 2, one fell, 9 turns   -> FourOrFewer, NoFiveStar, OneAspect, NoHealer
+            // bo:  five-star + mender + 3 mixed, attempt 1, 8 turns   -> FirstAttempt only (one fell)
+            // cy:  a LOSS in 3 turns with a four-hero line            -> nothing
+            // cy:  four mixed, attempt 2, nobody fell, 10 turns       -> FourOrFewer, NoFiveStar, NoHealer, Flawless
             List<GuildDungeonAttempt> attempts = new List<GuildDungeonAttempt>
             {
-                Made("ana", 1, true, 9, 4000, 3.4f),
-                Made("ana", 2, true, 7, 5200, 4.2f),
-                Made("bo",  1, true, 12, 2600, 2.0f),
-                Made("cy",  1, false, 3, 1000, 1.0f),
-                Made("cy",  2, true, 8, 3100, 3.0f),
+                Made("ana", 1, true, 12, 0, Line(mixed.GetRange(0, 5))),
+                Made("ana", 2, true, 9, 1, Line(oneAspect)),
+                Made("bo", 1, true, 8, 1, Line(new List<HeroDef> { five, mender, mixed[0], mixed[1], mixed[2] })),
+                Made("cy", 1, false, 3, 4, Line(mixed.GetRange(0, 4))),
+                Made("cy", 2, true, 10, 0, Line(mixed.GetRange(1, 4))),
             };
-            // Someone else's floor and someone else's cycle, which no board may count.
-            GuildDungeonAttempt wrongFloor = Made("dee", 1, true, 1, 1, 1f); wrongFloor.Floor = 3;
-            GuildDungeonAttempt wrongCycle = Made("eli", 1, true, 1, 1, 1f); wrongCycle.Cycle = 6;
+            GuildDungeonAttempt wrongFloor = Made("dee", 1, true, 1, 0, Line(mixed.GetRange(0, 4))); wrongFloor.Floor = 3;
+            GuildDungeonAttempt wrongCycle = Made("eli", 1, true, 1, 0, Line(mixed.GetRange(0, 4))); wrongCycle.Cycle = 6;
             attempts.Add(wrongFloor);
             attempts.Add(wrongCycle);
 
-            List<GuildDungeonAttempt> turns = GuildDungeon.Rank(attempts, 7, 2, GuildDungeonBoard.FewestTurns);
-            List<GuildDungeonAttempt> power = GuildDungeon.Rank(attempts, 7, 2, GuildDungeonBoard.LowestPower);
-            List<GuildDungeonAttempt> stars = GuildDungeon.Rank(attempts, 7, 2, GuildDungeonBoard.LowestStars);
+            Check(Met(content, attempts[0]) == "NoFiveStar,NoHealer,FirstAttempt,Flawless",
+                  "a five-hero mixed line cleared first time with nobody lost enters four boards (" + Met(content, attempts[0]) + ")");
+            Check(Met(content, attempts[1]) == "FourOrFewer,NoFiveStar,OneAspect,NoHealer",
+                  "a four-hero single-aspect line enters its four (" + Met(content, attempts[1]) + ")");
+            Check(Met(content, attempts[2]) == "FirstAttempt",
+                  "a line with a five-star and a Mender that lost a hero enters only FIRST ATTEMPT (" + Met(content, attempts[2]) + ")");
+            Check(Met(content, attempts[3]) == "", "a loss enters no board at all");
 
-            Check(Order(turns) == "ana:2 cy:2 bo:1", "FEWEST TURNS ranks each member's fastest clear (" + Order(turns) + ")");
-            Check(Order(power) == "bo:1 cy:2 ana:1", "LOWEST POWER ranks each member's cheapest clear (" + Order(power) + ")");
-            Check(Order(stars) == "bo:1 cy:2 ana:1", "LOWEST STARS ranks each member's humblest clear (" + Order(stars) + ")");
-            Check(turns.Count == 3, "one entry per member, other floors and other cycles excluded");
-            Check(!turns.Exists(a => !a.Victory), "a loss is recorded but never ranked - cy's 3-turn wipe is not a 3-turn clear");
-            Check(turns[0].Attempt == 2 && power[2].Attempt == 1,
-                  "the same member can lead one board with one attempt and sit on another with a different one");
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.FourOrFewer) == "ana:2 cy:2", "FOUR OR FEWER: " + BoardOrder(content, attempts, GuildDungeonBoard.FourOrFewer));
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.NoFiveStar) == "ana:2 cy:2", "NO FIVE STARS keeps each member's fastest qualifying clear: " + BoardOrder(content, attempts, GuildDungeonBoard.NoFiveStar));
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.OneAspect) == "ana:2", "ONE ASPECT: " + BoardOrder(content, attempts, GuildDungeonBoard.OneAspect));
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.NoHealer) == "ana:2 cy:2", "NO HEALER: " + BoardOrder(content, attempts, GuildDungeonBoard.NoHealer));
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.FirstAttempt) == "bo:1 ana:1", "FIRST ATTEMPT, fewest turns first: " + BoardOrder(content, attempts, GuildDungeonBoard.FirstAttempt));
+            Check(BoardOrder(content, attempts, GuildDungeonBoard.Flawless) == "cy:2 ana:1", "NOBODY FELL: " + BoardOrder(content, attempts, GuildDungeonBoard.Flawless));
+            Check(!BoardOrder(content, attempts, GuildDungeonBoard.FourOrFewer).Contains("dee") && !BoardOrder(content, attempts, GuildDungeonBoard.FourOrFewer).Contains("eli"),
+                  "other floors and other cycles are never counted");
+            Check(!BoardOrder(content, attempts, GuildDungeonBoard.FirstAttempt).Contains("cy:1"),
+                  "cy's 3-turn wipe is not a 3-turn clear, even on a board it would otherwise lead");
+
+            // The same member leading one board with one attempt and sitting on another with a different one.
+            List<GuildDungeonStanding> anaTwo = GuildDungeon.StandingsOf(content, attempts, attempts[1]);
+            List<GuildDungeonStanding> anaOne = GuildDungeon.StandingsOf(content, attempts, attempts[0]);
+            GuildDungeonStanding one = anaOne.Find(s => s.Board == GuildDungeonBoard.NoFiveStar);
+            GuildDungeonStanding flawless = anaOne.Find(s => s.Board == GuildDungeonBoard.Flawless);
+            Check(anaTwo.Count == 4 && anaTwo.TrueForAll(s => s.Rank == 1 && s.ThisAttempt),
+                  "ana's second attempt holds first place on all four of its boards");
+            Check(one != null && one.Rank == 1 && !one.ThisAttempt && flawless != null && flawless.Rank == 2 && flawless.ThisAttempt && flawless.Of == 2,
+                  "and her first attempt is told its NO FIVE STARS place is held by her later one, and that it is 2nd of 2 on NOBODY FELL");
+
+            Check(GuildDungeon.AttemptsUsed(attempts, "cy", 7, 2) == 2 && GuildDungeon.AttemptsUsed(attempts, "dee", 7, 2) == 0,
+                  "attempts used are counted per member, floor and cycle");
+            List<GuildDungeonAttempt> climb = new List<GuildDungeonAttempt>(attempts);
+            Check(GuildDungeon.FloorOpen(climb, 7, 1) && GuildDungeon.FloorOpen(climb, 7, 4) && !GuildDungeon.FloorOpen(climb, 7, 5),
+                  "floor N opens when anybody in the guild clears floor N-1 - dee's floor 3 clear opens floor 4 for everyone, and nothing opens 5");
+            Check(GuildDungeon.HighestCleared(climb, null, 7) == 3 && GuildDungeon.HighestCleared(climb, "bo", 7) == 2
+                  && GuildDungeon.HighestCleared(climb, "eli", 7) == 0,
+                  "how far the guild has pushed and how far one member has are separate numbers");
         }
 
-        private static GuildDungeonAttempt Made(string user, int attempt, bool victory, int turns, int power, float stars)
+        private static long _madeId;
+
+        private static string BoardOrder(ContentDatabase content, List<GuildDungeonAttempt> attempts, GuildDungeonBoard b)
+        {
+            return Order(GuildDungeon.Rank(content, attempts, 7, 2, b));
+        }
+
+        private static string ReadContent(string dir, string name)
+        {
+            string p = Path.Combine(dir, name + ".json");
+            return File.Exists(p) ? File.ReadAllText(p) : null;
+        }
+
+        private static ContentDatabase LoadWith(string dir, string balance)
+        {
+            return ContentDatabase.Load(ReadContent(dir, "heroes"), ReadContent(dir, "enemies"), ReadContent(dir, "campaign"),
+                                        balance, ReadContent(dir, "relics"), ReadContent(dir, "events"), ReadContent(dir, "armor"));
+        }
+
+        private static TeamSnapshot Line(List<HeroDef> heroes)
+        {
+            TeamSnapshot t = new TeamSnapshot();
+            for (int i = 0; i < heroes.Count; i++)
+                t.Units.Add(new SnapshotUnit { DefId = heroes[i].Id, Level = 40, Stars = heroes[i].Stars });
+            return t;
+        }
+
+        private static GuildDungeonAttempt Made(string user, int attempt, bool victory, int turns, int fallen, TeamSnapshot team)
         {
             GuildDungeonAttempt a = new GuildDungeonAttempt();
-            a.UserId = user; a.Attempt = attempt; a.Victory = victory; a.Turns = turns; a.Power = power;
-            a.AverageStars = stars; a.Cycle = 7; a.Floor = 2;
+            a.UserId = user; a.Attempt = attempt; a.Victory = victory; a.Turns = turns; a.Fallen = fallen;
+            a.Team = team; a.Cycle = 7; a.Floor = 2; a.Id = ++_madeId;
             return a;
+        }
+
+        private static string Met(ContentDatabase content, GuildDungeonAttempt a)
+        {
+            return string.Join(",", GuildDungeon.BoardsMet(content, a).ConvertAll(b => b.ToString()).ToArray());
         }
 
         private static string Order(List<GuildDungeonAttempt> board)
@@ -263,6 +542,136 @@ namespace Emberfall.DevHarness
             List<string> parts = new List<string>();
             for (int i = 0; i < board.Count; i++) parts.Add(board[i].UserId + ":" + board[i].Attempt);
             return string.Join(" ", parts.ToArray());
+        }
+
+        // ---------------------------------------------------------------- two members, one floor
+
+        /// <summary>
+        /// THE HANDOVER, end to end on the wire shapes. Two members of one guild, two rosters, one
+        /// floor. Both attempts go through the submit call's arguments and back out of a row; both
+        /// are scored onto the boards they satisfy; one is shared into chat as a message row with
+        /// the attempt embedded the way the chat read embeds it; the other member reads that
+        /// message, replays it event for event, and then fights the same floor with their own line.
+        ///
+        /// The server here is a stand-in that assigns ids and attempt numbers. The rules it holds
+        /// (the cap, one level, floors in order) are 0008's and are proven by the live rules test,
+        /// not by this.
+        /// </summary>
+        /// <summary>Assigns what guild_dungeon_submit assigns - the row id and the attempt number -
+        /// and hands the row back through the codec. Holds none of the server's rules.</summary>
+        private sealed class StandInServer
+        {
+            public readonly List<GuildDungeonAttempt> Stored = new List<GuildDungeonAttempt>();
+            private readonly ContentDatabase _content;
+            private readonly string _guild;
+            private readonly int _seed, _cycle;
+            private long _nextId = 1000;
+
+            public StandInServer(ContentDatabase content, string guild, int seed, int cycle)
+            {
+                _content = content; _guild = guild; _seed = seed; _cycle = cycle;
+            }
+
+            public GuildDungeonAttempt Submit(TeamSnapshot line, string user, string name, out BattleResult fought)
+            {
+                GuildDungeonAttempt made = GuildDungeon.Attempt(_content, line, _seed, _cycle, 1, out fought);
+                int number = GuildDungeon.AttemptsUsed(Stored, user, _cycle, 1) + 1;
+                JsonValue args = JsonValue.Parse(GuildDungeon.WriteRpcArgs(made).ToJson(false));
+                JsonValue row = RowFrom(args, _guild, user, number, _nextId++);
+                JsonValue profile = JsonValue.NewObject();
+                profile.Set("display_name", name);
+                row.Set("profiles", profile);
+                GuildDungeonAttempt back = GuildDungeon.ReadRow(JsonValue.Parse(row.ToJson(false)));
+                Stored.Add(back);
+                return back;
+            }
+        }
+
+        private static void CheckTwoMembers(ContentDatabase content)
+        {
+            const string guild = "9d0c1b2a-3e4f-4a5b-8c6d-7e8f9a0b1c2d";
+            const string mira = "11111111-aaaa-4aaa-8aaa-111111111111";
+            const string tomas = "22222222-bbbb-4bbb-8bbb-222222222222";
+            const int cycle = 38;
+            int seed = GuildDungeon.SeedFor(guild, cycle);
+
+            List<Sample> pool = SampleRosters(content, 0x7A11);
+            TeamSnapshot miraLine = pool[3].Team;
+            TeamSnapshot tomasLine = pool.Find(s => s.Group == "3 stars or fewer").Team;
+            tomasLine.Units.RemoveAt(tomasLine.Units.Count - 1);
+
+            StandInServer server = new StandInServer(content, guild, seed, cycle);
+            List<GuildDungeonAttempt> stored = server.Stored;
+
+            BattleResult miraFight, tomasFight;
+            GuildDungeonAttempt miraAttempt = server.Submit(miraLine, mira, "Mira", out miraFight);
+            GuildDungeonAttempt tomasAttempt = server.Submit(tomasLine, tomas, "Tomas", out tomasFight);
+
+            Line("    two members, floor 1: Mira " + (miraAttempt.Victory ? "cleared" : "fell") + " in " + miraAttempt.Turns
+                 + " turns with " + miraAttempt.Team.Units.Count + " [" + Met(content, miraAttempt) + "]; Tomas "
+                 + (tomasAttempt.Victory ? "cleared" : "fell") + " in " + tomasAttempt.Turns + " turns with "
+                 + tomasAttempt.Team.Units.Count + " [" + Met(content, tomasAttempt) + "]");
+            Check(miraAttempt.Attempt == 1 && tomasAttempt.Attempt == 1 && miraAttempt.DisplayName == "Mira",
+                  "two members, two rosters, one floor: both attempts stored and read back with their names");
+
+            bool boardsRight = true;
+            foreach (GuildDungeonBoard b in GuildDungeon.Boards)
+            {
+                List<GuildDungeonAttempt> board = GuildDungeon.Rank(content, stored, cycle, 1, b);
+                bool miraOn = board.Exists(a => a.UserId == mira), tomasOn = board.Exists(a => a.UserId == tomas);
+                if (miraOn != GuildDungeon.Satisfies(content, miraAttempt, b)) boardsRight = false;
+                if (tomasOn != GuildDungeon.Satisfies(content, tomasAttempt, b)) boardsRight = false;
+            }
+            Check(boardsRight, "each appears on exactly the boards its line satisfies, and on no other");
+            Check(Met(content, tomasAttempt).Contains("FourOrFewer") == tomasAttempt.Victory
+                  && Met(content, tomasAttempt).Contains("NoFiveStar") == tomasAttempt.Victory,
+                  "Tomas's four-hero, three-star line enters FOUR OR FEWER and NO FIVE STARS exactly when it clears");
+
+            // Mira shares. The message row as the chat read returns it: the line, the author's name,
+            // the attempt id and the attempt row embedded under "attempt".
+            GuildDungeonAttempt shared = miraAttempt;
+            JsonValue share = GuildDungeon.WriteShareArgs(shared);
+            Check(share.GetLong("p_attempt_id", 0) == shared.Id && share.GetString("p_body", "").Length > 0 && share.GetString("p_body", "").Length <= 200,
+                  "sharing sends the attempt's id and a line that stands on its own for an old client: \"" + share.GetString("p_body", "") + "\"");
+
+            JsonValue message = JsonValue.NewObject();
+            message.Set("id", 77L);
+            message.Set("user_id", mira);
+            message.Set("body", share.GetString("p_body", ""));
+            message.Set("created_at", "2026-09-22T21:30:00+00:00");
+            message.Set("attempt_id", shared.Id);
+            JsonValue author = JsonValue.NewObject();
+            author.Set("display_name", "Mira");
+            message.Set("profiles", author);
+            JsonValue embedded = JsonValue.Parse(GuildDungeon.WriteRpcArgs(shared).ToJson(false));
+            message.Set("attempt", RowFrom(embedded, guild, mira, shared.Attempt, shared.Id));
+            GuildMessageEntry seen = GuildCodec.ReadMessage(JsonValue.Parse(message.ToJson(false)), tomas);
+            Check(seen != null && !seen.IsMine && seen.AttemptId == shared.Id && seen.Attempt != null
+                  && seen.Attempt.DisplayName == "Mira",
+                  "Tomas reads it as a card carrying Mira's whole attempt, not as a line of text");
+
+            // Tomas watches it.
+            GuildDungeonReplay watched = GuildDungeon.Replay(content, seen.Attempt);
+            Check(watched.Playable && Fingerprint(watched.Result) == Fingerprint(miraFight)
+                  && watched.Result.Events.Count == miraFight.Events.Count,
+                  "AND WATCHES THAT EXACT FIGHT - " + watched.Result.Events.Count + " events, the same result, the same turns");
+            bool frameForFrame = watched.Playable;
+            for (int i = 0; frameForFrame && i < miraFight.Events.Count; i++)
+            {
+                BattleEvent x = miraFight.Events[i], y = watched.Result.Events[i];
+                if (x.Type != y.Type || x.SourceId != y.SourceId || x.TargetId != y.TargetId
+                    || x.Value != y.Value || x.Critical != y.Critical || x.Status != y.Status) frameForFrame = false;
+            }
+            Check(frameForFrame, "frame for frame: every event's kind, actor, target and amount match the fight Mira had");
+
+            // Then runs the same floor with his own line, from the replay: the record names the floor and the seed.
+            BattleResult tomasSecondFight;
+            GuildDungeonAttempt tomasSecond = server.Submit(pool[7].Team, tomas, "Tomas", out tomasSecondFight);
+            Check(tomasSecond.Attempt == 2 && tomasSecond.Floor == seen.Attempt.Floor && tomasSecond.Seed == seen.Attempt.Seed,
+                  "then fights the same floor with his own roster, as his second attempt ("
+                  + (tomasSecond.Victory ? "cleared in " : "fell after ") + tomasSecond.Turns + " turns)");
+            Check(GuildDungeon.AttemptsUsed(stored, tomas, cycle, 1) == 2 && GuildDungeon.AttemptsUsed(stored, mira, cycle, 1) == 1,
+                  "and it is his attempt that was spent, not hers");
         }
 
         // ---------------------------------------------------------------- the server's copy
@@ -274,7 +683,7 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckServerAgrees(ContentDatabase content, string contentDir)
         {
-            string migration = FindMigration(contentDir);
+            string migration = FindMigration(contentDir, "0007_guild_dungeon.sql");
             if (migration == null)
             {
                 Check(false, "Server/supabase/migrations/0007_guild_dungeon.sql is findable from the content folder");
@@ -287,6 +696,13 @@ namespace Emberfall.DevHarness
                   "the server's attempt cap (" + cap + ") is balance.json's (" + content.Balance.GuildDungeonAttemptsPerFloor + ")");
             Check(floors == content.Balance.GuildDungeonFloors,
                   "the server's floor count (" + floors + ") is balance.json's (" + content.Balance.GuildDungeonFloors + ")");
+
+            // 0008 refuses any submitted unit not at this level, so a disagreement would make
+            // every attempt this build fights bounce off the server.
+            string playable = FindMigration(contentDir, "0008_guild_dungeon_playable.sql");
+            int level = playable == null ? -1 : SqlConstant(File.ReadAllText(playable), "guild_dungeon_hero_level");
+            Check(level == content.Balance.GuildDungeonHeroLevel,
+                  "the server's dungeon hero level (" + level + ", 0008) is balance.json's (" + content.Balance.GuildDungeonHeroLevel + ")");
         }
 
         private static int SqlConstant(string sql, string function)
@@ -296,13 +712,13 @@ namespace Emberfall.DevHarness
             return m.Success ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) : -1;
         }
 
-        private static string FindMigration(string contentDir)
+        private static string FindMigration(string contentDir, string file)
         {
             DirectoryInfo dir = string.IsNullOrEmpty(contentDir) ? null : new DirectoryInfo(contentDir);
             for (int i = 0; i < 8 && dir != null; i++, dir = dir.Parent)
             {
                 string candidate = Path.Combine(dir.FullName, Path.Combine("Server", Path.Combine("supabase",
-                                   Path.Combine("migrations", "0007_guild_dungeon.sql"))));
+                                   Path.Combine("migrations", file))));
                 if (File.Exists(candidate)) return candidate;
             }
             return null;

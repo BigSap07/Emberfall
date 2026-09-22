@@ -11,37 +11,93 @@ using Emberfall.Core.Progression;
 namespace Emberfall.Core.Cloud
 {
     /// <summary>
-    /// The three lenses a guild dungeon floor is scored through. Same fight, different questions:
-    /// how fast, how cheaply, and with how humble a line. Lower is better on all three.
+    /// The guild dungeon's boards. EACH IS A CONSTRAINT, not a measurement.
+    ///
+    /// The first version ranked three measurements: fewest turns, lowest power and lowest average
+    /// stars. That set was broken three ways. Stars are a flat stat multiplier, so lowest power and
+    /// lowest stars asked the same question twice. Fewest turns was won by whoever owned the
+    /// strongest roster. And once every line fights at one level (GuildDungeon.NormaliseTeam),
+    /// power stops meaning anything at all.
+    ///
+    /// A constraint is binary and nobody declares it: an attempt enters every board whose rule
+    /// it happens to satisfy, and ranking inside a board is fewest turns. So a player with twelve
+    /// heroes competes on NO FIVE STARS against a player with ninety, on the same terms, and wins
+    /// it with the line they built rather than the roster they own.
+    ///
+    /// Appended, never inserted: the value is not stored anywhere yet, but the order is the order
+    /// the boards screen draws them in and the harness pins it.
     /// </summary>
     public enum GuildDungeonBoard
     {
-        FewestTurns,
-        LowestPower,
-        LowestStars
+        /// <summary>Cleared with four heroes or fewer. An empty slot is a real decision.</summary>
+        FourOrFewer,
+        /// <summary>Cleared with no 5-star hero in the line.</summary>
+        NoFiveStar,
+        /// <summary>Cleared with every hero of one Aspect.</summary>
+        OneAspect,
+        /// <summary>Cleared with no Mender in the line.</summary>
+        NoHealer,
+        /// <summary>Cleared on the member's FIRST attempt at the floor this cycle: read the floor,
+        /// commit once, win. The cap makes every attempt a decision; this board rewards the first.</summary>
+        FirstAttempt,
+        /// <summary>Cleared with every hero still standing at the end.</summary>
+        Flawless
+    }
+
+    /// <summary>
+    /// Whether a stored fight can be shown as the fight that happened.
+    /// </summary>
+    public enum GuildDungeonReplayVerdict
+    {
+        /// <summary>This build reproduces the record: same result, same turns, same losses.</summary>
+        Exact,
+        /// <summary>The record names no content version (it predates the field), so nothing can
+        /// vouch for a replay of it.</summary>
+        ContentUnknown,
+        /// <summary>The record was fought under different content from this build's.</summary>
+        ContentMoved,
+        /// <summary>Same content, but this build produces a different fight from the record - the
+        /// engine moved, or the record is not what it says it is.</summary>
+        Diverged
+    }
+
+    /// <summary>What GuildDungeon.Replay hands back. Result is null unless the verdict is Exact:
+    /// a replay that cannot be vouched for shows nothing rather than a fight that did not happen.</summary>
+    public sealed class GuildDungeonReplay
+    {
+        public GuildDungeonReplayVerdict Verdict;
+        public BattleResult Result;
+        /// <summary>One or two plain sentences a player can read, saying why when it is not Exact.</summary>
+        public string Explanation = "";
+
+        public bool Playable { get { return Verdict == GuildDungeonReplayVerdict.Exact && Result != null; } }
     }
 
     /// <summary>
     /// One attempt at one floor, as the server stores it and as the client submits it.
     ///
     /// THIS RECORD IS A REPLAY. Combat is a pure function (CombatSimulation.Run), the floor is a
-    /// pure function of (Seed, Floor) and the player side is carried whole in Team, so
+    /// pure function of (Seed, Floor, content) and the player side is carried whole in Team, so
     /// GuildDungeon.Replay(content, record) reproduces the fight event for event. That is the
-    /// point of storing the team by value rather than a reference to anybody's save: a handover
-    /// feature, a re-verification pass or a "watch how they did it" button all read this and
-    /// nothing else. The scores are stored beside it so a board can be read without running a
-    /// single battle; Replay is what makes them checkable.
+    /// point of storing the team by value rather than a reference to anybody's save: the chat
+    /// handover, a re-verification pass or a "watch how they did it" button all read this and
+    /// nothing else.
     ///
-    /// The one thing that breaks a replay is content moving under it. A balance patch mid-cycle
-    /// changes what the same team does on the same seed. The record does not carry a content
-    /// version yet. That is a known gap, left open because the prototype has no content version
-    /// to carry; a replay across a patch will disagree with its record and should be read as
-    /// "content moved", not as "the client lied".
+    /// ContentVersion is what keeps that honest across a balance patch: the record names the
+    /// content it was fought under, and a replay under anything else says so instead of playing.
     /// </summary>
     public sealed class GuildDungeonAttempt
     {
+        /// <summary>The server's row id. What a chat message points at when an attempt is shared.
+        /// Zero on a record not yet stored.</summary>
+        public long Id;
+
         public string GuildId = "";
         public string UserId = "";
+
+        /// <summary>The member's display name, read alongside the row. Not stored on it.</summary>
+        public string DisplayName = "";
+
         public int Cycle;
         public int Floor = 1;
 
@@ -52,8 +108,9 @@ namespace Emberfall.Core.Cloud
         /// derived from it per floor, so one number describes the whole cycle.</summary>
         public int Seed;
 
-        /// <summary>The line that fought, by value: heroes, levels, stars, relics, talents and armor.
-        /// Encoded with TeamSnapshotCodec, the same shape team_snapshots.units holds.</summary>
+        /// <summary>The line that fought, by value, AS IT FOUGHT: normalised to the dungeon level
+        /// with no relics or armor, talents kept (GuildDungeon.NormaliseTeam). Encoded with
+        /// TeamSnapshotCodec, the same shape team_snapshots.units holds.</summary>
         public TeamSnapshot Team = new TeamSnapshot();
 
         public bool Victory;
@@ -61,33 +118,82 @@ namespace Emberfall.Core.Cloud
         /// <summary>BattleResult.Rounds - one round is every living unit acting once.</summary>
         public int Turns;
 
-        /// <summary>The line's power as fought, relics and armor included (ProvingGenerator.PowerOf).</summary>
+        /// <summary>Heroes of this line that died during the fight, -1 when the record predates the
+        /// field. Read by the Flawless board and checked by Replay.</summary>
+        public int Fallen = -1;
+
+        /// <summary>The line's power as fought. No board ranks it any more - at one level it says
+        /// little - but the server's column requires it and it costs nothing to keep.</summary>
         public int Power;
 
-        /// <summary>Mean star rating of the units that fought, rounded to two places - the precision
-        /// the server column holds, so the value ranked locally is the value stored.</summary>
+        /// <summary>Mean star rating of the units that fought, to two places. Kept for the same
+        /// reason as Power; the NoFiveStar board reads the units' own stars instead.</summary>
         public float AverageStars;
 
-        public string CreatedAt = "";
+        /// <summary>ContentDatabase.ContentVersion at the moment of the fight. Empty on a record
+        /// stored before the field existed.</summary>
+        public string ContentVersion = "";
 
-        public float Metric(GuildDungeonBoard board)
+        public string CreatedAt = "";
+    }
+
+    /// <summary>
+    /// Where the guild's dungeon stands, as guild_dungeon_status() reports it. The server owns the
+    /// clock: the client never computes a cycle, it asks for one.
+    /// </summary>
+    public sealed class GuildDungeonStatus
+    {
+        public string GuildId = "";
+        public int Cycle;
+        public long StartsUnix;
+        public long EndsUnix;
+        public int AttemptCap = 3;
+        public int FloorCount = 5;
+
+        public int Seed { get { return GuildDungeon.SeedFor(GuildId, Cycle); } }
+
+        /// <summary>One row of the status call. Total: a malformed row reads as cycle -1, which
+        /// every screen treats as "not known yet".</summary>
+        public static GuildDungeonStatus Read(JsonValue row)
         {
-            switch (board)
-            {
-                case GuildDungeonBoard.FewestTurns: return Turns;
-                case GuildDungeonBoard.LowestPower: return Power;
-                case GuildDungeonBoard.LowestStars: return AverageStars;
-            }
-            return 0f;
+            GuildDungeonStatus s = new GuildDungeonStatus();
+            if (row != null && row.IsArray) row = row.Count > 0 ? row[0] : null;
+            if (row == null || !row.IsObject) { s.Cycle = -1; return s; }
+            s.GuildId = row.GetString("guild_id", "");
+            s.Cycle = row.GetInt("cycle", -1);
+            s.StartsUnix = GuildCodec.ParseTimestamp(row.GetString("starts_at", ""));
+            s.EndsUnix = GuildCodec.ParseTimestamp(row.GetString("ends_at", ""));
+            s.AttemptCap = row.GetInt("attempt_cap", s.AttemptCap);
+            s.FloorCount = row.GetInt("floor_count", s.FloorCount);
+            return s;
         }
+    }
+
+    /// <summary>One member's place on one board: the attempt that put them there and its rank.</summary>
+    public sealed class GuildDungeonStanding
+    {
+        public GuildDungeonBoard Board;
+        /// <summary>1-based. Zero when the attempt did not enter this board.</summary>
+        public int Rank;
+        public int Of;
+        /// <summary>True when THIS attempt is the member's entry on the board, rather than an
+        /// earlier, better one of theirs.</summary>
+        public bool ThisAttempt;
     }
 
     /// <summary>
     /// The guild dungeon's rules that are not the floor generator: whose seed, which fight, what
-    /// score, and who is ahead. Engine-free and pure, like everything under Core.
+    /// counts, and who is ahead. Engine-free and pure, like everything under Core.
     /// </summary>
     public static class GuildDungeon
     {
+        /// <summary>Every board, in drawing order.</summary>
+        public static readonly GuildDungeonBoard[] Boards =
+        {
+            GuildDungeonBoard.FourOrFewer, GuildDungeonBoard.NoFiveStar, GuildDungeonBoard.OneAspect,
+            GuildDungeonBoard.NoHealer, GuildDungeonBoard.FirstAttempt, GuildDungeonBoard.Flawless
+        };
+
         /// <summary>
         /// The seed for one guild's dungeon in one cycle. Every member of the guild computes it
         /// from two values they all hold - the guild's id and the cycle number the server reports -
@@ -123,75 +229,210 @@ namespace Emberfall.Core.Cloud
             return GuildDungeonGenerator.Mix(dungeonSeed ^ 0x2F6B, floor);
         }
 
+        // ---------------------------------------------------------------- the line
+
+        /// <summary>
+        /// The line as the dungeon fights it. EVERY hero at balance.json's guildDungeonHeroLevel,
+        /// with no relic and no armor, and with its selected talent kept.
+        ///
+        /// LEVEL, because a guild spans every level there is. A floor tuned for level 40 was a
+        /// formality at 90 and a wall at 20, so the same floor asked thirty different questions.
+        /// At one level it asks one.
+        ///
+        /// GEAR IS STRIPPED, relics and armor both, for the same reason level is. Armor is rolled
+        /// at random off campaign drops and relics are bought with dust over weeks (a mythic is
+        /// "deliberately a long grind"), so both measure time spent rather than a decision made
+        /// for this floor. Leaving either in would hand the floor back to whoever has played
+        /// longest, which is exactly what normalising level took away. The alternatives were
+        /// weighed: a standard issue kit for everyone adds nothing to decide and a second thing to
+        /// tune; letting relics through as "choices" re-opens the roster-wealth gap in the one
+        /// slot where a mythic hook can decide a fight. Gear-free is also exactly the line the
+        /// floors were calibrated against, so no floor moves.
+        ///
+        /// TALENTS STAY, because a talent costs nothing to change (GameSession.SelectTalent is the
+        /// whole rule), so which one a hero runs is a real choice about this floor.
+        ///
+        /// STARS STAY TOO, and cannot not: a hero's star rating is part of what the hero is. That
+        /// is what the NO FIVE STARS board is for. Stars are re-read from the def rather than
+        /// trusted from the input, so the record's stars are the stars that fought.
+        ///
+        /// Heroes this build does not know are dropped, duplicates are dropped, and the line is
+        /// cut to MaxTeamSize. Idempotent: normalising a normalised line changes nothing, which is
+        /// what lets Fight apply it to a stored record without caring whether it was applied before.
+        /// </summary>
+        public static TeamSnapshot NormaliseTeam(ContentDatabase content, TeamSnapshot team)
+        {
+            TeamSnapshot line = new TeamSnapshot();
+            if (team == null || content == null) return line;
+            line.Label = team.Label;
+            int level = Math.Max(1, content.Balance.GuildDungeonHeroLevel);
+            int size = Math.Max(1, content.Balance.MaxTeamSize);
+            HashSet<string> seen = new HashSet<string>();
+            for (int i = 0; i < team.Units.Count && line.Units.Count < size; i++)
+            {
+                SnapshotUnit u = team.Units[i];
+                if (u == null || string.IsNullOrEmpty(u.DefId) || seen.Contains(u.DefId)) continue;
+                HeroDef def = content.GetHero(u.DefId);
+                if (def == null) continue;
+                seen.Add(u.DefId);
+                SnapshotUnit n = new SnapshotUnit();
+                n.DefId = u.DefId;
+                n.Level = level;
+                n.Stars = def.Stars;
+                n.RelicId = "";
+                n.SelectedTalent = def.TalentAt(u.SelectedTalent) != null ? u.SelectedTalent : 0;
+                line.Units.Add(n);
+            }
+            line.PowerScore = ProvingGenerator.PowerOf(content, line.ToLoadout());
+            return line;
+        }
+
+        /// <summary>A dungeon line from owned heroes: the heroes and their talent picks, nothing
+        /// else, since NormaliseTeam discards everything else anyway.</summary>
+        public static TeamSnapshot LineOf(ContentDatabase content, IList<HeroInstance> heroes, string label)
+        {
+            TeamSnapshot raw = new TeamSnapshot();
+            raw.Label = label ?? "";
+            for (int i = 0; heroes != null && i < heroes.Count; i++)
+            {
+                HeroInstance h = heroes[i];
+                if (h == null) continue;
+                SnapshotUnit u = new SnapshotUnit();
+                u.DefId = h.DefId;
+                u.SelectedTalent = h.SelectedTalent;
+                raw.Units.Add(u);
+            }
+            return NormaliseTeam(content, raw);
+        }
+
+        // ---------------------------------------------------------------- the fight
+
         /// <summary>
         /// Fights one floor with one line. The live attempt and the replay both come through here,
-        /// so they cannot build the player side two different ways.
+        /// so they cannot build the player side two different ways - and both are normalised
+        /// here, so a record that claims a level-90 line is still fought at the dungeon level.
         ///
-        /// The player side is materialised from the snapshot into a scratch profile that owns only
-        /// the armor the snapshot carries - the same trick the ghost and duel paths avoid needing
-        /// because they fight on the OPPONENT side. The team here is the player's side, which
-        /// resolves armor through BattleRequest.Profile, so a profile is what it gets.
+        /// The player side is the PLAYER side of CombatSimulation, which resolves relics and armor
+        /// through BattleRequest.Profile. A normalised line has neither, so the scratch profile it
+        /// gets is empty and exists only so nothing downstream reads a null.
         /// </summary>
         public static BattleResult Fight(ContentDatabase content, TeamSnapshot team, int dungeonSeed, int floor)
         {
+            TeamSnapshot line = NormaliseTeam(content, team);
             BattleRequest request = new BattleRequest();
             request.Content = content;
             request.Stage = GuildDungeonGenerator.BuildFloor(content, dungeonSeed, floor);
             request.Seed = FightSeedFor(dungeonSeed, floor);
 
-            PlayerProfile scratch = new PlayerProfile();
-            for (int i = 0; team != null && i < team.Units.Count; i++)
+            for (int i = 0; i < line.Units.Count; i++)
             {
-                SnapshotUnit u = team.Units[i];
-                HeroDef def = u == null ? null : content.GetHero(u.DefId);
-                if (def == null) continue;
+                SnapshotUnit u = line.Units[i];
                 HeroInstance hero = new HeroInstance();
                 hero.Uid = "guild_dungeon_" + i;
                 hero.DefId = u.DefId;
-                hero.Def = def;
-                hero.Level = Math.Max(1, u.Level);
-                hero.EquippedRelicId = u.RelicId ?? "";
+                hero.Def = content.GetHero(u.DefId);
+                hero.Level = u.Level;
                 hero.SelectedTalent = u.SelectedTalent;
-                for (int a = 0; a < u.Armor.Count; a++)
-                {
-                    ArmorPiece piece = u.Armor[a];
-                    if (piece == null) continue;
-                    int slot = PlayerProfile.SlotIndex(piece.Slot);
-                    if (slot < 0 || slot >= hero.EquippedArmor.Length) continue;
-                    scratch.OwnedArmor.Add(piece);
-                    hero.EquippedArmor[slot] = piece.Uid;
-                }
                 request.Team.Add(hero);
             }
-            request.Profile = scratch;
+            request.Profile = new PlayerProfile();
             return CombatSimulation.Run(request);
         }
 
+        /// <summary>Player heroes that died in this fight. Read off the event list, never
+        /// recomputed: a Death event naming a player unit is one fallen hero.</summary>
+        public static int FallenIn(BattleResult result)
+        {
+            if (result == null) return 0;
+            int fallen = 0;
+            for (int i = 0; i < result.Events.Count; i++)
+            {
+                BattleEvent e = result.Events[i];
+                if (e.Type != BattleEventType.Death) continue;
+                UnitSnapshot unit = result.FindUnit(e.TargetId);
+                if (unit != null && unit.IsPlayer) fallen++;
+            }
+            return fallen;
+        }
+
         /// <summary>
-        /// Fights a floor and scores it into a record ready to submit. Attempt, UserId, GuildId and
-        /// CreatedAt are the caller's and the server's to fill.
+        /// Fights a floor and scores it into a record ready to submit. Attempt, UserId, GuildId,
+        /// Id and CreatedAt are the server's to fill.
         /// </summary>
         public static GuildDungeonAttempt Attempt(ContentDatabase content, TeamSnapshot team, int dungeonSeed,
                                                   int cycle, int floor, out BattleResult result)
         {
-            result = Fight(content, team, dungeonSeed, floor);
+            TeamSnapshot line = NormaliseTeam(content, team);
+            result = Fight(content, line, dungeonSeed, floor);
             GuildDungeonAttempt record = new GuildDungeonAttempt();
             record.Cycle = cycle;
             record.Floor = floor;
             record.Seed = dungeonSeed;
-            record.Team = team;
+            record.Team = line;
             record.Victory = result.Victory;
             record.Turns = result.Rounds;
-            record.Power = ProvingGenerator.PowerOf(content, team.ToLoadout());
-            record.AverageStars = AverageStars(team);
+            record.Fallen = FallenIn(result);
+            record.Power = line.PowerScore;
+            record.AverageStars = AverageStars(line);
+            record.ContentVersion = content.ContentVersion ?? "";
             return record;
         }
 
-        /// <summary>Runs the fight a record describes. Equal Victory and Turns to the record is what
-        /// "this attempt is what it says it was" means.</summary>
-        public static BattleResult Replay(ContentDatabase content, GuildDungeonAttempt record)
+        /// <summary>
+        /// Plays back what a record describes, IF this build can vouch that what it plays is what
+        /// happened.
+        ///
+        /// Two gates, in order. The first is the content version: a record fought under other
+        /// numbers is refused before a single event is computed, and says so. The second is the
+        /// fight itself: under the same content, this build must reproduce the record's result,
+        /// turn count and losses, or the replay is refused as Diverged. The second gate is what
+        /// catches the thing a content version cannot see - an engine change between builds - and
+        /// it is why a replay is never shown on the strength of the version check alone.
+        /// </summary>
+        public static GuildDungeonReplay Replay(ContentDatabase content, GuildDungeonAttempt record)
         {
-            return Fight(content, record.Team, record.Seed, record.Floor);
+            GuildDungeonReplay replay = new GuildDungeonReplay();
+            if (record == null || content == null)
+            {
+                replay.Verdict = GuildDungeonReplayVerdict.Diverged;
+                replay.Explanation = "There is no fight to show.";
+                return replay;
+            }
+            if (string.IsNullOrEmpty(record.ContentVersion))
+            {
+                replay.Verdict = GuildDungeonReplayVerdict.ContentUnknown;
+                replay.Explanation = "This attempt was recorded before fights carried a content version, "
+                                   + "so this game cannot promise to show the fight that happened.";
+                return replay;
+            }
+            if (record.ContentVersion != content.ContentVersion)
+            {
+                replay.Verdict = GuildDungeonReplayVerdict.ContentMoved;
+                replay.Explanation = "This fight was recorded under an earlier set of game numbers. They "
+                                   + "have changed since, so it cannot be shown as it happened.";
+                return replay;
+            }
+
+            BattleResult result = Fight(content, record.Team, record.Seed, record.Floor);
+            int fallen = FallenIn(result);
+            bool agrees = result.Victory == record.Victory && result.Rounds == record.Turns
+                          && (record.Fallen < 0 || fallen == record.Fallen);
+            if (!agrees)
+            {
+                replay.Verdict = GuildDungeonReplayVerdict.Diverged;
+                replay.Explanation = "This version of the game fights it differently from the record ("
+                                   + Outcome(record.Victory, record.Turns) + " recorded, "
+                                   + Outcome(result.Victory, result.Rounds) + " here), so it is not shown.";
+                return replay;
+            }
+            replay.Verdict = GuildDungeonReplayVerdict.Exact;
+            replay.Result = result;
+            return replay;
+        }
+
+        private static string Outcome(bool victory, int turns)
+        {
+            return (victory ? "a clear" : "a loss") + " in " + turns + " turns";
         }
 
         public static float AverageStars(TeamSnapshot team)
@@ -202,52 +443,225 @@ namespace Emberfall.Core.Cloud
             return (float)Math.Round((double)total / team.Units.Count, 2);
         }
 
+        // ---------------------------------------------------------------- constraints
+
+        /// <summary>
+        /// Whether a CLEAR satisfies a board's rule. A loss satisfies nothing: it has no turn count
+        /// worth comparing, and ranking it would reward giving up early.
+        ///
+        /// Aspect and role are read from the def through content, stars from the line by value.
+        /// A hero this build cannot resolve fails OneAspect and NoHealer rather than being guessed
+        /// about - a board entry this client cannot justify is not drawn.
+        /// </summary>
+        public static bool Satisfies(ContentDatabase content, GuildDungeonAttempt a, GuildDungeonBoard board)
+        {
+            if (a == null || !a.Victory || a.Team == null || a.Team.Units.Count == 0) return false;
+            List<SnapshotUnit> units = a.Team.Units;
+            switch (board)
+            {
+                case GuildDungeonBoard.FourOrFewer:
+                    return units.Count <= 4;
+                case GuildDungeonBoard.NoFiveStar:
+                    for (int i = 0; i < units.Count; i++) if (units[i].Stars >= 5) return false;
+                    return true;
+                case GuildDungeonBoard.OneAspect:
+                {
+                    HeroDef first = content != null ? content.GetHero(units[0].DefId) : null;
+                    if (first == null) return false;
+                    for (int i = 1; i < units.Count; i++)
+                    {
+                        HeroDef d = content.GetHero(units[i].DefId);
+                        if (d == null || d.Aspect != first.Aspect) return false;
+                    }
+                    return true;
+                }
+                case GuildDungeonBoard.NoHealer:
+                    for (int i = 0; i < units.Count; i++)
+                    {
+                        HeroDef d = content != null ? content.GetHero(units[i].DefId) : null;
+                        if (d == null || d.Role == HeroRole.Mender) return false;
+                    }
+                    return true;
+                case GuildDungeonBoard.FirstAttempt:
+                    return a.Attempt == 1;
+                case GuildDungeonBoard.Flawless:
+                    return a.Fallen == 0;
+            }
+            return false;
+        }
+
+        /// <summary>Every board this attempt enters, in drawing order. Nobody declares these.</summary>
+        public static List<GuildDungeonBoard> BoardsMet(ContentDatabase content, GuildDungeonAttempt a)
+        {
+            List<GuildDungeonBoard> met = new List<GuildDungeonBoard>();
+            for (int i = 0; i < Boards.Length; i++) if (Satisfies(content, a, Boards[i])) met.Add(Boards[i]);
+            return met;
+        }
+
+        public static string BoardTitle(GuildDungeonBoard board)
+        {
+            switch (board)
+            {
+                case GuildDungeonBoard.FourOrFewer: return "FOUR OR FEWER";
+                case GuildDungeonBoard.NoFiveStar: return "NO FIVE STARS";
+                case GuildDungeonBoard.OneAspect: return "ONE ASPECT";
+                case GuildDungeonBoard.NoHealer: return "NO HEALER";
+                case GuildDungeonBoard.FirstAttempt: return "FIRST ATTEMPT";
+                case GuildDungeonBoard.Flawless: return "NOBODY FELL";
+            }
+            return board.ToString().ToUpperInvariant();
+        }
+
+        public static string BoardRule(GuildDungeonBoard board)
+        {
+            switch (board)
+            {
+                case GuildDungeonBoard.FourOrFewer: return "Cleared with four heroes or fewer.";
+                case GuildDungeonBoard.NoFiveStar: return "Cleared with no 5-star hero.";
+                case GuildDungeonBoard.OneAspect: return "Cleared with every hero of one Aspect.";
+                case GuildDungeonBoard.NoHealer: return "Cleared with no Mender in the line.";
+                case GuildDungeonBoard.FirstAttempt: return "Cleared on your first attempt at the floor this cycle.";
+                case GuildDungeonBoard.Flawless: return "Cleared with every hero still standing.";
+            }
+            return "";
+        }
+
         // ---------------------------------------------------------------- boards
 
         /// <summary>
-        /// One board: each member's best CLEAR of this floor in this cycle under the given lens,
-        /// best first. A loss is recorded but never ranked - it has no turn count worth comparing
-        /// and ranking it would reward giving up early.
+        /// One board: each member's best qualifying clear of this floor in this cycle, fewest turns
+        /// first. One entry per member.
         ///
-        /// Ties fall through the other two lenses in board order, then the earlier attempt number,
-        /// then the user id, so the order is total and every device draws the same board.
+        /// Ties fall through fewer heroes lost, then fewer attempts spent getting there, then the
+        /// earlier row, then the user id, so the order is total and every device draws the same
+        /// board.
         /// </summary>
-        public static List<GuildDungeonAttempt> Rank(List<GuildDungeonAttempt> attempts, int cycle, int floor,
-                                                     GuildDungeonBoard board)
+        public static List<GuildDungeonAttempt> Rank(ContentDatabase content, List<GuildDungeonAttempt> attempts,
+                                                     int cycle, int floor, GuildDungeonBoard board)
         {
             Dictionary<string, GuildDungeonAttempt> best = new Dictionary<string, GuildDungeonAttempt>();
             for (int i = 0; attempts != null && i < attempts.Count; i++)
             {
                 GuildDungeonAttempt a = attempts[i];
-                if (a == null || !a.Victory || a.Cycle != cycle || a.Floor != floor) continue;
+                if (a == null || a.Cycle != cycle || a.Floor != floor) continue;
+                if (!Satisfies(content, a, board)) continue;
                 GuildDungeonAttempt held;
-                if (!best.TryGetValue(a.UserId, out held) || Compare(a, held, board) < 0) best[a.UserId] = a;
+                if (!best.TryGetValue(a.UserId, out held) || Compare(a, held) < 0) best[a.UserId] = a;
             }
             List<GuildDungeonAttempt> ranked = new List<GuildDungeonAttempt>(best.Values);
-            ranked.Sort((x, y) => Compare(x, y, board));
+            ranked.Sort(Compare);
             return ranked;
         }
 
-        private static int Compare(GuildDungeonAttempt x, GuildDungeonAttempt y, GuildDungeonBoard board)
+        private static int Compare(GuildDungeonAttempt x, GuildDungeonAttempt y)
         {
-            int c = x.Metric(board).CompareTo(y.Metric(board));
+            int c = x.Turns.CompareTo(y.Turns);
             if (c != 0) return c;
-            for (int b = 0; b < 3; b++)
-            {
-                GuildDungeonBoard other = (GuildDungeonBoard)b;
-                if (other == board) continue;
-                c = x.Metric(other).CompareTo(y.Metric(other));
-                if (c != 0) return c;
-            }
+            c = FallenKey(x).CompareTo(FallenKey(y));
+            if (c != 0) return c;
             c = x.Attempt.CompareTo(y.Attempt);
             if (c != 0) return c;
+            c = x.Id.CompareTo(y.Id);
+            if (c != 0) return c;
             return string.CompareOrdinal(x.UserId, y.UserId);
+        }
+
+        private static int FallenKey(GuildDungeonAttempt a) { return a.Fallen < 0 ? int.MaxValue : a.Fallen; }
+
+        /// <summary>
+        /// Where one attempt puts its member on every board it entered: their rank on the board,
+        /// the board's size, and whether it is THIS attempt that holds the place or an earlier,
+        /// better one of theirs.
+        /// </summary>
+        public static List<GuildDungeonStanding> StandingsOf(ContentDatabase content, List<GuildDungeonAttempt> attempts,
+                                                            GuildDungeonAttempt attempt)
+        {
+            List<GuildDungeonStanding> standings = new List<GuildDungeonStanding>();
+            if (attempt == null) return standings;
+            List<GuildDungeonBoard> met = BoardsMet(content, attempt);
+            for (int b = 0; b < met.Count; b++)
+            {
+                List<GuildDungeonAttempt> board = Rank(content, attempts, attempt.Cycle, attempt.Floor, met[b]);
+                GuildDungeonStanding s = new GuildDungeonStanding();
+                s.Board = met[b];
+                s.Of = board.Count;
+                for (int i = 0; i < board.Count; i++)
+                {
+                    if (board[i].UserId != attempt.UserId) continue;
+                    s.Rank = i + 1;
+                    s.ThisAttempt = SameAttempt(board[i], attempt);
+                    break;
+                }
+                standings.Add(s);
+            }
+            return standings;
+        }
+
+        private static bool SameAttempt(GuildDungeonAttempt x, GuildDungeonAttempt y)
+        {
+            if (x.Id != 0 && y.Id != 0) return x.Id == y.Id;
+            return x.UserId == y.UserId && x.Cycle == y.Cycle && x.Floor == y.Floor && x.Attempt == y.Attempt;
+        }
+
+        // ---------------------------------------------------------------- progress
+
+        public static int AttemptsUsed(List<GuildDungeonAttempt> attempts, string userId, int cycle, int floor)
+        {
+            int used = 0;
+            for (int i = 0; attempts != null && i < attempts.Count; i++)
+            {
+                GuildDungeonAttempt a = attempts[i];
+                if (a != null && a.UserId == userId && a.Cycle == cycle && a.Floor == floor) used++;
+            }
+            return used;
+        }
+
+        /// <summary>The highest floor cleared this cycle, by one member (userId) or by anyone in the
+        /// guild (null). Zero when nothing is cleared.</summary>
+        public static int HighestCleared(List<GuildDungeonAttempt> attempts, string userId, int cycle)
+        {
+            int best = 0;
+            for (int i = 0; attempts != null && i < attempts.Count; i++)
+            {
+                GuildDungeonAttempt a = attempts[i];
+                if (a == null || !a.Victory || a.Cycle != cycle) continue;
+                if (userId != null && a.UserId != userId) continue;
+                if (a.Floor > best) best = a.Floor;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Whether a floor is open to attempt. THE GUILD PUSHES TOGETHER: floor 1 is always open,
+        /// and floor N opens for everybody the moment anybody in the guild clears floor N-1. So a
+        /// newer member is never locked out of the floor the guild is actually working on, and the
+        /// question on it is the same one for all of them. guild_dungeon_submit (0008) holds the
+        /// same rule; this copy decides what to draw.
+        /// </summary>
+        public static bool FloorOpen(List<GuildDungeonAttempt> attempts, int cycle, int floor)
+        {
+            if (floor <= 1) return true;
+            return HighestCleared(attempts, null, cycle) >= floor - 1;
+        }
+
+        /// <summary>The first clear of a floor in the guild this cycle, by row order, or null. Not a
+        /// board - it is a race, not a constraint - but worth a line on the boards screen.</summary>
+        public static GuildDungeonAttempt FirstGuildClear(List<GuildDungeonAttempt> attempts, int cycle, int floor)
+        {
+            GuildDungeonAttempt first = null;
+            for (int i = 0; attempts != null && i < attempts.Count; i++)
+            {
+                GuildDungeonAttempt a = attempts[i];
+                if (a == null || !a.Victory || a.Cycle != cycle || a.Floor != floor) continue;
+                if (first == null || a.Id < first.Id) first = a;
+            }
+            return first;
         }
 
         // ---------------------------------------------------------------- the wire
 
         /// <summary>
-        /// The arguments of guild_dungeon_record (Server/supabase/migrations/0007), named as the
+        /// The arguments of guild_dungeon_submit (Server/supabase/migrations/0008), named as the
         /// function names them. The server assigns the attempt number, the user and the guild;
         /// sending them would only invite a client to choose.
         /// </summary>
@@ -262,15 +676,25 @@ namespace Emberfall.Core.Cloud
             j.Set("p_turns", a.Turns);
             j.Set("p_power", a.Power);
             j.Set("p_avg_stars", (double)a.AverageStars);
+            j.Set("p_fallen", Math.Max(0, a.Fallen));
+            j.Set("p_content_version", a.ContentVersion ?? "");
             return j;
         }
 
+        /// <summary>The columns every read of guild_dungeon_attempts asks for, the member's name
+        /// included. Shared by the boards read and the chat card's embed, so the two cannot read a
+        /// different record out of the same row.</summary>
+        public const string RowColumns = "id,guild_id,user_id,cycle,floor,attempt,seed,team,victory,turns,"
+                                       + "power,avg_stars,fallen,content_version,created_at";
+
         /// <summary>One row of guild_dungeon_attempts as PostgREST returns it. Total, like
-        /// TeamSnapshotCodec.Read: a malformed row reads as an empty record rather than throwing.</summary>
+        /// TeamSnapshotCodec.Read: a malformed row reads as an empty record rather than throwing.
+        /// A row stored before 0008 has no fallen and no content_version, and reads as -1 and "".</summary>
         public static GuildDungeonAttempt ReadRow(JsonValue row)
         {
             GuildDungeonAttempt a = new GuildDungeonAttempt();
             if (row == null || !row.IsObject) return a;
+            a.Id = row.GetLong("id", 0);
             a.GuildId = row.GetString("guild_id", "");
             a.UserId = row.GetString("user_id", "");
             a.Cycle = row.GetInt("cycle", 0);
@@ -281,9 +705,34 @@ namespace Emberfall.Core.Cloud
             a.Turns = row.GetInt("turns", 0);
             a.Power = row.GetInt("power", 0);
             a.AverageStars = row.GetFloat("avg_stars", 0f);
+            a.Fallen = row.Has("fallen") ? row.GetInt("fallen", -1) : -1;
+            a.ContentVersion = row.GetString("content_version", "");
             a.CreatedAt = row.GetString("created_at", "");
             a.Team = TeamSnapshotCodec.Read(row["team"], "", a.Power);
+            JsonValue profile = row["profiles"];
+            if (profile != null && profile.IsObject) a.DisplayName = profile.GetString("display_name", "");
             return a;
+        }
+
+        /// <summary>
+        /// The text a shared attempt carries in guild_messages.body. It is what an OLD client, one
+        /// that knows nothing of attempt cards, shows in place of the card - so it has to stand on
+        /// its own as a sentence. Well under the 200-character rule.
+        /// </summary>
+        public static string ShareLine(GuildDungeonAttempt a)
+        {
+            if (a == null) return "";
+            return "Floor " + a.Floor + ": " + (a.Victory ? "cleared in " + a.Turns + " turns" : "fell after " + a.Turns + " turns")
+                 + " with " + a.Team.Units.Count + (a.Team.Units.Count == 1 ? " hero" : " heroes") + ". Watch it.";
+        }
+
+        /// <summary>The arguments of guild_share_attempt (0008).</summary>
+        public static JsonValue WriteShareArgs(GuildDungeonAttempt a)
+        {
+            JsonValue j = JsonValue.NewObject();
+            j.Set("p_attempt_id", a == null ? 0L : a.Id);
+            j.Set("p_body", ShareLine(a));
+            return j;
         }
     }
 }

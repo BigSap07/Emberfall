@@ -27,6 +27,25 @@ namespace Emberfall.Core.Data
         public ArmorConfig Armor = new ArmorConfig();
         public readonly List<string> Warnings = new List<string>();
 
+        /// <summary>
+        /// Which content this database was built from, as one short string: a hash of the text of
+        /// every file handed to Load, in a fixed order.
+        ///
+        /// It exists for the guild dungeon's replays. An attempt is stored as a seed, a floor and
+        /// a line, and combat is a pure function of those plus CONTENT - so a balance patch between
+        /// the fight and the replay changes what the same record produces. A record that carries
+        /// this string can say "this was fought under different numbers" instead of showing a
+        /// fight that did not happen. See GuildDungeon.Replay.
+        ///
+        /// Line endings are folded to LF and a leading byte-order mark is dropped before hashing,
+        /// because the same file checked out on two machines can differ in both and still be the
+        /// same content. Anything else counts, comments included: a false "content moved" costs a
+        /// replay a sentence, and a false "same content" costs it the truth.
+        ///
+        /// Empty on a database built by hand rather than through Load.
+        /// </summary>
+        public string ContentVersion = "";
+
         private readonly Dictionary<string, HeroDef> _heroById = new Dictionary<string, HeroDef>();
         private readonly Dictionary<string, EnemyDef> _enemyById = new Dictionary<string, EnemyDef>();
         private readonly Dictionary<string, StageDef> _stageById = new Dictionary<string, StageDef>();
@@ -85,7 +104,43 @@ namespace Emberfall.Core.Data
             db.ParseEvents(eventsJson);
             db.ParseArmor(armorJson);
             db.Validate();
+            db.ContentVersion = VersionOf(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, armorJson);
             return db;
+        }
+
+        /// <summary>
+        /// FNV-1a, 64-bit, over the normalised text of each file with a separator between them, so
+        /// moving a character from the end of one file to the start of the next is still a change.
+        /// "c1-" names the scheme, so a future scheme can be told from this one by eye.
+        /// </summary>
+        public static string VersionOf(params string[] files)
+        {
+            unchecked
+            {
+                ulong hash = 14695981039346656037UL;
+                for (int f = 0; f < files.Length; f++)
+                {
+                    string text = files[f] ?? "";
+                    int start = text.Length > 0 && text[0] == '\uFEFF' ? 1 : 0;
+                    for (int i = start; i < text.Length; i++)
+                    {
+                        char c = text[i];
+                        if (c == '\r')
+                        {
+                            // CR LF and a lone CR both read as one LF.
+                            if (i + 1 < text.Length && text[i + 1] == '\n') continue;
+                            c = '\n';
+                        }
+                        hash ^= (byte)(c & 0xFF);
+                        hash *= 1099511628211UL;
+                        hash ^= (byte)(c >> 8);
+                        hash *= 1099511628211UL;
+                    }
+                    hash ^= 0x1F;
+                    hash *= 1099511628211UL;
+                }
+                return "c1-" + hash.ToString("x16");
+            }
         }
 
         /// <summary>
