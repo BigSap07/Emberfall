@@ -17,36 +17,51 @@ namespace Emberfall.Dev
     /// capture is taken of when a token changes, because a diff of two of these shots is the whole
     /// visual delta of a retune.
     ///
+    /// IT FITS ON ONE SCREEN, IN TWO COLUMNS, AND THAT IS THE POINT RATHER THAN A LAYOUT CHOICE.
+    /// The first version was a single scrolling column, and a capture of it photographed the first
+    /// two sections and nothing else - so the artefact this page exists to produce showed a third
+    /// of the kit. The columns are sized against the SHORTEST logical canvas this game targets,
+    /// which is the 20:9 phone at roughly 2147x966 rather than the 1920x1080 editor window, so the
+    /// page that fits in a capture also fits on the device.
+    ///
     /// IT IS A LAYER, NOT A SCREEN, and deliberately so. Adding a twenty-second ScreenId would put
-    /// a development page in the router's shipped enum, and the enum is what a save file's
-    /// last-screen field and the back stack are written against. A layer pushed onto
-    /// UiLayerStack - the same thing the idle claim popup and the overflow menu are - costs the
-    /// shipped build nothing, because this whole file compiles away.
+    /// a development page in the router's shipped enum, and that enum is what the back stack is
+    /// written against. A layer pushed onto UiLayerStack - the same thing the idle claim popup and
+    /// the overflow menu are - costs the shipped build nothing, because this whole file compiles
+    /// away.
     ///
     /// IT DRAWS NOTHING OF ITS OWN. Every surface on this page comes from EmberforgeUI, which is
     /// the property that makes it a gallery rather than a mockup: if the page looks right, the
     /// components are right, because they are the same objects the Hub is built from.
-    ///
-    /// THE PORTRAITS ARE REAL HEROES, picked out of the loaded content one per star tier and
-    /// across as many aspects as the roster offers. A rarity frame drawn around a placeholder is a
-    /// picture of the frame; drawn around the roster it is a picture of the screen the frame is
-    /// for, including the case this project actually has - a roster where some heroes are painted
-    /// and some are not.
     /// </summary>
     public sealed class DesignGallery
     {
-        private const float Column = 1180f;
-        private const float SectionGap = 26f;
-        private const float RowHeight = 118f;
-        private const float ButtonWidth = 300f;
-        private const float ButtonHeight = 108f;
+        /// <summary>The title band across the top, and the margin round the two columns.</summary>
+        private const float HeaderHeight = 104f;
+        private const float Margin = 32f;
+        private const float ColumnGap = 28f;
+
+        /// <summary>
+        /// The two columns. Narrow on the left for the things that are the width of a control,
+        /// wide on the right for the two rows that are the width of a ROSTER - five portrait
+        /// frames and a player plate beside a rail cannot be squeezed into a half-screen column
+        /// without showing them at a size nothing in the game draws them at.
+        ///
+        /// 32 + 740 + 28 + 1060 + 32 is 1892, inside the 1920 the reference canvas is wide.
+        /// </summary>
+        private const float LeftWidth = 740f;
+        private const float RightWidth = 1060f;
+
+        /// <summary>Vertical space a section costs on top of its body: the half of the ribbon that
+        /// hangs above the panel, plus a little air. The other half is buried by the panel.</summary>
+        private const float RibbonReserve = Emberforge.RibbonHeight * 0.5f + 10f;
+        private const float SectionGap = 16f;
 
         private readonly GameApp _app;
         private readonly RectTransform _layer;
 
         private RectTransform _root;
         private UiLayerStack.Layer _layerHandle;
-        private readonly List<ForgeTab> _tabs = new List<ForgeTab>();
 
         public bool IsOpen { get { return _root != null && _root.gameObject.activeSelf; } }
 
@@ -88,7 +103,8 @@ namespace Emberfall.Dev
             // Opaque rather than a scrim. Every other layer in this game dims what is behind it
             // because what is behind it still matters; here it does not, and a gallery of surfaces
             // judged against a half-visible painting is a gallery judged against the wrong thing.
-            Image backdrop = UIBuilder.Img("Backdrop", _root, TextureLab.White, Emberforge.PanelLow);
+            Image backdrop = UIBuilder.Img("Backdrop", _root, TextureLab.White,
+                                           UITheme.Shade(Emberforge.PanelLow, -0.35f));
             UIBuilder.FillParent(backdrop.rectTransform, 0f);
             backdrop.raycastTarget = true;
 
@@ -96,45 +112,60 @@ namespace Emberfall.Dev
             UIBuilder.FillParent(safe, 0f);
             SafeAreaRect.Attach(safe);
 
+            BuildHeader(safe);
+
+            RectTransform left = Column(safe, "Left", Margin, LeftWidth);
+            RectTransform right = Column(safe, "Right", Margin + LeftWidth + ColumnGap, RightWidth);
+
+            float y = 0f;
+            y = Surfaces(left, y);
+            y = Buttons(left, y);
+            Bars(left, y);
+
+            float ry = 0f;
+            ry = Portraits(right, ry);
+            PlateTabsAndCurrency(right, ry);
+
+            _root.gameObject.SetActive(false);
+        }
+
+        private void BuildHeader(RectTransform safe)
+        {
             Text title = EmberforgeUI.Title("Title", safe, "EMBERFORGE", UITheme.FontTitle,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(title.rectTransform, Emberforge.Space32, -Emberforge.Space16, 700f, 56f,
+            UIBuilder.Box(title.rectTransform, Margin, -Emberforge.Space12, 700f, 56f,
                           new Vector2(0f, 1f));
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThick);
 
             Text source = EmberforgeUI.Label("Source", safe, SourceLine(), UITheme.FontTiny,
                                              Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(source.rectTransform, Emberforge.Space32, -(Emberforge.Space16 + 54f),
-                          900f, 30f, new Vector2(0f, 1f));
+            UIBuilder.Box(source.rectTransform, Margin, -(Emberforge.Space12 + 54f), 1100f, 30f,
+                          new Vector2(0f, 1f));
 
             UIButton close = EmberforgeUI.Button("Close", safe, "CLOSE", UITheme.FontSmall,
                                                  ForgeButtonKind.Secondary);
-            UIBuilder.Box(close.Root, -Emberforge.Space32, -Emberforge.Space16, 240f, HubStyle.TouchMin,
+            UIBuilder.Box(close.Root, -Margin, -Emberforge.Space12, 240f, HubStyle.TouchMin,
                           new Vector2(1f, 1f));
             close.OnClick(Close);
+        }
 
-            ScrollRect scroll;
-            RectTransform list = UIBuilder.ScrollList("Sections", safe, out scroll, SectionGap,
-                                                      new RectOffset(0, 0, 0, 64));
-            RectTransform scrollRoot = scroll.GetComponent<RectTransform>();
-            UIBuilder.FillParent(scrollRoot, Emberforge.Space32, 110f, Emberforge.Space32, 0f);
-
-            BuildSurfaces(list);
-            BuildButtons(list);
-            BuildTabsAndPills(list);
-            BuildBars(list);
-            BuildPortraits(list);
-            BuildPlateAndDiscs(list);
-
-            _root.gameObject.SetActive(false);
+        private static RectTransform Column(RectTransform safe, string name, float x, float width)
+        {
+            RectTransform column = UIBuilder.Node(name, safe);
+            column.anchorMin = new Vector2(0f, 0f);
+            column.anchorMax = new Vector2(0f, 1f);
+            column.pivot = new Vector2(0f, 1f);
+            column.offsetMin = new Vector2(x, Margin);
+            column.offsetMax = new Vector2(x + width, -HeaderHeight);
+            return column;
         }
 
         /// <summary>
         /// Which of the three sources the kit is coming from, printed on the page.
         ///
-        /// It is here because the three are indistinguishable by eye and the difference matters:
-        /// a page that looks right while every slot is being generated on the device says the art
-        /// is correct and says nothing at all about whether the bake ran.
+        /// It is here because the three are indistinguishable by eye and the difference matters: a
+        /// page that looks right while every slot is being generated on the device says the art is
+        /// correct and says nothing at all about whether the bake ran.
         /// </summary>
         private static string SourceLine()
         {
@@ -152,38 +183,45 @@ namespace Emberfall.Dev
 
         // ------------------------------------------------------------------ sections
 
-        /// <summary>A section is a heading ribbon over a plain panel, which is itself two of the
-        /// components being shown. The page is built out of the kit all the way down.</summary>
-        private RectTransform Section(RectTransform list, string heading, float height)
+        /// <summary>
+        /// A section is a heading ribbon over a panel, which is itself two of the components being
+        /// shown. The page is built out of the kit all the way down.
+        ///
+        /// Returns the y the NEXT section starts at, so a column is a fold rather than a list of
+        /// hand-placed offsets that stop agreeing the moment one body changes height.
+        /// </summary>
+        private RectTransform Section(RectTransform column, string heading, float width,
+                                      float height, ref float y)
         {
-            RectTransform block = UIBuilder.Node("Section" + heading, list);
-            UIBuilder.Sized(block, Column, height + Emberforge.RibbonHeight);
-
-            RectTransform body = UIBuilder.Node("Body", block);
-            UIBuilder.Box(body, 0f, 0f, Column, height, new Vector2(0.5f, 0f));
+            RectTransform body = UIBuilder.Node("Section" + heading, column);
+            UIBuilder.Box(body, 0f, -(y + RibbonReserve), width, height, new Vector2(0f, 1f));
             EmberforgeUI.PanelOn(body, true);
 
-            EmberforgeUI.TitleRibbon("Heading", block, heading, Column * 0.5f);
+            EmberforgeUI.TitleRibbon("Heading", body, heading, width * 0.5f);
+
+            y += RibbonReserve + height + SectionGap;
             return body;
         }
 
-        private void BuildSurfaces(RectTransform list)
+        private float Surfaces(RectTransform column, float y)
         {
-            RectTransform body = Section(list, "SURFACES", 230f);
-            float w = 320f;
-            float h = 150f;
-            float gap = Emberforge.Space24;
-            float x = Emberforge.Space32;
+            RectTransform body = Section(column, "SURFACES", LeftWidth, 175f, ref y);
+            float w = 200f;
+            float h = 112f;
+            float gap = 22f;
+            float top = RibbonReserve + Emberforge.Space8;
 
-            Sample(body, "PANEL", x, w, h, 0);
-            Sample(body, "PLAIN", x + (w + gap), w, h, 1);
-            Sample(body, "SUNKEN", x + (w + gap) * 2f, w, h, 2);
+            Sample(body, "PANEL", Emberforge.Space32, top, w, h, 0);
+            Sample(body, "PLAIN", Emberforge.Space32 + (w + gap), top, w, h, 1);
+            Sample(body, "SUNKEN", Emberforge.Space32 + (w + gap) * 2f, top, w, h, 2);
+            return y;
         }
 
-        private void Sample(RectTransform body, string caption, float x, float w, float h, int kind)
+        private void Sample(RectTransform body, string caption, float x, float top, float w, float h,
+                            int kind)
         {
             RectTransform cell = UIBuilder.Node("Sample" + caption, body);
-            UIBuilder.Box(cell, x, -Emberforge.Space32, w, h, new Vector2(0f, 1f));
+            UIBuilder.Box(cell, x, -top, w, h, new Vector2(0f, 1f));
             if (kind == 0) EmberforgeUI.PanelOn(cell, true);
             else if (kind == 1) EmberforgeUI.PlainPanelOn(cell);
             else EmberforgeUI.SunkenOn(cell);
@@ -196,50 +234,54 @@ namespace Emberfall.Dev
 
         /// <summary>
         /// Both voices in all three states. The PRESSED column is a real button held down rather
-        /// than a picture of one: EmberforgeButtonSkin is driven straight so the page shows the
-        /// same object the finger produces, including the face having dropped into the lip.
+        /// than a picture of one: EmberforgeButtonSkin is driven straight, so the page shows the
+        /// same object a finger produces, including the face having dropped into the lip.
         /// </summary>
-        private void BuildButtons(RectTransform list)
+        private float Buttons(RectTransform column, float y)
         {
-            RectTransform body = Section(list, "BUTTONS", 330f);
+            const float buttonWidth = 200f;
+            const float buttonHeight = 100f;
+            const float buttonGap = 22f;
+            const float rowGap = 44f;
 
-            Header(body, "PRIMARY", 0);
-            Header(body, "SECONDARY", 1);
+            RectTransform body = Section(column, "BUTTONS", LeftWidth, 360f, ref y);
+            float top = RibbonReserve + Emberforge.Space8;
 
             string[] states = new string[] { "NORMAL", "PRESSED", "DISABLED" };
-            for (int row = 0; row < 2; row++)
+            string[] voices = new string[] { "PRIMARY", "SECONDARY" };
+
+            for (int row = 0; row < voices.Length; row++)
             {
+                float rowTop = top + row * (buttonHeight + rowGap + 30f);
+
+                Text header = EmberforgeUI.Label("H" + voices[row], body, voices[row],
+                                                 UITheme.FontTiny, Emberforge.TextGold,
+                                                 TextAnchor.UpperLeft);
+                UIBuilder.Box(header.rectTransform, Emberforge.Space32, -rowTop, 400f, 26f,
+                              new Vector2(0f, 1f));
+
                 ForgeButtonKind kind = row == 0 ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary;
                 for (int col = 0; col < states.Length; col++)
                 {
                     UIButton button = EmberforgeUI.Button("B" + row + col, body, states[col],
-                                                          UITheme.FontSmall, kind);
+                                                          UITheme.FontTiny, kind);
                     UIBuilder.Box(button.Root,
-                                  Emberforge.Space32 + col * (ButtonWidth + Emberforge.Space24),
-                                  -(Emberforge.Space32 + 34f + row * (ButtonHeight + 56f)),
-                                  ButtonWidth, ButtonHeight, new Vector2(0f, 1f));
+                                  Emberforge.Space32 + col * (buttonWidth + buttonGap),
+                                  -(rowTop + 30f), buttonWidth, buttonHeight, new Vector2(0f, 1f));
 
                     if (states[col] == "DISABLED") button.Interactable = false;
                     if (states[col] == "PRESSED") HoldDown(button);
                 }
             }
 
-            Text note = EmberforgeUI.Label("Note", body,
+            Text note = EmberforgeUI.Body("Note", body,
                 "A press is the lip shrinking from " + Emberforge.ButtonLip + " to "
                 + Emberforge.ButtonLipPressed + " and the face dropping "
                 + Emberforge.ButtonPressDrop + " into the space it frees. The outer silhouette "
-                + "never moves.", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16, Column - 64f,
-                          30f, new Vector2(0f, 0f));
-        }
-
-        private void Header(RectTransform body, string text, int row)
-        {
-            Text label = EmberforgeUI.Label("H" + text, body, text, UITheme.FontTiny,
-                                            Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, Emberforge.Space32,
-                          -(Emberforge.Space32 + row * (ButtonHeight + 56f)), 400f, 28f,
-                          new Vector2(0f, 1f));
+                + "never moves.", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16,
+                          LeftWidth - Emberforge.Space32 * 2f, 48f, new Vector2(0f, 0f));
+            return y;
         }
 
         /// <summary>
@@ -256,78 +298,45 @@ namespace Emberfall.Dev
             button.Button.interactable = false;   // so a click cannot release it mid-capture
         }
 
-        private void BuildTabsAndPills(RectTransform list)
+        private float Bars(RectTransform column, float y)
         {
-            RectTransform body = Section(list, "TABS AND CURRENCY", 250f);
-
-            _tabs.Clear();
-            string[] captions = new string[] { "PROFILE", "ACCOUNT", "FRIENDS", "SETTINGS" };
-            for (int i = 0; i < captions.Length; i++)
-            {
-                ForgeTab tab = EmberforgeUI.Tab(captions[i], body, 230f, 76f, null);
-                UIBuilder.Box(tab.Root, Emberforge.Space32 + i * (230f + Emberforge.Space12),
-                              -Emberforge.Space32, 230f, 76f, new Vector2(0f, 1f));
-                EmberforgeUI.SetTabSelected(tab, i == 0);
-                _tabs.Add(tab);
-            }
-
-            Color[] tints = new Color[] { UITheme.Gold, UITheme.Shard, UITheme.Dust };
-            string[] values = new string[] { "128,400", "2,140", "860" };
-            for (int i = 0; i < tints.Length; i++)
-            {
-                // Gold carries no plus, because gold is earned rather than bought. Passing null is
-                // what suppresses it, so this row shows both shapes of the same component.
-                System.Action onPlus = i == 0 ? null : new System.Action(DoNothing);
-                ForgePill pill = EmberforgeUI.CurrencyPill("Pill" + i, body, 250f, 68f, tints[i],
-                                                           onPlus);
-                UIBuilder.Box(pill.Root, Emberforge.Space32 + i * (250f + 56f),
-                              -(Emberforge.Space32 + 110f), 250f, 68f, new Vector2(0f, 1f));
-                pill.Value.text = values[i];
-            }
-
-            Text note = EmberforgeUI.Label("Note", body,
-                "The first pill carries no plus, because gold is earned rather than bought. A pill "
-                + "is a dark plate with a gold line inside it: the line is what stops it reading "
-                + "as a hole in the panel.", UITheme.FontTiny, Emberforge.TextQuiet,
-                TextAnchor.LowerLeft);
-            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16, Column - 64f,
-                          30f, new Vector2(0f, 0f));
-        }
-
-        private static void DoNothing() { }
-
-        private void BuildBars(RectTransform list)
-        {
-            RectTransform body = Section(list, "PROGRESS", 200f);
+            RectTransform body = Section(column, "PROGRESS", LeftWidth, 140f, ref y);
+            float top = RibbonReserve + Emberforge.Space8;
+            float barWidth = LeftWidth - Emberforge.Space32 * 2f - 110f;
 
             float[] ratios = new float[] { 0f, 0.18f, 0.55f, 1f };
             for (int i = 0; i < ratios.Length; i++)
             {
+                float rowTop = top + i * 28f;
+
                 Image fill = EmberforgeUI.ProgressBar("Bar" + i, body);
                 RectTransform root = fill.rectTransform.parent as RectTransform;
-                UIBuilder.Box(root, Emberforge.Space32, -(Emberforge.Space32 + i * 40f),
-                              Column - 260f, 26f, new Vector2(0f, 1f));
+                UIBuilder.Box(root, Emberforge.Space32, -rowTop, barWidth, 22f, new Vector2(0f, 1f));
                 EmberforgeUI.SetProgress(fill, ratios[i]);
 
                 Text value = EmberforgeUI.Label("V" + i, body,
                                                 Mathf.RoundToInt(ratios[i] * 100f) + "%",
                                                 UITheme.FontTiny, Emberforge.TextGold,
-                                                TextAnchor.MiddleLeft);
-                UIBuilder.Box(value.rectTransform, -Emberforge.Space32,
-                              -(Emberforge.Space32 + i * 40f), 160f, 26f, new Vector2(1f, 1f));
+                                                TextAnchor.MiddleRight);
+                UIBuilder.Box(value.rectTransform, -Emberforge.Space32, -rowTop, 100f, 22f,
+                              new Vector2(1f, 1f));
             }
+            return y;
         }
 
         /// <summary>
         /// One portrait per star tier, and across as many aspects as the roster can supply.
         ///
-        /// The row deliberately does NOT pick five heroes of one aspect: the frame carries the
-        /// tier and the glow carries the aspect, and a row where every glow is the same colour
-        /// proves only half of that.
+        /// The row deliberately does NOT pick five heroes of one aspect: the frame carries the tier
+        /// and the glow carries the aspect, and a row where every glow is the same colour proves
+        /// only half of that. It is real heroes out of the loaded content rather than placeholders,
+        /// so the row also shows the case this project actually has - a roster where some heroes
+        /// are painted and some are not.
         /// </summary>
-        private void BuildPortraits(RectTransform list)
+        private float Portraits(RectTransform column, float y)
         {
-            RectTransform body = Section(list, "PORTRAIT FRAMES", 300f);
+            RectTransform body = Section(column, "PORTRAIT FRAMES", RightWidth, 300f, ref y);
+            float top = RibbonReserve + Emberforge.Space8;
 
             List<HeroDef> picks = PickOnePerTier();
             if (picks.Count == 0)
@@ -336,32 +345,35 @@ namespace Emberfall.Dev
                                                 UITheme.FontBody, Emberforge.TextQuiet,
                                                 TextAnchor.MiddleCenter);
                 UIBuilder.FillParent(empty.rectTransform, 0f);
-                return;
+                return y;
             }
 
-            float size = 170f;
+            const float size = 160f;
+            const float gap = 42f;
+
             for (int i = 0; i < picks.Count; i++)
             {
                 HeroDef def = picks[i];
-                float x = Emberforge.Space32 + i * (size + 48f);
+                float x = Emberforge.Space32 + i * (size + gap);
 
                 RectTransform frame = EmberforgeUI.PortraitFrame("P" + i, body, def, def.Stars, size);
-                UIBuilder.Box(frame, x, -Emberforge.Space32, size, size, new Vector2(0f, 1f));
+                UIBuilder.Box(frame, x, -top, size, size, new Vector2(0f, 1f));
 
                 Text caption = EmberforgeUI.Label("C" + i, body,
                                                   def.Stars + "*  " + def.Aspect.ToString().ToUpperInvariant(),
                                                   UITheme.FontTiny, Emberforge.TextGold,
                                                   TextAnchor.UpperCenter);
-                UIBuilder.Box(caption.rectTransform, x + size * 0.5f, -(Emberforge.Space32 + size + 8f),
-                              size + 40f, 26f, new Vector2(0f, 1f));
+                UIBuilder.Box(caption.rectTransform, x + size * 0.5f, -(top + size + 8f),
+                              size + gap, 26f, new Vector2(0f, 1f));
                 UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
 
                 Text who = EmberforgeUI.Label("N" + i, body, def.Name.ToUpperInvariant(),
-                                              UITheme.FontTiny - 4, Emberforge.TextQuiet,
+                                              UITheme.FontTiny - 6, Emberforge.TextQuiet,
                                               TextAnchor.UpperCenter);
-                UIBuilder.Box(who.rectTransform, x + size * 0.5f, -(Emberforge.Space32 + size + 34f),
-                              size + 40f, 24f, new Vector2(0f, 1f));
+                UIBuilder.Box(who.rectTransform, x + size * 0.5f, -(top + size + 34f),
+                              size + gap, 24f, new Vector2(0f, 1f));
             }
+            return y;
         }
 
         /// <summary>
@@ -400,13 +412,13 @@ namespace Emberfall.Dev
             return picks;
         }
 
-        private void BuildPlateAndDiscs(RectTransform list)
+        private float PlateTabsAndCurrency(RectTransform column, float y)
         {
-            RectTransform body = Section(list, "PLATE AND RAIL", 260f);
+            RectTransform body = Section(column, "PLATE, TABS AND CURRENCY", RightWidth, 390f, ref y);
+            float top = RibbonReserve + Emberforge.Space8;
 
             ForgePlate plate = EmberforgeUI.PlayerPlate("Plate", body, 520f, 92f, null);
-            UIBuilder.Box(plate.Root, Emberforge.Space32, -Emberforge.Space32, 520f, 92f,
-                          new Vector2(0f, 1f));
+            UIBuilder.Box(plate.Root, Emberforge.Space32, -top, 520f, 92f, new Vector2(0f, 1f));
             plate.Rank.text = "42";
             plate.Name.text = "WAYFARER  -  RANK 42";
             plate.Xp.text = "1,240 / 3,000 XP";
@@ -420,6 +432,23 @@ namespace Emberfall.Dev
             UIBuilder.FillParent(mark.rectTransform, Emberforge.Space8);
             mark.transform.SetAsFirstSibling();
 
+            BuildRail(body, top);
+            BuildTabs(body, top + 92f + 22f);
+            BuildPills(body, top + 92f + 22f + 68f + 26f);
+
+            Text note = EmberforgeUI.Body("Note", body,
+                "The fourth disc is disabled and the first pill carries no plus, because gold is "
+                + "earned rather than bought. A rail disc is " + (int)HubStyle.RailDisc
+                + " of art inside a " + (int)HubStyle.TouchMin + "-unit hit rect: a target's size "
+                + "is a property of the control rather than of the drawing.",
+                UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16,
+                          RightWidth - Emberforge.Space32 * 2f, 48f, new Vector2(0f, 0f));
+            return y;
+        }
+
+        private void BuildRail(RectTransform body, float top)
+        {
             Sprite[] glyphs = new Sprite[]
             {
                 TextureLab.Heart(64), TextureLab.Envelope(64),
@@ -430,29 +459,48 @@ namespace Emberfall.Dev
                 Emberforge.TextBody, Emberforge.TextBody, UITheme.Success, Emberforge.TextBody
             };
 
+            float x = Emberforge.Space32 + 520f + 30f;
             for (int i = 0; i < glyphs.Length; i++)
             {
                 ForgeDisc disc = EmberforgeUI.IconButton("Disc" + i, body, "", glyphs[i], tints[i],
                                                          HubStyle.RailDisc, null);
-                UIBuilder.Box(disc.Root, Emberforge.Space32 + i * (HubStyle.TouchMin + Emberforge.Space16),
-                              -(Emberforge.Space32 + 120f), HubStyle.TouchMin, HubStyle.TouchMin,
-                              new Vector2(0f, 1f));
+                UIBuilder.Box(disc.Root, x + i * 116f, -(top - 8f),
+                              HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(0f, 1f));
                 if (i == 3) disc.Button.Interactable = false;
             }
-
-            UIButton plus = EmberforgeUI.PlusButton("Plus", body, null);
-            UIBuilder.Box(plus.Root, Emberforge.Space32 + 4f * (HubStyle.TouchMin + Emberforge.Space16) + 40f,
-                          -(Emberforge.Space32 + 120f), HubStyle.TouchMin, HubStyle.TouchMin,
-                          new Vector2(0f, 1f));
-
-            Text note = EmberforgeUI.Label("Note", body,
-                "The fourth disc is disabled. A rail disc is 76 of art inside a "
-                + HubStyle.TouchMin + "-unit hit rect, because a target's size is a property of "
-                + "the control rather than of the drawing.", UITheme.FontTiny,
-                Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            UIBuilder.Box(note.rectTransform, Emberforge.Space32, Emberforge.Space16, Column - 64f,
-                          30f, new Vector2(0f, 0f));
         }
+
+        private void BuildTabs(RectTransform body, float top)
+        {
+            string[] captions = new string[] { "PROFILE", "ACCOUNT", "FRIENDS", "SETTINGS" };
+            for (int i = 0; i < captions.Length; i++)
+            {
+                ForgeTab tab = EmberforgeUI.Tab(captions[i], body, 200f, 68f, null);
+                UIBuilder.Box(tab.Root, Emberforge.Space32 + i * (200f + 12f), -top, 200f, 68f,
+                              new Vector2(0f, 1f));
+                EmberforgeUI.SetTabSelected(tab, i == 0);
+            }
+        }
+
+        private void BuildPills(RectTransform body, float top)
+        {
+            Color[] tints = new Color[] { UITheme.Gold, UITheme.Shard, UITheme.Dust };
+            string[] values = new string[] { "128,400", "2,140", "860" };
+
+            for (int i = 0; i < tints.Length; i++)
+            {
+                // Gold carries no plus, because gold is earned rather than bought. Passing null is
+                // what suppresses it, so this row shows both shapes of the same component.
+                System.Action onPlus = i == 0 ? null : new System.Action(DoNothing);
+                ForgePill pill = EmberforgeUI.CurrencyPill("Pill" + i, body, 240f, 64f, tints[i],
+                                                           onPlus);
+                UIBuilder.Box(pill.Root, Emberforge.Space32 + i * (240f + 56f), -top, 240f, 64f,
+                              new Vector2(0f, 1f));
+                pill.Value.text = values[i];
+            }
+        }
+
+        private static void DoNothing() { }
     }
 }
 #endif

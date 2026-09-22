@@ -417,8 +417,12 @@ namespace Emberfall.UI
                                             EmberforgeSkin.Get(EmberforgeArt.Slot.JewelEdge), Color.white);
             UIBuilder.FillParent(jewelEdge.rectTransform, 0f);
 
+            // The figure's right inset. It does NOT grow when a plus is present, because the
+            // plus is hung mostly OUTSIDE the pill - see below - so it takes almost none of the
+            // pill's own width. Reserving for it anyway is what squeezed a five-digit figure into
+            // three characters in the first capture of this component.
             float valueLeft = jewelPad + jewelSize + Emberforge.Space8;
-            float valueRight = onPlus != null ? Emberforge.PlusSize * 0.6f : height * 0.4f;
+            float valueRight = height * 0.3f;
 
             pill.Value = Label("Value", pill.Root, "0", UITheme.FontSmall, Emberforge.TextGold,
                                TextAnchor.MiddleRight);
@@ -429,10 +433,19 @@ namespace Emberfall.UI
             if (onPlus != null)
             {
                 pill.Plus = PlusButton("Plus", pill.Root, onPlus);
-                // Hung HALF off the pill's right end. Fully inside it, the plus is a third thing
-                // competing for the pill's width with the jewel and the figure; half outside, it
-                // reads as attached to the pill rather than as part of it.
-                UIBuilder.Box(pill.Plus.Root, Emberforge.PlusSize * 0.3f, 0f,
+
+                // Hung mostly OFF the pill's right end. Fully inside it the plus is a third thing
+                // competing for the pill's width with the jewel and the figure, which is exactly
+                // what the first capture showed - a five-digit figure clipped to one character
+                // behind a green disc.
+                //
+                // The arithmetic matters because Box pivots on its anchor: at anchor (1, 0.5) the
+                // rect's RIGHT edge lands at the pill's right edge plus x, so the hit rect's
+                // CENTRE - and therefore the visible disc - sits at x minus half of TouchMin. The
+                // offset below puts that centre just outside the pill rather than a thumb's width
+                // inside it.
+                float centreOutside = Emberforge.Space8 + Emberforge.Space4;
+                UIBuilder.Box(pill.Plus.Root, HubStyle.TouchMin * 0.5f + centreOutside, 0f,
                               HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 0.5f));
             }
             return pill;

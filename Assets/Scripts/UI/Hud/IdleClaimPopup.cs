@@ -24,14 +24,29 @@ namespace Emberfall.UI
     public sealed class IdleClaimPopup
     {
         private const float PopupWidth = 760f;
-        // Measured against the content rather than picked: the amounts, the stored time and the
-        // well holding the cap sentence and the rate line come to about 290, the buttons take a
-        // full TouchMin, and the frame and the padding take the rest. It was 520 before the Hub
-        // pass, and the first capture of it showed a hand's width of empty plate between the
-        // rates and the buttons; it is taller than the 420 that replaced it because the ribbon
-        // now occupies the top edge and the well has a surface of its own.
-        private const float PopupHeight = 470f;
+
+        /// <summary>
+        /// Measured against the content rather than picked, and re-measured against a capture
+        /// rather than against the arithmetic.
+        ///
+        /// The amounts, the stored line and the well come to 262 below the ribbon, the buttons
+        /// take a full TouchMin, and the padding takes the rest. Every predecessor of this number
+        /// was too big and the fault was the same each time: 520 before the Hub pass showed a
+        /// hand's width of empty plate above the buttons, 420 fixed that, and 470 put it back the
+        /// moment the ribbon and the well changed what was above them. It is checked by looking at
+        /// the photograph, because nothing in the harness can see a gap.
+        /// </summary>
+        private const float PopupHeight = 430f;
         private const float RowHeight = 34f;
+
+        /// <summary>
+        /// Where content starts, measured from the plate's top edge.
+        ///
+        /// The ribbon STRADDLES that edge, so the first row has to clear the half hanging below
+        /// it rather than the whole thing. The first capture of this popup cleared neither and the
+        /// amounts sat against the ribbon's underside.
+        /// </summary>
+        private const float ContentTop = Emberforge.RibbonHeight * 0.5f + Emberforge.Space8;
 
         private readonly GameApp _app;
         private readonly RectTransform _layer;
@@ -122,23 +137,22 @@ namespace Emberfall.UI
             EmberforgeUI.TitleRibbon("Heading", popup, "IDLE REWARDS", PopupWidth * 0.56f);
 
             float inner = Emberforge.Space24;
-            float top = Emberforge.Space24;
 
             _amounts = EmberforgeUI.Title("Amounts", popup, "", UITheme.FontHeading,
                                           Emberforge.TextGold, TextAnchor.UpperCenter);
-            UIBuilder.Box(_amounts.rectTransform, 0f, -top, PopupWidth - inner * 2f, 54f,
+            UIBuilder.Box(_amounts.rectTransform, 0f, -ContentTop, PopupWidth - inner * 2f, 54f,
                           new Vector2(0.5f, 1f));
             UIBuilder.Outlined(_amounts, Emberforge.Outline, Emberforge.StrokeThick);
 
             _stored = EmberforgeUI.Label("Stored", popup, "", HubStyle.FontValue,
                                          Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(_stored.rectTransform, 0f, -(top + 60f), PopupWidth - inner * 2f, RowHeight,
+            UIBuilder.Box(_stored.rectTransform, 0f, -(ContentTop + 60f), PopupWidth - inner * 2f, RowHeight,
                           new Vector2(0.5f, 1f));
 
             // The two quiet lines sit in a sunken well, so the popup separates "what you have
             // earned" from "how this works" by depth rather than by font size alone.
             RectTransform well = UIBuilder.Node("Well", popup);
-            UIBuilder.Box(well, 0f, -(top + 102f), PopupWidth - inner * 2f, 124f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(well, 0f, -(ContentTop + 102f), PopupWidth - inner * 2f, 124f, new Vector2(0.5f, 1f));
             EmberforgeUI.SunkenOn(well);
 
             _cap = EmberforgeUI.Body("Cap", well, "", HubStyle.FontSecondary,
