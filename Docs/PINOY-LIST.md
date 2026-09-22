@@ -24,8 +24,9 @@ batch appends to it rather than rebuilding it again.
 
 **Sections 2b and 2c are closed lists**: every hero has a shipped kit, so no further batch can add
 a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
-**Section 2d is new and is not closed**, because it holds departures a MEASUREMENT produced rather
-than an authoring batch, and the instruments keep running.
+**Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
+an authoring batch, and the instruments keep running. 2e is the newest: two talents that cost the
+hero who picks them.
 
 ---
 
@@ -257,19 +258,37 @@ questions. Each is *the shipped number is the one I want*, or *the original numb
 want and the kit should change around it*, and for Hale in particular the second answer means
 giving him a second damage clause rather than restoring 120% and 220%.
 
-**A sixth reading is not in the table because nothing was changed for it, and it is the one worth
-answering first.** Altheon's Final Record pays 20% of Attack per Record and then consumes every
-Record, exactly as written - but Preserved Moment is spending those same Records as a standing
-+5% on every blow he lands on the Subject, so the talent sells a 15% output modifier to buy three
-blows and, over a long fight, loses on the trade. Measured at 103,377 against 107,349 in the arena
-built to raise it. The clause is authored, so nothing was touched; the question is whether the two
-halves of Record were meant to compete for it.
+**A sixth reading is not in the table because nothing was changed for it, and an earlier version
+of this file had its sign wrong.** Altheon's Final Record pays 20% of Attack per Record and then
+consumes every Record, exactly as written, while Preserved Moment is spending those same Records as
+a standing +5% on every blow he lands on a marked body. This file used to say the talent loses on
+that trade, at 103,377 against 107,349. That was one seed of the arena built to raise it, and one
+seed is one crit draw: the talent fires in every seed, and over 150 seeds of the same arena it is
+worth +1,025 a battle, about 1%, more than four standard errors clear of zero. Preserved
+Moment rebuilds its three Records in three basics, so the consumption costs about what the three
+blows pay. **So it is a gain, and a thin one.** The question left is only whether the two halves of
+Record were meant to compete at all; nothing needs answering for the talent to be worth picking.
 
 One more thing sits underneath the Altheon rows and is not a question for Pinoy, only a note:
 Immaculate Record's own ceiling arithmetic assumed a blow lands for as much as it is priced at.
 Defence takes a share of every blow before the record sees it, so a clause that records a fraction
 of damage and ceilings against raw Attack is reading two different currencies. Nothing else in the
 roster is shaped that way today.
+
+### 2e. Two talents that cost their own hero, and cannot be mended from content
+
+Every authored talent was measured against the same hero with nothing picked, over 40 seeds, in
+the sweep arena and in the arena built to raise it. Five cost their hero output. Three of those buy
+something the output total cannot see and are fine as written: Kiva's Unclaimed Victory keeps her
+alive, Nysera's Deeper Absence strips a buff (a taunting tank's Provoke, in the sweep), and Rheia's
+Endless Revision trades casts for bigger ones, as its own sentence says. **These two buy nothing,
+and each is a conflict between the talent and the kit it hangs on**, so the smallest repair is a
+change to the kit rather than to a number.
+
+| hero | talent as written | what it costs | why nothing comes back |
+|---|---|---|---|
+| **Kael** | Lasting Materials: "Rubble no longer expires after 3 rounds. Kael can hold up to 5 Rubble, but Take Down the Wall deals 10% less base damage." | 1,710 of his 22,361 output a battle, t -35.6: the 10% cut, exactly | What Breaks Forward consumes all Rubble on his very next Basic Attack, so Rubble never lives long enough to expire and never stacks past what one cast gave. The retention and the cap of 5 have nothing to act on. It loses in every arena it was tried in, including one where his Dispel has four long buffs to take. The question: should What Breaks Forward stop consuming all of it, or should the talent buy something What Breaks Forward cannot spend first? |
+| **Velis** | Final Denial: "When What Was Taken consumes 3 Remnants against an enemy below 30% HP, the attack also prevents that enemy from receiving healing until the end of its next turn." | 4,427 of her 81,592 a battle in the arena built to raise it, t -8.5, with fewer casts, more damage taken and fewer wins | What Was Taken only fires after Hollowed has converted healing on that body, so the body it hits is Hollowed by construction, and blocking its healing cancels the very heal that Hollowed converts into damage and that No Second Breath turns into Energy. Her kit profits from that enemy being healed and the talent forbids it. Gating the block off Hollowed bodies was tried, and the talent then never fires. The question: was Final Denial meant to deny the enemy's healer rather than the healing Velis herself feeds on? |
 
 ---
 

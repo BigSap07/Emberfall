@@ -7,9 +7,10 @@ measured, what it refused to build and why. This file is the state: what exists,
 what is moving, and what is owed.
 
 Checked against the repository on 2026-09-22, after the 2-star and 1-star kits landed, the roster
-reached 94 of 94, the five-star review closed four of the open decisions and the Dispel repair
-closed the fifth, against a live `Tools/build-check.ps1` run, a live `validate_heroes.py` run and
-the files themselves, not against this document's own prior claims.
+reached 94 of 94, the five-star review closed four of the open decisions, the Dispel repair
+closed the fifth, and every talent was measured for what it costs its own hero, against a live
+`Tools/build-check.ps1` run, a live `validate_heroes.py` run and the files themselves, not against
+this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
 
@@ -234,6 +235,28 @@ it names.
 The talent sweep runs all 90 talents at five seeds each and pins 450 fingerprints in
 `talent-sweep-baseline.txt`. **The talent selection UI does not exist yet.**
 
+**A talent a player picks should not make their hero worse, and `CheckTalentsAreWorthPicking` says
+which ones do.** It reads every talent against the same hero with nothing picked, paired seed for
+seed over 40 seeds, in the sweep arena wherever the talent changes a sweep fight and in its dark
+room wherever it has one (`DarkTalentRooms`, the same 29 pairs the coverage note counts). The
+quantity is the star band's: damage, healing and shielding, credited by source. A talent loses when
+its mean sits more than two standard errors below zero. Five seeds could not answer this: the sweep
+rolls damage variance, and a talent that shifts the dice stream moves a five-seed total by more than
+most talents are worth. The reading is **38 gain, 47 sit within the noise or change nothing the
+output total can see, and 5 lose**, and all 5 are pinned in `KnownCostlyTalents` with a reason. The
+check fails both when a talent starts losing without being listed and when a listed one stops.
+
+- **Two are traps**, both a conflict between the talent and its own kit, so neither could be mended
+  by a number and both are in `Docs/PINOY-LIST.md` section 2e. Kael III pays 10% of his active for
+  Rubble that What Breaks Forward consumes on the next basic, so its retention and cap never act.
+  Velis III blocks healing on a body her kit is converting that healing on.
+- **Three are trades.** Kiva III keeps her alive to the end of every fight in its room, where she
+  otherwise dies in every one. Nysera I strips a buff off the body targeting her, which in the sweep
+  is a taunting tank's Provoke. Rheia I is fewer casts that each hit harder, as its sentence says.
+- **Altheon III is not on the list.** The dark-talent note had printed it as a loss, 103,377 against
+  107,349, and that was one seed's crit draw. It fires in every seed and is worth +865 a battle over
+  the check's 40 seeds and +1,025 over 150.
+
 ### Campaign and progression
 
 `CampaignWaveGenerator` resolves a stage into its ladder, which is `waveCount` times 12 battles.
@@ -448,15 +471,12 @@ differs between them.
 
 ## In progress
 
-**`balance/dispel-inert`** carries the Dispel repair that closed the last of the five-star
-review's open decisions, the campaign curve re-solved and re-pinned under it, three dark-talent
-arenas moved to rooms that can still see their talents, Altheon brought from x1.51 of his role's
-5-star median to x1.23, and Altheon III's stale note turned into a live check. Everything else that
-was in flight has landed on `main` and is observable in the files: the five-star review itself, the
-4-star and 3-star tiers, the rarity stat pass, the star band's floor, the economy retune, the
-campaign curve re-derivation, the Hub's four layers, the Emberforge design system, Arden's caps,
-`Docs/ENGINE-GAPS.md`, and the twelve 2-star and eight 1-star kits with the star band's last two
-rungs and the sweep filler fix.
+**`balance/talent-traps`** carries `CheckTalentsAreWorthPicking` and its pinned list of the five
+talents that cost their hero output, described under **Talents** above, with the two traps sent to
+`Docs/PINOY-LIST.md` section 2e. It changes no content: neither trap could be mended by a number,
+so no hero, no baseline and nothing the balance line fields moved. Everything else that was in
+flight has landed on `main` and is observable in the files, the Dispel repair and the five-star
+review included.
 
 ## Next
 
@@ -506,8 +526,9 @@ In order.
 
 Three. None of them is a number to nudge, and neither the economy question nor the power-band one
 that used to head this list is still here. The five-star review closed four more - the three
-5-star kit questions and the low-tier Energy one - and this pass closed the Dispel one, all
-recorded below.
+5-star kit questions and the low-tier Energy one - and the Dispel repair closed the Dispel one,
+which was open decision 3, all recorded below. The numbers on the three that remain were reassigned
+when it closed, so the Hub rail is number 3 now.
 
 **The economy decision is resolved.** It read "a simulated player arrives at every stage between
 1.55 and 3.2 times its `recommendedPower`, and either progression is too fast or the targets are
@@ -566,7 +587,7 @@ carries the four rows as a record of what the kits do rather than as a question.
   15 Energy. Cross Reference makes the payout arrive sooner and start 30% of her Attack higher, and
   Volume Closed keeps everything it did. The Dispel half of the finding is open decision 3 below.
 
-**And the Dispel decision is closed: the repair was spent.** It read "a Mark counts as a buff to
+**And the Dispel decision, open decision 3, is closed: the repair was spent.** It read "a Mark counts as a buff to
 `Dispel`, and repairing that is an engine pass rather than a balance edit", and the open half was
 never the reading - it was whether to pay for it. `Dispel` now asks `StatusInfo.IsInert` before it
 takes anything, which is the same question `ApplyStatus`'s BuffSuppression gate and `CombatUnit`'s
@@ -637,8 +658,8 @@ The one harness red first, then the rest.
    AttackUp that lasts a single round and has expired by the time he casts - so his Dispel now finds
    nothing to take there. It is proved in `s_triple`, against a body holding four nine-round buffs,
    at 26 Fault Lines against 20, one per strip. **Altheon III stays off the list** and is a live
-   check now rather than a note; what that check reports is that the talent fires and loses on its
-   own trade, which is a balance question for Pinoy and not a wire.
+   check now rather than a note. That note used to report the talent losing on its own trade; the
+   loss was one seed, and `CheckTalentsAreWorthPicking` reads it as a small gain.
 
 Beyond the harness:
 
@@ -667,7 +688,12 @@ have meant. Altheon's Subject and its ceiling, both halves of Seraphine's Volume
 percentages, and Altheon's Witness Script rider - 35% where 42% shipped, and resolving before the
 blow it rides instead of after it, so that its condition can be false. A sixth reading sits under
 that section and changes nothing: Altheon's Final Record pays for Records that Preserved Moment is
-already spending, and loses on the trade.
+already spending, and it had been reported as losing on that trade; over 150 seeds it is a gain of
+about 1%.
+
+**Section 2e is the two talents that cost the hero who picks them**, Kael III and Velis III, each a
+conflict with its own kit that a number cannot mend. `CheckTalentsAreWorthPicking` pins both, so
+the day either kit changes the harness says whether the talent became worth picking.
 
 ## Later
 
