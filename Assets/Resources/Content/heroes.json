@@ -767,7 +767,7 @@
           "name": "Unclaimed Victory",
           "trigger": "OnKill",
           "oncePerBattle": false,
-          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed.",
+          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed. Measured: every payout in every harness arena is 12%, because Abandoned Support banks at most one Broken Link a round and Severance Paid spends it on the next basic against a Forsaken body, so a kill finds none held. The two link-gated clauses are authored and inert at those rates.",
           "effects": [
             {
               "kind": "Shield",
@@ -1567,7 +1567,7 @@
       "basic": {
         "id": "demos_notice_of_loss",
         "name": "Notice of Loss",
-        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% current HP.",
+        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% of its current HP, bounded at 105% of Demos's Attack. The bound is not in Pinoy's sentence and is the only thing holding the clause inside the star band; it is enforced on the Notice of Loss tick passive - see Docs/ENGINE-GAPS.md group 12.",
         "effects": [
           {
             "kind": "Damage",
