@@ -26,10 +26,12 @@ namespace Emberfall.DevHarness
         private static int Main(string[] args)
         {
             bool solve = false;
+            bool talentValue = false;
             string contentDir = null;
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--solve-recommended-power") { solve = true; continue; }
+                if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
                 if (contentDir == null) contentDir = args[i];
             }
             if (contentDir == null) contentDir = FindContentDir();
@@ -46,6 +48,14 @@ namespace Emberfall.DevHarness
 
             ContentDatabase content = LoadContent(contentDir);
             if (content == null) return 1;
+
+            // The talent-value table alone, for a talent pass that wants the reading without the
+            // rest of the harness. It asserts exactly what it asserts inside the full run.
+            if (talentValue)
+            {
+                CheckTalentsAreWorthPicking(content);
+                return _failures == 0 ? 0 : 1;
+            }
 
             CheckContent(content);
             CheckSpriteDelivery(content, contentDir);
@@ -103,6 +113,7 @@ namespace Emberfall.DevHarness
             CheckKitDefects(content);
             CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
+            CheckTalentsAreWorthPicking(content);
             CheckAuthoredKitExercise(content);
             CheckEveryAuthoredActiveIsCast(content);
             ReportTalentExercise();
@@ -23799,25 +23810,61 @@ namespace Emberfall.DevHarness
         /// </summary>
         /// <summary>
         /// Every (hero, talent) pair THE DARK TALENTS section fields, in the form the talent sweep
-        /// names them. The note under that sweep counts its overlap with the dark list rather than
-        /// carrying a number somebody has to remember to move.
+        /// names them, and the room it is fielded in: the stage, the squad beside the subject, the
+        /// seed and which clock. The note under that sweep counts its overlap with this list rather
+        /// than carrying a number somebody has to remember to move, and TALENTS WORTH PICKING
+        /// measures each pair's value in the same room, because for a talent the sweep leaves dark
+        /// this room is the only place a player's pick of it shows up at all.
+        ///
+        /// One room per pair. Nysera III is fielded twice above; this names the armoured room,
+        /// because that is the one about her damage rather than about a second concealment.
         /// </summary>
-        private static readonly string[] DarkTalentsCover = {
-            "kiva_the_forsaken_oath II", "kiva_the_forsaken_oath III",
-            "aeron_the_unbroken_stride II", "merek_the_sequence_thief I",
-            "nysera_the_missing_arrow I", "nysera_the_missing_arrow III",
-            "vaelis_the_unfixed_blade I", "vaelis_the_unfixed_blade II",
-            "vaelis_the_unfixed_blade III", "dahlia_the_wayward_hymn II",
-            "brenna_the_remaining_wall I", "altheon_the_first_witness III",
-            "isolde_the_slow_fading III", "mireth_the_erased_name II",
-            "mireth_the_erased_name III", "rheia_the_revision_scribe I",
-            "rheia_the_revision_scribe II", "rheia_the_revision_scribe III",
-            "rovan_the_adaptive_commander II", "seraphine_the_closed_volume I",
-            "seraphine_the_closed_volume II", "seraphine_the_closed_volume III",
-            "sylven_the_unfading_blade III", "velis_the_hollow_vow III",
-            "isara_the_second_chance II", "elyra_the_patient_warden III",
-            "edrin_the_distant_bell III", "hale_the_relentless_hunter II",
-            "kael_the_unyielding II" };
+        private sealed class TalentRoom
+        {
+            public readonly string Pair, Stage, Allies;
+            public readonly int Seed;
+            public readonly bool Slow;
+            public TalentRoom(string pair, string stage, string allies, int seed, bool slow)
+            { Pair = pair; Stage = stage; Allies = allies; Seed = seed; Slow = slow; }
+        }
+
+        private static readonly TalentRoom[] DarkTalentRooms = {
+            new TalentRoom("kiva_the_forsaken_oath II", "s_soft_mid_big", "", 1, false),
+            new TalentRoom("kiva_the_forsaken_oath III", "s_soft_mid_big", "", 1, false),
+            new TalentRoom("aeron_the_unbroken_stride II", "s_caster_tail", DarkFive, 1, false),
+            new TalentRoom("merek_the_sequence_thief I", "s_caster_tail", "", 1, false),
+            new TalentRoom("nysera_the_missing_arrow I", "s_buffer", "", 1, false),
+            new TalentRoom("nysera_the_missing_arrow III", "s_cloaker_armored", "", 1, false),
+            new TalentRoom("vaelis_the_unfixed_blade I", "s_soft_soft_big", "isara_the_second_chance", 2, false),
+            new TalentRoom("vaelis_the_unfixed_blade II", "s_soft4_triple", "", 4, false),
+            new TalentRoom("vaelis_the_unfixed_blade III", "s_soft_soft_big", "isara_the_second_chance", 2, false),
+            new TalentRoom("dahlia_the_wayward_hymn II", "s_caster_bruiser_tail", DarkFive, 1, false),
+            new TalentRoom("brenna_the_remaining_wall I", "s_bruiser_healer", DarkWall, 1, false),
+            new TalentRoom("altheon_the_first_witness III", "s_buffer_tail", DarkStrikers, 1, false),
+            new TalentRoom("isolde_the_slow_fading III", "s_buffer", "", 1, false),
+            new TalentRoom("mireth_the_erased_name II", "s_buffer", "", 1, false),
+            new TalentRoom("mireth_the_erased_name III", "s_frail_big", DarkPairUp, 1, false),
+            new TalentRoom("rheia_the_revision_scribe I", "s_selfdown", DarkStrikers, 1, false),
+            new TalentRoom("rheia_the_revision_scribe II", "s_selfdown", DarkStrikers, 1, false),
+            new TalentRoom("rheia_the_revision_scribe III", "s_selfdown", DarkStrikers, 1, false),
+            new TalentRoom("rovan_the_adaptive_commander II", "s_bruiser", "isara_the_second_chance", 1, false),
+            new TalentRoom("seraphine_the_closed_volume I", "s_soft_big", DarkStrikers, 1, false),
+            new TalentRoom("seraphine_the_closed_volume II", "s_buffer", DarkWall, 1, true),
+            new TalentRoom("seraphine_the_closed_volume III", "s_buffer_tail", DarkStrikers, 1, false),
+            new TalentRoom("sylven_the_unfading_blade III", "s_triple", "", 1, false),
+            new TalentRoom("velis_the_hollow_vow III", "s_frail_healer", DarkStrikers, 1, false),
+            new TalentRoom("isara_the_second_chance II", "s_wash", "darian_the_hidden_bulwark,kael_the_unyielding", 2, true),
+            new TalentRoom("elyra_the_patient_warden III", "s_buffer", DarkFive, 1, false),
+            new TalentRoom("edrin_the_distant_bell III", "s_buffer", DarkFive, 1, false),
+            new TalentRoom("hale_the_relentless_hunter II", "s_buffer", "", 1, false),
+            new TalentRoom("kael_the_unyielding II", "s_triple", "", 1, false) };
+
+        private static TalentRoom DarkRoomFor(string pair)
+        {
+            for (int i = 0; i < DarkTalentRooms.Length; i++)
+                if (DarkTalentRooms[i].Pair == pair) return DarkTalentRooms[i];
+            return null;
+        }
 
         private static void CheckDarkTalents(ContentDatabase live)
         {
@@ -24005,11 +24052,10 @@ namespace Emberfall.DevHarness
                       + " cap(s) raised, talent fired " + b.Fires("altheon_final_record")
                       + " time) - the five-star review's 3-round Subject, 50%-of-Attack ceiling and"
                       + " caster-only banking are what made OnLedgerCapped reachable at all");
-                Line("  [note] and the trade is a LOSS here: " + b.SubjectDamage + " against "
-                     + a.SubjectDamage + " damage. Final Record pays 20% of Attack per Record and"
-                     + " then consumes them all, and Preserved Moment was spending the same Records"
-                     + " as +5% on every blow against a marked body, so one firing costs more than"
-                     + " it pays over a long fight. Authored that way, reported for Pinoy.");
+                Line("  [note] on this one seed the firing reads " + b.SubjectDamage + " against "
+                     + a.SubjectDamage + " damage. One seed is one crit draw: TALENTS WORTH PICKING"
+                     + " reads the same room over " + TalentValueSeeds + " seeds, and that is where the"
+                     + " trade's sign lives.");
             }
 
             // ---- Isolde III: Revelation expiring on four Traces.
@@ -24282,6 +24328,291 @@ namespace Emberfall.DevHarness
             Line("");
         }
 
+        // ------------------------------------------------- talents worth picking
+
+        /// <summary>
+        /// Seeds per reading, and far more than the talent sweep's five, because this asks a
+        /// different question. The sweep asks whether a talent CHANGED the fight, and one changed
+        /// seed answers that. This asks which WAY it changed the hero's output, and the sweep
+        /// arena rolls damage variance, so a talent that shifts the dice stream moves a five-seed
+        /// total by more than most talents are worth. Measured rather than assumed: Isara I summed
+        /// to -48 over five seeds and to +99,947 over thirty; Altheon III read -3,972 on the one seed
+        /// THE DARK TALENTS section fields it at, and +1,025 averaged over 150 seeds in the same
+        /// room. At forty the set of talents that lose beyond two standard errors is the same set
+        /// 150 seeds finds, and the whole check costs about three seconds.
+        /// </summary>
+        private const int TalentValueSeeds = 40;
+
+        /// <summary>
+        /// How far below zero a paired mean has to sit, in standard errors, to count as a loss.
+        /// Two is the ordinary line between a reading and a coin toss, and every talent on the list
+        /// below sits beyond it at both 40 and 150 seeds, the nearest at -2.8.
+        /// </summary>
+        private const double TalentValueLossT = -2.0;
+
+        /// <summary>
+        /// A talent that costs its own hero output, and why it stays anyway.
+        ///
+        /// A TRAP loses output and gives nothing back; it is on this list only because it cannot
+        /// be repaired from content, and its note says what it is waiting on. A TRADE loses output
+        /// and buys something the output total cannot see, and its note names what.
+        /// </summary>
+        private sealed class CostlyTalent
+        {
+            public readonly string Pair, Kind, Why;
+            public CostlyTalent(string pair, string kind, string why) { Pair = pair; Kind = kind; Why = why; }
+        }
+
+        private static readonly CostlyTalent[] KnownCostlyTalents = {
+            new CostlyTalent("kael_the_unyielding III", "TRAP",
+                "Lasting Materials buys Rubble that never expires and a cap of 5 for 10% of Take Down the"
+                + " Wall's damage, and the purchase is empty: the active banks one Rubble a cast and What"
+                + " Breaks Forward consumes all of it on the very next basic, so Rubble never lives long"
+                + " enough to expire or to pass one stack. It loses in every room it was tried in,"
+                + " including against a body holding four long buffs. A kit conflict, waiting on Pinoy"),
+            new CostlyTalent("velis_the_hollow_vow III", "TRAP",
+                "Final Denial blocks healing on the body What Was Taken just hit, and that body carries"
+                + " her Hollowed record by construction, so the block cancels the heal-to-damage"
+                + " conversion and the No Second Breath Energy her whole kit runs on. Fewer casts, more"
+                + " damage taken, fewer wins. Gating it off Hollowed bodies makes it never fire. A kit"
+                + " conflict, waiting on Pinoy"),
+            new CostlyTalent("kiva_the_forsaken_oath III", "TRADE",
+                "survival: the Shield on a kill keeps her alive to the end in every seed of its room"
+                + " where she otherwise dies in every one, and the Energy she stops taking as damage is"
+                + " the casts it costs"),
+            new CostlyTalent("nysera_the_missing_arrow I", "TRADE",
+                "utility: the Dispel strips a buff off the body that targets her, which in the sweep is"
+                + " the Warden's Provoke, freeing the whole line's single-target aim. Her own output"
+                + " falls because her basic then leaves the body that was feeding Vanishing Mark"),
+            new CostlyTalent("rheia_the_revision_scribe I", "TRADE",
+                "as written: 3 Energy per changed status instead of 5, for 20% of Attack more on every"
+                + " enemy each cast changes. Fewer casts that each hit harder") };
+
+        private static CostlyTalent CostlyTalentFor(string pair)
+        {
+            for (int i = 0; i < KnownCostlyTalents.Length; i++)
+                if (KnownCostlyTalents[i].Pair == pair) return KnownCostlyTalents[i];
+            return null;
+        }
+
+        /// <summary>One paired reading: the hero's own output with a talent against the same hero
+        /// with none, seed for seed, as a per-battle mean.</summary>
+        private sealed class TalentValue
+        {
+            public long Without, With;
+            public double Mean, T;
+            public bool Loses { get { return Mean < 0 && T <= TalentValueLossT; } }
+
+            public string Show(string where)
+            {
+                return where + " " + Without + " -> " + With + " ("
+                     + (Mean >= 0 ? "+" : "") + Mean.ToString("0", CultureInfo.InvariantCulture)
+                     + ", t " + T.ToString("0.0", CultureInfo.InvariantCulture) + ")";
+            }
+        }
+
+        private static TalentValue PairUp(List<long> without, List<long> with)
+        {
+            TalentValue v = new TalentValue();
+            int n = without.Count;
+            long a = 0, b = 0;
+            double mean = 0;
+            for (int i = 0; i < n; i++) { a += without[i]; b += with[i]; mean += with[i] - without[i]; }
+            mean /= n;
+            double ss = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double d = with[i] - without[i] - mean;
+                ss += d * d;
+            }
+            double se = n > 1 ? Math.Sqrt(ss / (n - 1) / n) : 0;
+            v.Without = a / n;
+            v.With = b / n;
+            v.Mean = mean;
+            // A loss with no spread at all is a deterministic loss, not a zero reading.
+            v.T = se > 0 ? mean / se : (mean < 0 ? -99 : mean > 0 ? 99 : 0);
+            return v;
+        }
+
+        private static long OutputOf(BattleResult r, string defId)
+        {
+            if (r == null) return 0;
+            long[] terms = new long[3];
+            SubjectOutput(r, defId, terms);
+            return terms[0] + terms[1] + terms[2];
+        }
+
+        private static BattleResult RunSweepBattle(ContentDatabase arena, StageDef stage, List<HeroDef> fillers,
+                                                   HeroDef def, int talent, int seed)
+        {
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroInstance me = MakeInstance(def, HeroSweepLevel);
+            me.SelectedTalent = talent;
+            team.Add(me);
+            for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], HeroSweepLevel));
+            return RunWith(arena, stage, HeroSweepSeed(def.Id, seed), team);
+        }
+
+        /// <summary>The same battle RunDark fights, returned whole rather than reduced to a probe.</summary>
+        private static BattleResult RunDarkBattle(string heroId, int talent, TalentRoom room, int seed)
+        {
+            ContentDatabase db = DarkArena(room.Slow);
+            if (db == null) return null;
+            HeroDef subject = db.GetHero(heroId);
+            StageDef stage = db.GetStage(room.Stage);
+            if (subject == null || stage == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            HeroInstance me = MakeInstance(subject, 40);
+            me.SelectedTalent = talent;
+            team.Add(me);
+            if (!string.IsNullOrEmpty(room.Allies))
+            {
+                string[] ids = room.Allies.Split(',');
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    HeroDef d = db.GetHero(ids[i].Trim());
+                    if (d == null) return null;
+                    team.Add(MakeInstance(d, 40));
+                }
+            }
+            return RunWith(db, stage, seed, team);
+        }
+
+        /// <summary>
+        /// A TALENT A PLAYER PICKS SHOULD NOT MAKE THEIR HERO WORSE, and this is where that is
+        /// measured rather than hoped.
+        ///
+        /// Every authored talent is read against the same hero with nothing picked, seed for seed,
+        /// in every arena that actually reaches it: the sweep arena when the talent changes a sweep
+        /// fight at all, and its room in THE DARK TALENTS section when it has one - which is the
+        /// only reading there is for a talent the sweep leaves dark. The quantity is the star band's
+        /// own: damage dealt, healing paid and shielding granted, credited by source.
+        ///
+        /// A talent LOSES when its paired mean sits below zero by more than two standard errors in
+        /// any arena that reaches it. Every talent that loses is on KnownCostlyTalents with its
+        /// reason, and the check fails both ways: a talent that starts losing and is not on the list
+        /// is a new trap until somebody writes down what it buys, and a listed talent that stops
+        /// losing has left the list and has to be taken off it, so the list never outlives the
+        /// reading that put a talent on it.
+        ///
+        /// What it does not claim. Output is one currency. A talent that buys survival, control or
+        /// somebody else's damage can lose here and be the right pick, which is exactly what a
+        /// TRADE entry records; the check only guarantees that nobody has to discover that the hard
+        /// way, one talent at a time.
+        /// </summary>
+        private static void CheckTalentsAreWorthPicking(ContentDatabase live)
+        {
+            Line("TALENTS WORTH PICKING (each talent's hero, output with it against output without, paired over "
+                 + TalentValueSeeds + " seeds");
+            Line("                       in every arena that reaches it: per-battle mean, change, t)");
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            { Check(false, "talent-value arena built"); Line(""); return; }
+
+            List<HeroDef> authored = new List<HeroDef>();
+            for (int i = 0; i < live.Heroes.Count; i++)
+            {
+                HeroDef h = arena.GetHero(live.Heroes[i].Id);
+                if (h != null && h.Talents.Count > 0) authored.Add(h);
+            }
+            authored.Sort(delegate (HeroDef a, HeroDef b) { return string.CompareOrdinal(a.Id, b.Id); });
+
+            int measured = 0, gains = 0, flat = 0;
+            List<string> losing = new List<string>();
+            List<string> unlisted = new List<string>();
+            List<string> left = new List<string>();
+
+            for (int h = 0; h < authored.Count; h++)
+            {
+                HeroDef def = authored[h];
+                List<long> bare = new List<long>();
+                string[] bareHash = new string[TalentValueSeeds + 1];
+                for (int s = 1; s <= TalentValueSeeds; s++)
+                {
+                    BattleResult r = RunSweepBattle(arena, stage, fillers, def, 0, s);
+                    bare.Add(OutputOf(r, def.Id));
+                    bareHash[s] = r == null ? "NULL" : HeroSweepHash(r);
+                }
+
+                for (int t = 1; t <= def.Talents.Count; t++)
+                {
+                    string pair = def.Id + " " + RomanOf(t);
+                    List<long> with = new List<long>();
+                    bool moved = false;
+                    for (int s = 1; s <= TalentValueSeeds; s++)
+                    {
+                        BattleResult r = RunSweepBattle(arena, stage, fillers, def, t, s);
+                        with.Add(OutputOf(r, def.Id));
+                        if (r != null && HeroSweepHash(r) != bareHash[s]) moved = true;
+                    }
+
+                    List<string> parts = new List<string>();
+                    bool loses = false, gainsSomewhere = false;
+                    if (moved)
+                    {
+                        TalentValue v = PairUp(bare, with);
+                        parts.Add(v.Show("sweep"));
+                        if (v.Loses) loses = true;
+                        if (v.T >= -TalentValueLossT) gainsSomewhere = true;
+                    }
+                    TalentRoom room = DarkRoomFor(pair);
+                    if (room != null)
+                    {
+                        List<long> a = new List<long>(), b = new List<long>();
+                        for (int s = 0; s < TalentValueSeeds; s++)
+                        {
+                            a.Add(OutputOf(RunDarkBattle(def.Id, 0, room, room.Seed + s), def.Id));
+                            b.Add(OutputOf(RunDarkBattle(def.Id, t, room, room.Seed + s), def.Id));
+                        }
+                        TalentValue v = PairUp(a, b);
+                        parts.Add(v.Show(room.Stage));
+                        if (v.Loses) loses = true;
+                        if (v.T >= -TalentValueLossT) gainsSomewhere = true;
+                    }
+                    if (parts.Count == 0) parts.Add("unreached");
+
+                    measured++;
+                    if (loses) losing.Add(pair);
+                    else if (gainsSomewhere) gains++;
+                    else flat++;
+
+                    CostlyTalent known = CostlyTalentFor(pair);
+                    if (loses && known == null) unlisted.Add(pair);
+                    if (!loses && known != null) left.Add(pair);
+
+                    string reading = string.Join("; ", parts.ToArray());
+                    Line("  " + def.Name + " " + RomanOf(t) + "  " + reading
+                         + (loses ? "  <- LOSES" + (known != null ? ", " + known.Kind : ", NOT ON THE LIST") : ""));
+                }
+            }
+
+            Line("  " + measured + " talents: " + gains + " gain beyond two standard errors, " + flat
+                 + " sit within the noise or change nothing the output total can see, " + losing.Count
+                 + " lose.");
+            for (int i = 0; i < KnownCostlyTalents.Length; i++)
+            {
+                CostlyTalent k = KnownCostlyTalents[i];
+                Line("  [" + k.Kind.ToLowerInvariant() + "] " + k.Pair + ": " + k.Why + ".");
+            }
+
+            Check(unlisted.Count == 0,
+                  unlisted.Count == 0
+                    ? "every talent that costs its hero output is on the list with what it buys ("
+                      + losing.Count + " of " + measured + ")"
+                    : unlisted.Count + " talent(s) now cost their hero output and are not on"
+                      + " KnownCostlyTalents - each is a trap until somebody writes down what it buys: "
+                      + string.Join(", ", unlisted.ToArray()));
+            Check(left.Count == 0,
+                  left.Count == 0
+                    ? "no talent on the list has stopped costing its hero output"
+                    : left.Count + " talent(s) on KnownCostlyTalents no longer lose output and have left"
+                      + " the list: " + string.Join(", ", left.ToArray()));
+            Line("");
+        }
+
         private const string TalentSweepBaselineFile = "talent-sweep-baseline.txt";
 
         /// <summary>
@@ -24427,7 +24758,7 @@ namespace Emberfall.DevHarness
             //
             // COUNTED RATHER THAN WRITTEN DOWN, and the reason is that it was written down and
             // went stale: the line read "23 of the 27" for two passes after the list stopped being
-            // 27 long. DarkTalentsCover names the pairs the section fields, the count is the
+            // 27 long. DarkTalentRooms names the pairs the section fields, the count is the
             // intersection with what the sweep actually left dark, and any talent this note claims
             // and the section drops turns up as an uncovered name instead of as a wrong number.
             List<string> uncovered = new List<string>();
@@ -24436,7 +24767,7 @@ namespace Emberfall.DevHarness
                 string name = gated[i];
                 int cut = name.IndexOf(" needs ");
                 if (cut > 0) name = name.Substring(0, cut);
-                if (Array.IndexOf(DarkTalentsCover, name) < 0) uncovered.Add(name);
+                if (DarkRoomFor(name) == null) uncovered.Add(name);
             }
             Line("  [note] " + (gated.Count - uncovered.Count) + " of the " + gated.Count
                  + " talents named above are proved in THE DARK TALENTS section, each in an arena"
